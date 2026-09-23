@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { PROCUREMENT_COMPARISON_CONTRACT_VERSION, PROCUREMENT_COMPARISON_POLICY, comparisonContract } from '../app/src/procurement/comparison-contract.js';
+import { getPlatformCapability } from '../app/src/platform/capability-contract.js';
+const c=comparisonContract();
+assert.equal(PROCUREMENT_COMPARISON_CONTRACT_VERSION,'1.0');
+assert.equal(c.version,'1.0');
+assert.equal(c.authority,'procurement');
+assert.deepEqual(c.actions,['view','create']);
+assert.equal(PROCUREMENT_COMPARISON_POLICY.landedCost,false);
+assert.equal(PROCUREMENT_COMPARISON_POLICY.aiRequired,false);
+assert.equal(getPlatformCapability('procurement.comparison').authority,'procurement');
+assert.equal(getPlatformCapability('procurement.comparison').resource,'procurement_comparison');
+console.log('Phase 17.4 Comparison Contract Regression: PASS');

@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const server = fs.readFileSync(new URL('../backend/server.js', import.meta.url), 'utf8');
+const store = fs.readFileSync(new URL('../backend/lib/store-sqlite.js', import.meta.url), 'utf8');
+const ui = fs.readFileSync(new URL('../app/src/authorization/membership-admin.js', import.meta.url), 'utf8');
+assert.match(server, /GET.*memberships/);
+assert.match(server, /POST.*membership-role/);
+assert.match(server, /handleChangeMembershipRole/);
+assert.match(store, /export async function changeMembershipRole/);
+assert.match(store, /membership\.role_changed/);
+assert.match(store, /You cannot change your own role/);
+assert.match(store, /last owner cannot be demoted/);
+assert.match(ui, /membership-role/);
+assert.match(ui, /server-authorized/);
+console.log('P1-09 membership role-change authority: PASS');

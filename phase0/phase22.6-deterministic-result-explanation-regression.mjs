@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import { explainDeterministicProcurementResult, assertDeterministicProcurementExplanationBoundary, phase22DeterministicResultExplanationContract } from '../app/src/phase22-deterministic-result-explanation.js';
+const base={authority:'procurement',aiRequired:false,policy:{supplierOrder:['eligible','coverageRatio','completeCoverage','comparableTotalMinor','maxLeadTimeDays','validUntil','supplierOrganizationName','supplierOrganizationId']},suppliers:[{supplierOrganizationId:'s1',supplierOrganizationName:'Supplier One',eligible:true,coverageRatio:1,completeCoverage:true,comparableTotalMinor:1000,maxLeadTimeDays:10,validUntil:'2026-10-01'}]};
+let pass=0; const test=(name,fn)=>{fn();pass++;console.log(`PASS ${name}`)};
+test('explains supplied deterministic comparison',()=>assert.equal(explainDeterministicProcurementResult({comparison:base}).explanation.eligibleSupplierCount,1));
+test('preserves procurement authority',()=>assert.equal(explainDeterministicProcurementResult({comparison:base}).comparisonAuthority,'procurement'));
+test('does not create ranking',()=>assert.equal(explainDeterministicProcurementResult({comparison:base}).rankingCreatedHere,false));
+test('does not create supplier score',()=>assert.equal(explainDeterministicProcurementResult({comparison:base}).supplierScoreCreatedHere,false));
+test('does not create decision',()=>assert.equal(explainDeterministicProcurementResult({comparison:base}).decisionCreatedHere,false));
+test('no persistence',()=>assert.equal(explainDeterministicProcurementResult({comparison:base}).persistence,'none'));
+test('no mutation',()=>assert.equal(explainDeterministicProcurementResult({comparison:base}).mutation,false));
+test('no authorization',()=>assert.equal(explainDeterministicProcurementResult({comparison:base}).authorization,false));
+test('boundary passes',()=>assert.equal(assertDeterministicProcurementExplanationBoundary({comparison:base}),true));
+test('rejects ai-required comparison',()=>assert.throws(()=>explainDeterministicProcurementResult({comparison:{...base,aiRequired:true}})));
+test('rejects ranking field',()=>assert.throws(()=>explainDeterministicProcurementResult({comparison:base,ranking:'ai'})));
+test('rejects execution field',()=>assert.throws(()=>explainDeterministicProcurementResult({comparison:base,directExecution:'x'})));
+test('contract is explanation only',()=>assert.equal(phase22DeterministicResultExplanationContract().aiRole,'explanation_only'));
+console.log(`${pass} PASS / 0 FAIL`);

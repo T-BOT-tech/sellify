@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import { PROCUREMENT_EXECUTION_CONTRACT, procurementExecutionContract } from '../app/src/procurement/execution-contract.js';
+assert.equal(PROCUREMENT_EXECUTION_CONTRACT.version,'1.0');
+assert.equal(PROCUREMENT_EXECUTION_CONTRACT.source,'procurement.award');
+assert.equal(PROCUREMENT_EXECUTION_CONTRACT.target,'b2b.purchase-order');
+assert.equal(PROCUREMENT_EXECUTION_CONTRACT.executionAuthority,'existing_b2b_purchase_order_authority');
+assert.equal(PROCUREMENT_EXECUTION_CONTRACT.createsNewPoAuthority,false);
+assert.equal(PROCUREMENT_EXECUTION_CONTRACT.createsQuote,false);
+assert.equal(PROCUREMENT_EXECUTION_CONTRACT.mutatesInventory,false);
+assert.equal(PROCUREMENT_EXECUTION_CONTRACT.mutatesPayments,false);
+assert.equal(PROCUREMENT_EXECUTION_CONTRACT.mutatesSettlement,false);
+assert.equal(PROCUREMENT_EXECUTION_CONTRACT.mutatesCommerceOrder,false);
+assert.equal(PROCUREMENT_EXECUTION_CONTRACT.splitAwardPolicy,'one_purchase_order_per_supplier');
+assert.deepEqual(procurementExecutionContract(),PROCUREMENT_EXECUTION_CONTRACT);
+console.log('Phase 17.6 Execution Contract Regression: PASS');

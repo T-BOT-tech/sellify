@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const root = new URL('..', import.meta.url).pathname;
+const ui = fs.readFileSync(`${root}/app/src/authorization/pack-experimentation.js`, 'utf8');
+const settings = fs.readFileSync(`${root}/app/src/ui/settings.js`, 'utf8');
+const html = fs.readFileSync(`${root}/app/index.html`, 'utf8');
+assert.match(ui, /NOT_ESTABLISHED/);
+assert.match(ui, /NOT_ASSIGNED/);
+assert.match(ui, /BLOCKED_BY_BOUNDARY/);
+assert.match(ui, /does not define a canonical experimentation service/i);
+assert.doesNotMatch(ui, /fetch\(/);
+assert.match(settings, /renderPackExperimentationPanel/);
+assert.match(html, /packExperimentationPanel/);
+console.log('P1-20 Pack Experimentation regression: PASS');

@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+const root = path.resolve(new URL('.', import.meta.url).pathname, '..');
+const ui = fs.readFileSync(path.join(root, 'app/src/procurement/ui.js'), 'utf8');
+const server = fs.readFileSync(path.join(root, 'backend/server.js'), 'utf8');
+const store = fs.readFileSync(path.join(root, 'backend/lib/store-sqlite.js'), 'utf8');
+const auth = fs.readFileSync(path.join(root, 'backend/lib/authorization.js'), 'utf8');
+assert.match(ui, /data-award-action="confirm"/);
+assert.match(ui, /procurement:award:confirm/);
+assert.match(ui, /procurement:award:execute/);
+assert.match(server, /procurement:award:confirm/);
+assert.match(store, /Only FINAL comparisons can be awarded/);
+assert.match(store, /Only confirmed procurement awards can become purchase orders/);
+assert.match(auth, /procurement:award:confirm/);
+assert.match(auth, /procurement:award:execute/);
+console.log('P0-11 Comparison → Award → Authorization Regression: PASS');

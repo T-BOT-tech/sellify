@@ -1,0 +1,6 @@
+export const PROCUREMENT_SUPPLIER_CONTRACT_VERSION='1.0';
+export const PROCUREMENT_SUPPLIER_STATUSES=Object.freeze(['ACTIVE','SUSPENDED']);
+export const PROCUREMENT_SUPPLIER_RELATIONSHIP_STATES=Object.freeze({PENDING:['ACTIVE','DECLINED','BLOCKED'],ACTIVE:['SUSPENDED','BLOCKED'],SUSPENDED:['ACTIVE','BLOCKED'],BLOCKED:[],DECLINED:[]});
+export const PROCUREMENT_SUPPLIER_CAPABILITY=Object.freeze({capability:'procurement.supplier',authority:'procurement',resource:'procurement_supplier',identityAuthority:'organizations',richerNetworkFeatures:'phase18'});
+export function canTransitionProcurementSupplierRelationship(from,to){return Boolean(PROCUREMENT_SUPPLIER_RELATIONSHIP_STATES[String(from||'').toUpperCase()]?.includes(String(to||'').toUpperCase()))}
+export function procurementSupplierContract(){return Object.freeze({version:PROCUREMENT_SUPPLIER_CONTRACT_VERSION,identityAuthority:'organizations',supplierStatuses:[...PROCUREMENT_SUPPLIER_STATUSES],relationshipStates:Object.fromEntries(Object.entries(PROCUREMENT_SUPPLIER_RELATIONSHIP_STATES).map(([k,v])=>[k,[...v]])),capability:PROCUREMENT_SUPPLIER_CAPABILITY,inventoryMutation:false,paymentMutation:false,b2bQuoteMutation:false,b2bPurchaseOrderMutation:false})}

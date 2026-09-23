@@ -1,0 +1,5 @@
+ccf06c7b1900cbe6bd88cf1426844418934eabf6c58586a3ec01295fc0756cfb  app/src/platform/contract-versioning.js
+d0058545e31b9d3f23a06232fee4e4c41ebb340bffe2e316ce188556b228ce23  app/src/platform/index.js
+ec33d63077e878cea25e0aba688fd570a2dd4c95a906e33befbd5ab95102e2d0  phase0/phase16.6-contract-versioning-regression.mjs
+635c67fee2154f3fc5ef7d2a980c80f4f441a6eb0863f0054bb11eeb26728ee3  phase0/PHASE16.6-CONTRACT-VERSIONING.md
+ea80e1ede9c296112ac3b69044c065203d8f81283cc023825da0b9eabafaa705  package.json

@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import { listCountryPriorityCandidates, getCountryPriority, validateCountryPriority, countryPrioritySequencingContract, COUNTRY_PRIORITY_WEIGHTS } from '../app/src/country-priority-sequencing.js';
+
+const candidates = listCountryPriorityCandidates();
+assert.equal(candidates.length, 7);
+assert.deepEqual(candidates.map((x) => x.countryCode), ['TZ', 'UG', 'RW', 'BI', 'CD', 'SO', 'SS']);
+assert.equal(candidates[0].totalScore, 86);
+assert.equal(candidates[1].totalScore, 83);
+assert.equal(candidates[2].totalScore, 74);
+assert.equal(getCountryPriority('tz').countryCode, 'TZ');
+for (const candidate of candidates) assert.equal(validateCountryPriority(candidate).valid, true);
+assert.equal(Object.values(COUNTRY_PRIORITY_WEIGHTS).reduce((a,b)=>a+b,0), 100);
+const contract = countryPrioritySequencingContract();
+assert.equal(contract.regionCode, 'EAC');
+assert.equal(contract.persistence, 'none');
+assert.equal(contract.activation, 'manual_gate_required');
+assert.equal(contract.authority, 'strategy_only');
+assert.equal(contract.regulatoryClaim, 'none');
+assert.equal(contract.paymentClaim, 'none');
+assert.equal(contract.taxClaim, 'none');
+assert.throws(() => getCountryPriority('KE'), (e) => e.code === 'COUNTRY_PRIORITY_UNKNOWN');
+assert.throws(() => getCountryPriority('ET'), (e) => e.code === 'COUNTRY_PRIORITY_UNKNOWN');
+console.log('Phase 15.6 Country Priority & Sequencing Gate: PASS');
+console.log('Seven unimplemented EAC countries scored exactly once: PASS');
+console.log('Weighted model sums to 100: PASS');
+console.log('Recommended order Tanzania → Uganda → Rwanda: PASS');
+console.log('Kenya / Ethiopia excluded from unimplemented candidate gate: PASS');
+console.log('Strategy-only / no persistence / manual activation boundary: PASS');

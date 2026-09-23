@@ -1,0 +1,3 @@
+import assert from 'node:assert/strict';
+import { PROCUREMENT_SETTLEMENT_CONTRACT, PROCUREMENT_SETTLEMENT_CONTRACT_VERSION } from '../app/src/procurement/settlement-contract.js';
+assert.equal(PROCUREMENT_SETTLEMENT_CONTRACT_VERSION,'1.0'); assert.equal(PROCUREMENT_SETTLEMENT_CONTRACT.authority,'payments'); assert.equal(PROCUREMENT_SETTLEMENT_CONTRACT.paymentExecutionEqualsSettlement,false); assert.equal(PROCUREMENT_SETTLEMENT_CONTRACT.createsSecondLedger,false); assert.equal(PROCUREMENT_SETTLEMENT_CONTRACT.copiesMarketplaceSettlement,false); assert.deepEqual(PROCUREMENT_SETTLEMENT_CONTRACT.lifecycle,['OPEN','PARTIALLY_SETTLED','SETTLED','CANCELLED']); console.log('Phase 17.9 settlement contract regression: PASS');

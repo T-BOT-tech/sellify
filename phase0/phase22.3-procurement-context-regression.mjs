@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {defineProcurementContext,assertProcurementContextBoundary,phase22ProcurementContextContract} from '../app/src/phase22-procurement-context.js';
+let passed=0;const test=(n,f)=>{try{f();passed++;console.log(`PASS ${n}`)}catch(e){console.error(`FAIL ${n}: ${e.message}`);process.exitCode=1}};
+const base={intent:{id:'intent-1',authority:'ai_intent_boundary'},discovery:{opportunities:[]},supplyIntelligence:{signals:[]},crossBorder:{status:'UNKNOWN'},procurement:{demand:null},evidence:{items:[]}};
+test('composes all context authorities',()=>{const c=defineProcurementContext(base);assert.equal(c.state,'READY');assert.equal(c.derived,true);});
+test('marks partial context incomplete',()=>assert.equal(defineProcurementContext({...base,evidence:undefined}).state,'INCOMPLETE'));
+test('marks empty context unknown',()=>assert.equal(defineProcurementContext({intent:base.intent}).state,'UNKNOWN'));
+test('rejects non AI intent reference',()=>assert.throws(()=>defineProcurementContext({...base,intent:{id:'x',authority:'procurement'}}),/ai_intent_boundary/));
+test('is immutable',()=>assert.equal(Object.isFrozen(defineProcurementContext(base)),true));
+test('preserves no persistence or execution',()=>{const c=defineProcurementContext(base);assert.equal(c.persistence,'none');assert.equal(c.transactionExecution,false);assert.equal(c.authorization,false);});
+test('boundary assertion passes',()=>assert.equal(assertProcurementContextBoundary(base),true));
+test('contract names existing authorities',()=>{const x=phase22ProcurementContextContract();assert(x.sourceAuthorities.includes('supplier_network'));assert.equal(x.persistence,'none')});
+console.log(`\nPhase 22.3 Procurement Context Regression: ${passed} PASS / ${process.exitCode?'FAIL':'0 FAIL'}`);

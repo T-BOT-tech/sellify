@@ -1,0 +1,7 @@
+// Phase 18.10 — deterministic Supplier Network discovery contract.
+// Discovery ranks explainable network matches; it does not mutate source authorities.
+export const SUPPLIER_NETWORK_DISCOVERY_CONTRACT_VERSION='1.0';
+export const SUPPLIER_NETWORK_DISCOVERY_VISIBILITIES=Object.freeze(['PUBLIC','NETWORK','RELATIONSHIP']);
+export const SUPPLIER_NETWORK_DISCOVERY_EVENTS=Object.freeze(['supplier.network.discovery.performed']);
+export const SUPPLIER_NETWORK_DISCOVERY=Object.freeze({capability:'supplier-network.discovery',authority:'supplier_network',resource:'supplier_network_discovery',identityAuthority:'organizations',sourceAuthorities:Object.freeze({profile:'supplier_network',catalog:'supplier_network',capability:'supplier_network',serviceArea:'supplier_network',capacity:'supplier_network',commercial:'supplier_network',qualification:'supplier_network',trust:'supplier_network'}),deterministic:true,ai:false,sourceMutation:false,procurementMutation:false,productMutation:false,paymentMutation:false,inventoryMutation:false,marketplaceSellerAuthority:false});
+export function supplierNetworkDiscoveryContract(){return Object.freeze({version:SUPPLIER_NETWORK_DISCOVERY_CONTRACT_VERSION,visibilities:[...SUPPLIER_NETWORK_DISCOVERY_VISIBILITIES],events:[...SUPPLIER_NETWORK_DISCOVERY_EVENTS],capability:SUPPLIER_NETWORK_DISCOVERY,principle:'deterministic explainable discovery first; AI remains a later interpretation layer'});}

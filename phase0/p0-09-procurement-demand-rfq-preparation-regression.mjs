@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+const root = path.resolve(new URL('.', import.meta.url).pathname, '..');
+const ui = fs.readFileSync(path.join(root, 'app/src/procurement/ui.js'), 'utf8');
+const prep = fs.readFileSync(path.join(root, 'app/src/phase22-procurement-preparation.js'), 'utf8');
+const server = fs.readFileSync(path.join(root, 'backend/server.js'), 'utf8');
+assert.match(ui, /data-demand-rfq-prep/);
+assert.match(ui, /procurement:rfq:create/);
+assert.match(ui, /Prepare RFQ/);
+assert.match(prep, /createsRfq:false/);
+assert.match(prep, /existing procurement authority/);
+assert.match(server, /createProcurementRfq\(chatId, await readBody\(req\), session\)/);
+console.log('P0-09 Procurement Demand → RFQ Preparation Regression: PASS');

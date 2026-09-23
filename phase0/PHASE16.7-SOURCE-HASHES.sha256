@@ -1,0 +1,4 @@
+ffb518a0ee1ad5d528a3b75067337faa48aa69f50c93082f3b7c1a776c3672bd  app/src/platform/event-outbox-platform.js
+57d85a04ca0884dfae2688515fc56a6442b0c0a12211f72ee592119dd3c90bde  phase0/phase16.7-event-outbox-platformization-regression.mjs
+46be74b57666989d280cf5958e5107b12f84b1bce2f7f32554c9d364c5974918  app/src/platform/index.js
+e4eeba18fc764fe702113e3d5806e87e3953ab93e0cc78999403d288febc1c6c  package.json

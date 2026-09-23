@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {supplierNetworkTrustContract} from '../app/src/supplier-network/trust-contract.js';
+import {getDatabaseForTests,getOrCreateUserByTelegram,createTenantForUser,setProcurementSupplierParticipation,refreshSupplierNetworkTrustEvidence,listSupplierNetworkTrustEvidence} from '../backend/lib/store-sqlite.js';
+const c=supplierNetworkTrustContract();
+assert.equal(c.version,'1.0'); assert.equal(c.capability.capability,'supplier-network.trust'); assert.equal(c.capability.compositeScore,false); assert.deepEqual(c.evidenceTypes,['SUPPLIER_PARTICIPATION','QUALIFICATION_VERIFIED','PERFORMANCE_OBSERVED','PROCUREMENT_RELATIONSHIP']);
+const db=getDatabaseForTests(); const x=Date.now().toString(36); const u=await getOrCreateUserByTelegram('p189_'+x,'Trust Supplier'); const t=await createTenantForUser({userId:u.id,sellerName:'P18.9 '+x,businessType:'retail',country:'ET',currency:'ETB',timezone:'Africa/Addis_Ababa'}); const row=db.prepare('SELECT chat_id,organization_id FROM tenants WHERE chat_id=?').get(t.chatId); const a={userId:u.id,role:'owner',organizationId:row.organization_id,chatId:row.chat_id}; await setProcurementSupplierParticipation(row.chat_id,{status:'ACTIVE',discoverable:true},a);
+const first=await refreshSupplierNetworkTrustEvidence(row.chat_id,row.organization_id,{},a); assert.equal(first.length,1); assert.equal(first[0].evidenceType,'SUPPLIER_PARTICIPATION'); assert.equal(first[0].evidenceState,'OBSERVED');
+await refreshSupplierNetworkTrustEvidence(row.chat_id,row.organization_id,{},a); assert.equal(db.prepare('SELECT COUNT(*) c FROM supplier_network_trust_evidence WHERE supplier_organization_id=?').get(row.organization_id).c,1);
+assert.throws(()=>db.prepare('DELETE FROM supplier_network_trust_evidence WHERE supplier_organization_id=?').run(row.organization_id),/immutable|cannot be deleted/i);
+assert.throws(()=>db.prepare('UPDATE supplier_network_trust_evidence SET claim=? WHERE supplier_organization_id=?').run('x',row.organization_id),/immutable/i);
+assert.equal((await listSupplierNetworkTrustEvidence(row.chat_id,{supplierOrganizationId:row.organization_id},a)).length,1); console.log('Phase 18.9 supplier network trust regression: PASS');

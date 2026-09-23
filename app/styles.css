@@ -1,0 +1,1797 @@
+  /* ═══════════════════════════════════════════════════════════════════════
+     DESIGN TOKENS  (W1)
+     ───────────────────────────────────────────────────────────────────────
+     No external fonts or CDNs — this app must render correctly with zero
+     connectivity, including on first load, so everything is self-contained.
+
+     THREE LAYERS, and the rule is: components only ever read layer 2.
+       1. PRIMITIVES  --teal-600, --stone-200 …  raw ramp steps. Never used
+          directly in a component rule; they exist so layer 2 has somewhere
+          to point and so themes can re-point without inventing new colors.
+       2. SEMANTIC    --surface, --text, --border, --danger-bg …  what a
+          thing *means*. This is the only layer components touch.
+       3. THEMES      [data-theme="dark" | "sunlight"] re-point layer 2 at
+          different primitives. That is the entire cost of a new theme.
+
+     The legacy names (--paper, --ink, --teal …) are kept as first-class
+     semantic tokens rather than being renamed, for two reasons: ~1000 lines
+     of CSS below already reference them, and the Telegram themeParams
+     bridge writes them as inline custom properties on <html>. Renaming them
+     would silently break the Telegram theme sync.
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  :root {
+    /* ── 1. PRIMITIVES ─────────────────────────────────────────────────── */
+
+    /* Stone — warm neutrals. Tuned so the app's original paper/ink/line
+       values land on real ramp steps instead of floating outside it. */
+    --stone-0:   #FFFFFF;
+    --stone-50:  #FAF9F5;
+    --stone-100: #F2F1EC;  /* was --paper     */
+    --stone-200: #E7E5DC;  /* was --paper-dim */
+    --stone-300: #D8D5C9;
+    --stone-400: #C9C6B9;  /* was --line      */
+    --stone-500: #A5A29A;
+    --stone-600: #7B807C;
+    --stone-700: #4B5350;  /* was --ink-soft  */
+    --stone-800: #2A3633;
+    --stone-900: #1C2321;  /* was --ink       */
+    --stone-950: #121716;
+
+    /* Teal — primary. */
+    --teal-50:  #EEF7F4;
+    --teal-100: #DCEEE8;
+    --teal-200: #B8DCD1;
+    --teal-300: #8FC7B7;
+    --teal-400: #5FAA96;
+    --teal-500: #35907A;
+    --teal-600: #1F6F5C;   /* base */
+    --teal-700: #1A5C4C;
+    --teal-800: #14483C;
+    --teal-900: #0F352C;
+    --teal-950: #08201A;
+
+    /* Amber — secondary / pending. */
+    --amber-50:  #FBF6EA;
+    --amber-100: #F3E7CC;
+    --amber-200: #E8D19E;
+    --amber-300: #DAB76B;
+    --amber-400: #C99A3F;
+    --amber-500: #B88829;
+    --amber-600: #A8781F;  /* base */
+    --amber-700: #8A6119;
+    --amber-800: #6B4B14;
+    --amber-900: #4D360E;
+    --amber-950: #2E2008;
+
+    /* Brick — danger / urgent. */
+    --brick-50:  #FCEFEC;
+    --brick-100: #F4DCD6;
+    --brick-200: #E8B5A9;
+    --brick-300: #D98D7C;
+    --brick-400: #C66852;
+    --brick-500: #B65039;
+    --brick-600: #A6402F;  /* base */
+    --brick-700: #8A3527;
+    --brick-800: #6B291E;
+    --brick-900: #4D1D16;
+    --brick-950: #2E110D;
+
+    /* Slate blue — informational / "in progress". New: the app previously
+       had no cool hue, which is why kitchen "Preparing" had to borrow amber
+       from "Pending" and the two states read as the same thing. Value-matched
+       to teal-600 so the two never fight for attention. */
+    --blue-50:  #EBF2FA;
+    --blue-100: #D6E5F4;
+    --blue-200: #AEC9E8;
+    --blue-300: #82AAD8;
+    --blue-400: #558AC6;
+    --blue-500: #316FB0;
+    --blue-600: #1E5A96;   /* base */
+    --blue-700: #18497A;
+    --blue-800: #12385D;
+    --blue-900: #0D2842;
+    --blue-950: #071827;
+
+    /* ── 2. SEMANTIC ───────────────────────────────────────────────────── */
+
+    /* Surfaces. --paper is the page; --surface is anything sitting on it.
+       Kept distinct because in dark mode the page must be *darker* than the
+       cards, which is the opposite of light mode where the page is darker
+       than white cards only by accident. */
+    --paper:      var(--stone-100);
+    --paper-dim:  var(--stone-200);
+    --surface:    var(--stone-0);
+    --surface-2:  var(--stone-50);
+    --surface-3:  var(--stone-200);
+    --surface-inv: var(--stone-900);
+
+    /* Text. --text-subtle is deliberately NOT a third gray for body copy —
+       it is for non-essential metadata only, and it is the first thing
+       sunlight mode throws away. */
+    --ink:         var(--stone-900);
+    --ink-soft:    var(--stone-700);
+    --text:        var(--ink);
+    --text-muted:  var(--ink-soft);
+    --text-subtle: var(--stone-600);
+    --text-inv:    var(--stone-100);
+    --text-on-accent: var(--stone-0);
+
+    /* Borders */
+    --line:          var(--stone-400);
+    --border:        var(--line);
+    --border-soft:   var(--stone-200);
+    --border-strong: var(--stone-600);
+
+    /* Brand accents. Each accent is a TRIPLE, not a single value:
+       -bg (tinted fill), base (text/border on light), -solid (fill that
+       carries --text-on-accent). Every earlier badge/pill bug in this file
+       came from having only two of the three. */
+    --teal:        var(--teal-600);
+    --teal-bg:     var(--teal-100);
+    --teal-solid:  var(--teal-600);
+    --amber:       var(--amber-600);
+    --amber-bg:    var(--amber-100);
+    --amber-solid: var(--amber-600);
+    --brick:       var(--brick-600);
+    --brick-bg:    var(--brick-100);
+    --brick-solid: var(--brick-600);
+
+    /* Status. Aliased onto the accents so a status never drifts away from
+       the brand, and so themes only re-point one place. */
+    --success:     var(--teal);      --success-bg: var(--teal-bg);
+    --warn:        var(--amber);     --warn-bg:    var(--amber-bg);
+    --danger:      var(--brick);     --danger-bg:  var(--brick-bg);
+    --info:        var(--blue-600);  --info-bg:    var(--blue-100);
+    --neutral:     var(--stone-600); --neutral-bg: var(--stone-200);
+
+    /* Focus. Visible focus was entirely absent — the app could not be
+       operated from a keyboard or an external scanner's keyboard-wedge. */
+    --focus-ring: var(--teal-500);
+    --focus-ring-width: 3px;
+    --focus-ring-offset: 2px;
+
+    /* Type */
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Ethiopic", "Noto Sans Devanagari", sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+
+    --fs-2xs:     0.6875rem;  /* 11px — badges, timestamps. Floor.        */
+    --fs-xs:      0.75rem;    /* 12px */
+    --fs-sm:      0.8125rem;  /* 13px */
+    --fs-base:    0.875rem;   /* 14px — body                             */
+    --fs-md:      1rem;       /* 16px */
+    --fs-lg:      1.125rem;   /* 18px — section headings                 */
+    --fs-xl:      1.25rem;    /* 20px */
+    --fs-2xl:     1.5rem;     /* 24px */
+    --fs-3xl:     2rem;       /* 32px — change due, kitchen ticket ids    */
+    --fs-display: 2.5rem;     /* 40px — read across a counter            */
+
+    --fw-normal: 400;
+    --fw-medium: 500;
+    --fw-semi:   600;
+    --fw-bold:   700;
+
+    /* Ethiopic and Devanagari have taller ascenders/descenders than Latin,
+       so the body leading is set for the tallest script the app ships, not
+       for English. This is why it is 1.5 and not 1.4. */
+    --lh-tight: 1.25;
+    --lh-snug:  1.35;
+    --lh-body:  1.5;
+
+    /* Space — 4px base */
+    --sp-1: 0.25rem;  --sp-2: 0.5rem;   --sp-3: 0.75rem;  --sp-4: 1rem;
+    --sp-5: 1.25rem;  --sp-6: 1.5rem;   --sp-8: 2rem;     --sp-10: 2.5rem;
+    --sp-12: 3rem;    --sp-16: 4rem;
+
+    /* Radius */
+    --r-sm: 6px; --r-md: 8px; --r-lg: 12px; --r-xl: 16px; --r-full: 999px;
+
+    /* Elevation. Warm-tinted rather than neutral black so shadows sit on
+       the paper background instead of graying it. */
+    --e-1: 0 1px 2px rgba(28, 35, 33, 0.06);
+    --e-2: 0 2px 8px rgba(28, 35, 33, 0.08);
+    --e-3: 0 8px 24px rgba(28, 35, 33, 0.12);
+    --e-focus: 0 0 0 var(--focus-ring-width) color-mix(in srgb, var(--focus-ring) 35%, transparent);
+
+    /* Motion */
+    --dur-fast: 120ms; --dur-base: 200ms; --dur-slow: 320ms;
+    --ease: cubic-bezier(0.2, 0, 0.2, 1);
+
+    /* Touch targets. 44px is the documented minimum; --hit-lg is what
+       large-target mode promotes it to for gloved or cold hands. */
+    --hit: 44px;
+    --hit-lg: 56px;
+
+    /* Icon sizing (W3) */
+    --icon-sm: 16px; --icon: 20px; --icon-lg: 24px; --icon-xl: 32px;
+
+    /* Overlays. --media-stage stays dark in EVERY theme on purpose: it is the
+       backdrop a product photo is judged against, and flipping it to white in
+       light mode would blow out the pale packaging most of these products
+       have. Tokenised rather than hardcoded so that intent is recorded. */
+    --scrim: rgba(18, 23, 22, 0.6);
+    --media-stage: #0F1716;
+    --z-nav: 10; --z-sheet: 40; --z-toast: 60;
+
+    color-scheme: light;
+  }
+
+  /* ── 3. THEMES ───────────────────────────────────────────────────────── */
+
+  /* Dark. Only layer 2 is re-pointed; not one primitive is redefined and
+     not one component rule below knows this theme exists. */
+  :root[data-theme="dark"] {
+    --paper:      var(--stone-950);
+    --paper-dim:  var(--stone-900);
+    --surface:    var(--stone-900);
+    --surface-2:  var(--stone-800);
+    --surface-3:  #37423F;
+    --surface-inv: var(--stone-100);
+
+    --ink:         var(--stone-100);
+    --ink-soft:    var(--stone-500);
+    --text-subtle: var(--stone-600);
+    --text-inv:    var(--stone-900);
+
+    --line:          #37423F;
+    --border-soft:   var(--stone-800);
+    --border-strong: var(--stone-600);
+
+    /* Accents lighten so they stay legible AS TEXT on a dark surface, while
+       the -solid fills stay dark enough to carry light text. Collapsing
+       these into one value is what makes most dark modes unreadable. */
+    --teal:        var(--teal-400);
+    --teal-bg:     var(--teal-900);
+    --teal-solid:  var(--teal-600);
+    --amber:       var(--amber-300);
+    --amber-bg:    var(--amber-900);
+    --amber-solid: var(--amber-700);
+    --brick:       var(--brick-300);
+    --brick-bg:    var(--brick-900);
+    --brick-solid: var(--brick-600);
+    --info:        var(--blue-300);
+    --info-bg:     var(--blue-900);
+    --neutral:     var(--stone-500);
+    --neutral-bg:  var(--stone-800);
+
+    --focus-ring: var(--teal-300);
+
+    --e-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --e-2: 0 2px 8px rgba(0, 0, 0, 0.5);
+    --e-3: 0 8px 24px rgba(0, 0, 0, 0.6);
+
+    color-scheme: dark;
+  }
+
+  /* Sunlight. For direct equatorial sun on a cheap phone at a market stall,
+     where a mid-gray secondary label is simply not there. Strategy is not
+     "more contrast" — it is REMOVING the low-contrast tier entirely: every
+     gray collapses to near-black, tinted fills go white, accents darken
+     until they pass AA against white, and weights go up one step because
+     thin strokes wash out before color does. */
+  :root[data-theme="sunlight"] {
+    --paper:      #FFFFFF;
+    --paper-dim:  #F0F0F0;
+    --surface:    #FFFFFF;
+    --surface-2:  #FFFFFF;
+    --surface-3:  #E4E4E4;
+    --surface-inv: #000000;
+
+    --ink:         #000000;
+    --ink-soft:    #1A1A1A;   /* not a gray — a slightly lighter black */
+    --text-subtle: #1A1A1A;   /* the subtle tier is deleted, not dimmed */
+    --text-inv:    #FFFFFF;
+
+    --line:          #000000;
+    --border-soft:   #7A7A7A;
+    --border-strong: #000000;
+
+    --teal:        #0F4A3C;   --teal-bg:  #FFFFFF;  --teal-solid:  #0F4A3C;
+    --amber:       #5E4211;   --amber-bg: #FFFFFF;  --amber-solid: #5E4211;
+    --brick:       #7A2E20;   --brick-bg: #FFFFFF;  --brick-solid: #7A2E20;
+    --info:        #123A62;   --info-bg:  #FFFFFF;
+    --neutral:     #1A1A1A;   --neutral-bg: #FFFFFF;
+
+    --fw-normal: 500; --fw-medium: 600; --fw-semi: 700; --fw-bold: 800;
+
+    --focus-ring: #000000;
+    --focus-ring-width: 4px;
+
+    /* Shadows are invisible in glare and only muddy edges. Borders do the
+       work instead. */
+    --e-1: none; --e-2: none; --e-3: 0 0 0 2px #000000;
+
+    color-scheme: light;
+  }
+
+  /* Follow the OS only when the user hasn't chosen, and only outside
+     Telegram (inside Telegram, colorScheme drives this instead). */
+  @media (prefers-color-scheme: dark) {
+    :root[data-theme="auto"] {
+      --paper: var(--stone-950);      --paper-dim: var(--stone-900);
+      --surface: var(--stone-900);    --surface-2: var(--stone-800);
+      --surface-3: #37423F;           --surface-inv: var(--stone-100);
+      --ink: var(--stone-100);        --ink-soft: var(--stone-500);
+      --text-subtle: var(--stone-600);--text-inv: var(--stone-900);
+      --line: #37423F;                --border-soft: var(--stone-800);
+      --border-strong: var(--stone-600);
+      --teal: var(--teal-400);        --teal-bg: var(--teal-900);
+      --teal-solid: var(--teal-600);
+      --amber: var(--amber-300);      --amber-bg: var(--amber-900);
+      --amber-solid: var(--amber-700);
+      --brick: var(--brick-300);      --brick-bg: var(--brick-900);
+      --brick-solid: var(--brick-600);
+      --info: var(--blue-300);        --info-bg: var(--blue-900);
+      --neutral: var(--stone-500);    --neutral-bg: var(--stone-800);
+      --focus-ring: var(--teal-300);
+      --e-1: 0 1px 2px rgba(0,0,0,0.4);
+      --e-2: 0 2px 8px rgba(0,0,0,0.5);
+      --e-3: 0 8px 24px rgba(0,0,0,0.6);
+      color-scheme: dark;
+    }
+  }
+
+  /* Large-target mode — gloves, cold hands, older eyes. Because sizing is
+     tokenised, this is the whole feature. */
+  :root[data-density="large"] {
+    --hit: var(--hit-lg);
+    --fs-2xs: 0.75rem;   --fs-xs: 0.8125rem;  --fs-sm: 0.875rem;
+    --fs-base: 1rem;     --fs-md: 1.125rem;   --fs-lg: 1.25rem;
+    --fs-xl: 1.5rem;     --fs-2xl: 1.75rem;   --fs-3xl: 2.25rem;
+  }
+
+  /* Global focus visibility. Applied once, here, so no component has to
+     remember it. :focus-visible keeps rings off mouse/touch taps. */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+    border-radius: var(--r-sm);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     ICON SYSTEM  (W3)
+     ───────────────────────────────────────────────────────────────────────
+     Replaces emoji-as-UI. Emoji were the single biggest visual-credibility
+     problem in this file, for four concrete reasons rather than taste:
+
+       1. They render as a different picture on every Android OEM skin,
+          Windows, and iOS, so the app has no consistent visual identity.
+       2. They are full-colour and cannot inherit currentColor, so they can
+          never match the palette and never show a disabled or active state.
+       3. ZWJ sequences (👨‍🍳) split into two unrelated glyphs on older
+          Android — exactly the low-end hardware these merchants use.
+       4. Screen readers announce them literally ("man cook"), and there is
+          no way to give them a real accessible name.
+
+     Delivery is an inline <symbol> sprite: zero network requests, so the
+     zero-CDN offline guarantee is preserved, and every icon inherits colour
+     and size from its container.
+
+     Stroke width is optically compensated rather than fixed. Because the
+     viewBox scales, a constant 1.75 would visually thin out at 16px and
+     thicken at 32px, so the smaller sizes carry more weight and the larger
+     ones less. This is what makes icons at different sizes read as one
+     family instead of three.
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  .icon-sprite {
+    position: absolute;
+    width: 0; height: 0;
+    overflow: hidden;
+  }
+
+  .icon {
+    width: var(--icon);
+    height: var(--icon);
+    flex: none;
+    display: inline-block;
+    vertical-align: -0.18em;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none; /* clicks belong to the button, not the glyph */
+  }
+  .icon-sm { width: var(--icon-sm); height: var(--icon-sm); stroke-width: 2; }
+  .icon-lg { width: var(--icon-lg); height: var(--icon-lg); stroke-width: 1.6; }
+  .icon-xl { width: var(--icon-xl); height: var(--icon-xl); stroke-width: 1.4; }
+
+  /* A few glyphs are dots or solid wedges and must not be stroked. */
+  .icon [data-solid] { fill: currentColor; stroke: none; }
+
+  /* Semantic colouring, so a caller never reaches for a raw hex. */
+  .icon-success { color: var(--success); }
+  .icon-warn    { color: var(--warn); }
+  .icon-danger  { color: var(--danger); }
+  .icon-info    { color: var(--info); }
+  .icon-muted   { color: var(--text-muted); }
+
+  /* Sunlight mode: thin strokes wash out in glare before colour does. */
+  :root[data-theme="sunlight"] .icon { stroke-width: 2.25; }
+  :root[data-theme="sunlight"] .icon-sm { stroke-width: 2.5; }
+
+  /* Icon + label pairing. Used by every button so spacing is decided once. */
+  .ico-lbl {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    line-height: var(--lh-tight);
+  }
+
+  /* Icon-only control. Reserved for reversible actions — anything
+     destructive keeps a text label, because a tooltip cannot be revealed by
+     touch and there is no hover on the phone this app runs on. */
+  .icon-btn {
+    min-width: var(--hit);
+    min-height: var(--hit);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    color: var(--text-muted);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-md);
+    cursor: pointer;
+    transition: background var(--dur-fast) var(--ease),
+                color var(--dur-fast) var(--ease),
+                border-color var(--dur-fast) var(--ease);
+  }
+  .icon-btn:hover { background: var(--surface-3); color: var(--text); }
+  .icon-btn:active { background: var(--paper-dim); }
+  .icon-btn[data-variant="danger"]:hover { color: var(--danger); border-color: var(--danger); }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------- Status bar ---------- */
+  .statusbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: var(--ink);
+    color: var(--paper);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .statusbar .brand {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    font-size: 15px;
+  }
+  .statusbar .brand small {
+    display: block;
+    font-weight: 400;
+    opacity: 0.6;
+    font-size: 11px;
+    letter-spacing: 0.03em;
+  }
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-family: var(--mono);
+    font-weight: 600;
+  }
+  .status-pill.online { background: rgba(31,111,92,0.25); color: #8FDFC7; }
+  .status-pill.offline { background: rgba(166,64,47,0.25); color: #F0A99A; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .status-pill.offline .dot { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+  .gear-btn {
+    background: none; border: none; color: var(--paper); opacity: 0.7;
+    font-size: 18px; cursor: pointer; padding: 4px 8px;
+  }
+  .gear-btn:hover { opacity: 1; }
+
+  .staff-badge-btn {
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: var(--paper);
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: background 0.15s;
+  }
+  .staff-badge-btn:hover { background: rgba(255, 255, 255, 0.3); }
+
+  .lang-select {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: var(--paper);
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 6px;
+    padding: 4px 6px;
+    outline: none;
+    cursor: pointer;
+    font-family: var(--sans);
+  }
+  .lang-select option {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  /* ---------- Main content ---------- */
+  main {
+    flex: 1;
+    padding: 16px;
+    padding-bottom: 90px;
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  h2 { font-size: 18px; margin: 4px 0 14px; letter-spacing: -0.01em; }
+  .empty {
+    text-align: center;
+    color: var(--ink-soft);
+    padding: 40px 20px;
+    font-size: 14px;
+    border: 1px dashed var(--line);
+    border-radius: 10px;
+  }
+
+  /* ---------- Order tab ---------- */
+  .product-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+  }
+  .product-row .info { flex: 1; }
+  .product-row .pname { font-weight: 600; font-size: 14px; }
+  /* W5: price loudest, same rationale as the grid card — was 12px muted
+     ink-soft, i.e. quieter than the name, which is backwards for the
+     most-scanned field on the row. */
+  .product-row .pprice { font-family: var(--mono); font-weight: 800; font-size: 16px; color: var(--teal); margin-top: 2px; }
+  .product-row .pstock { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; font-family: var(--mono); font-weight: 700; font-size: 10px; padding: 1px 6px; border-radius: var(--r-full); vertical-align: middle; }
+  .product-row .pstock.low { background: var(--warn-bg); color: var(--warn); }
+  .product-row .pstock.out { background: var(--danger-bg); color: var(--danger); }
+  .stepper { display: flex; align-items: center; gap: 10px; }
+  .stepper button {
+    width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--paper-dim); font-size: 16px; cursor: pointer; color: var(--ink);
+  }
+  .stepper button:active { background: var(--line); }
+  .stepper .qty { font-family: var(--mono); font-weight: 700; min-width: 18px; text-align: center; }
+
+  .customer-fields { margin: 16px 0; display: flex; flex-direction: column; gap: 8px; }
+  .customer-fields input {
+    padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+    font-size: 14px; font-family: var(--sans); background: var(--surface);
+  }
+
+  .order-summary {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px; margin: 14px 0; font-family: var(--mono); font-size: 13px;
+  }
+  .order-summary .total-row {
+    display: flex; justify-content: space-between; font-weight: 700;
+    margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line);
+  }
+
+  /* ---------- Cash Calculator ---------- */
+  .cash-calc {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--line);
+  }
+  .cash-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+    font-family: var(--sans);
+  }
+  .quick-cash-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .quick-cash-btn {
+    background: var(--paper-dim);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    min-height: var(--hit);
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--mono);
+    cursor: pointer;
+    color: var(--ink);
+  }
+  .quick-cash-btn:hover { background: var(--line); }
+  .quick-cash-btn.active {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+  .cash-input-row input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: var(--mono);
+    outline: none;
+    box-sizing: border-box;
+  }
+  .change-display {
+    margin-top: 8px;
+    padding: 14px 14px;
+    border-radius: var(--r-md);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-weight: 700;
+    font-size: 13px;
+    font-family: var(--mono);
+  }
+  /* W5: change-due is read at arm's length across a counter, mid-
+     transaction — it was the same 13px as everything else around it.
+     The label stays small; the number people are actually squinting at
+     is now display-size. */
+  .change-display .amt { font-size: 28px; font-weight: 800; line-height: 1; }
+  .change-display.ok {
+    background: var(--teal-bg);
+    color: var(--teal);
+  }
+  .change-display.warn {
+    background: var(--amber-bg);
+    color: var(--amber);
+  }
+
+  /* ---------- W4: .btn primitive ----------
+     One closed set, all four variants sharing size/shape/motion so nobody
+     re-invents a shadow value per screen. Existing .btn-primary/.btn-secondary
+     markup is upgraded in place (no HTML changes needed); .btn-ghost and
+     .btn-danger are new variants for W5. All read --hit for the 44px floor,
+     so large-target mode (--hit-lg) grows every button in the app for free. */
+  .btn-primary, .btn-secondary, .btn-ghost, .btn-danger {
+    width: 100%; min-height: var(--hit); padding: 0 16px; border-radius: var(--r-md);
+    font-weight: 700; letter-spacing: 0.01em;
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    gap: 8px; box-sizing: border-box; border: 1px solid transparent;
+    transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease),
+                border-color var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
+    position: relative;
+  }
+  .btn-primary { background: var(--ink); color: var(--paper); font-size: 15px; }
+  .btn-primary:hover { background: var(--stone-800); }
+  .btn-primary:active { background: var(--stone-900); }
+  .btn-secondary {
+    background: var(--surface); color: var(--ink); border-color: var(--line);
+    font-weight: 600; font-size: 14px; margin-top: 8px;
+  }
+  .btn-secondary:hover { background: var(--stone-100); }
+  .btn-secondary:active { background: var(--stone-200); }
+  .btn-ghost {
+    background: transparent; color: var(--ink); border-color: transparent;
+    font-weight: 600; font-size: 14px;
+  }
+  .btn-ghost:hover { background: var(--stone-100); }
+  .btn-ghost:active { background: var(--stone-200); }
+  .btn-danger { background: var(--danger); color: var(--text-on-accent); font-size: 15px; }
+  .btn-danger:hover { opacity: 0.9; }
+  .btn-danger:active { opacity: 0.8; }
+  .btn-primary:disabled, .btn-secondary:disabled, .btn-ghost:disabled, .btn-danger:disabled {
+    opacity: 0.35; cursor: not-allowed;
+  }
+  /* Loading: toggle with classList.add('is-loading'), no markup change —
+     the label stays in the DOM (assistive tech still gets it) while a
+     spinner covers it visually. */
+  .btn-primary.is-loading, .btn-secondary.is-loading, .btn-ghost.is-loading, .btn-danger.is-loading {
+    color: transparent; pointer-events: none;
+  }
+  .btn-primary.is-loading::after, .btn-secondary.is-loading::after,
+  .btn-ghost.is-loading::after, .btn-danger.is-loading::after {
+    content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid currentColor; border-top-color: transparent;
+    animation: btnSpin 0.6s linear infinite;
+  }
+  .btn-primary.is-loading::after, .btn-danger.is-loading::after { color: var(--paper); }
+  .btn-secondary.is-loading::after, .btn-ghost.is-loading::after { color: var(--ink); }
+  @keyframes btnSpin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .btn-primary.is-loading::after, .btn-secondary.is-loading::after,
+    .btn-ghost.is-loading::after, .btn-danger.is-loading::after { animation-duration: 1.2s; }
+  }
+
+  /* ---------- Queue tab: receipt-style ticket cards ---------- */
+  .ticket {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+    position: relative;
+  }
+  .ticket::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 0;
+    border-top: 2px dashed var(--line);
+    margin-top: 46px;
+  }
+  .ticket-head { display: flex; justify-content: space-between; align-items: flex-start; }
+  .ticket-id { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); }
+  /* W5: provenance line — small, quiet, sits right under the head so it
+     reads as metadata rather than competing with the badge for attention. */
+  .ticket-provenance { font-family: var(--mono); font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+  .badge {
+    font-size: 11px; font-family: var(--mono); font-weight: 700;
+    padding: 3px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .badge.queued { background: var(--amber-bg); color: var(--amber); }
+  .badge.synced { background: var(--teal-bg); color: var(--teal); }
+  /* Full semantic set — queued/synced above are the two the queue already
+     uses; these four cover everything else (stock, sync errors, info
+     callouts) so a new badge never invents a sixth color. */
+  .badge.success { background: var(--success-bg); color: var(--success); }
+  .badge.warn    { background: var(--warn-bg);    color: var(--warn); }
+  .badge.danger  { background: var(--danger-bg);  color: var(--danger); }
+  .badge.info    { background: var(--info-bg);    color: var(--info); }
+  .badge.neutral { background: var(--neutral-bg); color: var(--neutral); }
+  .ticket-items { margin-top: 20px; font-family: var(--mono); font-size: 13px; line-height: 1.7; }
+  .ticket-items .item-row { display: flex; justify-content: space-between; }
+  .ticket-total {
+    display: flex; justify-content: space-between; font-weight: 700;
+    margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line);
+    font-family: var(--mono); font-size: 13px;
+  }
+  .ticket-customer { font-size: 12px; color: var(--ink-soft); margin-top: 6px; }
+
+  /* Queue: enter/exit for patched ticket nodes (see patchList in JS).
+     .ticket-enter plays once when a node is newly created — not on every
+     re-render, since existing tickets are patched in place, not rebuilt.
+     .ticket-removing is the "pending delete, undo still available" state;
+     .ticket-exit plays only once the undo window has actually expired. */
+  .ticket-enter { animation: ticketEnter 0.22s ease-out; }
+  @keyframes ticketEnter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .ticket-exit { opacity: 0; transform: scale(0.98); transition: opacity 0.2s ease, transform 0.2s ease; }
+  .ticket-removing { opacity: 0.45; pointer-events: none; position: relative; }
+  .ticket-removing::after {
+    content: "";
+    position: absolute; inset: 0; border-radius: 10px;
+    background: repeating-linear-gradient(135deg, transparent 0 8px, var(--line) 8px 9px);
+    opacity: 0.5;
+  }
+
+  .sync-bar {
+    display: flex; gap: 8px; margin-bottom: 14px;
+  }
+  .sync-bar .btn-primary { flex: 1; }
+
+  /* ---------- Sticky Search & Category Pills ---------- */
+  .search-container {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--paper);
+    padding: 8px 0 10px;
+  }
+  .search-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .search-input-wrap input {
+    width: 100%;
+    padding: 10px 36px 10px 36px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 13px;
+    background: var(--surface);
+    outline: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  }
+  .search-input-wrap .search-icon {
+    position: absolute;
+    left: 12px;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+  .search-input-wrap .clear-btn {
+    position: absolute;
+    right: 10px;
+    background: none;
+    border: none;
+    font-size: 16px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 2px 6px;
+  }
+  .category-pills {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 8px 0 2px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .category-pills::-webkit-scrollbar { display: none; }
+  .cat-pill {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .cat-pill.active {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+
+  .order-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    gap: 8px;
+  }
+  .order-header-bar h2 { margin: 0; }
+
+  .view-mode-toggle {
+    display: inline-flex;
+    background: var(--paper-dim);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 2px;
+    gap: 2px;
+  }
+  .view-toggle-btn {
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    padding: 4px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+    font-family: var(--sans);
+  }
+  .view-toggle-btn:hover {
+    color: var(--ink);
+  }
+  .view-toggle-btn.active {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    font-weight: 700;
+  }
+
+  /* Grid View Layout */
+  #productList.grid-view {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .grid-prod-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    position: relative;
+  }
+  .grid-prod-card.has-qty {
+    border-color: var(--teal);
+    box-shadow: 0 0 0 1.5px var(--teal);
+    background: var(--surface-2);
+  }
+  .grid-prod-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  }
+  .grid-prod-img-wrap {
+    width: 100%;
+    height: 100px;
+    background: var(--paper-dim);
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .grid-prod-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.2s ease;
+  }
+  .grid-prod-card:hover .grid-prod-img {
+    transform: scale(1.05);
+  }
+  .grid-prod-img-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    color: var(--ink-soft);
+  }
+  .grid-prod-badge-qty {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: var(--teal-solid);
+    color: var(--text-on-accent);
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--mono);
+    padding: 2px 7px;
+    border-radius: 999px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+  /* W5: stock legibility — inferable by position + color without reading.
+     Opposite corner from the qty badge so the two never collide. Only
+     rendered at all when stock is tracked and worth a glance (low/out);
+     a healthy count stays silent so the badge means something when it
+     does appear. */
+  .grid-prod-badge-stock {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: var(--mono);
+    padding: 2px 6px;
+    border-radius: var(--r-full);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+  .grid-prod-badge-stock.low { background: var(--warn-bg); color: var(--warn); }
+  .grid-prod-badge-stock.out { background: var(--danger-bg); color: var(--danger); }
+  .grid-prod-body {
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    justify-content: space-between;
+  }
+  .grid-prod-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--ink);
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 32px;
+  }
+  /* Price is the most-scanned element on the card, so it's the loudest —
+     was the same size as the name; now visibly the dominant number. */
+  .grid-prod-price {
+    font-family: var(--mono);
+    font-weight: 800;
+    font-size: 16px;
+    color: var(--teal);
+    margin-top: 4px;
+  }
+  .grid-prod-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    background: var(--paper-dim);
+    border-radius: 8px;
+    padding: 3px;
+  }
+  .grid-prod-stepper button {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .grid-prod-stepper button:active {
+    background: var(--line);
+  }
+  .grid-prod-stepper .qty {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--ink);
+  }
+
+  .product-main { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+  .prod-thumb {
+    width: 44px; height: 44px; border-radius: 8px; object-fit: cover;
+    border: 1px solid var(--line); flex-shrink: 0; background: var(--paper-dim);
+    cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .prod-thumb:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+  }
+  .prod-thumb-placeholder { width: 44px; height: 44px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper-dim); display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--ink-soft); flex-shrink: 0; }
+
+  .catalog-form-wrap { margin-bottom: 16px; }
+  .catalog-form { display: flex; gap: 8px; align-items: center; }
+  .catalog-form input {
+    flex: 1; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; min-width: 0;
+  }
+  .catalog-form input.price { max-width: 80px; font-family: var(--mono); }
+  
+  .img-upload-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 42px; height: 42px; border-radius: 8px; border: 1px dashed var(--line);
+    background: var(--surface); cursor: pointer; flex-shrink: 0; transition: border-color 0.15s;
+  }
+  .img-upload-btn:hover { border-color: var(--ink); }
+  .img-preview-box { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 18px; }
+  .img-preview-box img.thumb-img { width: 100%; height: 100%; object-fit: cover; border-radius: 7px; }
+
+  .cat-item-info { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+  .cat-thumb-img {
+    width: 40px; height: 40px; border-radius: 8px; object-fit: cover;
+    border: 1px solid var(--line); flex-shrink: 0;
+    cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .cat-thumb-img:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+  }
+  .cat-thumb-placeholder { width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper-dim); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .cat-item-name { font-weight: 600; font-size: 14px; }
+  .cat-item-price { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); }
+
+  .img-upload-btn-sm {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 6px; border: 1px dashed var(--line);
+    background: var(--surface); cursor: pointer; flex-shrink: 0;
+  }
+  .thumb-img-sm { width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
+  .img-status-msg { font-size: 11px; color: var(--teal); margin-top: 4px; font-weight: 600; }
+
+  .catalog-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 0; border-bottom: 1px solid var(--paper-dim); gap: 8px;
+  }
+  .catalog-row .remove { color: var(--brick); background: none; border: none; cursor: pointer; font-size: 13px; }
+  .catalog-row .edit { color: var(--ink-soft); background: none; border: none; cursor: pointer; font-size: 13px; margin-right: 12px; }
+  .catalog-row-edit {
+    display: flex; gap: 6px; align-items: center; padding: 8px 0;
+    border-bottom: 1px solid var(--paper-dim); flex-wrap: wrap;
+  }
+  .catalog-row-edit input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
+  .catalog-row-edit input.editName { flex: 1; min-width: 100px; }
+  .catalog-row-edit input.editPrice { width: 70px; font-family: var(--mono); }
+  .catalog-row-edit button { border: none; border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+  .catalog-row-edit .save-edit { background: var(--ink); color: var(--paper); }
+  .catalog-row-edit .cancel-edit { background: var(--paper-dim); color: var(--ink); }
+  .sync-note { font-size: 11px; color: var(--ink-soft); margin: -8px 0 14px; line-height: 1.4; }
+  .catalog-sync-head { margin: -8px 0 14px; }
+  .catalog-sync-head .sync-note { margin: 0 0 5px; }
+  .catalog-sync-status { font-size: 11px; font-weight: 600; }
+  .catalog-sync-status.synced { color: #3f6f52; }
+  .catalog-sync-status.dirty { color: var(--brick); }
+
+  /* ---------- Niche taxonomy: business type, unit/category selects, tag badges ---------- */
+  .niche-hint {
+    font-size: 11px; color: var(--ink-soft); margin: -2px 0 4px; line-height: 1.4;
+  }
+  .catalog-form-row2 {
+    display: flex; gap: 8px; margin-top: 8px;
+  }
+  .catalog-form-row2 select {
+    flex: 1; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+    font-size: 12px; background: var(--surface); min-width: 0; font-family: var(--sans); color: var(--ink);
+  }
+  .catalog-row-edit select.editCategory,
+  .catalog-row-edit select.editUnit {
+    padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; background: var(--surface);
+  }
+  .niche-tags-picker {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+  }
+  .niche-tag-check {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--paper-dim); border: 1px solid var(--line); border-radius: 999px;
+    padding: 4px 10px 4px 8px; font-size: 11px; font-weight: 600; color: var(--ink-soft); cursor: pointer;
+  }
+  .niche-tag-check input { margin: 0; }
+  .niche-tag-check.checked { background: var(--teal-bg); color: var(--teal); border-color: var(--teal); }
+
+  .prod-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .prod-badge {
+    display: inline-block; padding: 2px 7px; border-radius: 5px; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.01em; white-space: nowrap;
+  }
+  .prod-badge.unit { background: var(--paper-dim); color: var(--ink-soft); font-family: var(--mono); }
+  .prod-badge.tag { background: var(--amber-bg); color: var(--amber); }
+  .prod-badge.cat { background: var(--teal-bg); color: var(--teal); }
+
+  /* ---------- Restaurant mode: Tables + Kitchen ---------- */
+  .tables-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 10px;
+  }
+  .table-card {
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 8px;
+    text-align: center; cursor: pointer; background: var(--surface); transition: all 0.15s ease;
+  }
+  .table-card .table-number { font-weight: 700; font-size: 16px; }
+  .table-card .table-status { font-size: 11px; color: var(--ink-soft); margin-top: 4px; text-transform: capitalize; }
+  .table-card .table-capacity { font-size: 10px; color: var(--ink-soft); margin-top: 2px; }
+  .table-card .table-notes { font-size: 10px; color: var(--ink-soft); margin-top: 4px; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .table-card.free { border-color: var(--line); }
+  .table-card.occupied { background: var(--amber-bg); border-color: var(--amber); }
+  .table-card.occupied .table-status { color: var(--amber); font-weight: 600; }
+  .table-card .table-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 8px; }
+  .table-card .table-actions button {
+    font-size: 10px; border: none; background: none; cursor: pointer; padding: 2px 4px; font-weight: 600;
+  }
+  .table-card .table-edit { color: var(--ink-soft); }
+  .table-card .table-transfer { color: var(--teal); }
+  .table-card .table-remove { color: var(--brick); }
+
+  .account-card { cursor: default; }
+  .account-card .account-name { font-weight: 700; font-size: 14px; }
+  .account-card .account-contact { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+  .account-card .account-tier-badge {
+    display: inline-block; margin-top: 6px; font-size: 10px; font-weight: 700;
+    background: var(--teal-bg); color: var(--teal); border-radius: 5px; padding: 2px 6px;
+  }
+  .account-card .account-notes { font-size: 10px; color: var(--ink-soft); margin-top: 4px; font-style: italic; }
+  .account-card .table-actions { justify-content: flex-start; }
+  .tier-price-orig { text-decoration: line-through; opacity: 0.55; margin-right: 4px; font-size: 0.9em; }
+  .kitchen-toolbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+
+  .warehouse-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 14px; overflow-x: auto; }
+  .warehouse-tab {
+    padding: 8px 12px; border: none; border-bottom: 2px solid transparent; background: none;
+    font-size: 12px; font-weight: 700; color: var(--ink-soft); cursor: pointer; white-space: nowrap;
+  }
+  .warehouse-tab.active { color: var(--ink); border-bottom-color: var(--teal); }
+  .warehouse-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .warehouse-stats .stat-card { background: var(--surface); padding: 10px; border-radius: 8px; border: 1px solid var(--line); text-align: center; }
+  .warehouse-stats .stat-card .label { font-size: 9px; color: var(--ink-soft); font-weight: 700; text-transform: uppercase; }
+  .warehouse-stats .stat-card .val { font-size: 20px; font-weight: 700; font-family: var(--mono); margin-top: 2px; }
+  .warehouse-stats .stat-card.warning { border-color: var(--amber); }
+  .warehouse-stats .stat-card.warning .val { color: var(--amber); }
+  .warehouse-stats .stat-card.danger { border-color: var(--brick); }
+  .warehouse-stats .stat-card.danger .val { color: var(--brick); }
+  .inventory-item { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 8px; }
+  .inventory-item .item-name { font-weight: 700; font-size: 14px; }
+  .inventory-item .item-details { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; font-size: 11px; color: var(--ink-soft); }
+  .inventory-item .stock-badge { font-weight: 700; padding: 1px 6px; border-radius: 5px; background: var(--paper-dim); }
+  .inventory-item .stock-badge.warning { background: var(--amber-bg); color: var(--amber); }
+  .inventory-item .stock-badge.danger { background: var(--brick-bg); color: var(--brick); }
+  .inventory-item .item-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .inventory-item .item-actions button {
+    padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+    font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .tx-item { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; font-size: 12px; }
+  .tx-item .tx-top { display: flex; justify-content: space-between; align-items: center; }
+  .tx-item .tx-product { font-weight: 700; }
+  .tx-item .tx-qty { font-weight: 700; font-family: var(--mono); }
+  .tx-item .tx-qty.pos { color: var(--teal); }
+  .tx-item .tx-qty.neg { color: var(--brick); }
+  .tx-item .tx-meta { color: var(--ink-soft); font-size: 10px; margin-top: 3px; }
+
+  .fulfillment-type-btn {
+    flex: 1; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+    font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .fulfillment-type-btn.active { border-color: var(--teal); background: var(--teal-bg); color: var(--teal); }
+  .logistics-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 8px; }
+  .logistics-top { display: flex; justify-content: space-between; align-items: center; }
+  .logistics-type { font-weight: 700; font-size: 13px; }
+  .logistics-status {
+    font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 10px;
+    background: var(--paper-dim); color: var(--ink-soft); text-transform: uppercase;
+  }
+  .logistics-status.status-out_for_delivery, .logistics-status.status-ready_for_pickup { background: var(--amber-bg); color: var(--amber); }
+  .logistics-status.status-delivered, .logistics-status.status-picked_up { background: var(--teal-bg); color: var(--teal); }
+  .logistics-items { font-size: 13px; margin-top: 6px; }
+  .logistics-meta { font-size: 11px; color: var(--ink-soft); margin-top: 3px; }
+  .kitchen-sort-select {
+    padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 11px; background: var(--surface);
+  }
+  /* ---------- W5: kitchen — permanent dark/high-contrast + no-scroll grid ----------
+     This is the one component not used on a phone: wall-mounted or on a
+     tablet, read from 2-3 meters, by someone with wet hands. So it always
+     renders dark/high-contrast regardless of the app's own theme setting —
+     re-declaring the same semantic tokens the global [data-theme="dark"]
+     block uses, scoped to #tab-kitchen, so every rule below still just
+     reads var(--surface)/var(--ink)/etc. and doesn't need to know this
+     theme exists. And instead of one scrolling column, tickets lay out in
+     a grid so more of the board is visible at a glance without scrolling. */
+  #tab-kitchen {
+    --paper: var(--stone-950); --paper-dim: var(--stone-900);
+    --surface: var(--stone-900); --surface-2: var(--stone-800);
+    --ink: var(--stone-100); --ink-soft: var(--stone-500);
+    --line: #37423F; --border-soft: var(--stone-800); --border-strong: var(--stone-600);
+    --teal: var(--teal-400); --teal-bg: var(--teal-900); --teal-solid: var(--teal-600);
+    --amber: var(--amber-300); --amber-bg: var(--amber-900); --amber-solid: var(--amber-700);
+    --brick: var(--brick-300); --brick-bg: var(--brick-900); --brick-solid: var(--brick-600);
+    background: var(--paper); color: var(--ink);
+    padding: 12px; margin: 0 -16px; box-sizing: border-box;
+    min-height: calc(100vh - 60px);
+    color-scheme: dark;
+  }
+  #kitchenList {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px; align-content: start;
+  }
+  #kitchenList .empty { grid-column: 1 / -1; }
+  .kitchen-order {
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px;
+  }
+  .kitchen-order.pending { border-left: 4px solid var(--ink-soft); }
+  .kitchen-order.preparing { border-left: 4px solid var(--amber); }
+  .kitchen-order.ready { border-left: 4px solid var(--teal); }
+  .kitchen-order.priority-urgent { background: var(--brick-bg); }
+  .kitchen-order-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; gap: 8px; flex-wrap: wrap; }
+  .kitchen-order-head-left { display: flex; align-items: center; gap: 6px; font-weight: 700; color: var(--ink); }
+  .kitchen-course-badge {
+    display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    background: var(--paper-dim); color: var(--ink-soft); border-radius: 5px; padding: 2px 6px;
+  }
+  .kitchen-timer { font-family: var(--mono); font-weight: 700; }
+  .kitchen-timer.ok { color: var(--ink-soft); }
+  .kitchen-timer.warn { color: var(--amber); }
+  .kitchen-timer.late { color: var(--brick); }
+  .kitchen-order-items { font-size: 13px; margin-bottom: 8px; }
+  .kitchen-order-modifier-note { font-size: 11px; color: var(--ink-soft); font-style: italic; }
+
+  /* Kitchen: enter/exit for patched ticket nodes, same pattern as .ticket-*
+     above. .kitchen-removing is "marked served, undo still available" — the
+     ticket stays on the board, greyed out, until the undo window expires. */
+  .kitchen-enter { animation: kitchenEnter 0.22s ease-out; }
+  @keyframes kitchenEnter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .kitchen-exit { opacity: 0; transform: scale(0.98); transition: opacity 0.2s ease, transform 0.2s ease; }
+  .kitchen-removing { opacity: 0.45; pointer-events: none; }
+  .kitchen-order-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  /* Large hit area — wet hands, 2-3 meters away, single tap advances
+     state. --hit-lg (56px) rather than the standard --hit, since this is
+     exactly the "gloves/wet hands" case large-target mode exists for. */
+  .kitchen-order-actions button {
+    border: none; border-radius: var(--r-md); min-height: var(--hit-lg); padding: 0 16px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    background: var(--ink); color: var(--paper);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .priority-btns { display: inline-flex; gap: 4px; margin-left: auto; }
+  .priority-btns button {
+    border: 1px solid var(--line); background: var(--surface); border-radius: 999px; font-size: 10px;
+    padding: 4px 8px; cursor: pointer; font-weight: 600; color: var(--ink-soft);
+  }
+  .priority-btns button.active.urgent { background: var(--brick-solid); border-color: var(--brick); color: var(--text-on-accent); }
+  .priority-btns button.active.normal { background: var(--ink); border-color: var(--ink); color: var(--text-on-accent); }
+  .priority-btns button.active.low { background: var(--teal-bg); border-color: var(--teal); color: var(--teal); }
+  .kitchen-ready-badge { font-size: 12px; font-weight: 700; color: var(--teal); }
+
+  .modifier-note-btn {
+    display: block; margin-top: 4px; font-size: 11px; color: var(--teal); background: none; border: none;
+    cursor: pointer; padding: 0; text-align: left; font-weight: 600;
+  }
+  .modifier-note-preview { font-size: 11px; color: var(--ink-soft); font-style: italic; margin-top: 2px; }
+  .modifier-chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  .modifier-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--paper-dim); border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 12px 6px 10px; font-size: 12px; font-weight: 600; color: var(--ink-soft); cursor: pointer;
+  }
+  .modifier-chip input { margin: 0; }
+  .modifier-chip.checked { background: var(--teal-bg); color: var(--teal); border-color: var(--teal); }
+
+  /* ---------- Bottom tab bar ----------
+     W5: was flex + overflow-x scroll, which hid destinations past the fold
+     and defeated muscle memory. Now a fixed 5-column grid — 4 core tabs
+     (Order/Market/Queue/Catalog) plus a permanent 5th "More" slot for
+     whatever mode-conditional tabs are on. Never more than 5, ever. */
+  nav.tabbar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--surface); border-top: 1px solid var(--line);
+    display: flex; padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    z-index: 10;
+  }
+  nav.tabbar button {
+    flex: 1; min-height: var(--hit); background: none; border: none; padding: 8px 2px;
+    font-size: 11px; font-weight: 600; color: var(--ink-soft); cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    border-radius: var(--r-md); white-space: nowrap; position: relative;
+  }
+  nav.tabbar button .icon { font-size: 18px; }
+  nav.tabbar button.active { color: var(--ink); background: var(--paper-dim); }
+  nav.tabbar .queue-count {
+    display: inline-block; background: var(--brick-solid); color: var(--text-on-accent);
+    border-radius: var(--r-full); font-size: 9px; padding: 1px 5px; margin-left: 3px;
+    font-family: var(--mono);
+  }
+  /* Presence dot on More — a count would double-count across however many
+     overflow tabs happen to have their own badge, so this only ever answers
+     "does something in here need your attention," not "how many." */
+  #navMore .more-dot {
+    position: absolute; top: 4px; right: 22%;
+    width: 8px; height: 8px; border-radius: var(--r-full); background: var(--danger);
+  }
+  /* ---------- W5: sticky cart bar ----------
+     Fixed just above the tab bar (60px + safe-area is the tab bar's
+     approximate footprint given its own padding formula above), only
+     shown on the order tab once the cart has items. */
+  .cart-sticky-bar {
+    position: fixed; left: 0; right: 0;
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+    z-index: 9;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--ink); color: var(--paper);
+    padding: 12px 16px; cursor: pointer;
+    box-shadow: var(--e-2);
+  }
+  .cart-sticky-count { font-size: 13px; font-weight: 600; opacity: 0.85; }
+  .cart-sticky-total { font-family: var(--mono); font-size: 17px; font-weight: 800; margin-left: auto; }
+  .cart-sticky-bar .icon { opacity: 0.7; }
+  /* ---------- More sheet: relocated mode-conditional tabs ---------- */
+  .more-sheet-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+  .more-sheet-item.btn-ghost {
+    justify-content: flex-start; width: 100%; margin-top: 0; padding: 0 12px;
+  }
+  .more-sheet-item .queue-count { margin-left: auto; }
+
+  /* ---------- Settings modal ---------- */
+  /* ---------- W4: .sheet primitive ----------
+     This was already structurally a bottom sheet (flex-end, rounded top
+     corners, full-width) — the "reject centered modal" fix from the plan
+     was already done. This formalizes it: a drag-handle affordance so it
+     reads as a sheet rather than a modal, safe-area padding for phones
+     with a home indicator, and an entrance slide that respects
+     prefers-reduced-motion. No markup change needed — .modal-backdrop /
+     .modal are the existing classnames every open*Modal() function targets. */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+    display: none; align-items: flex-end; z-index: 20;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--paper); width: 100%; border-radius: var(--r-xl) var(--r-xl) 0 0;
+    padding: 12px 20px calc(20px + env(safe-area-inset-bottom, 0px)); max-width: 520px; margin: 0 auto;
+    max-height: 88vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    animation: sheetEnter var(--dur-slow) var(--ease);
+  }
+  @keyframes sheetEnter { from { transform: translateY(16px); opacity: 0.6; } to { transform: translateY(0); opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .modal { animation: none; } }
+  /* Drag-handle affordance — purely visual (no swipe-to-dismiss gesture
+     wired up yet), signals "sheet" instead of "dialog" at a glance. */
+  .modal::before {
+    content: ""; display: block; width: 36px; height: 4px; border-radius: var(--r-full);
+    background: var(--line); margin: 0 auto 14px;
+  }
+  .modal h3 { margin-top: 0; }
+  .modal label { display: block; font-size: 12px; font-weight: 600; margin: 12px 0 4px; color: var(--ink-soft); }
+  .modal input {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--line);
+    border-radius: 8px; font-size: 14px; background: var(--surface);
+  }
+  .modal .close-btn { margin-top: 18px; }
+  .hint { font-size: 11px; color: var(--ink-soft); margin-top: 4px; line-height: 1.4; }
+  .settings-section-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    color: var(--ink-soft); letter-spacing: 0.03em; margin: 14px 0 6px;
+  }
+  .paymethod-row {
+    display: flex; align-items: center; gap: 8px; background: var(--paper-dim);
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px;
+  }
+  .paymethod-row .pm-name { flex: 1; font-size: 13px; font-weight: 600; }
+  .paymethod-row input[type="text"].pm-details {
+    flex: 1; margin: 0; padding: 6px 8px; font-size: 12px;
+  }
+  .paymethod-row button.pm-remove {
+    background: none; border: none; color: var(--brick); font-size: 16px; cursor: pointer; padding: 0 4px;
+  }
+  .pm-details-hint {
+    font-size: 12px; background: var(--teal-bg); color: var(--teal); border-radius: 8px;
+    padding: 8px 10px; margin-bottom: 8px;
+  }
+
+  /* ---------- Product Image Preview Modal ---------- */
+  .img-modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(15, 23, 42, 0.78);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    display: none; align-items: center; justify-content: center;
+    z-index: 50; padding: 16px;
+  }
+  .image-preview-card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: 0 20px 35px -10px rgba(0,0,0,0.4);
+    width: 100%;
+    max-width: 440px;
+    overflow: hidden;
+    position: relative;
+    animation: imgModalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes imgModalPop {
+    from { opacity: 0; transform: scale(0.93); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .img-preview-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(15, 23, 42, 0.7);
+    color: var(--text-on-accent);
+    border: none;
+    font-size: 20px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 2;
+    transition: background 0.15s, transform 0.15s;
+  }
+  .img-preview-close:hover {
+    background: color-mix(in srgb, var(--media-stage) 95%, transparent);
+    transform: scale(1.05);
+  }
+  .img-preview-stage {
+    width: 100%;
+    min-height: 240px;
+    max-height: 380px;
+    background: var(--media-stage);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .img-preview-hero {
+    max-width: 100%;
+    max-height: 380px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+  }
+  .img-preview-meta {
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--paper);
+  }
+  .img-preview-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.3;
+  }
+  .img-preview-price {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--teal);
+    white-space: nowrap;
+  }
+  .ticket-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--line);
+  }
+  .ticket-act-btn {
+    flex: 1;
+    background: var(--paper-dim);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-family: var(--sans);
+  }
+  .ticket-act-btn:hover { background: var(--line); }
+  .ticket-act-btn.danger { color: var(--brick); }
+  .ticket-act-btn.danger:hover { background: var(--brick-bg); }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .summary-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .summary-card .label {
+    font-size: 10px;
+    color: var(--ink-soft);
+    font-weight: 700;
+    text-transform: uppercase;
+    font-family: var(--sans);
+  }
+  .summary-card .val {
+    font-size: 16px;
+    font-weight: 700;
+    font-family: var(--mono);
+    margin-top: 2px;
+    color: var(--ink);
+  }
+
+  /* Printable receipt thermal view */
+  #printableReceipt { display: none; }
+  @media print {
+    body * { visibility: hidden !important; }
+    #printableReceipt, #printableReceipt * { visibility: visible !important; }
+    #printableReceipt {
+      display: block !important;
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 78mm;
+      padding: 8px;
+      font-family: var(--mono), monospace;
+      color: #000;
+      background: var(--surface);
+      font-size: 12px;
+    }
+  }
+
+  .toast {
+    position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: var(--paper); padding: 10px 18px;
+    border-radius: 999px; font-size: 13px; z-index: 30;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px);
+  }
+  .toast.show { opacity: 1; pointer-events: auto; }
+  .toast-undo-btn {
+    display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+    background: none; border: none; color: var(--paper);
+    font-weight: 700; font-size: 13px; text-decoration: underline;
+    padding: 0; cursor: pointer;
+  }
+
+  /* ---------- Marketplace Styling ---------- */
+  .market-banner {
+    background: linear-gradient(135deg, #1C2321 0%, #2A3633 100%);
+    color: var(--paper);
+    padding: 14px 16px;
+    border-radius: 12px;
+    margin-bottom: 14px;
+  }
+  .market-banner h3 { margin: 0 0 4px; font-size: 16px; display: flex; align-items: center; gap: 6px; }
+  .market-banner p { margin: 0; font-size: 12px; opacity: 0.8; line-height: 1.4; }
+
+  .stall-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--teal-bg);
+    color: var(--teal);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: var(--mono);
+  }
+
+  .multi-cart-bar {
+    position: sticky;
+    bottom: 70px;
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    z-index: 20;
+    margin-top: 14px;
+    animation: slideUp 0.2s ease-out;
+  }
+  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  .multi-cart-btn {
+    background: var(--teal-solid);
+    color: var(--text-on-accent);
+    border: none;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .multi-cart-btn:hover { filter: brightness(1.1); }
+
+  .vendor-group-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .vendor-group-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px dashed var(--line);
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    font-weight: 700;
+    font-size: 13px;
+  }
+
+/* Seller Home — compact operator dashboard. */
+.seller-home-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin:8px 0 18px; }
+.seller-home-kicker { font-size:11px; font-weight:800; letter-spacing:.14em; opacity:.58; }
+.seller-home-head h2 { margin:3px 0 3px; }
+.seller-home-head p { margin:0; opacity:.68; font-size:13px; }
+.seller-home-status { padding:6px 9px; border-radius:999px; font-size:11px; font-weight:700; background:var(--surface-2, #eef2f0); }
+.seller-home-status.offline { opacity:.72; }
+.seller-home-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; margin-bottom:14px; }
+.home-metric { appearance:none; border:1px solid var(--border, #d9dfdc); background:var(--surface, #fff); color:inherit; text-align:left; border-radius:14px; padding:13px; min-height:76px; cursor:pointer; }
+.home-metric:hover { transform:translateY(-1px); }
+.home-metric.attention { border-color:#d8a34a; }
+.home-metric-label { display:block; font-size:11px; opacity:.62; margin-bottom:5px; }
+.home-metric strong { font-size:20px; line-height:1.1; }
+.seller-home-actions { display:grid; gap:9px; margin-bottom:14px; }
+.home-action { width:100%; display:flex; align-items:center; gap:12px; text-align:left; border:1px solid var(--border, #d9dfdc); background:var(--surface, #fff); color:inherit; border-radius:14px; padding:13px; cursor:pointer; }
+.home-action.primary { border-color:currentColor; }
+.home-action-icon { width:34px; height:34px; display:grid; place-items:center; border-radius:10px; background:var(--surface-2, #eef2f0); font-size:20px; flex:0 0 auto; }
+.home-action strong, .home-action small { display:block; }
+.home-action small { margin-top:3px; opacity:.62; font-size:12px; }
+.seller-home-note { display:grid; gap:4px; border-radius:14px; padding:13px; background:var(--surface-2, #eef2f0); font-size:12px; }
+.seller-home-note span { opacity:.68; line-height:1.45; }
+@media (min-width:600px) { .seller-home-metrics { grid-template-columns:repeat(4,minmax(0,1fr)); } .seller-home-actions { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+
+/* Seller branding editor */
+.branding-preview {
+  margin: 10px 0 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.branding-preview-bar {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--preview-brand);
+  color: #fff;
+}
+.branding-preview-bar img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgba(255,255,255,.25);
+}
+
+/* Buyer order tracking */
+.track-wrap { max-width: 720px; }
+.track-card { background: var(--paper, #fff); border: 1px solid var(--line, #ddd); border-radius: 18px; padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,.05); }
+.track-status { display:flex; justify-content:space-between; gap:16px; align-items:center; padding:14px; border-radius:12px; background:var(--paper-dim,#f6f6f6); text-transform:capitalize; }
+.track-status span,.muted { opacity:.65; font-size:.9rem; }
+.track-seller { display:flex; justify-content:space-between; gap:16px; padding:16px 4px; border-bottom:1px solid var(--line,#ddd); }
+.track-seller:last-child { border-bottom:0; }
+.track-right { display:flex; align-items:flex-end; flex-direction:column; gap:5px; text-align:right; }
+.track-pill { border:1px solid var(--line,#ddd); border-radius:999px; padding:4px 9px; text-transform:capitalize; font-size:.82rem; }
+#trackOrder { display:block; text-align:center; text-decoration:none; margin-bottom:8px; }
+
+/* FUX-5 / FUX-11: shared workspace surfaces. Existing legacy surfaces remain
+   untouched; these classes provide the first unified product shell layer. */
+.fux-workspace { display: grid; gap: 1.25rem; }
+.fux-workspace-header { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
+.fux-eyebrow { font-size:var(--fs-2xs); font-weight:var(--fw-bold); letter-spacing:.12em; color:var(--text-subtle); }
+.fux-workspace-header h2 { margin:.2rem 0 .15rem; font-size:var(--fs-2xl); line-height:var(--lh-tight); }
+.fux-context { margin:0; color:var(--text-muted); font-size:var(--fs-sm); }
+.fux-status { display:inline-flex; align-items:center; min-height:2rem; padding:.35rem .65rem; border-radius:999px; font-size:var(--fs-xs); font-weight:var(--fw-semi); white-space:nowrap; }
+.fux-status-success { color:var(--success); background:var(--success-bg); }
+.fux-status-warning { color:var(--warn); background:var(--warn-bg); }
+.fux-section-heading { display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin-bottom:.65rem; }
+.fux-section-heading h3 { margin:0; font-size:var(--fs-lg); }
+.fux-section-heading span { color:var(--text-subtle); font-size:var(--fs-xs); }
+.fux-card-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; }
+.fux-work-card, .fux-action { appearance:none; border:1px solid var(--border-soft); background:var(--surface); color:var(--text); border-radius:.9rem; text-align:left; padding:1rem; box-shadow:0 1px 2px rgba(0,0,0,.04); cursor:pointer; font:inherit; }
+.fux-work-card { display:grid; gap:.25rem; min-height:7rem; }
+.fux-work-card.has-attention { border-color:var(--warn); }
+.fux-card-label { color:var(--text-muted); font-size:var(--fs-xs); }
+.fux-work-card strong { font-size:var(--fs-lg); }
+.fux-work-card small, .fux-action small { color:var(--text-subtle); }
+.fux-action-list { display:grid; gap:.65rem; }
+.fux-action { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.fux-action strong { font-size:var(--fs-base); }
+.fux-action.primary { border-color:var(--teal); }
+.fux-work-card:focus-visible, .fux-action:focus-visible { outline:var(--focus-ring-width) solid var(--focus-ring); outline-offset:var(--focus-ring-offset); }
+@media (max-width:640px) {
+  .fux-card-grid { grid-template-columns:1fr; }
+  .fux-workspace-header { align-items:flex-start; }
+}
+
+.fux-procurement-summary { border:1px solid var(--border-soft); border-radius:.9rem; background:var(--surface); padding:1rem; }
+.fux-summary-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.75rem; }
+.fux-summary-grid > div { display:grid; gap:.15rem; }
+.fux-summary-grid strong { font-size:1.35rem; line-height:1; }
+.fux-summary-grid span, .fux-summary-note, .fux-summary-state { color:var(--text-muted); font-size:var(--fs-xs); }
+.fux-summary-note { display:block; margin-top:.75rem; }
+@media (max-width: 640px) { .fux-summary-grid { grid-template-columns:1fr; } }

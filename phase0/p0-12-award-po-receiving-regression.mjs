@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+const root = path.resolve(new URL('.', import.meta.url).pathname, '..');
+const ui = fs.readFileSync(path.join(root, 'app/src/procurement/ui.js'), 'utf8');
+const receiving = fs.readFileSync(path.join(root, 'app/src/warehouse/procurement-receiving.js'), 'utf8');
+const store = fs.readFileSync(path.join(root, 'backend/lib/store-sqlite.js'), 'utf8');
+const server = fs.readFileSync(path.join(root, 'backend/server.js'), 'utf8');
+assert.match(ui, /Create purchase order/);
+assert.match(ui, /b2b:po:create/);
+assert.match(ui, /b2b:po:approve/);
+assert.match(receiving, /approved procurement-origin purchase orders/);
+assert.match(store, /Only procurement-origin purchase orders can use procurement receiving/);
+assert.match(store, /Only approved procurement purchase orders can be received/);
+assert.match(store, /idempotencyKey/);
+assert.match(server, /procurementReceipt|procurement.*receipt/i);
+console.log('P0-12 Award → Purchase Order → Receiving Regression: PASS');

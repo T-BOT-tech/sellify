@@ -1,0 +1,40 @@
+name: Sellify CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [24]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Verify runtime
+        run: node --version
+
+      - name: Install root dependencies
+        run: npm install --ignore-scripts
+
+      - name: Syntax check core entrypoints
+        run: |
+          node --check backend/server.js
+          node --check backend/backup.js
+          node --check phase0/golden-regression.mjs
+
+      - name: Run baseline regression
+        run: npm run phase0:test

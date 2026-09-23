@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+const root = process.cwd();
+const panel = fs.readFileSync(path.join(root,'app/src/authorization/approval-delegation.js'),'utf8');
+const settings = fs.readFileSync(path.join(root,'app/src/ui/settings.js'),'utf8');
+const html = fs.readFileSync(path.join(root,'app/index.html'),'utf8');
+const boundary = fs.readFileSync(path.join(root,'backend/lib/vertical-approval-boundary.js'),'utf8');
+assert.match(panel,/b2b:po:approve/);
+assert.match(panel,/No canonical delegation workflow\/store/);
+assert.match(panel,/does not create approval evidence/);
+assert.match(panel,/server authorization remains authoritative/);
+assert.match(settings,/renderApprovalDelegationPanel/);
+assert.match(html,/approvalDelegationPanel/);
+assert.match(boundary,/approval_evidence/);
+assert.match(boundary,/approval_store: 'none'/);
+console.log('P1-07 Approval / Delegation UX Regression: PASS');

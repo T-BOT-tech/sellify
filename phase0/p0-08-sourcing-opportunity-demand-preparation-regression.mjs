@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+const root = path.resolve(new URL('.', import.meta.url).pathname, '..');
+const ui = fs.readFileSync(path.join(root, 'app/src/procurement/ui.js'), 'utf8');
+const demand = fs.readFileSync(path.join(root, 'app/src/procurement/demand-contract.js'), 'utf8');
+const server = fs.readFileSync(path.join(root, 'backend/server.js'), 'utf8');
+assert.match(ui, /prepareDemandFromOpportunity/);
+assert.match(ui, /data-demand-opportunity-index/);
+assert.match(ui, /Prepare procurement demand/);
+assert.match(ui, /Prepared from sourcing opportunity/);
+assert.match(ui, /canonical Procurement authority/);
+assert.match(demand, /capability: 'procurement\.demand'/);
+assert.match(demand, /execution: 'backend_authority'/);
+assert.match(server, /procurement:demand:create/);
+assert.match(server, /createProcurementDemand\(chatId, body, session\)/);
+assert.doesNotMatch(ui, /localStorage|indexedDB|sqlite|ledger/i);
+console.log('P0-08 Sourcing Opportunity → Procurement Demand Preparation Regression: PASS');

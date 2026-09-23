@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { PROCUREMENT_AWARD_CONTRACT_VERSION, PROCUREMENT_AWARD_STATES, PROCUREMENT_AWARD_CAPABILITY, canTransitionProcurementAward, procurementAwardContract } from '../app/src/procurement/award-contract.js';
+import { getPlatformCapability } from '../app/src/platform/capability-contract.js';
+assert.equal(PROCUREMENT_AWARD_CONTRACT_VERSION,'1.0');
+assert.deepEqual(PROCUREMENT_AWARD_STATES,{DRAFT:['CONFIRMED','CANCELLED'],CONFIRMED:[],CANCELLED:[]});
+assert.equal(canTransitionProcurementAward('DRAFT','CONFIRMED'),true);
+assert.equal(canTransitionProcurementAward('CONFIRMED','CANCELLED'),false);
+assert.equal(PROCUREMENT_AWARD_CAPABILITY.splitAwards,true);
+assert.equal(PROCUREMENT_AWARD_CAPABILITY.b2bPurchaseOrderMutation,false);
+assert.equal(procurementAwardContract().executionBridge,'b2b_purchase_order_authority');
+assert.equal(getPlatformCapability('procurement.award').authority,'procurement');
+assert.equal(getPlatformCapability('procurement.award').resource,'procurement_award');
+console.log('Phase 17.5 Procurement Award Contract Regression: PASS');

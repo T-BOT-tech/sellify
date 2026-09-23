@@ -1,0 +1,162 @@
+// Provider-neutral payment adapter boundary.
+// Provider implementations must stay outside the payment core and must not
+// perform persistence directly. The core owns state, ledger and reconciliation.
+
+const UNSUPPORTED = Symbol('unsupported-payment-operation');
+
+function unsupported(providerId, operation) {
+  const error = new Error(`Payment provider ${providerId} does not implement ${operation}`);
+  error.code = 'PAYMENT_PROVIDER_OPERATION_UNSUPPORTED';
+  error.statusCode = 501;
+  error.providerId = providerId;
+  error.operation = operation;
+  return error;
+}
+
+function notConfigured(providerId, operation) {
+  const error = new Error(`Payment provider ${providerId} is not configured for ${operation}`);
+  error.code = 'PAYMENT_PROVIDER_NOT_CONFIGURED';
+  error.statusCode = 503;
+  error.providerId = providerId;
+  error.operation = operation;
+  return error;
+}
+
+const METHODS = Object.freeze([
+  'getMetadata',
+  'validateAccount',
+  'parseConfirmation',
+  'verify',
+  'initiate',
+  'getStatus',
+  'refund',
+  'reconcile',
+]);
+
+function normalizeCapabilities(capabilities = {}) {
+  return Object.freeze(Object.fromEntries(METHODS.map(method => [method, Boolean(capabilities[method])] )));
+}
+
+function normalizeProvider(adapter) {
+  if (!adapter || typeof adapter !== 'object') throw new TypeError('Payment provider adapter must be an object');
+  const providerId = String(adapter.id || adapter.providerId || '').trim().toLowerCase();
+  if (!providerId) throw new TypeError('Payment provider adapter requires id');
+
+  const capabilities = normalizeCapabilities(adapter.capabilities || {});
+  const methods = Object.fromEntries(METHODS.map(method => [method, async (...args) => {
+    if (typeof adapter[method] === 'function') return adapter[method](...args);
+    throw unsupported(providerId, method);
+  }]));
+
+  return Object.freeze({
+    id: providerId,
+    name: String(adapter.name || providerId),
+    version: String(adapter.version || '1'),
+    capabilities,
+    getMetadata: methods.getMetadata,
+    validateAccount: methods.validateAccount,
+    parseConfirmation: methods.parseConfirmation,
+    verify: methods.verify,
+    initiate: methods.initiate,
+    getStatus: methods.getStatus,
+    refund: methods.refund,
+    reconcile: methods.reconcile,
+  });
+}
+
+const registry = new Map();
+
+export function registerPaymentProvider(adapter, { replace = false } = {}) {
+  const provider = normalizeProvider(adapter);
+  if (registry.has(provider.id) && !replace) {
+    const error = new Error(`Payment provider ${provider.id} is already registered`);
+    error.code = 'PAYMENT_PROVIDER_ALREADY_REGISTERED';
+    error.statusCode = 409;
+    throw error;
+  }
+  registry.set(provider.id, provider);
+  return provider;
+}
+
+export function getPaymentProvider(providerId) {
+  const id = String(providerId || '').trim().toLowerCase();
+  return registry.get(id) || null;
+}
+
+export function listPaymentProviders() {
+  return [...registry.values()].map(provider => ({
+    id: provider.id,
+    name: provider.name,
+    version: provider.version,
+    capabilities: { ...provider.capabilities },
+  }));
+}
+
+export function requirePaymentProvider(providerId) {
+  const provider = getPaymentProvider(providerId);
+  if (!provider) {
+    const error = new Error(`Unknown payment provider: ${providerId}`);
+    error.code = 'UNKNOWN_PAYMENT_PROVIDER';
+    error.statusCode = 400;
+    throw error;
+  }
+  return provider;
+}
+
+export function createUnconfiguredPaymentProvider({ id, name, version = '1', capabilities = {} }) {
+  const providerId = String(id || '').trim().toLowerCase();
+  return normalizeProvider({
+    id: providerId,
+    name,
+    version,
+    capabilities,
+    getMetadata: async () => ({ id: providerId, name: String(name || providerId), version }),
+    validateAccount: async () => { throw notConfigured(providerId, 'validateAccount'); },
+    parseConfirmation: async () => { throw notConfigured(providerId, 'parseConfirmation'); },
+    verify: async () => { throw notConfigured(providerId, 'verify'); },
+    initiate: async () => { throw notConfigured(providerId, 'initiate'); },
+    getStatus: async () => { throw notConfigured(providerId, 'getStatus'); },
+    refund: async () => { throw notConfigured(providerId, 'refund'); },
+    reconcile: async () => { throw notConfigured(providerId, 'reconcile'); },
+  });
+}
+
+export const PAYMENT_PROVIDER_IDS = Object.freeze(['manual', 'telebirr', 'cbe', 'mpesa']);
+
+registerPaymentProvider({
+  id: 'manual',
+  name: 'Manual / Cash',
+  capabilities: {
+    getMetadata: true,
+    validateAccount: true,
+    parseConfirmation: false,
+    verify: true,
+    initiate: false,
+    getStatus: false,
+    refund: false,
+    reconcile: true,
+  },
+  getMetadata: async () => ({ id: 'manual', name: 'Manual / Cash', version: '1', channelTypes: ['manual'] }),
+  validateAccount: async account => ({ valid: Boolean(account?.accountIdentifier || account?.phone), providerId: 'manual' }),
+  verify: async payment => ({ verified: true, paymentId: payment?.id || null, source: 'manual' }),
+  reconcile: async input => ({ matched: true, reference: input?.externalReference || null }),
+});
+
+for (const [id, name] of [['telebirr', 'Telebirr'], ['cbe', 'CBE'], ['mpesa', 'M-Pesa']]) {
+  registerPaymentProvider(createUnconfiguredPaymentProvider({
+    id,
+    name,
+    capabilities: {
+      getMetadata: true,
+      validateAccount: false,
+      parseConfirmation: false,
+      verify: false,
+      initiate: false,
+      getStatus: false,
+      refund: false,
+      reconcile: false,
+    },
+  }));
+}
+
+export { UNSUPPORTED };

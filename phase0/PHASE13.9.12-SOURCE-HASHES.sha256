@@ -1,0 +1,4 @@
+e4bf6d3bf7f44387c460c9d1d8fc03b2cd2e2a86da4cf43b7940ce67fe787c16  app/src/verticals/warehouse/legacy-bin-compatibility.js
+708e58dd3ff3b60a2e16b4a15a6caed2a2c19167c6404430c6108445709fe5e7  phase0/PHASE13.9.12-LEGACY-BIN-COMPATIBILITY.md
+9b8b168a12e681eed69a9cfc670be7d59309f65925ac27fa5d88a2764013759d  phase0/phase13.9.12-warehouse-legacy-bin-compatibility-regression.mjs
+1da6f94530ebd9900c464b78a7ee8a8ebf3e977d4538b4653d256e1b06225d0d  package.json

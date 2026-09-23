@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { buildSellerStorefrontChannelSummary, SELLER_STOREFRONT_CONSTITUTION } from '../app/src/platform/seller-channel-storefront-contract.js';
+const s = buildSellerStorefrontChannelSummary({ channelType:'telegram', status:'PUBLISHED', enabledCapabilities:['browse','checkout'], version:3 });
+assert.equal(s.channelType, 'telegram');
+assert.equal(s.status, 'PUBLISHED');
+assert.equal(s.configurationVersion, 3);
+assert.deepEqual(s.capabilities, ['browse','checkout']);
+assert.equal(SELLER_STOREFRONT_CONSTITUTION.transactionAuthority, false);
+assert.equal(SELLER_STOREFRONT_CONSTITUTION.identityAuthority, false);
+console.log('FUX-27 unified seller storefront regression: PASS');

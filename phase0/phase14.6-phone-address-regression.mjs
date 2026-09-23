@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { resolveCountryPhoneAddressRules, countryPhoneAddressContract } from '../app/src/country-phone-address-rules.js';
+const rules = resolveCountryPhoneAddressRules('ET');
+assert.equal(rules.countryCode, 'ET');
+assert.equal(rules.callingCode, '+251');
+assert.equal(rules.phone.format, 'E.164');
+assert.deepEqual(rules.address.hierarchy, ['region', 'zone', 'woreda', 'kebele']);
+assert.equal(countryPhoneAddressContract.persistence, 'none');
+assert.equal(countryPhoneAddressContract.ownsCustomerIdentity, false);
+assert.equal(countryPhoneAddressContract.ownsAddressPersistence, false);
+assert.throws(() => resolveCountryPhoneAddressRules('KE'), /Unsupported country/);
+console.log('Phase 14.6 Phone / Address Rules Regression: PASS');

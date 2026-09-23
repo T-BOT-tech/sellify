@@ -1,0 +1,16 @@
+{
+  "name": "sellify-backend",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Multi-tenant sync backend for Sellify. Zero external dependencies — `node server.js` is the whole thing. Also serves the static app/ (see STATIC_DIR in server.js) so this is the single deployable unit for production. See ../README.md.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "backup": "node backup.js"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

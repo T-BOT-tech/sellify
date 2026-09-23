@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+
+const dir = await mkdtemp(join(tmpdir(), 'sellify-phase10-7-'));
+process.env.SELLIFY_DATA_DIR = dir;
+const store = await import('../backend/lib/store-sqlite.js');
+const user = await store.getOrCreateUserByTelegram('phase107-user', 'Phase 10.7');
+const tenant = await store.createTenantForUser({ userId: user.id, sellerName: 'Outbox Test', country: 'ET', currency: 'ETB', timezone: 'Africa/Addis_Ababa' });
+await store.saveCatalog(tenant.chatId, [{ id: 'coffee', name: 'Coffee', price: 1000, stock: 10 }]);
+const session = await store.createSession({ userId: user.id, chatId: tenant.chatId });
+const event = { eventId: 'phase107-inv-1', eventType: 'inventory.movement.record', aggregateType: 'inventory_movement', aggregateId: 'phase107-movement', occurredAt: new Date().toISOString(), payload: { eventId: 'phase107-inv-1', productId: 'coffee', quantity: 7, movementType: 'PURCHASE', locationId: (await store.listOrganizationLocations(tenant.chatId))[0].id } };
+const first = await store.processSyncEvent(tenant.chatId, event, session);
+assert.equal(first.status, 'processed'); assert.equal(first.duplicate, false);
+const second = await store.processSyncEvent(tenant.chatId, event, session);
+assert.equal(second.status, 'processed'); assert.equal(second.duplicate, true);
+const movements = await store.listInventoryMovements(tenant.chatId, { productId: 'coffee' });
+assert.equal(movements.filter(m => m.eventId === 'phase107-inv-1').length, 1);
+const db = store.getDatabaseForTesting?.();
+if (db) assert.equal(db.prepare('SELECT COUNT(*) AS c FROM sync_events WHERE event_id = ?').get('phase107-inv-1').c, 1);
+console.log('Phase 10.7 Outbox/Event Regression: PASS');
+await rm(dir, { recursive: true, force: true });

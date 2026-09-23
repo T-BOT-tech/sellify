@@ -1,0 +1,7 @@
+// Phase 18.7 — Supplier Network Qualification & Verification contract.
+export const SUPPLIER_NETWORK_QUALIFICATION_CONTRACT_VERSION='1.0';
+export const SUPPLIER_NETWORK_QUALIFICATION_STATUSES=Object.freeze(['DECLARED','DOCUMENTED','VERIFIED','EXPIRED','REVOKED']);
+export const SUPPLIER_NETWORK_QUALIFICATION_VISIBILITIES=Object.freeze(['PUBLIC','NETWORK','RELATIONSHIP','PRIVATE','CONFIDENTIAL']);
+export const SUPPLIER_NETWORK_QUALIFICATION_EVENTS=Object.freeze(['supplier.network.qualification.created','supplier.network.qualification.documented','supplier.network.qualification.verified','supplier.network.qualification.expired','supplier.network.qualification.revoked']);
+export const SUPPLIER_NETWORK_QUALIFICATION=Object.freeze({capability:'supplier-network.qualification',authority:'supplier_network',resource:'supplier_network_qualifications',identityAuthority:'organizations',evidenceAuthority:'supplier_network',countryPolicyAuthority:'country/domain pack',verificationBoundary:'Only explicit verification actions create VERIFIED state',supplierParticipationPrerequisite:true,procurementMutation:false,productMutation:false,paymentMutation:false,inventoryMutation:false,marketplaceSellerAuthority:false});
+export function supplierNetworkQualificationContract(){return Object.freeze({version:SUPPLIER_NETWORK_QUALIFICATION_CONTRACT_VERSION,statuses:[...SUPPLIER_NETWORK_QUALIFICATION_STATUSES],visibilities:[...SUPPLIER_NETWORK_QUALIFICATION_VISIBILITIES],events:[...SUPPLIER_NETWORK_QUALIFICATION_EVENTS],capability:SUPPLIER_NETWORK_QUALIFICATION});}

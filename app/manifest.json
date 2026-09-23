@@ -1,0 +1,11 @@
+{
+  "name": "Stall Ledger — Offline Order Book",
+  "short_name": "Stall Ledger",
+  "description": "Offline-first order taking for sellers.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1C2321",
+  "theme_color": "#1C2321"
+}

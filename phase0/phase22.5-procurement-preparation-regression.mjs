@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {defineProcurementPreparation,assertProcurementPreparationBoundary,phase22ProcurementPreparationContract} from '../app/src/phase22-procurement-preparation.js';
+let passed=0;const test=(n,f)=>{try{f();passed++;console.log(`PASS ${n}`)}catch(e){console.error(`FAIL ${n}: ${e.message}`);process.exitCode=1}};
+const base={intent:{authority:'ai_intent_boundary',id:'intent-1'},context:{derived:true,persistence:'none'},items:[{description:'Sesame',quantity:500,unit:'ton'}],recipientReferences:[{authority:'supplier_network',id:'supplier-1'}]};
+test('prepares RFQ-ready item',()=>assert.equal(defineProcurementPreparation(base).items[0].quantity,500));
+test('references supplier network without selecting supplier',()=>{const x=defineProcurementPreparation(base);assert.equal(x.recipientReferences[0].id,'supplier-1');assert.equal(x.supplierSelection,false)});
+test('ready requires recipient references',()=>assert.equal(defineProcurementPreparation(base).state,'READY'));
+test('missing recipients remain incomplete',()=>assert.equal(defineProcurementPreparation({...base,recipientReferences:[]}).state,'INCOMPLETE'));
+test('requires items',()=>assert.throws(()=>defineProcurementPreparation({...base,items:[]}),/at least one procurement item/));
+test('rejects forbidden execution fields',()=>assert.throws(()=>defineProcurementPreparation({...base,execute:true}),/forbidden field/));
+test('rejects RFQ authority identifiers',()=>assert.throws(()=>defineProcurementPreparation({...base,rfqId:'rfq-1'}),/forbidden field/));
+test('rejects purchase order fields',()=>assert.throws(()=>defineProcurementPreparation({...base,purchaseOrder:'po-1'}),/forbidden field/));
+test('has no persistence or mutation',()=>{const x=defineProcurementPreparation(base);assert.equal(x.persistence,'none');assert.equal(x.mutation,false);assert.equal(x.transactionExecution,false)});
+test('boundary assertion passes',()=>assert.equal(assertProcurementPreparationBoundary(base),true));
+test('contract delegates durable RFQ authority',()=>assert.equal(phase22ProcurementPreparationContract().durableRfqAuthority,'existing procurement authority'));
+console.log(`\nPhase 22.5 Procurement Preparation Regression: ${passed} PASS / ${process.exitCode?'FAIL':'0 FAIL'}`);

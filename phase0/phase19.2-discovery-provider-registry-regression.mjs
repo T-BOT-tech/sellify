@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { clearDiscoveryProvidersForTests, registerDiscoveryProvider, getDiscoveryProvider, listDiscoveryProviders, unregisterDiscoveryProvider } from '../backend/lib/discovery/provider-registry.js';
+clearDiscoveryProvidersForTests();
+const provider = { providerId:'test.provider', version:'1.0', entityTypes:['test'], capabilities:['search'], filters:['q'], search:async()=>[], normalize:x=>x, evidence:()=>[], actions:()=>[] };
+registerDiscoveryProvider(provider);
+assert.equal(getDiscoveryProvider('TEST.PROVIDER').providerId,'test.provider');
+assert.equal(listDiscoveryProviders().length,1);
+assert.throws(()=>registerDiscoveryProvider(provider),/already registered/);
+assert.equal(unregisterDiscoveryProvider('test.provider'),true);
+assert.equal(listDiscoveryProviders().length,0);
+console.log('Phase 19.2 discovery provider registry regression: PASS');

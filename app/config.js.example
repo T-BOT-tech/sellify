@@ -1,0 +1,18 @@
+// config.js.example
+//
+// Copy this file to config.js (which is gitignored — see below) and fill in
+// your real values. index.html loads config.js as a plain classic <script>
+// BEFORE any ES module runs, so window.__APP_CONFIG__ must already exist by
+// the time src/constants.js reads it.
+//
+// Every key is optional. If config.js is missing entirely, or a key is
+// left blank, the app falls back to safe defaults (e.g. an empty sync URL)
+// and keeps working offline — nothing crashes. This file just lets you
+// pre-fill environment-specific values so a fresh install doesn't lose them.
+
+window.__APP_CONFIG__ = {
+  // Base URL of your sync server, e.g. "https://sync.example.com".
+  // Used to pre-fill Settings → Sync URL on first run. Leave '' to make
+  // sellers paste in their own server URL manually.
+  SYNC_SERVER_URL: ''
+};

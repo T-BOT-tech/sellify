@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+const root = path.resolve(new URL('.', import.meta.url).pathname, '..');
+const ui = fs.readFileSync(path.join(root, 'app/src/procurement/ui.js'), 'utf8');
+const server = fs.readFileSync(path.join(root, 'backend/server.js'), 'utf8');
+const store = fs.readFileSync(path.join(root, 'backend/lib/store-sqlite.js'), 'utf8');
+assert.match(ui, /data-rfq-action="compare"/);
+assert.match(ui, /procurement:comparison:create/);
+assert.match(ui, /loadComparisons/);
+assert.match(server, /createProcurementComparison/);
+assert.match(store, /No submitted supplier responses are available for comparison/);
+assert.match(store, /procurement_comparison/);
+console.log('P0-10 RFQ → Supplier Responses → Comparison Regression: PASS');

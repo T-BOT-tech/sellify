@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {defineSupplierIntelligence,assertSupplierIntelligenceBoundary,phase22SupplierIntelligenceContract} from '../app/src/phase22-evidence-supplier-intelligence.js';
+let passed=0;const test=(n,f)=>{try{f();passed++;console.log(`PASS ${n}`)}catch(e){console.error(`FAIL ${n}: ${e.message}`);process.exitCode=1}};
+const base={supplierReference:{authority:'organizations',id:'supplier-1'},capabilityReferences:[{authority:'supplier_network',id:'cap-1'}],qualificationReferences:[{authority:'supplier_network',id:'qual-1'}],evidence:[{type:'CAPACITY',state:'VERIFIED',source:'supplier_network',observedAt:'2026-09-15T10:00:00Z',reference:{authority:'supplier_network',id:'cap-1'}}]};
+test('projects supplier references',()=>assert.equal(defineSupplierIntelligence(base).supplierReference.id,'supplier-1'));
+test('preserves evidence provenance',()=>assert.equal(defineSupplierIntelligence(base).evidence[0].source,'supplier_network'));
+test('unknown evidence remains unknown',()=>assert.equal(defineSupplierIntelligence({...base,evidence:[{...base.evidence[0],state:'UNKNOWN'}]}).evidenceState,'UNKNOWN'));
+test('conflicting evidence remains conflicting',()=>assert.equal(defineSupplierIntelligence({...base,evidence:[{...base.evidence[0],state:'CONFLICTING'}]}).evidenceState,'CONFLICTING'));
+test('rejects missing supplier reference',()=>assert.throws(()=>defineSupplierIntelligence({evidence:[]}),/supplierReference/));
+test('rejects invalid evidence state',()=>assert.throws(()=>defineSupplierIntelligence({...base,evidence:[{...base.evidence[0],state:'PASS'}]}),/state must be one of/));
+test('does not create a supplier score or selection',()=>{const x=defineSupplierIntelligence(base);assert.equal(x.compositeSupplierScore,false);assert.equal(x.supplierSelection,false)});
+test('has no persistence or execution',()=>{const x=defineSupplierIntelligence(base);assert.equal(x.persistence,'none');assert.equal(x.transactionExecution,false);});
+test('boundary assertion passes',()=>assert.equal(assertSupplierIntelligenceBoundary(base),true));
+test('contract preserves existing authorities',()=>{const x=phase22SupplierIntelligenceContract();assert.equal(x.supplierAuthority,'supplier_network');assert.equal(x.rankingAuthority,'existing deterministic discovery/ranking authority')});
+console.log(`\nPhase 22.4 Evidence & Supplier Intelligence Regression: ${passed} PASS / ${process.exitCode?'FAIL':'0 FAIL'}`);

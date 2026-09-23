@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+const root = process.cwd();
+const ui = fs.readFileSync(path.join(root,'app/src/p0-ai-procurement-proposal.js'),'utf8');
+const html = fs.readFileSync(path.join(root,'app/index.html'),'utf8');
+const checks=[]; const check=(label,fn)=>{try{fn();checks.push(`PASS: ${label}`)}catch(e){checks.push(`FAIL: ${label}: ${e.message}`);process.exitCode=1}};
+check('proposal UI composes existing Phase 22 contracts',()=>{for(const x of ['defineProcurementIntent','defineProcurementContext','defineProcurementPreparation','defineProcurementActionProposal']) assert.match(ui,new RegExp(x));});
+check('offline/uncertain state is explicit',()=>{assert.match(ui,/state === 'UNKNOWN'/);assert.match(ui,/render\(.*'UNKNOWN'/);});
+check('existing authorization remains required',()=>assert.match(ui,/existing procurement authorization required/));
+check('context and preparation remain derived',()=>{assert.match(ui,/Context:<\/strong>/);assert.match(ui,/Preparation:<\/strong>/);});
+check('HTML exposes review-only context/preparation surfaces',()=>{for(const id of ['aiProcurementIntent','aiProcurementContext','aiProcurementPreparation','aiProcurementReview','aiProcurementResult']) assert.match(html,new RegExp(`id="${id}"`));});
+check('P0 module is loaded',()=>assert.match(html,/p0-ai-procurement-proposal\.js/));
+console.log(checks.join('\n')); console.log(`${checks.filter(x=>x.startsWith('PASS')).length} PASS / ${checks.filter(x=>x.startsWith('FAIL')).length} FAIL`);

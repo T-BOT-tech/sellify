@@ -1,0 +1,17 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const root = new URL('..', import.meta.url).pathname;
+const audit = fs.readFileSync(`${root}/app/src/authorization/pack-audit.js`, 'utf8');
+const settings = fs.readFileSync(`${root}/app/src/ui/settings.js`, 'utf8');
+const html = fs.readFileSync(`${root}/app/index.html`, 'utf8');
+const server = fs.readFileSync(`${root}/backend/server.js`, 'utf8');
+assert.match(audit, /audit\?limit/);
+assert.match(audit, /audit:view/);
+assert.match(audit, /UNKNOWN/);
+assert.match(audit, /PROVIDER_UNAVAILABLE/);
+assert.match(audit, /audit_events/);
+assert.match(settings, /renderPackAuditPanel/);
+assert.match(html, /packAuditPanel/);
+assert.match(server, /handleTenantAudit/);
+assert.match(server, /audit\$/,);
+console.log('P1-15 Pack Audit & Observability regression: PASS');

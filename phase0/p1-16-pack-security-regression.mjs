@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const root = new URL('..', import.meta.url).pathname;
+const source = fs.readFileSync(`${root}/app/src/authorization/pack-security.js`, 'utf8');
+const settings = fs.readFileSync(`${root}/app/src/ui/settings.js`, 'utf8');
+const html = fs.readFileSync(`${root}/app/index.html`, 'utf8');
+assert.match(source, /backend\/lib\/authorization\.js/);
+assert.match(source, /uiIsNotAuthorization: true/);
+assert.match(source, /UNKNOWN/);
+assert.match(source, /PERMISSION_DENIED/);
+assert.match(source, /REQUIRES_APPROVAL/);
+assert.match(source, /audit_events/);
+assert.match(source, /vertical-approval-boundary/);
+assert.doesNotMatch(source, /fetch\(/);
+assert.match(settings, /renderPackSecurityPanel/);
+assert.match(html, /id="packSecurityPanel"/);
+console.log('P1-16 Pack Security & Sensitive-Action regression: PASS');

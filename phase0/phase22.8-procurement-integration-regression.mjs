@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import { defineProcurementActionProposal } from '../app/src/phase22-action-proposal-authorization.js';
+import { resolveProcurementIntegration, routeProcurementActionProposal, assertProcurementIntegrationBoundary, phase22ProcurementIntegrationContract } from '../app/src/phase22-procurement-integration.js';
+
+let pass=0;
+const test=async(name,fn)=>{await fn();pass++;console.log(`PASS ${name}`)};
+const proposal=defineProcurementActionProposal({type:'PREPARE_RFQ',targetAuthority:'procurement',targetCapability:'procurement.rfq',targetAction:'create',status:'pending_authorization',reason:'prepare RFQ'});
+await test('resolves existing procurement capability',()=>{const r=resolveProcurementIntegration(proposal);assert.equal(r.capability,'procurement.rfq');assert.equal(r.authority,'procurement');});
+await test('requires existing authorization',()=>assert.equal(resolveProcurementIntegration(proposal).requiresExistingAuthorization,true));
+await test('phase22 has no persistence',()=>assert.equal(resolveProcurementIntegration(proposal).phase22Persistence,'none'));
+await test('boundary passes',()=>assert.equal(assertProcurementIntegrationBoundary(proposal),true));
+await test('delegates only after authorization',async()=>{let authorized=false,called=false;const out=await routeProcurementActionProposal(proposal,{authorize:async()=>{authorized=true;return 'ALLOW'},capabilityHandlers:{'procurement.rfq':async x=>{called=true;assert.equal(x.authorization,'ALLOW');return {ok:true}}}});assert.equal(authorized,true);assert.equal(called,true);assert.deepEqual(out.result,{ok:true});});
+await test('handler receives existing authority',async()=>{let seen;await routeProcurementActionProposal(proposal,{authorize:async()=>({approved:true}),capabilityHandlers:{'procurement.rfq':async x=>{seen=x;return true}}});assert.equal(seen.authority,'procurement');});
+await test('mutating action requires pending authorization',async()=>{const p=defineProcurementActionProposal({type:'PREPARE_RFQ',targetAuthority:'procurement',targetCapability:'procurement.rfq',targetAction:'create'});await assert.rejects(()=>routeProcurementActionProposal(p,{authorize:async()=>true,capabilityHandlers:{'procurement.rfq':async()=>true}}),/pending_authorization/)});
+await test('missing capability handler rejected',async()=>{await assert.rejects(()=>routeProcurementActionProposal(proposal,{authorize:async()=>true}),/capability handler/)});
+await test('execution capability rejected',()=>assert.throws(()=>resolveProcurementIntegration({ ...proposal,targetCapability:'procurement.execution',targetAction:'execute'})));
+await test('database payload rejected',async()=>{await assert.rejects(()=>routeProcurementActionProposal(proposal,{authorize:async()=>true,capabilityHandlers:{'procurement.rfq':async()=>true},payload:{database:'x'}}),/forbidden field/)});
+await test('PO injection rejected',async()=>{await assert.rejects(()=>routeProcurementActionProposal(proposal,{authorize:async()=>true,capabilityHandlers:{'procurement.rfq':async()=>true},payload:{purchaseOrder:'x'}}),/forbidden field/)});
+await test('wrong authority rejected',()=>assert.throws(()=>resolveProcurementIntegration({...proposal,targetAuthority:'payments'}),/targetAuthority/));
+await test('contract freezes non-authority role',()=>{const c=phase22ProcurementIntegrationContract();assert.equal(c.phase22TransactionAuthority,false);assert.equal(c.procurementExecutionCapabilityExposed,false);assert.equal(c.handlerOwnership,'injected_existing_capability_handler');});
+console.log(`${pass} PASS / 0 FAIL`);

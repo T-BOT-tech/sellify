@@ -1,0 +1,32 @@
+{
+  "name": "stall-ledger",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "serve -l 3000 .",
+    "start": "serve -l 3000 .",
+    "test:phase14.10": "node phase0/phase14.10-country-security-isolation-regression.mjs",
+    "test:phase15.1": "node phase0/phase15.1-multi-country-pack-contract-regression.mjs",
+    "test:phase15.2": "node phase0/phase15.2-kenya-country-identity-regression.mjs",
+    "test:phase15.3": "node phase0/phase15.3-nigeria-country-identity-regression.mjs",
+    "test:phase15.4": "node ../phase0/phase15.4-country-expansion-strategy-regression.mjs",
+    "test:phase15.6": "node phase0/phase15.6-country-priority-sequencing-regression.mjs",
+    "test:phase15.7": "node phase0/phase15.7-tanzania-country-identity-regression.mjs",
+    "test:phase15.8": "node phase0/phase15.8-waemu-regional-expansion-regression.mjs",
+    "test:phase15.10": "node ../phase0/phase15.10-strategic-african-markets-regression.mjs",
+    "test:phase15.11": "node ../phase0/phase15.11-currency-money-expansion-regression.mjs",
+    "test:phase15.12": "node ../phase0/phase15.12-tax-boundary-expansion-regression.mjs",
+    "test:phase15.13": "node ../phase0/phase15.13-document-invoice-expansion-regression.mjs",
+    "test:phase15.14": "node ../phase0/phase15.14-phone-address-expansion-regression.mjs",
+    "test:phase15.15": "node ../phase0/phase15.15-payment-adapter-expansion-regression.mjs",
+    "test:phase15.18": "node ../phase0/phase15.18-country-events-outbox-expansion-regression.mjs",
+    "test:phase15.19": "node ../phase0/phase15.19-cross-region-integration-regression.mjs",
+    "test:phase15.20": "node phase0/phase15.20-cross-country-regression-gate.mjs"
+  },
+  "devDependencies": {
+    "serve": "^14.2.4"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

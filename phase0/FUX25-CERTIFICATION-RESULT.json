@@ -1,0 +1,145 @@
+{
+  "phase": "FUX-25",
+  "date": "2026-09-20",
+  "runtime": "v22.16.0",
+  "certification": "PREPARED_NOT_CERTIFIED",
+  "runtimeGate": {
+    "status": "BLOCKED",
+    "exitCode": 2,
+    "output": "PASS root engine declares Node >=24 :: >=24\nPASS backend engine declares Node >=24 :: >=24\nBLOCKED runtime major >=24 :: v22.16.0\nBLOCKED node:sqlite available :: NOT_EXECUTED: runtime below required Node >=24\n\nP1-23 RELEASE GATE: BLOCKED (2 check(s)).\nA Node >=24 runtime is required to certify the release.\n"
+  },
+  "gates": [
+    {
+      "name": "offline",
+      "file": "phase0/p0-04-offline-recovery-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "roles",
+      "file": "phase0/p1-01-iam-role-catalog-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "role-scope",
+      "file": "phase0/p1-03-permission-role-scope-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "pack-role",
+      "file": "phase0/p1-04-pack-role-reconciliation-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "membership-role",
+      "file": "phase0/p1-09-membership-role-change-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "journey-composition",
+      "file": "phase0/p1-12-pack-capability-journey-composition-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "accessibility-localization",
+      "file": "phase0/p1-17-pack-accessibility-localization-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "traceability",
+      "file": "phase0/p1-21-pack-traceability-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "fux13",
+      "file": "phase0/fux13-pack-activation-contract-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "fux14",
+      "file": "phase0/fux14-device-hardware-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "fux15-16",
+      "file": "phase0/fux15-16-accessibility-localization-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "fux17-18",
+      "file": "phase0/fux17-18-notifications-observability-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "fux19-20",
+      "file": "phase0/fux19-20-experimentation-analytics-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "fux21-23",
+      "file": "phase0/fux21-23-qa-security-recovery-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "fux24",
+      "file": "phase0/fux24-in-product-documentation-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "fux27",
+      "file": "phase0/fux27-unified-seller-storefront-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "fux28",
+      "file": "phase0/fux28-cross-channel-consistency-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "fux29",
+      "file": "phase0/fux29-seller-golden-journey-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "fux30",
+      "file": "phase0/fux30-multi-channel-adversarial-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "r1-golden",
+      "file": "phase0/r1-golden-e2e-traceability-gate.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "r2-golden",
+      "file": "phase0/r2-golden-business-journeys-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "golden",
+      "file": "phase0/golden-regression.mjs",
+      "status": "PASS",
+      "exitCode": 0
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {supplierNetworkPerformanceContract} from '../app/src/supplier-network/performance-contract.js';
+import {getDatabaseForTests,getOrCreateUserByTelegram,createTenantForUser,setProcurementSupplierParticipation,listSupplierNetworkPerformance,recalculateSupplierNetworkPerformance} from '../backend/lib/store-sqlite.js';
+const c=supplierNetworkPerformanceContract();
+assert.equal(c.version,'1.0'); assert.equal(c.capability.capability,'supplier-network.performance'); assert.equal(c.capability.derivedOnly,true); assert.deepEqual(c.metrics,['RFQ_RESPONSE_RATE','FILL_RATE','PO_COMPLETION_RATE','CANCELLATION_RATE','OBSERVED_PURCHASE_ORDERS']);
+const db=getDatabaseForTests(); const x=Date.now().toString(36); const u=await getOrCreateUserByTelegram('p188_'+x,'Performance Supplier'); const t=await createTenantForUser({userId:u.id,sellerName:'P18.8 '+x,businessType:'retail',country:'ET',currency:'ETB',timezone:'Africa/Addis_Ababa'}); const row=db.prepare('SELECT chat_id,organization_id FROM tenants WHERE chat_id=?').get(t.chatId); const a={userId:u.id,role:'owner',organizationId:row.organization_id,chatId:row.chat_id}; await setProcurementSupplierParticipation(row.chat_id,{status:'ACTIVE',discoverable:true},a);
+const observations=await recalculateSupplierNetworkPerformance(row.chat_id,row.organization_id,{days:30},a); assert.equal(observations.length,5); assert.ok(observations.every(o=>o.supplierOrganizationId===row.organization_id)); assert.ok(observations.every(o=>o.visibility==='NETWORK'));
+const count=db.prepare('SELECT COUNT(*) c FROM supplier_network_performance_observations WHERE supplier_organization_id=?').get(row.organization_id).c; assert.equal(count,5);
+await recalculateSupplierNetworkPerformance(row.chat_id,row.organization_id,{days:30},a); assert.equal(db.prepare('SELECT COUNT(*) c FROM supplier_network_performance_observations WHERE supplier_organization_id=?').get(row.organization_id).c,10);
+assert.equal((await listSupplierNetworkPerformance(row.chat_id,{supplierOrganizationId:row.organization_id,limit:20},a)).length,10);
+assert.throws(()=>db.prepare('DELETE FROM supplier_network_performance_observations WHERE supplier_organization_id=?').run(row.organization_id),/immutable|cannot be deleted/i);
+console.log('Phase 18.8 supplier network performance regression: PASS');

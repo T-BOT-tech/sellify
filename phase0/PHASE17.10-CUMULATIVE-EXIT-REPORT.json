@@ -1,0 +1,11 @@
+{
+  "phase": "17.10",
+  "status": "PASS_WITH_NODE24_DEFERRED",
+  "phase17RegressionCount": 19,
+  "phase17RegressionFailures": 0,
+  "phase16_12": "PASS",
+  "golden": "PASS",
+  "runtime": "v22.16.0",
+  "node24Certification": "DEFERRED_TO_PHASE_16.13",
+  "checkedAt": "2026-09-22T20:28:57.657Z"
+}

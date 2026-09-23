@@ -1,0 +1,8 @@
+export const PROCUREMENT_RFQ_CONTRACT_VERSION='1.0';
+export const PROCUREMENT_RFQ_STATES=Object.freeze({DRAFT:['SENT','CANCELLED'],SENT:['CLOSED','EXPIRED','CANCELLED'],CLOSED:[],EXPIRED:[],CANCELLED:[]});
+export const PROCUREMENT_RFQ_RESPONSE_STATES=Object.freeze({DRAFT:['SUBMITTED','WITHDRAWN'],SUBMITTED:['WITHDRAWN'],WITHDRAWN:[]});
+export const PROCUREMENT_RFQ_EVENTS=Object.freeze(['procurement.rfq.created','procurement.rfq.sent','procurement.rfq.closed','procurement.rfq.expired','procurement.rfq.cancelled','procurement.rfq.response.created','procurement.rfq.response.submitted','procurement.rfq.response.withdrawn','procurement.rfq.response.rejected']);
+export const PROCUREMENT_RFQ_CAPABILITY=Object.freeze({capability:'procurement.rfq',authority:'procurement',resource:'procurement_rfq',responseResource:'procurement_rfq_response',inventoryMutation:false,paymentMutation:false,b2bQuoteMutation:false,b2bPurchaseOrderMutation:false,awardAuthority:false});
+export function canTransitionProcurementRfq(from,to){return Boolean(PROCUREMENT_RFQ_STATES[String(from||'').toUpperCase()]?.includes(String(to||'').toUpperCase()))}
+export function canTransitionProcurementRfqResponse(from,to){return Boolean(PROCUREMENT_RFQ_RESPONSE_STATES[String(from||'').toUpperCase()]?.includes(String(to||'').toUpperCase()))}
+export function procurementRfqContract(){return Object.freeze({version:PROCUREMENT_RFQ_CONTRACT_VERSION,states:PROCUREMENT_RFQ_STATES,responseStates:PROCUREMENT_RFQ_RESPONSE_STATES,events:PROCUREMENT_RFQ_EVENTS,capability:PROCUREMENT_RFQ_CAPABILITY,b2bQuoteDistinct:true,supplierIdentityAuthority:'organizations',persistence:'domain_authority',comparisonAuthority:'deferred_to_phase17.4',negotiationAuthority:false,awardAuthority:false});}

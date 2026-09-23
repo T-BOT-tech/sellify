@@ -1,0 +1,17 @@
+{
+  "phase": "18.12",
+  "status": "PASS_WITH_NODE24_DEFERRED",
+  "phase18Regressions": 11,
+  "phase18Failures": 0,
+  "phase17_10": "PASS",
+  "phase16_12": "PASS",
+  "golden": "PASS",
+  "structuralExit": "PASS",
+  "canonicalOrganizationIdentity": "PASS",
+  "duplicateSupplierIdentityAuthority": "NONE",
+  "marketplaceIntegrationMutation": "NONE",
+  "latestSupplierNetworkMigration": 38,
+  "nodeRuntime": "v22.16.0",
+  "node24Certification": "DEFERRED_TO_PHASE_16.13",
+  "checkedAt": "2026-09-15T16:01:35.239Z"
+}
