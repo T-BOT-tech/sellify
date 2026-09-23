@@ -262,7 +262,7 @@
 <div class="statusbar">
   <div class="brand" id="brandName"><small>SELLIFY</small>Loading…</div>
   <div style="display:flex; align-items:center; gap:6px;">
-    <button class="staff-badge-btn" id="staffBadgeBtn" onclick="openPinModal()" title="Switch Staff Station (PIN Required)"><span class="ico-lbl"><svg class="icon icon-sm"><use href="#i-crown"/></svg> OWNER</span></button>
+    <button class="staff-badge-btn" id="staffBadgeBtn" onclick="openPinModal()" data-i18n-title="switchStaff" title="Switch Staff Station (PIN Required)"><span class="ico-lbl"><svg class="icon icon-sm"><use href="#i-crown"/></svg> OWNER</span></button>
     <select class="lang-select" id="headerLangSelect" onchange="changeLanguage(this.value)">
       <option value="en">🇬🇧 EN</option>
       <option value="am">🇪🇹 አማርኛ</option>
@@ -275,7 +275,7 @@
     <div class="status-pill offline" id="statusPill">
       <span class="dot"></span><span id="statusText">Offline</span>
     </div>
-    <button class="gear-btn" id="gearSettingsBtn" onclick="openSettings()"><svg class="icon"><use href="#i-settings"/></svg></button>
+    <button class="gear-btn" id="gearSettingsBtn" onclick="openSettings()" data-i18n-title="settingsButton"><svg class="icon"><use href="#i-settings"/></svg></button>
   </div>
 </div>
 
@@ -318,7 +318,7 @@
         <button type="button" class="fulfillment-type-btn" data-ftype="delivery" onclick="setFulfillmentType('delivery')"><svg class="icon icon-sm"><use href="#i-truck"/></svg> <span data-i18n="whDelivery">Delivery</span></button>
       </div>
       <div id="fulfillmentDeliveryFields" style="display:none; margin-top:8px;">
-        <input type="text" id="fulfillmentAddress" placeholder="Delivery address" style="margin-bottom:8px;">
+        <input type="text" id="fulfillmentAddress" data-i18n-placeholder="deliveryAddress" placeholder="Delivery address" style="margin-bottom:8px;">
       </div>
       <div id="fulfillmentPickupFields" style="display:none; margin-top:8px;">
         <select id="fulfillmentPickupLocation" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:13px; background: var(--surface); margin-bottom:8px;"></select>
@@ -358,7 +358,7 @@
     <div class="catalog-sync-head"><div class="sync-note" data-i18n="catalogSyncNote">Catalog syncs both ways with your bot when you tap "Sync now" in the Queue tab — price changes made here or on the server side both carry over.</div><div id="catalogSyncStatus" class="catalog-sync-status synced">✓ Catalog synced</div></div>
     <div class="catalog-form-wrap">
       <div class="catalog-form">
-        <label for="newProdImgInput" class="img-upload-btn" title="Upload Product Photo">
+        <label for="newProdImgInput" class="img-upload-btn" data-i18n-title="uploadProductPhoto" title="Upload Product Photo">
           <span id="newProdImgPreview" class="img-preview-box"><svg class="icon icon-lg icon-muted"><use href="#i-camera"/></svg></span>
           <input type="file" id="newProdImgInput" accept="image/*" style="display:none;" onchange="handleNewProdImageSelect(event)">
         </label>
@@ -375,7 +375,7 @@
         <span data-i18n="listOnMarketplace">List on marketplace</span>
       </label>
       <div class="niche-tags-picker" id="newProdTagsContainer"></div>
-      <input type="text" id="newProdModifiers" style="display:none; margin-top:8px;" placeholder="Modifiers, comma-separated (e.g. No onions, Extra spicy, Gluten-free)">
+      <input type="text" id="newProdModifiers" data-i18n-placeholder="modifiersPlaceholder" style="display:none; margin-top:8px;" placeholder="Modifiers, comma-separated (e.g. No onions, Extra spicy, Gluten-free)">
       <div id="newProdImgStatus" class="img-status-msg" style="display:none;"></div>
     </div>
     <div id="catalogList"></div>
@@ -390,7 +390,7 @@
     <div class="search-container">
       <div class="search-input-wrap">
         <span class="search-icon"><svg class="icon icon-sm"><use href="#i-search"/></svg></span>
-        <input type="text" id="marketSearchInput" placeholder="Search across all vendors & stalls..." oninput="onMarketSearchInput(this.value)">
+        <input type="text" id="marketSearchInput" data-i18n-placeholder="marketSearchPlaceholder" placeholder="Search across all vendors & stalls..." oninput="onMarketSearchInput(this.value)">
         <button type="button" class="clear-btn" id="clearMarketSearchBtn" style="display:none;" onclick="clearMarketSearch()">×</button>
       </div>
       <div class="category-pills" id="marketCategoryPills"></div>
@@ -436,7 +436,7 @@
       <button class="btn-secondary" style="width:auto;margin:0;padding:8px 12px;" onclick="openCustomerModal('')">+ Add customer</button>
     </div>
     <div class="customer-fields" style="margin-bottom:12px;">
-      <input type="search" id="customerSearchInput" placeholder="Search customers…" oninput="renderCustomers()">
+      <input type="search" id="customerSearchInput" data-i18n-placeholder="searchCustomersPlaceholder" placeholder="Search customers…" oninput="renderCustomers()">
     </div>
     <div id="customersList"></div>
   </section>
@@ -1174,7 +1174,7 @@
   <div class="modal">
     <h3 style="margin-top:0;" id="modifierNoteModalTitle">Customize item</h3>
     <div class="modifier-chip-list" id="modifierChipList"></div>
-    <label>Additional note</label>
+    <label data-i18n="additionalNote">Additional note</label>
     <input type="text" id="modifierFreeText" placeholder="Any other special request">
     <div style="display:flex; gap:8px; margin-top:16px;">
       <button class="btn-primary" onclick="saveModifierNote()">Save</button>
