@@ -1,5 +1,5 @@
 /*
- * Stall Ledger service worker.
+ * Sellify service worker.
  *
  * The app is offline-first at the data layer (localStorage / IndexedDB), so
  * this worker only needs to make the app shell itself available offline.
@@ -8,7 +8,7 @@
  * hashed build assets in this zero-build PWA, so cache-first JS would leave
  * sellers stuck on stale code after a deployment.
  */
-const CACHE_VERSION = 'stall-ledger-shell-v2';
+const CACHE_VERSION = 'sellify-shell-v3';
 const APP_SHELL = [
   './',
   './index.html',
