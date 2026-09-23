@@ -1,0 +1,36 @@
+name: Sellify Deployment Certification
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_url:
+        description: "Deployed Sellify base URL"
+        required: true
+        type: string
+      expected_env:
+        description: "Expected /health env value"
+        required: false
+        default: "production"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deployment-smoke:
+    name: Deployed runtime smoke gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Public deployment certification
+        env:
+          SELLIFY_DEPLOYMENT_URL: ${{ inputs.deployment_url }}
+          SELLIFY_EXPECTED_ENV: ${{ inputs.expected_env }}
+        run: node phase0/deployment-certification.mjs
