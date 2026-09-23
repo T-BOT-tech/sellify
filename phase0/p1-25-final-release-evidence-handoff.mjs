@@ -28,8 +28,9 @@ assert.equal(rootPkg.scripts?.['test:p1-23'], 'node phase0/p1-23-node24-runtime-
 assert.equal(rootPkg.scripts?.['test:p1-24'], 'node phase0/p1-24-p1-final-snapshot.mjs');
 
 const handoff = read('P1-IMPLEMENTATION-25-P1-FINAL-RELEASE-EVIDENCE-HANDOFF.md');
-assert.match(handoff, /FINAL CERTIFIED/);
-assert.match(handoff, /Node 22/);
+assert.match(handoff, /HANDOFF PACKAGE PREPARED/);
+assert.match(handoff, /FINAL RELEASE CERTIFICATION DEFERRED/);
+assert.match(handoff, /Node >=24/);
 assert.match(handoff, /npm run test:p1-24/);
 
 const cumulative = spawnSync(process.execPath, ['phase0/p1-22-pack-cumulative-certification.mjs'], { cwd: ROOT, encoding: 'utf8' });
