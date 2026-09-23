@@ -41,3 +41,5 @@ jobs:
 
       - name: FUX-31 frontend identity regression
         run: npm run test:fux-31
+      - name: FUX-31 accessibility source regression
+        run: npm run test:fux-31-accessibility
