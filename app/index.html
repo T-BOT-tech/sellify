@@ -687,7 +687,7 @@
 
 <nav class="tabbar">
   <button id="navHome" class="active" onclick="switchTab('home')">
-    <svg class="icon"><use href="#i-store"/></svg><span>Home</span>
+    <svg class="icon"><use href="#i-store"/></svg><span data-i18n="homeNav">Home</span>
   </button>
   <button id="navOrder" onclick="switchTab('order')">
     <svg class="icon"><use href="#i-receipt"/></svg><span data-i18n="takeOrderNav">Take Order</span>
@@ -713,16 +713,16 @@
     <h3 data-i18n="moreNav">More</h3>
     <div class="more-sheet-list">
       <button id="navMarketplace" class="btn-ghost more-sheet-item" onclick="switchTab('marketplace'); closeMoreSheet();">
-        <svg class="icon"><use href="#i-globe"/></svg><span>Market</span>
+        <svg class="icon"><use href="#i-globe"/></svg><span data-i18n="marketNav">Market</span>
       </button>
       <button id="navTables" class="btn-ghost more-sheet-item" onclick="switchTab('tables'); closeMoreSheet();" style="display:none;">
-        <svg class="icon"><use href="#i-table"/></svg><span>Tables</span>
+        <svg class="icon"><use href="#i-table"/></svg><span data-i18n="tablesNav">Tables</span>
       </button>
       <button id="navKitchen" class="btn-ghost more-sheet-item" onclick="switchTab('kitchen'); closeMoreSheet();" style="display:none;">
-        <svg class="icon"><use href="#i-chef"/></svg><span>Kitchen</span><span class="queue-count" id="kitchenBadge" style="display:none;">0</span>
+        <svg class="icon"><use href="#i-chef"/></svg><span data-i18n="kitchenNav">Kitchen</span><span class="queue-count" id="kitchenBadge" style="display:none;">0</span>
       </button>
       <button id="navCustomers" class="btn-ghost more-sheet-item" onclick="switchTab('customers'); closeMoreSheet();">
-        <svg class="icon"><use href="#i-user"/></svg><span>Customers</span>
+        <svg class="icon"><use href="#i-user"/></svg><span data-i18n="customersNav">Customers</span>
       </button>
       <button id="navAccounts" class="btn-ghost more-sheet-item" onclick="switchTab('accounts'); closeMoreSheet();" style="display:none;">
         <svg class="icon"><use href="#i-building"/></svg><span data-i18n="accountsNav">Accounts</span>
@@ -734,7 +734,7 @@
         <svg class="icon"><use href="#i-truck"/></svg><span data-i18n="logisticsNav">Logistics</span>
       </button>
       <button id="navSourcing" class="btn-ghost more-sheet-item" onclick="switchTab('sourcing'); closeMoreSheet();">
-        <svg class="icon"><use href="#i-search"/></svg><span>Sourcing</span>
+        <svg class="icon"><use href="#i-search"/></svg><span data-i18n="sourcingNav">Sourcing</span>
       </button>
     </div>
     <button type="button" class="btn-secondary" onclick="closeMoreSheet()" data-i18n="cancel">Cancel</button>
