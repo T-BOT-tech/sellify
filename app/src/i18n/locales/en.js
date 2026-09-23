@@ -4,6 +4,16 @@
 export default {
     brandName: "SELLIFY",
     homeNav: "Home",
+    deliveryAddress: "Delivery address",
+    uploadProductPhoto: "Upload Product Photo",
+    modifiersPlaceholder: "Modifiers, comma-separated (e.g. No onions, Extra spicy, Gluten-free)",
+    marketSearchPlaceholder: "Search across all vendors & stalls...",
+    searchCustomersPlaceholder: "Search customers…",
+    additionalNote: "Additional note",
+    close: "Close",
+    switchStaff: "Switch Staff Station (PIN Required)",
+    settingsButton: "Settings",
+
     marketNav: "Market",
     tablesNav: "Tables",
     kitchenNav: "Kitchen",
