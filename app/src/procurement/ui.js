@@ -183,7 +183,17 @@ export async function searchSupplierNetwork() {
     lastSourcingOpportunities = Array.isArray(data.opportunities) ? data.opportunities : [];
     renderSupplyIntelligence(rows);
     const opportunityCards = lastSourcingOpportunities.length ? `<div class=\"sync-note\" style=\"margin-bottom:10px;\"><strong>Derived sourcing opportunities</strong> · ${lastSourcingOpportunities.length} eligible opportunity(ies). These are derived, persistence-free and non-executing.</div>` + lastSourcingOpportunities.map((o, index) => `<div class=\"table-card account-card\"><div class=\"account-name\">Sourcing opportunity · ${esc(o.candidate?.label || o.candidate?.organizationId || 'candidate')}</div><div class=\"account-contact\">Opportunity ${esc(o.opportunityId)} · match ${esc(o.match?.matchScore ?? '')}</div><div class=\"account-notes\">Derived from deterministic discovery; owning domain remains responsible for execution.</div><div class=\"table-actions\"><button type=\"button\" data-demand-opportunity-index=\"${index}\">Prepare procurement demand</button><button type="button" data-ai-opportunity-index=\"${index}\">Use sourcing opportunity in AI proposal</button></div></div>`).join('') : '';
-    results.innerHTML = opportunityCards + (rows.length ? rows.map(r => `<div class="table-card account-card"><div class="account-name">${esc(r.organization?.name || r.organizationName || r.displayName)} · match ${esc(r.score ?? '')}</div><div class="account-contact">${esc(r.profile?.serviceSummary || '')}</div><div class="account-notes">${esc(r.profile?.description || r.description || r.explanation || '')}</div>${r.organizationId ? `<div class="table-actions"><button type="button" data-ai-supplier-proposal="${esc(r.organizationId)}">Use supplier evidence in AI proposal</button>${!r.relationshipActive && can('procurement:supplier:relationship:manage') ? `<button type="button" data-supplier-connect="${esc(r.organizationId)}">Create relationship</button>` : ''}</div>` : ''}</div>`).join('') : '<div class="empty">No matching suppliers found.</div>';
+    const supplierCards = rows.map(r => {
+      const supplierActions = r.organizationId
+        ? '<div class="table-actions"><button type="button" data-ai-supplier-proposal="' + esc(r.organizationId) + '">Use supplier evidence in AI proposal</button>'
+          + ((!r.relationshipActive && can('procurement:supplier:relationship:manage'))
+            ? '<button type="button" data-supplier-connect="' + esc(r.organizationId) + '">Create relationship</button>'
+            : '')
+          + '</div>'
+        : '';
+      return `<div class="table-card account-card"><div class="account-name">${esc(r.organization?.name || r.organizationName || r.displayName)} · match ${esc(r.score ?? '')}</div><div class="account-contact">${esc(r.profile?.serviceSummary || '')}</div><div class="account-notes">${esc(r.profile?.description || r.description || r.explanation || '')}</div>${supplierActions}</div>`;
+    }).join('');
+    results.innerHTML = opportunityCards + (rows.length ? supplierCards : '<div class="empty">No matching suppliers found.</div>');
   } catch (error) { results.innerHTML = `<div class="empty">${esc(error.message)}</div>`; }
 }
 
