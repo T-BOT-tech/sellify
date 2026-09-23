@@ -709,7 +709,7 @@
 </nav>
 
 <div class="modal-backdrop" id="moreSheet">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true">
     <h3 data-i18n="moreNav">More</h3>
     <div class="more-sheet-list">
       <button id="navMarketplace" class="btn-ghost more-sheet-item" onclick="switchTab('marketplace'); closeMoreSheet();">
@@ -744,15 +744,15 @@
 
 
 <div class="modal-backdrop" id="customerModal" style="display:none;">
-  <div class="modal" style="max-height:85vh;overflow-y:auto;">
+  <div class="modal" role="dialog" aria-modal="true" style="max-height:85vh;overflow-y:auto;">
     <h3>Customer</h3>
-    <input id="customerNameInput" placeholder="Name">
-    <input id="customerPhoneInput" placeholder="Phone" type="tel">
-    <input id="customerEmailInput" placeholder="Email" type="email">
-    <input id="customerAddressInput" placeholder="Address">
-    <input id="customerTaxIdInput" placeholder="Tax ID (optional)">
-    <select id="customerTypeInput"><option value="retail">Retail</option><option value="business">Business</option></select>
-    <textarea id="customerNotesInput" placeholder="Notes" style="min-height:80px;"></textarea>
+    <label for="customerNameInput">Name</label><input id="customerNameInput" placeholder="Name">
+    <label for="customerPhoneInput">Phone</label><input id="customerPhoneInput" placeholder="Phone" type="tel">
+    <label for="customerEmailInput">Email</label><input id="customerEmailInput" placeholder="Email" type="email">
+    <label for="customerAddressInput">Address</label><input id="customerAddressInput" placeholder="Address">
+    <label for="customerTaxIdInput">Tax ID (optional)</label><input id="customerTaxIdInput" placeholder="Tax ID (optional)">
+    <label for="customerTypeInput">Customer type</label><select id="customerTypeInput"><option value="retail">Retail</option><option value="business">Business</option></select>
+    <label for="customerNotesInput">Notes</label><textarea id="customerNotesInput" placeholder="Notes" style="min-height:80px;"></textarea>
     <div style="display:flex;gap:8px;margin-top:12px;">
       <button type="button" class="btn-secondary" onclick="closeCustomerModal()">Cancel</button>
       <button type="button" class="btn-primary" onclick="saveCustomerModal()">Save customer</button>
@@ -761,7 +761,7 @@
 </div>
 
 <div class="modal-backdrop" id="marketCheckoutModal" style="display:none;">
-  <div class="modal" style="max-height:85vh; overflow-y:auto;">
+  <div class="modal" role="dialog" aria-modal="true" style="max-height:85vh; overflow-y:auto;">
     <h3 style="margin-top:0;"><svg class="icon"><use href="#i-cart"/></svg> Multi-Vendor Cart Review</h3>
     <p style="font-size:12px; color:var(--ink-soft); margin-bottom:12px;">Your order will be split automatically into sub-tickets for each merchant.</p>
     <div id="marketCartGroupedContainer"></div>
@@ -783,15 +783,15 @@
 </div>
 
 <div class="modal-backdrop" id="pinModal" style="display:none;">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true">
     <h3 style="margin-top:0;"><svg class="icon"><use href="#i-key"/></svg> Switch Staff Station</h3>
     <p style="font-size:12px; color:var(--ink-soft); margin-bottom:12px;">Switches which staff profile this device is using. This is a local convenience for a shared device, not a login — anyone with the device can still see this screen.</p>
-    <label>Select Staff Profile</label>
+    <label for="pinStaffSelect">Select Staff Profile</label>
     <select id="pinStaffSelect" style="width:100%; padding:10px 12px; margin-bottom:12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background: var(--surface); font-weight:600;">
     </select>
-    <label>Enter 4-Digit Station PIN</label>
+    <label for="pinInput">Enter 4-Digit Station PIN</label>
     <input type="password" id="pinInput" maxlength="4" placeholder="••••" pattern="[0-9]*" inputmode="numeric" style="width:100%; padding:12px; font-size:20px; text-align:center; letter-spacing:6px; font-family:var(--mono); border:1px solid var(--line); border-radius:8px; margin-bottom:12px; box-sizing:border-box;">
-    <div id="pinError" style="color:var(--amber); font-size:12px; font-weight:700; margin-bottom:12px; display:none;"><svg class="icon icon-sm"><use href="#i-alert"/></svg> Invalid PIN. Ask an owner or manager on this device if you've forgotten yours.</div>
+    <div id="pinError" role="alert" aria-live="assertive" style="color:var(--amber); font-size:12px; font-weight:700; margin-bottom:12px; display:none;"><svg class="icon icon-sm"><use href="#i-alert"/></svg> Invalid PIN. Ask an owner or manager on this device if you've forgotten yours.</div>
     <div style="display:flex; gap:8px;">
       <button class="btn-primary" onclick="verifyPinAndSwitch()">Unlock / Switch</button>
       <button class="btn-secondary" onclick="closePinModal()" style="margin:0;">Cancel</button>
@@ -800,7 +800,7 @@
 </div>
 
 <div class="modal-backdrop" id="onboardingModal" style="display:none; z-index:1000;">
-  <div class="modal" style="max-width:520px; width:calc(100% - 32px);">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:520px; width:calc(100% - 32px);">
     <div class="modal-head"><h2>Welcome to Sellify</h2></div>
     <div style="padding:4px 0 12px;">
       <div style="font-weight:600;">Account</div>
@@ -862,7 +862,7 @@
 </div>
 
 <div class="modal-backdrop" id="settingsModal">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true">
     <h3 data-i18n="settings">Settings</h3>
 
     <div id="tenantSwitcherWrap" style="margin-bottom:14px;">
@@ -1061,7 +1061,7 @@
 </div>
 
 <div class="modal-backdrop" id="paymentProofModal">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true">
     <h3 data-i18n="confirmPayment">Confirm payment</h3>
     <label data-i18n="paymentMethod">Payment method</label>
     <select id="orderPayMethod" onchange="onOrderPayMethodChange()" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background: var(--surface); margin-bottom:8px;"></select>
@@ -1079,7 +1079,7 @@
 </div>
 
 <div class="modal-backdrop" id="tableEditModal" style="display:none;">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true">
     <h3 style="margin-top:0;" id="tableEditModalTitle">Add table</h3>
     <label>Table number</label>
     <input type="number" id="tableEditNumber" min="1" placeholder="1">
@@ -1095,7 +1095,7 @@
 </div>
 
 <div class="modal-backdrop" id="tableTransferModal" style="display:none;">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true">
     <h3 style="margin-top:0;"><svg class="icon"><use href="#i-refresh"/></svg> Transfer table</h3>
     <p style="font-size:12px; color:var(--ink-soft); margin-bottom:12px;">Move this table's open order to another free table.</p>
     <div id="tableTransferList"></div>
@@ -1104,7 +1104,7 @@
 </div>
 
 <div class="modal-backdrop" id="accountEditModal" style="display:none;">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true">
     <h3 style="margin-top:0;" id="accountEditModalTitle" data-i18n="addAccount">Add account</h3>
     <label data-i18n="accountBusinessName">Business name</label>
     <input type="text" id="accountEditBusinessName" placeholder="e.g. Blue Nile Cafe">
@@ -1124,7 +1124,7 @@
 </div>
 
 <div class="modal-backdrop" id="stockAdjustModal" style="display:none;">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true">
     <h3 style="margin-top:0;"><svg class="icon"><use href="#i-box"/></svg> <span data-i18n="whAdjustStock">Adjust stock</span></h3>
     <label data-i18n="whProduct">Product</label>
     <select id="stockAdjustProduct" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background: var(--surface);" onchange="onStockAdjustProductChange()"></select>
@@ -1145,7 +1145,7 @@
 </div>
 
 <div class="modal-backdrop" id="receiveStockModal" style="display:none;">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true">
     <h3 style="margin-top:0;"><svg class="icon"><use href="#i-inbox"/></svg> <span data-i18n="whReceiveStock">Receive stock</span></h3>
     <label data-i18n="whProduct">Product</label>
     <select id="receiveProduct" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background: var(--surface);"></select>
@@ -1171,7 +1171,7 @@
 </div>
 
 <div class="modal-backdrop" id="modifierNoteModal" style="display:none;">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true">
     <h3 style="margin-top:0;" id="modifierNoteModalTitle">Customize item</h3>
     <div class="modifier-chip-list" id="modifierChipList"></div>
     <label data-i18n="additionalNote">Additional note</label>
