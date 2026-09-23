@@ -73,7 +73,7 @@ import {
   updateChangeDisplay, updateI18n, updateKitchenBadge, updateKitchenNode,
   updateKitchenTimer, updateMarketCartQty, updateMultiCartBar, updateNicheFieldVisibility,
   updateOrderSummary, updatePaymentMethodDetails, updateStorageInfoDisplay, updateTicketNode,
-  updateViewToggleButtons, verifyPinAndSwitch, viewPaymentProof, warehouseProductOptions, selectWarehouseLocation,
+  updateViewToggleButtons, verifyPinAndSwitch, viewPaymentProof, warehouseProductOptions,
   renderDeviceList, revokeDeviceInList
 } from './main.js';
 
