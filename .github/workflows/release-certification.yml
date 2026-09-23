@@ -1,0 +1,56 @@
+name: Sellify Release Certification
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-certification:
+    name: P1 + Release Evidence (Node 24)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Runtime gate
+        run: |
+          node --version
+          node -e "const m=process.versions.node.split('.')[0]; if(Number(m)<24) process.exit(1)"
+          node -e "import('node:sqlite').then(()=>console.log('node:sqlite: OK')).catch(()=>process.exit(1))"
+
+      - name: Install
+        run: npm install --ignore-scripts
+
+      - name: P1-22 cumulative certification
+        run: npm run test:p1-22
+
+      - name: P1-23 Node 24 release gate
+        run: npm run test:p1-23
+
+      - name: P1-24 final snapshot
+        run: npm run test:p1-24
+
+      - name: P1-25 release evidence handoff
+        run: npm run test:p1-25
+
+      - name: Phase 0 release check
+        run: npm run phase0:release-check
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sellify-release-evidence
+          path: |
+            phase0/RELEASE-MANIFEST.md
+            phase0/RELEASE-MANIFEST.sha256
+          if-no-files-found: ignore
