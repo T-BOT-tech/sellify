@@ -1,7 +1,7 @@
 {
-  "name": "Stall Ledger — Offline Order Book",
-  "short_name": "Stall Ledger",
-  "description": "Offline-first order taking for sellers.",
+  "name": "Sellify — Commerce Operating System",
+  "short_name": "Sellify",
+  "description": "Offline-first commerce operations for sellers.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
