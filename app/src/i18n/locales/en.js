@@ -2,7 +2,13 @@
 // Extracted verbatim from the original TRANSLATIONS.en block in main.js
 // (Phase 1 — pure data, zero dependencies).
 export default {
-    brandName: "STALL LEDGER",
+    brandName: "SELLIFY",
+    homeNav: "Home",
+    marketNav: "Market",
+    tablesNav: "Tables",
+    kitchenNav: "Kitchen",
+    customersNav: "Customers",
+    sourcingNav: "Sourcing",
     setupBusiness: "Set up your business",
     online: "Online",
     offline: "Offline",
