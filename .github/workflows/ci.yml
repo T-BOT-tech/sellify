@@ -59,3 +59,5 @@ jobs:
         run: npm run test:fux-50
       - name: FUX-51 legacy inventory authority regression
         run: npm run test:fux-51
+      - name: FUX-52 cross-pack inventory authority regression
+        run: npm run test:fux-52
