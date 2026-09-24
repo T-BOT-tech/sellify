@@ -188,5 +188,12 @@ export async function advanceFulfillmentOrder(orderId) {
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => { void reconcileQueuedFulfillments(); });
+  window.addEventListener('online', async () => {
+    try {
+      const { flushCommandOutbox } = await import('../sync/outbox.js');
+      await flushCommandOutbox('fulfillment.transition');
+    } finally {
+      await reconcileQueuedFulfillments();
+    }
+  });
 }
