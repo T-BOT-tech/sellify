@@ -45,6 +45,7 @@ import { renderPackAnalyticsPanel } from '../authorization/pack-analytics.js';
 import { renderPackExperimentationPanel } from '../authorization/pack-experimentation.js';
 import { renderPackTraceabilityPanel } from '../authorization/pack-traceability.js';
 import { renderCompliancePanel } from '../compliance/ui.js';
+import { renderCustomerPricingPanel } from '../b2b/customer-pricing.js';
 import { renderSellerStorefrontChannelsPanel } from '../channels/storefront.js';
 
 export function renderNicheSelect() {
@@ -149,6 +150,7 @@ export function openSettings() {
   renderPackTraceabilityPanel();
   renderMembershipAdministration().catch(() => {});
   renderCompliancePanel().catch(() => {});
+  renderCustomerPricingPanel();
   renderSellerStorefrontChannelsPanel().catch(() => {});
 
   const codeSel = document.getElementById('setCurrencyCode');
