@@ -61,3 +61,5 @@ jobs:
         run: npm run test:fux-51
       - name: FUX-52 cross-pack inventory authority regression
         run: npm run test:fux-52
+      - name: FUX-53 B2B quotes frontend authority regression
+        run: npm run test:fux-53
