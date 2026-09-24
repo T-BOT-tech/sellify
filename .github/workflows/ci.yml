@@ -65,3 +65,5 @@ jobs:
         run: npm run test:fux-53
       - name: FUX-54 compliance frontend authority regression
         run: npm run test:fux-54
+      - name: FUX-55 seller storefront channel authority regression
+        run: npm run test:fux-55
