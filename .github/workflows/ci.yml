@@ -43,3 +43,5 @@ jobs:
         run: npm run test:fux-31
       - name: FUX-31 accessibility source regression
         run: npm run test:fux-31-accessibility
+      - name: FUX-42 core fulfillment regression
+        run: npm run test:fux-42
