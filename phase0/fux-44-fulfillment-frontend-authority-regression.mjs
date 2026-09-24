@@ -20,3 +20,6 @@ assert.match(ui, /advanceFulfillmentOrder/);
 assert.match(outbox, /const commandResult = await flushCommandOutbox\(\)/);
 
 console.log('FUX-44 frontend fulfillment authority regression: 8 PASS');
+
+assert.match(fulfillment, /reconcileQueuedFulfillments/);
+assert.match(fulfillment, /flushCommandOutbox\('fulfillment\.transition'\)/);
