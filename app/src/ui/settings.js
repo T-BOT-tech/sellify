@@ -44,6 +44,7 @@ import { renderPackAccessibilityLocalizationPanel } from '../authorization/pack-
 import { renderPackAnalyticsPanel } from '../authorization/pack-analytics.js';
 import { renderPackExperimentationPanel } from '../authorization/pack-experimentation.js';
 import { renderPackTraceabilityPanel } from '../authorization/pack-traceability.js';
+import { renderCompliancePanel } from '../compliance/ui.js';
 
 export function renderNicheSelect() {
   const sel = document.getElementById('setNiche');
@@ -146,6 +147,7 @@ export function openSettings() {
   renderPackExperimentationPanel();
   renderPackTraceabilityPanel();
   renderMembershipAdministration().catch(() => {});
+  renderCompliancePanel().catch(() => {});
 
   const codeSel = document.getElementById('setCurrencyCode');
   const symInput = document.getElementById('setCurrencySymbol');
