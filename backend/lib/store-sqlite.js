@@ -2025,6 +2025,37 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(40, nowIso());
   }
 
+  // FUX-42 — Core Fulfillment authority. This is deliberately additive and
+  // separate from Marketplace fulfillment so ordinary seller orders gain one
+  // canonical lifecycle without reusing marketplace-specific tables.
+  if (!applied.includes(42)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS fulfillments (
+        id TEXT PRIMARY KEY,
+        server_order_id TEXT NOT NULL UNIQUE REFERENCES orders(server_order_id) ON DELETE CASCADE,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        location_id TEXT REFERENCES locations(id) ON DELETE SET NULL,
+        fulfillment_type TEXT NOT NULL CHECK (fulfillment_type IN ('delivery','pickup')),
+        status TEXT NOT NULL CHECK (status IN ('pending','out_for_delivery','delivered','ready_for_pickup','picked_up')),
+        destination_json TEXT,
+        scheduled_at TEXT,
+        tracking_reference TEXT,
+        proof_json TEXT,
+        last_command_key TEXT,
+        created_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        updated_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0)
+      );
+      CREATE INDEX IF NOT EXISTS idx_fulfillments_org_status
+        ON fulfillments(organization_id, status, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_fulfillments_location_status
+        ON fulfillments(location_id, status, updated_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(42, nowIso());
+  }
+
   // FUX-2 Section 6 — additive multi-role compatibility bridge.
   // memberships.role remains the legacy/default role authority while
   // membership_roles provides an additive path for multiple contextual roles.
@@ -2125,38 +2156,6 @@ function runMigrations() {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(31, nowIso());
   }}
-
-
-  // FUX-42 — Core Fulfillment authority. This is deliberately additive and
-  // separate from Marketplace fulfillment so ordinary seller orders gain one
-  // canonical lifecycle without reusing marketplace-specific tables.
-  if (!applied.includes(42)) {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS fulfillments (
-        id TEXT PRIMARY KEY,
-        server_order_id TEXT NOT NULL UNIQUE REFERENCES orders(server_order_id) ON DELETE CASCADE,
-        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-        location_id TEXT REFERENCES locations(id) ON DELETE SET NULL,
-        fulfillment_type TEXT NOT NULL CHECK (fulfillment_type IN ('delivery','pickup')),
-        status TEXT NOT NULL CHECK (status IN ('pending','out_for_delivery','delivered','ready_for_pickup','picked_up')),
-        destination_json TEXT,
-        scheduled_at TEXT,
-        tracking_reference TEXT,
-        proof_json TEXT,
-        last_command_key TEXT,
-        created_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-        updated_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0)
-      );
-      CREATE INDEX IF NOT EXISTS idx_fulfillments_org_status
-        ON fulfillments(organization_id, status, updated_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_fulfillments_location_status
-        ON fulfillments(location_id, status, updated_at DESC);
-    `);
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(42, nowIso());
-  }
 
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({
