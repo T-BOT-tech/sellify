@@ -48,4 +48,6 @@ jobs:
         run: npm run test:fux-44
       - name: FUX-46 canonical inventory mutation regression
         run: npm run test:fux-46
+      - name: FUX-47 canonical inventory projection regression
+        run: npm run test:fux-47
         run: npm run test:fux-42
