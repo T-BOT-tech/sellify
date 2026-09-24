@@ -5718,33 +5718,40 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
         if (!product.marketplace_listed) {
           throw Object.assign(new Error(`Item no longer listed: ${itemId}`), { statusCode: 409 });
         }
-        if (typeof row.stock === 'number' && row.stock < qty) {
-          throw Object.assign(new Error(`Not enough stock for "${product.name}" (${row.stock} left)`), { statusCode: 409 });
+        const sellerOrg = tenant.organization_id;
+        const defaultLocation = db.prepare(
+          "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
+        ).get(String(sellerOrg));
+        if (!defaultLocation) {
+          throw Object.assign(new Error('Canonical inventory location is unavailable'), { statusCode: 409, code: 'INVENTORY_LOCATION_UNAVAILABLE' });
+        }
+        const canonicalBalance = Number(db.prepare(`
+          SELECT COALESCE(SUM(quantity), 0) AS quantity
+          FROM inventory_movements
+          WHERE organization_id = ? AND location_id = ? AND product_id = ?
+        `).get(String(sellerOrg), String(defaultLocation.id), String(itemId))?.quantity || 0);
+        if (canonicalBalance < qty) {
+          throw Object.assign(new Error(`Not enough stock for "${product.name}" (${canonicalBalance} left)`), { statusCode: 409 });
         }
 
-        if (typeof row.stock === 'number') {
-          product.stock = row.stock - qty;
-          product.stock_revision = (Number.isInteger(row.stock_revision) ? row.stock_revision : 0) + 1;
-          insertProduct(sellerId, product);
-
-          const sellerOrg = tenant.organization_id;
-          const defaultLocation = db.prepare(
-            "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
-          ).get(String(sellerOrg));
-          if (defaultLocation) {
-            const movementEventId = `marketplace-sale:${marketplaceOrderId}:${sellerId}:${itemId}`;
-            db.prepare(`
-              INSERT OR IGNORE INTO inventory_movements
-                (id, event_id, organization_id, location_id, product_id, quantity, movement_type,
-                 reference_type, reference_id, actor_id, device_id, occurred_at, reason, metadata_json, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, 'SALE', 'marketplace_order', ?, NULL, NULL, ?, ?, ?, ?)
-            `).run(
-              crypto.randomUUID(), movementEventId, String(sellerOrg), String(defaultLocation.id),
-              String(itemId), -qty, marketplaceOrderId, nowIso(),
-              'Marketplace checkout', json({ marketplaceOrderId, sellerId, quantity: qty }), nowIso()
-            );
-          }
-        }
+        // inventory_movements is the physical stock authority. catalog_products.stock
+        // is retained only as a compatibility projection for older clients.
+        const movementEventId = `marketplace-sale:${marketplaceOrderId}:${sellerId}:${itemId}`;
+        await appendInventoryMovement(sellerId, {
+          productId: itemId,
+          locationId: String(defaultLocation.id),
+          quantity: -qty,
+          movementType: 'SALE',
+          referenceType: 'marketplace_order',
+          referenceId: marketplaceOrderId,
+          eventId: movementEventId,
+          occurredAt: nowIso(),
+          reason: 'Marketplace checkout',
+          metadata: { marketplaceOrderId, sellerId, quantity: qty },
+        });
+        product.stock = canonicalBalance - qty;
+        product.stock_revision = (Number.isInteger(row.stock_revision) ? row.stock_revision : 0) + 1;
+        insertProduct(sellerId, product);
 
         const price = row.price_minor;
         const lineTotal = price * qty;
@@ -5908,32 +5915,35 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
         const qty = Math.floor(Number(item?.qty));
         if (!itemId || !Number.isFinite(qty) || qty <= 0) continue;
         const productRow = db.prepare('SELECT * FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(key, itemId);
-        if (!productRow || typeof productRow.stock !== 'number') continue;
-        const restoredStock = Math.min(1000000000, productRow.stock + qty);
-        const product = productFromRow(productRow);
-        product.stock = restoredStock;
-        product.stock_revision = (Number.isInteger(productRow.stock_revision) ? productRow.stock_revision : 0) + 1;
-        insertProduct(key, product);
-
+        if (!productRow) continue;
         const tenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(key);
         const defaultLocation = tenant?.organization_id
           ? db.prepare("SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1").get(String(tenant.organization_id))
           : null;
-        if (tenant?.organization_id && defaultLocation) {
-          const movementEventId = `marketplace-cancel:${order.marketplace_order_id}:${key}:${itemId}`;
-          db.prepare(`
-            INSERT OR IGNORE INTO inventory_movements
-              (id, event_id, organization_id, location_id, product_id, quantity, movement_type,
-               reference_type, reference_id, actor_id, device_id, occurred_at, reason, metadata_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, 'RETURN', 'marketplace_order', ?, NULL, NULL, ?, ?, ?, ?)
-          `).run(
-            crypto.randomUUID(), movementEventId, String(tenant.organization_id), String(defaultLocation.id),
-            String(itemId), qty, order.marketplace_order_id, nowIso(),
-            'Marketplace cancellation stock release', json({ marketplaceOrderId: order.marketplace_order_id, sellerId: key, quantity: qty }),
-            nowIso()
-          );
-        }
-      }
+        if (!tenant?.organization_id || !defaultLocation) continue;
+        const canonicalBalance = Number(db.prepare(`
+          SELECT COALESCE(SUM(quantity), 0) AS quantity
+          FROM inventory_movements
+          WHERE organization_id = ? AND location_id = ? AND product_id = ?
+        `).get(String(tenant.organization_id), String(defaultLocation.id), String(itemId))?.quantity || 0);
+        const restoredStock = Math.min(1000000000, canonicalBalance + qty);
+        const movementEventId = `marketplace-cancel:${order.marketplace_order_id}:${key}:${itemId}`;
+        await appendInventoryMovement(key, {
+          productId: itemId,
+          locationId: String(defaultLocation.id),
+          quantity: qty,
+          movementType: 'RETURN',
+          referenceType: 'marketplace_order',
+          referenceId: order.marketplace_order_id,
+          eventId: movementEventId,
+          occurredAt: nowIso(),
+          reason: 'Marketplace cancellation stock release',
+          metadata: { marketplaceOrderId: order.marketplace_order_id, sellerId: key, quantity: qty },
+        });
+        const product = productFromRow(productRow);
+        product.stock = restoredStock;
+        product.stock_revision = (Number.isInteger(productRow.stock_revision) ? productRow.stock_revision : 0) + 1;
+        insertProduct(key, product);
 
       if (canonicalSeller) {
         db.prepare(`
