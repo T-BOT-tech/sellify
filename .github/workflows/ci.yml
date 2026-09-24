@@ -44,10 +44,12 @@ jobs:
       - name: FUX-31 accessibility source regression
         run: npm run test:fux-31-accessibility
       - name: FUX-42 core fulfillment regression
+        run: npm run test:fux-42
       - name: FUX-44 frontend fulfillment authority regression
         run: npm run test:fux-44
       - name: FUX-46 canonical inventory mutation regression
         run: npm run test:fux-46
       - name: FUX-47 canonical inventory projection regression
         run: npm run test:fux-47
-        run: npm run test:fux-42
+      - name: FUX-48 canonical warehouse history regression
+        run: npm run test:fux-48
