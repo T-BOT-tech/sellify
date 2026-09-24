@@ -53,3 +53,5 @@ jobs:
         run: npm run test:fux-47
       - name: FUX-48 canonical warehouse history regression
         run: npm run test:fux-48
+      - name: FUX-49 legacy inventory authority regression
+        run: npm run test:fux-49
