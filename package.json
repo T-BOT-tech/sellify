@@ -278,7 +278,8 @@
     "test:fux-48": "node phase0/fux-48-canonical-warehouse-history-regression.mjs",
     "test:fux-49": "node phase0/fux-49-legacy-inventory-authority-regression.mjs",
     "test:fux-50": "node phase0/fux-50-inventory-outbox-regression.mjs",
-    "test:fux-51": "node phase0/fux-51-legacy-inventory-authority-regression.mjs"
+    "test:fux-51": "node phase0/fux-51-legacy-inventory-authority-regression.mjs",
+    "test:fux-52": "node phase0/fux-52-cross-pack-inventory-authority-regression.mjs"
   },
   "engines": {
     "node": ">=24"
