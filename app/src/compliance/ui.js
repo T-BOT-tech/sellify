@@ -23,9 +23,26 @@ export async function renderCompliancePanel() {
     panel.innerHTML = '';
     return;
   }
-  panel.innerHTML = '<div class="settings-section-label">Compliance</div><div class="hint">Privacy requests, retention policy, and audited data exports are handled by the canonical backend.</div><div id="complianceStatus" class="hint">Loading…</div><div id="complianceRequests"></div><div style="display:flex;gap:8px;margin-top:8px;"><button type="button" class="btn-secondary" id="complianceRefresh">Refresh</button><button type="button" class="btn-secondary" id="complianceExport">Export organization data</button></div>';
+  panel.innerHTML = '<div class="settings-section-label">Compliance</div><div class="hint">Privacy requests, retention policy, and audited data exports are handled by the canonical backend.</div><div id="complianceStatus" class="hint">Loading…</div><div id="complianceRequests"></div><div style="display:flex;gap:8px;margin-top:8px;"><button type="button" class="btn-secondary" id="complianceNewRequest">New customer deletion request</button><button type="button" class="btn-secondary" id="complianceRefresh">Refresh</button><button type="button" class="btn-secondary" id="complianceExport">Export organization data</button></div>';
   document.getElementById('complianceRefresh').onclick = () => loadComplianceRequests();
+  document.getElementById('complianceNewRequest').onclick = () => createComplianceRequest().catch(showComplianceError);
   document.getElementById('complianceExport').onclick = () => exportCompliance('organization').catch(showComplianceError);
+  await loadComplianceRequests();
+}
+
+async function createComplianceRequest() {
+  if (!allowed()) throw new Error('Compliance management permission required.');
+  const customerId = window.prompt('Customer ID for the deletion request:');
+  if (!customerId) return;
+  await request(`/tenants/${encodeURIComponent(config.chatId)}/compliance/requests`, {
+    method: 'POST',
+    body: JSON.stringify({
+      requestType: 'DELETION',
+      subjectType: 'customer',
+      subjectId: customerId.trim(),
+      reason: 'Customer privacy request',
+    }),
+  });
   await loadComplianceRequests();
 }
 
