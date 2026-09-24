@@ -119,6 +119,30 @@ async function requestCanonicalFulfillment(order, next) {
   return data?.fulfillment || null;
 }
 
+export async function reconcileQueuedFulfillments() {
+  if (!config.chatId || !config.sessionToken || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
+  const queued = orders.filter(order =>
+    order.fulfillment_sync_status === 'queued' &&
+    order.server_order_id
+  );
+  for (const order of queued) {
+    try {
+      const response = await fetch(
+        `${(config.syncUrl || window.location.origin).replace(/\\/$/, '')}${fulfillmentEndpoint(order)}`,
+        { headers: { ...authHeaders() } },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data?.fulfillment?.status) continue;
+      canonicalFulfillmentPatch(order, data.fulfillment);
+      delete order.fulfillment_sync_reason;
+    } catch {
+      // Keep QUEUED/UNKNOWN until a later reconciliation succeeds.
+    }
+  }
+  saveJSON(STORAGE_KEYS.orders, orders);
+  renderLogistics();
+}
+
 export async function advanceFulfillmentOrder(orderId) {
   const order = orders.find(o => String(o.id) === String(orderId));
   if (!order) return;
@@ -161,4 +185,8 @@ export async function advanceFulfillmentOrder(orderId) {
     }
     showToast(error.message || 'Could not update fulfillment.');
   }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => { void reconcileQueuedFulfillments(); });
 }
