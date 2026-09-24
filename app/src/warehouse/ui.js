@@ -14,7 +14,7 @@
 import { escapeHtml, escapeAttr } from '../utils/index.js';
 import { products, warehouseLocations, stockTransactions, organizationLocations, config } from '../state.js';
 import {
-  isWarehouseEnabled, isStockTracked, getLowStockProducts, getOutOfStockProducts
+  isWarehouseEnabled, isStockTracked, projectedStock, getLowStockProducts, getOutOfStockProducts
 } from './inventory.js';
 import { loadInventoryBalances, getInventoryBalance, recordCanonicalInventoryMovement } from './ledger.js';
 import { loadOrganizationLocations, selectOrganizationLocation } from './locations.js';
@@ -90,8 +90,7 @@ export function renderWarehouseInventory() {
   }
   list.innerHTML = products.map(p => {
     const tracked = isStockTracked(p);
-    const locationStock = tracked && config.locationId ? getInventoryBalance(p.id, config.locationId) : null;
-    const stock = tracked ? ((config.locationId && organizationLocations.length > 0) ? locationStock : p.stock) : null;
+    const stock = tracked ? projectedStock(p, config.locationId || '') : null;
     let badgeClass = '';
     if (tracked) {
       if (stock <= 0) badgeClass = 'danger';
@@ -201,7 +200,7 @@ export function onStockAdjustProductChange() {
   const reorderInput = document.getElementById('stockAdjustReorderPoint');
   if (!product) { hint.textContent = ''; return; }
   hint.textContent = isStockTracked(product)
-    ? `${t('whCurrentStock')}: ${product.stock} ${product.unit || ''}`
+    ? `${t('whCurrentStock')}: ${projectedStock(product, config.locationId || '')} ${product.unit || ''}`
     : t('whNotTrackedYet');
   reorderInput.value = (product.reorder_point !== undefined && product.reorder_point !== null) ? product.reorder_point : '';
 }
