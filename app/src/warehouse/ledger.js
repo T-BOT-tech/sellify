@@ -59,6 +59,51 @@ export function recordInventoryMovement(product, quantity, type, meta = {}) {
   return movement;
 }
 
+export async function recordCanonicalInventoryMovement(input = {}) {
+  const productId = String(input.productId || '').trim();
+  const quantity = Number(input.quantity);
+  const movementType = String(input.movementType || '').trim().toUpperCase();
+  if (!productId || !Number.isFinite(quantity) || quantity === 0 || !movementType) {
+    throw new Error('Valid product, non-zero quantity, and movement type are required.');
+  }
+  const event = {
+    eventId: input.eventId || eventId(),
+    productId,
+    quantity,
+    movementType,
+    locationId: input.locationId || config.locationId || '',
+    referenceType: input.referenceType || null,
+    referenceId: input.referenceId || null,
+    reason: input.reason || '',
+    metadata: input.metadata || {},
+    occurredAt: new Date().toISOString(),
+  };
+  if (!config.chatId || !config.sessionToken || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+    enqueueEvent('inventory.movement.record', event, {
+      aggregateType: 'inventory_movement',
+      aggregateId: event.eventId,
+      eventId: event.eventId,
+      occurredAt: event.occurredAt,
+    });
+    return { queued: true, movement: event };
+  }
+  const res = await fetch(
+    `${baseUrl()}` + '/tenants/' + encodeURIComponent(config.chatId) + '/inventory/movements',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.sessionToken}` },
+      body: JSON.stringify(event),
+    },
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error?.message || `Inventory update failed (${res.status})`);
+  const remote = data.movement || event;
+  const existing = inventoryMovements.filter(m => m.eventId !== remote.eventId);
+  setInventoryMovements([{ ...remote, syncStatus: 'synced' }, ...existing]);
+  persist();
+  return { queued: false, movement: remote };
+}
+
 export async function syncInventoryMovement(movement) {
   if (!movement || !config.chatId || !config.sessionToken) return null;
   const res = await fetch(`${baseUrl()}/tenants/${encodeURIComponent(config.chatId)}/inventory/movements`, {
