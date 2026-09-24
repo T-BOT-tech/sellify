@@ -12,6 +12,7 @@ const {
   saveQueuedOrders,
   saveCatalog,
   getOrderFulfillment,
+  appendInventoryMovement,
   transitionOrderFulfillment,
   coreFulfillmentContract,
 } = await import('../backend/lib/store-sqlite.js');
@@ -19,6 +20,7 @@ const {
 const chatId = 'fux42-chat';
 const tenant = await getOrCreateTenant(chatId);
 await saveCatalog(chatId, [{ id: 'product-1', name: 'Test item', price: 500, stock: 5 }]);
+await appendInventoryMovement(chatId, { productId: 'product-1', quantity: 5, movementType: 'PURCHASE', eventId: 'fux42-opening-purchase' });
 const syncResult = await saveQueuedOrders(chatId, [{
   id: 'local-fux42-1',
   items: [{ item_id: 'product-1', name: 'Test item', qty: 1, price: 500 }],
