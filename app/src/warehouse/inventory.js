@@ -1,46 +1,56 @@
 // warehouse/inventory.js
-// Phase 6 extraction (see modularization plan §5): stock-tracking core —
-// isStockTracked/getLowStockProducts/getOutOfStockProducts/applyStockChange
-// — moved out of main.js unchanged. Stock is opt-in per install
-// (config.warehouseEnabled); products created before warehouse mode was
-// turned on simply have no `stock` field, treated as "not tracked" rather
-// than "zero", so enabling this never falsely flags every existing product
-// as out of stock. warehouseLocations/stockTransactions themselves already
-// live in state.js (Phase 2).
-import { STORAGE_KEYS } from '../constants.js';
-import { config, products, currentStaff, stockTransactions } from '../state.js';
+// FUX-47 — canonical inventory balance projection.
+// Legacy product.stock remains only as a compatibility fallback for installs
+// that have not yet received canonical inventory data.
+import { config, products, currentStaff, stockTransactions, inventoryBalances, inventoryMovements } from '../state.js';
 import { saveJSON } from '../storage/json.js';
+import { STORAGE_KEYS } from '../constants.js';
 import { hasPermission } from '../auth/permissions.js';
-import { recordInventoryMovement } from './ledger.js';
+import { getInventoryBalance } from './ledger.js';
 
 export function isWarehouseEnabled() {
   return !!config.warehouseEnabled;
 }
+
+function hasCanonicalInventory(productId) {
+  return inventoryBalances.some(row => String(row.productId) === String(productId))
+    || inventoryMovements.some(row => String(row.productId) === String(productId));
+}
+
 export function isStockTracked(p) {
-  return typeof p.stock === 'number';
+  return typeof p.stock === 'number' || hasCanonicalInventory(p.id);
 }
+
+export function projectedStock(p, locationId = config.locationId || '') {
+  if (hasCanonicalInventory(p.id)) return getInventoryBalance(p.id, locationId);
+  return typeof p.stock === 'number' ? p.stock : null;
+}
+
 export function getLowStockProducts() {
-  return products.filter(p => isStockTracked(p) && p.stock > 0 && p.stock <= (p.reorder_point || 0));
+  return products.filter(p => {
+    const stock = projectedStock(p);
+    return stock !== null && stock > 0 && stock <= (p.reorder_point || 0);
+  });
 }
+
 export function getOutOfStockProducts() {
-  return products.filter(p => isStockTracked(p) && p.stock <= 0);
+  return products.filter(p => {
+    const stock = projectedStock(p);
+    return stock !== null && stock <= 0;
+  });
 }
+
 export function saveStockTransactions() {
   saveJSON(STORAGE_KEYS.stockTransactions, stockTransactions);
 }
-// Records a stock movement and applies it to the product's stock count in one step.
-// type: 'received' | 'adjusted'. delta may be negative (e.g. correcting a miscount).
+
+// Compatibility-only legacy mutation path. Active Warehouse UI no longer calls
+// this function; canonical mutations use recordCanonicalInventoryMovement().
 export function applyStockChange(productId, delta, type, meta) {
-  // Phase 3 fix (see modularization plan §5, Phase 3): gated here rather
-  // than in each caller (saveStockAdjustModal, saveReceiveModal in
-  // warehouse/ui.js) since this is the one function that actually writes
-  // to product.stock — gating the modal handlers alone would leave a
-  // console call to applyStockChange() itself unguarded. Uses the same
-  // inventory:edit permission as editing/removing a product.
   if (!hasPermission(currentStaff ? currentStaff.role : 'owner', 'inventory:edit')) return null;
   const product = products.find(p => p.id === productId);
   if (!product) return null;
-  const before = isStockTracked(product) ? product.stock : 0;
+  const before = isStockTracked(product) ? projectedStock(product) : 0;
   product.stock = Math.max(0, before + delta);
   if (meta && meta.batch_number) product.batch_number = meta.batch_number;
   if (meta && meta.expiry_date) product.expiry_date = meta.expiry_date;
@@ -52,7 +62,7 @@ export function applyStockChange(productId, delta, type, meta) {
     id: 'ST_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
     product_id: productId,
     product_name: product.name,
-    type: type,
+    type,
     quantity: delta,
     resulting_stock: product.stock,
     bin_location: (meta && meta.bin_location) || product.bin_location || undefined,
@@ -65,21 +75,5 @@ export function applyStockChange(productId, delta, type, meta) {
   };
   stockTransactions.unshift(tx);
   saveStockTransactions();
-
-  // Phase 10.5: append the canonical movement stream without changing the
-  // legacy stock mutation above. The compatibility transaction remains the
-  // UI projection while the new ledger becomes the migration target.
-  recordInventoryMovement(product, delta, type, {
-    referenceType: meta?.referenceType || 'stock_transaction',
-    referenceId: meta?.referenceId || meta?.reference || tx.id,
-      eventId: meta?.eventId,
-    locationId: meta?.locationId || config.locationId || '',
-    reason: meta?.reason || meta?.notes || '',
-    metadata: {
-      legacyTransactionId: tx.id,
-      binLocation: tx.bin_location || null,
-      batchNumber: tx.batch_number || null,
-    },
-  });
   return tx;
 }
