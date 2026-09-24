@@ -46,4 +46,6 @@ jobs:
       - name: FUX-42 core fulfillment regression
       - name: FUX-44 frontend fulfillment authority regression
         run: npm run test:fux-44
+      - name: FUX-46 canonical inventory mutation regression
+        run: npm run test:fux-46
         run: npm run test:fux-42
