@@ -14,7 +14,7 @@ assert.match(fulfillment, /navigator\.onLine/);
 assert.match(fulfillment, /queueFulfillmentCommand/);
 assert.match(fulfillment, /canonicalFulfillmentPatch/);
 assert.doesNotMatch(fulfillment, /applyStockChange/);
-assert.doesNotMatch(fulfillment, /saveJSON\(STORAGE_KEYS\.orders, orders\);\s*renderLogistics\(\);\s*$/m, 'local terminal mutation must not be the authority');
+assert.doesNotMatch(fulfillment, /order\.fulfillment_status\s*=\s*next/, 'advance path must not assign terminal status locally');
 assert.match(ui, /advanceFulfillmentOrder/);
 
 console.log('FUX-44 frontend fulfillment authority regression: 8 PASS');
