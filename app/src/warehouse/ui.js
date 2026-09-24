@@ -12,11 +12,11 @@
 // pattern storage/json.js established — see that file for the fuller
 // explanation.
 import { escapeHtml, escapeAttr } from '../utils/index.js';
-import { products, warehouseLocations, stockTransactions, organizationLocations, config } from '../state.js';
+import { products, warehouseLocations, stockTransactions, inventoryMovements, organizationLocations, config } from '../state.js';
 import {
   isWarehouseEnabled, isStockTracked, projectedStock, getLowStockProducts, getOutOfStockProducts
 } from './inventory.js';
-import { loadInventoryBalances, getInventoryBalance, recordCanonicalInventoryMovement } from './ledger.js';
+import { loadInventoryBalances, loadInventoryMovements, getInventoryBalance, recordCanonicalInventoryMovement } from './ledger.js';
 import { loadOrganizationLocations, selectOrganizationLocation } from './locations.js';
 // Phase 8 fix (see modularization plan §5, Phase 8): these used to come
 // from '../main.js', which only re-exported them from their real owning
@@ -60,9 +60,9 @@ export function switchWarehouseSubtab(tab) {
     if (btn) btn.classList.toggle('active', name === tab);
   });
   if (tab === 'inventory') renderWarehouseInventory();
-  if (tab === 'receiving') { renderWarehouseReceiving(); renderProcurementReceiving(); bindProcurementReceivingEvents(); }
+  if (tab === 'receiving') { loadInventoryMovements({ locationId: config.locationId, limit: 100 }).then(() => renderWarehouseReceiving()).catch(() => renderWarehouseReceiving()); renderProcurementReceiving(); bindProcurementReceivingEvents(); }
   if (tab === 'locations') renderWarehouseLocationsList();
-  if (tab === 'transactions') renderWarehouseTransactions();
+  if (tab === 'transactions') { loadInventoryMovements({ locationId: config.locationId, limit: 100 }).then(() => renderWarehouseTransactions()).catch(() => renderWarehouseTransactions()); }
 }
 
 export function renderWarehouseInventory() {
@@ -118,24 +118,47 @@ export function renderWarehouseInventory() {
 export function renderWarehouseReceiving() {
   const list = document.getElementById('warehouseReceivingList');
   if (!list) return;
-  const received = stockTransactions.filter(t => t.type === 'received').slice(0, 50);
-  if (received.length === 0) {
+  const canonical = inventoryMovements.filter(m => String(m.movementType || '').toUpperCase() === 'PURCHASE').slice(0, 50);
+  const legacy = stockTransactions.filter(item => item.type === 'received').slice(0, 50);
+  if (canonical.length === 0 && legacy.length === 0) {
     list.innerHTML = `<div class="empty">${t('whNoReceiving')}</div>`;
     return;
   }
-  list.innerHTML = received.map(txItemMarkup).join('');
+  list.innerHTML = [...canonical.map(canonicalTxItemMarkup), ...legacy.map(txItemMarkup)].join('');
 }
 
 export function renderWarehouseTransactions() {
   const list = document.getElementById('warehouseTransactionsList');
   if (!list) return;
-  if (stockTransactions.length === 0) {
+  const canonical = inventoryMovements.slice(0, 100);
+  const legacy = stockTransactions.slice(0, 100);
+  if (canonical.length === 0 && legacy.length === 0) {
     list.innerHTML = `<div class="empty">${t('whNoHistory')}</div>`;
     return;
   }
-  list.innerHTML = stockTransactions.slice(0, 100).map(txItemMarkup).join('');
+  list.innerHTML = [...canonical.map(canonicalTxItemMarkup), ...legacy.map(txItemMarkup)].join('');
 }
 
+export function canonicalTxItemMarkup(movement) {
+  const quantity = Number(movement.quantity || 0);
+  const sign = quantity > 0 ? '+' : '';
+  const qtyClass = quantity > 0 ? 'pos' : 'neg';
+  const metaParts = [
+    movement.occurredAt ? new Date(movement.occurredAt).toLocaleString() : '',
+    movement.movementType ? escapeHtml(String(movement.movementType)) : '',
+    movement.referenceId ? '#' + escapeHtml(movement.referenceId) : '',
+    movement.syncStatus ? escapeHtml(String(movement.syncStatus)) : '',
+  ].filter(Boolean).join(' · ');
+  return `
+    <div class="tx-item">
+      <div class="tx-top">
+        <span class="tx-product">${escapeHtml(movement.productName || movement.productId || 'Deleted product')}</span>
+        <span class="tx-qty ${qtyClass}">${sign}${quantity}</span>
+      </div>
+      <div class="tx-meta">${metaParts}</div>
+      ${movement.reason ? `<div class="tx-meta">${escapeHtml(movement.reason)}</div>` : ''}
+    </div>`;
+}
 export function txItemMarkup(tx) {
   const sign = tx.quantity > 0 ? '+' : '';
   const qtyClass = tx.quantity > 0 ? 'pos' : 'neg';
