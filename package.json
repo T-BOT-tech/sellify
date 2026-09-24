@@ -275,7 +275,8 @@
     "test:fux-44": "node phase0/fux-44-fulfillment-frontend-authority-regression.mjs",
     "test:fux-46": "node phase0/fux-46-canonical-inventory-mutation-regression.mjs",
     "test:fux-47": "node phase0/fux-47-canonical-inventory-projection-regression.mjs",
-    "test:fux-48": "node phase0/fux-48-canonical-warehouse-history-regression.mjs"
+    "test:fux-48": "node phase0/fux-48-canonical-warehouse-history-regression.mjs",
+    "test:fux-49": "node phase0/fux-49-legacy-inventory-authority-regression.mjs"
   },
   "engines": {
     "node": ">=24"
