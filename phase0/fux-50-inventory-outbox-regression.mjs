@@ -15,7 +15,10 @@ check(ledger.includes("enqueueEvent('inventory.movement.record', event"), 'offli
 check(ledger.includes('eventId: event.eventId'), 'queued inventory event preserves its eventId');
 check(ledger.includes("eventId: input.eventId || eventId()"), 'online and offline paths create one stable event identity');
 check(ledger.includes('if (!res.ok) throw new Error'), 'HTTP application failures are not silently converted to synced state');
-check(ledger.includes('catch'), 'inventory transport boundary has an exception path');
+check(ledger.includes('catch (error)'), 'inventory transport boundary has an exception path');
+check((ledger.match(/enqueueEvent\('inventory\.movement\.record', event/g) || []).length >= 2, 'offline and transport-loss paths both use the same inventory event queue');
+check(ledger.includes('error.status = res.status'), 'HTTP application failures retain their status and are not misclassified as transport loss');
+check(ledger.includes("if (!error?.status && !error?.code)"), 'only transport/unknown failures are requeued automatically');
 
 check(outbox.includes("const id = String(eventId ||"), 'outbox de-duplicates events by eventId');
 check(outbox.includes("status: 'pending'"), 'new outbox work is explicitly pending');
