@@ -5362,6 +5362,34 @@ export async function getOrderFulfillment(chatId, serverOrderId) {
   return fulfillmentFromRow(row);
 }
 
+function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJson, actor = null) {
+  const terminal = fulfillmentRow.fulfillment_type === 'delivery'
+    ? fulfillmentRow.status === 'delivered'
+    : fulfillmentRow.status === 'picked_up';
+  if (!terminal) return [];
+  const items = Array.isArray(orderJson?.items) ? orderJson.items : [];
+  const defaultLocation = db.prepare("SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1").get(String(fulfillmentRow.organization_id));
+  const locationId = String(fulfillmentRow.location_id || defaultLocation?.id || '');
+  if (!locationId) throw Object.assign(new Error('Fulfillment inventory location is required'), { statusCode: 409, code: 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED' });
+  const movements = [];
+  for (const item of items) {
+    const productId = String(item?.product_id ?? item?.productId ?? item?.item_id ?? item?.id ?? '').trim();
+    const quantity = Number(item?.qty ?? item?.quantity ?? 0);
+    if (!productId || !Number.isFinite(quantity) || quantity <= 0) continue;
+    const product = db.prepare('SELECT product_id FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
+    if (!product) throw Object.assign(new Error('Fulfillment product not found'), { statusCode: 409, code: 'FULFILLMENT_PRODUCT_NOT_FOUND', productId });
+    const balance = Number(db.prepare('SELECT COALESCE(SUM(quantity), 0) AS quantity FROM inventory_movements WHERE organization_id = ? AND location_id = ? AND product_id = ?').get(String(fulfillmentRow.organization_id), locationId, productId)?.quantity || 0);
+    if (balance < quantity) throw Object.assign(new Error('Insufficient inventory for fulfillment'), { statusCode: 409, code: 'FULFILLMENT_INSUFFICIENT_INVENTORY', productId, available: balance, requested: quantity });
+    const eventId = `fulfillment-sale:${fulfillmentRow.id}:${productId}`;
+    const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
+    if (existing) { movements.push(inventoryMovementFromRow(existing)); continue; }
+    const id = crypto.randomUUID(); const now = nowIso();
+    db.prepare('INSERT INTO inventory_movements (id,event_id,organization_id,location_id,product_id,quantity,movement_type,reference_type,reference_id,actor_id,device_id,occurred_at,reason,metadata_json,created_at) VALUES (?,?,?,?,?,?,\'SALE\',\'fulfillment\',?,?,?,?,?,?,?)').run(id,eventId,String(fulfillmentRow.organization_id),locationId,productId,-quantity,String(fulfillmentRow.id),actor?.userId || null,actor?.deviceId || null,now,'Core fulfillment terminal inventory consequence',json({orderId:String(fulfillmentRow.server_order_id),fulfillmentId:String(fulfillmentRow.id)}),now);
+    movements.push(inventoryMovementFromRow(db.prepare('SELECT * FROM inventory_movements WHERE id = ?').get(id)));
+  }
+  return movements;
+}
+
 export async function transitionOrderFulfillment(chatId, serverOrderId, nextStatus, actor = null, input = {}) {
   ensureDatabase();
   const key = String(chatId);
@@ -5426,8 +5454,10 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
       row.id,
     );
     const updated = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(row.id);
+    const inventoryMovements = applyCoreFulfillmentInventoryConsequence(key, updated, orderJson, actor);
     audit(key, 'fulfillment.transitioned', 'fulfillment', row.id, {
       orderId: String(serverOrderId), from: current, to: target, commandKey,
+      inventoryMovementIds: inventoryMovements.map(item => item.id),
     }, {
       organizationId, locationId: updated.location_id, actorId: actorUserId, deviceId: actor?.deviceId || null,
     });
@@ -5450,7 +5480,7 @@ export function coreFulfillmentContract() {
     delivery_transitions: 'pending -> out_for_delivery -> delivered',
     pickup_transitions: 'pending -> ready_for_pickup -> picked_up',
     idempotency: 'client command key; replay returns current canonical state',
-    inventory_consequence: 'deferred to existing inventory authority',
+    inventory_consequence: 'terminal fulfillment atomically records SALE movements in existing inventory_movements authority',
     payment_authority: 'unchanged',
     marketplace_fulfillment_reuse: false,
   });
