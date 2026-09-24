@@ -41,6 +41,12 @@ If a network/5xx failure leaves the outcome unknown, the same deterministic idem
 
 A local order without `server_order_id` cannot receive a canonical fulfillment transition; the UI asks for synchronization rather than creating a second local authority.
 
+## Reconnect reconciliation
+
+When connectivity returns, the frontend flushes `fulfillment.transition` commands using their deterministic idempotency keys, then reads canonical fulfillment state for queued local projections.
+
+A queued local state is therefore reconciled from server authority rather than promoted locally to a terminal state.
+
 ## Regression
 
 `phase0/fux-44-fulfillment-frontend-authority-regression.mjs`
