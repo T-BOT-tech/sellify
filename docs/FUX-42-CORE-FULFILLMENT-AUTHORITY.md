@@ -79,7 +79,7 @@ No second audit store is introduced.
 
 FUX-42 does not yet:
 
-- mutate inventory from fulfillment transitions
+- introduce dispatch/route authority
 - introduce dispatch/route authority
 - rewrite the existing Logistics Pack
 - rewrite Warehouse inventory authority
@@ -87,7 +87,7 @@ FUX-42 does not yet:
 - change payment behavior
 - replace the frontend local fulfillment projection
 
-Inventory consequences remain deferred to the existing canonical inventory authority so the next migration can be introduced with an explicit transaction boundary rather than creating a second stock engine.
+Terminal fulfillment now records a canonical `SALE` movement in the existing `inventory_movements` authority inside the same SQLite transaction. No second stock engine is introduced. If inventory is insufficient or the product is missing, the fulfillment transition is rejected and the transaction rolls back.
 
 ## API boundary
 
@@ -97,6 +97,17 @@ Authenticated tenant-scoped endpoints:
 - `POST /tenants/:chatId/orders/:serverOrderId/fulfillment`
 
 POST requires `Idempotency-Key` and a target status.
+
+## Inventory consequence
+
+For terminal delivery/pickup transitions, Core Fulfillment uses the existing Inventory authority:
+
+- delivery `delivered` → `SALE` movement
+- pickup `picked_up` → `SALE` movement
+- deterministic event identity prevents duplicate deduction
+- balance is checked before mutation
+- fulfillment status and inventory consequence commit atomically
+- inventory remains represented by `inventory_movements`
 
 ## Regression
 
