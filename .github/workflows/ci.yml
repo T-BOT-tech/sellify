@@ -67,3 +67,5 @@ jobs:
         run: npm run test:fux-54
       - name: FUX-55 seller storefront channel authority regression
         run: npm run test:fux-55
+      - name: FUX-56 B2B customer pricing authority regression
+        run: npm run test:fux-56
