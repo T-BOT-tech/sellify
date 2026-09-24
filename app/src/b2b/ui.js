@@ -33,6 +33,7 @@ import { renderPurchaseOrders, bindPurchaseOrderUI } from './purchase-orders.js'
 import { renderCreditTerms, bindCreditTermsUI } from './credit-terms.js';
 import { renderReceivables, bindReceivableUI } from './accounts-receivable.js';
 import { renderInvoices, bindInvoiceUI } from './invoices.js';
+import { renderQuotes, bindQuoteUI } from './quotes.js';
 
 export function applyWholesaleUI() {
   const enabled = isWholesaleEnabled();
@@ -83,6 +84,7 @@ export function renderAccounts() {
     renderCreditTerms();
     renderReceivables();
     renderInvoices();
+    renderQuotes();
     return;
   }
   list.innerHTML = b2bAccounts.map(a => {
@@ -104,6 +106,7 @@ export function renderAccounts() {
   renderCreditTerms();
   renderReceivables();
   renderInvoices();
+  renderQuotes();
 }
 
 let accountModalEditingId = null;
@@ -258,4 +261,4 @@ export function onVolumeDiscountToggle(checked) {
   document.getElementById('volumeDiscountSection').style.display = checked ? 'block' : 'none';
 }
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { bindPurchaseOrderUI(); bindCreditTermsUI(); bindReceivableUI(); bindInvoiceUI(); }, { once: true }); else { bindPurchaseOrderUI(); bindCreditTermsUI(); bindReceivableUI(); bindInvoiceUI(); }
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { bindPurchaseOrderUI(); bindCreditTermsUI(); bindReceivableUI(); bindInvoiceUI(); bindQuoteUI(); }, { once: true }); else { bindPurchaseOrderUI(); bindCreditTermsUI(); bindReceivableUI(); bindInvoiceUI(); bindQuoteUI(); }
