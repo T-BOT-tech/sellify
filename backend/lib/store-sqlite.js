@@ -5944,6 +5944,7 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
         product.stock = restoredStock;
         product.stock_revision = (Number.isInteger(productRow.stock_revision) ? productRow.stock_revision : 0) + 1;
         insertProduct(key, product);
+      }
 
       if (canonicalSeller) {
         db.prepare(`
