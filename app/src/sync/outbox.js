@@ -117,7 +117,10 @@ export function retryCommand(eventId) {
 }
 
 export async function flushOutbox() {
-  if (!config.chatId || !config.sessionToken || !navigator.onLine || !outboxEvents.length) return { processed: 0, pending: outboxEvents.length };
+  const commandResult = await flushCommandOutbox();
+  if (!config.chatId || !config.sessionToken || !navigator.onLine || !outboxEvents.length) {
+    return { ...commandResult, processed: commandResult.processed || 0, pending: commandResult.pending ?? outboxEvents.length };
+  }
   const pending = outboxEvents.filter(e => !e.kind && e.status !== 'synced' && e.status !== 'rejected').slice(0, 100);
   if (!pending.length) return { processed: 0, pending: 0 };
   try {
@@ -136,10 +139,10 @@ export async function flushOutbox() {
     const processed = outboxEvents.length - next.length;
     setOutboxEvents(next);
     persist();
-    return { processed, pending: next.length };
+    return { processed: processed + (commandResult.processed || 0), pending: next.length + (commandResult.pending || 0) };
   } catch (error) {
     setOutboxEvents(outboxEvents.map(event => pending.some(p => p.eventId === event.eventId) ? { ...event, attempts: (event.attempts || 0) + 1, lastAttemptAt: Date.now(), lastError: error.message } : event));
     persist();
-    return { processed: 0, pending: outboxEvents.length, error: error.message };
+    return { processed: commandResult.processed || 0, pending: next.length + (commandResult.pending || 0), error: error.message };
   }
 }
