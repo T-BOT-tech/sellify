@@ -10,6 +10,7 @@ process.env.SELLIFY_DB_PATH = path.join(dataDir, 'sellify.sqlite');
 const {
   getOrCreateTenant,
   saveQueuedOrders,
+  saveCatalog,
   getOrderFulfillment,
   transitionOrderFulfillment,
   coreFulfillmentContract,
@@ -17,6 +18,7 @@ const {
 
 const chatId = 'fux42-chat';
 const tenant = await getOrCreateTenant(chatId);
+await saveCatalog(chatId, [{ id: 'product-1', name: 'Test item', price: 500, stock: 5 }]);
 const syncResult = await saveQueuedOrders(chatId, [{
   id: 'local-fux42-1',
   items: [{ item_id: 'product-1', name: 'Test item', qty: 1, price: 500 }],
@@ -55,6 +57,9 @@ fulfillment = await transitionOrderFulfillment(chatId, orderId, 'delivered', act
   proof: { type: 'photo', ref: 'proof-fux42' },
 });
 assert.equal(fulfillment.status, 'delivered');
+const balances = await (await import('../backend/lib/store-sqlite.js')).getInventoryBalances(chatId);
+const productBalance = balances.find((row) => row.productId === 'product-1');
+assert.equal(productBalance?.quantity, 4);
 assert.deepEqual(fulfillment.proof, { type: 'photo', ref: 'proof-fux42' });
 
 await assert.rejects(
@@ -81,4 +86,5 @@ console.log('Server transition authority: PASS');
 console.log('Idempotent replay: PASS');
 console.log('Invalid transition rejection: PASS');
 console.log('Organization/location scope: PASS');
+console.log('Terminal fulfillment inventory consequence: PASS');
 console.log('Marketplace fulfillment remains separate: PASS');
