@@ -280,7 +280,9 @@
     "test:fux-50": "node phase0/fux-50-inventory-outbox-regression.mjs",
     "test:fux-51": "node phase0/fux-51-legacy-inventory-authority-regression.mjs",
     "test:fux-52": "node phase0/fux-52-cross-pack-inventory-authority-regression.mjs",
-    "test:fux-53": "node phase0/fux-53-b2b-quotes-frontend-authority-regression.mjs"
+    "test:fux-53": "node phase0/fux-53-b2b-quotes-frontend-authority-regression.mjs",
+    "test:fux-54": "node phase0/fux-54-compliance-frontend-authority-regression.mjs",
+    "test:fux-55": "node phase0/fux-55-seller-storefront-channel-authority-regression.mjs"
   },
   "engines": {
     "node": ">=24"
