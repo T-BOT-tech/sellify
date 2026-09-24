@@ -1,0 +1,28 @@
+// FUX-55 — seller storefront channel + Telegram seller configuration authority regression.
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const ui=fs.readFileSync('app/src/channels/storefront.js','utf8');
+const settings=fs.readFileSync('app/src/ui/settings.js','utf8');
+const html=fs.readFileSync('app/index.html','utf8');
+const contract=fs.readFileSync('app/src/platform/seller-channel-storefront-contract.js','utf8');
+const credential=fs.readFileSync('app/src/platform/telegram-bot-credential-contract.js','utf8');
+const server=fs.readFileSync('backend/server.js','utf8');
+assert(ui.includes('/storefront-channels'));
+assert(ui.includes('/telegram-storefront'));
+assert(ui.includes("method: 'PATCH'"));
+assert(ui.includes('/telegram-storefront/verify'));
+assert(ui.includes("method: 'POST'"));
+assert(ui.includes("status: 'PUBLISHED'"));
+assert(ui.includes('secret://'));
+assert(!/localStorage.*telegram|localStorage.*channel/i.test(ui));
+assert(settings.includes('renderSellerStorefrontChannelsPanel'));
+assert(html.includes('sellerStorefrontChannelsPanel'));
+assert(contract.includes('transactionAuthority: false'));
+assert(contract.includes('inventoryAuthority: false'));
+assert(credential.includes('rawTokenPersistence: false'));
+assert(server.includes('handleSellerStorefrontChannelsGet'));
+assert(server.includes('handleTelegramStorefrontPatch'));
+assert(server.includes('handleTelegramStorefrontVerify'));
+assert(server.includes('/tenants/([^/]+)/storefront-channels'));
+assert(server.includes('/tenants/([^/]+)/telegram-storefront'));
+console.log('FUX-55 seller storefront channel + Telegram seller authority regression: PASS');
