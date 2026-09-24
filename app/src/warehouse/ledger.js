@@ -87,21 +87,36 @@ export async function recordCanonicalInventoryMovement(input = {}) {
     });
     return { queued: true, movement: event };
   }
-  const res = await fetch(
-    `${baseUrl()}` + '/tenants/' + encodeURIComponent(config.chatId) + '/inventory/movements',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.sessionToken}` },
-      body: JSON.stringify(event),
-    },
-  );
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.error?.message || `Inventory update failed (${res.status})`);
-  const remote = data.movement || event;
-  const existing = inventoryMovements.filter(m => m.eventId !== remote.eventId);
-  setInventoryMovements([{ ...remote, syncStatus: 'synced' }, ...existing]);
-  persist();
-  return { queued: false, movement: remote };
+  try {
+    const res = await fetch(
+      `${baseUrl()}` + '/tenants/' + encodeURIComponent(config.chatId) + '/inventory/movements',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.sessionToken}` },
+        body: JSON.stringify(event),
+      },
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error?.message || `Inventory update failed (${res.status})`);
+    const remote = data.movement || event;
+    const existing = inventoryMovements.filter(m => m.eventId !== remote.eventId);
+    setInventoryMovements([{ ...remote, syncStatus: 'synced' }, ...existing]);
+    persist();
+    return { queued: false, movement: remote };
+  } catch (error) {
+    // A lost response is UNKNOWN, not failure of the business operation.
+    // Requeue the exact event so a reconnect can safely replay it by eventId.
+    if (!error?.status && !error?.code) {
+      enqueueEvent('inventory.movement.record', event, {
+        aggregateType: 'inventory_movement',
+        aggregateId: event.eventId,
+        eventId: event.eventId,
+        occurredAt: event.occurredAt,
+      });
+      return { queued: true, movement: event, syncStatus: 'pending', reason: error?.message || 'transport_failure' };
+    }
+    throw error;
+  }
 }
 
 export async function syncInventoryMovement(movement) {
