@@ -26,7 +26,7 @@ export const ROLES = Object.freeze([
 const ROLE_PERMISSIONS = Object.freeze({
   owner: new Set(['*']),
   manager: new Set([
-    'orders:create', 'orders:view', 'orders:delete',
+    'orders:create', 'orders:view', 'orders:delete', 'fulfillment:view', 'fulfillment:update',
     'payments:accept', 'payments:view_proof', 'payments:view', 'payments:manage', 'payments:reconcile', 'payments:settlement:view', 'payments:settlement:allocate',
     'inventory:add', 'inventory:edit', 'sync:manual',
     'settings:configure', 'paymethods:manage',
@@ -41,13 +41,13 @@ const ROLE_PERMISSIONS = Object.freeze({
     'procurement:demand:view', 'procurement:demand:create', 'procurement:demand:manage', 'procurement:demand:submit', 'procurement:demand:cancel', 'procurement:demand:sourcing', 'procurement:supplier:view', 'procurement:supplier:manage', 'procurement:supplier:discover', 'procurement:supplier:relationship:view', 'procurement:supplier:relationship:manage', 'procurement:rfq:view', 'procurement:rfq:create', 'procurement:rfq:manage', 'procurement:rfq:send', 'procurement:rfq:close', 'procurement:rfq:respond', 'procurement:comparison:view', 'procurement:comparison:create', 'procurement:award:view', 'procurement:award:create', 'procurement:award:confirm', 'procurement:award:cancel', 'procurement:award:execute', 'procurement:receipt:view', 'procurement:receipt:create', 'procurement:receipt:cancel', 'procurement:payment:create',
   ]),
   cashier: new Set([
-    'orders:create', 'orders:view', 'payments:accept', 'payments:view',
+    'orders:create', 'orders:view', 'fulfillment:view', 'fulfillment:update', 'payments:accept', 'payments:view',
     'tables:status', 'kitchen:manage', 'locations:view',
     'customers:view', 'customers:manage',
     'marketplace_orders:view', 'marketplace_orders:update',
     'inventory:view',
   ]),
-  staff: new Set(['locations:view', 'customers:view', 'inventory:view']),
+  staff: new Set(['locations:view', 'customers:view', 'inventory:view', 'fulfillment:view']),
   buyer: new Set(['orders:create', 'b2b:po:view', 'b2b:po:create', 'supplier-network:trust:view', 'supplier-network:discovery:discover', 'supplier-network:marketplace-integration:view', 'procurement:demand:view', 'procurement:demand:create', 'procurement:demand:manage', 'procurement:demand:submit', 'procurement:demand:cancel', 'procurement:demand:sourcing', 'procurement:rfq:view', 'procurement:rfq:create', 'procurement:rfq:manage', 'procurement:rfq:send', 'procurement:rfq:close', 'procurement:comparison:view', 'procurement:comparison:create', 'procurement:award:execute', 'procurement:receipt:view', 'procurement:receipt:create']),
   viewer: new Set([]),
   // FUX-6 Restaurant contextual roles. These are executable only when the
