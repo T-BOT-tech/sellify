@@ -17,11 +17,6 @@ const {
 
 const chatId = 'fux42-chat';
 const tenant = await getOrCreateTenant(chatId);
-const location = tenant.organizationId
-  ? (await import('../backend/lib/store-sqlite.js')).listOrganizationLocations(chatId)
-  : [];
-const defaultLocation = Array.isArray(location) ? location.find((item) => item.code === 'DEFAULT') || location[0] : null;
-
 const syncResult = await saveQueuedOrders(chatId, [{
   id: 'local-fux42-1',
   items: [{ item_id: 'product-1', name: 'Test item', qty: 1, price: 500 }],
@@ -32,14 +27,13 @@ const syncResult = await saveQueuedOrders(chatId, [{
 assert.equal(syncResult[0].status, 'synced');
 const orderId = syncResult[0].order_id;
 
-assert.equal(getOrderFulfillment(chatId, orderId).then ? true : true, true);
 let fulfillment = await getOrderFulfillment(chatId, orderId);
 assert.equal(fulfillment, null);
 
 const actor = {
   userId: 'fux42-user',
   deviceId: 'fux42-device',
-  locationId: defaultLocation?.id || null,
+  locationId: null,
 };
 
 fulfillment = await transitionOrderFulfillment(chatId, orderId, 'out_for_delivery', actor, {
