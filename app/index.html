@@ -449,6 +449,20 @@
     <div class="sync-note" data-i18n="accountsHint">B2B customers get the pricing tier's discount applied automatically when you pick them on the Order tab.</div>
     <div id="accountsList" class="tables-grid"></div>
     <div class="order-header-bar" style="margin-top:18px;">
+      <h3 style="margin:0;">B2B Quotes</h3>
+      <button id="b2bQuoteRefresh" class="btn-secondary" type="button" style="width:auto;margin:0;padding:8px 12px;">Refresh</button>
+    </div>
+    <div class="sync-note">Quotes are server-authoritative B2B commercial documents. Totals and pricing are calculated by the canonical backend; this UI is only a projection and command surface.</div>
+    <div class="customer-fields" style="margin-bottom:12px;">
+      <select id="b2bQuoteCustomer"><option value="">Select business customer…</option></select>
+      <select id="b2bQuoteProduct"><option value="">Select product…</option></select>
+      <input id="b2bQuoteQuantity" type="number" min="1" step="1" value="1" placeholder="Quantity">
+      <input id="b2bQuoteNotes" type="text" placeholder="Notes (optional)">
+      <input id="b2bQuoteTerms" type="text" placeholder="Terms (optional)">
+      <button id="b2bQuoteCreate" class="btn-secondary" type="button" style="width:auto;padding:8px 12px;">Create quote</button>
+    </div>
+    <div id="b2bQuotesList" class="tables-grid"></div>
+    <div class="order-header-bar" style="margin-top:18px;">
       <h3 style="margin:0;">Purchase Orders</h3>
       <button id="b2bPoRefresh" class="btn-secondary" type="button" style="width:auto;margin:0;padding:8px 12px;">Refresh</button>
     </div>
