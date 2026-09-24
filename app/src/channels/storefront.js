@@ -118,3 +118,5 @@ export async function renderSellerStorefrontChannelsPanel() {
     panel.innerHTML = `<div class="settings-section-label">Seller channels</div><div class="hint">${esc(error.message || 'Could not load seller channels.')}</div>`;
   }
 }
+
+if (typeof window !== 'undefined') Object.assign(window, { saveTelegramStorefront, verifyTelegramStorefrontChannel, publishTelegramStorefrontChannel });
