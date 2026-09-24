@@ -5377,6 +5377,7 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
   const type = normalizeCoreFulfillmentType(input.fulfillmentType || input.fulfillment_type || orderJson.fulfillment_type || 'delivery');
   if (!CORE_FULFILLMENT_TRANSITIONS[type]) throw Object.assign(new Error('Unsupported fulfillment type'), { statusCode: 400 });
 
+  const actorUserId = actor?.userId && db.prepare('SELECT id FROM users WHERE id = ?').get(String(actor.userId)) ? String(actor.userId) : null;
   const locationId = input.locationId || input.location_id || actor?.locationId || null;
   if (locationId) {
     const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(String(locationId), organizationId);
@@ -5398,7 +5399,7 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
       `).run(
         fulfillmentId, String(serverOrderId), organizationId, locationId ? String(locationId) : null, type,
         json(destination), scheduledAt, input.trackingReference || input.tracking_reference || orderJson.tracking_reference || null,
-        json(input.proof ?? orderJson.fulfillment_proof ?? null), actor?.userId || null, actor?.userId || null, now, now,
+        json(input.proof ?? orderJson.fulfillment_proof ?? null), actorUserId, actorUserId, now, now,
       );
       row = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(fulfillmentId);
     }
@@ -5419,7 +5420,7 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
           tracking_reference = COALESCE(?, tracking_reference), proof_json = COALESCE(?, proof_json)
       WHERE id = ?
     `).run(
-      target, commandKey, actor?.userId || null, now,
+      target, commandKey, actorUserId, now,
       input.trackingReference || input.tracking_reference || null,
       input.proof === undefined ? null : json(input.proof),
       row.id,
@@ -5428,7 +5429,7 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     audit(key, 'fulfillment.transitioned', 'fulfillment', row.id, {
       orderId: String(serverOrderId), from: current, to: target, commandKey,
     }, {
-      organizationId, locationId: updated.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null,
+      organizationId, locationId: updated.location_id, actorId: actorUserId, deviceId: actor?.deviceId || null,
     });
     db.exec('COMMIT');
     return fulfillmentFromRow(updated);
