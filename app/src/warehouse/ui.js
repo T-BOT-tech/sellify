@@ -14,10 +14,9 @@
 import { escapeHtml, escapeAttr } from '../utils/index.js';
 import { products, warehouseLocations, stockTransactions, organizationLocations, config } from '../state.js';
 import {
-  isWarehouseEnabled, isStockTracked, getLowStockProducts, getOutOfStockProducts,
-  applyStockChange
+  isWarehouseEnabled, isStockTracked, getLowStockProducts, getOutOfStockProducts
 } from './inventory.js';
-import { loadInventoryBalances, getInventoryBalance } from './ledger.js';
+import { loadInventoryBalances, getInventoryBalance, recordCanonicalInventoryMovement } from './ledger.js';
 import { loadOrganizationLocations, selectOrganizationLocation } from './locations.js';
 // Phase 8 fix (see modularization plan §5, Phase 8): these used to come
 // from '../main.js', which only re-exported them from their real owning
@@ -211,20 +210,25 @@ export function closeStockAdjustModal() {
   document.getElementById('stockAdjustModal').style.display = 'none';
 }
 
-export function saveStockAdjustModal() {
+export async function saveStockAdjustModal() {
   const productId = document.getElementById('stockAdjustProduct').value;
   const delta = parseInt(document.getElementById('stockAdjustDelta').value, 10);
   const reorderRaw = document.getElementById('stockAdjustReorderPoint').value;
   const notes = document.getElementById('stockAdjustNotes').value.trim();
   if (!productId || isNaN(delta) || delta === 0) { showToast(t('whInvalidAdjust')); return; }
-  applyStockChange(productId, delta, 'adjusted', {
-    reorder_point: reorderRaw !== '' ? Math.max(0, parseInt(reorderRaw, 10) || 0) : undefined,
-    notes: notes || undefined,
-    locationId: document.getElementById('stockAdjustLocation')?.value || config.locationId || ''
-  });
-  closeStockAdjustModal();
-  renderWarehouseInventory();
-  showToast(t('whStockUpdated'));
+  try {
+    const result = await recordCanonicalInventoryMovement({
+      productId, quantity: delta, movementType: 'ADJUSTMENT', reason: notes,
+      locationId: document.getElementById('stockAdjustLocation')?.value || config.locationId || '',
+      metadata: { reorderPoint: reorderRaw !== '' ? Math.max(0, parseInt(reorderRaw, 10) || 0) : null },
+    });
+    closeStockAdjustModal();
+    await loadInventoryBalances({ locationId: config.locationId });
+    renderWarehouseInventory();
+    showToast(result?.queued ? 'Stock adjustment queued for sync.' : t('whStockUpdated'));
+  } catch (error) {
+    showToast(error.message || 'Could not update stock.');
+  }
 }
 
 // ---------- Warehouse: Receive stock modal ----------
@@ -247,7 +251,7 @@ export function closeReceiveModal() {
   document.getElementById('receiveStockModal').style.display = 'none';
 }
 
-export function saveReceiveModal() {
+export async function saveReceiveModal() {
   const productId = document.getElementById('receiveProduct').value;
   const qty = parseInt(document.getElementById('receiveQty').value, 10);
   const batch = document.getElementById('receiveBatch').value.trim();
@@ -257,17 +261,20 @@ export function saveReceiveModal() {
   const notes = document.getElementById('receiveNotes').value.trim();
   if (!productId || isNaN(qty) || qty <= 0) { showToast(t('whInvalidReceive')); return; }
   const product = products.find(p => p.id === productId);
-  applyStockChange(productId, qty, 'received', {
-    batch_number: batch || undefined,
-    expiry_date: expiry || undefined,
-    bin_location: location || undefined,
-    reference: reference || undefined,
-    notes: notes || undefined,
-    locationId: document.getElementById('receiveCanonicalLocation')?.value || config.locationId || ''
-  });
-  closeReceiveModal();
-  renderWarehouseInventory();
-  showToast(`${t('whReceived')} ${qty} × ${product ? product.name : ''}`);
+  try {
+    const result = await recordCanonicalInventoryMovement({
+      productId, quantity: qty, movementType: 'PURCHASE', reason: notes,
+      locationId: document.getElementById('receiveCanonicalLocation')?.value || config.locationId || '',
+      referenceType: 'stock_receipt', referenceId: reference || null,
+      metadata: { batchNumber: batch || null, expiryDate: expiry || null, binLocation: location || null },
+    });
+    closeReceiveModal();
+    await loadInventoryBalances({ locationId: config.locationId });
+    renderWarehouseInventory();
+    showToast(result?.queued ? 'Stock receipt queued for sync.' : t('whReceived') + ' ' + qty + ' × ' + (product ? product.name : ''));
+  } catch (error) {
+    showToast(error.message || 'Could not receive stock.');
+  }
 }
 
 export function onWarehouseToggle(checked) {
