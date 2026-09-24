@@ -63,3 +63,5 @@ jobs:
         run: npm run test:fux-52
       - name: FUX-53 B2B quotes frontend authority regression
         run: npm run test:fux-53
+      - name: FUX-54 compliance frontend authority regression
+        run: npm run test:fux-54
