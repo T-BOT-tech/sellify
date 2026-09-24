@@ -34,6 +34,7 @@ import { renderCreditTerms, bindCreditTermsUI } from './credit-terms.js';
 import { renderReceivables, bindReceivableUI } from './accounts-receivable.js';
 import { renderInvoices, bindInvoiceUI } from './invoices.js';
 import { renderQuotes, bindQuoteUI } from './quotes.js';
+import { renderCustomerPricingPanel } from './customer-pricing.js';
 
 export function applyWholesaleUI() {
   const enabled = isWholesaleEnabled();
@@ -107,6 +108,7 @@ export function renderAccounts() {
   renderReceivables();
   renderInvoices();
   renderQuotes();
+  renderCustomerPricingPanel();
 }
 
 let accountModalEditingId = null;
