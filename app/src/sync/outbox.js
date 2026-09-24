@@ -143,6 +143,6 @@ export async function flushOutbox() {
   } catch (error) {
     setOutboxEvents(outboxEvents.map(event => pending.some(p => p.eventId === event.eventId) ? { ...event, attempts: (event.attempts || 0) + 1, lastAttemptAt: Date.now(), lastError: error.message } : event));
     persist();
-    return { processed: commandResult.processed || 0, pending: next.length + (commandResult.pending || 0), error: error.message };
+    return { processed: commandResult.processed || 0, pending: outboxEvents.length, error: error.message };
   }
 }
