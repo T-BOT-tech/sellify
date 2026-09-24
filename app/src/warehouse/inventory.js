@@ -47,6 +47,14 @@ export function saveStockTransactions() {
 // Compatibility-only legacy mutation path. Active Warehouse UI no longer calls
 // this function; canonical mutations use recordCanonicalInventoryMovement().
 export function applyStockChange(productId, delta, type, meta) {
+  // Hard legacy boundary: once the station is connected/authenticated, local
+  // stock mutation must never become an alternate authority. Callers must use
+  // recordCanonicalInventoryMovement(), which queues safely when offline.
+  if (config.sessionToken || hasCanonicalInventory(productId)) {
+    throw Object.assign(new Error('Legacy local inventory mutation is disabled; use the canonical inventory movement API.'), {
+      code: 'LEGACY_INVENTORY_MUTATION_DISABLED',
+    });
+  }
   if (!hasPermission(currentStaff ? currentStaff.role : 'owner', 'inventory:edit')) return null;
   const product = products.find(p => p.id === productId);
   if (!product) return null;
