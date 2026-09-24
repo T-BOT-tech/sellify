@@ -136,7 +136,7 @@ export function renderWarehouseTransactions() {
     list.innerHTML = `<div class="empty">${t('whNoHistory')}</div>`;
     return;
   }
-  list.innerHTML = [...canonical.map(canonicalTxItemMarkup), ...legacy.map(txItemMarkup)].join('');
+  const history = canonical.length > 0 ? canonical.map(canonicalTxItemMarkup) : legacy.map(txItemMarkup);\n  list.innerHTML = history.join('');
 }
 
 export function canonicalTxItemMarkup(movement) {
