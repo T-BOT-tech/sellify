@@ -270,7 +270,8 @@
     "test:p0-12": "node phase0/p0-12-award-po-receiving-regression.mjs",
     "test:p0-golden-cumulative": "node phase0/p0-golden-journey-cumulative-gate.mjs",
     "test:fux-31": "node phase0/fux-31-frontend-identity-regression.mjs",
-    "test:fux-31-accessibility": "node phase0/fux-31-accessibility-regression.mjs"
+    "test:fux-31-accessibility": "node phase0/fux-31-accessibility-regression.mjs",
+    "test:fux-42": "node phase0/fux-42-core-fulfillment-regression.mjs"
   },
   "engines": {
     "node": ">=24"
