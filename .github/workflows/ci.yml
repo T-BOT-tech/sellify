@@ -55,3 +55,5 @@ jobs:
         run: npm run test:fux-48
       - name: FUX-49 legacy inventory authority regression
         run: npm run test:fux-49
+      - name: FUX-50 inventory outbox replay regression
+        run: npm run test:fux-50
