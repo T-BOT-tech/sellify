@@ -18,7 +18,7 @@ Authorization:
 - `b2b:quotes:view`
 - `b2b:quotes:manage`
 
-The current B2B frontend exposes accounts, pricing, purchase orders, credit terms, receivables, and invoices, but does not yet expose the canonical Quotes API.
+The B2B Accounts workspace now exposes the canonical Quotes API through app/src/b2b/quotes.js: business-customer/product selection, quote creation, server-returned quote projection, refresh, and lifecycle transitions are connected. No quote records are persisted locally.
 
 ## Required authority
 
@@ -50,3 +50,18 @@ Quote creation or transition that cannot be confirmed by the server must be repr
 ## Scope
 
 This increment is intentionally limited to the B2B Quotes frontend authority boundary. Payment integration remains deferred.
+
+
+## Implemented frontend surface
+
+- app/src/b2b/quotes.js is the only frontend quote command/read surface.
+- GET loads canonical quotes.
+- POST creates a DRAFT quote through the backend.
+- PATCH requests lifecycle transitions.
+- The Accounts workspace renders quote status, number, customer reference, items, totals, notes, and available server-authorized actions.
+- Frontend permission vocabulary mirrors b2b:quotes:view and b2b:quotes:manage.
+- FUX-53 regression now checks the real API paths and absence of a local quote ledger.
+
+## Evidence status
+
+Source integration is implemented and regression coverage is committed. GitHub Actions certification for the latest FUX-53 integration commits must still be observed before marking the increment CI-certified.
