@@ -2127,6 +2127,37 @@ function runMigrations() {
   }}
 
 
+  // FUX-42 — Core Fulfillment authority. This is deliberately additive and
+  // separate from Marketplace fulfillment so ordinary seller orders gain one
+  // canonical lifecycle without reusing marketplace-specific tables.
+  if (!applied.includes(42)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS fulfillments (
+        id TEXT PRIMARY KEY,
+        server_order_id TEXT NOT NULL UNIQUE REFERENCES orders(server_order_id) ON DELETE CASCADE,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        location_id TEXT REFERENCES locations(id) ON DELETE SET NULL,
+        fulfillment_type TEXT NOT NULL CHECK (fulfillment_type IN ('delivery','pickup')),
+        status TEXT NOT NULL CHECK (status IN ('pending','out_for_delivery','delivered','ready_for_pickup','picked_up')),
+        destination_json TEXT,
+        scheduled_at TEXT,
+        tracking_reference TEXT,
+        proof_json TEXT,
+        last_command_key TEXT,
+        created_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        updated_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0)
+      );
+      CREATE INDEX IF NOT EXISTS idx_fulfillments_org_status
+        ON fulfillments(organization_id, status, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_fulfillments_location_status
+        ON fulfillments(location_id, status, updated_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(42, nowIso());
+  }
+
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({
   NOT_INSTALLED: new Set(['INSTALLED']),
@@ -5269,6 +5300,159 @@ function ensureCanonicalPaymentForOrder(chatId, order, serverOrderId, actor = nu
     'Compatibility projection from existing order payment fields', json({ compatibility: 'legacy-order-payment' }), now
   );
   return id;
+}
+
+
+const CORE_FULFILLMENT_TRANSITIONS = Object.freeze({
+  delivery: Object.freeze({
+    pending: new Set(['out_for_delivery']),
+    out_for_delivery: new Set(['delivered']),
+    delivered: new Set([]),
+  }),
+  pickup: Object.freeze({
+    pending: new Set(['ready_for_pickup']),
+    ready_for_pickup: new Set(['picked_up']),
+    picked_up: new Set([]),
+  }),
+});
+
+function fulfillmentFromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    serverOrderId: row.server_order_id,
+    organizationId: row.organization_id,
+    locationId: row.location_id,
+    fulfillmentType: row.fulfillment_type,
+    status: row.status,
+    destination: parseJSON(row.destination_json, null),
+    scheduledAt: row.scheduled_at || null,
+    trackingReference: row.tracking_reference || null,
+    proof: parseJSON(row.proof_json, null),
+    version: Number(row.version || 1),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function normalizeCoreFulfillmentType(value) {
+  const type = String(value || '').trim().toLowerCase();
+  if (!Object.hasOwn(CORE_FULFILLMENT_TRANSITIONS, type)) {
+    throw Object.assign(new Error('Unsupported fulfillment type'), { statusCode: 400, code: 'UNSUPPORTED_FULFILLMENT_TYPE' });
+  }
+  return type;
+}
+
+function normalizeCoreFulfillmentStatus(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+async function getCoreFulfillmentOrder(chatId, serverOrderId) {
+  const row = db.prepare(
+    'SELECT o.*, t.organization_id AS tenant_organization_id FROM orders o JOIN tenants t ON t.chat_id = o.chat_id WHERE o.chat_id = ? AND o.server_order_id = ?'
+  ).get(String(chatId), String(serverOrderId));
+  if (!row) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+  return row;
+}
+
+export async function getOrderFulfillment(chatId, serverOrderId) {
+  ensureDatabase();
+  const order = await getCoreFulfillmentOrder(chatId, serverOrderId);
+  const row = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), String(order.tenant_organization_id));
+  return fulfillmentFromRow(row);
+}
+
+export async function transitionOrderFulfillment(chatId, serverOrderId, nextStatus, actor = null, input = {}) {
+  ensureDatabase();
+  const key = String(chatId);
+  const order = await getCoreFulfillmentOrder(key, serverOrderId);
+  const organizationId = String(order.tenant_organization_id || '');
+  if (!organizationId) throw Object.assign(new Error('Order organization is required'), { statusCode: 409, code: 'ORDER_ORGANIZATION_REQUIRED' });
+
+  const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  if (!commandKey) throw Object.assign(new Error('Idempotency key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
+  const target = normalizeCoreFulfillmentStatus(nextStatus);
+
+  const orderJson = orderFromRow(order);
+  const type = normalizeCoreFulfillmentType(input.fulfillmentType || input.fulfillment_type || orderJson.fulfillment_type || 'delivery');
+  if (!CORE_FULFILLMENT_TRANSITIONS[type]) throw Object.assign(new Error('Unsupported fulfillment type'), { statusCode: 400 });
+
+  const locationId = input.locationId || input.location_id || actor?.locationId || null;
+  if (locationId) {
+    const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(String(locationId), organizationId);
+    if (!location) throw Object.assign(new Error('Location does not belong to this organization'), { statusCode: 400, code: 'LOCATION_SCOPE_DENIED' });
+  }
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    let row = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), organizationId);
+    const now = nowIso();
+    if (!row) {
+      const fulfillmentId = crypto.randomUUID();
+      const destination = input.destination ?? (type === 'delivery' ? orderJson.delivery_address : orderJson.pickup_location) ?? null;
+      const scheduledAt = input.scheduledAt || input.scheduled_at || orderJson.scheduled_time || null;
+      db.prepare(`
+        INSERT INTO fulfillments
+          (id, server_order_id, organization_id, location_id, fulfillment_type, status, destination_json, scheduled_at, tracking_reference, proof_json, last_command_key, created_by_user_id, updated_by_user_id, created_at, updated_at, version)
+        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1)
+      `).run(
+        fulfillmentId, String(serverOrderId), organizationId, locationId ? String(locationId) : null, type,
+        json(destination), scheduledAt, input.trackingReference || input.tracking_reference || orderJson.tracking_reference || null,
+        json(input.proof ?? orderJson.fulfillment_proof ?? null), actor?.userId || null, actor?.userId || null, now, now,
+      );
+      row = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(fulfillmentId);
+    }
+
+    if (String(row.last_command_key || '') === commandKey) {
+      db.exec('COMMIT');
+      return fulfillmentFromRow(row);
+    }
+    if (row.fulfillment_type !== type) throw Object.assign(new Error('Fulfillment type cannot change'), { statusCode: 409, code: 'FULFILLMENT_TYPE_IMMUTABLE' });
+    const current = normalizeCoreFulfillmentStatus(row.status);
+    if (!CORE_FULFILLMENT_TRANSITIONS[type][current]?.has(target)) {
+      throw Object.assign(new Error(`Cannot move fulfillment from ${current} to ${target}`), { statusCode: 409, code: 'INVALID_FULFILLMENT_TRANSITION' });
+    }
+
+    db.prepare(`
+      UPDATE fulfillments
+      SET status = ?, last_command_key = ?, updated_by_user_id = ?, updated_at = ?, version = version + 1,
+          tracking_reference = COALESCE(?, tracking_reference), proof_json = COALESCE(?, proof_json)
+      WHERE id = ?
+    `).run(
+      target, commandKey, actor?.userId || null, now,
+      input.trackingReference || input.tracking_reference || null,
+      input.proof === undefined ? null : json(input.proof),
+      row.id,
+    );
+    const updated = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(row.id);
+    audit(key, 'fulfillment.transitioned', 'fulfillment', row.id, {
+      orderId: String(serverOrderId), from: current, to: target, commandKey,
+    }, {
+      organizationId, locationId: updated.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null,
+    });
+    db.exec('COMMIT');
+    return fulfillmentFromRow(updated);
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
+export function coreFulfillmentContract() {
+  return Object.freeze({
+    authority: 'backend/lib/store-sqlite.js',
+    entity: 'fulfillments',
+    order_authority: 'orders',
+    organization_scope: 'tenant organization_id',
+    location_scope: 'organization-owned location_id',
+    transition_authority: 'server',
+    delivery_transitions: 'pending -> out_for_delivery -> delivered',
+    pickup_transitions: 'pending -> ready_for_pickup -> picked_up',
+    idempotency: 'client command key; replay returns current canonical state',
+    inventory_consequence: 'deferred to existing inventory authority',
+    payment_authority: 'unchanged',
+    marketplace_fulfillment_reuse: false,
+  });
 }
 
 export async function getOrders(chatId) {
