@@ -97,7 +97,7 @@ export async function recordCanonicalInventoryMovement(input = {}) {
       },
     );
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.error?.message || `Inventory update failed (${res.status})`);
+    if (!res.ok) { const error = new Error(data?.error?.message || `Inventory update failed (${res.status})`); error.status = res.status; error.code = data?.error?.code; throw error; }
     const remote = data.movement || event;
     const existing = inventoryMovements.filter(m => m.eventId !== remote.eventId);
     setInventoryMovements([{ ...remote, syncStatus: 'synced' }, ...existing]);
