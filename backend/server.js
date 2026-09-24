@@ -113,7 +113,7 @@ import {
   listInventoryMovements, getInventoryBalances, appendInventoryMovement,
   createPairingChallenge, consumePairingChallenge,
   createInvite, listInvites, revokeInvite, consumeInvite, changeMembershipRole, assignMembershipContextualRole,
-  listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience,
+  listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
   createComplianceRequest, getComplianceRequest, listComplianceRequests, resolveComplianceRequest, buildComplianceExport,
   listPaymentAccounts, createPaymentAccount, createPayment, getPayment, listPayments, transitionPayment, listPaymentLedger, reconcilePayment, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
@@ -2357,6 +2357,44 @@ async function handlePackLifecycle(req, res, chatId, packId) {
   return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
 }
 
+
+async function handleOrderFulfillment(req, res, chatId, serverOrderId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, chatId);
+
+  if (req.method === 'GET') {
+    await requireAuthorization(session, tenant, 'fulfillment', 'fulfillment:view', {
+      location: session.locationId || null,
+      deniedMessage: 'Fulfillment view permission required',
+    });
+    const fulfillment = await getOrderFulfillment(chatId, serverOrderId);
+    return sendJSON(res, 200, { fulfillment }, req);
+  }
+
+  if (req.method === 'POST') {
+    const body = await readBody(req);
+    const locationId = body.locationId || body.location_id || session.locationId || null;
+    await requireAuthorization(session, tenant, 'fulfillment', 'fulfillment:update', {
+      location: locationId,
+      deniedMessage: 'Fulfillment update permission required',
+    });
+    const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
+    if (!idempotencyKey) {
+      return sendJSON(res, 400, { error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' } }, req);
+    }
+    const targetStatus = body.status || body.nextStatus || body.next_status;
+    const fulfillment = await transitionOrderFulfillment(chatId, serverOrderId, targetStatus, session, {
+      ...body,
+      locationId,
+      idempotencyKey,
+    });
+    return sendJSON(res, 200, { fulfillment }, req);
+  }
+
+  return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+}
+
 // ---------- routing ----------
 
 const ROUTES = [
@@ -2383,6 +2421,8 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/events\/([^/]+)$/, handler: (req, res, m) => handleSyncEvents(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/sync\/([^/]+)$/, handler: (req, res, m) => handleSyncPull(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/orders\/([^/]+)$/, handler: (req, res, m) => handleOrdersFeed(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleOrderFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleOrderFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/catalog\/([^/]+)$/, handler: (req, res, m) => handleCatalogGet(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/storefront-channels$/, handler: (req, res, m) => handleSellerStorefrontChannelsGet(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/storefront-consistency$/, handler: (req, res, m) => handleCrossChannelConsistencyGet(req, res, decodeURIComponent(m[1])) },
