@@ -23,7 +23,7 @@ assert(bridge.includes('saveOrganizationLocationModal'));
 assert(main.includes('openOrganizationLocationModal'));
 assert(html.includes('organizationLocationModal'));
 assert(html.includes('organizationLocationCode'));
-assert(server.includes('/tenants/([^/]+)/locations'));
+assert(server.includes("pattern: /^\\/tenants\\/([^/]+)\\/locations$/"));
 assert(server.includes('handleLocationCreate'));
 assert(server.includes('handleLocationPatch'));
 assert(server.includes('locations:manage'));
