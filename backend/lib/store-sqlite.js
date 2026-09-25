@@ -6714,8 +6714,18 @@ export async function createSession({ userId, chatId, deviceName = 'Sellify devi
            (SELECT l.id FROM locations l WHERE l.organization_id = t.organization_id AND l.code = 'DEFAULT' LIMIT 1) AS default_location_id
     FROM tenants t WHERE t.chat_id = ?
   `).get(String(chatId));
+  const contextualRoles = db.prepare(`
+    SELECT role_id, scope_type, scope_id
+      FROM membership_roles
+     WHERE membership_id = ? AND status = 'active'
+     ORDER BY created_at
+  `).all(String(membership.id)).map(row => ({
+    role: row.role_id, scopeType: row.scope_type, scopeId: row.scope_id || null,
+  }));
   return {
     token, expiresAt: expiresAt.toISOString(), sessionId, deviceId: device.id, role: membership.role,
+    roles: Array.from(new Set([membership.role, ...contextualRoles.map(item => item.role)])),
+    contextualRoles,
     chatId: String(chatId), organizationId: context?.organization_id || null, locationId: context?.default_location_id || null,
   };
 }
