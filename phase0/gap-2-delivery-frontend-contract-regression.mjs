@@ -8,6 +8,8 @@ assert.match(fulfillment,/delivery-assignments/);
 assert.match(fulfillment,/method: 'PATCH'/);
 assert.match(fulfillment,/Idempotency-Key/);
 assert.match(ui,/canonicalDeliveryAssignment/);
+assert.match(ui,/renderDeliveryWorkloadSummary/);
+assert.match(ui,/delivery workload/i);
 assert.match(ui,/assignment\.courier_name/);
 assert.match(main,/transitionDeliveryAssignmentForOrder/);
 console.log('GAP-2 Delivery Frontend Contract Regression: PASS');
