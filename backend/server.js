@@ -728,8 +728,12 @@ async function handleCreateInvite(req, res) {
 }
 
 async function handleListTenantMemberships(req, res, chatId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
   const session = await requireSession(req, chatId);
-  await requireOwnerRole(session);
+  await requireAuthorization(session, tenant, 'logistics', 'logistics:deliveries:view', {
+    deniedMessage: 'Logistics staff view permission required',
+  });
   const memberships = await listTenantMemberships(chatId);
   sendJSON(res, 200, { memberships }, req);
 }
