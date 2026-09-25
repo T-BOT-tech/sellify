@@ -5442,12 +5442,27 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
   const type = normalizeCoreFulfillmentType(order.fulfillment_type || 'delivery');
   if (type !== 'delivery') throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
   const actorUserId = actor?.userId ? String(actor.userId) : null;
-  const fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), organizationId);
-  if (!fulfillment) throw Object.assign(new Error('Fulfillment must exist before courier assignment'), { statusCode: 409, code: 'FULFILLMENT_REQUIRED' });
+  let fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), organizationId);
   const key = String(input.assignmentKey || input.assignment_key || `courier:${serverOrderId}:${courierUserId}`).trim();
   if (!key) throw Object.assign(new Error('Assignment key is required'), { statusCode: 400 });
   db.exec('BEGIN IMMEDIATE');
   try {
+    if (!fulfillment) {
+      const now = nowIso();
+      const fulfillmentId = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO fulfillments
+          (id, server_order_id, organization_id, location_id, fulfillment_type, status, destination_json,
+           scheduled_at, tracking_reference, proof_json, last_command_key, created_by_user_id,
+           updated_by_user_id, created_at, updated_at, version)
+        VALUES (?, ?, ?, ?, 'delivery', 'pending', ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1)
+      `).run(
+        fulfillmentId, String(serverOrderId), organizationId, locationId ? String(locationId) : null,
+        json(order.delivery_address || null), order.scheduled_time || null, order.tracking_reference || null,
+        json(order.fulfillment_proof || null), actorUserId, actorUserId, now, now,
+      );
+      fulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(fulfillmentId);
+    }
     const existing = db.prepare('SELECT * FROM delivery_assignments WHERE fulfillment_id = ?').get(fulfillment.id);
     if (existing) {
       if (existing.courier_user_id !== String(courierUserId)) throw Object.assign(new Error('Delivery is already assigned to another courier'), { statusCode: 409, code: 'ASSIGNMENT_CONFLICT' });
