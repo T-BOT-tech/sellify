@@ -128,7 +128,7 @@ export async function reconcileQueuedFulfillments() {
   for (const order of queued) {
     try {
       const response = await fetch(
-        `${(config.syncUrl || window.location.origin).replace(/\\/$/, '')}${fulfillmentEndpoint(order)}`,
+        `${(config.syncUrl || window.location.origin).replace(/\/$/, '')}${fulfillmentEndpoint(order)}`,
         { headers: { ...authHeaders() } },
       );
       const data = await response.json().catch(() => ({}));
