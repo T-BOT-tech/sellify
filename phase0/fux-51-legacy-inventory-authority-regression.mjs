@@ -6,7 +6,7 @@ const inventory = fs.readFileSync('app/src/warehouse/inventory.js', 'utf8');
 const warehouseUi = fs.readFileSync('app/src/warehouse/ui.js', 'utf8');
 const fulfillment = fs.readFileSync('app/src/logistics/fulfillment.js', 'utf8');
 const ledger = fs.readFileSync('app/src/warehouse/ledger.js', 'utf8');
-const main = fs.readFileSync('app/src/main.js', 'utf8');
+const state = fs.readFileSync('app/src/state.js', 'utf8');
 
 function check(condition, message) {
   assert.ok(condition, message);
@@ -21,7 +21,7 @@ check(inventory.includes('Compatibility-only legacy mutation path'), 'legacy loc
 check(warehouseUi.includes('recordCanonicalInventoryMovement'), 'Warehouse active mutations use canonical inventory commands');
 check(!warehouseUi.includes('applyStockChange('), 'Warehouse UI cannot invoke the legacy local mutation');
 check(!fulfillment.includes('applyStockChange('), 'Fulfillment cannot mutate inventory through the legacy path');
-check(main.includes('stockTransactions'), 'legacy history remains available only as a compatibility/UI projection');
+check(state.includes('export let stockTransactions = loadJSON(STORAGE_KEYS.stockTransactions, []);'), 'legacy history remains available only as a compatibility/UI projection');
 check(ledger.includes("enqueueEvent('inventory.movement.record'"), 'legacy movement helper still targets the canonical event boundary rather than a second ledger');
 check(ledger.includes('recordCanonicalInventoryMovement'), 'canonical inventory command remains the preferred mutation API');
 
