@@ -1,6 +1,6 @@
 # GAP-2 — Logistics Authorization Foundation
 
-Status: **FOUNDATION + CANONICAL DELIVERY ASSIGNMENT LIFECYCLE IMPLEMENTED / COURIER LIFECYCLE UI DEFERRED**
+Status: **FOUNDATION + CANONICAL DELIVERY ASSIGNMENT LIFECYCLE + ROLE-AWARE WORKLOAD PROJECTION IMPLEMENTED / ADVANCED DISPATCH UI DEFERRED**
 
 ## Why this gap exists
 
@@ -51,11 +51,11 @@ Courier actions are server-enforced against the active assignment; dispatcher/ma
 
 ### Current frontend boundary
 
-The Logistics frontend now consumes the canonical active-assignment workload endpoint and renders the assigned courier/status projection. Assignment lifecycle commands are exposed through the canonical PATCH contract with idempotency keys. Courier-facing lifecycle controls remain intentionally limited until role-aware action UI and realistic tenant certification are complete.
+The Logistics frontend now consumes the canonical active-assignment workload endpoint and renders the assigned courier/status projection plus a workload summary grouped by lifecycle status and courier. Assignment lifecycle commands are exposed through the canonical PATCH contract with idempotency keys. Courier-facing lifecycle controls are present for accept/start/complete-with-proof, while advanced dispatch filtering/balancing and realistic tenant certification remain deferred.
 
 ### Still deferred
 
-1. richer workload/dispatch controls such as explicit courier roster management and workload balancing;
+1. richer workload/dispatch controls such as explicit status/location/courier filters and workload balancing;
 2. full Delivery Staff UI for assign/reassign/accept/start/complete/proof actions;
 3. end-to-end assignment integration certification against realistic tenant fixtures.
 
