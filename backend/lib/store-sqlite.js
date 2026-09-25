@@ -2071,6 +2071,7 @@ function runMigrations() {
         assigned_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+        last_command_key TEXT,
         UNIQUE(fulfillment_id)
       );
       CREATE INDEX IF NOT EXISTS idx_delivery_assignments_courier
@@ -2079,6 +2080,45 @@ function runMigrations() {
         ON delivery_assignments(organization_id,status,updated_at DESC);
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(43, nowIso());
+  }
+
+  // GAP-2.1 — assignment history + command idempotency. A delivery may have
+  // multiple historical courier assignments, but only one active assignment.
+  if (!applied.includes(44)) {
+    db.exec(`
+      PRAGMA foreign_keys = OFF;
+      DROP INDEX IF EXISTS idx_delivery_assignments_courier;
+      DROP INDEX IF EXISTS idx_delivery_assignments_org;
+      CREATE TABLE delivery_assignments_v44 (
+        id TEXT PRIMARY KEY,
+        fulfillment_id TEXT NOT NULL REFERENCES fulfillments(id) ON DELETE CASCADE,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        location_id TEXT REFERENCES locations(id) ON DELETE SET NULL,
+        courier_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        status TEXT NOT NULL DEFAULT 'ASSIGNED' CHECK (status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY','DELIVERED','REASSIGNED','CANCELLED','FAILED')),
+        assignment_key TEXT NOT NULL UNIQUE,
+        assigned_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        assigned_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+        last_command_key TEXT
+      );
+      INSERT INTO delivery_assignments_v44
+        (id,fulfillment_id,organization_id,location_id,courier_user_id,status,assignment_key,assigned_by_user_id,assigned_at,updated_at,version,last_command_key)
+      SELECT id,fulfillment_id,organization_id,location_id,courier_user_id,status,assignment_key,assigned_by_user_id,assigned_at,updated_at,version,NULL
+      FROM delivery_assignments;
+      DROP TABLE delivery_assignments;
+      ALTER TABLE delivery_assignments_v44 RENAME TO delivery_assignments;
+      CREATE INDEX idx_delivery_assignments_courier
+        ON delivery_assignments(courier_user_id,status,updated_at DESC);
+      CREATE INDEX idx_delivery_assignments_org
+        ON delivery_assignments(organization_id,status,updated_at DESC);
+      CREATE UNIQUE INDEX idx_delivery_assignments_active_fulfillment
+        ON delivery_assignments(fulfillment_id)
+        WHERE status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY');
+      PRAGMA foreign_keys = ON;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(44, nowIso());
   }
 
   // FUX-2 Section 6 — additive multi-role compatibility bridge.
@@ -5473,9 +5513,9 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
     const id = crypto.randomUUID();
     db.prepare(`
       INSERT INTO delivery_assignments
-        (id,fulfillment_id,organization_id,location_id,courier_user_id,status,assignment_key,assigned_by_user_id,assigned_at,updated_at,version)
-      VALUES (?,?,?,?,?,'ASSIGNED',?,?,?,?,1)
-    `).run(id, fulfillment.id, organizationId, locationId ? String(locationId) : null, String(courierUserId), key, actorUserId, now, now);
+        (id,fulfillment_id,organization_id,location_id,courier_user_id,status,assignment_key,assigned_by_user_id,assigned_at,updated_at,version,last_command_key)
+      VALUES (?,?,?,?,?,'ASSIGNED',?,?,?,?,1,?)
+    `).run(id, fulfillment.id, organizationId, locationId ? String(locationId) : null, String(courierUserId), key, actorUserId, now, now, key);
     const row = db.prepare('SELECT * FROM delivery_assignments WHERE id = ?').get(id);
     audit(String(chatId), 'delivery.assignment.created', 'delivery_assignment', id, {
       orderId: String(serverOrderId), courierUserId: String(courierUserId), locationId: locationId ? String(locationId) : null,
@@ -5497,6 +5537,9 @@ export async function getDeliveryAssignment(chatId, serverOrderId, actor = null)
     FROM delivery_assignments da
     JOIN fulfillments f ON f.id = da.fulfillment_id
     WHERE f.server_order_id = ? AND da.organization_id = ?
+      AND da.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY')
+    ORDER BY da.updated_at DESC
+    LIMIT 1
   `).get(String(serverOrderId), String(tenant.organization_id));
   if (!row) return null;
   if (actor?.userId && String(actor.userId) === String(row.courier_user_id)) return row;
@@ -5512,6 +5555,65 @@ export async function assertCourierOwnsDelivery(chatId, serverOrderId, actor) {
     throw Object.assign(new Error('Courier assignment is no longer active'), { statusCode: 403, code: 'COURIER_ASSIGNMENT_INACTIVE' });
   }
   return assignment;
+}
+
+export async function transitionDeliveryAssignment(chatId, serverOrderId, action, actor = null, input = {}) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organization_id) throw Object.assign(new Error('Order organization is required'), { statusCode: 409, code: 'ORDER_ORGANIZATION_REQUIRED' });
+  const order = await getCoreFulfillmentOrder(String(chatId), String(serverOrderId));
+  const organizationId = String(order.tenant_organization_id || '');
+  if (organizationId !== String(tenant.organization_id)) throw Object.assign(new Error('Order organization mismatch'), { statusCode: 403 });
+  const normalizedAction = String(action || '').trim().toUpperCase();
+  const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  if (!commandKey) throw Object.assign(new Error('Idempotency key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
+  const existingCommand = db.prepare('SELECT * FROM delivery_assignments WHERE organization_id = ? AND last_command_key = ? ORDER BY updated_at DESC LIMIT 1').get(organizationId, commandKey);
+  if (existingCommand) return existingCommand;
+  const active = db.prepare(`
+    SELECT da.* FROM delivery_assignments da
+    JOIN fulfillments f ON f.id = da.fulfillment_id
+    WHERE f.server_order_id = ? AND da.organization_id = ?
+      AND da.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY')
+    ORDER BY da.updated_at DESC LIMIT 1
+  `).get(String(serverOrderId), organizationId);
+  if (!active) throw Object.assign(new Error('No active courier assignment exists'), { statusCode: 409, code: 'ASSIGNMENT_REQUIRED' });
+  const current = String(active.status);
+  const transitions = {
+    ASSIGNED: new Set(['ACCEPTED','CANCELLED','FAILED','REASSIGNED']),
+    ACCEPTED: new Set(['OUT_FOR_DELIVERY','CANCELLED','FAILED','REASSIGNED']),
+    OUT_FOR_DELIVERY: new Set(['DELIVERED','CANCELLED','FAILED','REASSIGNED']),
+  };
+  if (!transitions[current]?.has(normalizedAction)) throw Object.assign(new Error('Cannot move assignment from ' + current + ' to ' + normalizedAction), { statusCode: 409, code: 'INVALID_ASSIGNMENT_TRANSITION' });
+  if (normalizedAction === 'DELIVERED' && (input.proof == null || (typeof input.proof === 'string' && !input.proof.trim()))) {
+    throw Object.assign(new Error('Delivery proof is required before delivery completion'), { statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED' });
+  }
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const now = nowIso();
+    const fulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ? AND organization_id = ?').get(active.fulfillment_id, organizationId);
+    if (!fulfillment) throw Object.assign(new Error('Fulfillment not found'), { statusCode: 404, code: 'FULFILLMENT_NOT_FOUND' });
+    const fulfillmentTarget = normalizedAction === 'OUT_FOR_DELIVERY' ? 'out_for_delivery' : normalizedAction === 'DELIVERED' ? 'delivered' : null;
+    if (fulfillmentTarget) {
+      const currentFulfillment = normalizeCoreFulfillmentStatus(fulfillment.status);
+      if (!CORE_FULFILLMENT_TRANSITIONS.delivery[currentFulfillment]?.has(fulfillmentTarget)) throw Object.assign(new Error('Cannot move fulfillment from ' + currentFulfillment + ' to ' + fulfillmentTarget), { statusCode: 409, code: 'INVALID_FULFILLMENT_TRANSITION' });
+      db.prepare(`
+        UPDATE fulfillments
+        SET status = ?, last_command_key = ?, updated_by_user_id = ?, updated_at = ?, version = version + 1,
+            proof_json = CASE WHEN ? IS NULL THEN proof_json ELSE ? END
+        WHERE id = ?
+      `).run(fulfillmentTarget, commandKey, actor?.userId || null, now, input.proof === undefined ? null : json(input.proof), input.proof === undefined ? null : json(input.proof), fulfillment.id);
+    }
+    db.prepare('UPDATE delivery_assignments SET status = ?, last_command_key = ?, updated_at = ?, version = version + 1 WHERE id = ?').run(normalizedAction, commandKey, now, active.id);
+    const updatedFulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(fulfillment.id);
+    if (normalizedAction === 'DELIVERED') {
+      const inventoryMovements = applyCoreFulfillmentInventoryConsequence(String(chatId), updatedFulfillment, orderFromRow(order), actor);
+      audit(String(chatId), 'delivery.assignment.delivered', 'delivery_assignment', active.id, { orderId: String(serverOrderId), from: current, to: normalizedAction, commandKey, proofAttached: true, inventoryMovementIds: inventoryMovements.map(item => item.id) }, { organizationId, locationId: active.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
+    } else {
+      audit(String(chatId), 'delivery.assignment.' + normalizedAction.toLowerCase(), 'delivery_assignment', active.id, { orderId: String(serverOrderId), from: current, to: normalizedAction, commandKey }, { organizationId, locationId: active.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
+    }
+    db.exec('COMMIT');
+    return db.prepare('SELECT * FROM delivery_assignments WHERE id = ?').get(active.id);
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
 
 export async function transitionOrderFulfillment(chatId, serverOrderId, nextStatus, actor = null, input = {}) {
@@ -5601,7 +5703,7 @@ export function coreFulfillmentContract() {
     organization_scope: 'tenant organization_id',
     location_scope: 'organization-owned location_id',
     transition_authority: 'server',
-    delivery_transitions: 'pending -> out_for_delivery -> delivered',
+    delivery_transitions: 'pending -> out_for_delivery -> delivered; assignment: ASSIGNED -> ACCEPTED -> OUT_FOR_DELIVERY -> DELIVERED',
     pickup_transitions: 'pending -> ready_for_pickup -> picked_up',
     idempotency: 'client command key; replay returns current canonical state',
     inventory_consequence: 'terminal fulfillment atomically records SALE movements in existing inventory_movements authority',
