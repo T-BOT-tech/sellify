@@ -1,6 +1,6 @@
 # GAP-2 — Logistics Authorization Foundation
 
-Status: **FOUNDATION + CANONICAL DELIVERY ASSIGNMENT IMPLEMENTED / COURIER LIFECYCLE UI DEFERRED**
+Status: **FOUNDATION + CANONICAL DELIVERY ASSIGNMENT LIFECYCLE IMPLEMENTED / COURIER LIFECYCLE UI DEFERRED**
 
 ## Why this gap exists
 
@@ -38,25 +38,22 @@ A canonical `delivery_assignments` table now owns the delivery-to-courier relati
 
 The fulfillment command endpoint now distinguishes Courier actors from generic fulfillment operators. A Courier must hold the logistics courier capability **and** have an active assignment for the target delivery. Generic `fulfillment:update` remains denied to Courier.
 
-## Important deferred boundary
+## Implemented lifecycle boundary
 
-`logistics:deliveries:update_assigned` is a policy capability, not yet a complete
-server-side assignment authorization implementation.
+The assignment authority now supports a canonical lifecycle:
 
-Before Courier can mutate delivery state, Sellify still needs the canonical relationship:
+`ASSIGNED -> ACCEPTED -> OUT_FOR_DELIVERY -> DELIVERED`
 
-`delivery -> assignment -> membership/user`
+with controlled terminal exception paths for `CANCELLED`, `FAILED`, and `REASSIGNED`.
+Historical assignments are retained, while a partial unique index permits only one active assignment per fulfillment. Lifecycle commands require an idempotency key and are audited. Courier completion requires delivery proof and atomically applies the existing terminal fulfillment inventory consequence.
 
-and server-side enforcement that the actor is assigned to that delivery within the
-organization/location scope.
+Courier actions are server-enforced against the active assignment; dispatcher/manager reassignment and exception actions use the logistics reassignment capability.
 
-Required follow-up:
+### Still deferred
 
-1. full assign/reassign lifecycle and reassignment semantics;
-2. Courier accept/start/complete lifecycle states and proof authorization;
-3. richer workload/dispatch queries and location-scope resolution;
-4. Delivery Staff UI consuming these canonical contracts;
-5. end-to-end assignment integration certification against realistic tenant fixtures.
+1. richer workload/dispatch queries and location-scope resolution;
+2. Delivery Staff UI consuming these canonical contracts;
+3. end-to-end assignment integration certification against realistic tenant fixtures.
 
 Frontend visibility alone must never authorize courier actions.
 
