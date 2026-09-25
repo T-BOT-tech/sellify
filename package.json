@@ -284,7 +284,8 @@
     "test:fux-54": "node phase0/fux-54-compliance-frontend-authority-regression.mjs",
     "test:fux-55": "node phase0/fux-55-seller-storefront-channel-authority-regression.mjs",
     "test:fux-56": "node phase0/fux-56-b2b-customer-pricing-frontend-authority-regression.mjs",
-    "test:fux-57": "node phase0/fux-57-canonical-location-management-regression.mjs"
+    "test:fux-57": "node phase0/fux-57-canonical-location-management-regression.mjs",
+    "test:gap-2-logistics-authz": "node phase0/gap-2-logistics-authorization-foundation-regression.mjs"
   },
   "engines": {
     "node": ">=24"
