@@ -95,6 +95,8 @@ function renderDeliveryWorkloadSummary(assignments) {
     </div>`;
 }
 
+let logisticsDispatchFilters = { status: '', courierUserId: '' };
+
 export function renderLogistics() {
   const list = document.getElementById('logisticsList');
   if (!list) return;
@@ -156,7 +158,19 @@ export function renderLogistics() {
       </div>`;
   };
 
-  let html = renderDeliveryWorkloadSummary(canonicalAssignments);
+  const filterBar = `
+    <div class="logistics-meta" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <select id="logistics-status-filter">
+        <option value="">All active statuses</option>
+        <option value="ASSIGNED">Assigned</option>
+        <option value="ACCEPTED">Accepted</option>
+        <option value="OUT_FOR_DELIVERY">Out for delivery</option>
+      </select>
+      <select id="logistics-courier-filter"><option value="">All couriers</option></select>
+      <button type="button" class="btn-secondary" id="logistics-filter-apply">Filter</button>
+      <button type="button" class="btn-secondary" id="logistics-filter-clear">Clear</button>
+    </div>`;
+  let html = filterBar + renderDeliveryWorkloadSummary(canonicalAssignments);
   if (pending.length > 0) {
     html += `<div class="settings-section-label">${t('whPendingFulfillment')}</div>` + pending.map(renderCard).join('');
   }
@@ -164,6 +178,28 @@ export function renderLogistics() {
     html += `<div class="settings-section-label">${t('whCompletedFulfillment')}</div>` + done.map(renderCard).join('');
   }
   list.innerHTML = html;
+
+  const statusFilter = list.querySelector('#logistics-status-filter');
+  const courierFilter = list.querySelector('#logistics-courier-filter');
+  if (statusFilter) statusFilter.value = logisticsDispatchFilters.status;
+  if (courierFilter) courierFilter.value = logisticsDispatchFilters.courierUserId;
+  if (list.dataset.dispatchFiltersBound !== '1') {
+    list.dataset.dispatchFiltersBound = '1';
+    list.addEventListener('click', async (event) => {
+      if (event.target.closest('#logistics-filter-apply')) {
+        logisticsDispatchFilters = {
+          status: list.querySelector('#logistics-status-filter')?.value || '',
+          courierUserId: list.querySelector('#logistics-courier-filter')?.value || '',
+        };
+        await refreshDeliveryAssignments(logisticsDispatchFilters);
+        return;
+      }
+      if (event.target.closest('#logistics-filter-clear')) {
+        logisticsDispatchFilters = { status: '', courierUserId: '' };
+        await refreshDeliveryAssignments(logisticsDispatchFilters);
+      }
+    });
+  }
 
   if (list.dataset.deliveryHandlersBound !== '1') {
     list.dataset.deliveryHandlersBound = '1';
@@ -203,6 +239,17 @@ export function renderLogistics() {
   }
 
   listLogisticsStaff().then(memberships => {
+    const allCourierOptions = memberships.filter(m =>
+      Array.isArray(m.contextualRoles) && m.contextualRoles.some(r => r.role === 'logistics_courier')
+    );
+    const courierFilterEl = list.querySelector('#logistics-courier-filter');
+    if (courierFilterEl) {
+      const current = courierFilterEl.value;
+      courierFilterEl.innerHTML = '<option value="">All couriers</option>' + allCourierOptions.map(m =>
+        `<option value="${escapeAttr(m.userId)}">${escapeHtml(m.displayName || m.userId)}</option>`
+      ).join('');
+      courierFilterEl.value = current;
+    }
     const couriers = memberships.filter(m =>
       Array.isArray(m.contextualRoles) && m.contextualRoles.some(r => {
         if (r.role !== 'logistics_courier') return false;
