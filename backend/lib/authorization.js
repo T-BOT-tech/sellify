@@ -179,6 +179,10 @@ const CONTEXTUAL_ROLE_PACK_REQUIREMENTS = Object.freeze({
   warehouse_receiving: 'warehouse',
   warehouse_picker_packer: 'warehouse',
   warehouse_inventory_staff: 'warehouse',
+  logistics_manager: 'logistics',
+  logistics_dispatcher: 'logistics',
+  logistics_courier: 'logistics',
+  logistics_viewer: 'logistics',
 });
 
 export function requiredPackForRole(role) {
