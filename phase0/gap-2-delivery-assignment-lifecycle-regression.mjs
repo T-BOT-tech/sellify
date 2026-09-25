@@ -15,7 +15,7 @@ assert.match(store, /DELIVERY_PROOF_REQUIRED/);
 assert.match(store, /EXCEPTION_REASON_REQUIRED/);
 assert.match(store, /REASSIGN_EXCEPTION/);
 assert.match(store, /EXCEPTION_NOT_FOUND/);
-assert.match(store, /delivery\\.assignment\\.exception_resolved/);
+assert.match(store, /delivery\.assignment\.exception_resolved/);
 assert.match(store, /REASSIGNMENT_TARGET_REQUIRED/);
 assert.match(store, /delivery\.assignment\.reassigned/);
 assert.match(store, /Target courier does not have an active logistics courier role/);
