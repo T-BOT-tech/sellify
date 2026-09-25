@@ -11,3 +11,16 @@ assert.match(ui,/canonicalDeliveryAssignment/);
 assert.match(ui,/assignment\.courier_name/);
 assert.match(main,/transitionDeliveryAssignmentForOrder/);
 console.log('GAP-2 Delivery Frontend Contract Regression: PASS');
+
+const tenant=fs.readFileSync(new URL('../app/src/auth/tenant.js',import.meta.url),'utf8');
+const store=fs.readFileSync(new URL('../backend/lib/store-sqlite.js',import.meta.url),'utf8');
+assert.match(tenant,/authRoles = Array\.isArray\(data\.session\.roles\)/);
+assert.match(tenant,/contextualRoles = Array\.isArray\(data\.session\.contextualRoles\)/);
+assert.match(store,/contextualRoles = db\.prepare/);
+assert.match(store,/roles: Array\.from\(new Set\(\[membership\.role/);
+assert.match(ui,/logistics_courier/);
+assert.match(ui,/delivery-assign-btn/);
+assert.match(ui,/delivery-action-btn/);
+assert.match(ui,/REASSIGNED/);
+assert.match(fulfillment,/assignDeliveryCourierForOrder/);
+assert.match(fulfillment,/listLogisticsStaff/);
