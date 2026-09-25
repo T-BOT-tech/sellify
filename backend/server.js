@@ -121,6 +121,7 @@ import {
   listQuotes, getQuote, createQuote, transitionQuote,
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, createPurchaseOrderFromProcurementAward, transitionPurchaseOrder,
   getProcurementReceipt, listProcurementReceipts, createProcurementReceipt,
+  assignDeliveryCourier, getDeliveryAssignment, assertCourierOwnsDelivery,
   listCreditTerms, getCreditTerms, createCreditTerms, updateCreditTerms, transitionCreditTerms,
   listReceivables, getReceivable, createReceivable, transitionReceivable, allocatePaymentToReceivable, listReceivableLedger,
   listInvoices, getInvoice, createInvoice, transitionInvoice,
@@ -2358,6 +2359,26 @@ async function handlePackLifecycle(req, res, chatId, packId) {
 }
 
 
+async function handleDeliveryAssignment(req, res, chatId, serverOrderId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, chatId);
+  if (req.method === 'GET') {
+    await requireAuthorization(session, tenant, 'logistics', 'logistics:deliveries:view', {
+      location: session.locationId || null, deniedMessage: 'Logistics delivery view permission required',
+    });
+    const assignment = await getDeliveryAssignment(chatId, serverOrderId, session);
+    return sendJSON(res, 200, { assignment }, req);
+  }
+  const body = await readBody(req);
+  await requireAuthorization(session, tenant, 'logistics', 'logistics:deliveries:assign', {
+    location: body.locationId || body.location_id || session.locationId || null,
+    deniedMessage: 'Delivery assignment permission required',
+  });
+  const assignment = await assignDeliveryCourier(chatId, serverOrderId, body.courierUserId || body.courier_user_id, session, body);
+  return sendJSON(res, 200, { assignment }, req);
+}
+
 async function handleOrderFulfillment(req, res, chatId, serverOrderId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -2375,10 +2396,19 @@ async function handleOrderFulfillment(req, res, chatId, serverOrderId) {
   if (req.method === 'POST') {
     const body = await readBody(req);
     const locationId = body.locationId || body.location_id || session.locationId || null;
-    await requireAuthorization(session, tenant, 'fulfillment', 'fulfillment:update', {
-      location: locationId,
-      deniedMessage: 'Fulfillment update permission required',
-    });
+    const isCourier = Array.isArray(session.roles) && session.roles.includes('logistics_courier') || session.role === 'logistics_courier';
+    if (isCourier) {
+      await requireAuthorization(session, tenant, 'logistics', 'logistics:deliveries:update_assigned', {
+        location: locationId,
+        deniedMessage: 'Assigned delivery update permission required',
+      });
+      await assertCourierOwnsDelivery(chatId, serverOrderId, session);
+    } else {
+      await requireAuthorization(session, tenant, 'fulfillment', 'fulfillment:update', {
+        location: locationId,
+        deniedMessage: 'Fulfillment update permission required',
+      });
+    }
     const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
     if (!idempotencyKey) {
       return sendJSON(res, 400, { error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' } }, req);
@@ -2422,6 +2452,8 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/sync\/([^/]+)$/, handler: (req, res, m) => handleSyncPull(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/orders\/([^/]+)$/, handler: (req, res, m) => handleOrdersFeed(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleOrderFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleOrderFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/catalog\/([^/]+)$/, handler: (req, res, m) => handleCatalogGet(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/storefront-channels$/, handler: (req, res, m) => handleSellerStorefrontChannelsGet(req, res, decodeURIComponent(m[1])) },
