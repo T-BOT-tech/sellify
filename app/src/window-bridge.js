@@ -17,7 +17,7 @@
 
 import {
   CS, addCustomPaymentMethod, addPricingTier, addProduct,
-  addTable, addVolumeDiscountTier, addWarehouseLocation, loadOrganizationLocations, selectOrganizationLocation, selectWarehouseLocation, advanceFulfillmentOrder,
+  addTable, addVolumeDiscountTier, addWarehouseLocation, loadOrganizationLocations, selectOrganizationLocation, selectWarehouseLocation, openOrganizationLocationModal, closeOrganizationLocationModal, saveOrganizationLocationModal, advanceFulfillmentOrder,
   applyBusinessModelUI, applyLogisticsUI, applyRolePermissions, applyStockChange,
   applyStoreBranding, applyWarehouseUI, applyWholesaleUI, cancelProductEdit,
   capitalize, changeLanguage, changeQty, checkoutTelegramWebApp,
@@ -80,7 +80,7 @@ import {
 if (typeof window !== 'undefined') {
   Object.assign(window, {
   CS, addCustomPaymentMethod, addPricingTier, addProduct,
-  addTable, addVolumeDiscountTier, addWarehouseLocation, loadOrganizationLocations, selectOrganizationLocation, selectWarehouseLocation, advanceFulfillmentOrder,
+  addTable, addVolumeDiscountTier, addWarehouseLocation, loadOrganizationLocations, selectOrganizationLocation, selectWarehouseLocation, openOrganizationLocationModal, closeOrganizationLocationModal, saveOrganizationLocationModal, advanceFulfillmentOrder,
   applyBusinessModelUI, applyLogisticsUI, applyRolePermissions, applyStockChange,
   applyStoreBranding, applyWarehouseUI, applyWholesaleUI, cancelProductEdit,
   capitalize, changeLanguage, changeQty, checkoutTelegramWebApp,
