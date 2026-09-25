@@ -28,7 +28,9 @@ Authenticated tenant-scoped routes:
 - `POST /tenants/:chatId/locations`
 - `PATCH /tenants/:chatId/locations/:locationId`
 
-Viewing requires an active tenant session with `owner`, `manager`, `staff`, or `cashier` role. Creating/updating requires `owner` or `manager` through the current `requireOwnerRole` policy (manager support can be widened when central authorization lands in Phase 10.3).
+Viewing requires an active tenant session with the canonical `locations:view` permission. Creating/updating requires the canonical `locations:manage` permission enforced by the central authorization layer.
+
+The Warehouse → Locations management UI is a canonical client of these routes. The legacy `warehouseLocations` storage-bin list remains a separate local compatibility surface and must not be treated as organization-location authority.
 
 ## Migration
 
