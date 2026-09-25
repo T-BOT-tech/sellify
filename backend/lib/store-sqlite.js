@@ -5528,6 +5528,55 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
   }
 }
 
+export async function listDeliveryAssignments(chatId, actor = null, filters = {}) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organization_id) return [];
+  const organizationId = String(tenant.organization_id);
+  const status = String(filters.status || '').trim().toUpperCase();
+  const locationId = String(filters.locationId || filters.location_id || '').trim();
+  const courierUserId = String(filters.courierUserId || filters.courier_user_id || '').trim();
+  const isCourier = Array.isArray(actor?.roles) && actor.roles.includes('logistics_courier') || actor?.role === 'logistics_courier';
+
+  const clauses = [
+    'da.organization_id = ?',
+    "da.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY')",
+  ];
+  const params = [organizationId];
+  if (status && ['ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY'].includes(status)) {
+    clauses[1] = 'da.status = ?';
+    params.push(status);
+  }
+  if (locationId) {
+    clauses.push('da.location_id = ?');
+    params.push(locationId);
+  }
+  if (isCourier) {
+    clauses.push('da.courier_user_id = ?');
+    params.push(String(actor.userId));
+  } else if (courierUserId) {
+    clauses.push('da.courier_user_id = ?');
+    params.push(courierUserId);
+  }
+
+  return db.prepare(`
+    SELECT da.id, da.fulfillment_id, da.organization_id, da.location_id,
+           da.courier_user_id, u.display_name AS courier_name, da.status,
+           da.assignment_key, da.assigned_by_user_id, da.assigned_at,
+           da.updated_at, da.version, f.server_order_id,
+           f.fulfillment_type, f.status AS fulfillment_status,
+           f.destination_json
+    FROM delivery_assignments da
+    JOIN fulfillments f ON f.id = da.fulfillment_id
+    LEFT JOIN users u ON u.id = da.courier_user_id
+    WHERE ${clauses.join(' AND ')}
+    ORDER BY
+      CASE da.status WHEN 'OUT_FOR_DELIVERY' THEN 1 WHEN 'ACCEPTED' THEN 2 ELSE 3 END,
+      da.updated_at DESC
+    LIMIT 200
+  `).all(...params);
+}
+
 export async function getDeliveryAssignment(chatId, serverOrderId, actor = null) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
