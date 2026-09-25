@@ -4590,7 +4590,14 @@ export async function getOrCreateTenant(chatId) {
     INSERT INTO tenants (chat_id, tenant_id, api_key, created_at, seller_name)
     VALUES (?, ?, ?, ?, '')
   `).run(key, crypto.randomUUID(), crypto.randomBytes(24).toString('hex'), nowIso());
+  // New tenants must enter the canonical identity model immediately. The
+  // migration-time repair path only runs for tenants that already existed when
+  // the database was opened; without this call, a newly created tenant has no
+  // organization_id/default location/channel and organization-scoped commands
+  // fail with ORGANIZATION_NOT_FOUND.
+  ensureCanonicalIdentityForTenant(key);
   audit(key, 'tenant.created', 'tenant', key);
+
   return tenantFromRow(db.prepare('SELECT * FROM tenants WHERE chat_id = ?').get(key));
 }
 
