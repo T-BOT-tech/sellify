@@ -49,7 +49,7 @@ export function applyWarehouseUI() {
 
 export function switchWarehouseSubtab(tab) {
   warehouseActiveSubtab = tab;
-  if (config.sessionToken) loadOrganizationLocations().then(() => {
+  if (config.sessionToken) loadOrganizationLocations({ includeInactive: tab === 'locations' }).then(() => {
     if (tab === 'inventory') loadInventoryBalances({ locationId: config.locationId }).then(() => renderWarehouseInventory());
     renderWarehouseLocationsList();
   }).catch(() => {});
@@ -185,20 +185,35 @@ export function txItemMarkup(tx) {
 export function renderWarehouseLocationsList() {
   const list = document.getElementById('warehouseLocationsList');
   if (!list) return;
-  const canonical = organizationLocations.filter(l => l.status === 'active');
-  const canonicalMarkup = canonical.length ? `
-    <div class="hint" style="margin-bottom:6px;">Business locations</div>
-    <select id="warehouseCanonicalLocation" onchange="selectWarehouseLocation(this.value)" style="width:100%; margin-bottom:10px;">
-      ${canonical.map(l => `<option value="${escapeAttr(l.id)}" ${String(l.id) === String(config.locationId) ? 'selected' : ''}>${escapeHtml(l.name)} · ${escapeHtml(l.type)}</option>`).join('')}
-    </select>` : '';
-  const legacyMarkup = warehouseLocations.length ? `
-    <div class="hint" style="margin:8px 0 6px;">Storage bins (legacy)</div>
-    ${warehouseLocations.map((loc, idx) => `
-    <div class="paymethod-row">
-      <span class="pm-name">${escapeHtml(loc.name)}</span>
-      <button type="button" class="pm-remove" onclick="removeWarehouseLocation(${idx})" title="Remove"><svg class="icon icon-sm"><use href="#i-close"/></svg></button>
+  const active = organizationLocations.filter(l => l.status === 'active');
+  const canonicalMarkup = `
+    <div class="hint" style="margin-bottom:6px;">Canonical business locations</div>
+    <div style="display:grid; gap:8px;">
+      ${organizationLocations.length ? organizationLocations.map(location => `
+        <div class="card" style="padding:10px; opacity:${location.status === 'active' ? '1' : '.65'};">
+          <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+            <div>
+              <div style="font-weight:700;">${escapeHtml(location.name)}</div>
+              <div class="hint">${escapeHtml(location.code)} · ${escapeHtml(location.type)} · ${escapeHtml(location.status)}</div>
+            </div>
+            <button type="button" class="btn-secondary" style="width:auto; margin:0; padding:6px 10px;" onclick="openOrganizationLocationModal('${escapeAttr(location.id)}')">Edit</button>
+          </div>
+        </div>
+      `).join('') : '<div class="empty">No business locations yet.</div>'}
     </div>
-  `).join('')}` : '';
+    <div style="display:flex; gap:8px; margin-top:10px;">
+      <select id="warehouseCanonicalLocation" onchange="selectWarehouseLocation(this.value)" style="flex:1;">
+        ${active.length ? active.map(l => `<option value="${escapeAttr(l.id)}" ${String(l.id) === String(config.locationId) ? 'selected' : ''}>${escapeHtml(l.name)} · ${escapeHtml(l.type)}</option>`).join('') : '<option value="">No active locations</option>'}
+      </select>
+      <button type="button" class="btn-primary" style="width:auto; margin:0; padding:8px 12px;" onclick="openOrganizationLocationModal()">+ Add</button>
+    </div>`;
+  const legacyMarkup = `
+    <div class="hint" style="margin:14px 0 6px;">Storage bins (legacy compatibility)</div>
+    ${warehouseLocations.length ? warehouseLocations.map((loc, idx) => `
+      <div class="paymethod-row">
+        <span class="pm-name">${escapeHtml(loc.name)}</span>
+        <button type="button" class="pm-remove" onclick="removeWarehouseLocation(${idx})" title="Remove"><svg class="icon icon-sm"><use href="#i-close"/></svg></button>
+      </div>`).join('') : '<div class="hint">No legacy storage bins configured.</div>'}`;
   list.innerHTML = canonicalMarkup + legacyMarkup;
 }
 
