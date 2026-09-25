@@ -6458,12 +6458,39 @@ export async function authenticateSessionToken(token) {
               FROM membership_roles mr
              WHERE mr.membership_id = m.id AND mr.status = 'active'
                AND (
-                 mr.role_id NOT IN ('restaurant_waiter', 'restaurant_kitchen_staff')
-                 OR EXISTS (
-                   SELECT 1 FROM pack_lifecycle pl
-                    WHERE pl.organization_id = t.organization_id
-                      AND pl.pack_id = 'restaurant'
-                      AND pl.state = 'ACTIVE'
+                 (
+                   mr.role_id NOT IN (
+                     'restaurant_waiter', 'restaurant_kitchen_staff',
+                     'warehouse_receiving', 'warehouse_picker_packer', 'warehouse_inventory_staff',
+                     'logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer'
+                   )
+                 )
+                 OR (
+                   mr.role_id IN ('restaurant_waiter', 'restaurant_kitchen_staff')
+                   AND EXISTS (
+                     SELECT 1 FROM pack_lifecycle pl
+                      WHERE pl.organization_id = t.organization_id
+                        AND pl.pack_id = 'restaurant'
+                        AND pl.state = 'ACTIVE'
+                   )
+                 )
+                 OR (
+                   mr.role_id IN ('warehouse_receiving', 'warehouse_picker_packer', 'warehouse_inventory_staff')
+                   AND EXISTS (
+                     SELECT 1 FROM pack_lifecycle pl
+                      WHERE pl.organization_id = t.organization_id
+                        AND pl.pack_id = 'warehouse'
+                        AND pl.state = 'ACTIVE'
+                   )
+                 )
+                 OR (
+                   mr.role_id IN ('logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer')
+                   AND EXISTS (
+                     SELECT 1 FROM pack_lifecycle pl
+                      WHERE pl.organization_id = t.organization_id
+                        AND pl.pack_id = 'logistics'
+                        AND pl.state = 'ACTIVE'
+                   )
                  )
                )) AS membership_roles
     FROM sessions s JOIN devices d ON d.id = s.device_id
