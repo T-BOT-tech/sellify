@@ -55,7 +55,7 @@ The Logistics frontend now consumes the canonical active-assignment workload end
 
 ### Still deferred
 
-1. richer workload/dispatch controls such as explicit status/location/courier filters and workload balancing;
+1. richer workload/dispatch controls such as workload balancing, route sequencing, and explicit exception-resolution workflows;
 2. full Delivery Staff UI for assign/reassign/accept/start/complete/proof actions;
 3. end-to-end assignment integration certification against realistic tenant fixtures.
 
