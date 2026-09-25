@@ -74,3 +74,61 @@ export function selectOrganizationLocation(locationId) {
   saveJSON(STORAGE_KEYS.config, next);
   return location;
 }
+
+
+export function openOrganizationLocationModal(locationId = '') {
+  const modal = document.getElementById('organizationLocationModal');
+  if (!modal) return;
+  const location = organizationLocations.find(item => String(item.id) === String(locationId));
+  const title = document.getElementById('organizationLocationModalTitle');
+  const id = document.getElementById('organizationLocationId');
+  const code = document.getElementById('organizationLocationCode');
+  const name = document.getElementById('organizationLocationName');
+  const type = document.getElementById('organizationLocationType');
+  const status = document.getElementById('organizationLocationStatus');
+  if (id) id.value = location?.id || '';
+  if (code) code.value = location?.code || '';
+  if (name) name.value = location?.name || '';
+  if (type) type.value = location?.type || 'STORE';
+  if (status) status.value = location?.status || 'active';
+  if (title) title.textContent = location ? 'Edit business location' : 'Add business location';
+  if (code) code.disabled = Boolean(location);
+  modal.style.display = 'flex';
+}
+
+export function closeOrganizationLocationModal() {
+  const modal = document.getElementById('organizationLocationModal');
+  if (modal) modal.style.display = 'none';
+}
+
+export async function saveOrganizationLocationModal() {
+  const id = document.getElementById('organizationLocationId')?.value || '';
+  const code = document.getElementById('organizationLocationCode')?.value.trim().toUpperCase() || '';
+  const name = document.getElementById('organizationLocationName')?.value.trim() || '';
+  const type = document.getElementById('organizationLocationType')?.value || 'STORE';
+  const status = document.getElementById('organizationLocationStatus')?.value || 'active';
+  if (!code || !name) return;
+  if (!config.chatId || !config.sessionToken) return;
+  const url = `${baseUrl()}/tenants/${encodeURIComponent(config.chatId)}/locations${id ? '/' + encodeURIComponent(id) : ''}`;
+  try {
+    const res = await fetch(url, {
+      method: id ? 'PATCH' : 'POST',
+      headers: {
+        Authorization: `Bearer ${config.sessionToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ code, name, type, status }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error?.message || 'Could not save business location.');
+    closeOrganizationLocationModal();
+    await loadOrganizationLocations({ includeInactive: true });
+    renderWarehouseLocationsList();
+  } catch (error) {
+    const message = document.getElementById('organizationLocationError');
+    if (message) {
+      message.textContent = error.message || 'Could not save business location.';
+      message.style.display = 'block';
+    }
+  }
+}
