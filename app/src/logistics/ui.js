@@ -11,7 +11,7 @@
 import { escapeHtml, escapeAttr } from '../utils/index.js';
 import { config, orders, warehouseLocations } from '../state.js';
 import {
-  isLogisticsEnabled, selectedFulfillmentType, setSelectedFulfillmentType,
+  deliveryAssignments, isLogisticsEnabled, selectedFulfillmentType, setSelectedFulfillmentType,
   nextFulfillmentStatus, isFulfillmentFinal, fulfillmentStatusLabel, canonicalDeliveryAssignment,
   refreshDeliveryAssignments, transitionDeliveryAssignmentForOrder, assignDeliveryCourierForOrder, listLogisticsStaff
 } from './fulfillment.js';
@@ -98,7 +98,7 @@ function renderDeliveryWorkloadSummary(assignments) {
 export function renderLogistics() {
   const list = document.getElementById('logisticsList');
   if (!list) return;
-  const canonicalAssignments = Array.isArray(window.__sellifyDeliveryAssignments) ? window.__sellifyDeliveryAssignments : [];
+  const canonicalAssignments = Array.isArray(deliveryAssignments) ? deliveryAssignments : [];
   const pending = orders.filter(o => o.fulfillment_type && !isFulfillmentFinal(o.fulfillment_status));
   const done = orders.filter(o => o.fulfillment_type && isFulfillmentFinal(o.fulfillment_status)).slice(0, 20);
 
