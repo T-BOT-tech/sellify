@@ -11,7 +11,7 @@ const server = fs.readFileSync('backend/server.js', 'utf8');
 const store = fs.readFileSync('backend/lib/store-sqlite.js', 'utf8');
 
 assert(locations.includes('/locations'));
-assert(locations.includes('method: id ? "PATCH" : "POST"'));
+assert(locations.includes("method: id ? 'PATCH' : 'POST'"));
 assert(locations.includes('includeInactive: true'));
 assert(locations.includes('openOrganizationLocationModal'));
 assert(locations.includes('saveOrganizationLocationModal'));
