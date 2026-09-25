@@ -1,6 +1,6 @@
 # GAP-2 — Logistics Authorization Foundation
 
-Status: **FOUNDATION IMPLEMENTED / DELIVERY ASSIGNMENT ENFORCEMENT DEFERRED**
+Status: **FOUNDATION + CANONICAL DELIVERY ASSIGNMENT IMPLEMENTED / COURIER LIFECYCLE UI DEFERRED**
 
 ## Why this gap exists
 
@@ -32,6 +32,12 @@ inactive-pack contextual roles are excluded from authenticated session role reso
 | Courier | delivery view + `update_assigned`; **no generic `fulfillment:update`** |
 | Viewer | delivery/fulfillment read-only |
 
+## Delivery assignment authority implemented
+
+A canonical `delivery_assignments` table now owns the delivery-to-courier relationship. Assignment is organization-scoped, location-scoped when the courier role is location-scoped, idempotent by assignment key, and protected against assigning the same delivery to a different courier.
+
+The fulfillment command endpoint now distinguishes Courier actors from generic fulfillment operators. A Courier must hold the logistics courier capability **and** have an active assignment for the target delivery. Generic `fulfillment:update` remains denied to Courier.
+
 ## Important deferred boundary
 
 `logistics:deliveries:update_assigned` is a policy capability, not yet a complete
@@ -46,12 +52,11 @@ organization/location scope.
 
 Required follow-up:
 
-1. canonical delivery assignment persistence/authority;
-2. assign/reassign lifecycle and concurrency semantics;
-3. Courier own-assignment server enforcement;
-4. proof/status mutation authorization;
-5. audit events and idempotency/replay behavior;
-6. Delivery Staff UI consuming those canonical contracts.
+1. full assign/reassign lifecycle and reassignment semantics;
+2. Courier accept/start/complete lifecycle states and proof authorization;
+3. richer workload/dispatch queries and location-scope resolution;
+4. Delivery Staff UI consuming these canonical contracts;
+5. end-to-end assignment integration certification against realistic tenant fixtures.
 
 Frontend visibility alone must never authorize courier actions.
 
