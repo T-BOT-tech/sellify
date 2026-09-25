@@ -73,3 +73,5 @@ jobs:
         run: npm run test:fux-57
       - name: GAP-2 logistics authorization foundation regression
         run: npm run test:gap-2-logistics-authz
+      - name: GAP-2 delivery assignment authority regression
+        run: npm run test:gap-2-delivery-assignment
