@@ -23,6 +23,6 @@ assert(credential.includes('rawTokenPersistence: false'));
 assert(server.includes('handleSellerStorefrontChannelsGet'));
 assert(server.includes('handleTelegramStorefrontPatch'));
 assert(server.includes('handleTelegramStorefrontVerify'));
-assert(server.includes('/tenants/([^/]+)/storefront-channels'));
-assert(server.includes('/tenants/([^/]+)/telegram-storefront'));
+assert(server.includes("pattern: /^\\/tenants\\/([^/]+)\\/storefront-channels$/"));
+assert(server.includes("pattern: /^\\/tenants\\/([^/]+)\\/telegram-storefront$/"));
 console.log('FUX-55 seller storefront channel + Telegram seller authority regression: PASS');
