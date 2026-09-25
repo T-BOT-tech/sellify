@@ -18,7 +18,7 @@
 import {
   CS, addCustomPaymentMethod, addPricingTier, addProduct,
   refreshDeliveryAssignments, transitionDeliveryAssignmentForOrder,
-  addTable, addVolumeDiscountTier, addWarehouseLocation, loadOrganizationLocations, selectOrganizationLocation, selectWarehouseLocation, openOrganizationLocationModal, closeOrganizationLocationModal, saveOrganizationLocationModal, advanceFulfillmentOrder, refreshDeliveryAssignments, transitionDeliveryAssignmentForOrder,
+  addTable, addVolumeDiscountTier, addWarehouseLocation, loadOrganizationLocations, selectOrganizationLocation, selectWarehouseLocation, openOrganizationLocationModal, closeOrganizationLocationModal, saveOrganizationLocationModal, advanceFulfillmentOrder,
   applyBusinessModelUI, applyLogisticsUI, applyRolePermissions, applyStockChange,
   applyStoreBranding, applyWarehouseUI, applyWholesaleUI, cancelProductEdit,
   capitalize, changeLanguage, changeQty, checkoutTelegramWebApp,
