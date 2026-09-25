@@ -171,7 +171,11 @@ export function renderLogistics() {
 
   listLogisticsStaff().then(memberships => {
     const couriers = memberships.filter(m =>
-      Array.isArray(m.contextualRoles) && m.contextualRoles.some(r => r.role === 'logistics_courier' && r.status === 'active')
+      Array.isArray(m.contextualRoles) && m.contextualRoles.some(r => {
+        if (r.role !== 'logistics_courier') return false;
+        if (String(r.scopeType || '').toUpperCase() !== 'LOCATION') return true;
+        return !r.scopeId || !config.locationId || String(r.scopeId) === String(config.locationId);
+      })
     );
     list.querySelectorAll('.delivery-courier-select').forEach(select => {
       couriers.forEach(m => {
