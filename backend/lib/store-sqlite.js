@@ -5569,13 +5569,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
   if (!commandKey) throw Object.assign(new Error('Idempotency key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
   const existingCommand = db.prepare('SELECT * FROM delivery_assignments WHERE organization_id = ? AND last_command_key = ? ORDER BY updated_at DESC LIMIT 1').get(organizationId, commandKey);
   if (existingCommand) return existingCommand;
-  const active = db.prepare(`
-    SELECT da.* FROM delivery_assignments da
-    JOIN fulfillments f ON f.id = da.fulfillment_id
-    WHERE f.server_order_id = ? AND da.organization_id = ?
-      AND da.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY')
-    ORDER BY da.updated_at DESC LIMIT 1
-  `).get(String(serverOrderId), organizationId);
+  const active = db.prepare(`SELECT da.* FROM delivery_assignments da JOIN fulfillments f ON f.id = da.fulfillment_id WHERE f.server_order_id = ? AND da.organization_id = ? AND da.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY') ORDER BY da.updated_at DESC LIMIT 1`).get(String(serverOrderId), organizationId);
   if (!active) throw Object.assign(new Error('No active courier assignment exists'), { statusCode: 409, code: 'ASSIGNMENT_REQUIRED' });
   const current = String(active.status);
   const transitions = {
@@ -5584,8 +5578,15 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     OUT_FOR_DELIVERY: new Set(['DELIVERED','CANCELLED','FAILED','REASSIGNED']),
   };
   if (!transitions[current]?.has(normalizedAction)) throw Object.assign(new Error('Cannot move assignment from ' + current + ' to ' + normalizedAction), { statusCode: 409, code: 'INVALID_ASSIGNMENT_TRANSITION' });
-  if (normalizedAction === 'DELIVERED' && (input.proof == null || (typeof input.proof === 'string' && !input.proof.trim()))) {
-    throw Object.assign(new Error('Delivery proof is required before delivery completion'), { statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED' });
+  if (normalizedAction === 'DELIVERED' && (input.proof == null || (typeof input.proof === 'string' && !input.proof.trim()))) throw Object.assign(new Error('Delivery proof is required before delivery completion'), { statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED' });
+
+  const targetCourierId = String(input.courierUserId || input.courier_user_id || '').trim();
+  if (normalizedAction === 'REASSIGNED') {
+    if (!targetCourierId || targetCourierId === String(active.courier_user_id)) throw Object.assign(new Error('A different courier is required for reassignment'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
+    const courier = db.prepare(`SELECT m.user_id, mr.scope_type, mr.scope_id FROM memberships m JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active' WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active' AND mr.role_id = 'logistics_courier'`).get(targetCourierId, String(chatId));
+    if (!courier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
+    const locationId = input.locationId || input.location_id || active.location_id || order.location_id || null;
+    if (courier.scope_type === 'LOCATION' && String(courier.scope_id || '') !== String(locationId || '')) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
   }
   db.exec('BEGIN IMMEDIATE');
   try {
@@ -5596,23 +5597,26 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     if (fulfillmentTarget) {
       const currentFulfillment = normalizeCoreFulfillmentStatus(fulfillment.status);
       if (!CORE_FULFILLMENT_TRANSITIONS.delivery[currentFulfillment]?.has(fulfillmentTarget)) throw Object.assign(new Error('Cannot move fulfillment from ' + currentFulfillment + ' to ' + fulfillmentTarget), { statusCode: 409, code: 'INVALID_FULFILLMENT_TRANSITION' });
-      db.prepare(`
-        UPDATE fulfillments
-        SET status = ?, last_command_key = ?, updated_by_user_id = ?, updated_at = ?, version = version + 1,
-            proof_json = CASE WHEN ? IS NULL THEN proof_json ELSE ? END
-        WHERE id = ?
-      `).run(fulfillmentTarget, commandKey, actor?.userId || null, now, input.proof === undefined ? null : json(input.proof), input.proof === undefined ? null : json(input.proof), fulfillment.id);
+      db.prepare(`UPDATE fulfillments SET status = ?, last_command_key = ?, updated_by_user_id = ?, updated_at = ?, version = version + 1, proof_json = CASE WHEN ? IS NULL THEN proof_json ELSE ? END WHERE id = ?`).run(fulfillmentTarget, commandKey, actor?.userId || null, now, input.proof === undefined ? null : json(input.proof), input.proof === undefined ? null : json(input.proof), fulfillment.id);
     }
     db.prepare('UPDATE delivery_assignments SET status = ?, last_command_key = ?, updated_at = ?, version = version + 1 WHERE id = ?').run(normalizedAction, commandKey, now, active.id);
-    const updatedFulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(fulfillment.id);
-    if (normalizedAction === 'DELIVERED') {
+
+    let result = db.prepare('SELECT * FROM delivery_assignments WHERE id = ?').get(active.id);
+    if (normalizedAction === 'REASSIGNED') {
+      const locationId = input.locationId || input.location_id || active.location_id || order.location_id || null;
+      const assignmentKey = String(input.assignmentKey || input.assignment_key || ('reassign:' + serverOrderId + ':' + targetCourierId + ':' + commandKey)).trim();
+      db.prepare(`INSERT INTO delivery_assignments (id,fulfillment_id,organization_id,location_id,courier_user_id,status,assignment_key,assigned_by_user_id,assigned_at,updated_at,version,last_command_key) VALUES (?,?,?,?,?,'ASSIGNED',?,?,?,?,1,?)`).run(crypto.randomUUID(), active.fulfillment_id, organizationId, locationId ? String(locationId) : null, targetCourierId, assignmentKey, actor?.userId || null, now, now, commandKey);
+      result = db.prepare('SELECT * FROM delivery_assignments WHERE fulfillment_id = ? AND status = \'ASSIGNED\' ORDER BY updated_at DESC LIMIT 1').get(active.fulfillment_id);
+      audit(String(chatId), 'delivery.assignment.reassigned', 'delivery_assignment', result.id, { orderId: String(serverOrderId), previousCourierUserId: String(active.courier_user_id), courierUserId: targetCourierId, commandKey }, { organizationId, locationId, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
+    } else if (normalizedAction === 'DELIVERED') {
+      const updatedFulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(fulfillment.id);
       const inventoryMovements = applyCoreFulfillmentInventoryConsequence(String(chatId), updatedFulfillment, orderFromRow(order), actor);
       audit(String(chatId), 'delivery.assignment.delivered', 'delivery_assignment', active.id, { orderId: String(serverOrderId), from: current, to: normalizedAction, commandKey, proofAttached: true, inventoryMovementIds: inventoryMovements.map(item => item.id) }, { organizationId, locationId: active.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
     } else {
       audit(String(chatId), 'delivery.assignment.' + normalizedAction.toLowerCase(), 'delivery_assignment', active.id, { orderId: String(serverOrderId), from: current, to: normalizedAction, commandKey }, { organizationId, locationId: active.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
     }
     db.exec('COMMIT');
-    return db.prepare('SELECT * FROM delivery_assignments WHERE id = ?').get(active.id);
+    return result;
   } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
 
