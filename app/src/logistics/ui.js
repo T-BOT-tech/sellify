@@ -12,7 +12,8 @@ import { escapeHtml, escapeAttr } from '../utils/index.js';
 import { orders, warehouseLocations } from '../state.js';
 import {
   isLogisticsEnabled, selectedFulfillmentType, setSelectedFulfillmentType,
-  nextFulfillmentStatus, isFulfillmentFinal, fulfillmentStatusLabel
+  nextFulfillmentStatus, isFulfillmentFinal, fulfillmentStatusLabel, canonicalDeliveryAssignment,
+  refreshDeliveryAssignments, transitionDeliveryAssignmentForOrder
 } from './fulfillment.js';
 // Phase 8 fix (see modularization plan §5, Phase 8): these used to come
 // from '../main.js', which only re-exported them from their real owning
@@ -33,6 +34,7 @@ export function applyLogisticsUI() {
     switchTab('order');
   }
   renderOrderFulfillmentPicker();
+  refreshDeliveryAssignments();
 }
 
 export function renderOrderFulfillmentPicker() {
@@ -75,6 +77,10 @@ export function renderLogistics() {
   const renderCard = (o) => {
     const isDelivery = o.fulfillment_type === 'delivery';
     const next = nextFulfillmentStatus(o);
+    const assignment = canonicalDeliveryAssignment(o);
+    const assignmentLine = isDelivery && assignment
+      ? `<div class="logistics-meta"><svg class="icon icon-sm"><use href="#i-truck"/></svg> ${escapeHtml(assignment.courier_name || assignment.courier_user_id || 'Assigned courier')} · ${escapeHtml(assignment.status)}</div>`
+      : '';
     const itemsSummary = (o.items || []).map(i => `${i.qty}× ${escapeHtml(i.name)}`).join(', ');
     const destLine = isDelivery
       ? (o.delivery_address ? `<svg class="icon icon-sm"><use href="#i-pin"/></svg> ${escapeHtml(o.delivery_address)}` : '')
@@ -91,6 +97,7 @@ export function renderLogistics() {
         ${customerLine ? `<div class="logistics-meta">${customerLine}</div>` : ''}
         ${destLine ? `<div class="logistics-meta">${destLine}</div>` : ''}
         ${scheduledLine ? `<div class="logistics-meta">${scheduledLine}</div>` : ''}
+        ${assignmentLine}
         ${next ? `<button type="button" class="btn-secondary" style="width:auto; margin:8px 0 0; padding:8px 14px;" onclick="advanceFulfillmentOrder('${o.id}')">${t('whAdvanceTo')} ${fulfillmentStatusLabel(next)}</button>` : ''}
       </div>`;
   };
