@@ -12,6 +12,9 @@ assert.match(store, /ASSIGNED: new Set\(\['ACCEPTED','CANCELLED','FAILED','REASS
 assert.match(store, /ACCEPTED: new Set\(\['OUT_FOR_DELIVERY','CANCELLED','FAILED','REASSIGNED'\]\)/);
 assert.match(store, /OUT_FOR_DELIVERY: new Set\(\['DELIVERED','CANCELLED','FAILED','REASSIGNED'\]\)/);
 assert.match(store, /DELIVERY_PROOF_REQUIRED/);
+assert.match(store, /REASSIGNMENT_TARGET_REQUIRED/);
+assert.match(store, /delivery\.assignment\.reassigned/);
+assert.match(store, /Target courier does not have an active logistics courier role/);
 assert.match(store, /delivery\.assignment\.delivered/);
 assert.match(store, /applyCoreFulfillmentInventoryConsequence/);
 
