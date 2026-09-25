@@ -12,6 +12,10 @@ assert.match(store, /ASSIGNED: new Set\(\['ACCEPTED','CANCELLED','FAILED','REASS
 assert.match(store, /ACCEPTED: new Set\(\['OUT_FOR_DELIVERY','CANCELLED','FAILED','REASSIGNED'\]\)/);
 assert.match(store, /OUT_FOR_DELIVERY: new Set\(\['DELIVERED','CANCELLED','FAILED','REASSIGNED'\]\)/);
 assert.match(store, /DELIVERY_PROOF_REQUIRED/);
+assert.match(store, /EXCEPTION_REASON_REQUIRED/);
+assert.match(store, /REASSIGN_EXCEPTION/);
+assert.match(store, /EXCEPTION_NOT_FOUND/);
+assert.match(store, /delivery\\.assignment\\.exception_resolved/);
 assert.match(store, /REASSIGNMENT_TARGET_REQUIRED/);
 assert.match(store, /delivery\.assignment\.reassigned/);
 assert.match(store, /Target courier does not have an active logistics courier role/);
@@ -28,4 +32,5 @@ console.log('GAP-2 Delivery Assignment Lifecycle Regression: PASS');
 console.log('Assignment history + active-assignment uniqueness: PASS');
 console.log('Courier accept/start/deliver authorization boundary: PASS');
 console.log('Delivery proof requirement: PASS');
+console.log('Exception reason + explicit exception-resolution reassignment: PASS');
 console.log('Idempotent lifecycle command boundary: PASS');
