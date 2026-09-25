@@ -37,6 +37,8 @@ function persistAuth(data, membership = null) {
     next.sessionExpiresAt = data.session.expiresAt || '';
     next.chatId = data.session.chatId || membership?.chatId || next.chatId;
     next.tenantRole = data.session.role || membership?.role || 'owner';
+    next.authRoles = Array.isArray(data.session.roles) ? data.session.roles : [next.tenantRole];
+    next.contextualRoles = Array.isArray(data.session.contextualRoles) ? data.session.contextualRoles : [];
     // Needed so this device can recognize itself in the device list
     // (ui/settings.js's renderDeviceList) and self-revoke without an
     // owner/manager role — see server.js's handleRevokeDevice for the
