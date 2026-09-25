@@ -552,9 +552,10 @@
     <div id="warehouse-locations" class="warehouse-content" style="display:none;">
       <h2><svg class="icon"><use href="#i-map"/></svg> <span data-i18n="whLocations">Locations</span></h2>
       <div id="warehouseLocationsList" style="margin-bottom:8px;"></div>
-      <div style="display:flex; gap:8px; margin-bottom:12px;">
-        <input type="text" id="newLocationName" placeholder="e.g. Aisle A - Shelf 2" style="flex:1; margin-bottom:0;">
-        <button type="button" class="btn-secondary" style="width:auto; margin-top:0; padding:0 14px;" onclick="addWarehouseLocation()" data-i18n="add">Add</button>
+      <div class="hint" style="margin-top:12px;">Legacy storage bins remain local compatibility data; they are not canonical business locations.</div>
+      <div style="display:flex; gap:8px; margin:6px 0 12px;">
+        <input type="text" id="newLocationName" placeholder="Legacy bin name" style="flex:1; margin-bottom:0;">
+        <button type="button" class="btn-secondary" style="width:auto; margin-top:0; padding:0 14px;" onclick="addWarehouseLocation()" data-i18n="add">Add bin</button>
       </div>
     </div>
 
