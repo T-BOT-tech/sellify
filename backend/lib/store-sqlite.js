@@ -6260,6 +6260,10 @@ const CONTEXTUAL_ROLE_IDS = new Set([
   'supplier_network_staff',
   'marketplace_seller_admin',
   'marketplace_seller_staff',
+  'logistics_manager',
+  'logistics_dispatcher',
+  'logistics_courier',
+  'logistics_viewer',
 ]);
 
 function assertContextualRoleAssignable(chatId, role) {
@@ -6269,7 +6273,10 @@ function assertContextualRoleAssignable(chatId, role) {
   }
   const tenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(String(chatId));
   if (!tenant?.organization_id) throw Object.assign(new Error('Tenant organization not found'), { statusCode: 404 });
-  const requiredPack = normalizedRole.startsWith('warehouse_') ? 'warehouse' : normalizedRole.startsWith('restaurant_') ? 'restaurant' : null;
+  const requiredPack = normalizedRole.startsWith('warehouse_') ? 'warehouse'
+    : normalizedRole.startsWith('restaurant_') ? 'restaurant'
+    : normalizedRole.startsWith('logistics_') ? 'logistics'
+    : null;
   // Retail/POS contextual roles are backed by existing Platform/Core retail authorities.
   // Retail/POS and Agriculture contextual roles are backed by existing
   // Platform/Core or declarative Agriculture authorities; assignment does not
