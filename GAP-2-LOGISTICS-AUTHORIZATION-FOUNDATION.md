@@ -49,10 +49,14 @@ Historical assignments are retained, while a partial unique index permits only o
 
 Courier actions are server-enforced against the active assignment; dispatcher/manager reassignment and exception actions use the logistics reassignment capability.
 
+### Current frontend boundary
+
+The Logistics frontend now consumes the canonical active-assignment workload endpoint and renders the assigned courier/status projection. Assignment lifecycle commands are exposed through the canonical PATCH contract with idempotency keys. Courier-facing lifecycle controls remain intentionally limited until role-aware action UI and realistic tenant certification are complete.
+
 ### Still deferred
 
-1. richer workload/dispatch queries and location-scope resolution;
-2. Delivery Staff UI consuming these canonical contracts;
+1. richer workload/dispatch controls such as explicit courier roster management and workload balancing;
+2. full Delivery Staff UI for assign/reassign/accept/start/complete/proof actions;
 3. end-to-end assignment integration certification against realistic tenant fixtures.
 
 Frontend visibility alone must never authorize courier actions.
