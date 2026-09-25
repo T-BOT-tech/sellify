@@ -6492,14 +6492,21 @@ export async function getOrCreateUserByTelegram(telegramUserId, displayName = ''
 
 export async function listTenantMemberships(chatId) {
   ensureDatabase();
-  return db.prepare(`
+  const memberships = db.prepare(`
     SELECT m.id, m.user_id, m.chat_id, m.role, m.status, u.display_name
     FROM memberships m JOIN users u ON u.id = m.user_id
     WHERE m.chat_id = ? AND m.status = 'active'
     ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'manager' THEN 1 ELSE 2 END, u.display_name
-  `).all(String(chatId)).map(row => ({
+  `).all(String(chatId));
+  return memberships.map(row => ({
     id: row.id, userId: row.user_id, chatId: row.chat_id, role: row.role, status: row.status,
     displayName: row.display_name,
+    contextualRoles: db.prepare(`
+      SELECT role_id AS role, scope_type AS scopeType, scope_id AS scopeId
+        FROM membership_roles
+       WHERE membership_id = ? AND status = 'active'
+       ORDER BY created_at
+    `).all(String(row.id)),
   }));
 }
 
