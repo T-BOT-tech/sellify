@@ -77,6 +77,8 @@ jobs:
         run: npm run test:gap-2-delivery-assignment
       - name: GAP-2 delivery assignment lifecycle regression
         run: npm run test:gap-2-delivery-lifecycle
+      - name: GAP-2 delivery exception resolution regression
+        run: npm run test:gap-2-delivery-exception
       - name: GAP-2 dispatch workload regression
         run: npm run test:gap-2-dispatch-workload
       - name: GAP-2 delivery frontend contract regression
