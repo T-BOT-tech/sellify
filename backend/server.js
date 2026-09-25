@@ -121,7 +121,7 @@ import {
   listQuotes, getQuote, createQuote, transitionQuote,
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, createPurchaseOrderFromProcurementAward, transitionPurchaseOrder,
   getProcurementReceipt, listProcurementReceipts, createProcurementReceipt,
-  assignDeliveryCourier, getDeliveryAssignment, assertCourierOwnsDelivery,
+  assignDeliveryCourier, getDeliveryAssignment, assertCourierOwnsDelivery, transitionDeliveryAssignment,
   listCreditTerms, getCreditTerms, createCreditTerms, updateCreditTerms, transitionCreditTerms,
   listReceivables, getReceivable, createReceivable, transitionReceivable, allocatePaymentToReceivable, listReceivableLedger,
   listInvoices, getInvoice, createInvoice, transitionInvoice,
@@ -2370,10 +2370,34 @@ async function handleDeliveryAssignment(req, res, chatId, serverOrderId) {
     const assignment = await getDeliveryAssignment(chatId, serverOrderId, session);
     return sendJSON(res, 200, { assignment }, req);
   }
+
   const body = await readBody(req);
+  const location = body.locationId || body.location_id || session.locationId || null;
+  if (req.method === 'PATCH') {
+    const action = String(body.action || body.status || '').trim().toUpperCase();
+    const courierActor = Array.isArray(session.roles) && session.roles.includes('logistics_courier') || session.role === 'logistics_courier';
+    const courierActions = new Set(['ACCEPTED','OUT_FOR_DELIVERY','DELIVERED']);
+    if (courierActor && courierActions.has(action)) {
+      await requireAuthorization(session, tenant, 'logistics', 'logistics:deliveries:update_assigned', {
+        location, deniedMessage: 'Assigned delivery update permission required',
+      });
+      await assertCourierOwnsDelivery(chatId, serverOrderId, session);
+    } else {
+      const permission = action === 'REASSIGNED' || action === 'CANCELLED' || action === 'FAILED'
+        ? 'logistics:deliveries:reassign'
+        : 'logistics:deliveries:update_assigned';
+      await requireAuthorization(session, tenant, 'logistics', permission, {
+        location, deniedMessage: 'Delivery lifecycle permission required',
+      });
+    }
+    const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
+    if (!idempotencyKey) return sendJSON(res, 400, { error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' } }, req);
+    const assignment = await transitionDeliveryAssignment(chatId, serverOrderId, action, session, { ...body, locationId: location, idempotencyKey });
+    return sendJSON(res, 200, { assignment }, req);
+  }
+
   await requireAuthorization(session, tenant, 'logistics', 'logistics:deliveries:assign', {
-    location: body.locationId || body.location_id || session.locationId || null,
-    deniedMessage: 'Delivery assignment permission required',
+    location, deniedMessage: 'Delivery assignment permission required',
   });
   const assignment = await assignDeliveryCourier(chatId, serverOrderId, body.courierUserId || body.courier_user_id, session, body);
   return sendJSON(res, 200, { assignment }, req);
@@ -2453,6 +2477,7 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/orders\/([^/]+)$/, handler: (req, res, m) => handleOrdersFeed(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleOrderFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleOrderFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/catalog\/([^/]+)$/, handler: (req, res, m) => handleCatalogGet(req, res, decodeURIComponent(m[1])) },
