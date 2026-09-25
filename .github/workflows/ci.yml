@@ -71,3 +71,5 @@ jobs:
         run: npm run test:fux-56
       - name: FUX-57 canonical business location management authority regression
         run: npm run test:fux-57
+      - name: GAP-2 logistics authorization foundation regression
+        run: npm run test:gap-2-logistics-authz
