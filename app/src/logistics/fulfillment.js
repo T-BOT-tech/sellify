@@ -19,6 +19,60 @@ import { t } from '../ui/i18n.js';
 import { showToast } from '../ui/toast.js';
 import { renderLogistics } from './ui.js';
 
+export let deliveryAssignments = [];
+export function canonicalDeliveryAssignment(order) {
+  if (!order?.server_order_id) return null;
+  return deliveryAssignments.find(a => String(a.server_order_id) === String(order.server_order_id)) || null;
+}
+
+function deliveryAssignmentsEndpoint() {
+  return `/tenants/${encodeURIComponent(config.chatId)}/delivery-assignments`;
+}
+
+export async function refreshDeliveryAssignments() {
+  if (!config.chatId || !config.sessionToken || (typeof navigator !== 'undefined' && !navigator.onLine)) return deliveryAssignments;
+  try {
+    const response = await fetch(
+      `${(config.syncUrl || window.location.origin).replace(/\/$/, '')}${deliveryAssignmentsEndpoint()}`,
+      { headers: { ...authHeaders() } },
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return deliveryAssignments;
+    deliveryAssignments = Array.isArray(data.assignments) ? data.assignments : [];
+    renderLogistics();
+  } catch {
+    // Keep the last canonical projection until the next successful refresh.
+  }
+  return deliveryAssignments;
+}
+
+export async function transitionDeliveryAssignmentForOrder(order, action, input = {}) {
+  if (!order?.server_order_id || !config.chatId || !config.sessionToken) return null;
+  const idempotencyKey = String(input.idempotencyKey || `delivery:${order.server_order_id}:${String(action).toUpperCase()}`);
+  const endpoint = `${(config.syncUrl || window.location.origin).replace(/\/$/, '')}/tenants/${encodeURIComponent(config.chatId)}/orders/${encodeURIComponent(order.server_order_id)}/delivery-assignment`;
+  const response = await fetch(endpoint, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify({ action: String(action).toUpperCase(), ...input, idempotencyKey }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data?.error?.message || `Delivery assignment request failed (${response.status})`);
+    error.status = response.status;
+    error.code = data?.error?.code;
+    throw error;
+  }
+  const assignment = data?.assignment || null;
+  if (assignment) {
+    deliveryAssignments = [
+      ...deliveryAssignments.filter(a => String(a.id) !== String(assignment.id) && String(a.server_order_id) !== String(order.server_order_id)),
+      assignment,
+    ];
+    renderLogistics();
+  }
+  return assignment;
+}
+
 export let selectedFulfillmentType = null;
 export function setSelectedFulfillmentType(next) { selectedFulfillmentType = next; }
 
@@ -141,6 +195,7 @@ export async function reconcileQueuedFulfillments() {
   }
   saveJSON(STORAGE_KEYS.orders, orders);
   renderLogistics();
+  refreshDeliveryAssignments();
 }
 
 export async function advanceFulfillmentOrder(orderId) {
