@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const fulfillment=fs.readFileSync(new URL('../app/src/logistics/fulfillment.js',import.meta.url),'utf8');
+const ui=fs.readFileSync(new URL('../app/src/logistics/ui.js',import.meta.url),'utf8');
+const main=fs.readFileSync(new URL('../app/src/main.js',import.meta.url),'utf8');
+assert.match(fulfillment,/refreshDeliveryAssignments/);
+assert.match(fulfillment,/delivery-assignments/);
+assert.match(fulfillment,/method: 'PATCH'/);
+assert.match(fulfillment,/Idempotency-Key/);
+assert.match(ui,/canonicalDeliveryAssignment/);
+assert.match(ui,/assignment\.courier_name/);
+assert.match(main,/transitionDeliveryAssignmentForOrder/);
+console.log('GAP-2 Delivery Frontend Contract Regression: PASS');
