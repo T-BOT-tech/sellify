@@ -261,7 +261,7 @@ export {
   renderVolumeDiscountSettings, addVolumeDiscountTier, removeVolumeDiscountTier, onVolumeDiscountToggle,
   isWarehouseEnabled, isStockTracked, getLowStockProducts, getOutOfStockProducts,
   saveStockTransactions, applyStockChange, saveWarehouseLocations, addWarehouseLocation,
-  removeWarehouseLocation, loadOrganizationLocations, selectOrganizationLocation, applyWarehouseUI, switchWarehouseSubtab, renderWarehouseInventory,
+  removeWarehouseLocation, loadOrganizationLocations, selectOrganizationLocation, openOrganizationLocationModal, closeOrganizationLocationModal, saveOrganizationLocationModal, applyWarehouseUI, switchWarehouseSubtab, renderWarehouseInventory,
   renderWarehouseReceiving, renderWarehouseTransactions, txItemMarkup, renderWarehouseLocationsList,
   warehouseProductOptions, selectWarehouseLocation, openStockAdjustModal, onStockAdjustProductChange, closeStockAdjustModal,
   saveStockAdjustModal, openReceiveModal, closeReceiveModal, saveReceiveModal, onWarehouseToggle,
