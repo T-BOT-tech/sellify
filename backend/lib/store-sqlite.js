@@ -2056,6 +2056,31 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(42, nowIso());
   }
 
+  // GAP-2 — canonical delivery assignment authority.
+  if (!applied.includes(43)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS delivery_assignments (
+        id TEXT PRIMARY KEY,
+        fulfillment_id TEXT NOT NULL REFERENCES fulfillments(id) ON DELETE CASCADE,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        location_id TEXT REFERENCES locations(id) ON DELETE SET NULL,
+        courier_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        status TEXT NOT NULL DEFAULT 'ASSIGNED' CHECK (status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY','DELIVERED','REASSIGNED','CANCELLED','FAILED')),
+        assignment_key TEXT NOT NULL UNIQUE,
+        assigned_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        assigned_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+        UNIQUE(fulfillment_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_delivery_assignments_courier
+        ON delivery_assignments(courier_user_id,status,updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_delivery_assignments_org
+        ON delivery_assignments(organization_id,status,updated_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(43, nowIso());
+  }
+
   // FUX-2 Section 6 — additive multi-role compatibility bridge.
   // memberships.role remains the legacy/default role authority while
   // membership_roles provides an additive path for multiple contextual roles.
@@ -5394,6 +5419,84 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
     movements.push(inventoryMovementFromRow(db.prepare('SELECT * FROM inventory_movements WHERE id = ?').get(id)));
   }
   return movements;
+}
+
+export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId, actor = null, input = {}) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organization_id) throw Object.assign(new Error('Order organization is required'), { statusCode: 409 });
+  const order = await getCoreFulfillmentOrder(String(chatId), String(serverOrderId));
+  const organizationId = String(order.tenant_organization_id || '');
+  if (organizationId !== String(tenant.organization_id)) throw Object.assign(new Error('Order organization mismatch'), { statusCode: 403 });
+  const courier = db.prepare(`
+    SELECT m.user_id, mr.role_id, mr.scope_type, mr.scope_id
+    FROM memberships m
+    JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
+    WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
+      AND mr.role_id = 'logistics_courier'
+  `).get(String(courierUserId), String(chatId));
+  if (!courier) throw Object.assign(new Error('Courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
+  const scopeId = courier.scope_type === 'LOCATION' ? String(courier.scope_id || '') : null;
+  const locationId = input.locationId || input.location_id || order.location_id || null;
+  if (scopeId && String(locationId || '') !== scopeId) throw Object.assign(new Error('Courier role is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
+  const type = normalizeCoreFulfillmentType(order.fulfillment_type || 'delivery');
+  if (type !== 'delivery') throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
+  const actorUserId = actor?.userId ? String(actor.userId) : null;
+  const fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), organizationId);
+  if (!fulfillment) throw Object.assign(new Error('Fulfillment must exist before courier assignment'), { statusCode: 409, code: 'FULFILLMENT_REQUIRED' });
+  const key = String(input.assignmentKey || input.assignment_key || `courier:${serverOrderId}:${courierUserId}`).trim();
+  if (!key) throw Object.assign(new Error('Assignment key is required'), { statusCode: 400 });
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const existing = db.prepare('SELECT * FROM delivery_assignments WHERE fulfillment_id = ?').get(fulfillment.id);
+    if (existing) {
+      if (existing.courier_user_id !== String(courierUserId)) throw Object.assign(new Error('Delivery is already assigned to another courier'), { statusCode: 409, code: 'ASSIGNMENT_CONFLICT' });
+      db.exec('COMMIT');
+      return existing;
+    }
+    const now = nowIso();
+    const id = crypto.randomUUID();
+    db.prepare(`
+      INSERT INTO delivery_assignments
+        (id,fulfillment_id,organization_id,location_id,courier_user_id,status,assignment_key,assigned_by_user_id,assigned_at,updated_at,version)
+      VALUES (?,?,?,?,?,'ASSIGNED',?,?,?,?,1)
+    `).run(id, fulfillment.id, organizationId, locationId ? String(locationId) : null, String(courierUserId), key, actorUserId, now, now);
+    const row = db.prepare('SELECT * FROM delivery_assignments WHERE id = ?').get(id);
+    audit(String(chatId), 'delivery.assignment.created', 'delivery_assignment', id, {
+      orderId: String(serverOrderId), courierUserId: String(courierUserId), locationId: locationId ? String(locationId) : null,
+    }, { organizationId, locationId: locationId ? String(locationId) : null, actorId: actorUserId });
+    db.exec('COMMIT');
+    return row;
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
+export async function getDeliveryAssignment(chatId, serverOrderId, actor = null) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organization_id) return null;
+  const row = db.prepare(`
+    SELECT da.*
+    FROM delivery_assignments da
+    JOIN fulfillments f ON f.id = da.fulfillment_id
+    WHERE f.server_order_id = ? AND da.organization_id = ?
+  `).get(String(serverOrderId), String(tenant.organization_id));
+  if (!row) return null;
+  if (actor?.userId && String(actor.userId) === String(row.courier_user_id)) return row;
+  return row;
+}
+
+export async function assertCourierOwnsDelivery(chatId, serverOrderId, actor) {
+  const assignment = await getDeliveryAssignment(chatId, serverOrderId, actor);
+  if (!assignment || String(assignment.courier_user_id) !== String(actor?.userId || '')) {
+    throw Object.assign(new Error('Courier is not assigned to this delivery'), { statusCode: 403, code: 'COURIER_ASSIGNMENT_REQUIRED' });
+  }
+  if (['CANCELLED','FAILED','REASSIGNED'].includes(String(assignment.status))) {
+    throw Object.assign(new Error('Courier assignment is no longer active'), { statusCode: 403, code: 'COURIER_ASSIGNMENT_INACTIVE' });
+  }
+  return assignment;
 }
 
 export async function transitionOrderFulfillment(chatId, serverOrderId, nextStatus, actor = null, input = {}) {
