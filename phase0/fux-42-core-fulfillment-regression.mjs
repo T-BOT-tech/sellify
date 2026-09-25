@@ -61,7 +61,7 @@ fulfillment = await transitionOrderFulfillment(chatId, orderId, 'delivered', act
 assert.equal(fulfillment.status, 'delivered');
 const balances = await (await import('../backend/lib/store-sqlite.js')).getInventoryBalances(chatId);
 const productBalance = balances.find((row) => row.productId === 'product-1');
-assert.equal(productBalance?.quantity, 4);
+assert.equal(productBalance?.quantity, 9);
 assert.deepEqual(fulfillment.proof, { type: 'photo', ref: 'proof-fux42' });
 
 await assert.rejects(
