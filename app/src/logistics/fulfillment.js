@@ -57,11 +57,11 @@ export async function assignDeliveryCourierForOrder(order, courierUserId, input 
   }
   return assignment;
 }
-export async function refreshDeliveryAssignments() {
+export async function refreshDeliveryAssignments(filters = {}) {
   if (!config.chatId || !config.sessionToken || (typeof navigator !== 'undefined' && !navigator.onLine)) return deliveryAssignments;
   try {
     const response = await fetch(
-      `${(config.syncUrl || window.location.origin).replace(/\/$/, '')}${deliveryAssignmentsEndpoint()}`,
+      `${(config.syncUrl || window.location.origin).replace(/\/$/, '')}${deliveryAssignmentsEndpoint()}${(() => { const p = new URLSearchParams(); if (filters.status) p.set('status', filters.status); if (filters.locationId) p.set('locationId', filters.locationId); if (filters.courierUserId) p.set('courierUserId', filters.courierUserId); const q = p.toString(); return q ? `?${q}` : ''; })()}`,
       { headers: { ...authHeaders() } },
     );
     const data = await response.json().catch(() => ({}));
