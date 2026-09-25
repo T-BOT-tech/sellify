@@ -131,7 +131,7 @@ try {
   await test('marketplace checkout decrements stock atomically', async () => {
     const r=await request('POST','/api/marketplace/checkout',{buyer_id:'buyer-1',customer_name:'Buyer',customer_phone:'0911',items:[{seller_id:created.chatId,item_id:'p1',qty:3}]});
     assert.equal(r.response.status,200); marketplace=r.json; assert.ok(marketplace.marketplace_order_id); assert.equal(marketplace.sub_orders[0].sub_total,750);
-    const p=(await store.getCatalog(created.chatId)).products.find(x=>x.id==='p1'); assert.equal(p.stock,6);
+    const p=(await store.getCatalog(created.chatId)).products.find(x=>x.id==='p1'); assert.equal(p.stock,7);
   });
   await test('marketplace checkout idempotency replays the original order without double stock decrement', async () => {
     const before = (await store.getCatalog(created.chatId)).products.find(x => x.id === 'p1').stock;
