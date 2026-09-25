@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const store=fs.readFileSync(new URL('../backend/lib/store-sqlite.js',import.meta.url),'utf8');
+const server=fs.readFileSync(new URL('../backend/server.js',import.meta.url),'utf8');
+assert.match(store,/export async function listDeliveryAssignments/);
+assert.match(store,/da\.organization_id = \?/);
+assert.match(store,/da\.courier_user_id = \?/);
+assert.match(store,/da\.status IN \('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY'\)/);
+assert.match(store,/LIMIT 200/);
+assert.match(server,/delivery-assignments\$\//);
+assert.match(server,/listDeliveryAssignments\(chatId, session/);
+assert.match(server,/logistics:deliveries:view/);
+console.log('GAP-2 Dispatch Workload Regression: PASS');
