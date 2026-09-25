@@ -226,7 +226,8 @@ import {
 } from './warehouse/ui.js';
 import {
   isLogisticsEnabled, nextFulfillmentStatus, isFulfillmentFinal, fulfillmentStatusLabel,
-  advanceFulfillmentOrder, selectedFulfillmentType, setSelectedFulfillmentType
+  advanceFulfillmentOrder, selectedFulfillmentType, setSelectedFulfillmentType, deliveryAssignments,
+  canonicalDeliveryAssignment, refreshDeliveryAssignments, transitionDeliveryAssignmentForOrder
 } from './logistics/fulfillment.js';
 import {
   applyLogisticsUI, renderOrderFulfillmentPicker, setFulfillmentType, renderLogistics
