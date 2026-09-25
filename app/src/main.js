@@ -217,7 +217,7 @@ import {
   isWarehouseEnabled, isStockTracked, getLowStockProducts, getOutOfStockProducts,
   saveStockTransactions, applyStockChange
 } from './warehouse/inventory.js';
-import { saveWarehouseLocations, addWarehouseLocation, removeWarehouseLocation, loadOrganizationLocations, selectOrganizationLocation } from './warehouse/locations.js';
+import { saveWarehouseLocations, addWarehouseLocation, removeWarehouseLocation, loadOrganizationLocations, selectOrganizationLocation, openOrganizationLocationModal, closeOrganizationLocationModal, saveOrganizationLocationModal } from './warehouse/locations.js';
 import {
   applyWarehouseUI, switchWarehouseSubtab, warehouseActiveSubtab, renderWarehouseInventory,
   renderWarehouseReceiving, renderWarehouseTransactions, txItemMarkup, renderWarehouseLocationsList,
