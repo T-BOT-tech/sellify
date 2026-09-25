@@ -63,9 +63,42 @@ export function setFulfillmentType(type) {
   renderOrderFulfillmentPicker();
 }
 
+function renderDeliveryWorkloadSummary(assignments) {
+  const active = (Array.isArray(assignments) ? assignments : []).filter(a =>
+    !['CANCELLED', 'FAILED', 'REASSIGNED'].includes(String(a.status || '').toUpperCase())
+  );
+  const counts = active.reduce((acc, a) => {
+    const key = String(a.status || 'ASSIGNED').toUpperCase();
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const byCourier = active.reduce((acc, a) => {
+    const key = String(a.courier_name || a.courier_user_id || 'Unassigned');
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const statusSummary = ['ASSIGNED', 'ACCEPTED', 'OUT_FOR_DELIVERY']
+    .filter(status => counts[status])
+    .map(status => `${status.replaceAll('_', ' ')}: ${counts[status]}`)
+    .join(' · ');
+  const courierSummary = Object.entries(byCourier)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([name, count]) => `${escapeHtml(name)}: ${count}`)
+    .join(' · ');
+  if (!active.length) return '';
+  return `
+    <div class="logistics-meta" style="margin-bottom:10px;padding:8px 10px;">
+      <strong>Delivery workload</strong>
+      ${statusSummary ? `<span style="margin-left:8px;">${escapeHtml(statusSummary)}</span>` : ''}
+      ${courierSummary ? `<div style="margin-top:4px;">By courier: ${courierSummary}</div>` : ''}
+    </div>`;
+}
+
 export function renderLogistics() {
   const list = document.getElementById('logisticsList');
   if (!list) return;
+  const canonicalAssignments = Array.isArray(window.__sellifyDeliveryAssignments) ? window.__sellifyDeliveryAssignments : [];
   const pending = orders.filter(o => o.fulfillment_type && !isFulfillmentFinal(o.fulfillment_status));
   const done = orders.filter(o => o.fulfillment_type && isFulfillmentFinal(o.fulfillment_status)).slice(0, 20);
 
@@ -123,7 +156,7 @@ export function renderLogistics() {
       </div>`;
   };
 
-  let html = '';
+  let html = renderDeliveryWorkloadSummary(canonicalAssignments);
   if (pending.length > 0) {
     html += `<div class="settings-section-label">${t('whPendingFulfillment')}</div>` + pending.map(renderCard).join('');
   }
