@@ -143,7 +143,15 @@ export function renderLogistics() {
           const select = list.querySelector(`.delivery-courier-select[data-order-id="${CSS.escape(assignBtn.dataset.orderId)}"]`);
           if (!order || !select?.value) return;
           assignBtn.disabled = true;
-          await assignDeliveryCourierForOrder(order, select.value);
+          const currentAssignment = canonicalDeliveryAssignment(order);
+          if (currentAssignment) {
+            await transitionDeliveryAssignmentForOrder(order, 'REASSIGNED', {
+              targetCourierUserId: select.value,
+              idempotencyKey: `delivery:${order.server_order_id}:reassign:${select.value}`,
+            });
+          } else {
+            await assignDeliveryCourierForOrder(order, select.value);
+          }
         } else if (actionBtn) {
           const order = orders.find(o => String(o.id) === String(actionBtn.dataset.orderId));
           if (!order) return;
