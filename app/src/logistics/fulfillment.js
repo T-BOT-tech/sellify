@@ -29,6 +29,34 @@ function deliveryAssignmentsEndpoint() {
   return `/tenants/${encodeURIComponent(config.chatId)}/delivery-assignments`;
 }
 
+export async function listLogisticsStaff() {
+  if (!config.chatId || !config.sessionToken) return [];
+  const response = await fetch(
+    `${(config.syncUrl || window.location.origin).replace(/\/$/, '')}/tenants/${encodeURIComponent(config.chatId)}/memberships`,
+    { headers: { ...authHeaders() } },
+  );
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error?.message || `Membership request failed (${response.status})`);
+  return Array.isArray(data.memberships) ? data.memberships : [];
+}
+
+export async function assignDeliveryCourierForOrder(order, courierUserId, input = {}) {
+  if (!order?.server_order_id || !config.chatId || !config.sessionToken || !courierUserId) return null;
+  const endpoint = `${(config.syncUrl || window.location.origin).replace(/\/$/, '')}/tenants/${encodeURIComponent(config.chatId)}/orders/${encodeURIComponent(order.server_order_id)}/delivery-assignment`;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ courierUserId: String(courierUserId), locationId: input.locationId || config.locationId || null }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error?.message || `Courier assignment failed (${response.status})`);
+  const assignment = data?.assignment || null;
+  if (assignment) {
+    deliveryAssignments = [...deliveryAssignments.filter(a => String(a.server_order_id) !== String(order.server_order_id)), assignment];
+    renderLogistics();
+  }
+  return assignment;
+}
 export async function refreshDeliveryAssignments() {
   if (!config.chatId || !config.sessionToken || (typeof navigator !== 'undefined' && !navigator.onLine)) return deliveryAssignments;
   try {
