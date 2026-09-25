@@ -69,3 +69,5 @@ jobs:
         run: npm run test:fux-55
       - name: FUX-56 B2B customer pricing authority regression
         run: npm run test:fux-56
+      - name: FUX-57 canonical business location management authority regression
+        run: npm run test:fux-57
