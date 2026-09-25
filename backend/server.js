@@ -121,7 +121,7 @@ import {
   listQuotes, getQuote, createQuote, transitionQuote,
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, createPurchaseOrderFromProcurementAward, transitionPurchaseOrder,
   getProcurementReceipt, listProcurementReceipts, createProcurementReceipt,
-  assignDeliveryCourier, getDeliveryAssignment, assertCourierOwnsDelivery, transitionDeliveryAssignment,
+  assignDeliveryCourier, getDeliveryAssignment, listDeliveryAssignments, assertCourierOwnsDelivery, transitionDeliveryAssignment,
   listCreditTerms, getCreditTerms, createCreditTerms, updateCreditTerms, transitionCreditTerms,
   listReceivables, getReceivable, createReceivable, transitionReceivable, allocatePaymentToReceivable, listReceivableLedger,
   listInvoices, getInvoice, createInvoice, transitionInvoice,
@@ -2359,6 +2359,24 @@ async function handlePackLifecycle(req, res, chatId, packId) {
 }
 
 
+async function handleDeliveryAssignmentsList(req, res, chatId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, chatId);
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const locationId = String(url.searchParams.get('locationId') || '').trim() || null;
+  await requireAuthorization(session, tenant, 'logistics', 'logistics:deliveries:view', {
+    location: locationId || session.locationId || null,
+    deniedMessage: 'Logistics delivery view permission required',
+  });
+  const assignments = await listDeliveryAssignments(chatId, session, {
+    locationId,
+    status: url.searchParams.get('status'),
+    courierUserId: url.searchParams.get('courierUserId'),
+  });
+  return sendJSON(res, 200, { assignments }, req);
+}
+
 async function handleDeliveryAssignment(req, res, chatId, serverOrderId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -2478,6 +2496,7 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleOrderFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/delivery-assignments$/, handler: (req, res, m) => handleDeliveryAssignmentsList(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleOrderFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/catalog\/([^/]+)$/, handler: (req, res, m) => handleCatalogGet(req, res, decodeURIComponent(m[1])) },
