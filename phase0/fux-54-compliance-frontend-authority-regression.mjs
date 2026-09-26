@@ -8,6 +8,8 @@ const html = fs.readFileSync('app/index.html', 'utf8');
 
 assert(ui.includes('/compliance/requests'), 'Compliance UI must use canonical compliance request API');
 assert(ui.includes('/compliance/export/'), 'Compliance UI must use canonical export API');
+assert(ui.includes('/compliance/retention'), 'Compliance UI must use canonical retention API');
+assert(ui.includes('complianceRetentionDays'), 'Compliance UI must expose retention policy control');
 assert(ui.includes('compliance:manage'), 'Compliance UI must enforce the canonical permission vocabulary');
 assert(ui.includes('method: \'POST\''), 'Compliance UI must support creating compliance requests');
 assert(ui.includes('method: \'PATCH\''), 'Compliance UI must resolve requests through the backend');
