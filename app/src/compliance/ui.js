@@ -23,11 +23,35 @@ export async function renderCompliancePanel() {
     panel.innerHTML = '';
     return;
   }
-  panel.innerHTML = '<div class="settings-section-label">Compliance</div><div class="hint">Privacy requests, retention policy, and audited data exports are handled by the canonical backend.</div><div id="complianceStatus" class="hint">Loading…</div><div id="complianceRequests"></div><div style="display:flex;gap:8px;margin-top:8px;"><button type="button" class="btn-secondary" id="complianceNewRequest">New customer deletion request</button><button type="button" class="btn-secondary" id="complianceRefresh">Refresh</button><button type="button" class="btn-secondary" id="complianceExport">Export organization data</button></div>';
+  panel.innerHTML = '<div class="settings-section-label">Compliance</div><div class="hint">Privacy requests, retention policy, and audited data exports are handled by the canonical backend.</div><div id="complianceStatus" class="hint">Loading…</div><div id="complianceRequests"></div><div style="display:flex;gap:8px;align-items:center;margin-top:10px;"><label>Audit retention days <input id="complianceRetentionDays" type="number" min="1" max="3650" style="width:110px;"></label><button type="button" class="btn-secondary" id="complianceRetentionSave">Save retention</button></div><div style="display:flex;gap:8px;margin-top:8px;"><button type="button" class="btn-secondary" id="complianceNewRequest">New customer deletion request</button><button type="button" class="btn-secondary" id="complianceRefresh">Refresh</button><button type="button" class="btn-secondary" id="complianceExport">Export organization data</button></div>';
   document.getElementById('complianceRefresh').onclick = () => loadComplianceRequests();
   document.getElementById('complianceNewRequest').onclick = () => createComplianceRequest().catch(showComplianceError);
   document.getElementById('complianceExport').onclick = () => exportCompliance('organization').catch(showComplianceError);
+  document.getElementById('complianceRetentionSave').onclick = () => saveRetentionPolicy().catch(showComplianceError);
   await loadComplianceRequests();
+  await loadRetentionPolicy();
+}
+
+async function loadRetentionPolicy() {
+  const input = document.getElementById('complianceRetentionDays');
+  if (!input || !allowed()) return;
+  try {
+    const data = await request(`/tenants/${encodeURIComponent(config.chatId)}/compliance/retention`);
+    input.value = Number(data?.policy?.retentionDays || 365);
+  } catch (error) { showComplianceError(error); }
+}
+
+async function saveRetentionPolicy() {
+  const input = document.getElementById('complianceRetentionDays');
+  if (!input || !allowed()) return;
+  const retentionDays = Math.max(1, Math.min(3650, Number(input.value || 365)));
+  await request(`/tenants/${encodeURIComponent(config.chatId)}/compliance/retention`, {
+    method: 'PATCH',
+    body: JSON.stringify({ retentionDays }),
+  });
+  input.value = retentionDays;
+  const status = document.getElementById('complianceStatus');
+  if (status) status.textContent = 'Audit retention policy saved.';
 }
 
 async function createComplianceRequest() {
