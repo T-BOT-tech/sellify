@@ -21,7 +21,7 @@ const PERMISSIONS = {
     'orders:create', 'orders:view', 'orders:delete', 'payments:accept',
     'payments:view_proof', 'inventory:add', 'inventory:edit', 'sync:manual',
     'settings:configure', 'paymethods:manage',
-    'tables:manage', 'tables:status', 'kitchen:manage', 'b2b:manage', 'b2b:quotes:view', 'b2b:quotes:manage', 'devices:manage'
+    'tables:manage', 'tables:status', 'kitchen:manage', 'b2b:manage', 'compliance:manage', 'b2b:quotes:view', 'b2b:quotes:manage', 'devices:manage'
   ],
   cashier: ['orders:create', 'orders:view', 'payments:accept', 'tables:status', 'kitchen:manage'],
   staff: ['locations:view'],
