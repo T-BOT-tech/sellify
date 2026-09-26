@@ -5614,6 +5614,8 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
   const organizationId = String(order.tenant_organization_id || '');
   if (organizationId !== String(tenant.organization_id)) throw Object.assign(new Error('Order organization mismatch'), { statusCode: 403 });
   const normalizedAction = String(action || '').trim().toUpperCase();
+  const targetCourierId = String(input.courierUserId || input.courier_user_id || '').trim();
+  const exceptionReason = String(input.reason || input.exceptionReason || input.exception_reason || '').trim().slice(0, 500);
   const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
   if (!commandKey) throw Object.assign(new Error('Idempotency key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
   const existingCommand = db.prepare('SELECT * FROM delivery_assignments WHERE organization_id = ? AND last_command_key = ? ORDER BY updated_at DESC LIMIT 1').get(organizationId, commandKey);
@@ -5650,11 +5652,9 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     OUT_FOR_DELIVERY: new Set(['DELIVERED','CANCELLED','FAILED','REASSIGNED']),
   };
   if (!transitions[current]?.has(normalizedAction)) throw Object.assign(new Error('Cannot move assignment from ' + current + ' to ' + normalizedAction), { statusCode: 409, code: 'INVALID_ASSIGNMENT_TRANSITION' });
-  const exceptionReason = String(input.reason || input.exceptionReason || input.exception_reason || '').trim().slice(0, 500);
   if (['CANCELLED','FAILED'].includes(normalizedAction) && !exceptionReason) throw Object.assign(new Error('A reason is required when cancelling or failing a delivery assignment'), { statusCode: 400, code: 'EXCEPTION_REASON_REQUIRED' });
   if (normalizedAction === 'DELIVERED' && (input.proof == null || (typeof input.proof === 'string' && !input.proof.trim()))) throw Object.assign(new Error('Delivery proof is required before delivery completion'), { statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED' });
 
-  const targetCourierId = String(input.courierUserId || input.courier_user_id || '').trim();
   if (normalizedAction === 'REASSIGNED') {
     if (!targetCourierId || targetCourierId === String(active.courier_user_id)) throw Object.assign(new Error('A different courier is required for reassignment'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
     const courier = db.prepare(`SELECT m.user_id, mr.scope_type, mr.scope_id FROM memberships m JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active' WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active' AND mr.role_id = 'logistics_courier'`).get(targetCourierId, String(chatId));
