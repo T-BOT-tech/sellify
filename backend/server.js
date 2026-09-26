@@ -2405,7 +2405,7 @@ async function handleDeliveryAssignment(req, res, chatId, serverOrderId) {
       });
       await assertCourierOwnsDelivery(chatId, serverOrderId, session);
     } else {
-      const permission = action === 'REASSIGNED' || action === 'CANCELLED' || action === 'FAILED'
+      const permission = action === 'REASSIGNED' || action === 'REASSIGN_EXCEPTION' || action === 'CANCELLED' || action === 'FAILED'
         ? 'logistics:deliveries:reassign'
         : 'logistics:deliveries:update_assigned';
       await requireAuthorization(session, tenant, 'logistics', permission, {
