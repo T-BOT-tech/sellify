@@ -5699,9 +5699,11 @@ export async function resolvePaymentIntentForProviderEvidence(input = {}) {
     const consumed = db.prepare(`
       SELECT e.*
       FROM payment_evidence e
-      WHERE e.organization_id = ? AND e.provider_id = ? AND e.provider_transaction_id = ?
+      WHERE e.organization_id = ? AND e.provider_id = ?
+        AND (e.payment_account_id = ? OR (e.payment_account_id IS NULL AND e.provider_transaction_id = ?))
+        AND e.provider_transaction_id = ?
       LIMIT 1
-    `).get(account.organization_id, providerId, providerTransactionId);
+    `).get(account.organization_id, providerId, account.id, providerTransactionId, providerTransactionId);
     if (consumed) {
       return {
         chatId: account.chat_id,
