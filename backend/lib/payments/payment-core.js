@@ -108,10 +108,13 @@ export class PaymentCore {
     const decision = this.decisionEngine.decide({ verification, invariants, payment });
     const verificationId = crypto.randomUUID();
     const decisionId = crypto.randomUUID();
-    const committedPayment = await this.store.commitPaymentDecision(chatId, {
-      paymentId: payment.id,
-      expectedState: payment.state,
-      targetState: decision.targetState || payment.state,
+    let committedPayment;
+    let committedByAnotherWorker = false;
+    try {
+      committedPayment = await this.store.commitPaymentDecision(chatId, {
+        paymentId: payment.id,
+        expectedState: payment.state,
+        targetState: decision.targetState || payment.state,
       verification: {
         id: verificationId,
         paymentId: payment.id,
@@ -146,8 +149,28 @@ export class PaymentCore {
         reason: decision.reasonCodes.join(',') || 'Payment verification decision',
         entryType: decision.targetState || payment.state,
         metadata: { evidenceId: evidence.id, verificationId, decisionId },
-      },
-    }, command.actor || null);
+        },
+      }, command.actor || null);
+    } catch (error) {
+      if (error?.code !== 'PAYMENT_STATE_CONFLICT') throw error;
+      const concurrentVerifications = await this.store.listPaymentVerifications(chatId, payment.id);
+      const concurrentVerification = concurrentVerifications?.find(item => String(item.evidenceId) === evidence.id);
+      if (!concurrentVerification) throw error;
+      const concurrentDecisions = await this.store.listPaymentDecisions(chatId, payment.id);
+      const concurrentDecision = concurrentDecisions?.find(item => String(item.evidenceId) === evidence.id) || null;
+      committedPayment = await this.store.getPayment(chatId, payment.id);
+      committedByAnotherWorker = true;
+      return {
+        outcome: concurrentDecision?.targetState || concurrentVerification.result,
+        payment: committedPayment,
+        evidence,
+        verification: concurrentVerification,
+        invariants: concurrentDecision?.invariantResults || invariants,
+        decision: concurrentDecision,
+        idempotent: true,
+        concurrent: true,
+      };
+    }
 
     const storedVerification = await this.store.getPaymentVerification(chatId, verificationId);
     const storedDecision = await this.store.getPaymentDecision(chatId, decisionId);
