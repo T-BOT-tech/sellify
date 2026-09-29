@@ -5657,6 +5657,37 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
     if (verification && decisionEvidenceId && decisionEvidenceId !== verificationEvidenceId) throw Object.assign(new Error('Decision evidence does not match committed verification'), { statusCode: 409, code: 'PAYMENT_DECISION_BINDING_CONFLICT' });
     if (input.verification) {
       const v = input.verification;
+      const verificationEvidence = db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(verificationEvidenceId, organizationId);
+      if (!verificationEvidence) throw Object.assign(new Error('Verification evidence not found in organization scope'), { statusCode: 404, code: 'EVIDENCE_NOT_FOUND' });
+      const verificationIntentId = String(v.paymentIntentId || v.payment_intent_id || row.payment_intent_id || '').trim() || null;
+      if (verificationIntentId !== String(verificationEvidence.payment_intent_id || '').trim() || String(verificationEvidence.payment_intent_id || '').trim() !== String(row.payment_intent_id || '').trim()) {
+        throw Object.assign(new Error('Verification payment intent does not match stored evidence/payment'), { statusCode: 409, code: 'PAYMENT_VERIFICATION_BINDING_CONFLICT' });
+      }
+      const verificationProviderId = String(v.providerId || v.provider_id || row.provider_id || '').trim().toLowerCase();
+      if (verificationProviderId !== String(verificationEvidence.provider_id || '').trim().toLowerCase()) {
+        throw Object.assign(new Error('Verification provider does not match stored evidence'), { statusCode: 409, code: 'PAYMENT_VERIFICATION_BINDING_CONFLICT' });
+      }
+      const normalizedEvidence = verificationEvidence.normalized_payload_json ? JSON.parse(verificationEvidence.normalized_payload_json) : {};
+      const expectedAmount = Number.isInteger(normalizedEvidence.amountMinor) ? normalizedEvidence.amountMinor : null;
+      const expectedCurrency = String(normalizedEvidence.currency || '').trim().toUpperCase() || null;
+      const expectedReceiver = String(normalizedEvidence.receiver || '').trim() || null;
+      const expectedReference = String(normalizedEvidence.merchantReference || normalizedEvidence.externalReference || verificationEvidence.external_reference || '').trim() || null;
+      const expectedTransaction = String(normalizedEvidence.providerTransactionId || verificationEvidence.provider_transaction_id || '').trim() || null;
+      const observedAmount = v.observedAmountMinor ?? v.observed_amount_minor ?? null;
+      const observedCurrency = String(v.observedCurrency || v.observed_currency || '').trim().toUpperCase() || null;
+      const observedReceiver = String(v.observedReceiver || v.observed_receiver || '').trim() || null;
+      const observedReference = String(v.observedReference || v.observed_reference || '').trim() || null;
+      const observedTransaction = String(v.observedTransactionId || v.observed_transaction_id || '').trim() || null;
+      const bindingMismatch = (expectedAmount !== null && Number(observedAmount) !== expectedAmount)
+        || (expectedCurrency !== null && observedCurrency !== expectedCurrency)
+        || (expectedReceiver !== null && observedReceiver !== expectedReceiver)
+        || (expectedReference !== null && observedReference !== expectedReference)
+        || (expectedTransaction !== null && observedTransaction !== expectedTransaction);
+      if (bindingMismatch) throw Object.assign(new Error('Verification observations contradict stored evidence'), { statusCode: 409, code: 'PAYMENT_VERIFICATION_EVIDENCE_CONFLICT' });
+      if (verificationEvidence.payment_account_id && input.paymentAccountId && String(input.paymentAccountId) !== String(verificationEvidence.payment_account_id)) {
+        throw Object.assign(new Error('Verification payment account does not match stored evidence'), { statusCode: 409, code: 'PAYMENT_VERIFICATION_BINDING_CONFLICT' });
+      }
+
       db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
         verificationId, organizationId, paymentId, v.paymentIntentId || v.payment_intent_id || row.payment_intent_id || null, v.evidenceId || v.evidence_id || null,
         v.providerId || v.provider_id || row.provider_id, String(v.result || '').toUpperCase(), v.confidence == null ? null : Number(v.confidence),
