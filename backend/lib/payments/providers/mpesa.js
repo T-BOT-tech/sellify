@@ -1,4 +1,12 @@
+import crypto from 'node:crypto';
 import { EvidenceParseError, normalizeParsedEvidence } from '../evidence-parser.js';
+
+function timingSafeEqual(a, b) {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
 
 function first(...values) {
   return values.find(v => v !== undefined && v !== null && String(v).trim() !== '') ?? null;
@@ -22,6 +30,7 @@ export const mpesaProvider = Object.freeze({
     getMetadata: true,
     validateAccount: true,
     parseEvidence: true,
+    authenticateNotification: true,
     verify: false,
     initiate: false,
     getStatus: false,
@@ -35,6 +44,23 @@ export const mpesaProvider = Object.freeze({
     version: '1',
     channelTypes: ['c2b-callback', 'api', 'manual'],
   }),
+
+  authenticateNotification: async input => {
+    const headers = input?.headers || {};
+    const expectedToken = String(input?.expectedToken || process.env.MPESA_NOTIFICATION_TOKEN || '').trim();
+    if (!expectedToken) {
+      throw Object.assign(new Error('M-Pesa notification authentication is not configured'), {
+        code: 'PAYMENT_PROVIDER_AUTH_NOT_CONFIGURED', statusCode: 503, providerId: 'mpesa'
+      });
+    }
+    const supplied = String(headers['x-mpesa-notification-token'] || headers['x-notification-token'] || input?.token || '').trim();
+    if (!supplied || supplied.length !== expectedToken.length || !timingSafeEqual(supplied, expectedToken)) {
+      throw Object.assign(new Error('M-Pesa notification authentication failed'), {
+        code: 'PAYMENT_NOTIFICATION_UNAUTHORIZED', statusCode: 401, providerId: 'mpesa'
+      });
+    }
+    return Object.freeze({ authenticated: true, providerId: 'mpesa', method: 'shared-secret' });
+  },
 
   validateAccount: async account => ({
     valid: Boolean(first(account?.accountIdentifier, account?.shortCode, account?.phone)),
