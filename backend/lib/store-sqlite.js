@@ -5364,13 +5364,29 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
   const fingerprint = String(input.fingerprint || hashPaymentRequest({ providerId, channel, evidenceType, externalReference: input.externalReference || input.external_reference || null, providerTransactionId: input.providerTransactionId || input.provider_transaction_id || null, normalizedPayload, rawPayload })).trim();
   if (!fingerprint) throw Object.assign(new Error('Evidence fingerprint is required'), { statusCode: 400, code: 'EVIDENCE_FINGERPRINT_REQUIRED' });
   const paymentAccountId = input.paymentAccountId || input.payment_account_id || intent?.payment_account_id || null;
+  const providerTransactionId = String(input.providerTransactionId || input.provider_transaction_id || '').trim() || null;
+  const externalReference = input.externalReference || input.external_reference || null;
   const duplicate = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND fingerprint = ?').get(organizationId, providerId, fingerprint);
   if (duplicate) return { evidence: paymentEvidenceFromRow(duplicate), duplicate: true };
+
+  if (providerTransactionId && paymentAccountId) {
+    const transactionMatch = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND payment_account_id = ? AND provider_transaction_id = ?').get(
+      organizationId, providerId, String(paymentAccountId), providerTransactionId
+    );
+    if (transactionMatch) {
+      const sameEvidence = transactionMatch.fingerprint === fingerprint;
+      if (sameEvidence) return { evidence: paymentEvidenceFromRow(transactionMatch), duplicate: true };
+      throw Object.assign(new Error('Provider transaction already exists with different evidence'), {
+        statusCode: 409,
+        code: 'PROVIDER_TRANSACTION_EVIDENCE_CONFLICT',
+      });
+    }
+  }
   const id = String(input.id || crypto.randomUUID()); const now = nowIso();
   try {
     db.prepare("INSERT INTO payment_evidence (id, organization_id, location_id, payment_id, payment_intent_id, payment_account_id, provider_id, channel, evidence_type, external_reference, provider_transaction_id, fingerprint, raw_payload_json, normalized_payload_json, source, observed_at, received_at, submitted_by_user_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?, ?)").run(
       id, organizationId, locationId, paymentId ? String(paymentId) : null, intentId || null, paymentAccountId ? String(paymentAccountId) : null, providerId, channel, evidenceType,
-      input.externalReference || input.external_reference || null, input.providerTransactionId || input.provider_transaction_id || null,
+      externalReference, providerTransactionId,
       fingerprint, rawPayload == null ? null : json(rawPayload), normalizedPayload == null ? null : json(normalizedPayload),
       input.source || null, input.observedAt || input.observed_at || null, now, actor?.userId || null, now, now
     );
