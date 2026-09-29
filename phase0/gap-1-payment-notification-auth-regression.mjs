@@ -16,8 +16,8 @@ for (const provider of providers) {
     `provider ${provider.id} must expose parseEvidence()`);
 }
 
-assert.equal(getPaymentProvider('mpesa').capabilities.authenticateNotification, false);
-assert.equal(getPaymentProvider('mpesa').capabilities.parseEvidence, false);
+assert.equal(getPaymentProvider('mpesa').capabilities.authenticateNotification, true);
+assert.equal(getPaymentProvider('mpesa').capabilities.parseEvidence, true);
 
 const configured = registerPaymentProvider({
   id: 'gap1-auth-contract',
@@ -90,3 +90,46 @@ await assert.rejects(
 );
 
 console.log('GAP-1 Payment Notification Auth Contract Regression: PASS');
+
+const mpesa = getPaymentProvider('mpesa');
+const mpesaBody = { BusinessShortCode: '600001', TransID: 'RCP-001', TransAmount: '125.50', BillRefNumber: 'ORDER-1', TransTime: '20260930120000' };
+const rawBody = JSON.stringify(mpesaBody);
+const secret = 'gap1-mpesa-secret';
+const { createHmac } = await import('node:crypto');
+const signature = createHmac('sha256', secret).update(rawBody).digest('hex');
+const authenticatedMpesa = await mpesa.authenticateNotification({
+  rawRequest: { body: mpesaBody, rawBody, headers: { 'x-sellify-notification-signature': signature } },
+  config: { accountIdentifier: '600001', currency: 'KES', notificationAuthentication: { mode: 'shared-secret', secret } },
+});
+assert.equal(authenticatedMpesa.authenticated, true);
+assert.equal(authenticatedMpesa.providerId, 'mpesa');
+assert.equal(authenticatedMpesa.accountIdentifier, '600001');
+assert.equal(authenticatedMpesa.notificationId, 'RCP-001');
+
+await assert.rejects(
+  () => mpesa.authenticateNotification({
+    rawRequest: { body: mpesaBody, rawBody, headers: { 'x-sellify-notification-signature': 'bad' } },
+    config: { accountIdentifier: '600001', currency: 'KES', notificationAuthentication: { mode: 'shared-secret', secret } },
+  }),
+  error => error?.code === 'PAYMENT_NOTIFICATION_AUTH_FAILED' && error?.statusCode === 401
+);
+await assert.rejects(
+  () => mpesa.authenticateNotification({
+    rawRequest: { body: { ...mpesaBody, BusinessShortCode: '600002' }, rawBody, headers: { 'x-sellify-notification-signature': signature } },
+    config: { accountIdentifier: '600001', currency: 'KES', notificationAuthentication: { mode: 'shared-secret', secret } },
+  }),
+  error => error?.code === 'PAYMENT_NOTIFICATION_AUTH_FAILED'
+);
+await assert.rejects(
+  () => mpesa.authenticateNotification({ rawRequest: { body: mpesaBody, rawBody, headers: {} }, config: { accountIdentifier: '600001', currency: 'KES' } }),
+  error => error?.code === 'PAYMENT_NOTIFICATION_NOT_CONFIGURED' && error?.statusCode === 503
+);
+const mpesaEvidence = await mpesa.parseEvidence({ rawRequest: { body: mpesaBody }, config: { currency: 'KES' } });
+assert.deepEqual(mpesaEvidence, {
+  providerId: 'mpesa', providerTransactionId: 'RCP-001', amountMinor: 12550,
+  currency: 'KES', receiver: '600001', merchantReference: 'ORDER-1',
+  providerTimestamp: '20260930120000', rawProviderReference: 'RCP-001'
+});
+assert.equal(mpesaEvidence.verified, undefined);
+
+console.log('GAP-1 M-Pesa Notification Authentication Regression: PASS');
