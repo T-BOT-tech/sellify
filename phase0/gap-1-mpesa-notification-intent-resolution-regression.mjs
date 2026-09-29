@@ -492,5 +492,55 @@ assert.deepEqual(
 const rolledBackVerification = await store.getPaymentVerification(chatId, atomicFailureVerificationId);
 assert.equal(rolledBackVerification, null);
 
+const reconciliationSetup = await store.createPaymentWithIntent(chatId, {
+  paymentAccountId: account.id,
+  providerId: 'mpesa',
+  channel: 'api',
+  amountMinor: 12550,
+  currency: 'KES',
+}, session);
+await assert.rejects(
+  () => store.transitionPayment(chatId, reconciliationSetup.payment.id, 'RECONCILED', session),
+  error => error?.code === 'PAYMENT_RECONCILIATION_REQUIRED' && error?.statusCode === 409
+);
+assert.equal((await store.getPayment(chatId, reconciliationSetup.payment.id)).state, 'UNPAID');
+assert.equal((await store.listPaymentLedger(chatId, reconciliationSetup.payment.id)).length, 0);
+
+const verifiedForReconciliation = await store.insertPaymentEvidence(chatId, {
+  paymentIntentId: reconciliationSetup.intent.id,
+  paymentAccountId: account.id,
+  providerId: 'mpesa',
+  channel: 'api',
+  evidenceType: 'PROVIDER_NOTIFICATION',
+  providerTransactionId: 'RCP-RECONCILE-1',
+  externalReference: 'RECONCILE-1',
+  fingerprint: 'gap1-reconcile-verification',
+  normalizedPayload: {
+    providerId: 'mpesa',
+    providerTransactionId: 'RCP-RECONCILE-1',
+    amountMinor: 12550,
+    currency: 'KES',
+    receiver: '600001',
+    merchantReference: 'RECONCILE-1',
+  },
+  source: 'provider-notification',
+}, null);
+const reconciliationVerification = await paymentCore.verifyEvidence({
+  chatId,
+  evidenceId: verifiedForReconciliation.evidence.id,
+});
+assert.equal(reconciliationVerification.verification.result, 'MATCH');
+assert.equal((await store.getPayment(chatId, reconciliationSetup.payment.id)).state, 'VERIFIED');
+
+const reconciliation = await store.reconcilePayment(chatId, reconciliationSetup.payment.id, {
+  amountMinor: 12550,
+  currency: 'KES',
+  externalReference: 'RECONCILE-1',
+  reason: 'regression matched reconciliation',
+}, session);
+assert.equal(reconciliation.status, 'matched');
+assert.equal((await store.getPayment(chatId, reconciliationSetup.payment.id)).state, 'RECONCILED');
+
+
 console.log('GAP-1 M-Pesa Notification Intent Resolution Regression: PASS');
 await rm(dir, { recursive: true, force: true });
