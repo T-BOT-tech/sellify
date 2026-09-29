@@ -38,13 +38,15 @@ export class PaymentCore {
     this.#authorize(command, 'payments:accept');
     const chatId = String(command.chatId || '').trim();
     if (!chatId) throw Object.assign(new Error('chatId is required'), { statusCode: 400, code: 'PAYMENT_CONTEXT_REQUIRED' });
-    if (!command.paymentIntentId && !command.payment_intent_id) {
+    const paymentIntentId = command.paymentIntentId || command.payment_intent_id || null;
+    const evidenceSource = String(command.source || '').trim().toLowerCase();
+    if (!paymentIntentId && evidenceSource !== 'provider-notification') {
       throw Object.assign(new Error('paymentIntentId is required'), { statusCode: 400, code: 'PAYMENT_INTENT_REQUIRED' });
     }
 
     return this.store.insertPaymentEvidence(chatId, {
       ...command,
-      paymentIntentId: command.paymentIntentId || command.payment_intent_id,
+      paymentIntentId,
     }, command.actor || null);
   }
 
