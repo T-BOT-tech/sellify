@@ -5360,7 +5360,7 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
   ensureDatabase();
   const { organizationId, locationId } = await resolvePaymentContext(chatId, input);
   const intentId = String(input.paymentIntentId || input.payment_intent_id || '').trim();
-  const allowOrphanNotification = input.allowOrphanNotification === true && String(input.source || '').toLowerCase() === 'provider_notification';
+  const allowOrphanNotification = input.allowOrphanNotification === true && ['provider_webhook', 'provider_callback'].includes(String(input.source || '').toLowerCase());
   if (!intentId && !allowOrphanNotification) throw Object.assign(new Error('paymentIntentId is required'), { statusCode: 400, code: 'PAYMENT_INTENT_REQUIRED' });
   const intent = intentId
     ? db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(intentId, organizationId)
