@@ -2719,7 +2719,7 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/evidence$/, handler: (req, res, m) => handlePaymentEvidence(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/evidence$/, handler: (req, res, m) => handlePaymentEvidence(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/ledger$/, handler: (req, res, m) => handlePaymentLedger(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
-  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/reconcile$/, handler: (req, res, m) => handlePaymentReconciliation(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)$/, handler: (req, res, m) => handlePayments(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments$/, handler: (req, res, m) => handlePayments(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments$/, handler: (req, res, m) => handlePayments(req, res, decodeURIComponent(m[1])) },
