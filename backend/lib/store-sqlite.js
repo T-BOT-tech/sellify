@@ -5342,16 +5342,18 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
   ensureDatabase();
   const { organizationId, locationId } = await resolvePaymentContext(chatId, input);
   const intentId = String(input.paymentIntentId || input.payment_intent_id || '').trim();
-  if (!intentId) throw Object.assign(new Error('paymentIntentId is required'), { statusCode: 400, code: 'PAYMENT_INTENT_REQUIRED' });
-  const intent = db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(intentId, organizationId);
-  if (!intent) throw Object.assign(new Error('Payment intent not found'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND' });
+  const intent = intentId
+    ? db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(intentId, organizationId)
+    : null;
+  if (intentId && !intent) throw Object.assign(new Error('Payment intent not found'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND' });
   const paymentId = input.paymentId || input.payment_id || null;
   if (paymentId) {
     const payment = db.prepare('SELECT id FROM payments WHERE id = ? AND organization_id = ?').get(String(paymentId), organizationId);
     if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
   }
-  const providerId = String(input.providerId || input.provider_id || intent.provider_id).trim().toLowerCase();
-  if (providerId !== String(intent.provider_id)) throw Object.assign(new Error('Evidence provider does not match payment intent provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
+  const providerId = String(input.providerId || input.provider_id || intent?.provider_id || '').trim().toLowerCase();
+  if (!providerId) throw Object.assign(new Error('providerId is required'), { statusCode: 400, code: 'PROVIDER_REQUIRED' });
+  if (intent && providerId !== String(intent.provider_id)) throw Object.assign(new Error('Evidence provider does not match payment intent provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
   const channel = String(input.channel || 'manual').trim().toLowerCase();
   const evidenceType = String(input.evidenceType || input.evidence_type || '').trim().toUpperCase();
   if (!evidenceType) throw Object.assign(new Error('evidenceType is required'), { statusCode: 400, code: 'EVIDENCE_TYPE_REQUIRED' });
@@ -5752,7 +5754,18 @@ export async function resolvePaymentIntentForProviderEvidence(input = {}) {
     throw Object.assign(new Error('Provider notification matches multiple active payment intents'), { statusCode: 409, code: 'AMBIGUOUS_PAYMENT_INTENT' });
   }
   if (candidates.length === 0) {
-    throw Object.assign(new Error('Provider notification did not match an active payment intent'), { statusCode: 202, code: 'UNMATCHED_PROVIDER_NOTIFICATION' });
+    return {
+      chatId: account.chat_id,
+      organizationId: account.organization_id,
+      locationId: null,
+      paymentAccount: {
+        id: account.id,
+        providerId: account.provider_id,
+        accountIdentifier: account.account_identifier,
+        metadata: parseJSON(account.metadata_json, {}),
+      },
+      paymentIntent: null,
+    };
   }
 
   return {
