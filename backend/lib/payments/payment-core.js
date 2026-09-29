@@ -110,9 +110,17 @@ export class PaymentCore {
     if (this.store.transitionPaymentEvidence) {
       await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: 'PROCESSING' }, command.actor || null);
     }
-    let observed = operation === 'reconcile'
-      ? await provider.reconcile({ payment, paymentIntent, evidence, command })
-      : await provider.verify({ payment, paymentIntent, evidence, command });
+    let observed;
+    try {
+      observed = operation === 'reconcile'
+        ? await provider.reconcile({ payment, paymentIntent, evidence, command })
+        : await provider.verify({ payment, paymentIntent, evidence, command });
+    } catch (error) {
+      if (this.store.transitionPaymentEvidence) {
+        await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: 'RECEIVED' }, command.actor || null);
+      }
+      throw error;
+    }
     const verification = await this.#normalizeVerification(normalizeVerificationResult(observed, {
       providerId, paymentId, paymentIntentId: paymentIntent.id, evidenceId, providerVersion: provider.version
     }), evidence, chatId);
