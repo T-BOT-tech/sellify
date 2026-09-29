@@ -2278,6 +2278,28 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(47, nowIso());
   }
 
+  // GAP-1.4 — enforce one canonical decision per verification.
+  // A verification may be re-read/replayed, but the committed decision for that
+  // verification is singular. Nullable verification_id remains allowed for
+  // legacy/manual decisions that are not tied to a verification.
+  if (!applied.includes(48)) {
+    db.exec(\`
+      DELETE FROM payment_decisions
+      WHERE rowid NOT IN (
+        SELECT MIN(rowid)
+        FROM payment_decisions
+        WHERE verification_id IS NOT NULL
+        GROUP BY verification_id
+      )
+      AND verification_id IS NOT NULL;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_decisions_verification_unique
+        ON payment_decisions(verification_id)
+        WHERE verification_id IS NOT NULL;
+    \`);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(48, nowIso());
+  }
+
   // GAP-1.2 — link existing canonical payments to payment intents.
   if (!applied.includes(46)) {
     const columns = db.prepare('PRAGMA table_info(payments)').all();
