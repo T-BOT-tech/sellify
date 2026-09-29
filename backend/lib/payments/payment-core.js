@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { getPaymentProvider } from './provider-registry.js';
+import { getPaymentProvider, normalizeVerificationResult } from './provider-registry.js';
 import { InvariantGate } from './invariant-gate.js';
 import { PaymentDecisionEngine } from './decision-engine.js';
 
@@ -107,13 +107,15 @@ export class PaymentCore {
     if (operation !== 'reconcile' && !provider.capabilities.verify) {
       throw Object.assign(new Error('Payment provider does not support verification'), { statusCode: 501, code: 'PAYMENT_PROVIDER_VERIFY_UNSUPPORTED' });
     }
-    let observed = operation === 'reconcile'
-      ? await provider.reconcile({ payment, paymentIntent, evidence, command })
-      : await provider.verify({ payment, paymentIntent, evidence, command });
     if (this.store.transitionPaymentEvidence) {
       await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: 'PROCESSING' }, command.actor || null);
     }
-    const verification = await this.#normalizeVerification({ ...observed, providerId, paymentId, paymentIntentId: paymentIntent.id, evidenceId, verifier: provider.id, verifierVersion: provider.version }, evidence, chatId);
+    let observed = operation === 'reconcile'
+      ? await provider.reconcile({ payment, paymentIntent, evidence, command })
+      : await provider.verify({ payment, paymentIntent, evidence, command });
+    const verification = await this.#normalizeVerification(normalizeVerificationResult(observed, {
+      providerId, paymentId, paymentIntentId: paymentIntent.id, evidenceId, providerVersion: provider.version
+    }), evidence, chatId);
     const invariants = this.invariantGate.evaluate({ payment, paymentIntent, paymentAccount, evidence, verification, now: this.clock() });
     const decision = this.decisionEngine.decide({ payment, verification, invariants });
     if (!decision.targetState) {
