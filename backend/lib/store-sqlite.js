@@ -2244,6 +2244,17 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(45, nowIso());
   }
 
+  // GAP-1.3 — enforce one canonical verification per evidence.
+  // Verification is idempotent by evidence identity; the database must enforce
+  // that invariant even if multiple application workers race concurrently.
+  if (!applied.includes(47)) {
+    db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_verifications_evidence_unique
+        ON payment_verifications(evidence_id);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(47, nowIso());
+  }
+
   // GAP-1.2 — link existing canonical payments to payment intents.
   if (!applied.includes(46)) {
     const columns = db.prepare('PRAGMA table_info(payments)').all();
