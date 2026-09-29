@@ -110,9 +110,20 @@ export class PaymentCore {
     let observed = operation === 'reconcile'
       ? await provider.reconcile({ payment, paymentIntent, evidence, command })
       : await provider.verify({ payment, paymentIntent, evidence, command });
+    if (this.store.transitionPaymentEvidence) {
+      await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: 'PROCESSING' }, command.actor || null);
+    }
     const verification = await this.#normalizeVerification({ ...observed, providerId, paymentId, paymentIntentId: paymentIntent.id, evidenceId, verifier: provider.id, verifierVersion: provider.version }, evidence, chatId);
     const invariants = this.invariantGate.evaluate({ payment, paymentIntent, paymentAccount, evidence, verification, now: this.clock() });
     const decision = this.decisionEngine.decide({ payment, verification, invariants });
+    if (this.store.transitionPaymentEvidence) {
+      const evidenceStatus = decision.decision === 'MARK_DUPLICATE' ? 'DUPLICATE'
+        : decision.targetState === 'EXPIRED' ? 'EXPIRED'
+          : decision.targetState === 'VERIFIED' || decision.targetState === 'RECONCILED' ? 'VERIFIED'
+            : decision.targetState === 'MISMATCH' || decision.targetState === 'REJECTED' ? 'REJECTED'
+              : 'UNVERIFIABLE';
+      await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: evidenceStatus }, command.actor || null);
+    }
     if (!decision.targetState) {
       const response = { payment, paymentIntent, evidence, verification, invariants, decision };
       if (idempotencyKey && this.store.finalizePaymentIdempotency) await this.store.finalizePaymentIdempotency(chatId, { idempotencyKey, commandType, requestHash, response, responseStatus: 200, resourceType: 'payment', resourceId: paymentId });
