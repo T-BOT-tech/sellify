@@ -5804,6 +5804,7 @@ export async function resolvePaymentIntentForProviderEvidence(input = {}) {
         metadata: parseJSON(account.metadata_json, {}),
       },
       paymentIntent: null,
+      resolutionStatus: 'UNMATCHED',
     };
   }
 
