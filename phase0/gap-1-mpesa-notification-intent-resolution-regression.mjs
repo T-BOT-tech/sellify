@@ -197,6 +197,40 @@ assert.equal(verifiedReplay.verification.id, verified.verification.id);
 
 
 
+
+const tamperedAccount = await store.createPaymentAccount(chatId, {
+  providerId: 'mpesa',
+  accountIdentifier: '600003',
+  metadata: { currency: 'KES' },
+}, session);
+const tamperedEvidence = await store.insertPaymentEvidence(chatId, {
+  paymentIntentId: second.intent.id,
+  paymentAccountId: tamperedAccount.id,
+  providerId: 'mpesa',
+  channel: 'api',
+  evidenceType: 'PROVIDER_NOTIFICATION',
+  providerTransactionId: 'RCP-TAMPER-ACCOUNT-1',
+  externalReference: 'ORDER-RESOLVE-1',
+  fingerprint: 'gap1-tampered-account-fingerprint',
+  normalizedPayload: {
+    providerId: 'mpesa',
+    providerTransactionId: 'RCP-TAMPER-ACCOUNT-1',
+    amountMinor: 12550,
+    currency: 'KES',
+    receiver: '600003',
+    merchantReference: 'ORDER-RESOLVE-1',
+  },
+  source: 'provider-notification',
+}, null);
+const tamperedResult = await paymentCore.verifyEvidence({
+  chatId,
+  evidenceId: tamperedEvidence.evidence.id,
+});
+assert.equal(tamperedResult.verification.result, 'MISMATCH');
+assert.ok(tamperedResult.verification.reasonCodes.includes('PAYMENT_ACCOUNT_BINDING_MISMATCH'));
+const tamperedPayment = await store.getPayment(chatId, second.payment.id);
+assert.notEqual(tamperedPayment.state, 'VERIFIED');
+
 const concurrentPaymentSetup = await store.createPaymentWithIntent(chatId, {
   paymentAccountId: account.id,
   providerId: 'mpesa',
