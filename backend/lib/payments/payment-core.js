@@ -82,7 +82,7 @@ export class PaymentCore {
     if (!intent) throw Object.assign(new Error('Payment intent not found'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND' });
 
     const providerId = String(command.providerId || command.provider_id || intent.providerId || '').trim().toLowerCase();
-    if (!providerId || providerId !== String(intent.providerId || '').toLowerCase()) {
+    if (!providerId || (intent && providerId !== String(intent.providerId || '').toLowerCase())) {
       throw Object.assign(new Error('Evidence provider does not match payment intent provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
     }
 
@@ -172,6 +172,7 @@ export class PaymentCore {
       actor: null,
       source: command.source || 'provider_notification',
       channel: command.channel || 'provider_webhook',
+      allowOrphanNotification: isProviderNotification,
     });
   }
 
