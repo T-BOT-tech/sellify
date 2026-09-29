@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { getPaymentProvider } from './provider-registry.js';
 import { InvariantGate } from './invariant-gate.js';
 import { PaymentDecisionEngine } from './decision-engine.js';
@@ -145,4 +146,16 @@ export class PaymentCore {
       throw Object.assign(new Error('Payment permission required'), { statusCode: 403, code: 'UNAUTHORIZED_OPERATION' });
     }
   }
-}
+}  #commandHash(command, operation) {
+    const stable = JSON.stringify({
+      operation,
+      organizationId: command.organizationId || null,
+      locationId: command.locationId || null,
+      paymentId: command.paymentId || command.payment_id || null,
+      paymentIntentId: command.paymentIntentId || command.payment_intent_id || null,
+      evidenceId: command.evidenceId || command.evidence_id || null,
+    });
+    return crypto.createHash('sha256').update(stable).digest('hex');
+  }
+
+
