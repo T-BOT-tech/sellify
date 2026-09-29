@@ -85,7 +85,7 @@ export const mpesaProvider = Object.freeze({
     authenticateNotification: true,
     parseEvidence: true,
     parseConfirmation: true,
-    verify: false,
+    verify: true,
     initiate: false,
     getStatus: false,
     refund: false,
@@ -160,6 +160,50 @@ export const mpesaProvider = Object.freeze({
       rawProviderReference: transactionId,
     };
   },
+
+  verify: async ({ evidence, paymentIntent, paymentAccount }) => {
+    const normalizedEvidence = evidence?.normalizedPayload || evidence || {};
+    const transactionId = normalized(normalizedEvidence.providerTransactionId || evidence?.providerTransactionId);
+    const receiver = normalized(normalizedEvidence.receiver || normalizedEvidence.observedReceiver);
+    const currency = normalized(normalizedEvidence.currency || paymentAccount?.currency);
+    const amountMinor = Number(normalizedEvidence.amountMinor);
+    const reference = normalized(
+      normalizedEvidence.merchantReference ||
+      normalizedEvidence.externalReference ||
+      evidence?.externalReference
+    ) || null;
+
+    const reasonCodes = [];
+    if (!transactionId) reasonCodes.push('PROVIDER_TRANSACTION_UNAVAILABLE');
+    if (!Number.isInteger(amountMinor) || amountMinor < 0) reasonCodes.push('PROVIDER_AMOUNT_UNAVAILABLE');
+    if (!currency) reasonCodes.push('PROVIDER_CURRENCY_UNAVAILABLE');
+    if (!receiver) reasonCodes.push('RECEIVER_UNAVAILABLE');
+
+    const expectedProvider = String(paymentIntent?.providerId || paymentAccount?.providerId || PROVIDER_ID).toLowerCase();
+    if (expectedProvider !== PROVIDER_ID) reasonCodes.push('PROVIDER_MISMATCH');
+
+    return {
+      providerId: PROVIDER_ID,
+      result: reasonCodes.length ? 'UNVERIFIABLE' : 'MATCH',
+      confidence: reasonCodes.length ? 0 : 1,
+      observedAmountMinor: Number.isInteger(amountMinor) ? amountMinor : null,
+      observedCurrency: currency || null,
+      observedReceiver: receiver || null,
+      observedReceiverAccount: receiver || null,
+      observedReference: reference,
+      observedTransactionId: transactionId || null,
+      observedAt: normalizedEvidence.providerTimestamp || evidence?.observedAt || null,
+      reasonCodes: [...new Set(reasonCodes)],
+      rawResult: {
+        source: evidence?.source || 'provider-evidence',
+        provider: PROVIDER_ID,
+        verificationMode: 'authenticated-notification-evidence',
+      },
+      verifier: 'mpesa-provider-adapter',
+      verifierVersion: 'notification-evidence-v1',
+    };
+  },
+
 });
 
 export default mpesaProvider;
