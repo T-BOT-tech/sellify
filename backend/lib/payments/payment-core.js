@@ -173,18 +173,27 @@ export class PaymentCore {
       await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: 'PROCESSING' }, command.actor || null);
     }
     let observed;
+    let leaseRenewalTimer = null;
     try {
+      if (this.store.renewPaymentEvidenceProcessing && processingAttempt != null) {
+        const renewalIntervalMs = Math.max(1000, Math.floor((this.evidenceLeaseSeconds * 1000) / 2));
+        leaseRenewalTimer = setInterval(() => {
+          this.#renewEvidenceLease(chatId, evidenceId, processingAttempt, command.actor).catch(() => {});
+        }, renewalIntervalMs);
+      }
       observed = await this.#withVerificationTimeout((signal) =>
         operation === 'reconcile'
           ? provider.reconcile({ payment, paymentIntent, evidence, command: { ...command, signal } })
           : provider.verify({ payment, paymentIntent, evidence, command: { ...command, signal } })
       );
     } catch (error) {
+      if (leaseRenewalTimer) clearInterval(leaseRenewalTimer);
       if (this.store.transitionPaymentEvidence) {
         await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: 'RECEIVED', processingAttempt }, command.actor || null);
       }
       throw error;
     }
+    if (leaseRenewalTimer) clearInterval(leaseRenewalTimer);
     const verification = await this.#normalizeVerification(normalizeVerificationResult(observed, {
       providerId, paymentId, paymentIntentId: paymentIntent.id, evidenceId, providerVersion: provider.version
     }), evidence, chatId);
@@ -209,6 +218,11 @@ export class PaymentCore {
     const response = { ...committed, evidence, verification, invariants, decision };
     if (idempotencyKey && this.store.finalizePaymentIdempotency) await this.store.finalizePaymentIdempotency(chatId, { idempotencyKey, commandType, requestHash, response, responseStatus: 200, resourceType: 'payment', resourceId: paymentId });
     return response;
+  }
+
+  async #renewEvidenceLease(chatId, evidenceId, processingAttempt, actor) {
+    if (!this.store.renewPaymentEvidenceProcessing || processingAttempt == null) return;
+    return this.store.renewPaymentEvidenceProcessing(chatId, evidenceId, processingAttempt, actor || null, { leaseSeconds: this.evidenceLeaseSeconds });
   }
 
   async #withVerificationTimeout(operationFactory) {
