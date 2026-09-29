@@ -292,7 +292,8 @@
     "test:gap-2-dispatch-workload": "node phase0/gap-2-dispatch-workload-regression.mjs",
     "test:gap-2-delivery-frontend": "node phase0/gap-2-delivery-frontend-contract-regression.mjs",
     "gap-1:http-boundary-test": "node phase0/gap-1-payment-http-boundary-regression.mjs",
-    "gap-1:command-test": "node phase0/gap-1-payment-command-pipeline-regression.mjs"
+    "gap-1:command-test": "node phase0/gap-1-payment-command-pipeline-regression.mjs",
+    "gap-1:telebirr-parser-test": "node phase0/gap-1-telebirr-parser-regression.mjs"
   },
   "engines": {
     "node": ">=24"
