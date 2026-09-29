@@ -14,9 +14,13 @@ assert.ok(patchBlock, 'payment PATCH handler must exist');
 assert.match(patchBlock[0], /PAYMENT_COMMAND_REQUIRED/);
 assert.doesNotMatch(patchBlock[0], /transitionPayment\(/);
 
-assert.match(
-  source,
-  /payments\/\(\[\^\/\]\+\)\/evidence.*handlePaymentEvidence/
+assert.ok(
+  source.includes("\\/payments\\/([^/]+)\\/evidence"),
+  'payment evidence route pattern must exist'
+);
+assert.ok(
+  (source.match(/handlePaymentEvidence\(req, res/g) || []).length >= 2,
+  'payment evidence GET/POST routes must target the evidence handler'
 );
 assert.match(source, /async function handlePaymentEvidence\(/);
 assert.match(source, /paymentCore\.submitEvidence\(/);
