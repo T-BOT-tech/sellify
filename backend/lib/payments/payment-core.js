@@ -1,3 +1,6 @@
+import { InvariantGate } from './invariant-gate.js';
+import { PaymentDecisionEngine } from './decision-engine.js';
+
 export class PaymentCore {
   constructor({
     store,
@@ -14,6 +17,8 @@ export class PaymentCore {
     this.decisionEngine = decisionEngine;
     this.authorization = authorization;
     this.clock = clock;
+    this.invariantGate = invariantGate || new InvariantGate();
+    this.decisionEngine = decisionEngine || new PaymentDecisionEngine();
   }
 
   async createPayment(command = {}) {
@@ -32,6 +37,107 @@ export class PaymentCore {
     }, command.actor || null);
 
     return result;
+  }
+
+  async verifyEvidence(command = {}) {
+    this.#authorize(command, 'payments:accept');
+    const evidenceId = String(command.evidenceId || command.evidence_id || '').trim();
+    const chatId = String(command.chatId || '').trim();
+    if (!chatId || !evidenceId) {
+      throw Object.assign(new Error('chatId and evidenceId are required'), { statusCode: 400, code: 'PAYMENT_VERIFICATION_CONTEXT_REQUIRED' });
+    }
+
+    const evidence = await this.store.getPaymentEvidence(chatId, evidenceId);
+    if (!evidence) throw Object.assign(new Error('Evidence not found'), { statusCode: 404, code: 'EVIDENCE_NOT_FOUND' });
+    if (!evidence.paymentIntentId) {
+      return { outcome: 'UNMATCHED', evidence, verification: null, decision: null };
+    }
+
+    const paymentIntent = await this.store.getPaymentIntent(chatId, evidence.paymentIntentId);
+    const payment = await this.store.getPaymentForIntent(chatId, evidence.paymentIntentId);
+    const paymentAccount = paymentIntent?.paymentAccountId
+      ? await this.store.getPaymentAccountById(chatId, paymentIntent.paymentAccountId)
+      : null;
+    if (!paymentIntent || !payment) {
+      throw Object.assign(new Error('Payment intent/payment could not be resolved for evidence'), { statusCode: 409, code: 'PAYMENT_INTENT_MISMATCH' });
+    }
+
+    const normalized = evidence.normalizedPayload || {};
+    const verification = {
+      providerId: evidence.providerId,
+      result: 'MATCH',
+      confidence: 1,
+      observedAmountMinor: Number.isInteger(normalized.amountMinor) ? normalized.amountMinor : null,
+      observedCurrency: normalized.currency || null,
+      observedReceiver: normalized.receiver || null,
+      observedReceiverAccount: normalized.receiver || null,
+      observedReference: normalized.merchantReference || normalized.externalReference || evidence.externalReference || null,
+      observedTransactionId: normalized.providerTransactionId || evidence.providerTransactionId || null,
+      observedAt: normalized.providerTimestamp || evidence.observedAt || null,
+      reasonCodes: [],
+      rawResult: { source: evidence.source, normalizedPayload: normalized },
+      verifier: 'payment-core',
+      verifierVersion: 'notification-evidence-v1',
+    };
+
+    const invariants = this.invariantGate.evaluate({
+      payment,
+      paymentIntent,
+      paymentAccount,
+      evidence,
+      verification,
+      now: this.clock(),
+    });
+    if (!invariants.passed) verification.result = 'MISMATCH';
+    verification.reasonCodes = invariants.reasonCodes;
+
+    const decision = this.decisionEngine.decide({ verification, invariants, payment });
+    const storedVerification = await this.store.insertPaymentVerification(chatId, {
+      paymentId: payment.id,
+      paymentIntentId: paymentIntent.id,
+      evidenceId: evidence.id,
+      providerId: evidence.providerId,
+      result: verification.result,
+      confidence: verification.confidence,
+      observedAmountMinor: verification.observedAmountMinor,
+      observedCurrency: verification.observedCurrency,
+      observedReceiver: verification.observedReceiver,
+      observedReceiverAccount: verification.observedReceiverAccount,
+      observedReference: verification.observedReference,
+      observedTransactionId: verification.observedTransactionId,
+      observedAt: verification.observedAt,
+      reasonCodes: verification.reasonCodes,
+      rawResult: verification.rawResult,
+      verifier: verification.verifier,
+      verifierVersion: verification.verifierVersion,
+    }, command.actor || null);
+
+    const storedDecision = await this.store.insertPaymentDecision(chatId, {
+      paymentId: payment.id,
+      paymentIntentId: paymentIntent.id,
+      evidenceId: evidence.id,
+      verificationId: storedVerification.id,
+      decision: decision.decision,
+      targetState: decision.targetState,
+      reasonCodes: decision.reasonCodes,
+      invariantResults: invariants,
+      decisionSource: 'PAYMENT_CORE',
+    }, command.actor || null);
+
+    if (decision.targetState && decision.targetState !== payment.state) {
+      await this.store.transitionPayment(chatId, payment.id, decision.targetState, command.actor || null, {
+        reason: decision.reasonCodes.join(',') || 'Payment verification decision',
+        metadata: { evidenceId: evidence.id, verificationId: storedVerification.id, decisionId: storedDecision.id },
+      });
+    }
+
+    return {
+      outcome: decision.targetState || 'NO_STATE_CHANGE',
+      evidence,
+      verification: storedVerification,
+      invariants,
+      decision: storedDecision,
+    };
   }
 
   async submitEvidence(command = {}) {
