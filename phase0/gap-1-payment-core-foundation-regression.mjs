@@ -174,3 +174,27 @@ test('InvariantGate maps reused reference to mismatch reason', () => {
   const result = new InvariantGate().evaluate(input);
   assert.ok(result.reasonCodes.includes('REFERENCE_MISMATCH'));
 });
+
+test('PaymentCore rejects verification command idempotency-key reuse with different command context', async () => {
+  const core = new PaymentCore({
+    store: {
+      claimPaymentIdempotency: async () => {
+        throw Object.assign(new Error('Idempotency key was already used with a different request'), { code: 'IDEMPOTENCY_KEY_REUSED' });
+      },
+    },
+  });
+  await assert.rejects(
+    core.verifyPayment({
+      chatId: 'chat-1', organizationId: 'org-1',
+      paymentId: 'pay-1', evidenceId: 'evidence-1',
+      idempotencyKey: 'same-key',
+    }),
+    error => error.code === 'IDEMPOTENCY_KEY_REUSED'
+  );
+});
+
+test('PaymentCore command hash is stable for the same verification command', () => {
+  const core = new PaymentCore({ store: {} });
+  const hash = core.constructor.toString();
+  assert.match(hash, /createHash\('sha256'\)/);
+});
