@@ -1,3 +1,7 @@
+import { getPaymentProvider } from './provider-registry.js';
+import { InvariantGate } from './invariant-gate.js';
+import { PaymentDecisionEngine } from './decision-engine.js';
+
 export class PaymentCore {
   constructor({
     store,
@@ -9,9 +13,9 @@ export class PaymentCore {
   }) {
     if (!store) throw new TypeError('PaymentCore requires store');
     this.store = store;
-    this.providerRegistry = providerRegistry;
-    this.invariantGate = invariantGate;
-    this.decisionEngine = decisionEngine;
+    this.providerRegistry = providerRegistry || { getPaymentProvider };
+    this.invariantGate = invariantGate || new InvariantGate();
+    this.decisionEngine = decisionEngine || new PaymentDecisionEngine();
     this.authorization = authorization;
     this.clock = clock;
   }
@@ -48,6 +52,58 @@ export class PaymentCore {
     }, command.actor || null);
   }
 
+  async verifyPayment(command = {}) {
+    this.#authorize(command, 'payments:accept');
+    return this.#runVerification(command, 'verify');
+  }
+
+  async retryVerification(command = {}) {
+    this.#authorize(command, 'payments:accept');
+    return this.#runVerification(command, 'retry');
+  }
+
+  async reconcilePayment(command = {}) {
+    this.#authorize(command, 'payments:reconcile');
+    return this.#runVerification(command, 'reconcile');
+  }
+
+  async #runVerification(command, operation) {
+    const chatId = String(command.chatId || '').trim();
+    const paymentId = String(command.paymentId || command.payment_id || '').trim();
+    const evidenceId = String(command.evidenceId || command.evidence_id || '').trim();
+    if (!chatId || !paymentId || !evidenceId) throw Object.assign(new Error('chatId, paymentId and evidenceId are required'), { statusCode: 400, code: 'PAYMENT_VERIFICATION_CONTEXT_REQUIRED' });
+    const payment = await this.store.getPayment(chatId, paymentId);
+    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    const intentId = payment.paymentIntentId || command.paymentIntentId || command.payment_intent_id;
+    const paymentIntent = intentId ? await this.store.getPaymentIntent(chatId, intentId) : null;
+    if (!paymentIntent) throw Object.assign(new Error('Payment intent not found'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND' });
+    const evidenceRows = await this.store.listPaymentEvidence(chatId, paymentId);
+    const evidence = (evidenceRows || []).find(row => String(row.id) === evidenceId);
+    if (!evidence) throw Object.assign(new Error('Evidence not found'), { statusCode: 404, code: 'EVIDENCE_NOT_FOUND' });
+    const accounts = await this.store.listPaymentAccounts(chatId, { status: 'all' });
+    const paymentAccount = (accounts || []).find(row => String(row.id) === String(paymentIntent.paymentAccountId));
+    if (!paymentAccount) throw Object.assign(new Error('Payment account not found'), { statusCode: 409, code: 'PAYMENT_ACCOUNT_NOT_FOUND' });
+    const providerId = String(payment.providerId || paymentIntent.providerId || '').toLowerCase();
+    const provider = this.providerRegistry.getPaymentProvider(providerId);
+    if (!provider) throw Object.assign(new Error('Unknown payment provider'), { statusCode: 400, code: 'UNKNOWN_PAYMENT_PROVIDER' });
+    let observed;
+    if (operation === 'reconcile' && provider.capabilities.reconcile) observed = await provider.reconcile({ payment, paymentIntent, evidence, command });
+    else observed = await provider.verify({ payment, paymentIntent, evidence, command });
+    const verification = this.#normalizeVerification({ ...observed, providerId, paymentId, paymentIntentId: paymentIntent.id, evidenceId, verifier: provider.id, verifierVersion: provider.version }, evidence);
+    const invariants = this.invariantGate.evaluate({ payment, paymentIntent, paymentAccount, evidence, verification, now: this.clock() });
+    const decision = this.decisionEngine.decide({ payment, verification, invariants });
+    if (!decision.targetState) return { payment, paymentIntent, evidence, verification, invariants, decision };
+    const committed = await this.store.commitPaymentDecision(chatId, {
+      paymentId, paymentIntentId: paymentIntent.id, evidenceId, expectedState: payment.state, targetState: decision.targetState, verification,
+      decision: { ...decision, paymentIntentId: paymentIntent.id, evidenceId, decisionSource: operation === 'retry' ? 'payment-core-retry' : 'payment-core-' + operation, actorId: command.actor?.userId || null }
+    }, command.actor || null);
+    return { ...committed, evidence, verification, invariants, decision };
+  }
+
+  #normalizeVerification(observed = {}, evidence = {}) {
+    const result = String(observed.result || (observed.verified === true ? 'MATCH' : observed.matched === true ? 'MATCH' : 'UNVERIFIABLE')).toUpperCase();
+    return { id: observed.id, paymentId: observed.paymentId, paymentIntentId: observed.paymentIntentId, evidenceId: observed.evidenceId, providerId: observed.providerId, result, confidence: observed.confidence ?? null, observedAmountMinor: observed.observedAmountMinor ?? observed.amountMinor ?? observed.amount_minor ?? null, observedCurrency: observed.observedCurrency || observed.currency || null, observedReceiver: observed.observedReceiver || observed.receiver || null, observedReceiverAccount: observed.observedReceiverAccount || observed.receiverAccount || observed.receiver_account || null, observedReference: observed.observedReference || observed.reference || evidence.externalReference || null, observedTransactionId: observed.observedTransactionId || observed.transactionId || observed.transaction_id || null, observedAt: observed.observedAt || observed.observed_at || this.clock().toISOString(), reasonCodes: Array.isArray(observed.reasonCodes) ? observed.reasonCodes : [], rawResult: observed.rawResult ?? observed.raw ?? observed, verifier: observed.verifier, verifierVersion: observed.verifierVersion };
+  }
   #authorize(command, permission) {
     if (!this.authorization) return;
     const allowed = this.authorization(command.actor || null, command.organizationId || null, command.locationId || null, 'payments', permission);
