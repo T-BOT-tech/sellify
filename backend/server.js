@@ -147,8 +147,18 @@ import { assertTenantScope, assertLocationScope } from './lib/tenant-isolation.j
 import { listPaymentProviders } from './lib/payments/provider-registry.js';
 import { listPaymentChannels } from './lib/payments/channel-registry.js';
 import { processEventIsolated } from './lib/event-failure-isolation.js';
+import { PaymentCore } from './lib/payments/payment-core.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// GAP-1 command boundary: HTTP handlers may authorize and shape commands,
+// but PaymentCore/store remain the only authority for payment state changes.
+const paymentCore = new PaymentCore({
+  store: {
+    createPaymentWithIntent,
+    insertPaymentEvidence,
+  },
+});
 
 // ---------- env-driven config ----------
 
@@ -1813,15 +1823,28 @@ async function handlePayments(req, res, chatId, paymentId = null) {
   if (req.method === 'POST') {
     await requireAuthorization(session, tenant, 'payments', 'payments:accept', { deniedMessage: 'Payment acceptance permission required' });
     const body = await readBody(req);
-    const payment = await createPayment(chatId, body, session);
-    return sendJSON(res, 201, { payment }, req);
+    const paymentResult = await paymentCore.createPayment({
+      ...body,
+      chatId,
+      organizationId: tenant.organizationId,
+      actor: session,
+      idempotencyKey: body.idempotencyKey || body.idempotency_key || req.headers['idempotency-key'] || null,
+      correlationId: req._requestId,
+      source: 'http',
+    });
+    return sendJSON(res, 201, { payment: paymentResult.payment, payment_intent: paymentResult.intent }, req);
   }
   if (req.method === 'PATCH' && paymentId) {
     const body = await readBody(req);
-    const target = String(body.state || '').toUpperCase();
-    const permission = ['RECONCILED'].includes(target) ? 'payments:reconcile' : 'payments:manage';
-    await requireAuthorization(session, tenant, 'payments', permission, { deniedMessage: 'Payment state change permission required' });
-    const payment = await transitionPayment(chatId, paymentId, target, session, body);
+    if (body.state != null || body.status != null) {
+      throw Object.assign(new Error('Payment state changes must use a Payment Core command endpoint'), {
+        statusCode: 409,
+        code: 'PAYMENT_COMMAND_REQUIRED',
+      });
+    }
+    await requireAuthorization(session, tenant, 'payments', 'payments:manage', { deniedMessage: 'Payment management permission required' });
+    const payment = await getPayment(chatId, paymentId);
+    if (!payment) return sendJSON(res, 404, { error: { message: 'Payment not found', status: 404 } }, req);
     return sendJSON(res, 200, { payment }, req);
   }
   return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
@@ -1831,6 +1854,34 @@ async function handlePaymentOutbound(req,res,chatId,intentId=null,action=null){c
 async function handleProcurementSettlement(req,res,chatId,purchaseOrderId=null){const tenant=await getTenant(chatId);if(!tenant)return sendJSON(res,404,{error:{message:'Unknown store',status:404}},req);const session=await requireSession(req,tenant.chatId);if(req.method==='GET'){await requireAuthorization(session,tenant,'payments','payments:settlement:view',{deniedMessage:'Payment settlement view permission required'});if(purchaseOrderId){const settlement=await getProcurementSettlement(chatId,purchaseOrderId);return sendJSON(res,200,{settlement,allocations:await listProcurementSettlementAllocations(chatId,purchaseOrderId)},req);}const u=new URL(req.url,`http://${req.headers.host}`);return sendJSON(res,200,{settlements:await listProcurementSettlements(chatId,{purchaseOrderId:u.searchParams.get('purchase_order_id')||'',status:u.searchParams.get('status')||'all',limit:Number(u.searchParams.get('limit')||100)})},req);}if(req.method==='POST'&&purchaseOrderId){await requireAuthorization(session,tenant,'payments','payments:settlement:allocate',{deniedMessage:'Payment settlement allocation permission required'});return sendJSON(res,201,{settlement:await allocateConfirmedOutboundPaymentToProcurementSettlement(chatId,purchaseOrderId,await readBody(req),session)},req);}return sendJSON(res,405,{error:{message:'Method not allowed',status:405}},req);}
 
 async function handleProcurementPayment(req,res,chatId,purchaseOrderId){const tenant=await getTenant(chatId);if(!tenant)return sendJSON(res,404,{error:{message:'Unknown store',status:404}},req);const session=await requireSession(req,tenant.chatId);await requireAuthorization(session,tenant,'procurement_payment','procurement:payment:create',{deniedMessage:'Procurement payment permission required'});if(req.method!=='POST')return sendJSON(res,405,{error:{message:'Method not allowed',status:405}},req);return sendJSON(res,201,{intent:await createProcurementPaymentIntent(chatId,{...(await readBody(req)),purchaseOrderId},session)},req);}
+
+
+async function handlePaymentEvidence(req, res, chatId, paymentId, listOnly = false) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+  await requireAuthorization(session, tenant, 'payments', req.method === 'GET' ? 'payments:view' : 'payments:accept', {
+    deniedMessage: req.method === 'GET' ? 'Payment view permission required' : 'Payment acceptance permission required',
+  });
+  const payment = await getPayment(chatId, paymentId);
+  if (!payment) return sendJSON(res, 404, { error: { message: 'Payment not found', status: 404 } }, req);
+  if (req.method === 'GET') {
+    const evidence = await listPaymentEvidence(chatId, { paymentId });
+    return sendJSON(res, 200, { evidence }, req);
+  }
+  const body = await readBody(req);
+  const evidence = await paymentCore.submitEvidence({
+    ...body,
+    chatId,
+    organizationId: tenant.organizationId,
+    paymentId,
+    paymentIntentId: body.paymentIntentId || payment.paymentIntentId,
+    actor: session,
+    correlationId: req._requestId,
+    source: 'http',
+  });
+  return sendJSON(res, 201, { evidence }, req);
+}
 
 async function handlePaymentLedger(req, res, chatId, paymentId) {
   const tenant = await getTenant(chatId);
@@ -2628,6 +2679,8 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/procurement-settlements$/, handler:(req,res,m)=>handleProcurementSettlement(req,res,decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/procurement-settlements\/purchase-orders\/([^/]+)$/, handler:(req,res,m)=>handleProcurementSettlement(req,res,decodeURIComponent(m[1]),decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/procurement-settlements\/purchase-orders\/([^/]+)\/allocate$/, handler:(req,res,m)=>handleProcurementSettlement(req,res,decodeURIComponent(m[1]),decodeURIComponent(m[2])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/evidence$/, handler: (req, res, m) => handlePaymentEvidence(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/evidence$/, handler: (req, res, m) => handlePaymentEvidence(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/ledger$/, handler: (req, res, m) => handlePaymentLedger(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/reconcile$/, handler: (req, res, m) => handlePaymentReconciliation(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)$/, handler: (req, res, m) => handlePayments(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
