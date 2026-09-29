@@ -116,7 +116,7 @@ import {
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
   createComplianceRequest, getComplianceRequest, listComplianceRequests, resolveComplianceRequest, buildComplianceExport,
-  listPaymentAccounts, createPaymentAccount, createPayment, insertPaymentEvidence, getPayment, getPaymentEvidence, getPaymentIntent, getPaymentForIntent, getPaymentAccountById, insertPaymentVerification, insertPaymentDecision, listPaymentVerifications, listPaymentDecisions, getPaymentAccountForProviderNotification, resolvePaymentIntentForProviderEvidence, listPayments, transitionPayment, listPaymentLedger, reconcilePayment, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
+  listPaymentAccounts, createPaymentAccount, createPayment, insertPaymentEvidence, getPayment, getPaymentEvidence, getPaymentIntent, getPaymentForIntent, getPaymentAccountById, getPaymentVerification, getPaymentDecision, insertPaymentVerification, insertPaymentDecision, listPaymentVerifications, listPaymentDecisions, getPaymentAccountForProviderNotification, resolvePaymentIntentForProviderEvidence, listPayments, transitionPayment, listPaymentLedger, reconcilePayment, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
   listCustomerPricing, getCustomerPricing, upsertCustomerPricing, updateCustomerPricing,
   listQuotes, getQuote, createQuote, transitionQuote,
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, createPurchaseOrderFromProcurementAward, transitionPurchaseOrder,
@@ -1962,7 +1962,7 @@ const paymentVerificationCore = new PaymentCore({
   store: {
     getPaymentEvidence, getPaymentIntent, getPaymentForIntent, getPaymentAccountById,
     insertPaymentVerification, insertPaymentDecision, transitionPayment,
-    listPaymentVerifications, listPaymentDecisions,
+    getPaymentVerification, getPaymentDecision, listPaymentVerifications, listPaymentDecisions,
   },
 });
 
