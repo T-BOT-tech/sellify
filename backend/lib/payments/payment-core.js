@@ -147,7 +147,16 @@ export class PaymentCore {
     if (operation !== 'reconcile' && !provider.capabilities.verify) {
       throw Object.assign(new Error('Payment provider does not support verification'), { statusCode: 501, code: 'PAYMENT_PROVIDER_VERIFY_UNSUPPORTED' });
     }
-    if (this.store.transitionPaymentEvidence) {
+    if (this.store.claimPaymentEvidenceProcessing) {
+      const claim = await this.store.claimPaymentEvidenceProcessing(chatId, evidenceId, command.actor || null);
+      if (!claim.claimed) {
+        if (claim.terminal) {
+          const existing = await this.store.getPayment(chatId, paymentId);
+          return { payment: existing, paymentIntent, evidence: claim.evidence, idempotent: true };
+        }
+        throw Object.assign(new Error('Payment evidence is already being processed'), { statusCode: 409, code: 'EVIDENCE_PROCESSING' });
+      }
+    } else if (this.store.transitionPaymentEvidence) {
       await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: 'PROCESSING' }, command.actor || null);
     }
     let observed;
