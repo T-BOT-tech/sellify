@@ -26,6 +26,7 @@ const METHODS = Object.freeze([
   'getMetadata',
   'validateAccount',
   'parseEvidence',
+  'authenticateNotification',
   'parseConfirmation',
   'verify',
   'initiate',
@@ -48,6 +49,10 @@ function normalizeProvider(adapter) {
     parseEvidence: adapter.capabilities?.parseEvidence ?? Boolean(adapter.parseEvidence || adapter.parseConfirmation),
     parseConfirmation: adapter.capabilities?.parseConfirmation ?? Boolean(adapter.parseConfirmation || adapter.parseEvidence),
   });
+  const authenticateNotification = async (...args) => {
+    if (typeof adapter.authenticateNotification === 'function') return adapter.authenticateNotification(...args);
+    throw unsupported(providerId, 'authenticateNotification');
+  };
   const parseEvidence = async (...args) => {
     if (typeof adapter.parseEvidence === 'function') return adapter.parseEvidence(...args);
     if (typeof adapter.parseConfirmation === 'function') return adapter.parseConfirmation(...args);
@@ -55,6 +60,7 @@ function normalizeProvider(adapter) {
   };
   const parseConfirmation = async (...args) => parseEvidence(...args);
   const methods = Object.fromEntries(METHODS.map(method => [method, async (...args) => {
+    if (method === 'authenticateNotification') return authenticateNotification(...args);
     if (method === 'parseEvidence') return parseEvidence(...args);
     if (method === 'parseConfirmation') return parseConfirmation(...args);
     if (typeof adapter[method] === 'function') return adapter[method](...args);
@@ -67,6 +73,7 @@ function normalizeProvider(adapter) {
     version: String(adapter.version || '1'),
     capabilities,
     getMetadata: methods.getMetadata,
+    authenticateNotification: methods.authenticateNotification,
     validateAccount: methods.validateAccount,
     parseEvidence: methods.parseEvidence,
     parseConfirmation: methods.parseConfirmation,
@@ -127,6 +134,7 @@ export function createUnconfiguredPaymentProvider({ id, name, version = '1', cap
     getMetadata: async () => ({ id: providerId, name: String(name || providerId), version }),
     validateAccount: async () => { throw notConfigured(providerId, 'validateAccount'); },
     parseEvidence: async () => { throw notConfigured(providerId, 'parseEvidence'); },
+    authenticateNotification: async () => { throw Object.assign(notConfigured(providerId, 'authenticateNotification'), { code: 'PAYMENT_NOTIFICATION_NOT_CONFIGURED' }); },
     parseConfirmation: async () => { throw notConfigured(providerId, 'parseEvidence'); },
     verify: async () => { throw notConfigured(providerId, 'verify'); },
     initiate: async () => { throw notConfigured(providerId, 'initiate'); },
