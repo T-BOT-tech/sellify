@@ -82,6 +82,51 @@ const authoritativeResolution = await store.resolvePaymentIntentForProviderEvide
 assert.equal(authoritativeResolution.paymentIntent.id, first.intent.id);
 assert.equal(authoritativeResolution.paymentAccount.id, account.id);
 
+// Provider transaction identity is account-bound. The same provider transaction
+// identifier may exist under a different configured account without colliding,
+// while evidence cannot bind an account from another organization.
+const secondAccountEvidence = await store.insertPaymentEvidence(chatId, {
+  providerId: 'mpesa',
+  channel: 'api',
+  evidenceType: 'PROVIDER_NOTIFICATION',
+  providerTransactionId: 'RCP-RESOLVE-1',
+  paymentAccountId: attackerAccount.id,
+  fingerprint: 'gap1-resolution-different-account',
+  normalizedPayload: { providerTransactionId: 'RCP-RESOLVE-1', accountIdentifier: '600003' },
+  source: 'provider-notification',
+}, null);
+assert.equal(secondAccountEvidence.duplicate, false);
+assert.equal(secondAccountEvidence.evidence.paymentAccountId, attackerAccount.id);
+
+await assert.rejects(
+  () => store.insertPaymentEvidence(chatId, {
+    paymentIntentId: first.intent.id,
+    paymentAccountId: attackerAccount.id,
+    providerId: 'mpesa',
+    channel: 'api',
+    evidenceType: 'PROVIDER_NOTIFICATION',
+    providerTransactionId: 'RCP-BINDING-1',
+    fingerprint: 'gap1-binding-mismatch',
+    normalizedPayload: { providerTransactionId: 'RCP-BINDING-1' },
+    source: 'provider-notification',
+  }, null),
+  error => error?.code === 'PAYMENT_ACCOUNT_BINDING_MISMATCH' && error?.statusCode === 409
+);
+
+await assert.rejects(
+  () => store.insertPaymentEvidence(chatId, {
+    paymentAccountId: 'account-from-another-organization',
+    providerId: 'mpesa',
+    channel: 'api',
+    evidenceType: 'PROVIDER_NOTIFICATION',
+    providerTransactionId: 'RCP-CROSS-TENANT-1',
+    fingerprint: 'gap1-cross-tenant-account',
+    normalizedPayload: { providerTransactionId: 'RCP-CROSS-TENANT-1' },
+    source: 'provider-notification',
+  }, null),
+  error => error?.code === 'PAYMENT_ACCOUNT_NOT_FOUND' && error?.statusCode === 400
+);
+
 const second = await store.createPaymentWithIntent(chatId, {
   paymentAccountId: account.id,
   providerId: 'mpesa',
