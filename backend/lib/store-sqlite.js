@@ -5360,16 +5360,20 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
   ensureDatabase();
   const { organizationId, locationId } = await resolvePaymentContext(chatId, input);
   const intentId = String(input.paymentIntentId || input.payment_intent_id || '').trim();
-  if (!intentId) throw Object.assign(new Error('paymentIntentId is required'), { statusCode: 400, code: 'PAYMENT_INTENT_REQUIRED' });
-  const intent = db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(intentId, organizationId);
-  if (!intent) throw Object.assign(new Error('Payment intent not found'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND' });
+  const allowOrphanNotification = input.allowOrphanNotification === true && String(input.source || '').toLowerCase() === 'provider_notification';
+  if (!intentId && !allowOrphanNotification) throw Object.assign(new Error('paymentIntentId is required'), { statusCode: 400, code: 'PAYMENT_INTENT_REQUIRED' });
+  const intent = intentId
+    ? db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(intentId, organizationId)
+    : null;
+  if (intentId && !intent) throw Object.assign(new Error('Payment intent not found'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND' });
   const paymentId = input.paymentId || input.payment_id || null;
   if (paymentId) {
     const payment = db.prepare('SELECT id FROM payments WHERE id = ? AND organization_id = ?').get(String(paymentId), organizationId);
     if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
   }
-  const providerId = String(input.providerId || input.provider_id || intent.provider_id).trim().toLowerCase();
-  if (providerId !== String(intent.provider_id)) throw Object.assign(new Error('Evidence provider does not match payment intent provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
+  const providerId = String(input.providerId || input.provider_id || intent?.provider_id || '').trim().toLowerCase();
+  if (!providerId) throw Object.assign(new Error('providerId is required'), { statusCode: 400, code: 'PROVIDER_REQUIRED' });
+  if (intent && providerId !== String(intent.provider_id)) throw Object.assign(new Error('Evidence provider does not match payment intent provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
   const channel = String(input.channel || 'manual').trim().toLowerCase();
   const evidenceType = String(input.evidenceType || input.evidence_type || '').trim().toUpperCase();
   if (!evidenceType) throw Object.assign(new Error('evidenceType is required'), { statusCode: 400, code: 'EVIDENCE_TYPE_REQUIRED' });
@@ -5382,7 +5386,7 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
   const id = String(input.id || crypto.randomUUID()); const now = nowIso();
   try {
     db.prepare("INSERT INTO payment_evidence (id, organization_id, location_id, payment_id, payment_intent_id, provider_id, channel, evidence_type, external_reference, provider_transaction_id, fingerprint, raw_payload_json, normalized_payload_json, source, observed_at, received_at, submitted_by_user_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?, ?)").run(
-      id, organizationId, locationId, paymentId ? String(paymentId) : null, intentId, providerId, channel, evidenceType,
+      id, organizationId, locationId, paymentId ? String(paymentId) : null, intentId || null, providerId, channel, evidenceType,
       input.externalReference || input.external_reference || null, input.providerTransactionId || input.provider_transaction_id || null,
       fingerprint, rawPayload == null ? null : json(rawPayload), normalizedPayload == null ? null : json(normalizedPayload),
       input.source || null, input.observedAt || input.observed_at || null, now, actor?.userId || null, now, now
