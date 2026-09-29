@@ -195,6 +195,34 @@ const verifiedReplay = await paymentCore.verifyEvidence({
 assert.equal(verifiedReplay.idempotent, true);
 assert.equal(verifiedReplay.verification.id, verified.verification.id);
 
+
+const mismatchEvidence = await store.insertPaymentEvidence(chatId, {
+  paymentIntentId: second.intent.id,
+  paymentAccountId: account.id,
+  providerId: 'mpesa',
+  channel: 'api',
+  evidenceType: 'PROVIDER_NOTIFICATION',
+  providerTransactionId: 'RCP-MISMATCH-1',
+  externalReference: 'ORDER-MISMATCH',
+  fingerprint: 'gap1-mismatch-fingerprint',
+  normalizedPayload: {
+    providerTransactionId: 'RCP-MISMATCH-1',
+    amountMinor: 1,
+    currency: 'KES',
+    receiver: '600001',
+    merchantReference: 'ORDER-MISMATCH',
+  },
+  source: 'provider-notification',
+}, null);
+const mismatchResult = await paymentCore.verifyEvidence({
+  chatId,
+  evidenceId: mismatchEvidence.evidence.id,
+});
+assert.equal(mismatchResult.verification.result, 'MISMATCH');
+assert.notEqual(mismatchResult.decision.targetState, 'VERIFIED');
+const mismatchPayment = await store.getPayment(chatId, second.payment.id);
+assert.notEqual(mismatchPayment.state, 'VERIFIED');
+
 const replay = await store.resolvePaymentIntentForProviderEvidence({
   providerId: 'mpesa',
   accountIdentifier: '600001',
