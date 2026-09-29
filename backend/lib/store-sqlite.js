@@ -2263,6 +2263,13 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(47, nowIso());
   }
 
+  // GAP-1.3 — idempotency completion timestamp for atomic financial-command completion.
+  if (!applied.includes(48)) {
+    const columns = db.prepare('PRAGMA table_info(payment_idempotency_keys)').all();
+    if (!columns.some(row => row.name === 'completed_at')) db.exec('ALTER TABLE payment_idempotency_keys ADD COLUMN completed_at TEXT');
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(48, nowIso());
+  }
+
   // FUX-2 Section 6 — additive multi-role compatibility bridge.
   // memberships.role remains the legacy/default role authority while
   // membership_roles provides an additive path for multiple contextual roles.
