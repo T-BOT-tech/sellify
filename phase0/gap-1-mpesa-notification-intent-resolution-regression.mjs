@@ -100,6 +100,35 @@ const exactReplay = await store.insertPaymentEvidence(chatId, {
 assert.equal(exactReplay.duplicate, true);
 assert.equal(exactReplay.evidence.id, evidence.evidence.id);
 
+// A second insert racing on the provider transaction must converge on the
+// already committed row rather than creating a second evidence record.
+const concurrentReplay = await Promise.all([
+  store.insertPaymentEvidence(chatId, {
+    paymentIntentId: first.intent.id,
+    paymentAccountId: account.id,
+    providerId: 'mpesa',
+    channel: 'api',
+    evidenceType: 'PROVIDER_NOTIFICATION',
+    providerTransactionId: 'RCP-RESOLVE-1',
+    fingerprint: 'gap1-resolution-fingerprint',
+    normalizedPayload: { providerTransactionId: 'RCP-RESOLVE-1' },
+    source: 'provider-notification',
+  }, null),
+  store.insertPaymentEvidence(chatId, {
+    paymentIntentId: first.intent.id,
+    paymentAccountId: account.id,
+    providerId: 'mpesa',
+    channel: 'api',
+    evidenceType: 'PROVIDER_NOTIFICATION',
+    providerTransactionId: 'RCP-RESOLVE-1',
+    fingerprint: 'gap1-resolution-fingerprint',
+    normalizedPayload: { providerTransactionId: 'RCP-RESOLVE-1' },
+    source: 'provider-notification',
+  }, null),
+]);
+assert.equal(concurrentReplay.length, 2);
+assert.equal(concurrentReplay[0].evidence.id, concurrentReplay[1].evidence.id);
+
 const replay = await store.resolvePaymentIntentForProviderEvidence({
   providerId: 'mpesa',
   accountIdentifier: '600001',
