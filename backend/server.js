@@ -116,7 +116,7 @@ import {
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
   createComplianceRequest, getComplianceRequest, listComplianceRequests, resolveComplianceRequest, buildComplianceExport,
-  listPaymentAccounts, createPaymentAccount, createPayment, insertPaymentEvidence, getPayment, getPaymentAccountForProviderNotification, resolvePaymentIntentForProviderEvidence, listPayments, transitionPayment, listPaymentLedger, reconcilePayment, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
+  listPaymentAccounts, createPaymentAccount, createPayment, insertPaymentEvidence, getPayment, getPaymentEvidence, getPaymentIntent, getPaymentForIntent, getPaymentAccountById, insertPaymentVerification, insertPaymentDecision, getPaymentAccountForProviderNotification, resolvePaymentIntentForProviderEvidence, listPayments, transitionPayment, listPaymentLedger, reconcilePayment, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
   listCustomerPricing, getCustomerPricing, upsertCustomerPricing, updateCustomerPricing,
   listQuotes, getQuote, createQuote, transitionQuote,
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, createPurchaseOrderFromProcurementAward, transitionPurchaseOrder,
@@ -1958,6 +1958,42 @@ async function handlePaymentAccounts(req, res, chatId) {
   sendJSON(res, 201, { account }, req);
 }
 
+const paymentVerificationCore = new PaymentCore({
+  store: {
+    getPaymentEvidence, getPaymentIntent, getPaymentForIntent, getPaymentAccountById,
+    insertPaymentVerification, insertPaymentDecision, transitionPayment,
+    listPaymentVerifications: async (chatId, paymentId) => {
+      const rows = await listPayments(chatId, { state: 'all', limit: 500 });
+      const payment = rows.find(item => String(item.id) === String(paymentId));
+      return payment ? [] : [];
+    },
+    listPaymentDecisions: async () => [],
+  },
+});
+
+async function handlePaymentEvidenceVerification(req, res, chatId, evidenceId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+  await requireAuthorization(session, tenant, 'payments', 'payments:accept', {
+    deniedMessage: 'Payment verification permission required',
+  });
+  if (req.method !== 'POST') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+  const result = await paymentVerificationCore.verifyEvidence({
+    chatId,
+    evidenceId,
+    actor: session,
+  });
+  return sendJSON(res, 200, {
+    outcome: result.outcome,
+    evidence: result.evidence,
+    verification: result.verification,
+    invariants: result.invariants,
+    decision: result.decision,
+    idempotent: Boolean(result.idempotent),
+  }, req);
+}
+
 async function handlePayments(req, res, chatId, paymentId = null) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -2796,6 +2832,7 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/ledger$/, handler: (req, res, m) => handlePaymentLedger(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/reconcile$/, handler: (req, res, m) => handlePaymentReconciliation(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)$/, handler: (req, res, m) => handlePayments(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/evidence\/([^/]+)\/verify$/, handler: (req, res, m) => handlePaymentEvidenceVerification(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments$/, handler: (req, res, m) => handlePayments(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments$/, handler: (req, res, m) => handlePayments(req, res, decodeURIComponent(m[1])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)$/, handler: (req, res, m) => handlePayments(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
