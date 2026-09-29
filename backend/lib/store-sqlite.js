@@ -5417,6 +5417,30 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
   }
   return { evidence: paymentEvidenceFromRow(db.prepare('SELECT * FROM payment_evidence WHERE id = ?').get(id)), duplicate: false };
 }
+export async function getPaymentEvidence(chatId, evidenceId) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  return paymentEvidenceFromRow(db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(String(evidenceId), organizationId));
+}
+export async function getPaymentForIntent(chatId, intentId) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  return paymentFromRow(db.prepare('SELECT * FROM payments WHERE payment_intent_id = ? AND organization_id = ? ORDER BY created_at ASC LIMIT 1').get(String(intentId), organizationId));
+}
+export async function getPaymentAccountById(chatId, accountId) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const row = db.prepare('SELECT * FROM payment_accounts WHERE id = ? AND organization_id = ?').get(String(accountId), organizationId);
+  if (!row) return null;
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    providerId: row.provider_id,
+    accountIdentifier: row.account_identifier,
+    metadata: parseJSON(row.metadata_json, {}),
+    status: row.status,
+  };
+}
 export async function listPaymentEvidence(chatId, paymentId) {
   ensureDatabase();
   const payment = await getPayment(chatId, paymentId);
