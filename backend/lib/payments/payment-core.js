@@ -109,7 +109,6 @@ export class PaymentCore {
     const verificationId = crypto.randomUUID();
     const decisionId = crypto.randomUUID();
     let committedPayment;
-    let committedByAnotherWorker = false;
     try {
       committedPayment = await this.store.commitPaymentDecision(chatId, {
         paymentId: payment.id,
@@ -159,7 +158,6 @@ export class PaymentCore {
       const concurrentDecisions = await this.store.listPaymentDecisions(chatId, payment.id);
       const concurrentDecision = concurrentDecisions?.find(item => String(item.evidenceId) === evidence.id) || null;
       committedPayment = await this.store.getPayment(chatId, payment.id);
-      committedByAnotherWorker = true;
       return {
         outcome: concurrentDecision?.targetState || concurrentVerification.result,
         payment: committedPayment,
