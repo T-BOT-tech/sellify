@@ -79,6 +79,7 @@ const evidence = await store.insertPaymentEvidence(chatId, {
   channel: 'api',
   evidenceType: 'PROVIDER_NOTIFICATION',
   providerTransactionId: 'RCP-RESOLVE-1',
+  paymentAccountId: account.id,
   fingerprint: 'gap1-resolution-fingerprint',
   normalizedPayload: { providerTransactionId: 'RCP-RESOLVE-1' },
   source: 'provider-notification',
@@ -110,6 +111,7 @@ const unmatched = await store.resolvePaymentIntentForProviderEvidence({
   providerId: 'mpesa',
   accountIdentifier: unmatchedAccount.accountIdentifier,
   providerTransactionId: 'RCP-UNMATCHED-1',
+  paymentAccountId: unmatchedAccount.id,
   externalReference: 'UNKNOWN-ORDER',
 });
 assert.equal(unmatched.paymentIntent, null);
