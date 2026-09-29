@@ -74,7 +74,7 @@ export const mpesaProvider = Object.freeze({
       senderAccount: first(params.MSISDN, params.DebitParty),
       receiverName: first(params.BusinessShortCode, params.BusinessName, params.CreditPartyName, params.ReceiverPartyPublicName),
       receiverAccount: first(payload.BusinessShortCode, payload.BuyGoodsTillNumber, params.BusinessShortCode),
-      amountMinor: first(params.TransAmount, params.TransactionAmount, params.Amount, payload.TransAmount),
+      amountMinor: amountMinor(first(params.TransAmount, params.TransactionAmount, params.Amount, payload.TransAmount)),
       currency: first(payload.Currency, params.Currency, 'KES'),
       observedAt: first(params.TransTime, params.TransactionCompletedDateTime, params.TransactionCompletedTime, payload.TransTime),
       status: success ? 'COMPLETED' : first(root.ResultDesc, root.ResponseDescription, 'FAILED'),
