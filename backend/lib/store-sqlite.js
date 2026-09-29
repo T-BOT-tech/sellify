@@ -5416,7 +5416,7 @@ export async function transitionPaymentEvidence(chatId, input = {}, actor = null
     const terminal = new Set(['VERIFIED','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED']);
     if (row.status !== target) {
       if (terminal.has(row.status)) throw Object.assign(new Error('Evidence is immutable after terminal outcome'), { statusCode: 409, code: 'EVIDENCE_TERMINAL' });
-      const valid = row.status === 'RECEIVED' ? new Set(['PROCESSING','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED']) : new Set(['VERIFIED','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED']);
+      const valid = row.status === 'RECEIVED' ? new Set(['PROCESSING','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED']) : new Set(['RECEIVED','VERIFIED','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED']);
       if (!valid.has(target)) throw Object.assign(new Error('Invalid evidence status transition'), { statusCode: 409, code: 'INVALID_EVIDENCE_TRANSITION' });
       db.prepare('UPDATE payment_evidence SET status = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND status = ?').run(target, nowIso(), evidenceId, organizationId, row.status);
     }
