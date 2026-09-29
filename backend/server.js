@@ -1884,15 +1884,53 @@ async function handlePaymentProviderNotification(req, res, providerId) {
         code: 'PROVIDER_TRANSACTION_EVIDENCE_CONFLICT',
       });
     }
-    return sendJSON(res, submitted.duplicate ? 200 : 202, {
+    return sendJSON(res, 200, {
+      accepted: true,
+      notification_id: authenticated.notificationId || null,
+      evidence_id: resolved.duplicateEvidence.id,
+      status: 'DUPLICATE',
+      outcome_code: 'DUPLICATE',
+    }, req);
+  }
+
+  const fingerprint = crypto.createHash('sha256').update(JSON.stringify({
+    providerId: provider.id,
+    accountIdentifier: authenticated.accountIdentifier,
+    providerTransactionId: evidence.providerTransactionId || null,
+    externalReference: evidence.merchantReference || evidence.externalReference || null,
+    amountMinor: evidence.amountMinor,
+    currency: evidence.currency,
+  })).digest('hex');
+
+  const submitted = await notificationPaymentCore.submitEvidence({
+    chatId: resolved.chatId,
+    organizationId: resolved.organizationId,
+    locationId: resolved.locationId,
+    paymentIntentId: resolved.paymentIntent?.id || null,
+    paymentAccountId: resolved.paymentAccount.id,
+    providerId: provider.id,
+    channel: 'api',
+    evidenceType: 'PROVIDER_NOTIFICATION',
+    externalReference: evidence.merchantReference || evidence.externalReference || null,
+    providerTransactionId: evidence.providerTransactionId || null,
+    fingerprint,
+    rawPayload: body,
+    normalizedPayload: evidence,
+    source: 'provider-notification',
+    observedAt: evidence.providerTimestamp || null,
+    actor: null,
+  });
+
+  const outcome = submitted.duplicate
+    ? 'DUPLICATE'
+    : (resolved.resolutionStatus === 'UNMATCHED' ? 'UNMATCHED' : 'RECEIVED');
+
+  return sendJSON(res, submitted.duplicate ? 200 : 202, {
     accepted: true,
     notification_id: authenticated.notificationId || null,
     evidence_id: submitted.evidence?.id || null,
-    status: ingestionOutcome,
-    outcome_code: ingestionOutcome,
-    verification_status: verificationResult?.verification?.result || null,
-    decision: verificationResult?.decision?.decision || null,
-    target_state: verificationResult?.decision?.targetState || null,
+    status: outcome,
+    outcome_code: outcome,
   }, req);
 }
 
