@@ -169,12 +169,13 @@ export class PaymentCore {
         },
       }, command.actor || null);
     } catch (error) {
-      if (error?.code !== 'PAYMENT_STATE_CONFLICT') throw error;
-      const concurrentVerifications = await this.store.listPaymentVerifications(chatId, payment.id);
-      const concurrentVerification = concurrentVerifications?.find(item => String(item.evidenceId) === evidence.id);
+      const uniqueConstraint = String(error?.message || '').includes('UNIQUE constraint failed');
+      if (error?.code !== 'PAYMENT_STATE_CONFLICT' && !uniqueConstraint) throw error;
+      const concurrentVerification = await this.store.getPaymentVerificationForEvidence(chatId, evidence.id);
       if (!concurrentVerification) throw error;
-      const concurrentDecisions = await this.store.listPaymentDecisions(chatId, payment.id);
-      const concurrentDecision = concurrentDecisions?.find(item => String(item.evidenceId) === evidence.id) || null;
+      const concurrentDecision = concurrentVerification
+        ? await this.store.getPaymentDecisionForVerification(chatId, concurrentVerification.id)
+        : null;
       committedPayment = await this.store.getPayment(chatId, payment.id);
       return {
         outcome: concurrentDecision?.targetState || concurrentVerification.result,
