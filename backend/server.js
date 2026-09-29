@@ -1921,12 +1921,28 @@ async function handlePaymentProviderNotification(req, res, providerId) {
     actor: null,
   });
 
+  let verificationResult = null;
+  if (!submitted.duplicate && submitted.evidence?.paymentIntentId) {
+    verificationResult = await notificationPaymentCore.verifyEvidence({
+      chatId: resolved.chatId,
+      evidenceId: submitted.evidence.id,
+      actor: null,
+    });
+  }
+
+  const ingestionOutcome = submitted.duplicate
+    ? 'DUPLICATE'
+    : (resolved.resolutionStatus === 'UNMATCHED' ? 'UNMATCHED' : 'RECEIVED');
+
   return sendJSON(res, submitted.duplicate ? 200 : 202, {
     accepted: true,
     notification_id: authenticated.notificationId || null,
     evidence_id: submitted.evidence?.id || null,
-    status: submitted.duplicate ? 'DUPLICATE' : (resolved.resolutionStatus === 'UNMATCHED' ? 'UNMATCHED' : 'RECEIVED'),
-    outcome_code: submitted.duplicate ? 'DUPLICATE' : (resolved.resolutionStatus === 'UNMATCHED' ? 'UNMATCHED' : 'RECEIVED'),
+    status: ingestionOutcome,
+    outcome_code: ingestionOutcome,
+    verification_status: verificationResult?.verification?.result || null,
+    decision: verificationResult?.decision?.decision || null,
+    target_state: verificationResult?.decision?.targetState || null,
   }, req);
 }
 
