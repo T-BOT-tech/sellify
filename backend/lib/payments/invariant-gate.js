@@ -51,6 +51,9 @@ export class InvariantGate {
       { required: true }));
 
     const observedAmount = verification?.observedAmountMinor;
+    const expectedAmount = Number(payment?.amountMinor);
+    const amountIsInteger = Number.isInteger(observedAmount) && Number.isInteger(expectedAmount);
+    if (amountIsInteger && observedAmount > expectedAmount) reasons.push('OVERPAYMENT');
     checks.push(check('AMOUNT_MATCH',
       Number.isInteger(observedAmount) && Number(observedAmount) === Number(payment.amountMinor),
       { required: true, expected: payment?.amountMinor ?? null, observed: observedAmount ?? null }));
@@ -78,6 +81,8 @@ export class InvariantGate {
       { required: true }));
 
     const evidenceStatus = String(evidence?.status || '').toUpperCase();
+    checks.push(check('PROVIDER_TRANSACTION_UNIQUE', verification?.providerTransactionUnique !== false, { required: true }));
+    checks.push(check('REFERENCE_UNIQUE', verification?.referenceUnique !== false, { required: true }));
     checks.push(check('EVIDENCE_NOT_REPLAYED', !['DUPLICATE','EXPIRED'].includes(evidenceStatus), {
       required: true, evidenceStatus: evidenceStatus || null,
     }));
