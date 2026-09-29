@@ -116,7 +116,7 @@ import {
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
   createComplianceRequest, getComplianceRequest, listComplianceRequests, resolveComplianceRequest, buildComplianceExport,
-  listPaymentAccounts, createPaymentAccount, createPayment, getPayment, listPayments, transitionPayment, listPaymentLedger, reconcilePayment, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
+  listPaymentAccounts, createPaymentAccount, createPayment, getPayment, getPaymentAccountForProviderNotification, resolvePaymentIntentForProviderEvidence, listPayments, transitionPayment, listPaymentLedger, reconcilePayment, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
   listCustomerPricing, getCustomerPricing, upsertCustomerPricing, updateCustomerPricing,
   listQuotes, getQuote, createQuote, transitionQuote,
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, createPurchaseOrderFromProcurementAward, transitionPurchaseOrder,
@@ -147,6 +147,8 @@ import { assertTenantScope, assertLocationScope } from './lib/tenant-isolation.j
 import { listPaymentProviders } from './lib/payments/provider-registry.js';
 import { listPaymentChannels } from './lib/payments/channel-registry.js';
 import { processEventIsolated } from './lib/event-failure-isolation.js';
+import { requirePaymentProvider } from './lib/payments/provider-registry.js';
+import { PaymentCore } from './lib/payments/payment-core.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -256,6 +258,25 @@ function sendError(res, status, err, req) {
   const message = status >= 500 ? 'Internal error' : (err.message || 'Request error');
   if (status >= 500) console.error('[error]', err);
   sendJSON(res, status, { error: { message, status } }, req);
+}
+
+
+async function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > 2 * 1024 * 1024) {
+        reject(Object.assign(new Error('Payload too large'), { statusCode: 413 }));
+        req.destroy();
+        return;
+      }
+      chunks.push(Buffer.from(chunk));
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
 }
 
 function readBody(req) {
@@ -1771,6 +1792,118 @@ async function handleTenantPatch(req, res, chatId) {
 }
 
 
+
+const notificationPaymentCore = new PaymentCore({
+  store: {
+    insertPaymentEvidence,
+  },
+});
+
+async function handlePaymentProviderNotification(req, res, providerId) {
+  const provider = requirePaymentProvider(providerId);
+  if (!provider.capabilities.authenticateNotification) {
+    throw Object.assign(new Error('Payment provider notification authentication is not configured'), {
+      statusCode: 503,
+      code: 'PAYMENT_NOTIFICATION_NOT_CONFIGURED',
+    });
+  }
+
+  const rawBody = await readRawBody(req);
+  let body = {};
+  try {
+    body = rawBody.length ? JSON.parse(rawBody.toString('utf8')) : {};
+  } catch {
+    throw Object.assign(new Error('Invalid provider notification payload'), {
+      statusCode: 400,
+      code: 'INVALID_PROVIDER_NOTIFICATION',
+    });
+  }
+
+  const callbackAccountIdentifier = String(body?.BusinessShortCode || body?.businessShortCode || '').trim();
+  if (!callbackAccountIdentifier) {
+    throw Object.assign(new Error('Provider notification account identity is required'), {
+      statusCode: 400,
+      code: 'PAYMENT_NOTIFICATION_ACCOUNT_REQUIRED',
+    });
+  }
+
+  const account = await getPaymentAccountForProviderNotification(provider.id, callbackAccountIdentifier);
+  const config = {
+    ...account.metadata,
+    accountIdentifier: account.accountIdentifier,
+  };
+
+  const authenticated = await provider.authenticateNotification({
+    rawRequest: {
+      body,
+      rawBody,
+      headers: req.headers,
+      method: req.method,
+      url: req.url,
+    },
+    requestContext: {
+      requestId: req._requestId,
+      remoteAddress: req.socket.remoteAddress || null,
+      providerAuthenticated: /^(1|true|yes)$/i.test(String(req.headers['x-sellify-provider-authenticated'] || '')),
+    },
+    config,
+  });
+
+  if (!authenticated?.authenticated) {
+    throw Object.assign(new Error('Provider notification authentication failed'), {
+      statusCode: 401,
+      code: 'PAYMENT_NOTIFICATION_AUTH_FAILED',
+    });
+  }
+
+  const evidence = await provider.parseEvidence({
+    rawRequest: { body, rawBody, headers: req.headers, method: req.method, url: req.url },
+    config: { ...config, currency: config.currency || null },
+    authentication: authenticated,
+  });
+
+  const resolved = await resolvePaymentIntentForProviderEvidence({
+    providerId: provider.id,
+    accountIdentifier: authenticated.accountIdentifier,
+    providerTransactionId: evidence.providerTransactionId,
+    externalReference: evidence.merchantReference || evidence.externalReference || '',
+  });
+
+  const fingerprint = crypto.createHash('sha256').update(JSON.stringify({
+    providerId: provider.id,
+    accountIdentifier: authenticated.accountIdentifier,
+    providerTransactionId: evidence.providerTransactionId || null,
+    externalReference: evidence.merchantReference || evidence.externalReference || null,
+    amountMinor: evidence.amountMinor,
+    currency: evidence.currency,
+  })).digest('hex');
+
+  const submitted = await notificationPaymentCore.submitEvidence({
+    chatId: resolved.chatId,
+    organizationId: resolved.organizationId,
+    locationId: resolved.locationId,
+    paymentIntentId: resolved.paymentIntent.id,
+    providerId: provider.id,
+    channel: 'api',
+    evidenceType: 'PROVIDER_NOTIFICATION',
+    externalReference: evidence.merchantReference || evidence.externalReference || null,
+    providerTransactionId: evidence.providerTransactionId || null,
+    fingerprint,
+    rawPayload: body,
+    normalizedPayload: evidence,
+    source: 'provider-notification',
+    observedAt: evidence.providerTimestamp || null,
+    actor: null,
+  });
+
+  return sendJSON(res, submitted.duplicate ? 200 : 202, {
+    accepted: true,
+    notification_id: authenticated.notificationId || null,
+    evidence_id: submitted.evidence?.id || null,
+    status: submitted.duplicate ? 'RECEIVED' : 'RECEIVED',
+  }, req);
+}
+
 async function handlePaymentProviderMetadata(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -2474,6 +2607,8 @@ async function handleOrderFulfillment(req, res, chatId, serverOrderId) {
 // ---------- routing ----------
 
 const ROUTES = [
+  { method: 'POST', pattern: /^\/integrations\/payments\/([^/]+)\/notifications$/, handler: (req, res, m) => handlePaymentProviderNotification(req, res, decodeURIComponent(m[1])) },
+
   { method: 'POST', pattern: /^\/auth\/telegram$/, handler: handleTelegramAuth },
   { method: 'POST', pattern: /^\/auth\/migrate-legacy$/, handler: handleLegacyMigration },
   { method: 'POST', pattern: /^\/auth\/tenants$/, handler: handleCreateTenant },
