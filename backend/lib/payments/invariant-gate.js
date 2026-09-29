@@ -80,8 +80,8 @@ export class InvariantGate {
     const referenceExpected = String(payment.externalReference || evidence?.externalReference || '').trim();
     const referenceObserved = String(verification?.observedReference || '').trim();
     checks.push(check('REFERENCE_MATCH',
-      !referenceExpected || !referenceObserved || referenceExpected === referenceObserved,
-      { required: false, expected: referenceExpected || null, observed: referenceObserved || null }));
+      !referenceExpected || Boolean(referenceObserved && referenceExpected === referenceObserved),
+      { required: Boolean(referenceExpected), expected: referenceExpected || null, observed: referenceObserved || null }));
 
     checks.push(check('INTENT_NOT_EXPIRED',
       !paymentIntent?.expiresAt || new Date(paymentIntent.expiresAt).getTime() > new Date(now).getTime(),
