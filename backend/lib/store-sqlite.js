@@ -497,8 +497,7 @@ function runMigrations() {
         reference_id TEXT,
         actor_id TEXT,
         device_id TEXT,
-        occurred_at TEXT NOT NULL,        reason TEXT NOT NULL DEFAULT '',
-        metadata_json TEXT,
+        occurred_at TEXT NOT NULL,        reason TEXT NOT NULL DEFAULT '',        metadata_json TEXT,
         created_at TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_inventory_movements_org_product_time
@@ -997,8 +996,7 @@ function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_invoices_org_customer ON invoices(organization_id, customer_id, created_at DESC);
       CREATE TABLE IF NOT EXISTS invoice_items (
         id TEXT PRIMARY KEY,        invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
-        product_id TEXT,
-        description TEXT NOT NULL,
+        product_id TEXT,        description TEXT NOT NULL,
         quantity INTEGER NOT NULL CHECK (quantity > 0),
         unit_price_minor INTEGER NOT NULL CHECK (unit_price_minor >= 0),
         line_total_minor INTEGER NOT NULL CHECK (line_total_minor >= 0),
@@ -1497,8 +1495,7 @@ function runMigrations() {
       WHEN (SELECT status FROM procurement_awards WHERE id=OLD.award_id) <> 'DRAFT'
       BEGIN SELECT RAISE(ABORT,'Confirmed procurement award lines are immutable'); END;      CREATE TRIGGER IF NOT EXISTS procurement_award_lines_no_delete_after_confirm
       BEFORE DELETE ON procurement_award_lines
-      WHEN (SELECT status FROM procurement_awards WHERE id=OLD.award_id) <> 'DRAFT'
-      BEGIN SELECT RAISE(ABORT,'Confirmed procurement award lines cannot be deleted'); END;
+      WHEN (SELECT status FROM procurement_awards WHERE id=OLD.award_id) <> 'DRAFT'      BEGIN SELECT RAISE(ABORT,'Confirmed procurement award lines cannot be deleted'); END;
       CREATE TRIGGER IF NOT EXISTS procurement_awards_no_core_update_after_confirm
       BEFORE UPDATE OF organization_id,demand_id,rfq_id,comparison_id,currency,idempotency_key,request_hash
       ON procurement_awards
@@ -1997,8 +1994,7 @@ function runMigrations() {
         id TEXT PRIMARY KEY,        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
         pack_id TEXT NOT NULL,
         pack_version TEXT NOT NULL DEFAULT '',
-        state TEXT NOT NULL CHECK (state IN (
-          'NOT_INSTALLED','INSTALLED','ELIGIBILITY_UNKNOWN','ELIGIBLE',
+        state TEXT NOT NULL CHECK (state IN (          'NOT_INSTALLED','INSTALLED','ELIGIBILITY_UNKNOWN','ELIGIBLE',
           'DEPENDENCY_BLOCKED','ACTIVATION_AUTHORIZATION_REQUIRED','ACTIVE',
           'DEACTIVATION_AUTHORIZATION_REQUIRED','DEACTIVATED','UPGRADE_AVAILABLE',
           'UPGRADE_AUTHORIZATION_REQUIRED','UPGRADE_BLOCKED','RECOVERY_REQUIRED','UNKNOWN'
@@ -2497,8 +2493,7 @@ export function getTelegramStorefrontConfig(chatId) {
   if (!org?.organization_id) return null;
   const row = db.prepare('SELECT * FROM telegram_storefront_configs WHERE organization_id=?').get(org.organization_id);
   if (!row) return null;
-  return {
-    organizationId: row.organization_id, channelType: row.channel_type, botId: row.bot_id,
+  return {    organizationId: row.organization_id, channelType: row.channel_type, botId: row.bot_id,
     botUsername: row.bot_username, credentialRef: row.credential_ref, status: row.status,
     webappUrl: row.webapp_url, enabledCapabilities: parseJSON(row.enabled_capabilities_json, []),
     metadata: parseJSON(row.metadata_json, {}), createdByUserId: row.created_by_user_id,
@@ -2997,8 +2992,7 @@ function procurementRfqItemFromRow(row){return {id:row.id,rfqId:row.rfq_id,deman
 function procurementRfqSupplierFromRow(row){return {id:row.id,rfqId:row.rfq_id,supplierOrganizationId:row.supplier_organization_id,supplierOrganizationName:row.supplier_organization_name||'',status:row.status,invitedAt:row.invited_at,updatedAt:row.updated_at,version:Number(row.version||1)};}
 function procurementRfqResponseItemFromRow(row){return {id:row.id,responseId:row.response_id,rfqItemId:row.rfq_item_id,offeredQuantity:Number(row.offered_quantity),unitPriceMinor:Number(row.unit_price_minor),currency:normaliseCurrency(row.currency,'ETB'),leadTimeDays:row.lead_time_days==null?null:Number(row.lead_time_days),notes:row.notes||''};}
 function procurementRfqResponseFromRow(row,items=[]){if(!row)return null;return {id:row.id,rfqId:row.rfq_id,supplierOrganizationId:row.supplier_organization_id,supplierOrganizationName:row.supplier_organization_name||'',status:row.status,currency:normaliseCurrency(row.currency,'ETB'),validUntil:row.valid_until,notes:row.notes||'',idempotencyKey:row.idempotency_key,version:Number(row.version||1),submittedAt:row.submitted_at,withdrawnAt:row.withdrawn_at,rejectedAt:row.rejected_at,createdAt:row.created_at,updatedAt:row.updated_at,items};}
-function procurementRfqInput(input, fallbackCurrency='ETB'){const currency=normaliseCurrency(input.currency,fallbackCurrency);const responseDue=input.responseDue??input.response_due??null;if(responseDue!=null&&(!String(responseDue).trim()))throw Object.assign(new Error('responseDue must be non-empty when supplied'),{statusCode:400,code:'INVALID_RESPONSE_DUE'});return {currency,responseDue:responseDue==null?null:String(responseDue).trim(),notes:String(input.notes||'').trim().slice(0,4000),supplierOrganizationIds:[...new Set((Array.isArray(input.supplierOrganizationIds)?input.supplierOrganizationIds:input.supplier_organization_ids||[]).map(v=>String(v).trim()).filter(Boolean))],idempotencyKey:input.idempotencyKey??input.idempotency_key??null};}
-function procurementRfqHash(value){return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');}
+function procurementRfqInput(input, fallbackCurrency='ETB'){const currency=normaliseCurrency(input.currency,fallbackCurrency);const responseDue=input.responseDue??input.response_due??null;if(responseDue!=null&&(!String(responseDue).trim()))throw Object.assign(new Error('responseDue must be non-empty when supplied'),{statusCode:400,code:'INVALID_RESPONSE_DUE'});return {currency,responseDue:responseDue==null?null:String(responseDue).trim(),notes:String(input.notes||'').trim().slice(0,4000),supplierOrganizationIds:[...new Set((Array.isArray(input.supplierOrganizationIds)?input.supplierOrganizationIds:input.supplier_organization_ids||[]).map(v=>String(v).trim()).filter(Boolean))],idempotencyKey:input.idempotencyKey??input.idempotency_key??null};}function procurementRfqHash(value){return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');}
 function rfqRows(organizationId,where='',params=[]){const rows=db.prepare(`SELECT * FROM procurement_rfqs WHERE organization_id=? ${where?'AND '+where:''} ORDER BY updated_at DESC,created_at DESC`).all(organizationId,...params);return rows.map(r=>{const items=db.prepare('SELECT * FROM procurement_rfq_items WHERE rfq_id=? ORDER BY created_at,id').all(r.id).map(procurementRfqItemFromRow);const suppliers=db.prepare(`SELECT rs.*,o.name AS supplier_organization_name FROM procurement_rfq_suppliers rs JOIN organizations o ON o.id=rs.supplier_organization_id WHERE rs.rfq_id=? ORDER BY o.name COLLATE NOCASE`).all(r.id).map(procurementRfqSupplierFromRow);const responses=db.prepare(`SELECT rr.*,o.name AS supplier_organization_name FROM procurement_rfq_responses rr JOIN organizations o ON o.id=rr.supplier_organization_id WHERE rr.rfq_id=? ORDER BY rr.created_at`).all(r.id).map(x=>procurementRfqResponseFromRow(x,db.prepare('SELECT * FROM procurement_rfq_response_items WHERE response_id=? ORDER BY created_at,id').all(x.id).map(procurementRfqResponseItemFromRow)));return procurementRfqFromRow(r,items,suppliers,responses);});}
 function assertActiveSupplierRelationship(buyerOrg,supplierOrg){const row=db.prepare(`SELECT 1 FROM procurement_supplier_relationships WHERE buyer_organization_id=? AND supplier_organization_id=? AND status='ACTIVE'`).get(buyerOrg,supplierOrg);if(!row)throw Object.assign(new Error('Active buyer-supplier relationship is required'),{statusCode:409,code:'SUPPLIER_RELATIONSHIP_REQUIRED'});}
 export async function createProcurementRfq(chatId,input={},actor=null){ensureDatabase();const orgId=await tenantOrganizationId(chatId);const actorId=assertProcurementActor(orgId,actor);const demandId=String(input.demandId??input.demand_id??'').trim();if(!demandId)throw Object.assign(new Error('demandId is required'),{statusCode:400,code:'DEMAND_REQUIRED'});const demand=await getProcurementDemand(chatId,demandId);if(!demand)throw Object.assign(new Error('Procurement demand not found'),{statusCode:404,code:'DEMAND_NOT_FOUND'});if(demand.status!=='SOURCING')throw Object.assign(new Error('Demand must be in SOURCING before creating an RFQ'),{statusCode:409,code:'DEMAND_NOT_SOURCING'});const normalized=procurementRfqInput(input,demand.currency);if(normalized.supplierOrganizationIds.length===0)throw Object.assign(new Error('At least one supplier is required'),{statusCode:400,code:'RFQ_SUPPLIERS_REQUIRED'});if(normalized.idempotencyKey){const old=db.prepare('SELECT * FROM procurement_rfqs WHERE organization_id=? AND idempotency_key=?').get(orgId,String(normalized.idempotencyKey));if(old){const hash=procurementRfqHash({demandId,...normalized});if(old.request_hash!==hash)throw Object.assign(new Error('Idempotency key was already used with a different RFQ payload'),{statusCode:409,code:'IDEMPOTENCY_KEY_REUSED'});return rfqRows(orgId,'id=?',[old.id])[0];}}
@@ -3497,8 +3491,7 @@ export async function createProcurementAward(chatId, input = {}, actor = null) {
   if (!rawLines.length) throw Object.assign(new Error('At least one award line is required'),{statusCode:400,code:'AWARD_LINES_REQUIRED'});
   const comparisonLines = db.prepare(`SELECT cl.*,r.status AS response_status,r.currency AS response_currency FROM procurement_comparison_line_offers cl JOIN procurement_rfq_responses r ON r.id=cl.response_id WHERE cl.comparison_id=?`).all(comparisonId);
   const byKey = new Map(comparisonLines.map(x => [`${x.rfq_item_id}:${x.supplier_organization_id}`,x]));
-  const requestedByItem = new Map(db.prepare('SELECT id,quantity,currency FROM procurement_rfq_items WHERE rfq_id=?').all(rfqId).map(x => [String(x.id),x]));
-  const seen = new Set();
+  const requestedByItem = new Map(db.prepare('SELECT id,quantity,currency FROM procurement_rfq_items WHERE rfq_id=?').all(rfqId).map(x => [String(x.id),x]));  const seen = new Set();
   const lines = rawLines.map((x,i)=>{
     const itemId=String(x.rfqItemId??x.rfq_item_id??'').trim();
     const supplierId=String(x.supplierOrganizationId??x.supplier_organization_id??'').trim();
@@ -3997,8 +3990,7 @@ function procurementReceiptLineFromRow(row) {
     receiptId: row.receipt_id,
     purchaseOrderItemId: row.purchase_order_item_id,
     productId: row.product_id,
-    receivedQuantity: Number(row.received_quantity),
-    notes: row.notes,
+    receivedQuantity: Number(row.received_quantity),    notes: row.notes,
     eventId: row.event_id,
     createdAt: row.created_at,
   };
@@ -4497,8 +4489,7 @@ function importLegacyJSON() {
     for (const [sellerPhone, chatId] of Object.entries(phoneRouting)) {
       ensureTenantRow(String(chatId));
       db.prepare(`
-        INSERT OR REPLACE INTO phone_routing (seller_phone, chat_id, updated_at)
-        VALUES (?, ?, ?)
+        INSERT OR REPLACE INTO phone_routing (seller_phone, chat_id, updated_at)        VALUES (?, ?, ?)
       `).run(String(sellerPhone), String(chatId), nowIso());
     }
 
@@ -4997,8 +4988,7 @@ export async function updateCustomer(chatId, customerId, patch = {}) {
   return upsertCustomer(chatId, { ...current, ...patch, id: current.id });
 }
 
-function inventoryMovementFromRow(row) {
-  if (!row) return null;
+function inventoryMovementFromRow(row) {  if (!row) return null;
   return {
     id: row.id, eventId: row.event_id, organizationId: row.organization_id,
     locationId: row.location_id, productId: row.product_id, quantity: Number(row.quantity),
@@ -5265,6 +5255,103 @@ function hashPaymentRequest(value) {
   return crypto.createHash('sha256').update(JSON.stringify(value ?? {})).digest('hex');
 }
 
+
+export async function createPaymentWithIntent(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const { organizationId, locationId } = await resolvePaymentContext(chatId, input);
+  const currency = tenantCurrency(chatId);
+  const amountMinor = Number(input.amountMinor ?? input.amount_minor);
+  if (!Number.isInteger(amountMinor) || amountMinor < 0) throw Object.assign(new Error('amountMinor must be a non-negative integer'), { statusCode: 400, code: 'INVALID_PAYMENT_AMOUNT' });
+  if (input.currency != null && normaliseCurrency(input.currency, currency) !== currency) throw Object.assign(new Error('Payment currency does not match the organization currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
+
+  const orderId = input.orderId || input.order_id || null;
+  let customerId = input.customerId || input.customer_id || null;
+  if (orderId) {
+    const order = db.prepare('SELECT order_json, customer_id, total_minor, currency FROM orders WHERE chat_id = ? AND server_order_id = ?').get(String(chatId), String(orderId));
+    if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    if (normaliseCurrency(order.currency, currency) !== currency) throw Object.assign(new Error('Order currency does not match the organization currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
+    if (amountMinor > Number(order.total_minor)) throw Object.assign(new Error('Payment amount cannot exceed the order total'), { statusCode: 400, code: 'PAYMENT_AMOUNT_EXCEEDS_ORDER' });
+    customerId = customerId || order.customer_id || parseJSON(order.order_json, {}).customer_id || null;
+  }
+  if (customerId) {
+    const customer = db.prepare('SELECT id FROM customers WHERE id = ? AND organization_id = ?').get(String(customerId), organizationId);
+    if (!customer) throw Object.assign(new Error('Customer does not belong to this organization'), { statusCode: 400, code: 'CUSTOMER_ORGANIZATION_MISMATCH' });
+    customerId = String(customerId);
+  }
+
+  const providerId = String(input.providerId || input.provider_id || '').trim().toLowerCase();
+  if (!providerId) throw Object.assign(new Error('providerId is required'), { statusCode: 400, code: 'PROVIDER_REQUIRED' });
+  requirePaymentProvider(providerId);
+
+  const accountId = input.paymentAccountId || input.payment_account_id || null;
+  if (!accountId) throw Object.assign(new Error('paymentAccountId is required'), { statusCode: 400, code: 'PAYMENT_ACCOUNT_REQUIRED' });
+  const account = db.prepare("SELECT id, provider_id FROM payment_accounts WHERE id = ? AND organization_id = ? AND status = 'active'").get(String(accountId), organizationId);
+  if (!account) throw Object.assign(new Error('Payment account does not belong to this organization'), { statusCode: 400, code: 'PAYMENT_ACCOUNT_NOT_FOUND' });
+  if (String(account.provider_id) !== providerId) throw Object.assign(new Error('Payment account provider does not match payment provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
+
+  const channel = String(input.channel || 'manual').trim().toLowerCase();
+  requirePaymentChannel(channel);
+  const id = String(input.id || crypto.randomUUID());
+  const intentId = String(input.paymentIntentId || input.payment_intent_id || crypto.randomUUID());
+  const now = nowIso();
+  const idempotencyKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  const requestHash = String(input.requestHash || input.request_hash || hashPaymentRequest({
+    orderId, customerId, paymentAccountId: accountId, providerId, channel, amountMinor, currency,
+    expiresAt: input.expiresAt || input.expires_at || null, metadata: input.metadata || {},
+  }));
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    if (idempotencyKey) {
+      const existing = db.prepare('SELECT * FROM payment_idempotency_keys WHERE organization_id = ? AND idempotency_key = ? AND command_type = ?').get(organizationId, idempotencyKey, 'CREATE_PAYMENT');
+      if (existing) {
+        if (String(existing.request_hash) !== requestHash) {
+          throw Object.assign(new Error('Idempotency key was already used with a different request'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE' });
+        }
+        const response = parseJSON(existing.response_json, null);
+        db.exec('COMMIT');
+        return response?.paymentId
+          ? { payment: paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(response.paymentId, organizationId)), intent: paymentIntentFromRow(db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(response.intentId, organizationId)), idempotent: true }
+          : { payment: null, intent: null, idempotent: true };
+      }
+    }
+
+    db.prepare("INSERT INTO payment_intents (id, organization_id, location_id, order_id, payment_account_id, provider_id, amount_minor, currency, status, expires_at, metadata_json, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)").run(
+      intentId, organizationId, locationId, orderId ? String(orderId) : null, String(accountId), providerId, amountMinor, currency,
+      input.expiresAt || input.expires_at || null, json(input.metadata || {}), actor?.userId || null, now, now
+    );
+
+    db.prepare("INSERT INTO payments (id, organization_id, location_id, order_id, customer_id, payment_account_id, provider_id, channel, method_id, method_name, amount_minor, currency, state, payment_intent_id, external_reference, claimed_at, received_at, verified_at, reconciled_at, metadata_json, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'UNPAID', ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?)").run(
+      id, organizationId, locationId, orderId ? String(orderId) : null, customerId, String(accountId), providerId, channel,
+      input.methodId || input.method_id || null, input.methodName || input.method_name || null, intentId,
+      json(input.metadata || {}), actor?.userId || null, now, now
+    );
+
+    db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, 'CREATED', ?, ?, NULL, 'UNPAID', ?, ?, ?, ?)").run(
+      crypto.randomUUID(), id, organizationId, amountMinor, currency, actor?.userId || null, String(input.reason || ''), json(input.metadata || {}), now
+    );
+
+    syncMarketplacePaymentAllocation(orderId, id, amountMinor, 'UNPAID');
+
+    const response = { paymentId: id, intentId };
+    if (idempotencyKey) {
+      db.prepare("INSERT INTO payment_idempotency_keys (id, organization_id, idempotency_key, command_type, request_hash, response_status, response_json, resource_type, resource_id, created_at, expires_at) VALUES (?, ?, ?, 'CREATE_PAYMENT', ?, 201, ?, 'payment', ?, ?, ?)").run(
+        crypto.randomUUID(), organizationId, idempotencyKey, requestHash, json(response), id, now, input.idempotencyExpiresAt || input.idempotency_expires_at || null
+      );
+    }
+    db.exec('COMMIT');
+    audit(String(chatId), 'payment.created', 'payment', id, { amountMinor, currency, state: 'UNPAID', orderId, paymentIntentId: intentId }, { organizationId, locationId, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
+    return {
+      payment: paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(id, organizationId)),
+      intent: paymentIntentFromRow(db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(intentId, organizationId)),
+      idempotent: false,
+    };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
 export async function getPaymentIntent(chatId, intentId) {
   ensureDatabase();
   const { organizationId } = await resolvePaymentContext(chatId);
@@ -5497,8 +5584,7 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
         db.prepare("UPDATE marketplace_settlements SET status = 'REVERSED' WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')").run(marketplaceAllocation.canonical_seller_order_id);
       } else if (['VERIFIED','RECONCILED'].includes(target) && Number(row.amount_minor) === Number(marketplaceAllocation.amount_minor)) {
         db.prepare("UPDATE marketplace_payment_allocations SET status = 'ALLOCATED', updated_at = ? WHERE id = ?").run(now, marketplaceAllocation.id);
-        db.prepare("UPDATE marketplace_settlements SET status = 'READY' WHERE seller_order_id = ? AND status = 'PENDING'").run(marketplaceAllocation.canonical_seller_order_id);
-      }
+        db.prepare("UPDATE marketplace_settlements SET status = 'READY' WHERE seller_order_id = ? AND status = 'PENDING'").run(marketplaceAllocation.canonical_seller_order_id);      }
     }
     audit(String(chatId), 'payment.' + target.toLowerCase(), 'payment', paymentId, {
       fromState: row.state, toState: target, decision: decision.decision || null,
@@ -5997,7 +6083,6 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
     throw error;
   }
 }
-
 export async function listDeliveryAssignments(chatId, actor = null, filters = {}) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
@@ -6498,472 +6583,3 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
         ).get(String(sellerOrg));
         if (!defaultLocation) {
           throw Object.assign(new Error('Canonical inventory location is unavailable'), { statusCode: 409, code: 'INVENTORY_LOCATION_UNAVAILABLE' });
-        }
-        const canonicalBalance = Number(db.prepare(`
-          SELECT COALESCE(SUM(quantity), 0) AS quantity
-          FROM inventory_movements
-          WHERE organization_id = ? AND location_id = ? AND product_id = ?
-        `).get(String(sellerOrg), String(defaultLocation.id), String(itemId))?.quantity || 0);
-        if (canonicalBalance < qty) {
-          throw Object.assign(new Error(`Not enough stock for "${product.name}" (${canonicalBalance} left)`), { statusCode: 409 });
-        }
-
-        // inventory_movements is the physical stock authority. catalog_products.stock
-        // is retained only as a compatibility projection for older clients.
-        const movementEventId = `marketplace-sale:${marketplaceOrderId}:${sellerId}:${itemId}`;
-        await appendInventoryMovement(sellerId, {
-          productId: itemId,
-          locationId: String(defaultLocation.id),
-          quantity: -qty,
-          movementType: 'SALE',
-          referenceType: 'marketplace_order',
-          referenceId: marketplaceOrderId,
-          eventId: movementEventId,
-          occurredAt: nowIso(),
-          reason: 'Marketplace checkout',
-          metadata: { marketplaceOrderId, sellerId, quantity: qty },
-        });
-        product.stock = canonicalBalance - qty;
-        product.stock_revision = (Number.isInteger(row.stock_revision) ? row.stock_revision : 0) + 1;
-        insertProduct(sellerId, product);
-
-        const price = row.price_minor;
-        const lineTotal = price * qty;
-        subtotal += lineTotal;
-        grandTotal += lineTotal;
-        sellerItems.push({ item_id: product.id, name: product.name, price, qty, total: lineTotal, currency: sellerCurrency, category: product.category });
-      }
-
-      const orderId = `MPO_${marketplaceOrderId}_${sellerId}`;
-      const serverOrderId = crypto.randomUUID();
-      const sellerOrderCanonicalId = crypto.randomUUID();
-      const order = {
-        id: orderId,
-        marketplace_order_id: marketplaceOrderId,
-        is_marketplace: true,
-        vendor_code: tenant.vendor_code || defaultVendorCode(sellerId),
-        items: sellerItems,
-        total: subtotal,
-        currency: sellerCurrency,
-        customer_name: customer_name || 'Marketplace Buyer',
-        customer_phone: customer_phone || '',
-        buyer_id: buyer_id || buyerIdentity,
-        buyer_identity: buyerIdentity,
-        buyer_tracking_token_hash: trackingTokenHash,
-        status: 'queued',
-        created_at: Date.now(),
-        created_by_role: 'buyer',
-        created_by_user: customer_name || 'Marketplace Buyer',
-      };
-      insertOrder(sellerId, orderId, {
-        ...order,
-        server_order_id: serverOrderId,
-        synced_at: nowIso(),
-        delivered_to_device: false,
-      });
-
-      db.prepare(`
-        INSERT INTO marketplace_seller_orders
-          (id, marketplace_order_id, seller_id, seller_order_id, organization_id, currency, subtotal_minor, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)
-      `).run(
-        sellerOrderCanonicalId, marketplaceOrderId, sellerId, orderId, String(tenant.organization_id),
-        sellerCurrency, subtotal, nowIso(), nowIso()
-      );
-
-      db.prepare(`
-        INSERT INTO marketplace_fulfillments
-          (id, seller_order_id, status, fulfillment_type, created_at, updated_at)
-        VALUES (?, ?, 'pending', 'delivery', ?, ?)
-      `).run(crypto.randomUUID(), sellerOrderCanonicalId, nowIso(), nowIso());
-
-      for (const item of sellerItems) {
-        db.prepare(`
-          INSERT INTO marketplace_inventory_reservations
-            (id, marketplace_order_id, seller_order_id, seller_id, product_id, quantity, status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, 'consumed', ?, ?)
-        `).run(
-          crypto.randomUUID(), marketplaceOrderId, sellerOrderCanonicalId, sellerId,
-          String(item.item_id), Math.floor(Number(item.qty)), nowIso(), nowIso()
-        );
-      }
-
-      db.prepare(`
-        INSERT INTO marketplace_payment_allocations
-          (id, marketplace_order_id, seller_order_id, payment_id, organization_id, amount_minor, currency, status, created_at, updated_at)
-        VALUES (?, ?, ?, NULL, ?, ?, ?, 'UNPAID', ?, ?)
-      `).run(
-        crypto.randomUUID(), marketplaceOrderId, sellerOrderCanonicalId, String(tenant.organization_id),
-        subtotal, sellerCurrency, nowIso(), nowIso()
-      );
-
-      db.prepare(`
-        INSERT INTO marketplace_settlements
-          (id, marketplace_order_id, seller_order_id, organization_id, amount_minor, currency, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'PENDING', ?)
-      `).run(
-        crypto.randomUUID(), marketplaceOrderId, sellerOrderCanonicalId, String(tenant.organization_id),
-        subtotal, sellerCurrency, nowIso()
-      );
-
-      audit(sellerId, 'marketplace.order_created', 'order', orderId, {
-        marketplaceOrderId,
-        canonicalSellerOrderId: sellerOrderCanonicalId,
-        totalMinor: subtotal,
-        itemCount: sellerItems.length,
-      });
-      subOrders.push({
-        seller_id: sellerId,
-        vendor_code: order.vendor_code,
-        sub_total: subtotal,
-        currency: sellerCurrency,
-        item_count: sellerItems.length,
-        seller_order_id: sellerOrderCanonicalId,
-      });
-    }
-
-    const finalCurrency = marketplaceCurrency || 'ETB';
-    db.prepare('UPDATE marketplace_orders SET currency = ?, total_minor = ?, updated_at = ? WHERE id = ?')
-      .run(finalCurrency, grandTotal, nowIso(), marketplaceOrderId);
-
-    const response = { marketplace_order_id: marketplaceOrderId, tracking_token: trackingToken, sub_orders: subOrders };
-    if (idempotencyKey) {
-      db.prepare(`
-        INSERT INTO marketplace_checkout_idempotency
-          (id, idempotency_key, buyer_identity, request_hash, response_json, marketplace_order_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(crypto.randomUUID(), idempotencyKey, buyerIdentity, requestHash, json(response), marketplaceOrderId, nowIso());
-    }
-    db.exec('COMMIT');
-    return response;
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
-}
-
-const MARKETPLACE_STATUS_TRANSITIONS = {
-  queued: new Set(['confirmed', 'cancelled']),
-  confirmed: new Set(['preparing', 'cancelled']),
-  preparing: new Set(['ready', 'cancelled']),
-  ready: new Set(['completed']),
-  completed: new Set([]),
-  cancelled: new Set([]),
-};
-
-export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) {
-  ensureDatabase();
-  const key = String(chatId);
-  const id = String(localId);
-  const target = String(nextStatus || '').trim().toLowerCase();
-  if (!Object.hasOwn(MARKETPLACE_STATUS_TRANSITIONS, target)) {
-    throw Object.assign(new Error('Invalid marketplace order status'), { statusCode: 400 });
-  }
-
-  db.exec('BEGIN IMMEDIATE');
-  try {
-    const row = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND local_id = ? AND is_marketplace = 1').get(key, id);
-    if (!row) throw Object.assign(new Error('Marketplace order not found'), { statusCode: 404 });
-    const order = orderFromRow(row);
-    const current = String(order.status || row.status || 'queued');
-    if (current === target) {
-      db.exec('COMMIT');
-      return order;
-    }
-    if (!MARKETPLACE_STATUS_TRANSITIONS[current]?.has(target)) {
-      throw Object.assign(new Error(`Cannot move order from ${current} to ${target}`), { statusCode: 409 });
-    }
-
-    // Stock is reserved at checkout. A cancellation releases that reservation
-    // exactly once (the transition machine makes repeated cancellation
-    // impossible). We restore against the current product row instead of
-    // trusting the buyer payload; if the seller deleted the product after the
-    // order, we deliberately do not resurrect it.
-    const canonicalSeller = db.prepare(
-      'SELECT * FROM marketplace_seller_orders WHERE seller_order_id = ?'
-    ).get(id);
-
-    if (target === 'cancelled') {
-      for (const item of Array.isArray(order.items) ? order.items : []) {
-        const itemId = String(item?.item_id || '').trim();
-        const qty = Math.floor(Number(item?.qty));
-        if (!itemId || !Number.isFinite(qty) || qty <= 0) continue;
-        const productRow = db.prepare('SELECT * FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(key, itemId);
-        if (!productRow) continue;
-        const tenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(key);
-        const defaultLocation = tenant?.organization_id
-          ? db.prepare("SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1").get(String(tenant.organization_id))
-          : null;
-        if (!tenant?.organization_id || !defaultLocation) continue;
-        const canonicalBalance = Number(db.prepare(`
-          SELECT COALESCE(SUM(quantity), 0) AS quantity
-          FROM inventory_movements
-          WHERE organization_id = ? AND location_id = ? AND product_id = ?
-        `).get(String(tenant.organization_id), String(defaultLocation.id), String(itemId))?.quantity || 0);
-        const restoredStock = Math.min(1000000000, canonicalBalance + qty);
-        const movementEventId = `marketplace-cancel:${order.marketplace_order_id}:${key}:${itemId}`;
-        await appendInventoryMovement(key, {
-          productId: itemId,
-          locationId: String(defaultLocation.id),
-          quantity: qty,
-          movementType: 'RETURN',
-          referenceType: 'marketplace_order',
-          referenceId: order.marketplace_order_id,
-          eventId: movementEventId,
-          occurredAt: nowIso(),
-          reason: 'Marketplace cancellation stock release',
-          metadata: { marketplaceOrderId: order.marketplace_order_id, sellerId: key, quantity: qty },
-        });
-        const product = productFromRow(productRow);
-        product.stock = restoredStock;
-        product.stock_revision = (Number.isInteger(productRow.stock_revision) ? productRow.stock_revision : 0) + 1;
-        insertProduct(key, product);
-      }
-
-      if (canonicalSeller) {
-        db.prepare(`
-          UPDATE marketplace_inventory_reservations
-          SET status = 'released', updated_at = ?
-          WHERE seller_order_id = ? AND status = 'consumed'
-        `).run(nowIso(), canonicalSeller.id);
-
-        const allocations = db.prepare(`
-          SELECT a.*, p.state AS payment_state
-          FROM marketplace_payment_allocations a
-          LEFT JOIN payments p ON p.id = a.payment_id
-          WHERE a.seller_order_id = ? AND a.status IN ('ALLOCATED','PARTIAL')
-        `).all(canonicalSeller.id);
-        for (const allocation of allocations) {
-          const paidAndVerified = ['VERIFIED', 'RECONCILED'].includes(String(allocation.payment_state || '').toUpperCase());
-          if (!paidAndVerified || Number(allocation.amount_minor) <= 0 || !allocation.payment_id) continue;
-          db.prepare(`
-            INSERT INTO marketplace_refunds
-              (id, marketplace_order_id, seller_order_id, payment_id, organization_id, amount_minor, currency, reason, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
-          `).run(
-            crypto.randomUUID(), allocation.marketplace_order_id, allocation.seller_order_id,
-            allocation.payment_id, allocation.organization_id, allocation.amount_minor,
-            allocation.currency, 'Marketplace order cancellation', nowIso()
-          );
-          db.prepare(`
-            UPDATE marketplace_payment_allocations
-            SET status = 'REFUNDED', updated_at = ?
-            WHERE id = ?
-          `).run(nowIso(), allocation.id);
-        }
-
-        db.prepare(`
-          UPDATE marketplace_settlements
-          SET status = 'REVERSED'
-          WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')
-        `).run(canonicalSeller.id);
-
-        db.prepare(`
-          UPDATE marketplace_fulfillments
-          SET status = 'cancelled', updated_at = ?
-          WHERE seller_order_id = ? AND status <> 'delivered' AND status <> 'picked_up'
-        `).run(nowIso(), canonicalSeller.id);
-      }
-    }
-
-    if (canonicalSeller) {
-      db.prepare(`
-        UPDATE marketplace_seller_orders
-        SET status = ?, updated_at = ?
-        WHERE id = ?
-      `).run(target, nowIso(), canonicalSeller.id);
-
-      const statusSummary = db.prepare(`
-        SELECT
-          COUNT(*) AS total,
-          SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
-          SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
-          SUM(CASE WHEN status = 'ready' THEN 1 ELSE 0 END) AS ready,
-          SUM(CASE WHEN status = 'preparing' THEN 1 ELSE 0 END) AS preparing,
-          SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed
-        FROM marketplace_seller_orders
-        WHERE marketplace_order_id = ?
-      `).get(canonicalSeller.marketplace_order_id);
-      let masterStatus = 'queued';
-      if (Number(statusSummary?.cancelled || 0) === Number(statusSummary?.total || 0)) masterStatus = 'cancelled';
-      else if (Number(statusSummary?.completed || 0) === Number(statusSummary?.total || 0)) masterStatus = 'completed';
-      else if (Number(statusSummary?.ready || 0) > 0) masterStatus = 'ready';
-      else if (Number(statusSummary?.preparing || 0) > 0) masterStatus = 'preparing';
-      else if (Number(statusSummary?.confirmed || 0) === Number(statusSummary?.total || 0)) masterStatus = 'confirmed';
-      db.prepare('UPDATE marketplace_orders SET status = ?, updated_at = ? WHERE id = ?')
-        .run(masterStatus, nowIso(), canonicalSeller.marketplace_order_id);
-    }
-
-    const updated = { ...order, status: target, status_updated_at: Date.now() };
-    db.prepare('UPDATE orders SET order_json = ?, status = ? WHERE chat_id = ? AND local_id = ?').run(json(updated), target, key, id);
-    audit(key, `marketplace.order_${target}`, 'order', id, {
-      marketplaceOrderId: order.marketplace_order_id,
-      from: current,
-      to: target,
-      stockReleased: target === 'cancelled',
-    });
-    db.exec('COMMIT');
-    return updated;
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
-}
-
-export async function getMarketplaceOrderTracking(marketplaceOrderId, trackingToken) {
-  ensureDatabase();
-  const id = String(marketplaceOrderId || '').trim();
-  const token = String(trackingToken || '').trim();
-  if (!id || !token) throw Object.assign(new Error('Order ID and tracking token are required'), { statusCode: 400 });
-  const rows = db.prepare('SELECT * FROM orders WHERE marketplace_order_id = ? AND is_marketplace = 1 ORDER BY created_at ASC').all(id);
-  if (!rows.length) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
-  const expectedHash = hashToken(token);
-  const authorised = rows.some(row => {
-    const stored = String(orderFromRow(row).buyer_tracking_token_hash || '');
-    const a = Buffer.from(stored); const b = Buffer.from(expectedHash);
-    return a.length === b.length && crypto.timingSafeEqual(a, b);
-  });
-  if (!authorised) throw Object.assign(new Error('Invalid tracking token'), { statusCode: 404 });
-  return {
-    marketplace_order_id: id,
-    created_at: Math.min(...rows.map(r => Number(r.created_at) || Date.now())),
-    status: rows.some(r => String(r.status) === 'cancelled') ? 'cancelled' : rows.every(r => String(r.status) === 'completed') ? 'completed' : rows.some(r => ['preparing','ready'].includes(String(r.status))) ? 'in_progress' : rows.every(r => String(r.status) === 'confirmed' || String(r.status) === 'completed') ? 'confirmed' : 'queued',
-    sellers: rows.map(row => {
-      const order = orderFromRow(row);
-      return { seller_name: getTenant(row.chat_id)?.sellerName || 'Seller', status: order.status || row.status || 'queued', item_count: Array.isArray(order.items) ? order.items.reduce((n, item) => n + Number(item.qty || 0), 0) : 0, total: order.total || 0, currency: normaliseCurrency(row.currency || order.currency || parseJSON(db.prepare('SELECT branding_json FROM tenants WHERE chat_id = ?').get(row.chat_id)?.branding_json, {})?.currency, 'ETB') };
-    }),
-  };
-}
-
-export async function getTelegramBuyerFulfillmentExperience(chatId, telegramUserId, marketplaceOrderId) {
-  ensureDatabase();
-  const tenant = await getTenant(chatId);
-  if (!tenant?.organizationId) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'STORE_NOT_FOUND' });
-  const buyer = String(telegramUserId || '').trim();
-  const orderId = String(marketplaceOrderId || '').trim();
-  if (!buyer) throw Object.assign(new Error('Telegram buyer identity is required'), { statusCode: 400, code: 'TELEGRAM_BUYER_REQUIRED' });
-  if (!orderId) throw Object.assign(new Error('Marketplace order ID is required'), { statusCode: 400, code: 'MARKETPLACE_ORDER_REQUIRED' });
-  const rows = db.prepare(`
-    SELECT mo.id AS marketplace_order_id, mo.status AS marketplace_status, mo.created_at,
-           mso.seller_order_id, mso.status AS seller_status,
-           mf.id AS fulfillment_id, mf.status AS fulfillment_status,
-           mf.fulfillment_type, mf.tracking_reference, mf.proof_json,
-           mf.created_at AS fulfillment_created_at, mf.updated_at AS fulfillment_updated_at
-    FROM marketplace_orders mo
-    JOIN marketplace_seller_orders mso ON mso.marketplace_order_id = mo.id
-    LEFT JOIN marketplace_fulfillments mf ON mf.seller_order_id = mso.id
-    WHERE mo.id = ? AND mo.buyer_identity = ? AND mso.seller_id = ?
-    ORDER BY mf.updated_at DESC, mf.created_at DESC
-  `).all(orderId, buyer, String(chatId));
-  if (!rows.length) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
-  const first = rows[0];
-  const fulfillments = rows.filter(r => r.fulfillment_id).map(r => ({
-    id: r.fulfillment_id,
-    sellerOrderId: r.seller_order_id,
-    status: r.fulfillment_status,
-    fulfillmentType: r.fulfillment_type,
-    trackingReference: r.tracking_reference || null,
-    proof: parseJSON(r.proof_json, null),
-    createdAt: r.fulfillment_created_at,
-    updatedAt: r.fulfillment_updated_at,
-  }));
-  return {
-    marketplaceOrderId: first.marketplace_order_id,
-    marketplaceStatus: first.marketplace_status,
-    createdAt: first.created_at,
-    sellerOrders: [...new Map(rows.map(r => [r.seller_order_id, { sellerOrderId: r.seller_order_id, status: r.seller_status }])).values()],
-    fulfillments,
-    returns: { supported: false, status: null, requestAction: 'existing_logistics_return_authority_required' },
-    authority: { order: 'commerce', fulfillment: 'existing_marketplace_fulfillment', logistics: 'logistics-pack', returns: 'logistics-pack' },
-  };
-}
-
-export async function listTelegramBuyerOrders(chatId, telegramUserId, limit = 20) {
-  ensureDatabase();
-  const tenant = await getTenant(chatId);
-  if (!tenant?.organizationId) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'STORE_NOT_FOUND' });
-  const buyer = String(telegramUserId || '').trim();
-  if (!buyer) throw Object.assign(new Error('Telegram buyer identity is required'), { statusCode: 400, code: 'TELEGRAM_BUYER_REQUIRED' });
-  const safeLimit = Math.min(50, Math.max(1, Number(limit) || 20));
-  const rows = db.prepare(`
-    SELECT mo.id AS marketplace_order_id, mo.currency AS marketplace_currency,
-           mo.total_minor, mo.status AS marketplace_status, mo.created_at, mo.updated_at,
-           mso.seller_id, mso.organization_id, mso.seller_order_id, mso.currency AS seller_currency,
-           mso.subtotal_minor, mso.status AS seller_status
-    FROM marketplace_orders mo
-    JOIN marketplace_seller_orders mso ON mso.marketplace_order_id = mo.id
-    WHERE mo.buyer_identity = ? AND mso.seller_id = ?
-    ORDER BY mo.created_at DESC, mso.created_at ASC
-  `).all(buyer, String(chatId));
-  const grouped = new Map();
-  for (const row of rows) {
-    if (!grouped.has(row.marketplace_order_id)) grouped.set(row.marketplace_order_id, {
-      marketplace_order_id: row.marketplace_order_id,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      status: row.marketplace_status,
-      total_minor: Number(row.total_minor || 0),
-      currency: row.marketplace_currency,
-      sellers: [],
-    });
-    const order = grouped.get(row.marketplace_order_id);
-    order.sellers.push({ seller_order_id: row.seller_order_id, status: row.seller_status, subtotal_minor: Number(row.subtotal_minor || 0), currency: row.seller_currency });
-  }
-  return [...grouped.values()].slice(0, safeLimit);
-}
-
-export async function listAuditEvents(chatId, limit = 100, filters = {}) {
-  ensureDatabase();
-  const safeLimit = Math.min(500, Math.max(1, Number(limit) || 100));
-  const tenant = await getTenant(chatId);
-  if (!tenant?.organizationId) return [];
-  const where = ['a.organization_id = ?'];
-  const params = [String(tenant.organizationId)];
-  if (filters.action) { where.push('a.action = ?'); params.push(String(filters.action)); }
-  if (filters.actorId) { where.push('a.actor_id = ?'); params.push(String(filters.actorId)); }
-  if (filters.entityType) { where.push('a.entity_type = ?'); params.push(String(filters.entityType)); }
-  params.push(safeLimit);
-  return db.prepare(`
-    SELECT a.id, a.chat_id, a.organization_id, a.location_id, a.actor_id, a.device_id,
-           a.action, a.entity_type, a.entity_id, a.reason, a.result, a.metadata_json, a.created_at
-    FROM audit_events a
-    WHERE ${where.join(' AND ')}
-    ORDER BY a.id DESC
-    LIMIT ?
-  `).all(...params).map(row => ({
-    id: row.id,
-    chatId: row.chat_id,
-    organizationId: row.organization_id,
-    locationId: row.location_id,
-    actorId: row.actor_id,
-    deviceId: row.device_id,
-    action: row.action,
-    entityType: row.entity_type,
-    entityId: row.entity_id,
-    reason: row.reason || '',
-    result: row.result || 'success',
-    metadata: parseJSON(row.metadata_json, {}),
-    createdAt: row.created_at,
-  }));
-}
-
-export async function createDatabaseBackup() {
-  ensureDatabase();
-  await mkdir(BACKUP_DIR, { recursive: true });
-  const fileName = `sellify-${new Date().toISOString().replaceAll(':', '').replace(/\.\d{3}Z$/, 'Z')}.sqlite`;
-  const destination = path.join(BACKUP_DIR, fileName);
-  // VACUUM INTO produces a compact, consistent snapshot even while the
-  // service is live. The destination is generated under our own backup dir.
-  db.exec(`VACUUM INTO '${sqlString(destination)}'`);
-
-  const files = (await readdir(BACKUP_DIR))
-    .filter(file => file.startsWith('sellify-') && file.endsWith('.sqlite'))
-    .sort()
-    .reverse();
-  for (const oldFile of files.slice(BACKUP_RETENTION)) {
-    await unlink(path.join(BACKUP_DIR, oldFile));
-  }
-  return { path: destination, fileName, retained: Math.min(files.length, BACKUP_RETENTION) };
-}
-
-function hashToken(token) {
