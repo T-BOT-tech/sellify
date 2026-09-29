@@ -294,7 +294,8 @@
     "gap-1:http-boundary-test": "node phase0/gap-1-payment-http-boundary-regression.mjs",
     "gap-1:command-test": "node phase0/gap-1-payment-command-pipeline-regression.mjs",
     "gap-1:telebirr-parser-test": "node phase0/gap-1-telebirr-parser-regression.mjs",
-    "gap-1:telebirr-ingestion-test": "node phase0/gap-1-telebirr-evidence-ingestion-regression.mjs"
+    "gap-1:telebirr-ingestion-test": "node phase0/gap-1-telebirr-evidence-ingestion-regression.mjs",
+    "gap-1:cbe-parser-test": "node phase0/gap-1-cbe-parser-regression.mjs"
   },
   "engines": {
     "node": ">=24"
