@@ -85,6 +85,17 @@ test('DecisionEngine turns duplicate provider transactions into DUPLICATE', () =
   assert.equal(result.targetState, 'DUPLICATE');
 });
 
+test('DecisionEngine preserves a valid underpayment as PARTIAL', () => {
+  const result = new PaymentDecisionEngine().decide({
+    payment: { ...base.payment, amountMinor: 150000 },
+    verification: { ...base.verification, observedAmountMinor: 100000 },
+    invariants: { passed: false, reasonCodes: ['AMOUNT_MISMATCH'] },
+  });
+  assert.equal(result.decision, 'MARK_PARTIAL');
+  assert.equal(result.targetState, 'PARTIAL');
+  assert.ok(result.reasonCodes.includes('PARTIAL_PAYMENT'));
+});
+
 test('DecisionEngine turns provider mismatch into MISMATCH', () => {
   const result = new PaymentDecisionEngine().decide({
     payment: base.payment,
