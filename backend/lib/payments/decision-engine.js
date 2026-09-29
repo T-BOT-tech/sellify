@@ -37,6 +37,16 @@ export class PaymentDecisionEngine {
     } else if (has(reasons, 'INTENT_EXPIRED') || String(verification?.result).toUpperCase() === 'EXPIRED') {
       decision = 'EXPIRE';
       targetState = 'EXPIRED';
+    } else if (String(verification?.result).toUpperCase() === 'MATCH' &&
+               Number.isInteger(verification?.observedAmountMinor) &&
+               Number.isInteger(payment?.amountMinor) &&
+               verification.observedAmountMinor < payment.amountMinor &&
+               !has(reasons, 'CURRENCY_MISMATCH') &&
+               !has(reasons, 'RECEIVER_MISMATCH') &&
+               !has(reasons, 'RECEIVER_UNAVAILABLE')) {
+      decision = 'MARK_PARTIAL';
+      targetState = 'PARTIAL';
+      reasons.push('PARTIAL_PAYMENT');
     } else if (has(reasons, 'RECEIVER_MISMATCH') || has(reasons, 'RECEIVER_UNAVAILABLE') ||
                has(reasons, 'CURRENCY_MISMATCH') || has(reasons, 'AMOUNT_MISMATCH') ||
                has(reasons, 'REFERENCE_MISMATCH')) {
@@ -54,13 +64,6 @@ export class PaymentDecisionEngine {
     } else if (String(verification?.result).toUpperCase() === 'EXPIRED') {
       decision = 'EXPIRE';
       targetState = 'EXPIRED';
-    } else if (Number.isInteger(verification?.observedAmountMinor) &&
-               Number.isInteger(payment?.amountMinor) &&
-               verification.observedAmountMinor < payment.amountMinor &&
-               String(verification?.result).toUpperCase() === 'MATCH') {
-      decision = 'MARK_PARTIAL';
-      targetState = 'PARTIAL';
-      reasons.push('PARTIAL_PAYMENT');
     }
 
     return {
