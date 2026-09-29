@@ -1892,6 +1892,7 @@ async function handlePaymentProviderNotification(req, res, providerId) {
     organizationId: resolved.organizationId,
     locationId: resolved.locationId,
     paymentIntentId: resolved.paymentIntent?.id || null,
+    paymentAccountId: resolved.paymentAccount.id,
     providerId: provider.id,
     channel: 'api',
     evidenceType: 'PROVIDER_NOTIFICATION',
