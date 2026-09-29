@@ -30,10 +30,12 @@ export function normalizeVerificationPolicy(input = {}) {
   });
 }
 
-export function resolveVerificationPolicy({ paymentAccount = null, paymentIntent = null, provider = null } = {}) {
+export function resolveVerificationPolicy({ paymentAccount = null, paymentIntent = null } = {}) {
+  // Provider metadata is adapter capability/configuration, not tenant payment
+  // policy. Keep policy resolution synchronous and explicitly scoped to the
+  // account/intent configuration authorities.
   const configured = paymentAccount?.metadata?.verificationPolicy
     ?? paymentIntent?.metadata?.verificationPolicy
-    ?? provider?.metadata?.verificationPolicy
     ?? {};
 
   return normalizeVerificationPolicy(configured);
