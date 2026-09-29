@@ -29,6 +29,7 @@ function notConfigured(providerId, operation) {
 
 const METHODS = Object.freeze([
   'getMetadata',
+  'authenticateNotification',
   'validateAccount',
   'parseEvidence',
   'parseConfirmation',
@@ -73,6 +74,7 @@ function normalizeProvider(adapter) {
     version: String(adapter.version || '1'),
     capabilities,
     getMetadata: methods.getMetadata,
+    authenticateNotification: methods.authenticateNotification,
     validateAccount: methods.validateAccount,
     parseEvidence: methods.parseEvidence,
     parseConfirmation: methods.parseConfirmation,
@@ -155,6 +157,7 @@ export function createUnconfiguredPaymentProvider({ id, name, version = '1', cap
     version,
     capabilities,
     getMetadata: async () => ({ id: providerId, name: String(name || providerId), version }),
+    authenticateNotification: async () => { throw notConfigured(providerId, 'authenticateNotification'); },
     validateAccount: async () => { throw notConfigured(providerId, 'validateAccount'); },
     parseEvidence: async () => { throw notConfigured(providerId, 'parseEvidence'); },
     parseConfirmation: async () => { throw notConfigured(providerId, 'parseEvidence'); },
