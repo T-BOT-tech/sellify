@@ -183,6 +183,10 @@ assert.equal(verified.decision.decision, 'ACCEPT');
 assert.equal(verified.decision.targetState, 'VERIFIED');
 const verifiedPayment = await store.getPayment(chatId, first.payment.id);
 assert.equal(verifiedPayment.state, 'VERIFIED');
+const paymentLedger = await store.listPaymentLedger(chatId, first.payment.id);
+assert.equal(paymentLedger.at(-1).entryType, 'VERIFIED');
+assert.equal(paymentLedger.at(-1).fromState, 'UNPAID');
+assert.equal(paymentLedger.at(-1).toState, 'VERIFIED');
 
 const verifiedReplay = await paymentCore.verifyEvidence({
   chatId,
