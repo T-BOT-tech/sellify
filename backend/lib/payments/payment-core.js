@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { InvariantGate } from './invariant-gate.js';
 import { PaymentDecisionEngine } from './decision-engine.js';
 import { requirePaymentProvider } from './provider-registry.js';
+import { resolveVerificationPolicy, requiresIndependentConfirmation } from './verification-policy.js';
 
 export class PaymentCore {
   constructor({
@@ -97,6 +98,8 @@ export class PaymentCore {
 
     const normalized = evidence.normalizedPayload || {};
     const provider = this.providerRegistry.requirePaymentProvider(evidence.providerId);
+    const verificationPolicy = resolveVerificationPolicy({ paymentAccount, paymentIntent, provider });
+
     let providerVerification;
     try {
       providerVerification = await provider.verify({
@@ -138,10 +141,83 @@ export class PaymentCore {
       ...providerVerification,
       providerId: providerVerification?.providerId || evidence.providerId,
       reasonCodes: Array.isArray(providerVerification?.reasonCodes) ? providerVerification.reasonCodes : [],
-      rawResult: providerVerification?.rawResult || { source: evidence.source, normalizedPayload: normalized },
+      rawResult: {
+        ...(providerVerification?.rawResult || { source: evidence.source, normalizedPayload: normalized }),
+        verificationPolicy: verificationPolicy.mode,
+        independentConfirmationRequired: verificationPolicy.requireIndependentConfirmation,
+      },
       verifier: providerVerification?.verifier || 'payment-core',
       verifierVersion: providerVerification?.verifierVersion || 'provider-verification-v1',
     };
+
+    if (requiresIndependentConfirmation(verificationPolicy)) {
+      let providerStatus;
+      try {
+        providerStatus = await provider.getStatus({
+          evidence,
+          paymentIntent,
+          payment,
+          paymentAccount,
+          config: {
+            ...(paymentAccount?.metadata || {}),
+            accountIdentifier: paymentAccount?.accountIdentifier || null,
+          },
+          now: this.clock(),
+        });
+      } catch (error) {
+        if (error?.code === 'PAYMENT_PROVIDER_OPERATION_UNSUPPORTED' ||
+            error?.code === 'PAYMENT_PROVIDER_NOT_CONFIGURED') {
+          providerStatus = {
+            providerId: evidence.providerId,
+            status: 'UNKNOWN',
+            reasonCodes: ['PROVIDER_STATUS_UNAVAILABLE'],
+            rawResult: { source: evidence.source || 'payment-evidence' },
+            verifier: 'payment-core',
+            verifierVersion: 'provider-status-v1',
+          };
+        } else {
+          throw error;
+        }
+      }
+
+      const status = String(providerStatus?.status || 'UNKNOWN').toUpperCase();
+      verification.rawResult = {
+        ...verification.rawResult,
+        independentConfirmation: providerStatus,
+      };
+
+      if (status !== 'CONFIRMED') {
+        verification.result = status === 'PENDING' ? 'PENDING' : 'UNVERIFIABLE';
+        verification.confidence = 0;
+        verification.reasonCodes = [
+          ...new Set([
+            ...verification.reasonCodes,
+            ...(Array.isArray(providerStatus?.reasonCodes) ? providerStatus.reasonCodes : []),
+            status === 'UNKNOWN' ? 'INDEPENDENT_CONFIRMATION_UNAVAILABLE' : 'INDEPENDENT_CONFIRMATION_REQUIRED',
+          ]),
+        ];
+        return {
+          outcome: 'PENDING_CONFIRMATION',
+          payment,
+          evidence,
+          verification,
+          invariants: null,
+          decision: null,
+          pending: true,
+        };
+      }
+
+      if (providerStatus.providerId && String(providerStatus.providerId).toLowerCase() !== String(evidence.providerId).toLowerCase()) {
+        verification.result = 'MISMATCH';
+        verification.reasonCodes = [...new Set([...verification.reasonCodes, 'PROVIDER_MISMATCH'])];
+      }
+      if (providerStatus.providerTransactionId &&
+          verification.observedTransactionId &&
+          String(providerStatus.providerTransactionId) !== String(verification.observedTransactionId)) {
+        verification.result = 'MISMATCH';
+        verification.reasonCodes = [...new Set([...verification.reasonCodes, 'PROVIDER_TRANSACTION_MISMATCH'])];
+      }
+    }
 
     const invariants = this.invariantGate.evaluate({
       payment,
