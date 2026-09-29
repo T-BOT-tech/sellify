@@ -5209,6 +5209,7 @@ function paymentEvidenceFromRow(row) {
     normalizedPayload: parseJSON(row.normalized_payload_json, null), source: row.source || null,
     observedAt: row.observed_at || null, receivedAt: row.received_at,
     submittedByUserId: row.submitted_by_user_id || null, status: row.status,
+    processingClaimedAt: row.processing_claimed_at || null, processingLeaseExpiresAt: row.processing_lease_expires_at || null, processingAttempt: Number(row.processing_attempt || 0),
     createdAt: row.created_at, updatedAt: row.updated_at,
   };
 }
@@ -5475,7 +5476,7 @@ export async function transitionPaymentEvidence(chatId, input = {}, actor = null
       if (terminal.has(row.status)) throw Object.assign(new Error('Evidence is immutable after terminal outcome'), { statusCode: 409, code: 'EVIDENCE_TERMINAL' });
       const valid = row.status === 'RECEIVED' ? new Set(['PROCESSING','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED']) : new Set(['RECEIVED','VERIFIED','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED']);
       if (!valid.has(target)) throw Object.assign(new Error('Invalid evidence status transition'), { statusCode: 409, code: 'INVALID_EVIDENCE_TRANSITION' });
-      db.prepare('UPDATE payment_evidence SET status = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND status = ?').run(target, nowIso(), evidenceId, organizationId, row.status);
+      db.prepare('UPDATE payment_evidence SET status = ?, processing_lease_expires_at = NULL, updated_at = ? WHERE id = ? AND organization_id = ? AND status = ?').run(target, nowIso(), evidenceId, organizationId, row.status);
     }
     audit(String(chatId), 'payment.evidence.' + target.toLowerCase(), 'payment_evidence', evidenceId, { fromStatus: row.status, toStatus: target }, { organizationId, locationId: row.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
     db.exec('COMMIT');
