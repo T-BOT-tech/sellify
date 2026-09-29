@@ -13,8 +13,6 @@ export class PaymentCore {
     if (!store) throw new TypeError('PaymentCore requires store');
     this.store = store;
     this.providerRegistry = providerRegistry;
-    this.invariantGate = invariantGate;
-    this.decisionEngine = decisionEngine;
     this.authorization = authorization;
     this.clock = clock;
     this.invariantGate = invariantGate || new InvariantGate();
@@ -60,6 +58,21 @@ export class PaymentCore {
       : null;
     if (!paymentIntent || !payment) {
       throw Object.assign(new Error('Payment intent/payment could not be resolved for evidence'), { statusCode: 409, code: 'PAYMENT_INTENT_MISMATCH' });
+    }
+
+    const priorVerifications = await this.store.listPaymentVerifications(chatId, payment.id);
+    const priorVerification = priorVerifications?.find(item => String(item.evidenceId) === evidence.id);
+    if (priorVerification) {
+      const priorDecisions = await this.store.listPaymentDecisions(chatId, payment.id);
+      const priorDecision = priorDecisions?.find(item => String(item.evidenceId) === evidence.id) || null;
+      return {
+        outcome: priorDecision?.targetState || priorVerification.result,
+        evidence,
+        verification: priorVerification,
+        invariants: priorDecision?.invariantResults || null,
+        decision: priorDecision,
+        idempotent: true,
+      };
     }
 
     const normalized = evidence.normalizedPayload || {};
