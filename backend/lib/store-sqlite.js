@@ -5616,10 +5616,12 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
     if (!row) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
     if (expectedState && row.state !== expectedState) throw Object.assign(new Error('Payment state changed before decision could commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
     if (row.state !== target && !PAYMENT_TRANSITIONS[row.state]?.has(target)) throw Object.assign(new Error('Invalid payment transition'), { statusCode: 409, code: 'INVALID_PAYMENT_TRANSITION' });
+    let committedVerificationId = null;
     if (input.verification) {
       const v = input.verification;
+      committedVerificationId = String(v.id || crypto.randomUUID());
       db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-        String(v.id || crypto.randomUUID()), organizationId, paymentId, v.paymentIntentId || v.payment_intent_id || row.payment_intent_id || null, v.evidenceId || v.evidence_id || null,
+        committedVerificationId, organizationId, paymentId, v.paymentIntentId || v.payment_intent_id || row.payment_intent_id || null, v.evidenceId || v.evidence_id || null,
         v.providerId || v.provider_id || row.provider_id, String(v.result || '').toUpperCase(), v.confidence == null ? null : Number(v.confidence),
         v.observedAmountMinor ?? v.observed_amount_minor ?? null, v.observedCurrency || v.observed_currency || null,
         v.observedReceiver || v.observed_receiver || null, v.observedReceiverAccount || v.observed_receiver_account || null,
@@ -5632,7 +5634,7 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
     const decisionId = String(decision.id || crypto.randomUUID());
     db.prepare("INSERT INTO payment_decisions (id, organization_id, payment_id, payment_intent_id, evidence_id, verification_id, decision, target_state, reason_codes_json, invariant_results_json, decision_source, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
       decisionId, organizationId, paymentId, decision.paymentIntentId || decision.payment_intent_id || row.payment_intent_id || null,
-      decision.evidenceId || decision.evidence_id || null, decision.verificationId || decision.verification_id || null,
+      decision.evidenceId || decision.evidence_id || null, decision.verificationId || decision.verification_id || committedVerificationId,
       String(decision.decision || '').toUpperCase(), target, json(decision.reasonCodes || decision.reason_codes || []),
       json(decision.invariantResults || decision.invariant_results || {}), decision.decisionSource || 'PAYMENT_CORE', actor?.userId || null, now
     );
@@ -5654,6 +5656,27 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       }
     }
     audit(String(chatId), 'payment.' + target.toLowerCase(), 'payment', paymentId, { fromState: row.state, toState: target, decision: decision.decision || null, reasonCodes: decision.reasonCodes || decision.reason_codes || [] }, { organizationId, locationId: row.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null, reason: decision.reason || '' });
+    if (input.idempotencyKey && input.idempotencyCommandType && input.idempotencyRequestHash) {
+      const idempotencyRow = db.prepare('SELECT id FROM payment_idempotency_keys WHERE organization_id = ? AND idempotency_key = ? AND command_type = ? AND request_hash = ?').get(
+        organizationId, String(input.idempotencyKey), String(input.idempotencyCommandType), String(input.idempotencyRequestHash)
+      );
+      if (!idempotencyRow) throw Object.assign(new Error('Payment idempotency record not found during commit'), { statusCode: 409, code: 'IDEMPOTENCY_RECORD_NOT_FOUND' });
+      const committedPayment = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
+      const committedIntent = input.paymentIntentId ? db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(String(input.paymentIntentId), organizationId) : null;
+      const committedEvidence = input.evidenceId ? db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(String(input.evidenceId), organizationId) : null;
+      const committedVerification = committedVerificationId ? db.prepare('SELECT * FROM payment_verifications WHERE id = ? AND organization_id = ?').get(committedVerificationId, organizationId) : null;
+      const response = {
+        payment: paymentFromRow(committedPayment),
+        paymentIntent: paymentIntentFromRow(committedIntent),
+        evidence: paymentEvidenceFromRow(committedEvidence),
+        verification: paymentVerificationFromRow(committedVerification),
+        invariants: decision.invariantResults || decision.invariant_results || {},
+        decision: { ...decision, verificationId: committedVerificationId },
+      };
+      db.prepare('UPDATE payment_idempotency_keys SET response_status = ?, response_json = ?, resource_type = ?, resource_id = ?, completed_at = ? WHERE id = ?').run(
+        200, json(response), 'payment', paymentId, now, idempotencyRow.id
+      );
+    }
     db.exec('COMMIT');
     return paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId));
   } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
