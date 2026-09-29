@@ -297,7 +297,8 @@
     "gap-1:telebirr-ingestion-test": "node phase0/gap-1-telebirr-evidence-ingestion-regression.mjs",
     "gap-1:cbe-parser-test": "node phase0/gap-1-cbe-parser-regression.mjs",
     "gap-1:mpesa-parser-test": "node phase0/gap-1-mpesa-parser-regression.mjs",
-    "gap-1:boa-parser-test": "node phase0/gap-1-boa-parser-regression.mjs"
+    "gap-1:boa-parser-test": "node phase0/gap-1-boa-parser-regression.mjs",
+    "gap-1:provider-contract-test": "node phase0/gap-1-provider-contract-regression.mjs"
   },
   "engines": {
     "node": ">=24"
