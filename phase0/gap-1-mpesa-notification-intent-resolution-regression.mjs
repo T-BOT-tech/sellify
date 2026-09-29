@@ -552,6 +552,46 @@ assert.equal((await store.getPayment(chatId, refundBypassSetup.payment.id)).stat
 assert.equal((await store.listPaymentLedger(chatId, refundBypassSetup.payment.id)).length, 0);
 
 
+// GAP-1.6: Payment Core must use the provider verification boundary
+// rather than treating normalized notification data as inherently verified.
+const providerVerificationSetup = await store.createPaymentWithIntent(chatId, {
+  paymentAccountId: account.id,
+  providerId: 'mpesa',
+  channel: 'api',
+  amountMinor: 12550,
+  currency: 'KES',
+  metadata: { merchantReference: 'PROVIDER-VERIFY-1' },
+}, session);
+const providerEvidence = await store.insertPaymentEvidence(chatId, {
+  paymentIntentId: providerVerificationSetup.intent.id,
+  paymentAccountId: account.id,
+  providerId: 'mpesa',
+  channel: 'api',
+  evidenceType: 'PROVIDER_NOTIFICATION',
+  providerTransactionId: 'RCP-PROVIDER-VERIFY-1',
+  externalReference: 'PROVIDER-VERIFY-1',
+  fingerprint: 'gap1-provider-verify',
+  normalizedPayload: {
+    providerId: 'mpesa',
+    providerTransactionId: 'RCP-PROVIDER-VERIFY-1',
+    amountMinor: 12550,
+    currency: 'KES',
+    receiver: '600001',
+    merchantReference: 'PROVIDER-VERIFY-1',
+    providerTimestamp: '20260930123000',
+  },
+  source: 'provider-notification',
+}, null);
+
+const providerVerification = await paymentCore.verifyEvidence({
+  chatId,
+  evidenceId: providerEvidence.evidence.id,
+});
+assert.equal(providerVerification.verification.verifier, 'mpesa-provider-adapter');
+assert.equal(providerVerification.verification.verifierVersion, 'notification-evidence-v1');
+assert.equal(providerVerification.verification.result, 'MATCH');
+assert.equal(providerVerification.outcome, 'VERIFIED');
+
 const reconciliationSetup = await store.createPaymentWithIntent(chatId, {
   paymentAccountId: account.id,
   providerId: 'mpesa',
