@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { InvariantGate } from './invariant-gate.js';
 import { PaymentDecisionEngine } from './decision-engine.js';
+import { requirePaymentProvider } from './provider-registry.js';
 
 export class PaymentCore {
   constructor({
@@ -13,7 +14,7 @@ export class PaymentCore {
   }) {
     if (!store) throw new TypeError('PaymentCore requires store');
     this.store = store;
-    this.providerRegistry = providerRegistry;
+    this.providerRegistry = providerRegistry || { requirePaymentProvider };
     this.authorization = authorization;
     this.clock = clock;
     this.invariantGate = invariantGate || new InvariantGate();
@@ -95,21 +96,51 @@ export class PaymentCore {
     }
 
     const normalized = evidence.normalizedPayload || {};
+    const provider = this.providerRegistry.requirePaymentProvider(evidence.providerId);
+    let providerVerification;
+    try {
+      providerVerification = await provider.verify({
+        evidence,
+        paymentIntent,
+        payment,
+        paymentAccount,
+        config: {
+          ...(paymentAccount?.metadata || {}),
+          accountIdentifier: paymentAccount?.accountIdentifier || null,
+        },
+        now: this.clock(),
+      });
+    } catch (error) {
+      if (error?.code === 'PAYMENT_PROVIDER_OPERATION_UNSUPPORTED' ||
+          error?.code === 'PAYMENT_PROVIDER_NOT_CONFIGURED') {
+        providerVerification = {
+          providerId: evidence.providerId,
+          result: 'UNVERIFIABLE',
+          confidence: 0,
+          observedAmountMinor: Number.isInteger(normalized.amountMinor) ? normalized.amountMinor : null,
+          observedCurrency: normalized.currency || null,
+          observedReceiver: normalized.receiver || null,
+          observedReceiverAccount: normalized.receiver || null,
+          observedReference: normalized.merchantReference || normalized.externalReference || evidence.externalReference || null,
+          observedTransactionId: normalized.providerTransactionId || evidence.providerTransactionId || null,
+          observedAt: normalized.providerTimestamp || evidence.observedAt || null,
+          reasonCodes: ['PROVIDER_VERIFICATION_UNAVAILABLE'],
+          rawResult: { source: evidence.source, normalizedPayload: normalized },
+          verifier: 'payment-core',
+          verifierVersion: 'provider-verification-v1',
+        };
+      } else {
+        throw error;
+      }
+    }
+
     const verification = {
-      providerId: evidence.providerId,
-      result: 'MATCH',
-      confidence: 1,
-      observedAmountMinor: Number.isInteger(normalized.amountMinor) ? normalized.amountMinor : null,
-      observedCurrency: normalized.currency || null,
-      observedReceiver: normalized.receiver || null,
-      observedReceiverAccount: normalized.receiver || null,
-      observedReference: normalized.merchantReference || normalized.externalReference || evidence.externalReference || null,
-      observedTransactionId: normalized.providerTransactionId || evidence.providerTransactionId || null,
-      observedAt: normalized.providerTimestamp || evidence.observedAt || null,
-      reasonCodes: [],
-      rawResult: { source: evidence.source, normalizedPayload: normalized },
-      verifier: 'payment-core',
-      verifierVersion: 'notification-evidence-v1',
+      ...providerVerification,
+      providerId: providerVerification?.providerId || evidence.providerId,
+      reasonCodes: Array.isArray(providerVerification?.reasonCodes) ? providerVerification.reasonCodes : [],
+      rawResult: providerVerification?.rawResult || { source: evidence.source, normalizedPayload: normalized },
+      verifier: providerVerification?.verifier || 'payment-core',
+      verifierVersion: providerVerification?.verifierVersion || 'provider-verification-v1',
     };
 
     const invariants = this.invariantGate.evaluate({
