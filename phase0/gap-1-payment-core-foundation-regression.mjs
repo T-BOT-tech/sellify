@@ -152,3 +152,25 @@ test('PaymentCore submitEvidence never changes payment state', async () => {
   assert.equal(result.evidence.status, 'RECEIVED');
   assert.equal(calls.length, 1);
 });
+
+test('InvariantGate identifies overpayment explicitly', () => {
+  const input = structuredClone(base);
+  input.verification.observedAmountMinor = 175000;
+  const result = new InvariantGate().evaluate(input);
+  assert.ok(result.reasonCodes.includes('OVERPAYMENT'));
+  assert.ok(result.reasonCodes.includes('AMOUNT_MISMATCH'));
+});
+
+test('InvariantGate maps duplicate provider transaction to decision reason', () => {
+  const input = structuredClone(base);
+  input.verification.providerTransactionUnique = false;
+  const result = new InvariantGate().evaluate(input);
+  assert.ok(result.reasonCodes.includes('PROVIDER_TRANSACTION_DUPLICATE'));
+});
+
+test('InvariantGate maps reused reference to mismatch reason', () => {
+  const input = structuredClone(base);
+  input.verification.referenceUnique = false;
+  const result = new InvariantGate().evaluate(input);
+  assert.ok(result.reasonCodes.includes('REFERENCE_MISMATCH'));
+});
