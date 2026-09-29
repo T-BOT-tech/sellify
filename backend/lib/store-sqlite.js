@@ -5402,6 +5402,39 @@ export async function findPaymentEvidenceByReference(chatId, providerId, referen
   return row ? paymentEvidenceFromRow(row) : null;
 }
 
+export async function claimPaymentEvidenceProcessing(chatId, evidenceId, actor = null) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const id = String(evidenceId || '').trim();
+  if (!id) throw Object.assign(new Error('evidenceId is required'), { statusCode: 400, code: 'EVIDENCE_REQUIRED' });
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const row = db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(id, organizationId);
+    if (!row) throw Object.assign(new Error('Evidence not found'), { statusCode: 404, code: 'EVIDENCE_NOT_FOUND' });
+    if (row.status === 'PROCESSING') {
+      db.exec('COMMIT');
+      return { claimed: false, evidence: paymentEvidenceFromRow(row) };
+    }
+    if (['VERIFIED','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED'].includes(row.status)) {
+      db.exec('COMMIT');
+      return { claimed: false, terminal: true, evidence: paymentEvidenceFromRow(row) };
+    }
+    if (row.status !== 'RECEIVED') {
+      throw Object.assign(new Error('Evidence cannot be claimed for processing'), { statusCode: 409, code: 'INVALID_EVIDENCE_PROCESSING_STATE' });
+    }
+    const now = nowIso();
+    const result = db.prepare("UPDATE payment_evidence SET status = 'PROCESSING', updated_at = ? WHERE id = ? AND organization_id = ? AND status = 'RECEIVED'").run(now, id, organizationId);
+    if (Number(result.changes || 0) !== 1) {
+      db.exec('COMMIT');
+      const current = db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(id, organizationId);
+      return { claimed: false, evidence: paymentEvidenceFromRow(current) };
+    }
+    audit(String(chatId), 'payment.evidence.processing', 'payment_evidence', id, { fromStatus: 'RECEIVED', toStatus: 'PROCESSING' }, { organizationId, locationId: row.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
+    db.exec('COMMIT');
+    return { claimed: true, evidence: paymentEvidenceFromRow(db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(id, organizationId)) };
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
+
 export async function transitionPaymentEvidence(chatId, input = {}, actor = null) {
   ensureDatabase();
   const { organizationId } = await resolvePaymentContext(chatId);
