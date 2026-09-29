@@ -8392,6 +8392,7 @@ export async function createPaymentConfirmationAttempt(chatId, input = {}, actor
   const account = intent.payment_account_id
     ? db.prepare('SELECT * FROM payment_accounts WHERE id=? AND organization_id=?').get(intent.payment_account_id, organizationId)
     : null;
+  const payment = db.prepare('SELECT id FROM payments WHERE payment_intent_id=? AND organization_id=? LIMIT 1').get(paymentIntentId, organizationId);
   const latest = db.prepare('SELECT MAX(attempt_number) AS n FROM payment_confirmation_attempts WHERE payment_intent_id=? AND evidence_id=?').get(paymentIntentId,evidenceId);
   const attemptNumber = Number(input.attemptNumber ?? input.attempt_number ?? Number(latest?.n || 0) + 1);
   if (!Number.isInteger(attemptNumber) || attemptNumber < 1) {
@@ -8406,7 +8407,7 @@ export async function createPaymentConfirmationAttempt(chatId, input = {}, actor
       (id,organization_id,payment_id,payment_intent_id,evidence_id,payment_account_id,provider_id,status,attempt_number,requested_at,expires_at,created_at,updated_at)
     VALUES (?,?,?,?,?,?,?,'REQUESTED',?,?,?, ?,?)
   `).run(
-    id, organizationId, intent.payment_id || null, paymentIntentId, evidenceId, intent.payment_account_id || null,
+    id, organizationId, payment?.id || null, paymentIntentId, evidenceId, intent.payment_account_id || null,
     intent.provider_id, attemptNumber, now, input.expiresAt ?? input.expires_at ?? null, now, now
   );
   audit(String(chatId), 'payment.confirmation_attempt.created', 'payment_confirmation_attempt', id,
