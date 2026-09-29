@@ -147,8 +147,10 @@ export class PaymentCore {
     if (operation !== 'reconcile' && !provider.capabilities.verify) {
       throw Object.assign(new Error('Payment provider does not support verification'), { statusCode: 501, code: 'PAYMENT_PROVIDER_VERIFY_UNSUPPORTED' });
     }
+    let processingAttempt = null;
     if (this.store.claimPaymentEvidenceProcessing) {
       const claim = await this.store.claimPaymentEvidenceProcessing(chatId, evidenceId, command.actor || null);
+      if (claim.claimed) processingAttempt = claim.evidence?.processingAttempt ?? null;
       if (!claim.claimed) {
         if (claim.terminal) {
           const existing = await this.store.getPayment(chatId, paymentId);
@@ -166,7 +168,7 @@ export class PaymentCore {
         : await provider.verify({ payment, paymentIntent, evidence, command });
     } catch (error) {
       if (this.store.transitionPaymentEvidence) {
-        await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: 'RECEIVED' }, command.actor || null);
+        await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: 'RECEIVED', processingAttempt }, command.actor || null);
       }
       throw error;
     }
@@ -177,7 +179,7 @@ export class PaymentCore {
     const decision = this.decisionEngine.decide({ payment, verification, invariants });
     if (!decision.targetState) {
       const response = { payment, paymentIntent, evidence, verification, invariants, decision };
-      if (this.store.transitionPaymentEvidence) await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: 'UNVERIFIABLE' }, command.actor || null);
+      if (this.store.transitionPaymentEvidence) await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: 'UNVERIFIABLE', processingAttempt }, command.actor || null);
       if (idempotencyKey && this.store.finalizePaymentIdempotency) await this.store.finalizePaymentIdempotency(chatId, { idempotencyKey, commandType, requestHash, response, responseStatus: 200, resourceType: 'payment', resourceId: paymentId });
       return response;
     }
@@ -187,9 +189,10 @@ export class PaymentCore {
       idempotencyKey,
       idempotencyCommandType: idempotencyKey ? commandType : null,
       idempotencyRequestHash: idempotencyKey ? requestHash : null,
+      processingAttempt,
     }, command.actor || null);
     const terminalStatus = decision.decision === 'MARK_DUPLICATE' ? 'DUPLICATE' : decision.targetState === 'EXPIRED' ? 'EXPIRED' : decision.targetState === 'VERIFIED' || decision.targetState === 'RECONCILED' ? 'VERIFIED' : decision.targetState === 'MISMATCH' || decision.targetState === 'REJECTED' ? 'REJECTED' : 'UNVERIFIABLE';
-    if (this.store.transitionPaymentEvidence) await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: terminalStatus }, command.actor || null);
+    if (this.store.transitionPaymentEvidence) await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: terminalStatus, processingAttempt }, command.actor || null);
     const response = { ...committed, evidence, verification, invariants, decision };
     if (idempotencyKey && this.store.finalizePaymentIdempotency) await this.store.finalizePaymentIdempotency(chatId, { idempotencyKey, commandType, requestHash, response, responseStatus: 200, resourceType: 'payment', resourceId: paymentId });
     return response;
