@@ -5471,6 +5471,35 @@ export async function claimPaymentEvidenceProcessing(chatId, evidenceId, actor =
   } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
 
+export async function renewPaymentEvidenceProcessing(chatId, evidenceId, processingAttempt, actor = null, options = {}) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const id = String(evidenceId || '').trim();
+  const attempt = Number(processingAttempt);
+  const leaseSeconds = Number(options.leaseSeconds ?? 60);
+  if (!id || !Number.isInteger(attempt) || attempt < 1) {
+    throw Object.assign(new Error('evidenceId and processingAttempt are required'), { statusCode: 400, code: 'EVIDENCE_LEASE_CONTEXT_REQUIRED' });
+  }
+  if (!Number.isInteger(leaseSeconds) || leaseSeconds < 30 || leaseSeconds > 3600) {
+    throw Object.assign(new Error('Invalid payment evidence lease duration'), { statusCode: 500, code: 'INVALID_EVIDENCE_LEASE_CONFIG' });
+  }
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const now = nowIso();
+    const result = db.prepare("UPDATE payment_evidence SET processing_lease_expires_at = datetime(?, '+' || ? || ' seconds'), updated_at = ? WHERE id = ? AND organization_id = ? AND status = 'PROCESSING' AND processing_attempt = ? AND processing_lease_expires_at > ?").run(now, leaseSeconds, now, id, organizationId, attempt, now);
+    if (Number(result.changes || 0) !== 1) {
+      db.exec('ROLLBACK');
+      throw Object.assign(new Error('Payment evidence processing lease is no longer owned by this worker'), { statusCode: 409, code: 'EVIDENCE_PROCESSING_LEASE_LOST' });
+    }
+    audit(String(chatId), 'payment.evidence.processing_renewed', 'payment_evidence', id, { attempt, leaseSeconds }, { organizationId, locationId: null, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
+    db.exec('COMMIT');
+    return paymentEvidenceFromRow(db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(id, organizationId));
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
 export async function transitionPaymentEvidence(chatId, input = {}, actor = null) {
   ensureDatabase();
   const { organizationId } = await resolvePaymentContext(chatId);
