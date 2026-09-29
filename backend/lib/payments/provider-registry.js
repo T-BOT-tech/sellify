@@ -158,6 +158,7 @@ export function createUnconfiguredPaymentProvider({ id, name, version = '1', cap
     validateAccount: async () => { throw notConfigured(providerId, 'validateAccount'); },
     parseEvidence: async () => { throw notConfigured(providerId, 'parseEvidence'); },
     parseConfirmation: async () => { throw notConfigured(providerId, 'parseEvidence'); },
+    authenticateNotification: async () => { throw notConfigured(providerId, 'authenticateNotification'); },
     verify: async () => { throw notConfigured(providerId, 'verify'); },
     initiate: async () => { throw notConfigured(providerId, 'initiate'); },
     getStatus: async () => { throw notConfigured(providerId, 'getStatus'); },
