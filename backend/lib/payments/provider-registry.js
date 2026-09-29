@@ -1,3 +1,5 @@
+import { telebirrProvider } from './providers/telebirr.js';
+
 // Provider-neutral payment adapter boundary.
 // Provider implementations must stay outside the payment core and must not
 // perform persistence directly. The core owns state, ledger and reconciliation.
