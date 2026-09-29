@@ -198,3 +198,24 @@ test('PaymentCore command hash is stable for the same verification command', () 
   const hash = core.constructor.toString();
   assert.match(hash, /createHash\('sha256'\)/);
 });
+
+test('Evidence lifecycle allows processing then terminal outcome but blocks terminal mutation', async () => {
+  const calls = [];
+  const core = new PaymentCore({
+    store: {
+      getPayment: async () => ({ id: 'pay-1', organizationId: 'org-1', paymentIntentId: 'intent-1', providerId: 'telebirr', state: 'UNPAID' }),
+      getPaymentIntent: async () => ({ id: 'intent-1', organizationId: 'org-1', providerId: 'telebirr', paymentAccountId: 'account-1' }),
+      listPaymentEvidence: async () => [{ id: 'evidence-1', organizationId: 'org-1', paymentIntentId: 'intent-1', providerId: 'telebirr', status: 'RECEIVED' }],
+      listPaymentAccounts: async () => [{ id: 'account-1', organizationId: 'org-1', providerId: 'telebirr', accountIdentifier: 'acct' }],
+      transitionPaymentEvidence: async (_chatId, input) => { calls.push(input.status); },
+      commitPaymentDecision: async () => ({ id: 'pay-1', state: 'VERIFIED' }),
+    },
+    providerRegistry: { getPaymentProvider: () => ({
+      id: 'telebirr', version: 'test', capabilities: { verify: true, reconcile: false },
+      verify: async () => ({ result: 'MATCH', amountMinor: 150000, currency: 'ETB', receiverAccount: 'acct', transactionId: 'tx-1' }),
+    }) },
+  });
+  const result = await core.verifyPayment({ chatId: 'chat-1', organizationId: 'org-1', paymentId: 'pay-1', evidenceId: 'evidence-1' });
+  assert.equal(result.payment.state, 'VERIFIED');
+  assert.deepEqual(calls, ['PROCESSING', 'VERIFIED']);
+});
