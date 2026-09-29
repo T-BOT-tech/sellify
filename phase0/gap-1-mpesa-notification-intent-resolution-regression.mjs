@@ -7,6 +7,7 @@ const dir = await mkdtemp(join(tmpdir(), 'sellify-gap1-resolution-'));
 process.env.SELLIFY_DATA_DIR = dir;
 
 const store = await import('../backend/lib/store-sqlite.js');
+const { PaymentCore } = await import('../backend/lib/payments/payment-core.js');
 
 const user = await store.getOrCreateUserByTelegram('gap1-resolution-user', 'GAP1 Resolution');
 const tenantResult = await store.createTenantForUser({
@@ -152,6 +153,43 @@ const concurrentReplay = await Promise.all([
 ]);
 assert.equal(concurrentReplay.length, 2);
 assert.equal(concurrentReplay[0].evidence.id, concurrentReplay[1].evidence.id);
+
+const verificationEvidence = await store.insertPaymentEvidence(chatId, {
+  paymentIntentId: first.intent.id,
+  paymentAccountId: account.id,
+  providerId: 'mpesa',
+  channel: 'api',
+  evidenceType: 'PROVIDER_NOTIFICATION',
+  providerTransactionId: 'RCP-VERIFY-1',
+  externalReference: 'ORDER-RESOLVE-1',
+  fingerprint: 'gap1-verification-fingerprint',
+  normalizedPayload: {
+    providerId: 'mpesa',
+    providerTransactionId: 'RCP-VERIFY-1',
+    amountMinor: 12550,
+    currency: 'KES',
+    receiver: '600001',
+    merchantReference: 'ORDER-RESOLVE-1',
+  },
+  source: 'provider-notification',
+}, null);
+const paymentCore = new PaymentCore({ store });
+const verified = await paymentCore.verifyEvidence({
+  chatId,
+  evidenceId: verificationEvidence.evidence.id,
+});
+assert.equal(verified.verification.result, 'MATCH');
+assert.equal(verified.decision.decision, 'ACCEPT');
+assert.equal(verified.decision.targetState, 'VERIFIED');
+const verifiedPayment = await store.getPayment(chatId, first.payment.id);
+assert.equal(verifiedPayment.state, 'VERIFIED');
+
+const verifiedReplay = await paymentCore.verifyEvidence({
+  chatId,
+  evidenceId: verificationEvidence.evidence.id,
+});
+assert.equal(verifiedReplay.idempotent, true);
+assert.equal(verifiedReplay.verification.id, verified.verification.id);
 
 const replay = await store.resolvePaymentIntentForProviderEvidence({
   providerId: 'mpesa',
