@@ -5483,7 +5483,9 @@ export async function transitionPaymentEvidence(chatId, input = {}, actor = null
       if (terminal.has(row.status)) throw Object.assign(new Error('Evidence is immutable after terminal outcome'), { statusCode: 409, code: 'EVIDENCE_TERMINAL' });
       const valid = row.status === 'RECEIVED' ? new Set(['PROCESSING','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED']) : new Set(['RECEIVED','VERIFIED','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED']);
       if (!valid.has(target)) throw Object.assign(new Error('Invalid evidence status transition'), { statusCode: 409, code: 'INVALID_EVIDENCE_TRANSITION' });
-      db.prepare('UPDATE payment_evidence SET status = ?, processing_lease_expires_at = NULL, updated_at = ? WHERE id = ? AND organization_id = ? AND status = ?').run(target, nowIso(), evidenceId, organizationId, row.status);
+      const attempt = input.processingAttempt ?? input.processing_attempt ?? null;
+      const result = db.prepare('UPDATE payment_evidence SET status = ?, processing_lease_expires_at = NULL, updated_at = ? WHERE id = ? AND organization_id = ? AND status = ?' + (attempt == null ? '' : ' AND processing_attempt = ?')).run(target, nowIso(), evidenceId, organizationId, row.status, ...(attempt == null ? [] : [Number(attempt)]));
+      if (Number(result.changes || 0) !== 1) throw Object.assign(new Error('Payment evidence processing lease is no longer owned by this worker'), { statusCode: 409, code: 'EVIDENCE_PROCESSING_LEASE_LOST' });
     }
     audit(String(chatId), 'payment.evidence.' + target.toLowerCase(), 'payment_evidence', evidenceId, { fromStatus: row.status, toStatus: target }, { organizationId, locationId: row.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
     db.exec('COMMIT');
@@ -5616,11 +5618,18 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
   const target = String(input.targetState || input.target_state || '').toUpperCase();
   if (!PAYMENT_STATES.has(target)) throw Object.assign(new Error('Invalid payment target state'), { statusCode: 400, code: 'INVALID_PAYMENT_STATE' });
   const expectedState = String(input.expectedState || input.expected_state || '').toUpperCase();
+  const processingAttempt = input.processingAttempt ?? input.processing_attempt ?? null;
   const now = nowIso();
   db.exec('BEGIN IMMEDIATE');
   try {
     const row = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
     if (!row) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    if (processingAttempt != null) {
+      const evidenceRow = db.prepare('SELECT status, processing_attempt FROM payment_evidence WHERE id = ? AND payment_id = ? AND organization_id = ?').get(String(input.evidenceId || input.evidence_id || ''), paymentId, organizationId);
+      if (!evidenceRow || evidenceRow.status !== 'PROCESSING' || Number(evidenceRow.processing_attempt) !== Number(processingAttempt)) {
+        throw Object.assign(new Error('Payment evidence processing lease is no longer owned by this worker'), { statusCode: 409, code: 'EVIDENCE_PROCESSING_LEASE_LOST' });
+      }
+    }
     if (expectedState && row.state !== expectedState) throw Object.assign(new Error('Payment state changed before decision could commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
     if (row.state !== target && !PAYMENT_TRANSITIONS[row.state]?.has(target)) throw Object.assign(new Error('Invalid payment transition'), { statusCode: 409, code: 'INVALID_PAYMENT_TRANSITION' });
     let committedVerificationId = null;
