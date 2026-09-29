@@ -291,7 +291,8 @@
     "test:gap-2-delivery-exception": "node phase0/gap-2-delivery-assignment-lifecycle-regression.mjs",
     "test:gap-2-dispatch-workload": "node phase0/gap-2-dispatch-workload-regression.mjs",
     "test:gap-2-delivery-frontend": "node phase0/gap-2-delivery-frontend-contract-regression.mjs",
-    "test:gap-1-notification-auth-contract": "node phase0/gap-1-payment-notification-auth-regression.mjs"
+    "test:gap-1-notification-auth-contract": "node phase0/gap-1-payment-notification-auth-regression.mjs",
+    "test:gap-1-mpesa-resolution": "node phase0/gap-1-mpesa-notification-intent-resolution-regression.mjs"
   },
   "engines": {
     "node": ">=24"
