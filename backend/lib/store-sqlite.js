@@ -497,8 +497,7 @@ function runMigrations() {
         reference_id TEXT,
         actor_id TEXT,
         device_id TEXT,
-        occurred_at TEXT NOT NULL,
-        reason TEXT NOT NULL DEFAULT '',
+        occurred_at TEXT NOT NULL,        reason TEXT NOT NULL DEFAULT '',
         metadata_json TEXT,
         created_at TEXT NOT NULL
       );
@@ -997,8 +996,7 @@ function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_invoices_org_status ON invoices(organization_id, status, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_invoices_org_customer ON invoices(organization_id, customer_id, created_at DESC);
       CREATE TABLE IF NOT EXISTS invoice_items (
-        id TEXT PRIMARY KEY,
-        invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+        id TEXT PRIMARY KEY,        invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
         product_id TEXT,
         description TEXT NOT NULL,
         quantity INTEGER NOT NULL CHECK (quantity > 0),
@@ -1497,8 +1495,7 @@ function runMigrations() {
       CREATE TRIGGER IF NOT EXISTS procurement_award_lines_no_update_after_confirm
       BEFORE UPDATE ON procurement_award_lines
       WHEN (SELECT status FROM procurement_awards WHERE id=OLD.award_id) <> 'DRAFT'
-      BEGIN SELECT RAISE(ABORT,'Confirmed procurement award lines are immutable'); END;
-      CREATE TRIGGER IF NOT EXISTS procurement_award_lines_no_delete_after_confirm
+      BEGIN SELECT RAISE(ABORT,'Confirmed procurement award lines are immutable'); END;      CREATE TRIGGER IF NOT EXISTS procurement_award_lines_no_delete_after_confirm
       BEFORE DELETE ON procurement_award_lines
       WHEN (SELECT status FROM procurement_awards WHERE id=OLD.award_id) <> 'DRAFT'
       BEGIN SELECT RAISE(ABORT,'Confirmed procurement award lines cannot be deleted'); END;
@@ -1997,8 +1994,7 @@ function runMigrations() {
   if (!applied.includes(40)) {
     db.exec(`
       CREATE TABLE IF NOT EXISTS pack_lifecycle (
-        id TEXT PRIMARY KEY,
-        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        id TEXT PRIMARY KEY,        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
         pack_id TEXT NOT NULL,
         pack_version TEXT NOT NULL DEFAULT '',
         state TEXT NOT NULL CHECK (state IN (
@@ -2119,6 +2115,140 @@ function runMigrations() {
       PRAGMA foreign_keys = ON;
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(44, nowIso());
+  }
+
+
+  // GAP-1.1 — payment intent/evidence/verification/decision foundation.
+  if (!applied.includes(45)) {
+    db.exec(\`
+      CREATE TABLE IF NOT EXISTS payment_intents (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        location_id TEXT REFERENCES locations(id) ON DELETE SET NULL,
+        order_id TEXT,
+        payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL,
+        provider_id TEXT NOT NULL,
+        amount_minor INTEGER NOT NULL CHECK (amount_minor >= 0),
+        currency TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'OPEN'
+          CHECK (status IN ('OPEN','PAYMENT_ATTEMPTED','FULFILLED','EXPIRED','CANCELLED')),
+        expires_at TEXT,
+        fulfilled_at TEXT,
+        cancelled_at TEXT,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_intents_org_created ON payment_intents(organization_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_intents_org_order ON payment_intents(organization_id, order_id);
+      CREATE INDEX IF NOT EXISTS idx_payment_intents_org_status ON payment_intents(organization_id, status);
+
+      CREATE TABLE IF NOT EXISTS payment_evidence (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        location_id TEXT REFERENCES locations(id) ON DELETE SET NULL,
+        payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
+        payment_intent_id TEXT REFERENCES payment_intents(id) ON DELETE SET NULL,
+        provider_id TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        evidence_type TEXT NOT NULL,
+        external_reference TEXT,
+        provider_transaction_id TEXT,
+        fingerprint TEXT NOT NULL,
+        raw_payload_json TEXT,
+        normalized_payload_json TEXT,
+        source TEXT,
+        observed_at TEXT,
+        received_at TEXT NOT NULL,
+        submitted_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        status TEXT NOT NULL DEFAULT 'RECEIVED'
+          CHECK (status IN ('RECEIVED','PROCESSING','VERIFIED','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_evidence_org_provider_fingerprint ON payment_evidence(organization_id, provider_id, fingerprint);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_evidence_org_provider_transaction ON payment_evidence(organization_id, provider_id, provider_transaction_id) WHERE provider_transaction_id IS NOT NULL AND provider_transaction_id <> '';
+      CREATE INDEX IF NOT EXISTS idx_payment_evidence_payment ON payment_evidence(payment_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_evidence_intent ON payment_evidence(payment_intent_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_evidence_org_status ON payment_evidence(organization_id, status, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_evidence_external_reference ON payment_evidence(organization_id, provider_id, external_reference);
+
+      CREATE TABLE IF NOT EXISTS payment_verifications (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
+        payment_intent_id TEXT REFERENCES payment_intents(id) ON DELETE SET NULL,
+        evidence_id TEXT NOT NULL REFERENCES payment_evidence(id) ON DELETE CASCADE,
+        provider_id TEXT NOT NULL,
+        result TEXT NOT NULL CHECK (result IN ('MATCH','MISMATCH','DUPLICATE','UNVERIFIABLE','EXPIRED','PENDING','ERROR')),
+        confidence REAL,
+        observed_amount_minor INTEGER,
+        observed_currency TEXT,
+        observed_receiver TEXT,
+        observed_receiver_account TEXT,
+        observed_reference TEXT,
+        observed_transaction_id TEXT,
+        observed_at TEXT,
+        reason_codes_json TEXT NOT NULL DEFAULT '[]',
+        raw_result_json TEXT,
+        verifier TEXT NOT NULL,
+        verifier_version TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_verifications_payment ON payment_verifications(payment_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_verifications_evidence ON payment_verifications(evidence_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_verifications_intent ON payment_verifications(payment_intent_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_verifications_org_result ON payment_verifications(organization_id, result, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS payment_decisions (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        payment_id TEXT NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+        payment_intent_id TEXT REFERENCES payment_intents(id) ON DELETE SET NULL,
+        evidence_id TEXT REFERENCES payment_evidence(id) ON DELETE SET NULL,
+        verification_id TEXT REFERENCES payment_verifications(id) ON DELETE SET NULL,
+        decision TEXT NOT NULL CHECK (decision IN ('ACCEPT','REJECT','RETRY_VERIFICATION','MARK_DUPLICATE','MARK_MISMATCH','MARK_PARTIAL','EXPIRE','RECONCILE')),
+        target_state TEXT,
+        reason_codes_json TEXT NOT NULL DEFAULT '[]',
+        invariant_results_json TEXT NOT NULL DEFAULT '{}',
+        decision_source TEXT NOT NULL DEFAULT 'PAYMENT_CORE',
+        actor_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_decisions_payment ON payment_decisions(payment_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_decisions_evidence ON payment_decisions(evidence_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_decisions_verification ON payment_decisions(verification_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_decisions_org_created ON payment_decisions(organization_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS payment_idempotency_keys (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        idempotency_key TEXT NOT NULL,
+        command_type TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        response_status INTEGER,
+        response_json TEXT,
+        resource_type TEXT,
+        resource_id TEXT,
+        created_at TEXT NOT NULL,
+        expires_at TEXT,
+        UNIQUE(organization_id, idempotency_key, command_type)
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_idempotency_expiry ON payment_idempotency_keys(expires_at);
+    \`);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(45, nowIso());
+  }
+
+  // GAP-1.2 — link existing canonical payments to payment intents.
+  if (!applied.includes(46)) {
+    const columns = db.prepare('PRAGMA table_info(payments)').all();
+    const hasPaymentIntentId = columns.some(column => String(column.name) === 'payment_intent_id');
+    if (!hasPaymentIntentId) {
+      db.exec(\`ALTER TABLE payments ADD COLUMN payment_intent_id TEXT REFERENCES payment_intents(id) ON DELETE SET NULL\`);
+    }
+    db.exec(\`CREATE INDEX IF NOT EXISTS idx_payments_payment_intent ON payments(payment_intent_id)\`);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(46, nowIso());
   }
 
   // FUX-2 Section 6 — additive multi-role compatibility bridge.
@@ -2497,8 +2627,7 @@ function normalizeSupplierNetworkCapabilityInput(input={}){const clean=(v,max=20
 function supplierNetworkCapabilityRow(id,organizationId){return db.prepare('SELECT * FROM supplier_network_capabilities WHERE id=? AND organization_id=?').get(String(id),String(organizationId))}
 export async function listSupplierNetworkCapabilities(chatId,options={}){ensureDatabase();const org=await tenantOrganizationId(chatId);const w=['organization_id=?'],p=[org];if(options.status&&options.status!=='all'){w.push('status=?');p.push(String(options.status).toUpperCase())}if(options.code){w.push('code=?');p.push(String(options.code).trim().toUpperCase())}p.push(Math.max(1,Math.min(500,Number(options.limit)||100)));return db.prepare(`SELECT * FROM supplier_network_capabilities WHERE ${w.join(' AND ')} ORDER BY name ASC, id ASC LIMIT ?`).all(...p).map(supplierNetworkCapabilityFromRow)}
 export async function getSupplierNetworkCapability(chatId,id){ensureDatabase();const org=await tenantOrganizationId(chatId);return supplierNetworkCapabilityFromRow(supplierNetworkCapabilityRow(id,org))}
-export async function upsertSupplierNetworkCapability(chatId,input={},actor=null){ensureDatabase();const org=await tenantOrganizationId(chatId);const actorId=assertProcurementActor(org,actor);assertSupplierNetworkParticipant(org);const normalized=normalizeSupplierNetworkCapabilityInput(input);const existing=input.id?supplierNetworkCapabilityRow(input.id,org):db.prepare('SELECT * FROM supplier_network_capabilities WHERE organization_id=? AND code=?').get(org,normalized.code);const target=input.status==null?(existing?.status||'ACTIVE'):String(input.status).trim().toUpperCase();if(!SUPPLIER_NETWORK_CAPABILITY_STATES[target]&&target!=='ACTIVE')throw Object.assign(new Error('Invalid supplier network capability status'),{statusCode:400,code:'INVALID_CAPABILITY_STATUS'});if(existing&&existing.status!==target&&!SUPPLIER_NETWORK_CAPABILITY_STATES[existing.status]?.has(target))throw Object.assign(new Error(`Illegal supplier network capability transition ${existing.status} -> ${target}`),{statusCode:409,code:'INVALID_CAPABILITY_TRANSITION'});if(normalized.source==='VERIFIED'&&existing?.source!=='VERIFIED')throw Object.assign(new Error('Only the verification authority may mark a capability VERIFIED'),{statusCode:403,code:'CAPABILITY_VERIFICATION_REQUIRED'});const now=nowIso();db.exec('BEGIN IMMEDIATE');try{if(existing){db.prepare(`UPDATE supplier_network_capabilities SET code=?,name=?,category=?,description=?,metadata_json=?,visibility=?,source=?,status=?,updated_by_user_id=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=?`).run(normalized.code,normalized.name,normalized.category,normalized.description,json(normalized.metadata),normalized.visibility,normalized.source,target,actorId,now,existing.id,org);audit(String(chatId),target!==existing.status?`supplier.network.capability.${target.toLowerCase()}`:'supplier.network.capability.updated','supplier_network_capability',existing.id,{code:normalized.code,status:target,visibility:normalized.visibility,source:normalized.source},{organizationId:org,actorId})}else{const id=String(input.id||crypto.randomUUID());db.prepare(`INSERT INTO supplier_network_capabilities (id,organization_id,code,name,category,description,metadata_json,visibility,source,status,created_by_user_id,updated_by_user_id,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`).run(id,org,normalized.code,normalized.name,normalized.category,normalized.description,json(normalized.metadata),normalized.visibility,normalized.source,target,actorId,actorId,now,now);audit(String(chatId),'supplier.network.capability.created','supplier_network_capability',id,{code:normalized.code,status:target,visibility:normalized.visibility,source:normalized.source},{organizationId:org,actorId})}db.exec('COMMIT')}catch(e){db.exec('ROLLBACK');throw e}return supplierNetworkCapabilityFromRow(existing?supplierNetworkCapabilityRow(existing.id,org):db.prepare('SELECT * FROM supplier_network_capabilities WHERE organization_id=? AND code=?').get(org,normalized.code))}
-export async function transitionSupplierNetworkCapability(chatId,id,targetStatus,actor=null){ensureDatabase();const org=await tenantOrganizationId(chatId);const actorId=assertProcurementActor(org,actor);assertSupplierNetworkParticipant(org);const row=supplierNetworkCapabilityRow(id,org);if(!row)throw Object.assign(new Error('Supplier network capability not found'),{statusCode:404,code:'CAPABILITY_NOT_FOUND'});const target=String(targetStatus||'').trim().toUpperCase();if(!SUPPLIER_NETWORK_CAPABILITY_STATES[target])throw Object.assign(new Error('Invalid supplier network capability status'),{statusCode:400,code:'INVALID_CAPABILITY_STATUS'});if(!SUPPLIER_NETWORK_CAPABILITY_STATES[row.status]?.has(target))throw Object.assign(new Error(`Illegal network capability transition ${row.status} -> ${target}`),{statusCode:409,code:'INVALID_CAPABILITY_TRANSITION'});const now=nowIso();db.prepare('UPDATE supplier_network_capabilities SET status=?,updated_by_user_id=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=?').run(target,actorId,now,row.id,org);audit(String(chatId),`supplier.network.capability.${target.toLowerCase()}`,'supplier_network_capability',row.id,{fromStatus:row.status,toStatus:target,code:row.code},{organizationId:org,actorId});return supplierNetworkCapabilityFromRow(supplierNetworkCapabilityRow(row.id,org))}
+export async function upsertSupplierNetworkCapability(chatId,input={},actor=null){ensureDatabase();const org=await tenantOrganizationId(chatId);const actorId=assertProcurementActor(org,actor);assertSupplierNetworkParticipant(org);const normalized=normalizeSupplierNetworkCapabilityInput(input);const existing=input.id?supplierNetworkCapabilityRow(input.id,org):db.prepare('SELECT * FROM supplier_network_capabilities WHERE organization_id=? AND code=?').get(org,normalized.code);const target=input.status==null?(existing?.status||'ACTIVE'):String(input.status).trim().toUpperCase();if(!SUPPLIER_NETWORK_CAPABILITY_STATES[target]&&target!=='ACTIVE')throw Object.assign(new Error('Invalid supplier network capability status'),{statusCode:400,code:'INVALID_CAPABILITY_STATUS'});if(existing&&existing.status!==target&&!SUPPLIER_NETWORK_CAPABILITY_STATES[existing.status]?.has(target))throw Object.assign(new Error(`Illegal supplier network capability transition ${existing.status} -> ${target}`),{statusCode:409,code:'INVALID_CAPABILITY_TRANSITION'});if(normalized.source==='VERIFIED'&&existing?.source!=='VERIFIED')throw Object.assign(new Error('Only the verification authority may mark a capability VERIFIED'),{statusCode:403,code:'CAPABILITY_VERIFICATION_REQUIRED'});const now=nowIso();db.exec('BEGIN IMMEDIATE');try{if(existing){db.prepare(`UPDATE supplier_network_capabilities SET code=?,name=?,category=?,description=?,metadata_json=?,visibility=?,source=?,status=?,updated_by_user_id=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=?`).run(normalized.code,normalized.name,normalized.category,normalized.description,json(normalized.metadata),normalized.visibility,normalized.source,target,actorId,now,existing.id,org);audit(String(chatId),target!==existing.status?`supplier.network.capability.${target.toLowerCase()}`:'supplier.network.capability.updated','supplier_network_capability',existing.id,{code:normalized.code,status:target,visibility:normalized.visibility,source:normalized.source},{organizationId:org,actorId})}else{const id=String(input.id||crypto.randomUUID());db.prepare(`INSERT INTO supplier_network_capabilities (id,organization_id,code,name,category,description,metadata_json,visibility,source,status,created_by_user_id,updated_by_user_id,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`).run(id,org,normalized.code,normalized.name,normalized.category,normalized.description,json(normalized.metadata),normalized.visibility,normalized.source,target,actorId,actorId,now,now);audit(String(chatId),'supplier.network.capability.created','supplier_network_capability',id,{code:normalized.code,status:target,visibility:normalized.visibility,source:normalized.source},{organizationId:org,actorId})}db.exec('COMMIT')}catch(e){db.exec('ROLLBACK');throw e}return supplierNetworkCapabilityFromRow(existing?supplierNetworkCapabilityRow(existing.id,org):db.prepare('SELECT * FROM supplier_network_capabilities WHERE organization_id=? AND code=?').get(org,normalized.code))}export async function transitionSupplierNetworkCapability(chatId,id,targetStatus,actor=null){ensureDatabase();const org=await tenantOrganizationId(chatId);const actorId=assertProcurementActor(org,actor);assertSupplierNetworkParticipant(org);const row=supplierNetworkCapabilityRow(id,org);if(!row)throw Object.assign(new Error('Supplier network capability not found'),{statusCode:404,code:'CAPABILITY_NOT_FOUND'});const target=String(targetStatus||'').trim().toUpperCase();if(!SUPPLIER_NETWORK_CAPABILITY_STATES[target])throw Object.assign(new Error('Invalid supplier network capability status'),{statusCode:400,code:'INVALID_CAPABILITY_STATUS'});if(!SUPPLIER_NETWORK_CAPABILITY_STATES[row.status]?.has(target))throw Object.assign(new Error(`Illegal network capability transition ${row.status} -> ${target}`),{statusCode:409,code:'INVALID_CAPABILITY_TRANSITION'});const now=nowIso();db.prepare('UPDATE supplier_network_capabilities SET status=?,updated_by_user_id=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=?').run(target,actorId,now,row.id,org);audit(String(chatId),`supplier.network.capability.${target.toLowerCase()}`,'supplier_network_capability',row.id,{fromStatus:row.status,toStatus:target,code:row.code},{organizationId:org,actorId});return supplierNetworkCapabilityFromRow(supplierNetworkCapabilityRow(row.id,org))}
 
 const SUPPLIER_NETWORK_PROFILE_VISIBILITIES = Object.freeze(['PUBLIC','NETWORK','RELATIONSHIP','PRIVATE','CONFIDENTIAL']);
 const SUPPLIER_NETWORK_PROFILE_STATES = Object.freeze({
@@ -2997,8 +3126,7 @@ export async function listSupplierNetworkTrustEvidence(chatId,{supplierOrganizat
 export async function getSupplierNetworkTrustEvidence(chatId,evidenceId,actor=null){
   ensureDatabase(); const org=await tenantOrganizationId(chatId); assertProcurementActor(org,actor);
   const row=db.prepare('SELECT * FROM supplier_network_trust_evidence WHERE id=?').get(String(evidenceId));
-  if(!row || !supplierNetworkTrustCanAccessEvidence(org,row.supplier_organization_id,row.visibility)) return null;
-  return supplierNetworkTrustEvidenceFromRow(row);
+  if(!row || !supplierNetworkTrustCanAccessEvidence(org,row.supplier_organization_id,row.visibility)) return null;  return supplierNetworkTrustEvidenceFromRow(row);
 }
 
 export async function refreshSupplierNetworkTrustEvidence(chatId,supplierOrganizationId,input={},actor=null){
@@ -3497,8 +3625,7 @@ export async function upsertCustomerPricing(chatId, input = {}, actor = null) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(organization_id, customer_id, product_id) DO UPDATE SET
       price_minor = excluded.price_minor,
-      currency = excluded.currency,
-      status = excluded.status,
+      currency = excluded.currency,      status = excluded.status,
       effective_from = excluded.effective_from,
       effective_to = excluded.effective_to,
       reason = excluded.reason,
@@ -3997,8 +4124,7 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
         reason: 'Procurement purchase-order receipt',
         metadata: { purchaseOrderId: po.id, purchaseOrderItemId: items[i].purchaseOrderItemId, receiptNumber },
       }, actor);
-    }
-  } catch (error) {
+    }  } catch (error) {
     audit(chatId, 'procurement.receipt.inventory_pending', 'procurement_receipt', receiptId, { purchaseOrderId: po.id, errorCode: error?.code || 'INVENTORY_SYNC_FAILED' }, { organizationId, actorId, locationId });
     throw error;
   }
@@ -4497,8 +4623,7 @@ export async function updateOrganizationLocation(chatId, locationId, patch = {})
   if (!organizationId) throw Object.assign(new Error('Unknown store'), { statusCode: 404 });
   const existing = db.prepare('SELECT * FROM locations WHERE id = ? AND organization_id = ?').get(String(locationId), organizationId);
   if (!existing) throw Object.assign(new Error('Location not found'), { statusCode: 404 });
-  const name = patch.name == null ? existing.name : String(patch.name).trim();
-  if (!name || name.length > 120) throw Object.assign(new Error('Location name must be 1–120 characters'), { statusCode: 400 });
+  const name = patch.name == null ? existing.name : String(patch.name).trim();  if (!name || name.length > 120) throw Object.assign(new Error('Location name must be 1–120 characters'), { statusCode: 400 });
   const type = patch.type == null ? existing.type : normaliseLocationType(patch.type);
   const status = patch.status == null ? existing.status : normaliseLocationStatus(patch.status);
   const code = patch.code == null ? existing.code : String(patch.code).trim().toUpperCase();
@@ -4997,8 +5122,7 @@ export async function processSyncEvent(chatId, event = {}, actor = null) {
       await appendInventoryMovement(chatId, event.payload, actor);
     } else if (eventType === 'customer.upsert') {
       await upsertCustomer(chatId, event.payload);
-    } else {
-      throw Object.assign(new Error(`Unsupported sync event type: ${eventType}`), { statusCode: 400 });
+    } else {      throw Object.assign(new Error(`Unsupported sync event type: ${eventType}`), { statusCode: 400 });
     }
     db.prepare(`INSERT INTO sync_events
       (event_id, organization_id, event_type, aggregate_type, aggregate_id, payload_json, actor_id, device_id, occurred_at, received_at, processed_at, status)
@@ -5024,6 +5148,7 @@ function paymentFromRow(row) {
     orderId: row.order_id,
     customerId: row.customer_id,
     paymentAccountId: row.payment_account_id,
+    paymentIntentId: row.payment_intent_id || null,
     providerId: row.provider_id,
     channel: row.channel,
     methodId: row.method_id,
@@ -5042,6 +5167,351 @@ function paymentFromRow(row) {
     updatedAt: row.updated_at,
   };
 }
+
+function paymentIntentFromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    locationId: row.location_id || null,
+    orderId: row.order_id || null,
+    paymentAccountId: row.payment_account_id || null,
+    providerId: row.provider_id,
+    amountMinor: Number(row.amount_minor),
+    currency: normaliseCurrency(row.currency, 'ETB'),
+    status: row.status,
+    expiresAt: row.expires_at || null,
+    fulfilledAt: row.fulfilled_at || null,
+    cancelledAt: row.cancelled_at || null,
+    metadata: parseJSON(row.metadata_json, {}),
+    createdByUserId: row.created_by_user_id || null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function paymentEvidenceFromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    locationId: row.location_id || null,
+    paymentId: row.payment_id || null,
+    paymentIntentId: row.payment_intent_id || null,
+    providerId: row.provider_id,
+    channel: row.channel,
+    evidenceType: row.evidence_type,
+    externalReference: row.external_reference || null,
+    providerTransactionId: row.provider_transaction_id || null,
+    fingerprint: row.fingerprint,
+    rawPayload: parseJSON(row.raw_payload_json, null),
+    normalizedPayload: parseJSON(row.normalized_payload_json, null),
+    source: row.source || null,
+    observedAt: row.observed_at || null,
+    receivedAt: row.received_at,
+    submittedByUserId: row.submitted_by_user_id || null,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function paymentVerificationFromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    paymentId: row.payment_id || null,
+    paymentIntentId: row.payment_intent_id || null,
+    evidenceId: row.evidence_id,
+    providerId: row.provider_id,
+    result: row.result,
+    confidence: row.confidence == null ? null : Number(row.confidence),
+    observedAmountMinor: row.observed_amount_minor == null ? null : Number(row.observed_amount_minor),
+    observedCurrency: row.observed_currency || null,
+    observedReceiver: row.observed_receiver || null,
+    observedReceiverAccount: row.observed_receiver_account || null,
+    observedReference: row.observed_reference || null,
+    observedTransactionId: row.observed_transaction_id || null,
+    observedAt: row.observed_at || null,
+    reasonCodes: parseJSON(row.reason_codes_json, []),
+    rawResult: parseJSON(row.raw_result_json, null),
+    verifier: row.verifier,
+    verifierVersion: row.verifier_version || null,
+    createdAt: row.created_at,
+  };
+}
+
+function paymentDecisionFromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    paymentId: row.payment_id,
+    paymentIntentId: row.payment_intent_id || null,
+    evidenceId: row.evidence_id || null,
+    verificationId: row.verification_id || null,
+    decision: row.decision,
+    targetState: row.target_state || null,
+    reasonCodes: parseJSON(row.reason_codes_json, []),
+    invariantResults: parseJSON(row.invariant_results_json, {}),
+    decisionSource: row.decision_source,
+    actorId: row.actor_id || null,
+    createdAt: row.created_at,
+  };
+}
+
+function hashPaymentRequest(value) {
+  return crypto.createHash('sha256').update(JSON.stringify(value ?? {})).digest('hex');
+}
+
+export async function getPaymentIntent(chatId, intentId) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  return paymentIntentFromRow(db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(String(intentId), organizationId));
+}
+
+export async function insertPaymentIntent(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const { organizationId, locationId } = await resolvePaymentContext(chatId, input);
+  const providerId = String(input.providerId || input.provider_id || '').trim().toLowerCase();
+  if (!providerId) throw Object.assign(new Error('providerId is required'), { statusCode: 400, code: 'PROVIDER_REQUIRED' });
+  requirePaymentProvider(providerId);
+  const amountMinor = Number(input.amountMinor ?? input.amount_minor);
+  if (!Number.isInteger(amountMinor) || amountMinor < 0) throw Object.assign(new Error('amountMinor must be a non-negative integer'), { statusCode: 400, code: 'INVALID_PAYMENT_AMOUNT' });
+  const currency = tenantCurrency(chatId);
+  if (input.currency != null && normaliseCurrency(input.currency, currency) !== currency) throw Object.assign(new Error('Payment currency does not match the organization currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
+  const accountId = input.paymentAccountId || input.payment_account_id || null;
+  if (accountId) {
+    const account = db.prepare("SELECT id, provider_id FROM payment_accounts WHERE id = ? AND organization_id = ? AND status = 'active'").get(String(accountId), organizationId);
+    if (!account) throw Object.assign(new Error('Payment account does not belong to this organization'), { statusCode: 400, code: 'PAYMENT_ACCOUNT_NOT_FOUND' });
+    if (String(account.provider_id) !== providerId) throw Object.assign(new Error('Payment account provider does not match payment intent provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
+  }
+  const orderId = input.orderId || input.order_id || null;
+  if (orderId) {
+    const order = db.prepare('SELECT total_minor, currency FROM orders WHERE chat_id = ? AND server_order_id = ?').get(String(chatId), String(orderId));
+    if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    if (normaliseCurrency(order.currency, currency) !== currency) throw Object.assign(new Error('Order currency does not match the organization currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
+    if (amountMinor > Number(order.total_minor)) throw Object.assign(new Error('Payment amount cannot exceed the order total'), { statusCode: 400, code: 'PAYMENT_AMOUNT_EXCEEDS_ORDER' });
+  }
+  const id = String(input.id || crypto.randomUUID());
+  const now = nowIso();
+  db.prepare("INSERT INTO payment_intents (id, organization_id, location_id, order_id, payment_account_id, provider_id, amount_minor, currency, status, expires_at, metadata_json, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)").run(
+    id, organizationId, locationId, orderId ? String(orderId) : null, accountId ? String(accountId) : null,
+    providerId, amountMinor, currency, input.expiresAt || input.expires_at || null,
+    json(input.metadata || {}), actor?.userId || null, now, now
+  );
+  return paymentIntentFromRow(db.prepare('SELECT * FROM payment_intents WHERE id = ?').get(id));
+}
+
+export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const { organizationId, locationId } = await resolvePaymentContext(chatId, input);
+  const intentId = String(input.paymentIntentId || input.payment_intent_id || '').trim();
+  if (!intentId) throw Object.assign(new Error('paymentIntentId is required'), { statusCode: 400, code: 'PAYMENT_INTENT_REQUIRED' });
+  const intent = db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(intentId, organizationId);
+  if (!intent) throw Object.assign(new Error('Payment intent not found'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND' });
+  const paymentId = input.paymentId || input.payment_id || null;
+  if (paymentId) {
+    const payment = db.prepare('SELECT id FROM payments WHERE id = ? AND organization_id = ?').get(String(paymentId), organizationId);
+    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  }
+  const providerId = String(input.providerId || input.provider_id || intent.provider_id).trim().toLowerCase();
+  if (providerId !== String(intent.provider_id)) throw Object.assign(new Error('Evidence provider does not match payment intent provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
+  const channel = String(input.channel || 'manual').trim().toLowerCase();
+  const evidenceType = String(input.evidenceType || input.evidence_type || '').trim().toUpperCase();
+  if (!evidenceType) throw Object.assign(new Error('evidenceType is required'), { statusCode: 400, code: 'EVIDENCE_TYPE_REQUIRED' });
+  const rawPayload = input.rawPayload ?? input.raw_payload ?? input.payload ?? null;
+  const normalizedPayload = input.normalizedPayload ?? input.normalized_payload ?? null;
+  const fingerprint = String(input.fingerprint || hashPaymentRequest({
+    providerId,
+    channel,
+    evidenceType,
+    externalReference: input.externalReference || input.external_reference || null,
+    providerTransactionId: input.providerTransactionId || input.provider_transaction_id || null,
+    normalizedPayload,
+    rawPayload,
+  })).trim();
+  if (!fingerprint) throw Object.assign(new Error('Evidence fingerprint is required'), { statusCode: 400, code: 'EVIDENCE_FINGERPRINT_REQUIRED' });
+  const duplicate = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND fingerprint = ?').get(organizationId, providerId, fingerprint);
+  if (duplicate) return { evidence: paymentEvidenceFromRow(duplicate), duplicate: true };
+  const id = String(input.id || crypto.randomUUID());
+  const now = nowIso();
+  try {
+    db.prepare("INSERT INTO payment_evidence (id, organization_id, location_id, payment_id, payment_intent_id, provider_id, channel, evidence_type, external_reference, provider_transaction_id, fingerprint, raw_payload_json, normalized_payload_json, source, observed_at, received_at, submitted_by_user_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?, ?)").run(
+      id, organizationId, locationId, paymentId ? String(paymentId) : null, intentId, providerId, channel, evidenceType,
+      input.externalReference || input.external_reference || null,
+      input.providerTransactionId || input.provider_transaction_id || null,
+      fingerprint, rawPayload == null ? null : json(rawPayload),
+      normalizedPayload == null ? null : json(normalizedPayload),
+      input.source || null, input.observedAt || input.observed_at || null, now, actor?.userId || null, now, now
+    );
+  } catch (error) {
+    if (String(error?.message || '').includes('UNIQUE constraint failed: payment_evidence')) {
+      const existing = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND fingerprint = ?').get(organizationId, providerId, fingerprint);
+      if (existing) return { evidence: paymentEvidenceFromRow(existing), duplicate: true };
+    }
+    throw error;
+  }
+  return { evidence: paymentEvidenceFromRow(db.prepare('SELECT * FROM payment_evidence WHERE id = ?').get(id)), duplicate: false };
+}
+
+export async function listPaymentEvidence(chatId, paymentId) {
+  ensureDatabase();
+  const payment = await getPayment(chatId, paymentId);
+  if (!payment) return null;
+  return db.prepare('SELECT * FROM payment_evidence WHERE payment_id = ? AND organization_id = ? ORDER BY created_at DESC').all(String(paymentId), payment.organizationId).map(paymentEvidenceFromRow);
+}
+
+export async function insertPaymentVerification(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const evidence = db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(String(input.evidenceId || input.evidence_id), organizationId);
+  if (!evidence) throw Object.assign(new Error('Evidence not found'), { statusCode: 404, code: 'EVIDENCE_NOT_FOUND' });
+  const id = String(input.id || crypto.randomUUID());
+  const now = nowIso();
+  db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+    id, organizationId, input.paymentId || input.payment_id || evidence.payment_id || null,
+    input.paymentIntentId || input.payment_intent_id || evidence.payment_intent_id || null,
+    evidence.id, String(input.providerId || input.provider_id || evidence.provider_id),
+    String(input.result || '').toUpperCase(), input.confidence == null ? null : Number(input.confidence),
+    input.observedAmountMinor ?? input.observed_amount_minor ?? null,
+    input.observedCurrency || input.observed_currency || null,
+    input.observedReceiver || input.observed_receiver || null,
+    input.observedReceiverAccount || input.observed_receiver_account || null,
+    input.observedReference || input.observed_reference || null,
+    input.observedTransactionId || input.observed_transaction_id || null,
+    input.observedAt || input.observed_at || null,
+    json(input.reasonCodes || input.reason_codes || []), input.rawResult == null ? null : json(input.rawResult || input.raw_result),
+    String(input.verifier || 'payment-core'), input.verifierVersion || input.verifier_version || null, now
+  );
+  return paymentVerificationFromRow(db.prepare('SELECT * FROM payment_verifications WHERE id = ?').get(id));
+}
+
+export async function listPaymentVerifications(chatId, paymentId) {
+  ensureDatabase();
+  const payment = await getPayment(chatId, paymentId);
+  if (!payment) return null;
+  return db.prepare('SELECT * FROM payment_verifications WHERE payment_id = ? AND organization_id = ? ORDER BY created_at DESC').all(String(paymentId), payment.organizationId).map(paymentVerificationFromRow);
+}
+
+export async function insertPaymentDecision(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const paymentId = String(input.paymentId || input.payment_id || '').trim();
+  if (!paymentId) throw Object.assign(new Error('paymentId is required'), { statusCode: 400, code: 'PAYMENT_REQUIRED' });
+  const payment = db.prepare('SELECT id FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
+  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  const id = String(input.id || crypto.randomUUID());
+  const now = nowIso();
+  db.prepare("INSERT INTO payment_decisions (id, organization_id, payment_id, payment_intent_id, evidence_id, verification_id, decision, target_state, reason_codes_json, invariant_results_json, decision_source, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+    id, organizationId, paymentId, input.paymentIntentId || input.payment_intent_id || null,
+    input.evidenceId || input.evidence_id || null, input.verificationId || input.verification_id || null,
+    String(input.decision || '').toUpperCase(), input.targetState || input.target_state || null,
+    json(input.reasonCodes || input.reason_codes || []), json(input.invariantResults || input.invariant_results || {}),
+    String(input.decisionSource || input.decision_source || 'PAYMENT_CORE'), actor?.userId || null, now
+  );
+  return paymentDecisionFromRow(db.prepare('SELECT * FROM payment_decisions WHERE id = ?').get(id));
+}
+
+export async function listPaymentDecisions(chatId, paymentId) {
+  ensureDatabase();
+  const payment = await getPayment(chatId, paymentId);
+  if (!payment) return null;
+  return db.prepare('SELECT * FROM payment_decisions WHERE payment_id = ? AND organization_id = ? ORDER BY created_at DESC').all(String(paymentId), payment.organizationId).map(paymentDecisionFromRow);
+}
+
+export async function getPaymentIdempotency(chatId, key, commandType) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  return db.prepare('SELECT * FROM payment_idempotency_keys WHERE organization_id = ? AND idempotency_key = ? AND command_type = ?').get(organizationId, String(key), String(commandType));
+}
+
+export async function insertPaymentIdempotency(chatId, input = {}) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const now = nowIso();
+  db.prepare("INSERT INTO payment_idempotency_keys (id, organization_id, idempotency_key, command_type, request_hash, response_status, response_json, resource_type, resource_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+    String(input.id || crypto.randomUUID()), organizationId, String(input.idempotencyKey || input.idempotency_key),
+    String(input.commandType || input.command_type), String(input.requestHash || input.request_hash),
+    input.responseStatus ?? input.response_status ?? null,
+    input.responseJson == null && input.response_json == null ? null : String(input.responseJson ?? input.response_json),
+    input.resourceType || input.resource_type || null, input.resourceId || input.resource_id || null, now,
+    input.expiresAt || input.expires_at || null
+  );
+  return getPaymentIdempotency(chatId, input.idempotencyKey || input.idempotency_key, input.commandType || input.command_type);
+}
+
+export async function commitPaymentDecision(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const paymentId = String(input.paymentId || input.payment_id || '').trim();
+  if (!paymentId) throw Object.assign(new Error('paymentId is required'), { statusCode: 400, code: 'PAYMENT_REQUIRED' });
+  const target = String(input.targetState || input.target_state || '').toUpperCase();
+  if (!PAYMENT_STATES.has(target)) throw Object.assign(new Error('Invalid payment target state'), { statusCode: 400, code: 'INVALID_PAYMENT_STATE' });
+  const expectedState = String(input.expectedState || input.expected_state || '').toUpperCase();
+  const now = nowIso();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const row = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
+    if (!row) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    if (expectedState && row.state !== expectedState) throw Object.assign(new Error('Payment state changed before decision could commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
+    if (row.state !== target && !PAYMENT_TRANSITIONS[row.state]?.has(target)) throw Object.assign(new Error('Invalid payment transition'), { statusCode: 409, code: 'INVALID_PAYMENT_TRANSITION' });
+
+    if (input.verification) {
+      const v = input.verification;
+      db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+        String(v.id || crypto.randomUUID()), organizationId, paymentId, v.paymentIntentId || v.payment_intent_id || row.payment_intent_id || null,
+        v.evidenceId || v.evidence_id || null, v.providerId || v.provider_id || row.provider_id, String(v.result || '').toUpperCase(),
+        v.confidence == null ? null : Number(v.confidence), v.observedAmountMinor ?? v.observed_amount_minor ?? null,
+        v.observedCurrency || v.observed_currency || null, v.observedReceiver || v.observed_receiver || null,
+        v.observedReceiverAccount || v.observed_receiver_account || null, v.observedReference || v.observed_reference || null,
+        v.observedTransactionId || v.observed_transaction_id || null, v.observedAt || v.observed_at || null,
+        json(v.reasonCodes || v.reason_codes || []), v.rawResult == null ? null : json(v.rawResult || v.raw_result),
+        v.verifier || 'payment-core', v.verifierVersion || v.verifier_version || null, now
+      );
+    }
+    const decision = input.decision || {};
+    const decisionId = String(decision.id || crypto.randomUUID());
+    db.prepare("INSERT INTO payment_decisions (id, organization_id, payment_id, payment_intent_id, evidence_id, verification_id, decision, target_state, reason_codes_json, invariant_results_json, decision_source, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+      decisionId, organizationId, paymentId, decision.paymentIntentId || decision.payment_intent_id || row.payment_intent_id || null,
+      decision.evidenceId || decision.evidence_id || null, decision.verificationId || decision.verification_id || null,
+      String(decision.decision || '').toUpperCase(), target, json(decision.reasonCodes || decision.reason_codes || []),
+      json(decision.invariantResults || decision.invariant_results || {}), decision.decisionSource || 'PAYMENT_CORE', actor?.userId || null, now
+    );
+
+    const result = db.prepare("UPDATE payments SET state = ?, updated_at = ?, claimed_at = CASE WHEN ? = 'CLAIMED' THEN ? ELSE claimed_at END, received_at = CASE WHEN ? = 'RECEIVED' THEN ? ELSE received_at END, verified_at = CASE WHEN ? = 'VERIFIED' THEN ? ELSE verified_at END, reconciled_at = CASE WHEN ? = 'RECONCILED' THEN ? ELSE reconciled_at END WHERE id = ? AND organization_id = ?" + (expectedState ? " AND state = ?" : ""))
+      .run(target, now, target, now, target, now, target, now, target, now, paymentId, organizationId, ...(expectedState ? [expectedState] : []));
+    if (Number(result.changes || 0) !== 1) throw Object.assign(new Error('Payment state changed before commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
+
+    db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+      crypto.randomUUID(), paymentId, organizationId, String(decision.entryType || target), Number(row.amount_minor),
+      normaliseCurrency(row.currency, 'ETB'), row.state, target, actor?.userId || null,
+      String(decision.reason || ''), json(decision.metadata || {}), now
+    );
+
+    const marketplaceAllocation = db.prepare("SELECT a.*, so.id AS canonical_seller_order_id FROM marketplace_payment_allocations a JOIN marketplace_seller_orders so ON so.id = a.seller_order_id WHERE a.payment_id = ? LIMIT 1").get(paymentId);
+    if (marketplaceAllocation) {
+      if (target === 'REFUNDED') {
+        db.prepare("UPDATE marketplace_payment_allocations SET status = 'REFUNDED', updated_at = ? WHERE id = ?").run(now, marketplaceAllocation.id);
+        db.prepare("UPDATE marketplace_settlements SET status = 'REVERSED' WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')").run(marketplaceAllocation.canonical_seller_order_id);
+      } else if (['VERIFIED','RECONCILED'].includes(target) && Number(row.amount_minor) === Number(marketplaceAllocation.amount_minor)) {
+        db.prepare("UPDATE marketplace_payment_allocations SET status = 'ALLOCATED', updated_at = ? WHERE id = ?").run(now, marketplaceAllocation.id);
+        db.prepare("UPDATE marketplace_settlements SET status = 'READY' WHERE seller_order_id = ? AND status = 'PENDING'").run(marketplaceAllocation.canonical_seller_order_id);
+      }
+    }
+    audit(String(chatId), 'payment.' + target.toLowerCase(), 'payment', paymentId, {
+      fromState: row.state, toState: target, decision: decision.decision || null,
+      reasonCodes: decision.reasonCodes || decision.reason_codes || [],
+    }, { organizationId, locationId: row.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null, reason: decision.reason || '' });
+    db.exec('COMMIT');
+    return paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId));
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
 
 const PAYMENT_STATES = new Set(['UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','REJECTED','DUPLICATE','MISMATCH','EXPIRED','PARTIAL','REFUNDED']);
 const PAYMENT_TRANSITIONS = Object.freeze({
@@ -5225,8 +5695,9 @@ export async function createPayment(chatId, input = {}, actor = null) {
     const account = db.prepare('SELECT id FROM payment_accounts WHERE id = ? AND organization_id = ? AND status = \'active\'').get(String(accountId), organizationId);
     if (!account) throw Object.assign(new Error('Payment account does not belong to this organization'), { statusCode: 400 });
   }
-  const state = String(input.state || 'UNPAID').toUpperCase();
-  if (!PAYMENT_STATES.has(state)) throw Object.assign(new Error('Invalid payment state'), { statusCode: 400 });
+  const suppliedState = input.state == null ? null : String(input.state).toUpperCase();
+  if (suppliedState && suppliedState !== 'UNPAID') throw Object.assign(new Error('Payment state is controlled by PaymentCore commands'), { statusCode: 409, code: 'STATE_NOT_CLIENT_CONTROLLED' });
+  const state = 'UNPAID';
   const now = nowIso();
   const id = String(input.id || crypto.randomUUID());
   const providerId = String(input.providerId || input.provider_id || 'manual').trim().toLowerCase();
@@ -5497,8 +5968,7 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
            updated_by_user_id, created_at, updated_at, version)
         VALUES (?, ?, ?, ?, 'delivery', 'pending', ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1)
       `).run(
-        fulfillmentId, String(serverOrderId), organizationId, locationId ? String(locationId) : null,
-        json(order.delivery_address || null), order.scheduled_time || null, order.tracking_reference || null,
+        fulfillmentId, String(serverOrderId), organizationId, locationId ? String(locationId) : null,        json(order.delivery_address || null), order.scheduled_time || null, order.tracking_reference || null,
         json(order.fulfillment_proof || null), actorUserId, actorUserId, now, now,
       );
       fulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(fulfillmentId);
@@ -5997,8 +6467,7 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
       marketplaceOrderId,
       buyerIdentity,
       String(customer_name || 'Marketplace Buyer').trim().slice(0, 200),
-      String(customer_phone || '').trim().slice(0, 80),
-      trackingTokenHash,
+      String(customer_phone || '').trim().slice(0, 80),      trackingTokenHash,
       idempotencyKey || null,
       nowIso(),
       nowIso(),
@@ -6498,825 +6967,3 @@ export async function createDatabaseBackup() {
 }
 
 function hashToken(token) {
-  return crypto.createHash('sha256').update(String(token)).digest('hex');
-}
-
-export async function getOrCreateUserByTelegram(telegramUserId, displayName = '') {
-  ensureDatabase();
-  const id = String(telegramUserId);
-  const existing = db.prepare('SELECT * FROM users WHERE telegram_user_id = ?').get(id);
-  const now = nowIso();
-  if (existing) {
-    db.prepare('UPDATE users SET display_name = ?, last_seen_at = ? WHERE id = ?').run(displayName || existing.display_name || '', now, existing.id);
-    return { ...existing, display_name: displayName || existing.display_name || '', last_seen_at: now };
-  }
-  const userId = crypto.randomUUID();
-  db.prepare(`INSERT INTO users (id, telegram_user_id, display_name, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)`).run(userId, id, displayName || '', now, now);
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-}
-
-export async function listTenantMemberships(chatId) {
-  ensureDatabase();
-  const memberships = db.prepare(`
-    SELECT m.id, m.user_id, m.chat_id, m.role, m.status, u.display_name
-    FROM memberships m JOIN users u ON u.id = m.user_id
-    WHERE m.chat_id = ? AND m.status = 'active'
-    ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'manager' THEN 1 ELSE 2 END, u.display_name
-  `).all(String(chatId));
-  return memberships.map(row => ({
-    id: row.id, userId: row.user_id, chatId: row.chat_id, role: row.role, status: row.status,
-    displayName: row.display_name,
-    contextualRoles: db.prepare(`
-      SELECT role_id AS role, scope_type AS scopeType, scope_id AS scopeId
-        FROM membership_roles
-       WHERE membership_id = ? AND status = 'active'
-       ORDER BY created_at
-    `).all(String(row.id)),
-  }));
-}
-
-export async function listUserMemberships(userId) {
-  ensureDatabase();
-  return db.prepare(`
-    SELECT m.id, m.chat_id, m.role, m.status, t.tenant_id, t.seller_name, t.branding_json, t.vendor_code
-    FROM memberships m JOIN tenants t ON t.chat_id = m.chat_id
-    WHERE m.user_id = ? AND m.status = 'active'
-    ORDER BY t.created_at
-  `).all(String(userId)).map(row => ({
-    id: row.id, chatId: row.chat_id, tenantId: row.tenant_id, role: row.role, status: row.status,
-    sellerName: row.seller_name, branding: parseJSON(row.branding_json, {}), vendorCode: row.vendor_code
-  }));
-}
-
-
-const CONTEXTUAL_ROLE_IDS = new Set([
-  'restaurant_waiter',
-  'restaurant_kitchen_staff',
-  'warehouse_receiving',
-  'warehouse_picker_packer',
-  'warehouse_inventory_staff',
-  'retail_cashier',
-  'retail_stock_staff',
-  'agriculture_farm_manager',
-  'agriculture_field_staff',
-  'procurement_buyer_requester',
-  'procurement_approver',
-  'supplier_network_admin',
-  'supplier_network_staff',
-  'marketplace_seller_admin',
-  'marketplace_seller_staff',
-  'logistics_manager',
-  'logistics_dispatcher',
-  'logistics_courier',
-  'logistics_viewer',
-]);
-
-function assertContextualRoleAssignable(chatId, role) {
-  const normalizedRole = String(role || '').trim().toLowerCase();
-  if (!CONTEXTUAL_ROLE_IDS.has(normalizedRole)) {
-    throw Object.assign(new Error('Unsupported contextual role'), { statusCode: 400 });
-  }
-  const tenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(String(chatId));
-  if (!tenant?.organization_id) throw Object.assign(new Error('Tenant organization not found'), { statusCode: 404 });
-  const requiredPack = normalizedRole.startsWith('warehouse_') ? 'warehouse'
-    : normalizedRole.startsWith('restaurant_') ? 'restaurant'
-    : normalizedRole.startsWith('logistics_') ? 'logistics'
-    : null;
-  // Retail/POS contextual roles are backed by existing Platform/Core retail authorities.
-  // Retail/POS and Agriculture contextual roles are backed by existing
-  // Platform/Core or declarative Agriculture authorities; assignment does not
-  // invent a new lifecycle authority.
-  if (normalizedRole.startsWith('retail_') || normalizedRole.startsWith('agriculture_') || normalizedRole.startsWith('procurement_') || normalizedRole.startsWith('supplier_network_') || normalizedRole.startsWith('marketplace_')) return;
-  const lifecycle = db.prepare(`
-    SELECT state FROM pack_lifecycle
-     WHERE organization_id = ? AND pack_id = ?
-     ORDER BY updated_at DESC LIMIT 1
-  `).get(String(tenant.organization_id), requiredPack);
-  if (lifecycle?.state !== 'ACTIVE') {
-    throw Object.assign(
-      new Error(`${requiredPack[0].toUpperCase()}${requiredPack.slice(1)} Pack must be ACTIVE before assigning ${requiredPack} contextual roles`),
-      { statusCode: 409 },
-    );
-  }
-}
-
-export async function assignMembershipContextualRole({
-  actorUserId, chatId, membershipId, role, scopeType = 'ORGANIZATION', scopeId = null,
-}) {
-  ensureDatabase();
-  const normalizedRole = String(role || '').trim().toLowerCase();
-  const normalizedScopeType = String(scopeType || 'ORGANIZATION').trim().toUpperCase();
-  const normalizedScopeId = scopeId == null || String(scopeId).trim() === '' ? null : String(scopeId).trim();
-  if (!membershipId || !normalizedRole) throw Object.assign(new Error('membershipId and role are required'), { statusCode: 400 });
-  assertContextualRoleAssignable(chatId, normalizedRole);
-  if (!['ORGANIZATION', 'LOCATION', 'RESOURCE'].includes(normalizedScopeType)) {
-    throw Object.assign(new Error('Unsupported role scope type'), { statusCode: 400 });
-  }
-  if (normalizedScopeType !== 'ORGANIZATION' && !normalizedScopeId) {
-    throw Object.assign(new Error('scopeId is required for non-organization role scope'), { statusCode: 400 });
-  }
-  if (normalizedScopeType === 'LOCATION') {
-    const tenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(String(chatId));
-    const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(normalizedScopeId, String(tenant?.organization_id || ''));
-    if (!location) throw Object.assign(new Error('Role scope location is outside the organization'), { statusCode: 403 });
-  }
-
-  const actor = db.prepare(`SELECT * FROM memberships WHERE user_id = ? AND chat_id = ? AND status = 'active'`)
-    .get(String(actorUserId), String(chatId));
-  if (!actor || !['owner', 'manager'].includes(actor.role)) {
-    throw Object.assign(new Error('Owner or manager permission required'), { statusCode: 403 });
-  }
-  const target = db.prepare(`SELECT * FROM memberships WHERE id = ? AND chat_id = ? AND status = 'active'`)
-    .get(String(membershipId), String(chatId));
-  if (!target) throw Object.assign(new Error('Membership not found'), { statusCode: 404 });
-
-  const id = crypto.randomUUID();
-  const createdAt = nowIso();
-  db.prepare(`
-    INSERT OR IGNORE INTO membership_roles
-      (id, membership_id, role_id, status, scope_type, scope_id, source, created_at)
-    VALUES (?, ?, ?, 'active', ?, ?, 'PACK_ROLE_ASSIGNMENT', ?)
-  `).run(id, target.id, normalizedRole, normalizedScopeType, normalizedScopeId, createdAt);
-
-  audit(String(chatId), 'membership.contextual_role.assigned', 'membership_role', id, {
-    membershipId: target.id, userId: target.user_id, role: normalizedRole,
-    scopeType: normalizedScopeType, scopeId: normalizedScopeId,
-    changedByUserId: String(actorUserId),
-  });
-  return {
-    id, membershipId: target.id, userId: target.user_id, chatId: String(chatId),
-    role: normalizedRole, status: 'active', scopeType: normalizedScopeType, scopeId: normalizedScopeId,
-  };
-}
-
-export async function changeMembershipRole({ actorUserId, chatId, membershipId, role }) {
-  ensureDatabase();
-  const nextRole = String(role || '').trim().toLowerCase();
-  const allowedRoles = new Set(['owner', 'manager', 'cashier', 'staff', 'buyer', 'viewer']);
-  if (!allowedRoles.has(nextRole)) throw Object.assign(new Error('Invalid membership role'), { statusCode: 400 });
-  const actor = db.prepare(`SELECT * FROM memberships WHERE user_id = ? AND chat_id = ? AND status = 'active'`).get(String(actorUserId), String(chatId));
-  if (!actor) throw Object.assign(new Error('You are not a member of this tenant'), { statusCode: 403 });
-  if (!['owner', 'manager'].includes(actor.role)) throw Object.assign(new Error('Owner or manager permission required'), { statusCode: 403 });
-  const target = db.prepare(`SELECT * FROM memberships WHERE id = ? AND chat_id = ? AND status = 'active'`).get(String(membershipId), String(chatId));
-  if (!target) throw Object.assign(new Error('Membership not found'), { statusCode: 404 });
-  if (String(target.user_id) === String(actorUserId)) throw Object.assign(new Error('You cannot change your own role'), { statusCode: 409 });
-  if (target.role === 'owner' && actor.role !== 'owner') throw Object.assign(new Error('Only the owner can change an owner membership'), { statusCode: 403 });
-  if (nextRole === 'owner' && actor.role !== 'owner') throw Object.assign(new Error('Only the owner can assign the owner role'), { statusCode: 403 });
-  if (actor.role === 'manager' && !['cashier', 'staff', 'viewer'].includes(nextRole)) {
-    throw Object.assign(new Error('Managers may assign cashier, staff, or viewer roles'), { statusCode: 403 });
-  }
-  if (target.role === 'owner' && nextRole !== 'owner') {
-    const owners = db.prepare(`SELECT COUNT(*) AS count FROM memberships WHERE chat_id = ? AND status = 'active' AND role = 'owner'`).get(String(chatId));
-    if (Number(owners?.count || 0) <= 1) throw Object.assign(new Error('The last owner cannot be demoted'), { statusCode: 409 });
-  }
-  if (target.role === nextRole) return { id: target.id, userId: target.user_id, chatId: target.chat_id, from: target.role, to: nextRole, changed: false };
-  db.prepare('UPDATE memberships SET role = ? WHERE id = ?').run(nextRole, target.id);
-  db.prepare(`
-    UPDATE membership_roles
-       SET status = 'revoked', revoked_at = ?
-     WHERE membership_id = ? AND scope_type = 'ORGANIZATION' AND scope_id IS NULL AND status = 'active'
-  `).run(nowIso(), target.id);
-  db.prepare(`
-    INSERT OR IGNORE INTO membership_roles
-      (id, membership_id, role_id, status, scope_type, source, created_at)
-    VALUES (?, ?, ?, 'active', 'ORGANIZATION', 'LEGACY_ROLE_CHANGE', ?)
-  `).run(`legacy-role:${target.id}`, target.id, nextRole, nowIso());
-  audit(String(chatId), 'membership.role_changed', 'membership', target.id, {
-    userId: target.user_id, changedByUserId: String(actorUserId), from: target.role, to: nextRole,
-  });
-  return { id: target.id, userId: target.user_id, chatId: target.chat_id, from: target.role, to: nextRole, changed: true };
-}
-
-export async function ensureMembership(userId, chatId, role = 'owner') {
-  ensureDatabase();
-  const existing = db.prepare('SELECT * FROM memberships WHERE user_id = ? AND chat_id = ?').get(String(userId), String(chatId));
-  if (existing) return existing;
-  const id = crypto.randomUUID();
-  const createdAt = nowIso();
-  db.prepare(`INSERT INTO memberships (id, user_id, chat_id, role, status, created_at) VALUES (?, ?, ?, ?, 'active', ?)`).run(id, String(userId), String(chatId), role, createdAt);
-  db.prepare(`
-    INSERT OR IGNORE INTO membership_roles
-      (id, membership_id, role_id, status, scope_type, source, created_at)
-    VALUES (?, ?, ?, 'active', 'ORGANIZATION', 'LEGACY_BRIDGE', ?)
-  `).run(`legacy-role:${id}`, id, String(role).trim().toLowerCase(), createdAt);
-  audit(String(chatId), 'membership.created', 'membership', id, { userId: String(userId), role });
-  return db.prepare('SELECT * FROM memberships WHERE id = ?').get(id);
-}
-
-export async function createTenantForUser({ userId, sellerName, businessType, country, currency, timezone }) {
-  ensureDatabase();
-  const chatId = `tenant_${crypto.randomUUID()}`;
-  const tenantId = crypto.randomUUID();
-  const now = nowIso();
-  const apiKey = crypto.randomBytes(32).toString('hex');
-  const tenant = { sellerName: String(sellerName || '').trim(), businessType: String(businessType || 'retail'), country: String(country || ''), currency: normaliseCurrency(currency, 'ETB'), timezone: String(timezone || 'UTC') };
-  db.exec('BEGIN IMMEDIATE');
-  try {
-    db.prepare(`INSERT INTO tenants (chat_id, tenant_id, api_key, created_at, seller_name, branding_json, vendor_code) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(chatId, tenantId, apiKey, now, tenant.sellerName, json({ currency: tenant.currency, country: tenant.country, timezone: tenant.timezone }), null);
-    ensureCanonicalIdentityForTenant(chatId);
-    const membership = await ensureMembership(userId, chatId, 'owner');
-    audit(chatId, 'tenant.created_authenticated', 'tenant', chatId, { userId: String(userId), businessType: tenant.businessType });
-    db.exec('COMMIT');
-    return { chatId, tenantId, membership, tenant: { ...tenant, createdAt: now } };
-  } catch (e) {
-    db.exec('ROLLBACK');
-    throw e;
-  }
-}
-
-function createDeviceRow(userId, chatId, name) {
-  const id = crypto.randomUUID();
-  const now = nowIso();
-  db.prepare(`INSERT INTO devices (id, user_id, chat_id, name, status, created_at, last_seen_at) VALUES (?, ?, ?, ?, 'active', ?, ?)`).run(id, String(userId), String(chatId), String(name || 'Unnamed device'), now, now);
-  return db.prepare('SELECT * FROM devices WHERE id = ?').get(id);
-}
-
-export async function createSession({ userId, chatId, deviceName = 'Sellify device', ttlMs = 1000 * 60 * 60 * 24 * 7 }) {
-  ensureDatabase();
-  const membership = db.prepare(`SELECT * FROM memberships WHERE user_id = ? AND chat_id = ? AND status = 'active'`).get(String(userId), String(chatId));
-  if (!membership) throw Object.assign(new Error('User is not a member of this tenant'), { statusCode: 403 });
-  const device = createDeviceRow(userId, chatId, deviceName);
-  const token = crypto.randomBytes(32).toString('base64url');
-  const createdAt = new Date();
-  const expiresAt = new Date(createdAt.getTime() + ttlMs);
-  const sessionId = crypto.randomUUID();
-  db.prepare(`INSERT INTO sessions (id, device_id, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)`).run(sessionId, device.id, hashToken(token), createdAt.toISOString(), expiresAt.toISOString());
-  const context = db.prepare(`
-    SELECT t.organization_id,
-           (SELECT l.id FROM locations l WHERE l.organization_id = t.organization_id AND l.code = 'DEFAULT' LIMIT 1) AS default_location_id
-    FROM tenants t WHERE t.chat_id = ?
-  `).get(String(chatId));
-  const contextualRoles = db.prepare(`
-    SELECT role_id, scope_type, scope_id
-      FROM membership_roles
-     WHERE membership_id = ? AND status = 'active'
-     ORDER BY created_at
-  `).all(String(membership.id)).map(row => ({
-    role: row.role_id, scopeType: row.scope_type, scopeId: row.scope_id || null,
-  }));
-  return {
-    token, expiresAt: expiresAt.toISOString(), sessionId, deviceId: device.id, role: membership.role,
-    roles: Array.from(new Set([membership.role, ...contextualRoles.map(item => item.role)])),
-    contextualRoles,
-    chatId: String(chatId), organizationId: context?.organization_id || null, locationId: context?.default_location_id || null,
-  };
-}
-
-export async function authenticateSessionToken(token) {
-  ensureDatabase();
-  if (!token) return null;
-  const row = db.prepare(`
-    SELECT s.*, d.user_id, d.chat_id, d.status AS device_status, m.role, m.status AS membership_status,
-           t.organization_id,
-           (SELECT l.id FROM locations l WHERE l.organization_id = t.organization_id AND l.code = 'DEFAULT' LIMIT 1) AS default_location_id,
-           (SELECT group_concat(DISTINCT mr.role_id)
-              FROM membership_roles mr
-             WHERE mr.membership_id = m.id AND mr.status = 'active'
-               AND (
-                 (
-                   mr.role_id NOT IN (
-                     'restaurant_waiter', 'restaurant_kitchen_staff',
-                     'warehouse_receiving', 'warehouse_picker_packer', 'warehouse_inventory_staff',
-                     'logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer'
-                   )
-                 )
-                 OR (
-                   mr.role_id IN ('restaurant_waiter', 'restaurant_kitchen_staff')
-                   AND EXISTS (
-                     SELECT 1 FROM pack_lifecycle pl
-                      WHERE pl.organization_id = t.organization_id
-                        AND pl.pack_id = 'restaurant'
-                        AND pl.state = 'ACTIVE'
-                   )
-                 )
-                 OR (
-                   mr.role_id IN ('warehouse_receiving', 'warehouse_picker_packer', 'warehouse_inventory_staff')
-                   AND EXISTS (
-                     SELECT 1 FROM pack_lifecycle pl
-                      WHERE pl.organization_id = t.organization_id
-                        AND pl.pack_id = 'warehouse'
-                        AND pl.state = 'ACTIVE'
-                   )
-                 )
-                 OR (
-                   mr.role_id IN ('logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer')
-                   AND EXISTS (
-                     SELECT 1 FROM pack_lifecycle pl
-                      WHERE pl.organization_id = t.organization_id
-                        AND pl.pack_id = 'logistics'
-                        AND pl.state = 'ACTIVE'
-                   )
-                 )
-               )) AS membership_roles
-    FROM sessions s JOIN devices d ON d.id = s.device_id
-    JOIN memberships m ON m.user_id = d.user_id AND m.chat_id = d.chat_id
-    JOIN tenants t ON t.chat_id = d.chat_id
-    WHERE s.token_hash = ?
-  `).get(hashToken(token));
-  if (!row || row.revoked_at || row.device_status !== 'active' || row.membership_status !== 'active') return null;
-  if (Date.parse(row.expires_at) <= Date.now()) return null;
-  db.prepare('UPDATE devices SET last_seen_at = ? WHERE id = ?').run(nowIso(), row.device_id);
-  return {
-    sessionId: row.id,
-    userId: row.user_id,
-    chatId: row.chat_id,
-    deviceId: row.device_id,
-    role: row.role,
-    roles: Array.from(new Set(String(row.membership_roles || row.role || '').split(',').map(value => value.trim().toLowerCase()).filter(Boolean))),
-    organizationId: row.organization_id || null,
-    locationId: row.default_location_id || null,
-    expiresAt: row.expires_at,
-  };
-}
-
-export async function recordAuditEvent({
-  chatId = null,
-  organizationId = null,
-  locationId = null,
-  actorId = null,
-  deviceId = null,
-  action,
-  entityType,
-  entityId = null,
-  reason = '',
-  result = 'success',
-  metadata = {},
-}) {
-  ensureDatabase();
-  audit(chatId, action, entityType, entityId, metadata, {
-    organizationId, locationId, actorId, deviceId, reason, result,
-  });
-}
-
-export async function getAuditRetentionPolicy(chatId) {
-  ensureDatabase();
-  const tenant = await getTenant(chatId);
-  if (!tenant?.organizationId) return null;
-  const row = db.prepare('SELECT * FROM audit_retention_policies WHERE organization_id = ?').get(String(tenant.organizationId));
-  return {
-    organizationId: tenant.organizationId,
-    retentionDays: Number(row?.retention_days || 365),
-    updatedAt: row?.updated_at || null,
-    updatedBy: row?.updated_by || null,
-  };
-}
-
-export async function setAuditRetentionPolicy(chatId, retentionDays, actor = null) {
-  ensureDatabase();
-  const tenant = await getTenant(chatId);
-  if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
-  const days = Math.floor(Number(retentionDays));
-  if (!Number.isInteger(days) || days < 30 || days > 3650) {
-    throw Object.assign(new Error('retentionDays must be an integer between 30 and 3650'), { statusCode: 400 });
-  }
-  const now = nowIso();
-  db.prepare(`
-    INSERT INTO audit_retention_policies (organization_id, retention_days, updated_at, updated_by)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(organization_id) DO UPDATE SET
-      retention_days = excluded.retention_days,
-      updated_at = excluded.updated_at,
-      updated_by = excluded.updated_by
-  `).run(String(tenant.organizationId), days, now, actor?.userId || null);
-  audit(String(chatId), 'audit.retention_policy.updated', 'audit_retention_policy', tenant.organizationId, {
-    retentionDays: days,
-  }, {
-    organizationId: tenant.organizationId,
-    actorId: actor?.userId || null,
-    deviceId: actor?.deviceId || null,
-  });
-  return getAuditRetentionPolicy(chatId);
-}
-
-export async function createComplianceRequest(chatId, input = {}, actor = null) {
-  ensureDatabase();
-  const tenant = await getTenant(chatId);
-  if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
-  const requestType = String(input.requestType || input.request_type || '').trim().toUpperCase();
-  const subjectType = String(input.subjectType || input.subject_type || '').trim().toLowerCase();
-  const allowedTypes = new Set(['ACCESS', 'EXPORT', 'DELETION']);
-  const allowedSubjectTypes = new Set(['organization', 'customer']);
-  if (!allowedTypes.has(requestType) || !subjectType || !allowedSubjectTypes.has(subjectType)) {
-    throw Object.assign(new Error('requestType must be ACCESS, EXPORT, or DELETION and subjectType must be organization or customer'), { statusCode: 400 });
-  }
-  if (subjectType === 'organization' && input.subjectId && String(input.subjectId) !== String(tenant.organizationId)) {
-    throw Object.assign(new Error('Organization compliance requests must target the current organization'), { statusCode: 400 });
-  }
-  if (subjectType === 'customer') {
-    if (!input.subjectId) throw Object.assign(new Error('Customer compliance requests require subjectId'), { statusCode: 400 });
-    const customer = db.prepare('SELECT id FROM customers WHERE id = ? AND organization_id = ?').get(String(input.subjectId), tenant.organizationId);
-    if (!customer) throw Object.assign(new Error('Customer not found'), { statusCode: 404 });
-  }
-  if (input.locationId) {
-    const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(String(input.locationId), tenant.organizationId);
-    if (!location) throw Object.assign(new Error('Location does not belong to this organization'), { statusCode: 400 });
-  }
-  const id = crypto.randomUUID();
-  const now = nowIso();
-  db.prepare(`
-    INSERT INTO compliance_requests
-      (id, organization_id, location_id, request_type, subject_type, subject_id, requested_by, reason, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-  `).run(
-    id, String(tenant.organizationId), input.locationId ? String(input.locationId) : null,
-    requestType, subjectType, input.subjectId == null ? null : String(input.subjectId),
-    actor?.userId || null, String(input.reason || '').slice(0, 1000), now, now,
-  );
-  audit(String(chatId), 'compliance.request.created', 'compliance_request', id, {
-    requestType, subjectType, subjectId: input.subjectId == null ? null : String(input.subjectId),
-  }, {
-    organizationId: tenant.organizationId,
-    locationId: input.locationId || null,
-    actorId: actor?.userId || null,
-    deviceId: actor?.deviceId || null,
-  });
-  return getComplianceRequest(chatId, id);
-}
-
-export async function getComplianceRequest(chatId, requestId) {
-  ensureDatabase();
-  const tenant = await getTenant(chatId);
-  if (!tenant?.organizationId) return null;
-  const row = db.prepare('SELECT * FROM compliance_requests WHERE id = ? AND organization_id = ?').get(String(requestId), tenant.organizationId);
-  return row ? {
-    id: row.id, organizationId: row.organization_id, locationId: row.location_id,
-    requestType: row.request_type, subjectType: row.subject_type, subjectId: row.subject_id,
-    requestedBy: row.requested_by, reason: row.reason, status: row.status,
-    resolutionNote: row.resolution_note, createdAt: row.created_at, updatedAt: row.updated_at,
-  } : null;
-}
-
-export async function listComplianceRequests(chatId, { status = 'all', limit = 100 } = {}) {
-  ensureDatabase();
-  const tenant = await getTenant(chatId);
-  if (!tenant?.organizationId) return [];
-  const safeLimit = Math.min(200, Math.max(1, Number(limit) || 100));
-  const where = ['organization_id = ?'];
-  const params = [String(tenant.organizationId)];
-  if (status && status !== 'all') { where.push('status = ?'); params.push(String(status)); }
-  params.push(safeLimit);
-  return db.prepare(`SELECT * FROM compliance_requests WHERE ${where.join(' AND ')} ORDER BY created_at DESC LIMIT ?`).all(...params).map(row => ({
-    id: row.id, organizationId: row.organization_id, locationId: row.location_id,
-    requestType: row.request_type, subjectType: row.subject_type, subjectId: row.subject_id,
-    requestedBy: row.requested_by, reason: row.reason, status: row.status,
-    resolutionNote: row.resolution_note, createdAt: row.created_at, updatedAt: row.updated_at,
-  }));
-}
-
-export async function resolveComplianceRequest(chatId, requestId, status, resolutionNote = '', actor = null) {
-  ensureDatabase();
-  const tenant = await getTenant(chatId);
-  if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
-  const nextStatus = String(status || '').toLowerCase();
-  const current = await getComplianceRequest(chatId, requestId);
-  if (!current) throw Object.assign(new Error('Compliance request not found'), { statusCode: 404 });
-  const transitions = {
-    pending: new Set(['approved', 'rejected', 'cancelled']),
-    approved: new Set(['completed', 'cancelled']),
-    rejected: new Set(),
-    completed: new Set(),
-    cancelled: new Set(),
-  };
-  if (!transitions[current.status]?.has(nextStatus)) {
-    throw Object.assign(new Error(`Invalid compliance request transition: ${current.status} -> ${nextStatus}`), { statusCode: 409 });
-  }
-  const now = nowIso();
-  db.prepare('UPDATE compliance_requests SET status = ?, resolution_note = ?, updated_at = ? WHERE id = ? AND organization_id = ?')
-    .run(nextStatus, String(resolutionNote || '').slice(0, 2000), now, String(requestId), String(tenant.organizationId));
-  audit(String(chatId), 'compliance.request.resolved', 'compliance_request', requestId, {
-    previousStatus: current.status, status: nextStatus,
-  }, {
-    organizationId: tenant.organizationId,
-    actorId: actor?.userId || null,
-    deviceId: actor?.deviceId || null,
-    reason: resolutionNote || '',
-    result: nextStatus === 'rejected' ? 'failure' : 'success',
-  });
-  return getComplianceRequest(chatId, requestId);
-}
-
-
-export async function buildComplianceExport(chatId, { subjectType = 'organization', subjectId = null } = {}) {
-  ensureDatabase();
-  const tenant = await getTenant(chatId);
-  if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
-  const type = String(subjectType || 'organization').toLowerCase();
-  const orgId = String(tenant.organizationId);
-
-  if (type === 'customer') {
-    if (!subjectId) throw Object.assign(new Error('subjectId is required for customer export'), { statusCode: 400 });
-    const customer = db.prepare('SELECT * FROM customers WHERE id = ? AND organization_id = ?').get(String(subjectId), orgId);
-    if (!customer) throw Object.assign(new Error('Customer not found'), { statusCode: 404 });
-    const orders = db.prepare(`
-      SELECT server_order_id, local_id, order_json, total_minor, created_at, status,
-             delivered_to_device, marketplace_order_id, is_marketplace
-      FROM orders WHERE chat_id = ? AND customer_id = ? ORDER BY created_at DESC
-    `).all(String(chatId), String(subjectId)).map(row => ({
-      serverOrderId: row.server_order_id, localId: row.local_id,
-      order: parseJSON(row.order_json, {}), totalMinor: row.total_minor,
-      createdAt: row.created_at, status: row.status,
-      deliveredToDevice: Boolean(row.delivered_to_device),
-      marketplaceOrderId: row.marketplace_order_id, isMarketplace: Boolean(row.is_marketplace),
-    }));
-    const auditEvents = db.prepare(`
-      SELECT id, action, entity_type, entity_id, actor_id, location_id, device_id, reason, result, metadata_json, created_at
-      FROM audit_events
-      WHERE organization_id = ? AND (entity_type = 'customer' AND entity_id = ?)
-      ORDER BY id DESC LIMIT 5000
-    `).all(orgId, String(subjectId)).map(row => ({
-      id: row.id, action: row.action, entityType: row.entity_type, entityId: row.entity_id,
-      actorId: row.actor_id, locationId: row.location_id, deviceId: row.device_id,
-      reason: row.reason || '', result: row.result || 'success', metadata: parseJSON(row.metadata_json, {}),
-      createdAt: row.created_at,
-    }));
-    return {
-      exportVersion: 1,
-      exportedAt: nowIso(),
-      subject: { type: 'customer', id: String(subjectId) },
-      customer: customerFromRow(customer),
-      orders,
-      auditEvents,
-    };
-  }
-
-  if (type !== 'organization') {
-    throw Object.assign(new Error('Unsupported export subject type'), { statusCode: 400 });
-  }
-
-  const locations = db.prepare('SELECT id, code, name, type, status, created_at FROM locations WHERE organization_id = ? ORDER BY code').all(orgId);
-  const customers = db.prepare('SELECT * FROM customers WHERE organization_id = ? ORDER BY updated_at DESC').all(orgId).map(customerFromRow);
-  const orders = db.prepare(`
-    SELECT server_order_id, local_id, order_json, total_minor, created_at, status,
-           delivered_to_device, marketplace_order_id, is_marketplace, customer_id
-    FROM orders WHERE chat_id = ? ORDER BY created_at DESC LIMIT 5000
-  `).all(String(chatId)).map(row => ({
-    serverOrderId: row.server_order_id, localId: row.local_id,
-    order: parseJSON(row.order_json, {}), totalMinor: row.total_minor,
-    createdAt: row.created_at, status: row.status,
-    deliveredToDevice: Boolean(row.delivered_to_device),
-    marketplaceOrderId: row.marketplace_order_id, isMarketplace: Boolean(row.is_marketplace),
-    customerId: row.customer_id || null,
-  }));
-  const auditEvents = db.prepare(`
-    SELECT id, chat_id, organization_id, location_id, actor_id, device_id, action, entity_type, entity_id, reason, result, metadata_json, created_at
-    FROM audit_events WHERE organization_id = ? ORDER BY id DESC LIMIT 10000
-  `).all(orgId).map(row => ({
-    id: row.id, chatId: row.chat_id, organizationId: row.organization_id, locationId: row.location_id,
-    actorId: row.actor_id, deviceId: row.device_id, action: row.action, entityType: row.entity_type,
-    entityId: row.entity_id, reason: row.reason || '', result: row.result || 'success',
-    metadata: parseJSON(row.metadata_json, {}), createdAt: row.created_at,
-  }));
-  const complianceRequests = await listComplianceRequests(chatId, { limit: 500 });
-  return {
-    exportVersion: 1,
-    exportedAt: nowIso(),
-    subject: { type: 'organization', id: orgId },
-    organization: {
-      id: orgId, tenantId: tenant.tenantId, chatId: String(chatId),
-      sellerName: tenant.sellerName, country: tenant.country, currency: tenant.currency, timezone: tenant.timezone,
-    },
-    retentionPolicy: await getAuditRetentionPolicy(chatId),
-    locations, customers, orders, auditEvents, complianceRequests,
-  };
-}
-
-export async function revokeSession(sessionId) {
-  ensureDatabase();
-  db.prepare('UPDATE sessions SET revoked_at = ? WHERE id = ?').run(nowIso(), String(sessionId));
-}
-
-// A "device" row today is created fresh on every createSession call (see
-// createDeviceRow above) — there's no re-use of an existing device across
-// logins, so this list is really "every session lineage ever created for
-// this tenant," most of which will show status 'active' but an expired
-// underlying session. hasLiveSession distinguishes those from ones that
-// are both active *and* currently authenticate-able, so the UI can show
-// "signed out (expired)" instead of implying a revoke would do anything.
-export async function listDevices(chatId) {
-  ensureDatabase();
-  const rows = db.prepare(`
-    SELECT d.id, d.name, d.status, d.created_at, d.last_seen_at,
-           s.expires_at AS session_expires_at, s.revoked_at AS session_revoked_at
-    FROM devices d
-    LEFT JOIN sessions s ON s.device_id = d.id
-    WHERE d.chat_id = ?
-    ORDER BY d.last_seen_at DESC
-  `).all(String(chatId));
-  // A device can have accumulated more than one session row over time in
-  // principle (none today, since createSession always makes a fresh
-  // device — but the schema allows it), so collapse to one row per
-  // device, keeping whichever session is furthest from expiring.
-  const byDevice = new Map();
-  for (const row of rows) {
-    const existing = byDevice.get(row.id);
-    if (!existing || (row.session_expires_at || '') > (existing.session_expires_at || '')) {
-      byDevice.set(row.id, row);
-    }
-  }
-  const now = Date.now();
-  return Array.from(byDevice.values()).map(row => {
-    const hasLiveSession = row.status === 'active' && !row.session_revoked_at
-      && row.session_expires_at && Date.parse(row.session_expires_at) > now;
-    return {
-      id: row.id,
-      name: row.name,
-      status: row.status, // 'active' | 'revoked' (device-level, set by revokeDevice)
-      createdAt: row.created_at,
-      lastSeenAt: row.last_seen_at,
-      sessionExpiresAt: row.session_expires_at || null,
-      hasLiveSession,
-    };
-  });
-}
-
-// Revokes at the device level (not just its session): sets devices.status
-// = 'revoked', which authenticateSessionToken already checks on every
-// request (`row.device_status !== 'active'` short-circuits to null), so
-// this takes effect immediately without needing to separately find and
-// revoke every session row that device ever created. The explicit
-// sessions UPDATE below is defense-in-depth, not load-bearing — it means
-// a future re-activation of the device row (if that's ever added) doesn't
-// silently resurrect an old session too.
-// requestingDeviceId is the caller's *own* device, from their session —
-// not user input. Revoking your own device (signing yourself out) never
-// needs a role check; revoking a different device does. This mirrors the
-// same self-vs-other split server.js's handleRevokeDevice already applies
-// before calling in here, but re-checked here too since this function is
-// the actual authority, not the route handler.
-export async function revokeDevice({ userId, chatId, deviceId, requestingDeviceId }) {
-  ensureDatabase();
-  const isSelf = requestingDeviceId != null && String(requestingDeviceId) === String(deviceId);
-  if (!isSelf) {
-    const membership = db.prepare(`SELECT * FROM memberships WHERE user_id = ? AND chat_id = ? AND status = 'active'`).get(String(userId), String(chatId));
-    if (!membership || !['owner', 'manager'].includes(membership.role)) {
-      throw Object.assign(new Error('Owner or manager permission required'), { statusCode: 403 });
-    }
-  }
-  const device = db.prepare('SELECT * FROM devices WHERE id = ? AND chat_id = ?').get(String(deviceId), String(chatId));
-  if (!device) throw Object.assign(new Error('Device not found'), { statusCode: 404 });
-  db.prepare(`UPDATE devices SET status = 'revoked' WHERE id = ?`).run(String(deviceId));
-  db.prepare(`UPDATE sessions SET revoked_at = ? WHERE device_id = ? AND revoked_at IS NULL`).run(nowIso(), String(deviceId));
-  audit(String(chatId), 'device.revoked', 'device', String(deviceId), { userId: String(userId), deviceName: device.name });
-}
-
-export async function createAuthChallenge(userId, ttlMs = 5 * 60_000) {
-  ensureDatabase();
-  const token = crypto.randomBytes(32).toString('base64url');
-  const now = new Date();
-  const expires = new Date(now.getTime() + ttlMs);
-  db.prepare('INSERT INTO auth_challenges (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)').run(hashToken(token), String(userId), now.toISOString(), expires.toISOString());
-  return { token, expiresAt: expires.toISOString() };
-}
-
-export async function consumeAuthChallenge(token) {
-  ensureDatabase();
-  const hash = hashToken(token);
-  const row = db.prepare('SELECT * FROM auth_challenges WHERE token_hash = ?').get(hash);
-  if (!row || row.used_at || Date.parse(row.expires_at) <= Date.now()) return null;
-  db.prepare('UPDATE auth_challenges SET used_at = ? WHERE token_hash = ?').run(nowIso(), hash);
-  return { userId: row.user_id };
-}
-
-export async function createPairingChallenge({ userId, chatId, role = 'cashier', ttlMs = 10 * 60_000 }) {
-  ensureDatabase();
-  const allowedRoles = new Set(['manager', 'cashier', 'staff']);
-  if (!allowedRoles.has(role)) throw Object.assign(new Error('Invalid pairing role'), { statusCode: 400 });
-  const membership = db.prepare(`SELECT * FROM memberships WHERE user_id = ? AND chat_id = ? AND status = 'active'`).get(String(userId), String(chatId));
-  if (!membership || !['owner', 'manager'].includes(membership.role)) throw Object.assign(new Error('Owner or manager permission required'), { statusCode: 403 });
-  if (membership.role !== 'owner' && role === 'manager') throw Object.assign(new Error('Only the owner can invite managers'), { statusCode: 403 });
-  const token = crypto.randomBytes(18).toString('base64url');
-  const now = new Date();
-  const expires = new Date(now.getTime() + ttlMs);
-  db.prepare('INSERT INTO pairing_challenges (token_hash, chat_id, created_by_user_id, role, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)').run(hashToken(token), String(chatId), String(userId), role, now.toISOString(), expires.toISOString());
-  audit(String(chatId), 'device.pairing_created', 'device', null, { userId: String(userId), role, expiresAt: expires.toISOString() });
-  return { token, expiresAt: expires.toISOString(), role, chatId: String(chatId) };
-}
-
-export async function consumePairingChallenge(token, deviceName = 'Paired Sellify device') {
-  ensureDatabase();
-  const hash = hashToken(token);
-  const row = db.prepare(`SELECT * FROM pairing_challenges WHERE token_hash = ?`).get(hash);
-  if (!row || row.used_at || Date.parse(row.expires_at) <= Date.now()) return null;
-  const userId = crypto.randomUUID();
-  const now = nowIso();
-  db.exec('BEGIN IMMEDIATE');
-  try {
-    db.prepare('INSERT INTO users (id, telegram_user_id, display_name, created_at, last_seen_at) VALUES (?, NULL, ?, ?, ?)').run(userId, `Paired device`, now, now);
-    await ensureMembership(userId, row.chat_id, row.role);
-    db.prepare('UPDATE pairing_challenges SET used_at = ? WHERE token_hash = ?').run(now, hash);
-    audit(row.chat_id, 'device.paired', 'device', null, { userId, role: row.role, deviceName: String(deviceName || 'Paired Sellify device') });
-    db.exec('COMMIT');
-  } catch (e) {
-    db.exec('ROLLBACK');
-    throw e;
-  }
-  return { userId, chatId: row.chat_id, role: row.role };
-}
-
-// Invites are distinct from pairing challenges: pairing hands a *device*
-// a role by minting a fresh anonymous user, for standalone/non-Telegram
-// clients. Invites hand a *person* a role — the recipient authenticates
-// with their own Telegram identity and the invite grants that existing
-// (or newly created) user a membership on this tenant. This is the path
-// for adding a staff member who has their own Telegram account, as
-// opposed to physically approving a new device.
-export async function createInvite({ userId, chatId, role = 'cashier', ttlMs = 7 * 24 * 60 * 60_000 }) {
-  ensureDatabase();
-  const allowedRoles = new Set(['manager', 'cashier', 'staff']);
-  if (!allowedRoles.has(role)) throw Object.assign(new Error('Invalid invite role'), { statusCode: 400 });
-  const membership = db.prepare(`SELECT * FROM memberships WHERE user_id = ? AND chat_id = ? AND status = 'active'`).get(String(userId), String(chatId));
-  if (!membership || !['owner', 'manager'].includes(membership.role)) throw Object.assign(new Error('Owner or manager permission required'), { statusCode: 403 });
-  if (membership.role !== 'owner' && role === 'manager') throw Object.assign(new Error('Only the owner can invite managers'), { statusCode: 403 });
-  const token = crypto.randomBytes(18).toString('base64url');
-  const now = new Date();
-  const expires = new Date(now.getTime() + ttlMs);
-  db.prepare('INSERT INTO invites (token_hash, chat_id, created_by_user_id, role, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)').run(hashToken(token), String(chatId), String(userId), role, now.toISOString(), expires.toISOString());
-  audit(String(chatId), 'invite.created', 'invite', null, { userId: String(userId), role, expiresAt: expires.toISOString() });
-  return { token, expiresAt: expires.toISOString(), role, chatId: String(chatId) };
-}
-
-// Listing never returns the raw token (it's only known at creation time,
-// same as pairing codes) — just status, so an owner can see what's
-// outstanding and revoke it if it was sent to the wrong person.
-export async function listInvites(chatId) {
-  ensureDatabase();
-  const rows = db.prepare(`
-    SELECT i.role, i.created_at, i.expires_at, i.used_at, i.revoked_at, u.display_name AS created_by_name
-    FROM invites i JOIN users u ON u.id = i.created_by_user_id
-    WHERE i.chat_id = ?
-    ORDER BY i.created_at DESC
-  `).all(String(chatId));
-  return rows.map(row => ({
-    role: row.role,
-    createdAt: row.created_at,
-    expiresAt: row.expires_at,
-    createdBy: row.created_by_name,
-    status: row.revoked_at ? 'revoked' : row.used_at ? 'accepted' : Date.parse(row.expires_at) <= Date.now() ? 'expired' : 'pending',
-  }));
-}
-
-export async function revokeInvite({ userId, chatId, token }) {
-  ensureDatabase();
-  const membership = db.prepare(`SELECT * FROM memberships WHERE user_id = ? AND chat_id = ? AND status = 'active'`).get(String(userId), String(chatId));
-  if (!membership || !['owner', 'manager'].includes(membership.role)) throw Object.assign(new Error('Owner or manager permission required'), { statusCode: 403 });
-  const hash = hashToken(token);
-  const row = db.prepare('SELECT * FROM invites WHERE token_hash = ? AND chat_id = ?').get(hash, String(chatId));
-  if (!row) throw Object.assign(new Error('Invite not found'), { statusCode: 404 });
-  db.prepare('UPDATE invites SET revoked_at = ? WHERE token_hash = ?').run(nowIso(), hash);
-  audit(String(chatId), 'invite.revoked', 'invite', null, { userId: String(userId) });
-}
-
-// Roles an invite can carry, ranked so consumeInvite can tell an upgrade
-// from a downgrade. Not exported: this ordering only matters for deciding
-// whether accepting an invite should raise an existing membership's role,
-// never for permission checks (those live client-side in
-// auth/permissions.js and are re-derived from the stored role each time).
-const ROLE_RANK = { owner: 4, manager: 3, staff: 2, cashier: 2, buyer: 1 };
-function roleRank(role) { return ROLE_RANK[role] ?? 0; }
-
-export async function consumeInvite(token, userId) {
-  ensureDatabase();
-  const hash = hashToken(token);
-  const row = db.prepare('SELECT * FROM invites WHERE token_hash = ?').get(hash);
-  if (!row || row.used_at || row.revoked_at || Date.parse(row.expires_at) <= Date.now()) return null;
-  db.exec('BEGIN IMMEDIATE');
-  let alreadyMember = false;
-  let roleChanged = false;
-  try {
-    const existing = db.prepare('SELECT * FROM memberships WHERE user_id = ? AND chat_id = ?').get(String(userId), String(row.chat_id));
-    if (existing) {
-      // Already a member of this tenant — accepting the invite again should
-      // never be a silent no-op. Only raise the role if the invite actually
-      // grants more than they already have; never downgrade someone (e.g. a
-      // manager re-accepting a stale cashier-level invite keeps their
-      // manager role).
-      alreadyMember = true;
-      if (roleRank(row.role) > roleRank(existing.role)) {
-        db.prepare('UPDATE memberships SET role = ? WHERE id = ?').run(row.role, existing.id);
-        roleChanged = true;
-        audit(row.chat_id, 'membership.role_upgraded', 'membership', existing.id, { userId: String(userId), from: existing.role, to: row.role });
-      }
-    } else {
-      await ensureMembership(userId, row.chat_id, row.role);
-    }
-    db.prepare('UPDATE invites SET used_at = ?, used_by_user_id = ? WHERE token_hash = ?').run(nowIso(), String(userId), hash);
-    audit(row.chat_id, 'invite.accepted', 'invite', null, { userId: String(userId), role: row.role, alreadyMember, roleChanged });
-    db.exec('COMMIT');
-  } catch (e) {
-    db.exec('ROLLBACK');
-    throw e;
-  }
-  const tenant = db.prepare('SELECT tenant_id, seller_name FROM tenants WHERE chat_id = ?').get(row.chat_id);
-  const finalRole = db.prepare('SELECT role FROM memberships WHERE user_id = ? AND chat_id = ?').get(String(userId), String(row.chat_id))?.role || row.role;
-  return { chatId: row.chat_id, tenantId: tenant?.tenant_id, sellerName: tenant?.seller_name, role: finalRole, alreadyMember, roleChanged };
-}
-
-export function getDatabasePath() {
-  return DB_PATH;
-}
-// Test-only introspection kept deliberately narrow; production callers should
-// use domain functions rather than the raw database handle.
-export function getDatabaseForTests() {
-  ensureDatabase();
-  return db;
-}
