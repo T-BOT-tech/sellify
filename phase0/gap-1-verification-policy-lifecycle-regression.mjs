@@ -103,6 +103,9 @@ assert.ok(pending.verification.reasonCodes.includes('INDEPENDENT_CONFIRMATION_UN
 assert.equal((await store.getPayment(chatId, paymentSetup.payment.id)).state, 'UNPAID');
 assert.equal((await store.listPaymentVerifications(chatId, paymentSetup.payment.id)).length, 0);
 assert.equal((await store.listPaymentLedger(chatId, paymentSetup.payment.id)).length, 0);
+const pendingAttempts = await store.listPaymentConfirmationAttempts(chatId, { paymentIntentId: paymentSetup.intent.id, evidenceId: evidence.evidence.id });
+assert.equal(pendingAttempts.length, 1);
+assert.equal(pendingAttempts[0].status, 'UNKNOWN');
 
 const confirmedCore = new PaymentCore({
   store,
@@ -130,6 +133,10 @@ assert.equal(confirmed.decision.targetState, 'VERIFIED');
 assert.equal(confirmed.verification.rawResult.verificationPolicy, 'combined');
 assert.equal(confirmed.verification.rawResult.independentConfirmation.status, 'CONFIRMED');
 assert.equal((await store.getPayment(chatId, paymentSetup.payment.id)).state, 'VERIFIED');
+const completedAttempts = await store.listPaymentConfirmationAttempts(chatId, { paymentIntentId: paymentSetup.intent.id, evidenceId: evidence.evidence.id });
+assert.equal(completedAttempts.length, 2);
+assert.equal(completedAttempts[0].status, 'CONFIRMED');
+assert.equal(completedAttempts[1].status, 'UNKNOWN');
 
 console.log('GAP-1 verification policy lifecycle regression: PASS');
 await rm(dir, { recursive: true, force: true });
