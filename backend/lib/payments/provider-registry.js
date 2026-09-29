@@ -180,7 +180,9 @@ registerPaymentProvider({
   reconcile: async input => ({ matched: true, reference: input?.externalReference || null }),
 });
 
-for (const [id, name] of [['telebirr', 'Telebirr'], ['cbe', 'CBE'], ['mpesa', 'M-Pesa'], ['boa', 'Bank of Abyssinia']]) {
+registerPaymentProvider(telebirrProvider);
+
+for (const [id, name] of [['cbe', 'CBE'], ['mpesa', 'M-Pesa'], ['boa', 'Bank of Abyssinia']]) {
   registerPaymentProvider(createUnconfiguredPaymentProvider({
     id,
     name,
