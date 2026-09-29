@@ -1,3 +1,5 @@
+import mpesaProvider from './providers/mpesa.js';
+
 // Provider-neutral payment adapter boundary.
 // Provider implementations must stay outside the payment core and must not
 // perform persistence directly. The core owns state, ledger and reconciliation.
@@ -165,7 +167,7 @@ registerPaymentProvider({
   reconcile: async input => ({ matched: true, reference: input?.externalReference || null }),
 });
 
-for (const [id, name] of [['telebirr', 'Telebirr'], ['cbe', 'CBE'], ['mpesa', 'M-Pesa'], ['boa', 'Bank of Abyssinia']]) {
+for (const [id, name] of [['telebirr', 'Telebirr'], ['cbe', 'CBE'], ['boa', 'Bank of Abyssinia']]) {
   registerPaymentProvider(createUnconfiguredPaymentProvider({
     id,
     name,
@@ -181,5 +183,7 @@ for (const [id, name] of [['telebirr', 'Telebirr'], ['cbe', 'CBE'], ['mpesa', 'M
     },
   }));
 }
+
+registerPaymentProvider(mpesaProvider);
 
 export { UNSUPPORTED };
