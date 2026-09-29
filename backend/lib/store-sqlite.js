@@ -2253,6 +2253,16 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(46, nowIso());
   }
 
+  // GAP-1.2 — payment evidence processing lease/recovery metadata.
+  if (!applied.includes(47)) {
+    const evidenceColumns = db.prepare('PRAGMA table_info(payment_evidence)').all();
+    if (!evidenceColumns.some(row => row.name === 'processing_claimed_at')) db.exec('ALTER TABLE payment_evidence ADD COLUMN processing_claimed_at TEXT');
+    if (!evidenceColumns.some(row => row.name === 'processing_attempt')) db.exec('ALTER TABLE payment_evidence ADD COLUMN processing_attempt INTEGER NOT NULL DEFAULT 0');
+    if (!evidenceColumns.some(row => row.name === 'processing_lease_expires_at')) db.exec('ALTER TABLE payment_evidence ADD COLUMN processing_lease_expires_at TEXT');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_payment_evidence_processing_lease ON payment_evidence(organization_id,status,processing_lease_expires_at)');
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(47, nowIso());
+  }
+
   // FUX-2 Section 6 — additive multi-role compatibility bridge.
   // memberships.role remains the legacy/default role authority while
   // membership_roles provides an additive path for multiple contextual roles.
@@ -5412,8 +5422,22 @@ export async function claimPaymentEvidenceProcessing(chatId, evidenceId, actor =
     const row = db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(id, organizationId);
     if (!row) throw Object.assign(new Error('Evidence not found'), { statusCode: 404, code: 'EVIDENCE_NOT_FOUND' });
     if (row.status === 'PROCESSING') {
+      const leaseExpires = row.processing_lease_expires_at ? Date.parse(row.processing_lease_expires_at) : 0;
+      if (!leaseExpires || leaseExpires > Date.now()) {
+        db.exec('COMMIT');
+        return { claimed: false, evidence: paymentEvidenceFromRow(row) };
+      }
+      const now = nowIso();
+      const nextAttempt = Number(row.processing_attempt || 0) + 1;
+      const recovery = db.prepare("UPDATE payment_evidence SET processing_claimed_at = ?, processing_lease_expires_at = datetime(?, '+5 minutes'), processing_attempt = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND status = 'PROCESSING' AND processing_lease_expires_at = ?").run(now, now, nextAttempt, now, id, organizationId, row.processing_lease_expires_at);
+      if (Number(recovery.changes || 0) !== 1) {
+        db.exec('COMMIT');
+        const current = db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(id, organizationId);
+        return { claimed: false, evidence: paymentEvidenceFromRow(current) };
+      }
+      audit(String(chatId), 'payment.evidence.processing_reclaimed', 'payment_evidence', id, { attempt: nextAttempt }, { organizationId, locationId: row.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
       db.exec('COMMIT');
-      return { claimed: false, evidence: paymentEvidenceFromRow(row) };
+      return { claimed: true, reclaimed: true, evidence: paymentEvidenceFromRow(db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(id, organizationId)) };
     }
     if (['VERIFIED','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED'].includes(row.status)) {
       db.exec('COMMIT');
@@ -5423,7 +5447,7 @@ export async function claimPaymentEvidenceProcessing(chatId, evidenceId, actor =
       throw Object.assign(new Error('Evidence cannot be claimed for processing'), { statusCode: 409, code: 'INVALID_EVIDENCE_PROCESSING_STATE' });
     }
     const now = nowIso();
-    const result = db.prepare("UPDATE payment_evidence SET status = 'PROCESSING', updated_at = ? WHERE id = ? AND organization_id = ? AND status = 'RECEIVED'").run(now, id, organizationId);
+    const result = db.prepare("UPDATE payment_evidence SET status = 'PROCESSING', processing_claimed_at = ?, processing_lease_expires_at = datetime(?, '+5 minutes'), processing_attempt = processing_attempt + 1, updated_at = ? WHERE id = ? AND organization_id = ? AND status = 'RECEIVED'").run(now, now, now, id, organizationId);
     if (Number(result.changes || 0) !== 1) {
       db.exec('COMMIT');
       const current = db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(id, organizationId);
