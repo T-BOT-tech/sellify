@@ -68,6 +68,9 @@ export class PaymentCore {
     const normalizedPayload = parsed || command.normalizedPayload || command.normalized_payload || null;
     const externalReference = parsed?.reference || command.externalReference || command.external_reference || null;
     const providerTransactionId = parsed?.providerTransactionId || command.providerTransactionId || command.provider_transaction_id || null;
+    if (!externalReference && !providerTransactionId) {
+      throw Object.assign(new Error('Payment evidence requires a provider reference or transaction ID'), { statusCode: 422, code: 'EVIDENCE_IDENTIFIER_REQUIRED' });
+    }
     const evidenceFingerprint = this.#evidenceFingerprint({
       providerId,
       externalReference,
