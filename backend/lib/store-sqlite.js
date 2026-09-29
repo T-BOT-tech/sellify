@@ -2249,6 +2249,29 @@ function runMigrations() {
   // that invariant even if multiple application workers race concurrently.
   if (!applied.includes(47)) {
     db.exec(`
+      UPDATE payment_decisions
+      SET verification_id = (
+        SELECT keeper.id
+        FROM payment_verifications keeper
+        WHERE keeper.evidence_id = (
+          SELECT duplicate.evidence_id
+          FROM payment_verifications duplicate
+          WHERE duplicate.id = payment_decisions.verification_id
+        )
+        ORDER BY keeper.created_at ASC, keeper.rowid ASC
+        LIMIT 1
+      )
+      WHERE verification_id IN (
+        SELECT duplicate.id
+        FROM payment_verifications duplicate
+        WHERE duplicate.evidence_id IN (
+          SELECT evidence_id FROM payment_verifications GROUP BY evidence_id HAVING COUNT(*) > 1
+        )
+      );
+
+      DELETE FROM payment_verifications
+      WHERE rowid NOT IN (SELECT MIN(rowid) FROM payment_verifications GROUP BY evidence_id);
+
       CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_verifications_evidence_unique
         ON payment_verifications(evidence_id);
     `);
