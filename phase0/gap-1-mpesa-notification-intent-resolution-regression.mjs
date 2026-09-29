@@ -409,5 +409,88 @@ assert.equal(retained.duplicate, false);
 assert.equal(retained.evidence.paymentIntentId, null);
 assert.equal(retained.evidence.status, 'RECEIVED');
 
+const atomicFailureSetup = await store.createPaymentWithIntent(chatId, {
+  paymentAccountId: account.id,
+  providerId: 'mpesa',
+  channel: 'api',
+  amountMinor: 12550,
+  currency: 'KES',
+}, session);
+const atomicFailureEvidence = await store.insertPaymentEvidence(chatId, {
+  paymentIntentId: atomicFailureSetup.intent.id,
+  paymentAccountId: account.id,
+  providerId: 'mpesa',
+  channel: 'api',
+  evidenceType: 'PROVIDER_NOTIFICATION',
+  providerTransactionId: 'RCP-ATOMIC-FAIL-1',
+  externalReference: 'ATOMIC-FAIL-1',
+  fingerprint: 'gap1-atomic-failure-fingerprint',
+  normalizedPayload: {
+    providerTransactionId: 'RCP-ATOMIC-FAIL-1',
+    amountMinor: 12550,
+    currency: 'KES',
+    receiver: '600001',
+    merchantReference: 'ATOMIC-FAIL-1',
+  },
+  source: 'provider-notification',
+}, null);
+const atomicFailureVerificationId = 'gap1-atomic-failure-verification';
+await store.insertPaymentDecision(chatId, {
+  paymentId: atomicFailureSetup.payment.id,
+  paymentIntentId: atomicFailureSetup.intent.id,
+  evidenceId: atomicFailureEvidence.evidence.id,
+  verificationId: atomicFailureVerificationId,
+  decision: 'ACCEPT',
+  targetState: 'VERIFIED',
+  reasonCodes: [],
+  invariantResults: {},
+  decisionSource: 'REGRESSION',
+}, null);
+const atomicFailureBefore = await store.getPayment(chatId, atomicFailureSetup.payment.id);
+const atomicFailureLedgerBefore = await store.listPaymentLedger(chatId, atomicFailureSetup.payment.id);
+await assert.rejects(
+  () => store.commitPaymentDecision(chatId, {
+    paymentId: atomicFailureSetup.payment.id,
+    expectedState: atomicFailureBefore.state,
+    targetState: 'VERIFIED',
+    verification: {
+      id: atomicFailureVerificationId,
+      paymentIntentId: atomicFailureSetup.intent.id,
+      evidenceId: atomicFailureEvidence.evidence.id,
+      providerId: 'mpesa',
+      result: 'MATCH',
+      confidence: 1,
+      observedAmountMinor: 12550,
+      observedCurrency: 'KES',
+      observedReceiver: '600001',
+      observedReference: 'ATOMIC-FAIL-1',
+      observedTransactionId: 'RCP-ATOMIC-FAIL-1',
+      observedAt: new Date().toISOString(),
+      reasonCodes: [],
+      rawResult: { source: 'regression' },
+      verifier: 'payment-core',
+    },
+    decision: {
+      id: 'gap1-atomic-failure-decision',
+      paymentIntentId: atomicFailureSetup.intent.id,
+      evidenceId: atomicFailureEvidence.evidence.id,
+      verificationId: atomicFailureVerificationId,
+      decision: 'ACCEPT',
+      targetState: 'VERIFIED',
+      reasonCodes: [],
+      invariantResults: {},
+    },
+  }, null),
+  error => String(error?.message || '').includes('UNIQUE constraint failed: payment_decisions')
+);
+const atomicFailureAfter = await store.getPayment(chatId, atomicFailureSetup.payment.id);
+assert.equal(atomicFailureAfter.state, atomicFailureBefore.state);
+assert.deepEqual(
+  await store.listPaymentLedger(chatId, atomicFailureSetup.payment.id),
+  atomicFailureLedgerBefore
+);
+const rolledBackVerification = await store.getPaymentVerification(chatId, atomicFailureVerificationId);
+assert.equal(rolledBackVerification, null);
+
 console.log('GAP-1 M-Pesa Notification Intent Resolution Regression: PASS');
 await rm(dir, { recursive: true, force: true });
