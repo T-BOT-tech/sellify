@@ -40,6 +40,77 @@ export class PaymentCore {
     return result;
   }
 
+  async #observeProviderConfirmation({ chatId, evidence, paymentIntent, payment, paymentAccount, actor = null }) {
+    const confirmationAttempt = await this.store.createPaymentConfirmationAttempt(chatId, {
+      paymentId: payment.id,
+      paymentIntentId: paymentIntent.id,
+      evidenceId: evidence.id,
+      paymentAccountId: paymentAccount?.id || paymentIntent.paymentAccountId || null,
+      providerId: evidence.providerId,
+    }, actor);
+
+    const provider = this.providerRegistry.requirePaymentProvider(evidence.providerId);
+    let providerStatus;
+    try {
+      providerStatus = await provider.getStatus({
+        evidence,
+        paymentIntent,
+        payment,
+        paymentAccount,
+        confirmationAttempt,
+        config: {
+          ...(paymentAccount?.metadata || {}),
+          accountIdentifier: paymentAccount?.accountIdentifier || null,
+        },
+        now: this.clock(),
+      });
+    } catch (error) {
+      if (error?.code === 'PAYMENT_PROVIDER_OPERATION_UNSUPPORTED' ||
+          error?.code === 'PAYMENT_PROVIDER_NOT_CONFIGURED') {
+        providerStatus = {
+          providerId: evidence.providerId,
+          status: 'UNKNOWN',
+          reasonCodes: ['PROVIDER_STATUS_UNAVAILABLE'],
+          rawResult: { source: evidence.source || 'payment-evidence' },
+          verifier: 'payment-core',
+          verifierVersion: 'provider-status-v1',
+        };
+      } else {
+        await this.store.updatePaymentConfirmationAttempt(chatId, confirmationAttempt.id, {
+          status: 'FAILED',
+          reasonCodes: [error?.code || 'PROVIDER_STATUS_ERROR'],
+          observation: { message: String(error?.message || 'Provider status request failed') },
+          observedAt: this.clock().toISOString(),
+        }, actor);
+        throw error;
+      }
+    }
+
+    const status = String(providerStatus?.status || 'UNKNOWN').toUpperCase();
+    const attemptStatus = ({
+      CONFIRMED: 'CONFIRMED',
+      PENDING: 'PENDING',
+      NOT_FOUND: 'NOT_FOUND',
+      FAILED: 'FAILED',
+      EXPIRED: 'EXPIRED',
+      UNKNOWN: 'UNKNOWN',
+    })[status] || 'UNKNOWN';
+
+    const updatedAttempt = await this.store.updatePaymentConfirmationAttempt(chatId, confirmationAttempt.id, {
+      status: attemptStatus,
+      providerTransactionId: providerStatus?.providerTransactionId || null,
+      reasonCodes: Array.isArray(providerStatus?.reasonCodes) ? providerStatus.reasonCodes : [],
+      observation: providerStatus || {},
+      observedAt: this.clock().toISOString(),
+    }, actor);
+
+    return {
+      status: attemptStatus,
+      providerStatus,
+      confirmationAttempt: updatedAttempt,
+    };
+  }
+
   async verifyEvidence(command = {}) {
     this.#authorize(command, 'payments:accept');
     const evidenceId = String(command.evidenceId || command.evidence_id || '').trim();
@@ -151,82 +222,31 @@ export class PaymentCore {
     };
 
     if (requiresIndependentConfirmation(verificationPolicy)) {
-      const confirmationAttempt = await this.store.createPaymentConfirmationAttempt(chatId, {
-        paymentId: payment.id,
-        paymentIntentId: paymentIntent.id,
-        evidenceId: evidence.id,
-        paymentAccountId: paymentAccount?.id || paymentIntent.paymentAccountId || null,
-        providerId: evidence.providerId,
-      }, command.actor || null);
-
-      let providerStatus;
-      try {
-        providerStatus = await provider.getStatus({
-          evidence,
-          paymentIntent,
-          payment,
-          paymentAccount,
-          confirmationAttempt,
-          config: {
-            ...(paymentAccount?.metadata || {}),
-            accountIdentifier: paymentAccount?.accountIdentifier || null,
-          },
-          now: this.clock(),
-        });
-      } catch (error) {
-        if (error?.code === 'PAYMENT_PROVIDER_OPERATION_UNSUPPORTED' ||
-            error?.code === 'PAYMENT_PROVIDER_NOT_CONFIGURED') {
-          providerStatus = {
-            providerId: evidence.providerId,
-            status: 'UNKNOWN',
-            reasonCodes: ['PROVIDER_STATUS_UNAVAILABLE'],
-            rawResult: { source: evidence.source || 'payment-evidence' },
-            verifier: 'payment-core',
-            verifierVersion: 'provider-status-v1',
-          };
-        } else {
-          await this.store.updatePaymentConfirmationAttempt(chatId, confirmationAttempt.id, {
-            status: 'FAILED',
-            reasonCodes: [error?.code || 'PROVIDER_STATUS_ERROR'],
-            observation: { message: String(error?.message || 'Provider status request failed') },
-            observedAt: this.clock().toISOString(),
-          }, command.actor || null);
-          throw error;
-        }
-      }
-
-      const status = String(providerStatus?.status || 'UNKNOWN').toUpperCase();
-      const attemptStatus = ({
-        CONFIRMED: 'CONFIRMED',
-        PENDING: 'PENDING',
-        NOT_FOUND: 'NOT_FOUND',
-        FAILED: 'FAILED',
-        EXPIRED: 'EXPIRED',
-        UNKNOWN: 'UNKNOWN',
-      })[status] || 'UNKNOWN';
-
-      const updatedAttempt = await this.store.updatePaymentConfirmationAttempt(chatId, confirmationAttempt.id, {
-        status: attemptStatus,
-        providerTransactionId: providerStatus?.providerTransactionId || null,
-        reasonCodes: Array.isArray(providerStatus?.reasonCodes) ? providerStatus.reasonCodes : [],
-        observation: providerStatus || {},
-        observedAt: this.clock().toISOString(),
-      }, command.actor || null);
+      const confirmation = await this.#observeProviderConfirmation({
+        chatId,
+        evidence,
+        paymentIntent,
+        payment,
+        paymentAccount,
+        actor: command.actor || null,
+      });
 
       verification.rawResult = {
         ...verification.rawResult,
-        independentConfirmation: providerStatus,
-        confirmationAttempt: updatedAttempt,
+        independentConfirmation: confirmation.providerStatus,
+        confirmationAttempt: confirmation.confirmationAttempt,
       };
 
-      if (status !== 'CONFIRMED') {
-        verification.result = status === 'PENDING' ? 'PENDING' : 'UNVERIFIABLE';
+      if (confirmation.status !== 'CONFIRMED') {
+        verification.result = confirmation.status === 'PENDING' ? 'PENDING' : 'UNVERIFIABLE';
         verification.confidence = 0;
         verification.reasonCodes = [
           ...new Set([
             ...verification.reasonCodes,
-            ...(Array.isArray(providerStatus?.reasonCodes) ? providerStatus.reasonCodes : []),
-            status === 'UNKNOWN' ? 'INDEPENDENT_CONFIRMATION_UNAVAILABLE' : 'INDEPENDENT_CONFIRMATION_REQUIRED',
+            ...(Array.isArray(confirmation.providerStatus?.reasonCodes) ? confirmation.providerStatus.reasonCodes : []),
+            confirmation.status === 'UNKNOWN'
+              ? 'INDEPENDENT_CONFIRMATION_UNAVAILABLE'
+              : 'INDEPENDENT_CONFIRMATION_REQUIRED',
           ]),
         ];
         return {
@@ -234,23 +254,18 @@ export class PaymentCore {
           payment,
           evidence,
           verification,
-          confirmationAttempt: updatedAttempt,
+          confirmationAttempt: confirmation.confirmationAttempt,
           invariants: null,
           decision: null,
           pending: true,
         };
       }
 
-      if (providerStatus.providerId && String(providerStatus.providerId).toLowerCase() !== String(evidence.providerId).toLowerCase()) {
-        verification.result = 'MISMATCH';
-        verification.reasonCodes = [...new Set([...verification.reasonCodes, 'PROVIDER_MISMATCH'])];
-      }
-      if (providerStatus.providerTransactionId &&
-          verification.observedTransactionId &&
-          String(providerStatus.providerTransactionId) !== String(verification.observedTransactionId)) {
-        verification.result = 'MISMATCH';
-        verification.reasonCodes = [...new Set([...verification.reasonCodes, 'PROVIDER_TRANSACTION_MISMATCH'])];
-      }
+      return this.finalizeProviderConfirmation({
+        chatId,
+        confirmationAttemptId: confirmation.confirmationAttempt.id,
+        actor: command.actor || null,
+      });
     }
 
     const invariants = this.invariantGate.evaluate({
