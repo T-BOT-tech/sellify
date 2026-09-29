@@ -5581,6 +5581,22 @@ export async function getPaymentVerification(chatId, verificationId) {
   const { organizationId } = await resolvePaymentContext(chatId);
   return paymentVerificationFromRow(db.prepare('SELECT * FROM payment_verifications WHERE id = ? AND organization_id = ?').get(String(verificationId), organizationId));
 }
+export async function getPaymentVerificationForEvidence(chatId, evidenceId) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  return paymentVerificationFromRow(db.prepare(
+    'SELECT * FROM payment_verifications WHERE evidence_id = ? AND organization_id = ? ORDER BY rowid ASC LIMIT 1'
+  ).get(String(evidenceId), organizationId));
+}
+
+export async function getPaymentDecisionForVerification(chatId, verificationId) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  return paymentDecisionFromRow(db.prepare(
+    'SELECT * FROM payment_decisions WHERE verification_id = ? AND organization_id = ? ORDER BY rowid ASC LIMIT 1'
+  ).get(String(verificationId), organizationId));
+}
+
 export async function getPaymentDecision(chatId, decisionId) {
   ensureDatabase();
   const { organizationId } = await resolvePaymentContext(chatId);
