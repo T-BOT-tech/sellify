@@ -137,11 +137,16 @@ export class PaymentCore {
       throw Object.assign(new Error('Provider does not support notification evidence parsing'), { statusCode: 501, code: 'NOTIFICATION_PARSING_UNSUPPORTED' });
     }
 
-    const verification = typeof provider.verifyNotification === 'function'
-      ? await provider.verifyNotification({ payload: command.rawPayload ?? command.payload, headers: command.headers || {}, command })
-      : { authenticated: true };
+    if (!provider.capabilities.authenticateNotification) {
+      throw Object.assign(new Error('Provider notification authentication is not configured'), { statusCode: 503, code: 'PROVIDER_NOTIFICATION_AUTH_NOT_CONFIGURED' });
+    }
+    const verification = await provider.authenticateNotification({
+      payload: command.rawPayload ?? command.payload,
+      headers: command.headers || {},
+      command,
+    });
 
-    if (verification?.authenticated === false) {
+    if (!verification?.authenticated) {
       throw Object.assign(new Error('Provider notification authentication failed'), { statusCode: 401, code: 'PROVIDER_NOTIFICATION_UNAUTHENTICATED' });
     }
 
