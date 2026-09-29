@@ -6213,20 +6213,71 @@ export async function listPaymentLedger(chatId, paymentId) {
 
 export async function reconcilePayment(chatId, paymentId, input = {}, actor = null) {
   ensureDatabase();
-  const payment = await getPayment(chatId, paymentId);
-  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404 });
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const paymentRow = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(String(paymentId), organizationId);
+  if (!paymentRow) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  const payment = paymentFromRow(paymentRow);
   const amountMinor = Number(input.amountMinor ?? input.amount_minor ?? payment.amountMinor);
   const currency = normaliseCurrency(input.currency, payment.currency);
   const matched = Number.isInteger(amountMinor) && amountMinor === payment.amountMinor && currency === payment.currency;
+  const targetState = matched ? (payment.state === 'VERIFIED' ? 'RECONCILED' : payment.state) : (
+    payment.state !== 'MISMATCH' && !['REFUNDED','REJECTED','DUPLICATE','EXPIRED'].includes(payment.state) ? 'MISMATCH' : payment.state
+  );
   const now = nowIso();
   const reconciliationId = crypto.randomUUID();
-  db.prepare(`INSERT INTO payment_reconciliations (id, payment_id, organization_id, status, external_reference, amount_minor, currency, reason, actor_id, created_at, resolved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    reconciliationId, payment.id, payment.organizationId, matched ? 'matched' : 'mismatched', input.externalReference || input.external_reference || payment.externalReference || null,
-    Number.isInteger(amountMinor) && amountMinor >= 0 ? amountMinor : 0, currency, String(input.reason || ''), actor?.userId || null, now, matched ? now : null
-  );
-  if (matched && payment.state === 'VERIFIED') await transitionPayment(chatId, payment.id, 'RECONCILED', actor, { reason: input.reason || 'Payment reconciliation matched' });
-  if (!matched && payment.state !== 'MISMATCH' && !['REFUNDED','REJECTED','DUPLICATE','EXPIRED'].includes(payment.state)) await transitionPayment(chatId, payment.id, 'MISMATCH', actor, { reason: input.reason || 'Payment reconciliation mismatch' });
-  return db.prepare('SELECT * FROM payment_reconciliations WHERE id = ?').get(reconciliationId);
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const current = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(String(paymentId), organizationId);
+    if (!current) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+
+    if (targetState !== current.state && !PAYMENT_TRANSITIONS[current.state]?.has(targetState)) {
+      throw Object.assign(new Error(`Invalid payment transition ${current.state} -> ${targetState}`), {
+        statusCode: 409, code: 'INVALID_PAYMENT_TRANSITION',
+      });
+    }
+
+    db.prepare(`INSERT INTO payment_reconciliations
+      (id, payment_id, organization_id, status, external_reference, amount_minor, currency, reason, actor_id, created_at, resolved_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      reconciliationId, current.id, organizationId, matched ? 'matched' : 'mismatched',
+      input.externalReference || input.external_reference || current.external_reference || null,
+      Number.isInteger(amountMinor) && amountMinor >= 0 ? amountMinor : 0,
+      currency, String(input.reason || ''), actor?.userId || null, now, matched ? now : null
+    );
+
+    if (targetState !== current.state) {
+      const timestampColumn = { MISMATCH: 'updated_at', RECONCILED: 'reconciled_at' }[targetState];
+      const sets = ['state = ?', 'updated_at = ?'];
+      const params = [targetState, now];
+      if (timestampColumn === 'reconciled_at') {
+        sets.push('reconciled_at = ?');
+        params.push(now);
+      }
+      params.push(String(paymentId), organizationId, current.state);
+      const result = db.prepare(
+        `UPDATE payments SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND state = ?`
+      ).run(...params);
+      if (result.changes !== 1) throw Object.assign(new Error('Payment state changed during reconciliation'), {
+        statusCode: 409, code: 'PAYMENT_STATE_CONFLICT',
+      });
+
+      db.prepare(`INSERT INTO payment_ledger_entries
+        (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        crypto.randomUUID(), String(paymentId), organizationId, targetState, Number(current.amount_minor),
+        normaliseCurrency(current.currency, 'ETB'), current.state, targetState, actor?.userId || null,
+        String(input.reason || ''), json({ reconciliationId }), now
+      );
+    }
+
+    db.exec('COMMIT');
+    return db.prepare('SELECT * FROM payment_reconciliations WHERE id = ? AND organization_id = ?')
+      .get(reconciliationId, organizationId);
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
 }
 
 
