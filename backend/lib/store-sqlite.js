@@ -5420,7 +5420,11 @@ export async function findPaymentEvidenceByReference(chatId, providerId, referen
   return row ? paymentEvidenceFromRow(row) : null;
 }
 
-export async function claimPaymentEvidenceProcessing(chatId, evidenceId, actor = null) {
+export async function claimPaymentEvidenceProcessing(chatId, evidenceId, actor = null, options = {}) {
+  const leaseSeconds = Number(options.leaseSeconds ?? 300);
+  if (!Number.isInteger(leaseSeconds) || leaseSeconds < 30 || leaseSeconds > 3600) {
+    throw Object.assign(new Error('Invalid payment evidence lease duration'), { statusCode: 500, code: 'INVALID_EVIDENCE_LEASE_CONFIG' });
+  }
   ensureDatabase();
   const { organizationId } = await resolvePaymentContext(chatId);
   const id = String(evidenceId || '').trim();
@@ -5437,7 +5441,7 @@ export async function claimPaymentEvidenceProcessing(chatId, evidenceId, actor =
       }
       const now = nowIso();
       const nextAttempt = Number(row.processing_attempt || 0) + 1;
-      const recovery = db.prepare("UPDATE payment_evidence SET processing_claimed_at = ?, processing_lease_expires_at = datetime(?, '+5 minutes'), processing_attempt = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND status = 'PROCESSING' AND processing_lease_expires_at = ?").run(now, now, nextAttempt, now, id, organizationId, row.processing_lease_expires_at);
+      const recovery = db.prepare("UPDATE payment_evidence SET processing_claimed_at = ?, processing_lease_expires_at = datetime(?, '+' || ? || ' seconds'), processing_attempt = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND status = 'PROCESSING' AND processing_lease_expires_at = ?").run(now, now, leaseSeconds, nextAttempt, now, id, organizationId, row.processing_lease_expires_at);
       if (Number(recovery.changes || 0) !== 1) {
         db.exec('COMMIT');
         const current = db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(id, organizationId);
