@@ -80,6 +80,29 @@ function normalizeProvider(adapter) {
 
 const registry = new Map();
 
+export function normalizeVerificationResult(observed = {}, context = {}) {
+  const result = String(observed.result || (observed.verified === true ? 'MATCH' : observed.matched === true ? 'MATCH' : 'UNVERIFIABLE')).toUpperCase();
+  return Object.freeze({
+    providerId: String(observed.providerId || context.providerId || '').toLowerCase() || null,
+    paymentId: observed.paymentId || context.paymentId || null,
+    paymentIntentId: observed.paymentIntentId || context.paymentIntentId || null,
+    evidenceId: observed.evidenceId || context.evidenceId || null,
+    result,
+    confidence: observed.confidence ?? null,
+    observedAmountMinor: observed.observedAmountMinor ?? observed.amountMinor ?? observed.amount_minor ?? null,
+    observedCurrency: observed.observedCurrency || observed.currency || null,
+    observedReceiver: observed.observedReceiver || observed.receiver || null,
+    observedReceiverAccount: observed.observedReceiverAccount || observed.receiverAccount || observed.receiver_account || null,
+    observedReference: observed.observedReference || observed.reference || null,
+    observedTransactionId: observed.observedTransactionId || observed.transactionId || observed.transaction_id || null,
+    observedAt: observed.observedAt || observed.observed_at || null,
+    reasonCodes: Array.isArray(observed.reasonCodes) ? observed.reasonCodes : [],
+    rawResult: observed.rawResult ?? observed.raw ?? observed,
+    verifier: observed.verifier || context.providerId || null,
+    verifierVersion: observed.verifierVersion || context.providerVersion || null,
+  });
+}
+
 export function registerPaymentProvider(adapter, { replace = false } = {}) {
   const provider = normalizeProvider(adapter);
   if (registry.has(provider.id) && !replace) {
