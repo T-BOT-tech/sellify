@@ -5525,6 +5525,17 @@ export async function transitionPayment(chatId, paymentId, nextState, actor = nu
       });
     }
     const evidenceId = String(input.evidenceId || input.evidence_id || '').trim() || null;
+    if (target === 'RECONCILED') {
+      const reconciliation = db.prepare(
+        "SELECT id, status FROM payment_reconciliations WHERE payment_id = ? AND organization_id = ? AND status = 'matched' ORDER BY created_at DESC, rowid DESC LIMIT 1"
+      ).get(String(paymentId), organizationId);
+      if (payment.state !== 'VERIFIED' || !reconciliation) {
+        throw Object.assign(new Error('Reconciled payment transition requires a verified payment and a matched reconciliation'), {
+          statusCode: 409,
+          code: 'PAYMENT_RECONCILIATION_REQUIRED',
+        });
+      }
+    }
     if (target === 'VERIFIED') {
       if (!evidenceId) {
         throw Object.assign(new Error('Verified payment transition requires canonical evidence'), {
