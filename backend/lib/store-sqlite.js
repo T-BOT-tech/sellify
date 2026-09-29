@@ -5520,6 +5520,16 @@ export async function insertPaymentVerification(chatId, input = {}, actor = null
   );
   return paymentVerificationFromRow(db.prepare('SELECT * FROM payment_verifications WHERE id = ?').get(id));
 }
+export async function getPaymentVerification(chatId, verificationId) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  return paymentVerificationFromRow(db.prepare('SELECT * FROM payment_verifications WHERE id = ? AND organization_id = ?').get(String(verificationId), organizationId));
+}
+export async function getPaymentDecision(chatId, decisionId) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  return paymentDecisionFromRow(db.prepare('SELECT * FROM payment_decisions WHERE id = ? AND organization_id = ?').get(String(decisionId), organizationId));
+}
 export async function listPaymentVerifications(chatId, paymentId) {
   ensureDatabase();
   const payment = await getPayment(chatId, paymentId);
