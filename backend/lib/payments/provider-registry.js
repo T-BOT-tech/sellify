@@ -25,6 +25,7 @@ function notConfigured(providerId, operation) {
 const METHODS = Object.freeze([
   'getMetadata',
   'validateAccount',
+  'parseEvidence',
   'parseConfirmation',
   'verify',
   'initiate',
@@ -42,8 +43,20 @@ function normalizeProvider(adapter) {
   const providerId = String(adapter.id || adapter.providerId || '').trim().toLowerCase();
   if (!providerId) throw new TypeError('Payment provider adapter requires id');
 
-  const capabilities = normalizeCapabilities(adapter.capabilities || {});
+  const capabilities = normalizeCapabilities({
+    ...(adapter.capabilities || {}),
+    parseEvidence: adapter.capabilities?.parseEvidence ?? Boolean(adapter.parseEvidence || adapter.parseConfirmation),
+    parseConfirmation: adapter.capabilities?.parseConfirmation ?? Boolean(adapter.parseConfirmation || adapter.parseEvidence),
+  });
+  const parseEvidence = async (...args) => {
+    if (typeof adapter.parseEvidence === 'function') return adapter.parseEvidence(...args);
+    if (typeof adapter.parseConfirmation === 'function') return adapter.parseConfirmation(...args);
+    throw unsupported(providerId, 'parseEvidence');
+  };
+  const parseConfirmation = async (...args) => parseEvidence(...args);
   const methods = Object.fromEntries(METHODS.map(method => [method, async (...args) => {
+    if (method === 'parseEvidence') return parseEvidence(...args);
+    if (method === 'parseConfirmation') return parseConfirmation(...args);
     if (typeof adapter[method] === 'function') return adapter[method](...args);
     throw unsupported(providerId, method);
   }]));
@@ -55,6 +68,7 @@ function normalizeProvider(adapter) {
     capabilities,
     getMetadata: methods.getMetadata,
     validateAccount: methods.validateAccount,
+    parseEvidence: methods.parseEvidence,
     parseConfirmation: methods.parseConfirmation,
     verify: methods.verify,
     initiate: methods.initiate,
@@ -112,7 +126,8 @@ export function createUnconfiguredPaymentProvider({ id, name, version = '1', cap
     capabilities,
     getMetadata: async () => ({ id: providerId, name: String(name || providerId), version }),
     validateAccount: async () => { throw notConfigured(providerId, 'validateAccount'); },
-    parseConfirmation: async () => { throw notConfigured(providerId, 'parseConfirmation'); },
+    parseEvidence: async () => { throw notConfigured(providerId, 'parseEvidence'); },
+    parseConfirmation: async () => { throw notConfigured(providerId, 'parseEvidence'); },
     verify: async () => { throw notConfigured(providerId, 'verify'); },
     initiate: async () => { throw notConfigured(providerId, 'initiate'); },
     getStatus: async () => { throw notConfigured(providerId, 'getStatus'); },
@@ -121,7 +136,7 @@ export function createUnconfiguredPaymentProvider({ id, name, version = '1', cap
   });
 }
 
-export const PAYMENT_PROVIDER_IDS = Object.freeze(['manual', 'telebirr', 'cbe', 'mpesa']);
+export const PAYMENT_PROVIDER_IDS = Object.freeze(['manual', 'telebirr', 'cbe', 'mpesa', 'boa']);
 
 registerPaymentProvider({
   id: 'manual',
@@ -142,7 +157,7 @@ registerPaymentProvider({
   reconcile: async input => ({ matched: true, reference: input?.externalReference || null }),
 });
 
-for (const [id, name] of [['telebirr', 'Telebirr'], ['cbe', 'CBE'], ['mpesa', 'M-Pesa']]) {
+for (const [id, name] of [['telebirr', 'Telebirr'], ['cbe', 'CBE'], ['mpesa', 'M-Pesa'], ['boa', 'Bank of Abyssinia']]) {
   registerPaymentProvider(createUnconfiguredPaymentProvider({
     id,
     name,
