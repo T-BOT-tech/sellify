@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { InvariantGate } from './invariant-gate.js';
 import { PaymentDecisionEngine } from './decision-engine.js';
 
@@ -105,47 +106,55 @@ export class PaymentCore {
     verification.reasonCodes = invariants.reasonCodes;
 
     const decision = this.decisionEngine.decide({ verification, invariants, payment });
-    const storedVerification = await this.store.insertPaymentVerification(chatId, {
+    const verificationId = crypto.randomUUID();
+    const decisionId = crypto.randomUUID();
+    const committedPayment = await this.store.commitPaymentDecision(chatId, {
       paymentId: payment.id,
-      paymentIntentId: paymentIntent.id,
-      evidenceId: evidence.id,
-      providerId: evidence.providerId,
-      result: verification.result,
-      confidence: verification.confidence,
-      observedAmountMinor: verification.observedAmountMinor,
-      observedCurrency: verification.observedCurrency,
-      observedReceiver: verification.observedReceiver,
-      observedReceiverAccount: verification.observedReceiverAccount,
-      observedReference: verification.observedReference,
-      observedTransactionId: verification.observedTransactionId,
-      observedAt: verification.observedAt,
-      reasonCodes: verification.reasonCodes,
-      rawResult: verification.rawResult,
-      verifier: verification.verifier,
-      verifierVersion: verification.verifierVersion,
-    }, command.actor || null);
-
-    const storedDecision = await this.store.insertPaymentDecision(chatId, {
-      paymentId: payment.id,
-      paymentIntentId: paymentIntent.id,
-      evidenceId: evidence.id,
-      verificationId: storedVerification.id,
-      decision: decision.decision,
-      targetState: decision.targetState,
-      reasonCodes: decision.reasonCodes,
-      invariantResults: invariants,
-      decisionSource: 'PAYMENT_CORE',
-    }, command.actor || null);
-
-    if (decision.targetState && decision.targetState !== payment.state) {
-      await this.store.transitionPayment(chatId, payment.id, decision.targetState, command.actor || null, {
+      expectedState: payment.state,
+      targetState: decision.targetState || payment.state,
+      verification: {
+        id: verificationId,
+        paymentId: payment.id,
+        paymentIntentId: paymentIntent.id,
+        evidenceId: evidence.id,
+        providerId: evidence.providerId,
+        result: verification.result,
+        confidence: verification.confidence,
+        observedAmountMinor: verification.observedAmountMinor,
+        observedCurrency: verification.observedCurrency,
+        observedReceiver: verification.observedReceiver,
+        observedReceiverAccount: verification.observedReceiverAccount,
+        observedReference: verification.observedReference,
+        observedTransactionId: verification.observedTransactionId,
+        observedAt: verification.observedAt,
+        reasonCodes: verification.reasonCodes,
+        rawResult: verification.rawResult,
+        verifier: verification.verifier,
+        verifierVersion: verification.verifierVersion,
+      },
+      decision: {
+        id: decisionId,
+        paymentId: payment.id,
+        paymentIntentId: paymentIntent.id,
+        evidenceId: evidence.id,
+        verificationId,
+        decision: decision.decision,
+        targetState: decision.targetState,
+        reasonCodes: decision.reasonCodes,
+        invariantResults: invariants,
+        decisionSource: 'PAYMENT_CORE',
         reason: decision.reasonCodes.join(',') || 'Payment verification decision',
-        metadata: { evidenceId: evidence.id, verificationId: storedVerification.id, decisionId: storedDecision.id },
-      });
-    }
+        entryType: decision.targetState || payment.state,
+        metadata: { evidenceId: evidence.id, verificationId, decisionId },
+      },
+    }, command.actor || null);
+
+    const storedVerification = await this.store.getPaymentVerification(chatId, verificationId);
+    const storedDecision = await this.store.getPaymentDecision(chatId, decisionId);
 
     return {
       outcome: decision.targetState || 'NO_STATE_CHANGE',
+      payment: committedPayment,
       evidence,
       verification: storedVerification,
       invariants,
