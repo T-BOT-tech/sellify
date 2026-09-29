@@ -132,4 +132,49 @@ assert.deepEqual(mpesaEvidence, {
 });
 assert.equal(mpesaEvidence.verified, undefined);
 
+// Security boundary regressions: authentication must be bound to the configured
+// account and to the exact raw callback bytes.
+await assert.rejects(
+  () => mpesa.authenticateNotification({
+    rawRequest: { body: mpesaBody, rawBody: Buffer.from(rawBody), headers: { 'x-sellify-notification-signature': signature.slice(0, -2) + '00' } },
+    config: { accountIdentifier: '600001', currency: 'KES', notificationAuthentication: { mode: 'shared-secret', secret } },
+  }),
+  error => error?.code === 'PAYMENT_NOTIFICATION_AUTH_FAILED' && error?.statusCode === 401
+);
+
+await assert.rejects(
+  () => mpesa.authenticateNotification({
+    rawRequest: { body: mpesaBody, rawBody: Buffer.from(JSON.stringify({ ...mpesaBody, TransAmount: '999.99' })), headers: { 'x-sellify-notification-signature': signature } },
+    config: { accountIdentifier: '600001', currency: 'KES', notificationAuthentication: { mode: 'shared-secret', secret } },
+  }),
+  error => error?.code === 'PAYMENT_NOTIFICATION_AUTH_FAILED' && error?.statusCode === 401
+);
+
+await assert.rejects(
+  () => mpesa.authenticateNotification({
+    rawRequest: { body: mpesaBody, rawBody, headers: { 'x-sellify-notification-signature': signature } },
+    config: { accountIdentifier: '600002', currency: 'KES', notificationAuthentication: { mode: 'shared-secret', secret } },
+  }),
+  error => error?.code === 'PAYMENT_NOTIFICATION_AUTH_FAILED' && error?.statusCode === 401
+);
+
+await assert.rejects(
+  () => mpesa.authenticateNotification({
+    rawRequest: { body: mpesaBody, rawBody, headers: { 'x-sellify-notification-signature': signature } },
+    config: { accountIdentifier: '600001', currency: 'KES', notificationAuthentication: { mode: 'trusted-transport' } },
+    requestContext: { providerAuthenticated: false },
+  }),
+  error => error?.code === 'PAYMENT_NOTIFICATION_AUTH_FAILED' && error?.statusCode === 401
+);
+
+await assert.rejects(
+  () => mpesa.parseEvidence({ rawRequest: { body: { ...mpesaBody, TransID: '' } }, config: { currency: 'KES' } }),
+  error => error?.code === 'INVALID_PROVIDER_NOTIFICATION' && error?.statusCode === 400
+);
+
+await assert.rejects(
+  () => mpesa.parseEvidence({ rawRequest: { body: { ...mpesaBody, TransAmount: 'not-a-number' } }, config: { currency: 'KES' } }),
+  error => error?.code === 'INVALID_PROVIDER_NOTIFICATION' && error?.statusCode === 400
+);
+
 console.log('GAP-1 M-Pesa Notification Authentication Regression: PASS');
