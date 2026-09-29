@@ -116,16 +116,9 @@ export class PaymentCore {
     const verification = await this.#normalizeVerification({ ...observed, providerId, paymentId, paymentIntentId: paymentIntent.id, evidenceId, verifier: provider.id, verifierVersion: provider.version }, evidence, chatId);
     const invariants = this.invariantGate.evaluate({ payment, paymentIntent, paymentAccount, evidence, verification, now: this.clock() });
     const decision = this.decisionEngine.decide({ payment, verification, invariants });
-    if (this.store.transitionPaymentEvidence) {
-      const evidenceStatus = decision.decision === 'MARK_DUPLICATE' ? 'DUPLICATE'
-        : decision.targetState === 'EXPIRED' ? 'EXPIRED'
-          : decision.targetState === 'VERIFIED' || decision.targetState === 'RECONCILED' ? 'VERIFIED'
-            : decision.targetState === 'MISMATCH' || decision.targetState === 'REJECTED' ? 'REJECTED'
-              : 'UNVERIFIABLE';
-      await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: evidenceStatus }, command.actor || null);
-    }
     if (!decision.targetState) {
       const response = { payment, paymentIntent, evidence, verification, invariants, decision };
+      if (this.store.transitionPaymentEvidence) await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: 'UNVERIFIABLE' }, command.actor || null);
       if (idempotencyKey && this.store.finalizePaymentIdempotency) await this.store.finalizePaymentIdempotency(chatId, { idempotencyKey, commandType, requestHash, response, responseStatus: 200, resourceType: 'payment', resourceId: paymentId });
       return response;
     }
@@ -133,6 +126,8 @@ export class PaymentCore {
       paymentId, paymentIntentId: paymentIntent.id, evidenceId, expectedState: payment.state, targetState: decision.targetState, verification,
       decision: { ...decision, paymentIntentId: paymentIntent.id, evidenceId, decisionSource: operation === 'retry' ? 'payment-core-retry' : 'payment-core-' + operation, actorId: command.actor?.userId || null }
     }, command.actor || null);
+    const terminalStatus = decision.decision === 'MARK_DUPLICATE' ? 'DUPLICATE' : decision.targetState === 'EXPIRED' ? 'EXPIRED' : decision.targetState === 'VERIFIED' || decision.targetState === 'RECONCILED' ? 'VERIFIED' : decision.targetState === 'MISMATCH' || decision.targetState === 'REJECTED' ? 'REJECTED' : 'UNVERIFIABLE';
+    if (this.store.transitionPaymentEvidence) await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: terminalStatus }, command.actor || null);
     const response = { ...committed, evidence, verification, invariants, decision };
     if (idempotencyKey && this.store.finalizePaymentIdempotency) await this.store.finalizePaymentIdempotency(chatId, { idempotencyKey, commandType, requestHash, response, responseStatus: 200, resourceType: 'payment', resourceId: paymentId });
     return response;
