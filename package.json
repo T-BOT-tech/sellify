@@ -303,7 +303,8 @@
     "gap-1:verification-concurrency-test": "node phase0/gap-1-verification-concurrency-regression.mjs",
     "gap-1:payment-idempotency-atomicity-test": "node phase0/gap-1-payment-idempotency-atomicity-regression.mjs",
     "gap-1:payment-lease-ownership-test": "node phase0/gap-1-payment-lease-ownership-regression.mjs",
-    "gap-1:payment-timeout-test": "node phase0/gap-1-payment-timeout-regression.mjs"
+    "gap-1:payment-timeout-test": "node phase0/gap-1-payment-timeout-regression.mjs",
+    "gap-1:payment-lease-renewal-test": "node phase0/gap-1-payment-lease-renewal-regression.mjs"
   },
   "engines": {
     "node": ">=24"
