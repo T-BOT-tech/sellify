@@ -167,10 +167,10 @@ export class PaymentCore {
     }
     let observed;
     try {
-      observed = await this.#withVerificationTimeout(
+      observed = await this.#withVerificationTimeout((signal) =>
         operation === 'reconcile'
-          ? provider.reconcile({ payment, paymentIntent, evidence, command })
-          : provider.verify({ payment, paymentIntent, evidence, command })
+          ? provider.reconcile({ payment, paymentIntent, evidence, command: { ...command, signal } })
+          : provider.verify({ payment, paymentIntent, evidence, command: { ...command, signal } })
       );
     } catch (error) {
       if (this.store.transitionPaymentEvidence) {
@@ -204,16 +204,21 @@ export class PaymentCore {
     return response;
   }
 
-  async #withVerificationTimeout(operationPromise) {
+  async #withVerificationTimeout(operationFactory) {
+    const controller = new AbortController();
     let timer = null;
     try {
+      const operationPromise = Promise.resolve().then(() => operationFactory(controller.signal));
       return await Promise.race([
-        Promise.resolve(operationPromise),
+        operationPromise,
         new Promise((_, reject) => {
-          timer = setTimeout(() => reject(Object.assign(new Error('Payment provider verification timed out'), {
-            statusCode: 504,
-            code: 'PAYMENT_PROVIDER_TIMEOUT',
-          })), this.verificationTimeoutMs);
+          timer = setTimeout(() => {
+            controller.abort();
+            reject(Object.assign(new Error('Payment provider verification timed out'), {
+              statusCode: 504,
+              code: 'PAYMENT_PROVIDER_TIMEOUT',
+            }));
+          }, this.verificationTimeoutMs);
         }),
       ]);
     } finally {
