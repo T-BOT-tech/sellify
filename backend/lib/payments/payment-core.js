@@ -123,6 +123,58 @@ export class PaymentCore {
     }, command.actor || null);
   }
 
+  async ingestProviderNotification(command = {}) {
+    const providerId = String(command.providerId || command.provider_id || '').trim().toLowerCase();
+    if (!providerId) throw Object.assign(new Error('providerId is required'), { statusCode: 400, code: 'PROVIDER_REQUIRED' });
+    const provider = this.providerRegistry.getPaymentProvider(providerId);
+    if (!provider) throw Object.assign(new Error('Unknown payment provider'), { statusCode: 400, code: 'UNKNOWN_PAYMENT_PROVIDER' });
+    if (!provider.capabilities.parseEvidence) {
+      throw Object.assign(new Error('Provider does not support notification evidence parsing'), { statusCode: 501, code: 'NOTIFICATION_PARSING_UNSUPPORTED' });
+    }
+
+    const verification = typeof provider.verifyNotification === 'function'
+      ? await provider.verifyNotification({ payload: command.rawPayload ?? command.payload, headers: command.headers || {}, command })
+      : { authenticated: true };
+
+    if (verification?.authenticated === false) {
+      throw Object.assign(new Error('Provider notification authentication failed'), { statusCode: 401, code: 'PROVIDER_NOTIFICATION_UNAUTHENTICATED' });
+    }
+
+    const parsed = await provider.parseEvidence({
+      payload: command.rawPayload ?? command.payload,
+      headers: command.headers || {},
+      command,
+      paymentIntent: null,
+    });
+
+    const providerTransactionId = parsed?.providerTransactionId || null;
+    const externalReference = parsed?.reference || null;
+    if (!providerTransactionId && !externalReference) {
+      throw Object.assign(new Error('Provider notification requires a reference or transaction ID'), { statusCode: 422, code: 'EVIDENCE_IDENTIFIER_REQUIRED' });
+    }
+
+    const intent = await this.store.findPaymentIntentForProviderEvidence(command.chatId, {
+      providerId,
+      providerTransactionId,
+      externalReference,
+      receiverAccount: parsed?.receiverAccount || null,
+    });
+    if (!intent) {
+      throw Object.assign(new Error('No payment intent matched provider notification'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND_FOR_NOTIFICATION' });
+    }
+
+    return this.submitEvidence({
+      ...command,
+      paymentId: intent.paymentId || null,
+      paymentIntentId: intent.id,
+      providerId,
+      rawPayload: command.rawPayload ?? command.payload,
+      actor: null,
+      source: command.source || 'provider_notification',
+      channel: command.channel || 'provider_webhook',
+    });
+  }
+
   async verifyPayment(command = {}) {
     this.#authorize(command, 'payments:accept');
     return this.#runVerification(command, 'verify');
