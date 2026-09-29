@@ -12,6 +12,7 @@ export class PaymentCore {
     authorization = null,
     clock = () => new Date(),
     verificationTimeoutMs = 30000,
+    evidenceLeaseSeconds = 60,
   }) {
     if (!store) throw new TypeError('PaymentCore requires store');
     this.store = store;
@@ -20,9 +21,15 @@ export class PaymentCore {
     this.decisionEngine = decisionEngine || new PaymentDecisionEngine();
     this.authorization = authorization;
     this.clock = clock;
-    this.verificationTimeoutMs = Number.isFinite(Number(verificationTimeoutMs)) && Number(verificationTimeoutMs) > 0
+    this.verificationTimeoutMs = Number.isFinite(Number(verificationTimeoutMs)) && Number(verificationTimeoutMs) >= 1000
       ? Number(verificationTimeoutMs)
       : 30000;
+    this.evidenceLeaseSeconds = Number.isInteger(Number(evidenceLeaseSeconds)) && Number(evidenceLeaseSeconds) >= 30 && Number(evidenceLeaseSeconds) <= 3600
+      ? Number(evidenceLeaseSeconds)
+      : 60;
+    if (this.verificationTimeoutMs >= this.evidenceLeaseSeconds * 1000) {
+      throw new RangeError('Payment provider verification timeout must be shorter than the evidence processing lease');
+    }
   }
 
   async createPayment(command = {}) {
@@ -153,7 +160,7 @@ export class PaymentCore {
     }
     let processingAttempt = null;
     if (this.store.claimPaymentEvidenceProcessing) {
-      const claim = await this.store.claimPaymentEvidenceProcessing(chatId, evidenceId, command.actor || null);
+      const claim = await this.store.claimPaymentEvidenceProcessing(chatId, evidenceId, command.actor || null, { leaseSeconds: this.evidenceLeaseSeconds });
       if (claim.claimed) processingAttempt = claim.evidence?.processingAttempt ?? null;
       if (!claim.claimed) {
         if (claim.terminal) {
