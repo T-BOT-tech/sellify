@@ -1,6 +1,7 @@
 import { telebirrProvider } from './providers/telebirr.js';
 import { cbeProvider } from './providers/cbe.js';
 import { mpesaProvider } from './providers/mpesa.js';
+import { boaProvider } from './providers/boa.js';
 
 // Provider-neutral payment adapter boundary.
 // Provider implementations must stay outside the payment core and must not
@@ -187,8 +188,9 @@ registerPaymentProvider({
 registerPaymentProvider(telebirrProvider);
 registerPaymentProvider(cbeProvider);
 registerPaymentProvider(mpesaProvider);
+registerPaymentProvider(boaProvider);
 
-for (const [id, name] of [['boa', 'Bank of Abyssinia']]) {
+for (const [id, name] of []) {
   registerPaymentProvider(createUnconfiguredPaymentProvider({
     id,
     name,
