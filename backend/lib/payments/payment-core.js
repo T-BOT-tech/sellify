@@ -47,9 +47,46 @@ export class PaymentCore {
       throw Object.assign(new Error('paymentIntentId is required'), { statusCode: 400, code: 'PAYMENT_INTENT_REQUIRED' });
     }
 
+    const paymentIntentId = command.paymentIntentId || command.payment_intent_id;
+    const intent = await this.store.getPaymentIntent(chatId, paymentIntentId);
+    if (!intent) throw Object.assign(new Error('Payment intent not found'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND' });
+
+    const providerId = String(command.providerId || command.provider_id || intent.providerId || '').trim().toLowerCase();
+    if (!providerId || providerId !== String(intent.providerId || '').toLowerCase()) {
+      throw Object.assign(new Error('Evidence provider does not match payment intent provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
+    }
+
+    const provider = this.providerRegistry.getPaymentProvider(providerId);
+    if (!provider) throw Object.assign(new Error('Unknown payment provider'), { statusCode: 400, code: 'UNKNOWN_PAYMENT_PROVIDER' });
+
+    const rawPayload = command.rawPayload ?? command.raw_payload ?? command.payload ?? null;
+    let parsed = null;
+    if (provider.capabilities.parseEvidence && rawPayload != null) {
+      parsed = await provider.parseEvidence({ payload: rawPayload, command, paymentIntent: intent });
+    }
+
+    const normalizedPayload = parsed || command.normalizedPayload || command.normalized_payload || null;
+    const externalReference = parsed?.reference || command.externalReference || command.external_reference || null;
+    const providerTransactionId = parsed?.providerTransactionId || command.providerTransactionId || command.provider_transaction_id || null;
+    const evidenceFingerprint = this.#evidenceFingerprint({
+      providerId,
+      externalReference,
+      providerTransactionId,
+      amountMinor: parsed?.amountMinor ?? command.amountMinor ?? command.amount_minor ?? command.amount ?? null,
+      currency: parsed?.currency || command.currency || null,
+      receiverAccount: parsed?.receiverAccount || command.receiverAccount || command.receiver_account || null,
+    });
+
     return this.store.insertPaymentEvidence(chatId, {
       ...command,
-      paymentIntentId: command.paymentIntentId || command.payment_intent_id,
+      paymentIntentId,
+      providerId,
+      rawPayload,
+      normalizedPayload,
+      externalReference,
+      providerTransactionId,
+      observedAt: parsed?.observedAt || command.observedAt || command.observed_at || null,
+      fingerprint: evidenceFingerprint,
     }, command.actor || null);
   }
 
@@ -155,6 +192,18 @@ export class PaymentCore {
       : null;
     return { id: observed.id, paymentId: observed.paymentId, paymentIntentId: observed.paymentIntentId, evidenceId: observed.evidenceId, providerId: observed.providerId, result, confidence: observed.confidence ?? null, observedAmountMinor: observed.observedAmountMinor ?? observed.amountMinor ?? observed.amount_minor ?? null, observedCurrency: observed.observedCurrency || observed.currency || null, observedReceiver: observed.observedReceiver || observed.receiver || null, observedReceiverAccount: observed.observedReceiverAccount || observed.receiverAccount || observed.receiver_account || null, observedReference: reference, observedTransactionId: transactionId, providerTransactionUnique: !duplicateTransaction, referenceUnique: !duplicateReference, observedAt: observed.observedAt || observed.observed_at || this.clock().toISOString(), reasonCodes: Array.isArray(observed.reasonCodes) ? observed.reasonCodes : [], rawResult: observed.rawResult ?? observed.raw ?? observed, verifier: observed.verifier, verifierVersion: observed.verifierVersion };
   }
+  #evidenceFingerprint(input = {}) {
+    const stable = JSON.stringify({
+      providerId: input.providerId || null,
+      externalReference: input.externalReference || null,
+      providerTransactionId: input.providerTransactionId || null,
+      amountMinor: input.amountMinor ?? null,
+      currency: input.currency || null,
+      receiverAccount: input.receiverAccount || null,
+    });
+    return crypto.createHash('sha256').update(stable).digest('hex');
+  }
+
   #authorize(command, permission) {
     if (!this.authorization) return;
     const allowed = this.authorization(command.actor || null, command.organizationId || null, command.locationId || null, 'payments', permission);
