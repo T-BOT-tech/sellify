@@ -11,6 +11,7 @@ export class PaymentCore {
     decisionEngine = null,
     authorization = null,
     clock = () => new Date(),
+    verificationTimeoutMs = 30000,
   }) {
     if (!store) throw new TypeError('PaymentCore requires store');
     this.store = store;
@@ -19,6 +20,9 @@ export class PaymentCore {
     this.decisionEngine = decisionEngine || new PaymentDecisionEngine();
     this.authorization = authorization;
     this.clock = clock;
+    this.verificationTimeoutMs = Number.isFinite(Number(verificationTimeoutMs)) && Number(verificationTimeoutMs) > 0
+      ? Number(verificationTimeoutMs)
+      : 30000;
   }
 
   async createPayment(command = {}) {
@@ -163,9 +167,11 @@ export class PaymentCore {
     }
     let observed;
     try {
-      observed = operation === 'reconcile'
-        ? await provider.reconcile({ payment, paymentIntent, evidence, command })
-        : await provider.verify({ payment, paymentIntent, evidence, command });
+      observed = await this.#withVerificationTimeout(
+        operation === 'reconcile'
+          ? provider.reconcile({ payment, paymentIntent, evidence, command })
+          : provider.verify({ payment, paymentIntent, evidence, command })
+      );
     } catch (error) {
       if (this.store.transitionPaymentEvidence) {
         await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: 'RECEIVED', processingAttempt }, command.actor || null);
@@ -196,6 +202,23 @@ export class PaymentCore {
     const response = { ...committed, evidence, verification, invariants, decision };
     if (idempotencyKey && this.store.finalizePaymentIdempotency) await this.store.finalizePaymentIdempotency(chatId, { idempotencyKey, commandType, requestHash, response, responseStatus: 200, resourceType: 'payment', resourceId: paymentId });
     return response;
+  }
+
+  async #withVerificationTimeout(operationPromise) {
+    let timer = null;
+    try {
+      return await Promise.race([
+        Promise.resolve(operationPromise),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(Object.assign(new Error('Payment provider verification timed out'), {
+            statusCode: 504,
+            code: 'PAYMENT_PROVIDER_TIMEOUT',
+          })), this.verificationTimeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   async #normalizeVerification(observed = {}, evidence = {}, chatId = null) {
