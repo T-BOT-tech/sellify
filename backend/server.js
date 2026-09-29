@@ -1794,6 +1794,29 @@ async function handleTenantPatch(req, res, chatId) {
 }
 
 
+async function handlePaymentProviderNotification(req, res, providerId) {
+  if (req.method !== 'POST') {
+    return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+  }
+  const body = await readBody(req);
+  const result = await paymentCore.ingestProviderNotification({
+    providerId,
+    rawPayload: body,
+    headers: req.headers || {},
+    source: 'provider_callback',
+    channel: 'provider_webhook',
+    evidenceType: 'PROVIDER_NOTIFICATION',
+    actorType: 'system',
+  });
+  return sendJSON(res, 202, {
+    accepted: true,
+    duplicate: Boolean(result.duplicate),
+    evidence: result.evidence,
+    paymentId: result.paymentId,
+    paymentIntentId: result.paymentIntentId,
+  }, req);
+}
+
 async function handlePaymentProviderMetadata(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -2571,6 +2594,7 @@ async function handleOrderFulfillment(req, res, chatId, serverOrderId) {
 // ---------- routing ----------
 
 const ROUTES = [
+  { method: 'POST', pattern: /^\/payments\/notifications\/([^/]+)$/, handler: (req, res, m) => handlePaymentProviderNotification(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/auth\/telegram$/, handler: handleTelegramAuth },
   { method: 'POST', pattern: /^\/auth\/migrate-legacy$/, handler: handleLegacyMigration },
   { method: 'POST', pattern: /^\/auth\/tenants$/, handler: handleCreateTenant },
