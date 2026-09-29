@@ -1888,7 +1888,8 @@ async function handlePaymentProviderNotification(req, res, providerId) {
       accepted: true,
       notification_id: authenticated.notificationId || null,
       evidence_id: resolved.duplicateEvidence.id,
-      status: 'RECEIVED',
+      status: 'DUPLICATE',
+      outcome_code: 'DUPLICATE',
     }, req);
   }
 
@@ -1924,7 +1925,8 @@ async function handlePaymentProviderNotification(req, res, providerId) {
     accepted: true,
     notification_id: authenticated.notificationId || null,
     evidence_id: submitted.evidence?.id || null,
-    status: submitted.duplicate ? 'RECEIVED' : 'RECEIVED',
+    status: submitted.duplicate ? 'DUPLICATE' : (resolved.resolutionStatus === 'UNMATCHED' ? 'UNMATCHED' : 'RECEIVED'),
+    outcome_code: submitted.duplicate ? 'DUPLICATE' : (resolved.resolutionStatus === 'UNMATCHED' ? 'UNMATCHED' : 'RECEIVED'),
   }, req);
 }
 
