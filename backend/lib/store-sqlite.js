@@ -5402,6 +5402,30 @@ export async function findPaymentEvidenceByReference(chatId, providerId, referen
   return row ? paymentEvidenceFromRow(row) : null;
 }
 
+export async function transitionPaymentEvidence(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const evidenceId = String(input.evidenceId || input.evidence_id || '').trim();
+  const target = String(input.status || '').trim().toUpperCase();
+  const allowed = new Set(['RECEIVED','PROCESSING','VERIFIED','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED']);
+  if (!evidenceId || !allowed.has(target)) throw Object.assign(new Error('Invalid evidence status transition'), { statusCode: 400, code: 'INVALID_EVIDENCE_STATUS' });
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const row = db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(evidenceId, organizationId);
+    if (!row) throw Object.assign(new Error('Evidence not found'), { statusCode: 404, code: 'EVIDENCE_NOT_FOUND' });
+    const terminal = new Set(['VERIFIED','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED']);
+    if (row.status !== target) {
+      if (terminal.has(row.status)) throw Object.assign(new Error('Evidence is immutable after terminal outcome'), { statusCode: 409, code: 'EVIDENCE_TERMINAL' });
+      const valid = row.status === 'RECEIVED' ? new Set(['PROCESSING','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED']) : new Set(['VERIFIED','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED']);
+      if (!valid.has(target)) throw Object.assign(new Error('Invalid evidence status transition'), { statusCode: 409, code: 'INVALID_EVIDENCE_TRANSITION' });
+      db.prepare('UPDATE payment_evidence SET status = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND status = ?').run(target, nowIso(), evidenceId, organizationId, row.status);
+    }
+    audit(String(chatId), 'payment.evidence.' + target.toLowerCase(), 'payment_evidence', evidenceId, { fromStatus: row.status, toStatus: target }, { organizationId, locationId: row.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
+    db.exec('COMMIT');
+    return paymentEvidenceFromRow(db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(evidenceId, organizationId));
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
+
 export async function listPaymentEvidence(chatId, paymentId) {
   ensureDatabase();
   const payment = await getPayment(chatId, paymentId);
