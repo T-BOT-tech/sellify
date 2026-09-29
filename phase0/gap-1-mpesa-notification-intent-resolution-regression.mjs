@@ -492,6 +492,21 @@ assert.deepEqual(
 const rolledBackVerification = await store.getPaymentVerification(chatId, atomicFailureVerificationId);
 assert.equal(rolledBackVerification, null);
 
+const refundBypassSetup = await store.createPaymentWithIntent(chatId, {
+  paymentAccountId: account.id,
+  providerId: 'mpesa',
+  channel: 'api',
+  amountMinor: 12550,
+  currency: 'KES',
+}, session);
+await assert.rejects(
+  () => store.transitionPayment(chatId, refundBypassSetup.payment.id, 'REFUNDED', session),
+  error => error?.code === 'PAYMENT_REFUND_REQUIRED' && error?.statusCode === 409
+);
+assert.equal((await store.getPayment(chatId, refundBypassSetup.payment.id)).state, 'UNPAID');
+assert.equal((await store.listPaymentLedger(chatId, refundBypassSetup.payment.id)).length, 0);
+
+
 const reconciliationSetup = await store.createPaymentWithIntent(chatId, {
   paymentAccountId: account.id,
   providerId: 'mpesa',
