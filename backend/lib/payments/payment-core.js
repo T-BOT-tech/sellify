@@ -151,6 +151,14 @@ export class PaymentCore {
     };
 
     if (requiresIndependentConfirmation(verificationPolicy)) {
+      const confirmationAttempt = await this.store.createPaymentConfirmationAttempt(chatId, {
+        paymentId: payment.id,
+        paymentIntentId: paymentIntent.id,
+        evidenceId: evidence.id,
+        paymentAccountId: paymentAccount?.id || paymentIntent.paymentAccountId || null,
+        providerId: evidence.providerId,
+      }, command.actor || null);
+
       let providerStatus;
       try {
         providerStatus = await provider.getStatus({
@@ -158,6 +166,7 @@ export class PaymentCore {
           paymentIntent,
           payment,
           paymentAccount,
+          confirmationAttempt,
           config: {
             ...(paymentAccount?.metadata || {}),
             accountIdentifier: paymentAccount?.accountIdentifier || null,
@@ -176,14 +185,38 @@ export class PaymentCore {
             verifierVersion: 'provider-status-v1',
           };
         } else {
+          await this.store.updatePaymentConfirmationAttempt(chatId, confirmationAttempt.id, {
+            status: 'FAILED',
+            reasonCodes: [error?.code || 'PROVIDER_STATUS_ERROR'],
+            observation: { message: String(error?.message || 'Provider status request failed') },
+            observedAt: this.clock().toISOString(),
+          }, command.actor || null);
           throw error;
         }
       }
 
       const status = String(providerStatus?.status || 'UNKNOWN').toUpperCase();
+      const attemptStatus = ({
+        CONFIRMED: 'CONFIRMED',
+        PENDING: 'PENDING',
+        NOT_FOUND: 'NOT_FOUND',
+        FAILED: 'FAILED',
+        EXPIRED: 'EXPIRED',
+        UNKNOWN: 'UNKNOWN',
+      })[status] || 'UNKNOWN';
+
+      const updatedAttempt = await this.store.updatePaymentConfirmationAttempt(chatId, confirmationAttempt.id, {
+        status: attemptStatus,
+        providerTransactionId: providerStatus?.providerTransactionId || null,
+        reasonCodes: Array.isArray(providerStatus?.reasonCodes) ? providerStatus.reasonCodes : [],
+        observation: providerStatus || {},
+        observedAt: this.clock().toISOString(),
+      }, command.actor || null);
+
       verification.rawResult = {
         ...verification.rawResult,
         independentConfirmation: providerStatus,
+        confirmationAttempt: updatedAttempt,
       };
 
       if (status !== 'CONFIRMED') {
@@ -201,6 +234,7 @@ export class PaymentCore {
           payment,
           evidence,
           verification,
+          confirmationAttempt: updatedAttempt,
           invariants: null,
           decision: null,
           pending: true,
