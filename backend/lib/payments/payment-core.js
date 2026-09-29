@@ -183,7 +183,10 @@ export class PaymentCore {
     }
     const committed = await this.store.commitPaymentDecision(chatId, {
       paymentId, paymentIntentId: paymentIntent.id, evidenceId, expectedState: payment.state, targetState: decision.targetState, verification,
-      decision: { ...decision, paymentIntentId: paymentIntent.id, evidenceId, decisionSource: operation === 'retry' ? 'payment-core-retry' : 'payment-core-' + operation, actorId: command.actor?.userId || null }
+      decision: { ...decision, paymentIntentId: paymentIntent.id, evidenceId, decisionSource: operation === 'retry' ? 'payment-core-retry' : 'payment-core-' + operation, actorId: command.actor?.userId || null },
+      idempotencyKey,
+      idempotencyCommandType: idempotencyKey ? commandType : null,
+      idempotencyRequestHash: idempotencyKey ? requestHash : null,
     }, command.actor || null);
     const terminalStatus = decision.decision === 'MARK_DUPLICATE' ? 'DUPLICATE' : decision.targetState === 'EXPIRED' ? 'EXPIRED' : decision.targetState === 'VERIFIED' || decision.targetState === 'RECONCILED' ? 'VERIFIED' : decision.targetState === 'MISMATCH' || decision.targetState === 'REJECTED' ? 'REJECTED' : 'UNVERIFIABLE';
     if (this.store.transitionPaymentEvidence) await this.store.transitionPaymentEvidence(chatId, { evidenceId, status: terminalStatus }, command.actor || null);
