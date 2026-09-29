@@ -196,6 +196,48 @@ assert.equal(verifiedReplay.idempotent, true);
 assert.equal(verifiedReplay.verification.id, verified.verification.id);
 
 
+
+const concurrentPaymentSetup = await store.createPaymentWithIntent(chatId, {
+  paymentAccountId: account.id,
+  providerId: 'mpesa',
+  channel: 'api',
+  amountMinor: 12550,
+  currency: 'KES',
+}, session);
+const concurrentEvidence = await store.insertPaymentEvidence(chatId, {
+  paymentIntentId: concurrentPaymentSetup.intent.id,
+  paymentAccountId: account.id,
+  providerId: 'mpesa',
+  channel: 'api',
+  evidenceType: 'PROVIDER_NOTIFICATION',
+  providerTransactionId: 'RCP-CONCURRENT-VERIFY-1',
+  externalReference: 'ORDER-CONCURRENT-VERIFY-1',
+  fingerprint: 'gap1-concurrent-verification-fingerprint',
+  normalizedPayload: {
+    providerId: 'mpesa',
+    providerTransactionId: 'RCP-CONCURRENT-VERIFY-1',
+    amountMinor: 12550,
+    currency: 'KES',
+    receiver: '600001',
+    merchantReference: 'ORDER-CONCURRENT-VERIFY-1',
+  },
+  source: 'provider-notification',
+}, null);
+
+const concurrentResults = await Promise.all([
+  paymentCore.verifyEvidence({ chatId, evidenceId: concurrentEvidence.evidence.id }),
+  paymentCore.verifyEvidence({ chatId, evidenceId: concurrentEvidence.evidence.id }),
+]);
+assert.equal(concurrentResults.length, 2);
+assert.ok(concurrentResults.every(result => result.verification?.result === 'MATCH'));
+assert.ok(concurrentResults.every(result => result.idempotent === true || result.concurrent === true || result.decision?.decision === 'ACCEPT'));
+assert.equal(new Set(concurrentResults.map(result => result.verification.id)).size, 1);
+assert.equal(new Set(concurrentResults.map(result => result.decision.id)).size, 1);
+const concurrentPayment = await store.getPayment(chatId, concurrentPaymentSetup.payment.id);
+assert.equal(concurrentPayment.state, 'VERIFIED');
+const concurrentLedger = await store.listPaymentLedger(chatId, concurrentPaymentSetup.payment.id);
+assert.equal(concurrentLedger.filter(entry => entry.toState === 'VERIFIED').length, 1);
+
 const mismatchEvidence = await store.insertPaymentEvidence(chatId, {
   paymentIntentId: second.intent.id,
   paymentAccountId: account.id,
