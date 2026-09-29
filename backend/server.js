@@ -1869,6 +1869,15 @@ async function handlePaymentProviderNotification(req, res, providerId) {
     externalReference: evidence.merchantReference || evidence.externalReference || '',
   });
 
+  if (resolved.duplicateEvidence) {
+    return sendJSON(res, 200, {
+      accepted: true,
+      notification_id: authenticated.notificationId || null,
+      evidence_id: resolved.duplicateEvidence.id,
+      status: 'RECEIVED',
+    }, req);
+  }
+
   const fingerprint = crypto.createHash('sha256').update(JSON.stringify({
     providerId: provider.id,
     accountIdentifier: authenticated.accountIdentifier,
