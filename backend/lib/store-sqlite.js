@@ -2300,6 +2300,27 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(48, nowIso());
   }
 
+  // GAP-1.5 — bind provider transaction identity to payment account.
+  // Provider transaction IDs are only replay-identifiers inside the concrete
+  // payment account context. Keep a separate legacy guard for evidence rows
+  // that intentionally have no account binding.
+  if (!applied.includes(49)) {
+    db.exec(`
+      DROP INDEX IF EXISTS idx_payment_evidence_org_provider_transaction;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_evidence_org_provider_account_transaction
+        ON payment_evidence(organization_id, provider_id, payment_account_id, provider_transaction_id)
+        WHERE payment_account_id IS NOT NULL
+          AND provider_transaction_id IS NOT NULL
+          AND provider_transaction_id <> '';
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_evidence_org_provider_transaction_legacy
+        ON payment_evidence(organization_id, provider_id, provider_transaction_id)
+        WHERE payment_account_id IS NULL
+          AND provider_transaction_id IS NOT NULL
+          AND provider_transaction_id <> '';
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(49, nowIso());
+  }
+
   // GAP-1.2 — link existing canonical payments to payment intents.
   if (!applied.includes(46)) {
     const columns = db.prepare('PRAGMA table_info(payments)').all();
@@ -5405,11 +5426,11 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
     : null;
   if (intentId && !intent) throw Object.assign(new Error('Payment intent not found'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND' });
   const paymentId = input.paymentId || input.payment_id || null;
-  if (paymentId) {
-    const payment = db.prepare('SELECT id FROM payments WHERE id = ? AND organization_id = ?').get(String(paymentId), organizationId);
-    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
-  }
-  const providerId = String(input.providerId || input.provider_id || intent?.provider_id || '').trim().toLowerCase();
+  const payment = paymentId
+    ? db.prepare('SELECT id, payment_account_id, provider_id FROM payments WHERE id = ? AND organization_id = ?').get(String(paymentId), organizationId)
+    : null;
+  if (paymentId && !payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  const providerId = String(input.providerId || input.provider_id || intent?.provider_id || payment?.provider_id || '').trim().toLowerCase();
   if (!providerId) throw Object.assign(new Error('providerId is required'), { statusCode: 400, code: 'PROVIDER_REQUIRED' });
   if (intent && providerId !== String(intent.provider_id)) throw Object.assign(new Error('Evidence provider does not match payment intent provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
   const channel = String(input.channel || 'manual').trim().toLowerCase();
@@ -5419,7 +5440,20 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
   const normalizedPayload = input.normalizedPayload ?? input.normalized_payload ?? null;
   const fingerprint = String(input.fingerprint || hashPaymentRequest({ providerId, channel, evidenceType, externalReference: input.externalReference || input.external_reference || null, providerTransactionId: input.providerTransactionId || input.provider_transaction_id || null, normalizedPayload, rawPayload })).trim();
   if (!fingerprint) throw Object.assign(new Error('Evidence fingerprint is required'), { statusCode: 400, code: 'EVIDENCE_FINGERPRINT_REQUIRED' });
-  const paymentAccountId = input.paymentAccountId || input.payment_account_id || intent?.payment_account_id || null;
+  let paymentAccountId = input.paymentAccountId || input.payment_account_id || intent?.payment_account_id || payment?.payment_account_id || null;
+  if (paymentAccountId) {
+    const account = db.prepare('SELECT id, provider_id FROM payment_accounts WHERE id = ? AND organization_id = ?').get(String(paymentAccountId), organizationId);
+    if (!account) throw Object.assign(new Error('Payment account does not belong to this organization'), { statusCode: 400, code: 'PAYMENT_ACCOUNT_NOT_FOUND' });
+    if (String(account.provider_id) !== providerId) {
+      throw Object.assign(new Error('Payment account provider does not match evidence provider'), { statusCode: 409, code: 'PAYMENT_ACCOUNT_PROVIDER_MISMATCH' });
+    }
+    if (intent?.payment_account_id && String(intent.payment_account_id) !== String(paymentAccountId)) {
+      throw Object.assign(new Error('Evidence payment account does not match payment intent account'), { statusCode: 409, code: 'PAYMENT_ACCOUNT_BINDING_MISMATCH' });
+    }
+    if (payment?.payment_account_id && String(payment.payment_account_id) !== String(paymentAccountId)) {
+      throw Object.assign(new Error('Evidence payment account does not match payment account'), { statusCode: 409, code: 'PAYMENT_ACCOUNT_BINDING_MISMATCH' });
+    }
+  }
   const providerTransactionId = String(input.providerTransactionId || input.provider_transaction_id || '').trim() || null;
   const externalReference = input.externalReference || input.external_reference || null;
   const duplicate = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND fingerprint = ?').get(organizationId, providerId, fingerprint);
