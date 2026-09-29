@@ -45,6 +45,16 @@ export class InvariantGate {
         String(verification.providerId) === String(paymentIntent.providerId)),
       { required: true }));
 
+    const evidenceAccountId = String(evidence?.paymentAccountId || '').trim();
+    const intentAccountId = String(paymentIntent?.paymentAccountId || '').trim();
+    checks.push(check('PAYMENT_ACCOUNT_BINDING_MISMATCH',
+      Boolean(paymentAccount && evidenceAccountId && intentAccountId && evidenceAccountId === intentAccountId),
+      { required: true, expected: intentAccountId || null, observed: evidenceAccountId || null }));
+
+    checks.push(check('EVIDENCE_PROVIDER_MISMATCH',
+      Boolean(evidence && paymentIntent && String(evidence.providerId) === String(paymentIntent.providerId)),
+      { required: true, expected: paymentIntent?.providerId || null, observed: evidence?.providerId || null }));
+
     checks.push(check('PAYMENT_ACCOUNT_PROVIDER_MATCH',
       Boolean(paymentAccount && paymentIntent &&
         String(paymentAccount.providerId) === String(paymentIntent.providerId)),
