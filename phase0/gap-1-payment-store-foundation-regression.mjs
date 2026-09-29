@@ -15,8 +15,9 @@ test.after(async () => {
 });
 
 test('GAP-1 store creates PaymentIntent + Payment atomically at safe initial states', async () => {
+  const user = await store.getOrCreateUserByTelegram('gap1-user', 'GAP1 Test User');
   const created = await store.createTenantForUser({
-    userId: 'gap1-user',
+    userId: user.id,
     sellerName: 'GAP1 Test Store',
     businessType: 'retail',
     country: 'ET',
@@ -24,6 +25,7 @@ test('GAP-1 store creates PaymentIntent + Payment atomically at safe initial sta
     timezone: 'Africa/Addis_Ababa',
   });
 
+  const tenant = await store.getTenant(created.chatId);
   const account = await store.createPaymentAccount(created.chatId, {
     providerId: 'telebirr',
     accountIdentifier: '251900000000',
@@ -31,7 +33,7 @@ test('GAP-1 store creates PaymentIntent + Payment atomically at safe initial sta
   });
 
   const result = await store.createPaymentWithIntent(created.chatId, {
-    organizationId: created.organizationId,
+    organizationId: tenant.organizationId,
     paymentAccountId: account.id,
     providerId: 'telebirr',
     channel: 'manual',
