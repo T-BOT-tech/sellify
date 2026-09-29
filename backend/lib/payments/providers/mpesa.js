@@ -129,7 +129,7 @@ export const mpesaProvider = Object.freeze({
     };
   },
 
-  parseEvidence: async ({ rawRequest }) => {
+  parseEvidence: async ({ rawRequest, config }) => {
     const body = callbackBody(rawRequest);
     const transactionId = normalized(body?.TransID);
     if (!transactionId) {
@@ -153,7 +153,7 @@ export const mpesaProvider = Object.freeze({
       providerId: PROVIDER_ID,
       providerTransactionId: transactionId,
       amountMinor: Math.round(amount * 100),
-      currency: normalized(body?.Currency) || 'KES',
+      currency: normalized(config?.currency),
       receiver: normalized(body?.BusinessShortCode),
       merchantReference: normalized(body?.BillRefNumber) || null,
       providerTimestamp: normalized(body?.TransTime) || null,
