@@ -497,7 +497,8 @@ function runMigrations() {
         reference_id TEXT,
         actor_id TEXT,
         device_id TEXT,
-        occurred_at TEXT NOT NULL,        reason TEXT NOT NULL DEFAULT '',
+        occurred_at TEXT NOT NULL,
+        reason TEXT NOT NULL DEFAULT '',
         metadata_json TEXT,
         created_at TEXT NOT NULL
       );
@@ -996,7 +997,8 @@ function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_invoices_org_status ON invoices(organization_id, status, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_invoices_org_customer ON invoices(organization_id, customer_id, created_at DESC);
       CREATE TABLE IF NOT EXISTS invoice_items (
-        id TEXT PRIMARY KEY,        invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+        id TEXT PRIMARY KEY,
+        invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
         product_id TEXT,
         description TEXT NOT NULL,
         quantity INTEGER NOT NULL CHECK (quantity > 0),
@@ -1495,7 +1497,8 @@ function runMigrations() {
       CREATE TRIGGER IF NOT EXISTS procurement_award_lines_no_update_after_confirm
       BEFORE UPDATE ON procurement_award_lines
       WHEN (SELECT status FROM procurement_awards WHERE id=OLD.award_id) <> 'DRAFT'
-      BEGIN SELECT RAISE(ABORT,'Confirmed procurement award lines are immutable'); END;      CREATE TRIGGER IF NOT EXISTS procurement_award_lines_no_delete_after_confirm
+      BEGIN SELECT RAISE(ABORT,'Confirmed procurement award lines are immutable'); END;
+      CREATE TRIGGER IF NOT EXISTS procurement_award_lines_no_delete_after_confirm
       BEFORE DELETE ON procurement_award_lines
       WHEN (SELECT status FROM procurement_awards WHERE id=OLD.award_id) <> 'DRAFT'
       BEGIN SELECT RAISE(ABORT,'Confirmed procurement award lines cannot be deleted'); END;
@@ -1994,7 +1997,8 @@ function runMigrations() {
   if (!applied.includes(40)) {
     db.exec(`
       CREATE TABLE IF NOT EXISTS pack_lifecycle (
-        id TEXT PRIMARY KEY,        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
         pack_id TEXT NOT NULL,
         pack_version TEXT NOT NULL DEFAULT '',
         state TEXT NOT NULL CHECK (state IN (
@@ -2142,6 +2146,7 @@ function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_payment_intents_org_created ON payment_intents(organization_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_payment_intents_org_order ON payment_intents(organization_id, order_id);
       CREATE INDEX IF NOT EXISTS idx_payment_intents_org_status ON payment_intents(organization_id, status);
+
       CREATE TABLE IF NOT EXISTS payment_evidence (
         id TEXT PRIMARY KEY,
         organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -2170,6 +2175,7 @@ function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_payment_evidence_intent ON payment_evidence(payment_intent_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_payment_evidence_org_status ON payment_evidence(organization_id, status, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_payment_evidence_external_reference ON payment_evidence(organization_id, provider_id, external_reference);
+
       CREATE TABLE IF NOT EXISTS payment_verifications (
         id TEXT PRIMARY KEY,
         organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -2196,6 +2202,7 @@ function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_payment_verifications_evidence ON payment_verifications(evidence_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_payment_verifications_intent ON payment_verifications(payment_intent_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_payment_verifications_org_result ON payment_verifications(organization_id, result, created_at DESC);
+
       CREATE TABLE IF NOT EXISTS payment_decisions (
         id TEXT PRIMARY KEY,
         organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -2215,6 +2222,7 @@ function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_payment_decisions_evidence ON payment_decisions(evidence_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_payment_decisions_verification ON payment_decisions(verification_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_payment_decisions_org_created ON payment_decisions(organization_id, created_at DESC);
+
       CREATE TABLE IF NOT EXISTS payment_idempotency_keys (
         id TEXT PRIMARY KEY,
         organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -2621,7 +2629,8 @@ function normalizeSupplierNetworkCapabilityInput(input={}){const clean=(v,max=20
 function supplierNetworkCapabilityRow(id,organizationId){return db.prepare('SELECT * FROM supplier_network_capabilities WHERE id=? AND organization_id=?').get(String(id),String(organizationId))}
 export async function listSupplierNetworkCapabilities(chatId,options={}){ensureDatabase();const org=await tenantOrganizationId(chatId);const w=['organization_id=?'],p=[org];if(options.status&&options.status!=='all'){w.push('status=?');p.push(String(options.status).toUpperCase())}if(options.code){w.push('code=?');p.push(String(options.code).trim().toUpperCase())}p.push(Math.max(1,Math.min(500,Number(options.limit)||100)));return db.prepare(`SELECT * FROM supplier_network_capabilities WHERE ${w.join(' AND ')} ORDER BY name ASC, id ASC LIMIT ?`).all(...p).map(supplierNetworkCapabilityFromRow)}
 export async function getSupplierNetworkCapability(chatId,id){ensureDatabase();const org=await tenantOrganizationId(chatId);return supplierNetworkCapabilityFromRow(supplierNetworkCapabilityRow(id,org))}
-export async function upsertSupplierNetworkCapability(chatId,input={},actor=null){ensureDatabase();const org=await tenantOrganizationId(chatId);const actorId=assertProcurementActor(org,actor);assertSupplierNetworkParticipant(org);const normalized=normalizeSupplierNetworkCapabilityInput(input);const existing=input.id?supplierNetworkCapabilityRow(input.id,org):db.prepare('SELECT * FROM supplier_network_capabilities WHERE organization_id=? AND code=?').get(org,normalized.code);const target=input.status==null?(existing?.status||'ACTIVE'):String(input.status).trim().toUpperCase();if(!SUPPLIER_NETWORK_CAPABILITY_STATES[target]&&target!=='ACTIVE')throw Object.assign(new Error('Invalid supplier network capability status'),{statusCode:400,code:'INVALID_CAPABILITY_STATUS'});if(existing&&existing.status!==target&&!SUPPLIER_NETWORK_CAPABILITY_STATES[existing.status]?.has(target))throw Object.assign(new Error(`Illegal supplier network capability transition ${existing.status} -> ${target}`),{statusCode:409,code:'INVALID_CAPABILITY_TRANSITION'});if(normalized.source==='VERIFIED'&&existing?.source!=='VERIFIED')throw Object.assign(new Error('Only the verification authority may mark a capability VERIFIED'),{statusCode:403,code:'CAPABILITY_VERIFICATION_REQUIRED'});const now=nowIso();db.exec('BEGIN IMMEDIATE');try{if(existing){db.prepare(`UPDATE supplier_network_capabilities SET code=?,name=?,category=?,description=?,metadata_json=?,visibility=?,source=?,status=?,updated_by_user_id=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=?`).run(normalized.code,normalized.name,normalized.category,normalized.description,json(normalized.metadata),normalized.visibility,normalized.source,target,actorId,now,existing.id,org);audit(String(chatId),target!==existing.status?`supplier.network.capability.${target.toLowerCase()}`:'supplier.network.capability.updated','supplier_network_capability',existing.id,{code:normalized.code,status:target,visibility:normalized.visibility,source:normalized.source},{organizationId:org,actorId})}else{const id=String(input.id||crypto.randomUUID());db.prepare(`INSERT INTO supplier_network_capabilities (id,organization_id,code,name,category,description,metadata_json,visibility,source,status,created_by_user_id,updated_by_user_id,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`).run(id,org,normalized.code,normalized.name,normalized.category,normalized.description,json(normalized.metadata),normalized.visibility,normalized.source,target,actorId,actorId,now,now);audit(String(chatId),'supplier.network.capability.created','supplier_network_capability',id,{code:normalized.code,status:target,visibility:normalized.visibility,source:normalized.source},{organizationId:org,actorId})}db.exec('COMMIT')}catch(e){db.exec('ROLLBACK');throw e}return supplierNetworkCapabilityFromRow(existing?supplierNetworkCapabilityRow(existing.id,org):db.prepare('SELECT * FROM supplier_network_capabilities WHERE organization_id=? AND code=?').get(org,normalized.code))}export async function transitionSupplierNetworkCapability(chatId,id,targetStatus,actor=null){ensureDatabase();const org=await tenantOrganizationId(chatId);const actorId=assertProcurementActor(org,actor);assertSupplierNetworkParticipant(org);const row=supplierNetworkCapabilityRow(id,org);if(!row)throw Object.assign(new Error('Supplier network capability not found'),{statusCode:404,code:'CAPABILITY_NOT_FOUND'});const target=String(targetStatus||'').trim().toUpperCase();if(!SUPPLIER_NETWORK_CAPABILITY_STATES[target])throw Object.assign(new Error('Invalid supplier network capability status'),{statusCode:400,code:'INVALID_CAPABILITY_STATUS'});if(!SUPPLIER_NETWORK_CAPABILITY_STATES[row.status]?.has(target))throw Object.assign(new Error(`Illegal network capability transition ${row.status} -> ${target}`),{statusCode:409,code:'INVALID_CAPABILITY_TRANSITION'});const now=nowIso();db.prepare('UPDATE supplier_network_capabilities SET status=?,updated_by_user_id=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=?').run(target,actorId,now,row.id,org);audit(String(chatId),`supplier.network.capability.${target.toLowerCase()}`,'supplier_network_capability',row.id,{fromStatus:row.status,toStatus:target,code:row.code},{organizationId:org,actorId});return supplierNetworkCapabilityFromRow(supplierNetworkCapabilityRow(row.id,org))}
+export async function upsertSupplierNetworkCapability(chatId,input={},actor=null){ensureDatabase();const org=await tenantOrganizationId(chatId);const actorId=assertProcurementActor(org,actor);assertSupplierNetworkParticipant(org);const normalized=normalizeSupplierNetworkCapabilityInput(input);const existing=input.id?supplierNetworkCapabilityRow(input.id,org):db.prepare('SELECT * FROM supplier_network_capabilities WHERE organization_id=? AND code=?').get(org,normalized.code);const target=input.status==null?(existing?.status||'ACTIVE'):String(input.status).trim().toUpperCase();if(!SUPPLIER_NETWORK_CAPABILITY_STATES[target]&&target!=='ACTIVE')throw Object.assign(new Error('Invalid supplier network capability status'),{statusCode:400,code:'INVALID_CAPABILITY_STATUS'});if(existing&&existing.status!==target&&!SUPPLIER_NETWORK_CAPABILITY_STATES[existing.status]?.has(target))throw Object.assign(new Error(`Illegal supplier network capability transition ${existing.status} -> ${target}`),{statusCode:409,code:'INVALID_CAPABILITY_TRANSITION'});if(normalized.source==='VERIFIED'&&existing?.source!=='VERIFIED')throw Object.assign(new Error('Only the verification authority may mark a capability VERIFIED'),{statusCode:403,code:'CAPABILITY_VERIFICATION_REQUIRED'});const now=nowIso();db.exec('BEGIN IMMEDIATE');try{if(existing){db.prepare(`UPDATE supplier_network_capabilities SET code=?,name=?,category=?,description=?,metadata_json=?,visibility=?,source=?,status=?,updated_by_user_id=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=?`).run(normalized.code,normalized.name,normalized.category,normalized.description,json(normalized.metadata),normalized.visibility,normalized.source,target,actorId,now,existing.id,org);audit(String(chatId),target!==existing.status?`supplier.network.capability.${target.toLowerCase()}`:'supplier.network.capability.updated','supplier_network_capability',existing.id,{code:normalized.code,status:target,visibility:normalized.visibility,source:normalized.source},{organizationId:org,actorId})}else{const id=String(input.id||crypto.randomUUID());db.prepare(`INSERT INTO supplier_network_capabilities (id,organization_id,code,name,category,description,metadata_json,visibility,source,status,created_by_user_id,updated_by_user_id,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`).run(id,org,normalized.code,normalized.name,normalized.category,normalized.description,json(normalized.metadata),normalized.visibility,normalized.source,target,actorId,actorId,now,now);audit(String(chatId),'supplier.network.capability.created','supplier_network_capability',id,{code:normalized.code,status:target,visibility:normalized.visibility,source:normalized.source},{organizationId:org,actorId})}db.exec('COMMIT')}catch(e){db.exec('ROLLBACK');throw e}return supplierNetworkCapabilityFromRow(existing?supplierNetworkCapabilityRow(existing.id,org):db.prepare('SELECT * FROM supplier_network_capabilities WHERE organization_id=? AND code=?').get(org,normalized.code))}
+export async function transitionSupplierNetworkCapability(chatId,id,targetStatus,actor=null){ensureDatabase();const org=await tenantOrganizationId(chatId);const actorId=assertProcurementActor(org,actor);assertSupplierNetworkParticipant(org);const row=supplierNetworkCapabilityRow(id,org);if(!row)throw Object.assign(new Error('Supplier network capability not found'),{statusCode:404,code:'CAPABILITY_NOT_FOUND'});const target=String(targetStatus||'').trim().toUpperCase();if(!SUPPLIER_NETWORK_CAPABILITY_STATES[target])throw Object.assign(new Error('Invalid supplier network capability status'),{statusCode:400,code:'INVALID_CAPABILITY_STATUS'});if(!SUPPLIER_NETWORK_CAPABILITY_STATES[row.status]?.has(target))throw Object.assign(new Error(`Illegal network capability transition ${row.status} -> ${target}`),{statusCode:409,code:'INVALID_CAPABILITY_TRANSITION'});const now=nowIso();db.prepare('UPDATE supplier_network_capabilities SET status=?,updated_by_user_id=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=?').run(target,actorId,now,row.id,org);audit(String(chatId),`supplier.network.capability.${target.toLowerCase()}`,'supplier_network_capability',row.id,{fromStatus:row.status,toStatus:target,code:row.code},{organizationId:org,actorId});return supplierNetworkCapabilityFromRow(supplierNetworkCapabilityRow(row.id,org))}
 
 const SUPPLIER_NETWORK_PROFILE_VISIBILITIES = Object.freeze(['PUBLIC','NETWORK','RELATIONSHIP','PRIVATE','CONFIDENTIAL']);
 const SUPPLIER_NETWORK_PROFILE_STATES = Object.freeze({
@@ -3120,7 +3129,8 @@ export async function listSupplierNetworkTrustEvidence(chatId,{supplierOrganizat
 export async function getSupplierNetworkTrustEvidence(chatId,evidenceId,actor=null){
   ensureDatabase(); const org=await tenantOrganizationId(chatId); assertProcurementActor(org,actor);
   const row=db.prepare('SELECT * FROM supplier_network_trust_evidence WHERE id=?').get(String(evidenceId));
-  if(!row || !supplierNetworkTrustCanAccessEvidence(org,row.supplier_organization_id,row.visibility)) return null;  return supplierNetworkTrustEvidenceFromRow(row);
+  if(!row || !supplierNetworkTrustCanAccessEvidence(org,row.supplier_organization_id,row.visibility)) return null;
+  return supplierNetworkTrustEvidenceFromRow(row);
 }
 
 export async function refreshSupplierNetworkTrustEvidence(chatId,supplierOrganizationId,input={},actor=null){
@@ -3619,7 +3629,8 @@ export async function upsertCustomerPricing(chatId, input = {}, actor = null) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(organization_id, customer_id, product_id) DO UPDATE SET
       price_minor = excluded.price_minor,
-      currency = excluded.currency,      status = excluded.status,
+      currency = excluded.currency,
+      status = excluded.status,
       effective_from = excluded.effective_from,
       effective_to = excluded.effective_to,
       reason = excluded.reason,
@@ -4118,7 +4129,8 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
         reason: 'Procurement purchase-order receipt',
         metadata: { purchaseOrderId: po.id, purchaseOrderItemId: items[i].purchaseOrderItemId, receiptNumber },
       }, actor);
-    }  } catch (error) {
+    }
+  } catch (error) {
     audit(chatId, 'procurement.receipt.inventory_pending', 'procurement_receipt', receiptId, { purchaseOrderId: po.id, errorCode: error?.code || 'INVENTORY_SYNC_FAILED' }, { organizationId, actorId, locationId });
     throw error;
   }
@@ -4617,7 +4629,8 @@ export async function updateOrganizationLocation(chatId, locationId, patch = {})
   if (!organizationId) throw Object.assign(new Error('Unknown store'), { statusCode: 404 });
   const existing = db.prepare('SELECT * FROM locations WHERE id = ? AND organization_id = ?').get(String(locationId), organizationId);
   if (!existing) throw Object.assign(new Error('Location not found'), { statusCode: 404 });
-  const name = patch.name == null ? existing.name : String(patch.name).trim();  if (!name || name.length > 120) throw Object.assign(new Error('Location name must be 1–120 characters'), { statusCode: 400 });
+  const name = patch.name == null ? existing.name : String(patch.name).trim();
+  if (!name || name.length > 120) throw Object.assign(new Error('Location name must be 1–120 characters'), { statusCode: 400 });
   const type = patch.type == null ? existing.type : normaliseLocationType(patch.type);
   const status = patch.status == null ? existing.status : normaliseLocationStatus(patch.status);
   const code = patch.code == null ? existing.code : String(patch.code).trim().toUpperCase();
@@ -5116,7 +5129,8 @@ export async function processSyncEvent(chatId, event = {}, actor = null) {
       await appendInventoryMovement(chatId, event.payload, actor);
     } else if (eventType === 'customer.upsert') {
       await upsertCustomer(chatId, event.payload);
-    } else {      throw Object.assign(new Error(`Unsupported sync event type: ${eventType}`), { statusCode: 400 });
+    } else {
+      throw Object.assign(new Error(`Unsupported sync event type: ${eventType}`), { statusCode: 400 });
     }
     db.prepare(`INSERT INTO sync_events
       (event_id, organization_id, event_type, aggregate_type, aggregate_id, payload_json, actor_id, device_id, occurred_at, received_at, processed_at, status)
@@ -5947,7 +5961,8 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
            updated_by_user_id, created_at, updated_at, version)
         VALUES (?, ?, ?, ?, 'delivery', 'pending', ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1)
       `).run(
-        fulfillmentId, String(serverOrderId), organizationId, locationId ? String(locationId) : null,        json(order.delivery_address || null), order.scheduled_time || null, order.tracking_reference || null,
+        fulfillmentId, String(serverOrderId), organizationId, locationId ? String(locationId) : null,
+        json(order.delivery_address || null), order.scheduled_time || null, order.tracking_reference || null,
         json(order.fulfillment_proof || null), actorUserId, actorUserId, now, now,
       );
       fulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(fulfillmentId);
@@ -6446,7 +6461,8 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
       marketplaceOrderId,
       buyerIdentity,
       String(customer_name || 'Marketplace Buyer').trim().slice(0, 200),
-      String(customer_phone || '').trim().slice(0, 80),      trackingTokenHash,
+      String(customer_phone || '').trim().slice(0, 80),
+      trackingTokenHash,
       idempotencyKey || null,
       nowIso(),
       nowIso(),
@@ -6945,7 +6961,8 @@ export async function createDatabaseBackup() {
   return { path: destination, fileName, retained: Math.min(files.length, BACKUP_RETENTION) };
 }
 
-function hashToken(token) {  return crypto.createHash('sha256').update(String(token)).digest('hex');
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
 }
 
 export async function getOrCreateUserByTelegram(telegramUserId, displayName = '') {
@@ -7444,7 +7461,8 @@ export async function resolveComplianceRequest(chatId, requestId, status, resolu
 
 
 export async function buildComplianceExport(chatId, { subjectType = 'organization', subjectId = null } = {}) {
-  ensureDatabase();  const tenant = await getTenant(chatId);
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
   if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
   const type = String(subjectType || 'organization').toLowerCase();
   const orgId = String(tenant.organizationId);
