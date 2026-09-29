@@ -2153,6 +2153,7 @@ function runMigrations() {
         location_id TEXT REFERENCES locations(id) ON DELETE SET NULL,
         payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
         payment_intent_id TEXT REFERENCES payment_intents(id) ON DELETE SET NULL,
+        payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL,
         provider_id TEXT NOT NULL,
         channel TEXT NOT NULL,
         evidence_type TEXT NOT NULL,
@@ -2171,6 +2172,7 @@ function runMigrations() {
       );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_evidence_org_provider_fingerprint ON payment_evidence(organization_id, provider_id, fingerprint);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_evidence_org_provider_transaction ON payment_evidence(organization_id, provider_id, provider_transaction_id) WHERE provider_transaction_id IS NOT NULL AND provider_transaction_id <> '';
+      CREATE INDEX IF NOT EXISTS idx_payment_evidence_account_transaction ON payment_evidence(organization_id, payment_account_id, provider_transaction_id) WHERE provider_transaction_id IS NOT NULL AND provider_transaction_id <> '';
       CREATE INDEX IF NOT EXISTS idx_payment_evidence_payment ON payment_evidence(payment_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_payment_evidence_intent ON payment_evidence(payment_intent_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_payment_evidence_org_status ON payment_evidence(organization_id, status, created_at DESC);
@@ -5361,12 +5363,13 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
   const normalizedPayload = input.normalizedPayload ?? input.normalized_payload ?? null;
   const fingerprint = String(input.fingerprint || hashPaymentRequest({ providerId, channel, evidenceType, externalReference: input.externalReference || input.external_reference || null, providerTransactionId: input.providerTransactionId || input.provider_transaction_id || null, normalizedPayload, rawPayload })).trim();
   if (!fingerprint) throw Object.assign(new Error('Evidence fingerprint is required'), { statusCode: 400, code: 'EVIDENCE_FINGERPRINT_REQUIRED' });
+  const paymentAccountId = input.paymentAccountId || input.payment_account_id || intent?.payment_account_id || null;
   const duplicate = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND fingerprint = ?').get(organizationId, providerId, fingerprint);
   if (duplicate) return { evidence: paymentEvidenceFromRow(duplicate), duplicate: true };
   const id = String(input.id || crypto.randomUUID()); const now = nowIso();
   try {
-    db.prepare("INSERT INTO payment_evidence (id, organization_id, location_id, payment_id, payment_intent_id, provider_id, channel, evidence_type, external_reference, provider_transaction_id, fingerprint, raw_payload_json, normalized_payload_json, source, observed_at, received_at, submitted_by_user_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?, ?)").run(
-      id, organizationId, locationId, paymentId ? String(paymentId) : null, intentId, providerId, channel, evidenceType,
+    db.prepare("INSERT INTO payment_evidence (id, organization_id, location_id, payment_id, payment_intent_id, payment_account_id, provider_id, channel, evidence_type, external_reference, provider_transaction_id, fingerprint, raw_payload_json, normalized_payload_json, source, observed_at, received_at, submitted_by_user_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?, ?)").run(
+      id, organizationId, locationId, paymentId ? String(paymentId) : null, intentId || null, paymentAccountId ? String(paymentAccountId) : null, providerId, channel, evidenceType,
       input.externalReference || input.external_reference || null, input.providerTransactionId || input.provider_transaction_id || null,
       fingerprint, rawPayload == null ? null : json(rawPayload), normalizedPayload == null ? null : json(normalizedPayload),
       input.source || null, input.observedAt || input.observed_at || null, now, actor?.userId || null, now, now
