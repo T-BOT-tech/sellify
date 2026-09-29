@@ -57,6 +57,30 @@ const attackerInput = await store.resolvePaymentIntentForProviderEvidence({
 });
 assert.equal(attackerInput.paymentIntent.id, first.intent.id);
 
+// Caller-controlled routing fields must never override server-side provider/account resolution.
+const attackerAccount = await store.createPaymentAccount(chatId, {
+  providerId: 'mpesa',
+  accountIdentifier: '600003',
+  metadata: { currency: 'KES', notificationAuthentication: { mode: 'shared-secret', secret: 'test-secret' } },
+}, session);
+const attackerIntent = await store.createPaymentWithIntent(chatId, {
+  paymentAccountId: attackerAccount.id,
+  providerId: 'mpesa',
+  channel: 'api',
+  amountMinor: 12550,
+  currency: 'KES',
+  metadata: { merchantReference: 'ATTACKER-ORDER' },
+}, session);
+const authoritativeResolution = await store.resolvePaymentIntentForProviderEvidence({
+  providerId: 'mpesa',
+  accountIdentifier: '600001',
+  externalReference: 'ORDER-RESOLVE-1',
+  paymentIntentId: attackerIntent.intent.id,
+  paymentAccountId: attackerAccount.id,
+});
+assert.equal(authoritativeResolution.paymentIntent.id, first.intent.id);
+assert.equal(authoritativeResolution.paymentAccount.id, account.id);
+
 const second = await store.createPaymentWithIntent(chatId, {
   paymentAccountId: account.id,
   providerId: 'mpesa',
