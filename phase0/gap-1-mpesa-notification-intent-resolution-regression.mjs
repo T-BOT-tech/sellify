@@ -101,6 +101,32 @@ await assert.rejects(
   }),
   error => error?.code === 'UNMATCHED_PROVIDER_NOTIFICATION' && error?.statusCode === 404
 );
+const unmatchedAccount = await store.createPaymentAccount(chatId, {
+  providerId: 'mpesa',
+  accountIdentifier: '600002',
+  metadata: { currency: 'KES', notificationAuthentication: { mode: 'shared-secret', secret: 'test-secret' } },
+}, session);
+const unmatched = await store.resolvePaymentIntentForProviderEvidence({
+  providerId: 'mpesa',
+  accountIdentifier: unmatchedAccount.accountIdentifier,
+  providerTransactionId: 'RCP-UNMATCHED-1',
+  externalReference: 'UNKNOWN-ORDER',
+});
+assert.equal(unmatched.paymentIntent, null);
+assert.equal(unmatched.paymentAccount.id, unmatchedAccount.id);
+const retained = await store.insertPaymentEvidence(chatId, {
+  providerId: 'mpesa',
+  channel: 'api',
+  evidenceType: 'PROVIDER_NOTIFICATION',
+  providerTransactionId: 'RCP-UNMATCHED-1',
+  externalReference: 'UNKNOWN-ORDER',
+  fingerprint: 'gap1-unmatched-retention',
+  normalizedPayload: { providerTransactionId: 'RCP-UNMATCHED-1', merchantReference: 'UNKNOWN-ORDER' },
+  source: 'provider-notification',
+}, null);
+assert.equal(retained.duplicate, false);
+assert.equal(retained.evidence.paymentIntentId, null);
+assert.equal(retained.evidence.status, 'RECEIVED');
 
 console.log('GAP-1 M-Pesa Notification Intent Resolution Regression: PASS');
 await rm(dir, { recursive: true, force: true });
