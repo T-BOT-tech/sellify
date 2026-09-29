@@ -50,6 +50,25 @@ export class PaymentCore {
     return result;
   }
 
+  async ingestProviderNotification(command = {}) {
+    const source = String(command.source || '').trim().toLowerCase();
+    if (!['provider_webhook', 'provider_callback'].includes(source)) {
+      throw Object.assign(new Error('Provider notification source is not allowed'), { statusCode: 400, code: 'INVALID_PROVIDER_NOTIFICATION_SOURCE' });
+    }
+    const actorType = String(command.actorType || command.actor_type || '').trim().toLowerCase();
+    if (actorType !== 'system') {
+      throw Object.assign(new Error('Provider notification ingestion requires a system actor'), { statusCode: 403, code: 'PROVIDER_NOTIFICATION_ACTOR_REQUIRED' });
+    }
+    const result = await this.submitEvidence({
+      ...command,
+      source,
+      channel: command.channel || 'webhook',
+      evidenceType: command.evidenceType || 'PROVIDER_NOTIFICATION',
+      actor: command.actor || { userId: null, type: 'system' },
+    });
+    return { evidence: result.evidence, duplicate: Boolean(result.duplicate) };
+  }
+
   async submitEvidence(command = {}) {
     this.#authorize(command, 'payments:accept');
     const chatId = String(command.chatId || '').trim();
