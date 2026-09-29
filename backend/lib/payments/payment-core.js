@@ -59,6 +59,21 @@ export class PaymentCore {
     if (actorType !== 'system') {
       throw Object.assign(new Error('Provider notification ingestion requires a system actor'), { statusCode: 403, code: 'PROVIDER_NOTIFICATION_ACTOR_REQUIRED' });
     }
+    const providerId = String(command.providerId || command.provider_id || '').trim().toLowerCase();
+    if (!providerId) throw Object.assign(new Error('providerId is required for provider notification ingestion'), { statusCode: 400, code: 'PROVIDER_REQUIRED' });
+    const provider = this.providerRegistry.getPaymentProvider(providerId);
+    if (!provider) throw Object.assign(new Error('Unknown payment provider'), { statusCode: 400, code: 'UNKNOWN_PAYMENT_PROVIDER' });
+    if (!provider.capabilities.authenticateNotification) {
+      throw Object.assign(new Error('Provider notification authentication is not configured'), { statusCode: 503, code: 'PAYMENT_PROVIDER_NOTIFICATION_AUTH_NOT_CONFIGURED', providerId });
+    }
+    const authenticated = await provider.authenticateNotification({
+      payload: command.rawPayload ?? command.raw_payload ?? command.payload ?? null,
+      headers: command.headers || {},
+      command,
+    });
+    if (authenticated !== true && authenticated?.authenticated !== true) {
+      throw Object.assign(new Error('Provider notification authentication failed'), { statusCode: 401, code: 'PROVIDER_NOTIFICATION_AUTH_FAILED', providerId });
+    }
     const result = await this.submitEvidence({
       ...command,
       source,
