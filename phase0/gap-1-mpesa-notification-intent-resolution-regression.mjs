@@ -173,7 +173,54 @@ const verificationEvidence = await store.insertPaymentEvidence(chatId, {
   },
   source: 'provider-notification',
 }, null);
+const scopePayment = await store.createPaymentWithIntent(chatId, {
+  paymentAccountId: account.id,
+  providerId: 'mpesa',
+  channel: 'api',
+  amountMinor: 12550,
+  currency: 'KES',
+}, session);
+const scopeEvidence = await store.insertPaymentEvidence(chatId, {
+  paymentIntentId: scopePayment.intent.id,
+  paymentAccountId: account.id,
+  providerId: 'mpesa',
+  channel: 'api',
+  evidenceType: 'PROVIDER_NOTIFICATION',
+  providerTransactionId: 'RCP-SCOPE-1',
+  externalReference: 'SCOPE-1',
+  fingerprint: 'gap1-scope-fingerprint',
+  normalizedPayload: {
+    providerTransactionId: 'RCP-SCOPE-1',
+    amountMinor: 12550,
+    currency: 'KES',
+    receiver: '600001',
+    merchantReference: 'SCOPE-1',
+  },
+  source: 'provider-notification',
+}, null);
 const paymentCore = new PaymentCore({ store });
+const scopeBefore = await store.getPayment(chatId, scopePayment.payment.id);
+await assert.rejects(
+  () => paymentCore.verifyEvidence({
+    chatId,
+    evidenceId: scopeEvidence.evidence.id,
+    organizationId: 'attacker-organization',
+  }),
+  error => error?.code === 'TENANT_SCOPE_DENIED' && error?.statusCode === 403
+);
+await assert.rejects(
+  () => paymentCore.verifyEvidence({
+    chatId,
+    evidenceId: scopeEvidence.evidence.id,
+    locationId: 'attacker-location',
+  }),
+  error => error?.code === 'LOCATION_SCOPE_DENIED' && error?.statusCode === 403
+);
+const scopeAfter = await store.getPayment(chatId, scopePayment.payment.id);
+assert.equal(scopeAfter.state, scopeBefore.state);
+assert.equal((await store.listPaymentLedger(chatId, scopePayment.payment.id)).length, 0);
+
+
 const verified = await paymentCore.verifyEvidence({
   chatId,
   evidenceId: verificationEvidence.evidence.id,
