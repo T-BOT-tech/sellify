@@ -116,7 +116,7 @@ import {
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
   createComplianceRequest, getComplianceRequest, listComplianceRequests, resolveComplianceRequest, buildComplianceExport,
-  listPaymentAccounts, createPaymentAccount, createPaymentWithIntent, getPayment, listPayments, listPaymentLedger, reconcilePayment, insertPaymentEvidence, listPaymentEvidence, listPaymentVerifications, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
+  listPaymentAccounts, createPaymentAccount, createPaymentWithIntent, getPayment, listPayments, listPaymentLedger, reconcilePayment, insertPaymentEvidence, findPaymentIntentForProviderEvidence, listPaymentEvidence, listPaymentVerifications, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
   listCustomerPricing, getCustomerPricing, upsertCustomerPricing, updateCustomerPricing,
   listQuotes, getQuote, createQuote, transitionQuote,
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, createPurchaseOrderFromProcurementAward, transitionPurchaseOrder,
@@ -157,6 +157,7 @@ const paymentCore = new PaymentCore({
   store: {
     createPaymentWithIntent,
     insertPaymentEvidence,
+    findPaymentIntentForProviderEvidence,
   },
 });
 
