@@ -5525,6 +5525,12 @@ export async function transitionPayment(chatId, paymentId, nextState, actor = nu
       });
     }
     const evidenceId = String(input.evidenceId || input.evidence_id || '').trim() || null;
+    if (target === 'REFUNDED') {
+      throw Object.assign(new Error('Refunded payment transition requires the canonical refund workflow'), {
+        statusCode: 409,
+        code: 'PAYMENT_REFUND_REQUIRED',
+      });
+    }
     if (target === 'RECONCILED') {
       const reconciliation = db.prepare(
         "SELECT id, status FROM payment_reconciliations WHERE payment_id = ? AND organization_id = ? AND status = 'matched' ORDER BY created_at DESC, rowid DESC LIMIT 1"
