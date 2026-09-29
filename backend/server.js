@@ -116,7 +116,7 @@ import {
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
   createComplianceRequest, getComplianceRequest, listComplianceRequests, resolveComplianceRequest, buildComplianceExport,
-  listPaymentAccounts, createPaymentAccount, createPaymentWithIntent, getPayment, listPayments, listPaymentLedger, reconcilePayment, insertPaymentEvidence, listPaymentEvidence, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
+  listPaymentAccounts, createPaymentAccount, createPaymentWithIntent, getPayment, listPayments, listPaymentLedger, reconcilePayment, insertPaymentEvidence, listPaymentEvidence, listPaymentVerifications, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
   listCustomerPricing, getCustomerPricing, upsertCustomerPricing, updateCustomerPricing,
   listQuotes, getQuote, createQuote, transitionQuote,
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, createPurchaseOrderFromProcurementAward, transitionPurchaseOrder,
@@ -1856,6 +1856,39 @@ async function handleProcurementSettlement(req,res,chatId,purchaseOrderId=null){
 async function handleProcurementPayment(req,res,chatId,purchaseOrderId){const tenant=await getTenant(chatId);if(!tenant)return sendJSON(res,404,{error:{message:'Unknown store',status:404}},req);const session=await requireSession(req,tenant.chatId);await requireAuthorization(session,tenant,'procurement_payment','procurement:payment:create',{deniedMessage:'Procurement payment permission required'});if(req.method!=='POST')return sendJSON(res,405,{error:{message:'Method not allowed',status:405}},req);return sendJSON(res,201,{intent:await createProcurementPaymentIntent(chatId,{...(await readBody(req)),purchaseOrderId},session)},req);}
 
 
+async function handlePaymentVerificationCommand(req, res, chatId, paymentId, action) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+  const permission = action === 'reconcile' ? 'payments:reconcile' : 'payments:accept';
+  await requireAuthorization(session, tenant, 'payments', permission, { deniedMessage: 'Payment verification permission required' });
+  const payment = await getPayment(chatId, paymentId);
+  if (!payment) return sendJSON(res, 404, { error: { message: 'Payment not found', status: 404 } }, req);
+  if (req.method === 'GET') {
+    const verifications = await listPaymentVerifications(chatId, paymentId);
+    return sendJSON(res, 200, { verifications }, req);
+  }
+  const body = await readBody(req);
+  const evidenceId = body.evidenceId || body.evidence_id;
+  if (!evidenceId) throw Object.assign(new Error('evidenceId is required'), { statusCode: 400, code: 'EVIDENCE_REQUIRED' });
+  const command = {
+    ...body,
+    chatId,
+    organizationId: tenant.organizationId,
+    paymentId,
+    evidenceId,
+    actor: session,
+    correlationId: req._requestId,
+    source: 'http',
+  };
+  const result = action === 'verify'
+    ? await paymentCore.verifyPayment(command)
+    : action === 'retry'
+      ? await paymentCore.retryVerification(command)
+      : await paymentCore.reconcilePayment(command);
+  return sendJSON(res, 200, result, req);
+}
+
 async function handlePaymentEvidence(req, res, chatId, paymentId, listOnly = false) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -2679,6 +2712,10 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/procurement-settlements$/, handler:(req,res,m)=>handleProcurementSettlement(req,res,decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/procurement-settlements\/purchase-orders\/([^/]+)$/, handler:(req,res,m)=>handleProcurementSettlement(req,res,decodeURIComponent(m[1]),decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/procurement-settlements\/purchase-orders\/([^/]+)\/allocate$/, handler:(req,res,m)=>handleProcurementSettlement(req,res,decodeURIComponent(m[1]),decodeURIComponent(m[2])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/verifications$/, handler: (req, res, m) => handlePaymentVerificationCommand(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), 'verify') },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/verify$/, handler: (req, res, m) => handlePaymentVerificationCommand(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), 'verify') },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/retry-verification$/, handler: (req, res, m) => handlePaymentVerificationCommand(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), 'retry') },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/reconcile$/, handler: (req, res, m) => handlePaymentVerificationCommand(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), 'reconcile') },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/evidence$/, handler: (req, res, m) => handlePaymentEvidence(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/evidence$/, handler: (req, res, m) => handlePaymentEvidence(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/ledger$/, handler: (req, res, m) => handlePaymentLedger(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
