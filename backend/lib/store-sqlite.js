@@ -5475,18 +5475,20 @@ export async function claimPaymentIdempotency(chatId, input = {}) {
   }
   const now = nowIso();
   const expiresAt = input.expiresAt || input.expires_at || new Date(Date.now() + 24 * 60 * 60_000).toISOString();
+  let created = false;
   try {
     db.prepare("INSERT INTO payment_idempotency_keys (id, organization_id, idempotency_key, command_type, request_hash, response_status, response_json, resource_type, resource_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)").run(
       String(input.id || crypto.randomUUID()), organizationId, key, commandType, requestHash,
       input.resourceType || input.resource_type || null, input.resourceId || input.resource_id || null, now, expiresAt
     );
+    created = true;
   } catch (error) {
     if (!String(error?.message || '').includes('UNIQUE constraint failed')) throw error;
   }
   const record = db.prepare('SELECT * FROM payment_idempotency_keys WHERE organization_id = ? AND idempotency_key = ? AND command_type = ?').get(organizationId, key, commandType);
   if (!record) throw new Error('Could not claim idempotency key');
   if (String(record.request_hash) !== requestHash) throw Object.assign(new Error('Idempotency key was already used with a different request'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
-  return { created: String(record.response_json || '') === '' && record.response_json == null, record };
+  return { created, record };
 }
 
 export async function finalizePaymentIdempotency(chatId, input = {}) {
