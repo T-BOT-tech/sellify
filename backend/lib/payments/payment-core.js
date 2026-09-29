@@ -18,6 +18,9 @@ export class PaymentCore {
 
   async createPayment(command = {}) {
     this.#authorize(command, 'payments:accept');
+    if (command.state != null && String(command.state).toUpperCase() !== 'UNPAID') {
+      throw Object.assign(new Error('Payment state is controlled by PaymentCore commands'), { statusCode: 409, code: 'STATE_NOT_CLIENT_CONTROLLED' });
+    }
     const organizationId = String(command.organizationId || '').trim();
     const chatId = String(command.chatId || '').trim();
     if (!organizationId || !chatId) throw Object.assign(new Error('organizationId and chatId are required'), { statusCode: 400, code: 'PAYMENT_CONTEXT_REQUIRED' });
