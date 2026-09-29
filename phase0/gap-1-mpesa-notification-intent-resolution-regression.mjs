@@ -96,6 +96,21 @@ assert.equal(replay.paymentIntent.id, first.intent.id);
 assert.notEqual(replay.paymentIntent.id, second.intent.id);
 
 await assert.rejects(
+  () => store.insertPaymentEvidence(chatId, {
+    paymentIntentId: first.intent.id,
+    paymentAccountId: account.id,
+    providerId: 'mpesa',
+    channel: 'api',
+    evidenceType: 'PROVIDER_NOTIFICATION',
+    providerTransactionId: 'RCP-RESOLVE-1',
+    fingerprint: 'gap1-conflicting-fingerprint',
+    normalizedPayload: { providerTransactionId: 'RCP-RESOLVE-1', amountMinor: 99999 },
+    source: 'provider-notification',
+  }, null),
+  error => error?.code === 'PROVIDER_TRANSACTION_EVIDENCE_CONFLICT' && error?.statusCode === 409
+);
+
+await assert.rejects(
   () => store.resolvePaymentIntentForProviderEvidence({
     providerId: 'mpesa',
     accountIdentifier: '999999',
