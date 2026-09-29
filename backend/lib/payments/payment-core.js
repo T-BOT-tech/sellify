@@ -233,6 +233,63 @@ export class PaymentCore {
     };
   }
 
+  async getProviderStatus(command = {}) {
+    this.#authorize(command, 'payments:accept');
+    const evidenceId = String(command.evidenceId || command.evidence_id || '').trim();
+    const chatId = String(command.chatId || '').trim();
+    if (!chatId || !evidenceId) {
+      throw Object.assign(new Error('chatId and evidenceId are required'), { statusCode: 400, code: 'PAYMENT_STATUS_CONTEXT_REQUIRED' });
+    }
+
+    const evidence = await this.store.getPaymentEvidence(chatId, evidenceId);
+    if (!evidence) throw Object.assign(new Error('Evidence not found'), { statusCode: 404, code: 'EVIDENCE_NOT_FOUND' });
+
+    const paymentIntent = evidence.paymentIntentId
+      ? await this.store.getPaymentIntent(chatId, evidence.paymentIntentId)
+      : null;
+    const payment = evidence.paymentIntentId
+      ? await this.store.getPaymentForIntent(chatId, evidence.paymentIntentId)
+      : null;
+    const paymentAccount = paymentIntent?.paymentAccountId
+      ? await this.store.getPaymentAccountById(chatId, paymentIntent.paymentAccountId)
+      : null;
+
+    if (!paymentIntent || !payment) {
+      throw Object.assign(new Error('Payment intent/payment could not be resolved for provider status'), { statusCode: 409, code: 'PAYMENT_INTENT_MISMATCH' });
+    }
+    if (String(evidence.providerId || '').toLowerCase() !== String(paymentIntent.providerId || '').toLowerCase()) {
+      throw Object.assign(new Error('Evidence provider does not match payment intent provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
+    }
+
+    const provider = this.providerRegistry.requirePaymentProvider(evidence.providerId);
+    try {
+      return await provider.getStatus({
+        evidence,
+        paymentIntent,
+        payment,
+        paymentAccount,
+        config: {
+          ...(paymentAccount?.metadata || {}),
+          accountIdentifier: paymentAccount?.accountIdentifier || null,
+        },
+        now: this.clock(),
+      });
+    } catch (error) {
+      if (error?.code === 'PAYMENT_PROVIDER_OPERATION_UNSUPPORTED' ||
+          error?.code === 'PAYMENT_PROVIDER_NOT_CONFIGURED') {
+        return {
+          providerId: evidence.providerId,
+          status: 'UNKNOWN',
+          reasonCodes: ['PROVIDER_STATUS_UNAVAILABLE'],
+          rawResult: { source: evidence.source || 'payment-evidence' },
+          verifier: 'payment-core',
+          verifierVersion: 'provider-status-v1',
+        };
+      }
+      throw error;
+    }
+  }
+
   async submitEvidence(command = {}) {
     this.#authorize(command, 'payments:accept');
     const chatId = String(command.chatId || '').trim();
