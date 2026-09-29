@@ -5378,6 +5378,30 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
   }
   return { evidence: paymentEvidenceFromRow(db.prepare('SELECT * FROM payment_evidence WHERE id = ?').get(id)), duplicate: false };
 }
+export async function findPaymentEvidenceByProviderTransaction(chatId, providerId, transactionId, excludeEvidenceId = null) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const tx = String(transactionId || '').trim();
+  if (!tx) return null;
+  const row = db.prepare(`SELECT * FROM payment_evidence
+    WHERE organization_id = ? AND provider_id = ? AND provider_transaction_id = ?
+      AND (? IS NULL OR id <> ?)
+    LIMIT 1`).get(organizationId, String(providerId || '').toLowerCase(), tx, excludeEvidenceId ? String(excludeEvidenceId) : null, excludeEvidenceId ? String(excludeEvidenceId) : null);
+  return row ? paymentEvidenceFromRow(row) : null;
+}
+
+export async function findPaymentEvidenceByReference(chatId, providerId, reference, excludeEvidenceId = null) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const ref = String(reference || '').trim();
+  if (!ref) return null;
+  const row = db.prepare(`SELECT * FROM payment_evidence
+    WHERE organization_id = ? AND provider_id = ? AND external_reference = ?
+      AND (? IS NULL OR id <> ?)
+    LIMIT 1`).get(organizationId, String(providerId || '').toLowerCase(), ref, excludeEvidenceId ? String(excludeEvidenceId) : null, excludeEvidenceId ? String(excludeEvidenceId) : null);
+  return row ? paymentEvidenceFromRow(row) : null;
+}
+
 export async function listPaymentEvidence(chatId, paymentId) {
   ensureDatabase();
   const payment = await getPayment(chatId, paymentId);
