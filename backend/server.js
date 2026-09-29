@@ -1884,12 +1884,23 @@ async function handlePaymentProviderNotification(req, res, providerId) {
         code: 'PROVIDER_TRANSACTION_EVIDENCE_CONFLICT',
       });
     }
+    let verificationResult = null;
+    if (resolved.duplicateEvidence.paymentIntentId) {
+      verificationResult = await notificationPaymentCore.verifyEvidence({
+        chatId: resolved.chatId,
+        evidenceId: resolved.duplicateEvidence.id,
+        actor: null,
+      });
+    }
     return sendJSON(res, 200, {
       accepted: true,
       notification_id: authenticated.notificationId || null,
       evidence_id: resolved.duplicateEvidence.id,
       status: 'DUPLICATE',
       outcome_code: 'DUPLICATE',
+      verification_status: verificationResult?.verification?.result || null,
+      decision: verificationResult?.decision?.decision || null,
+      target_state: verificationResult?.decision?.targetState || null,
     }, req);
   }
 
