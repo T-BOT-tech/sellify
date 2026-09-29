@@ -1870,6 +1870,20 @@ async function handlePaymentProviderNotification(req, res, providerId) {
   });
 
   if (resolved.duplicateEvidence) {
+    const incomingFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+      providerId: provider.id,
+      accountIdentifier: authenticated.accountIdentifier,
+      providerTransactionId: evidence.providerTransactionId || null,
+      externalReference: evidence.merchantReference || evidence.externalReference || null,
+      amountMinor: evidence.amountMinor,
+      currency: evidence.currency,
+    })).digest('hex');
+    if (resolved.duplicateEvidence.fingerprint !== incomingFingerprint) {
+      throw Object.assign(new Error('Provider transaction already exists with different evidence'), {
+        statusCode: 409,
+        code: 'PROVIDER_TRANSACTION_EVIDENCE_CONFLICT',
+      });
+    }
     return sendJSON(res, 200, {
       accepted: true,
       notification_id: authenticated.notificationId || null,
