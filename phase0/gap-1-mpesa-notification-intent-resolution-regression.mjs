@@ -174,6 +174,7 @@ const unmatched = await store.resolvePaymentIntentForProviderEvidence({
 });
 assert.equal(unmatched.paymentIntent, null);
 assert.equal(unmatched.paymentAccount.id, unmatchedAccount.id);
+assert.equal(unmatched.resolutionStatus, 'UNMATCHED');
 const retained = await store.insertPaymentEvidence(chatId, {
   providerId: 'mpesa',
   channel: 'api',
