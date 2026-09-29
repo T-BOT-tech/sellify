@@ -5646,10 +5646,19 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
     if (!row) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
     if (expectedState && row.state !== expectedState) throw Object.assign(new Error('Payment state changed before decision could commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
     if (row.state !== target && !PAYMENT_TRANSITIONS[row.state]?.has(target)) throw Object.assign(new Error('Invalid payment transition'), { statusCode: 409, code: 'INVALID_PAYMENT_TRANSITION' });
+    const verification = input.verification || null;
+    const decision = input.decision || {};
+    const verificationId = verification ? String(verification.id || crypto.randomUUID()) : null;
+    const decisionVerificationId = String(decision.verificationId || decision.verification_id || '').trim() || null;
+    const verificationEvidenceId = verification ? String(verification.evidenceId || verification.evidence_id || '').trim() : null;
+    const decisionEvidenceId = String(decision.evidenceId || decision.evidence_id || '').trim() || null;
+    if (verification && !verificationEvidenceId) throw Object.assign(new Error('verification evidenceId is required'), { statusCode: 400, code: 'EVIDENCE_REQUIRED' });
+    if (verification && decisionVerificationId && decisionVerificationId !== verificationId) throw Object.assign(new Error('Decision verification does not match committed verification'), { statusCode: 409, code: 'PAYMENT_DECISION_BINDING_CONFLICT' });
+    if (verification && decisionEvidenceId && decisionEvidenceId !== verificationEvidenceId) throw Object.assign(new Error('Decision evidence does not match committed verification'), { statusCode: 409, code: 'PAYMENT_DECISION_BINDING_CONFLICT' });
     if (input.verification) {
       const v = input.verification;
       db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-        String(v.id || crypto.randomUUID()), organizationId, paymentId, v.paymentIntentId || v.payment_intent_id || row.payment_intent_id || null, v.evidenceId || v.evidence_id || null,
+        verificationId, organizationId, paymentId, v.paymentIntentId || v.payment_intent_id || row.payment_intent_id || null, v.evidenceId || v.evidence_id || null,
         v.providerId || v.provider_id || row.provider_id, String(v.result || '').toUpperCase(), v.confidence == null ? null : Number(v.confidence),
         v.observedAmountMinor ?? v.observed_amount_minor ?? null, v.observedCurrency || v.observed_currency || null,
         v.observedReceiver || v.observed_receiver || null, v.observedReceiverAccount || v.observed_receiver_account || null,
@@ -5658,11 +5667,10 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
         v.rawResult == null ? null : json(v.rawResult || v.raw_result), v.verifier || 'payment-core', v.verifierVersion || v.verifier_version || null, now
       );
     }
-    const decision = input.decision || {};
     const decisionId = String(decision.id || crypto.randomUUID());
     db.prepare("INSERT INTO payment_decisions (id, organization_id, payment_id, payment_intent_id, evidence_id, verification_id, decision, target_state, reason_codes_json, invariant_results_json, decision_source, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
       decisionId, organizationId, paymentId, decision.paymentIntentId || decision.payment_intent_id || row.payment_intent_id || null,
-      decision.evidenceId || decision.evidence_id || null, decision.verificationId || decision.verification_id || null,
+      decisionEvidenceId || verificationEvidenceId || null, decisionVerificationId || verificationId || null,
       String(decision.decision || '').toUpperCase(), target, json(decision.reasonCodes || decision.reason_codes || []),
       json(decision.invariantResults || decision.invariant_results || {}), decision.decisionSource || 'PAYMENT_CORE', actor?.userId || null, now
     );
