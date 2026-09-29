@@ -5689,6 +5689,33 @@ export async function resolvePaymentIntentForProviderEvidence(input = {}) {
   }
 
   const account = accounts[0];
+
+  if (providerTransactionId) {
+    const consumed = db.prepare(`
+      SELECT e.*
+      FROM payment_evidence e
+      WHERE e.organization_id = ? AND e.provider_id = ? AND e.provider_transaction_id = ?
+      LIMIT 1
+    `).get(account.organization_id, providerId, providerTransactionId);
+    if (consumed) {
+      return {
+        chatId: account.chat_id,
+        organizationId: account.organization_id,
+        locationId: consumed.location_id || null,
+        paymentAccount: {
+          id: account.id,
+          providerId: account.provider_id,
+          accountIdentifier: account.account_identifier,
+          metadata: parseJSON(account.metadata_json, {}),
+        },
+        duplicateEvidence: paymentEvidenceFromRow(consumed),
+        paymentIntent: consumed.payment_intent_id
+          ? paymentIntentFromRow(db.prepare('SELECT * FROM payment_intents WHERE id = ?').get(consumed.payment_intent_id))
+          : null,
+      };
+    }
+  }
+
   const base = `
     SELECT pi.*
     FROM payment_intents pi
