@@ -89,7 +89,10 @@ export class InvariantGate {
 
     for (const item of checks) {
       if (!item.passed && item.required) {
-        const mapped = item.code === 'RECEIVER_MATCH' && !item.available ? 'RECEIVER_UNAVAILABLE' : item.code;
+        const mapped = item.code === 'RECEIVER_MATCH' && !item.available ? 'RECEIVER_UNAVAILABLE'
+          : item.code === 'PROVIDER_TRANSACTION_UNIQUE' ? 'PROVIDER_TRANSACTION_DUPLICATE'
+            : item.code === 'REFERENCE_UNIQUE' ? 'REFERENCE_MISMATCH'
+              : item.code;
         reasons.push(mapped);
       }
     }
