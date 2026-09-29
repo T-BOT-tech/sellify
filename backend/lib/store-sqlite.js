@@ -2121,6 +2121,138 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(44, nowIso());
   }
 
+
+  // GAP-1.1 — payment intent/evidence/verification/decision foundation.
+  if (!applied.includes(45)) {
+    db.exec(\`
+      CREATE TABLE IF NOT EXISTS payment_intents (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        location_id TEXT REFERENCES locations(id) ON DELETE SET NULL,
+        order_id TEXT,
+        payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL,
+        provider_id TEXT NOT NULL,
+        amount_minor INTEGER NOT NULL CHECK (amount_minor >= 0),
+        currency TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','PAYMENT_ATTEMPTED','FULFILLED','EXPIRED','CANCELLED')),
+        expires_at TEXT,
+        fulfilled_at TEXT,
+        cancelled_at TEXT,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_intents_org_created ON payment_intents(organization_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_intents_org_order ON payment_intents(organization_id, order_id);
+      CREATE INDEX IF NOT EXISTS idx_payment_intents_org_status ON payment_intents(organization_id, status);
+
+      CREATE TABLE IF NOT EXISTS payment_evidence (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        location_id TEXT REFERENCES locations(id) ON DELETE SET NULL,
+        payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
+        payment_intent_id TEXT REFERENCES payment_intents(id) ON DELETE SET NULL,
+        provider_id TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        evidence_type TEXT NOT NULL,
+        external_reference TEXT,
+        provider_transaction_id TEXT,
+        fingerprint TEXT NOT NULL,
+        raw_payload_json TEXT,
+        normalized_payload_json TEXT,
+        source TEXT,
+        observed_at TEXT,
+        received_at TEXT NOT NULL,
+        submitted_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        status TEXT NOT NULL DEFAULT 'RECEIVED' CHECK (status IN ('RECEIVED','PROCESSING','VERIFIED','REJECTED','DUPLICATE','UNVERIFIABLE','EXPIRED')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_evidence_org_provider_fingerprint ON payment_evidence(organization_id, provider_id, fingerprint);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_evidence_org_provider_transaction ON payment_evidence(organization_id, provider_id, provider_transaction_id) WHERE provider_transaction_id IS NOT NULL AND provider_transaction_id <> '';
+      CREATE INDEX IF NOT EXISTS idx_payment_evidence_payment ON payment_evidence(payment_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_evidence_intent ON payment_evidence(payment_intent_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_evidence_org_status ON payment_evidence(organization_id, status, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_evidence_external_reference ON payment_evidence(organization_id, provider_id, external_reference);
+
+      CREATE TABLE IF NOT EXISTS payment_verifications (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
+        payment_intent_id TEXT REFERENCES payment_intents(id) ON DELETE SET NULL,
+        evidence_id TEXT NOT NULL REFERENCES payment_evidence(id) ON DELETE CASCADE,
+        provider_id TEXT NOT NULL,
+        result TEXT NOT NULL CHECK (result IN ('MATCH','MISMATCH','DUPLICATE','UNVERIFIABLE','EXPIRED','PENDING','ERROR')),
+        confidence REAL,
+        observed_amount_minor INTEGER,
+        observed_currency TEXT,
+        observed_receiver TEXT,
+        observed_receiver_account TEXT,
+        observed_reference TEXT,
+        observed_transaction_id TEXT,
+        observed_at TEXT,
+        reason_codes_json TEXT NOT NULL DEFAULT '[]',
+        raw_result_json TEXT,
+        verifier TEXT NOT NULL,
+        verifier_version TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_verifications_payment ON payment_verifications(payment_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_verifications_evidence ON payment_verifications(evidence_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_verifications_intent ON payment_verifications(payment_intent_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_verifications_org_result ON payment_verifications(organization_id, result, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS payment_decisions (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        payment_id TEXT NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+        payment_intent_id TEXT REFERENCES payment_intents(id) ON DELETE SET NULL,
+        evidence_id TEXT REFERENCES payment_evidence(id) ON DELETE SET NULL,
+        verification_id TEXT REFERENCES payment_verifications(id) ON DELETE SET NULL,
+        decision TEXT NOT NULL CHECK (decision IN ('ACCEPT','REJECT','RETRY_VERIFICATION','MARK_DUPLICATE','MARK_MISMATCH','MARK_PARTIAL','EXPIRE','RECONCILE')),
+        target_state TEXT,
+        reason_codes_json TEXT NOT NULL DEFAULT '[]',
+        invariant_results_json TEXT NOT NULL DEFAULT '{}',
+        decision_source TEXT NOT NULL DEFAULT 'PAYMENT_CORE',
+        actor_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_decisions_payment ON payment_decisions(payment_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_decisions_evidence ON payment_decisions(evidence_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_decisions_verification ON payment_decisions(verification_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_decisions_org_created ON payment_decisions(organization_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS payment_idempotency_keys (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        idempotency_key TEXT NOT NULL,
+        command_type TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        response_status INTEGER,
+        response_json TEXT,
+        resource_type TEXT,
+        resource_id TEXT,
+        created_at TEXT NOT NULL,
+        expires_at TEXT,
+        UNIQUE(organization_id, idempotency_key, command_type)
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_idempotency_expiry ON payment_idempotency_keys(expires_at);
+    \`);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(45, nowIso());
+  }
+
+  // GAP-1.2 — link existing canonical payments to payment intents.
+  if (!applied.includes(46)) {
+    const columns = db.prepare('PRAGMA table_info(payments)').all();
+    const hasPaymentIntentId = columns.some(column => String(column.name) === 'payment_intent_id');
+    if (!hasPaymentIntentId) {
+      db.exec(\`ALTER TABLE payments ADD COLUMN payment_intent_id TEXT REFERENCES payment_intents(id) ON DELETE SET NULL\`);
+    }
+    db.exec(\`CREATE INDEX IF NOT EXISTS idx_payments_payment_intent ON payments(payment_intent_id)\`);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(46, nowIso());
+  }
+
   // FUX-2 Section 6 — additive multi-role compatibility bridge.
   // memberships.role remains the legacy/default role authority while
   // membership_roles provides an additive path for multiple contextual roles.
@@ -5024,6 +5156,7 @@ function paymentFromRow(row) {
     orderId: row.order_id,
     customerId: row.customer_id,
     paymentAccountId: row.payment_account_id,
+    paymentIntentId: row.payment_intent_id || null,
     providerId: row.provider_id,
     channel: row.channel,
     methodId: row.method_id,
@@ -5042,6 +5175,336 @@ function paymentFromRow(row) {
     updatedAt: row.updated_at,
   };
 }
+
+function paymentIntentFromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id, organizationId: row.organization_id, locationId: row.location_id || null,
+    orderId: row.order_id || null, paymentAccountId: row.payment_account_id || null,
+    providerId: row.provider_id, amountMinor: Number(row.amount_minor),
+    currency: normaliseCurrency(row.currency, 'ETB'), status: row.status,
+    expiresAt: row.expires_at || null, fulfilledAt: row.fulfilled_at || null,
+    cancelledAt: row.cancelled_at || null, metadata: parseJSON(row.metadata_json, {}),
+    createdByUserId: row.created_by_user_id || null, createdAt: row.created_at, updatedAt: row.updated_at,
+  };
+}
+function paymentEvidenceFromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id, organizationId: row.organization_id, locationId: row.location_id || null,
+    paymentId: row.payment_id || null, paymentIntentId: row.payment_intent_id || null,
+    providerId: row.provider_id, channel: row.channel, evidenceType: row.evidence_type,
+    externalReference: row.external_reference || null, providerTransactionId: row.provider_transaction_id || null,
+    fingerprint: row.fingerprint, rawPayload: parseJSON(row.raw_payload_json, null),
+    normalizedPayload: parseJSON(row.normalized_payload_json, null), source: row.source || null,
+    observedAt: row.observed_at || null, receivedAt: row.received_at,
+    submittedByUserId: row.submitted_by_user_id || null, status: row.status,
+    createdAt: row.created_at, updatedAt: row.updated_at,
+  };
+}
+function paymentVerificationFromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id, organizationId: row.organization_id, paymentId: row.payment_id || null,
+    paymentIntentId: row.payment_intent_id || null, evidenceId: row.evidence_id, providerId: row.provider_id,
+    result: row.result, confidence: row.confidence == null ? null : Number(row.confidence),
+    observedAmountMinor: row.observed_amount_minor == null ? null : Number(row.observed_amount_minor),
+    observedCurrency: row.observed_currency || null, observedReceiver: row.observed_receiver || null,
+    observedReceiverAccount: row.observed_receiver_account || null, observedReference: row.observed_reference || null,
+    observedTransactionId: row.observed_transaction_id || null, observedAt: row.observed_at || null,
+    reasonCodes: parseJSON(row.reason_codes_json, []), rawResult: parseJSON(row.raw_result_json, null),
+    verifier: row.verifier, verifierVersion: row.verifier_version || null, createdAt: row.created_at,
+  };
+}
+function paymentDecisionFromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id, organizationId: row.organization_id, paymentId: row.payment_id,
+    paymentIntentId: row.payment_intent_id || null, evidenceId: row.evidence_id || null,
+    verificationId: row.verification_id || null, decision: row.decision, targetState: row.target_state || null,
+    reasonCodes: parseJSON(row.reason_codes_json, []), invariantResults: parseJSON(row.invariant_results_json, {}),
+    decisionSource: row.decision_source, actorId: row.actor_id || null, createdAt: row.created_at,
+  };
+}
+function hashPaymentRequest(value) {
+  return crypto.createHash('sha256').update(JSON.stringify(value ?? {})).digest('hex');
+}
+export async function createPaymentWithIntent(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const { organizationId, locationId } = await resolvePaymentContext(chatId, input);
+  if (input.organizationId && String(input.organizationId) !== organizationId) throw Object.assign(new Error('Payment organization does not match tenant'), { statusCode: 403, code: 'ORGANIZATION_MISMATCH' });
+  const currency = tenantCurrency(chatId);
+  const amountMinor = Number(input.amountMinor ?? input.amount_minor);
+  if (!Number.isInteger(amountMinor) || amountMinor < 0) throw Object.assign(new Error('amountMinor must be a non-negative integer'), { statusCode: 400, code: 'INVALID_PAYMENT_AMOUNT' });
+  if (input.currency != null && normaliseCurrency(input.currency, currency) !== currency) throw Object.assign(new Error('Payment currency does not match the organization currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
+  const orderId = input.orderId || input.order_id || null;
+  let customerId = input.customerId || input.customer_id || null;
+  if (orderId) {
+    const order = db.prepare('SELECT order_json, customer_id, total_minor, currency FROM orders WHERE chat_id = ? AND server_order_id = ?').get(String(chatId), String(orderId));
+    if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    if (normaliseCurrency(order.currency, currency) !== currency) throw Object.assign(new Error('Order currency does not match the organization currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
+    if (amountMinor > Number(order.total_minor)) throw Object.assign(new Error('Payment amount cannot exceed the order total'), { statusCode: 400, code: 'PAYMENT_AMOUNT_EXCEEDS_ORDER' });
+    customerId = customerId || order.customer_id || parseJSON(order.order_json, {}).customer_id || null;
+  }
+  if (customerId) {
+    const customer = db.prepare('SELECT id FROM customers WHERE id = ? AND organization_id = ?').get(String(customerId), organizationId);
+    if (!customer) throw Object.assign(new Error('Customer does not belong to this organization'), { statusCode: 400, code: 'CUSTOMER_ORGANIZATION_MISMATCH' });
+    customerId = String(customerId);
+  }
+  const providerId = String(input.providerId || input.provider_id || '').trim().toLowerCase();
+  if (!providerId) throw Object.assign(new Error('providerId is required'), { statusCode: 400, code: 'PROVIDER_REQUIRED' });
+  requirePaymentProvider(providerId);
+  const accountId = input.paymentAccountId || input.payment_account_id || null;
+  if (!accountId) throw Object.assign(new Error('paymentAccountId is required'), { statusCode: 400, code: 'PAYMENT_ACCOUNT_REQUIRED' });
+  const account = db.prepare("SELECT id, provider_id FROM payment_accounts WHERE id = ? AND organization_id = ? AND status = 'active'").get(String(accountId), organizationId);
+  if (!account) throw Object.assign(new Error('Payment account does not belong to this organization'), { statusCode: 400, code: 'PAYMENT_ACCOUNT_NOT_FOUND' });
+  if (String(account.provider_id) !== providerId) throw Object.assign(new Error('Payment account provider does not match payment provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
+  const channel = String(input.channel || 'manual').trim().toLowerCase();
+  requirePaymentChannel(channel);
+  const id = String(input.id || crypto.randomUUID());
+  const intentId = String(input.paymentIntentId || input.payment_intent_id || crypto.randomUUID());
+  const now = nowIso();
+  const idempotencyKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  const requestHash = String(input.requestHash || input.request_hash || hashPaymentRequest({ orderId, customerId, paymentAccountId: accountId, providerId, channel, amountMinor, currency, expiresAt: input.expiresAt || input.expires_at || null, metadata: input.metadata || {} }));
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    if (idempotencyKey) {
+      const existing = db.prepare('SELECT * FROM payment_idempotency_keys WHERE organization_id = ? AND idempotency_key = ? AND command_type = ?').get(organizationId, idempotencyKey, 'CREATE_PAYMENT');
+      if (existing) {
+        if (String(existing.request_hash) !== requestHash) throw Object.assign(new Error('Idempotency key was already used with a different request'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE' });
+        const response = parseJSON(existing.response_json, null);
+        db.exec('COMMIT');
+        return response?.paymentId ? { payment: paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(response.paymentId, organizationId)), intent: paymentIntentFromRow(db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(response.intentId, organizationId)), idempotent: true } : { payment: null, intent: null, idempotent: true };
+      }
+    }
+    db.prepare("INSERT INTO payment_intents (id, organization_id, location_id, order_id, payment_account_id, provider_id, amount_minor, currency, status, expires_at, metadata_json, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)").run(
+      intentId, organizationId, locationId, orderId ? String(orderId) : null, String(accountId), providerId, amountMinor, currency,
+      input.expiresAt || input.expires_at || null, json(input.metadata || {}), actor?.userId || null, now, now
+    );
+    db.prepare("INSERT INTO payments (id, organization_id, location_id, order_id, customer_id, payment_account_id, provider_id, channel, method_id, method_name, amount_minor, currency, state, payment_intent_id, external_reference, claimed_at, received_at, verified_at, reconciled_at, metadata_json, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'UNPAID', ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?)").run(
+      id, organizationId, locationId, orderId ? String(orderId) : null, customerId, String(accountId), providerId, channel,
+      input.methodId || input.method_id || null, input.methodName || input.method_name || null, intentId,
+      json(input.metadata || {}), actor?.userId || null, now, now
+    );
+    db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, 'CREATED', ?, ?, NULL, 'UNPAID', ?, ?, ?, ?)").run(
+      crypto.randomUUID(), id, organizationId, amountMinor, currency, actor?.userId || null, String(input.reason || ''), json(input.metadata || {}), now
+    );
+    syncMarketplacePaymentAllocation(orderId, id, amountMinor, 'UNPAID');
+    const response = { paymentId: id, intentId };
+    if (idempotencyKey) {
+      db.prepare("INSERT INTO payment_idempotency_keys (id, organization_id, idempotency_key, command_type, request_hash, response_status, response_json, resource_type, resource_id, created_at, expires_at) VALUES (?, ?, ?, 'CREATE_PAYMENT', ?, 201, ?, 'payment', ?, ?, ?)").run(
+        crypto.randomUUID(), organizationId, idempotencyKey, requestHash, json(response), id, now, input.idempotencyExpiresAt || input.idempotency_expires_at || null
+      );
+    }
+    db.exec('COMMIT');
+    audit(String(chatId), 'payment.created', 'payment', id, { amountMinor, currency, state: 'UNPAID', orderId, paymentIntentId: intentId }, { organizationId, locationId, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
+    return { payment: paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(id, organizationId)), intent: paymentIntentFromRow(db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(intentId, organizationId)), idempotent: false };
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
+export async function getPaymentIntent(chatId, intentId) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  return paymentIntentFromRow(db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(String(intentId), organizationId));
+}
+export async function insertPaymentIntent(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const { organizationId, locationId } = await resolvePaymentContext(chatId, input);
+  const providerId = String(input.providerId || input.provider_id || '').trim().toLowerCase();
+  if (!providerId) throw Object.assign(new Error('providerId is required'), { statusCode: 400, code: 'PROVIDER_REQUIRED' });
+  requirePaymentProvider(providerId);
+  const amountMinor = Number(input.amountMinor ?? input.amount_minor);
+  if (!Number.isInteger(amountMinor) || amountMinor < 0) throw Object.assign(new Error('amountMinor must be a non-negative integer'), { statusCode: 400, code: 'INVALID_PAYMENT_AMOUNT' });
+  const currency = tenantCurrency(chatId);
+  if (input.currency != null && normaliseCurrency(input.currency, currency) !== currency) throw Object.assign(new Error('Payment currency does not match the organization currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
+  const accountId = input.paymentAccountId || input.payment_account_id || null;
+  if (accountId) {
+    const account = db.prepare("SELECT id, provider_id FROM payment_accounts WHERE id = ? AND organization_id = ? AND status = 'active'").get(String(accountId), organizationId);
+    if (!account) throw Object.assign(new Error('Payment account does not belong to this organization'), { statusCode: 400, code: 'PAYMENT_ACCOUNT_NOT_FOUND' });
+    if (String(account.provider_id) !== providerId) throw Object.assign(new Error('Payment account provider does not match payment intent provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
+  }
+  const orderId = input.orderId || input.order_id || null;
+  if (orderId) {
+    const order = db.prepare('SELECT total_minor, currency FROM orders WHERE chat_id = ? AND server_order_id = ?').get(String(chatId), String(orderId));
+    if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    if (normaliseCurrency(order.currency, currency) !== currency) throw Object.assign(new Error('Order currency does not match the organization currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
+    if (amountMinor > Number(order.total_minor)) throw Object.assign(new Error('Payment amount cannot exceed the order total'), { statusCode: 400, code: 'PAYMENT_AMOUNT_EXCEEDS_ORDER' });
+  }
+  const id = String(input.id || crypto.randomUUID());
+  const now = nowIso();
+  db.prepare("INSERT INTO payment_intents (id, organization_id, location_id, order_id, payment_account_id, provider_id, amount_minor, currency, status, expires_at, metadata_json, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)").run(
+    id, organizationId, locationId, orderId ? String(orderId) : null, accountId ? String(accountId) : null,
+    providerId, amountMinor, currency, input.expiresAt || input.expires_at || null,
+    json(input.metadata || {}), actor?.userId || null, now, now
+  );
+  return paymentIntentFromRow(db.prepare('SELECT * FROM payment_intents WHERE id = ?').get(id));
+}
+export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const { organizationId, locationId } = await resolvePaymentContext(chatId, input);
+  const intentId = String(input.paymentIntentId || input.payment_intent_id || '').trim();
+  if (!intentId) throw Object.assign(new Error('paymentIntentId is required'), { statusCode: 400, code: 'PAYMENT_INTENT_REQUIRED' });
+  const intent = db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(intentId, organizationId);
+  if (!intent) throw Object.assign(new Error('Payment intent not found'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND' });
+  const paymentId = input.paymentId || input.payment_id || null;
+  if (paymentId) {
+    const payment = db.prepare('SELECT id FROM payments WHERE id = ? AND organization_id = ?').get(String(paymentId), organizationId);
+    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  }
+  const providerId = String(input.providerId || input.provider_id || intent.provider_id).trim().toLowerCase();
+  if (providerId !== String(intent.provider_id)) throw Object.assign(new Error('Evidence provider does not match payment intent provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
+  const channel = String(input.channel || 'manual').trim().toLowerCase();
+  const evidenceType = String(input.evidenceType || input.evidence_type || '').trim().toUpperCase();
+  if (!evidenceType) throw Object.assign(new Error('evidenceType is required'), { statusCode: 400, code: 'EVIDENCE_TYPE_REQUIRED' });
+  const rawPayload = input.rawPayload ?? input.raw_payload ?? input.payload ?? null;
+  const normalizedPayload = input.normalizedPayload ?? input.normalized_payload ?? null;
+  const fingerprint = String(input.fingerprint || hashPaymentRequest({ providerId, channel, evidenceType, externalReference: input.externalReference || input.external_reference || null, providerTransactionId: input.providerTransactionId || input.provider_transaction_id || null, normalizedPayload, rawPayload })).trim();
+  if (!fingerprint) throw Object.assign(new Error('Evidence fingerprint is required'), { statusCode: 400, code: 'EVIDENCE_FINGERPRINT_REQUIRED' });
+  const duplicate = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND fingerprint = ?').get(organizationId, providerId, fingerprint);
+  if (duplicate) return { evidence: paymentEvidenceFromRow(duplicate), duplicate: true };
+  const id = String(input.id || crypto.randomUUID()); const now = nowIso();
+  try {
+    db.prepare("INSERT INTO payment_evidence (id, organization_id, location_id, payment_id, payment_intent_id, provider_id, channel, evidence_type, external_reference, provider_transaction_id, fingerprint, raw_payload_json, normalized_payload_json, source, observed_at, received_at, submitted_by_user_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?, ?)").run(
+      id, organizationId, locationId, paymentId ? String(paymentId) : null, intentId, providerId, channel, evidenceType,
+      input.externalReference || input.external_reference || null, input.providerTransactionId || input.provider_transaction_id || null,
+      fingerprint, rawPayload == null ? null : json(rawPayload), normalizedPayload == null ? null : json(normalizedPayload),
+      input.source || null, input.observedAt || input.observed_at || null, now, actor?.userId || null, now, now
+    );
+  } catch (error) {
+    if (String(error?.message || '').includes('UNIQUE constraint failed: payment_evidence')) {
+      const existing = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND fingerprint = ?').get(organizationId, providerId, fingerprint);
+      if (existing) return { evidence: paymentEvidenceFromRow(existing), duplicate: true };
+    }
+    throw error;
+  }
+  return { evidence: paymentEvidenceFromRow(db.prepare('SELECT * FROM payment_evidence WHERE id = ?').get(id)), duplicate: false };
+}
+export async function listPaymentEvidence(chatId, paymentId) {
+  ensureDatabase();
+  const payment = await getPayment(chatId, paymentId);
+  if (!payment) return null;
+  return db.prepare('SELECT * FROM payment_evidence WHERE payment_id = ? AND organization_id = ? ORDER BY created_at DESC').all(String(paymentId), payment.organizationId).map(paymentEvidenceFromRow);
+}
+export async function insertPaymentVerification(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const evidence = db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(String(input.evidenceId || input.evidence_id), organizationId);
+  if (!evidence) throw Object.assign(new Error('Evidence not found'), { statusCode: 404, code: 'EVIDENCE_NOT_FOUND' });
+  const id = String(input.id || crypto.randomUUID()); const now = nowIso();
+  db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+    id, organizationId, input.paymentId || input.payment_id || evidence.payment_id || null, input.paymentIntentId || input.payment_intent_id || evidence.payment_intent_id || null,
+    evidence.id, String(input.providerId || input.provider_id || evidence.provider_id), String(input.result || '').toUpperCase(),
+    input.confidence == null ? null : Number(input.confidence), input.observedAmountMinor ?? input.observed_amount_minor ?? null,
+    input.observedCurrency || input.observed_currency || null, input.observedReceiver || input.observed_receiver || null,
+    input.observedReceiverAccount || input.observed_receiver_account || null, input.observedReference || input.observed_reference || null,
+    input.observedTransactionId || input.observed_transaction_id || null, input.observedAt || input.observed_at || null,
+    json(input.reasonCodes || input.reason_codes || []), input.rawResult == null ? null : json(input.rawResult || input.raw_result),
+    String(input.verifier || 'payment-core'), input.verifierVersion || input.verifier_version || null, now
+  );
+  return paymentVerificationFromRow(db.prepare('SELECT * FROM payment_verifications WHERE id = ?').get(id));
+}
+export async function listPaymentVerifications(chatId, paymentId) {
+  ensureDatabase();
+  const payment = await getPayment(chatId, paymentId);
+  if (!payment) return null;
+  return db.prepare('SELECT * FROM payment_verifications WHERE payment_id = ? AND organization_id = ? ORDER BY created_at DESC').all(String(paymentId), payment.organizationId).map(paymentVerificationFromRow);
+}
+export async function insertPaymentDecision(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const paymentId = String(input.paymentId || input.payment_id || '').trim();
+  if (!paymentId) throw Object.assign(new Error('paymentId is required'), { statusCode: 400, code: 'PAYMENT_REQUIRED' });
+  const payment = db.prepare('SELECT id FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
+  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  const id = String(input.id || crypto.randomUUID()); const now = nowIso();
+  db.prepare("INSERT INTO payment_decisions (id, organization_id, payment_id, payment_intent_id, evidence_id, verification_id, decision, target_state, reason_codes_json, invariant_results_json, decision_source, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+    id, organizationId, paymentId, input.paymentIntentId || input.payment_intent_id || null, input.evidenceId || input.evidence_id || null,
+    input.verificationId || input.verification_id || null, String(input.decision || '').toUpperCase(), input.targetState || input.target_state || null,
+    json(input.reasonCodes || input.reason_codes || []), json(input.invariantResults || input.invariant_results || {}),
+    String(input.decisionSource || input.decision_source || 'PAYMENT_CORE'), actor?.userId || null, now
+  );
+  return paymentDecisionFromRow(db.prepare('SELECT * FROM payment_decisions WHERE id = ?').get(id));
+}
+export async function listPaymentDecisions(chatId, paymentId) {
+  ensureDatabase();
+  const payment = await getPayment(chatId, paymentId);
+  if (!payment) return null;
+  return db.prepare('SELECT * FROM payment_decisions WHERE payment_id = ? AND organization_id = ? ORDER BY created_at DESC').all(String(paymentId), payment.organizationId).map(paymentDecisionFromRow);
+}
+export async function getPaymentIdempotency(chatId, key, commandType) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  return db.prepare('SELECT * FROM payment_idempotency_keys WHERE organization_id = ? AND idempotency_key = ? AND command_type = ?').get(organizationId, String(key), String(commandType));
+}
+export async function insertPaymentIdempotency(chatId, input = {}) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const now = nowIso();
+  db.prepare("INSERT INTO payment_idempotency_keys (id, organization_id, idempotency_key, command_type, request_hash, response_status, response_json, resource_type, resource_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+    String(input.id || crypto.randomUUID()), organizationId, String(input.idempotencyKey || input.idempotency_key), String(input.commandType || input.command_type),
+    String(input.requestHash || input.request_hash), input.responseStatus ?? input.response_status ?? null,
+    input.responseJson == null && input.response_json == null ? null : String(input.responseJson ?? input.response_json),
+    input.resourceType || input.resource_type || null, input.resourceId || input.resource_id || null, now, input.expiresAt || input.expires_at || null
+  );
+  return getPaymentIdempotency(chatId, input.idempotencyKey || input.idempotency_key, input.commandType || input.command_type);
+}
+export async function commitPaymentDecision(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const paymentId = String(input.paymentId || input.payment_id || '').trim();
+  if (!paymentId) throw Object.assign(new Error('paymentId is required'), { statusCode: 400, code: 'PAYMENT_REQUIRED' });
+  const target = String(input.targetState || input.target_state || '').toUpperCase();
+  if (!PAYMENT_STATES.has(target)) throw Object.assign(new Error('Invalid payment target state'), { statusCode: 400, code: 'INVALID_PAYMENT_STATE' });
+  const expectedState = String(input.expectedState || input.expected_state || '').toUpperCase();
+  const now = nowIso();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const row = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
+    if (!row) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    if (expectedState && row.state !== expectedState) throw Object.assign(new Error('Payment state changed before decision could commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
+    if (row.state !== target && !PAYMENT_TRANSITIONS[row.state]?.has(target)) throw Object.assign(new Error('Invalid payment transition'), { statusCode: 409, code: 'INVALID_PAYMENT_TRANSITION' });
+    if (input.verification) {
+      const v = input.verification;
+      db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+        String(v.id || crypto.randomUUID()), organizationId, paymentId, v.paymentIntentId || v.payment_intent_id || row.payment_intent_id || null, v.evidenceId || v.evidence_id || null,
+        v.providerId || v.provider_id || row.provider_id, String(v.result || '').toUpperCase(), v.confidence == null ? null : Number(v.confidence),
+        v.observedAmountMinor ?? v.observed_amount_minor ?? null, v.observedCurrency || v.observed_currency || null,
+        v.observedReceiver || v.observed_receiver || null, v.observedReceiverAccount || v.observed_receiver_account || null,
+        v.observedReference || v.observed_reference || null, v.observedTransactionId || v.observed_transaction_id || null,
+        v.observedAt || v.observed_at || null, json(v.reasonCodes || v.reason_codes || []),
+        v.rawResult == null ? null : json(v.rawResult || v.raw_result), v.verifier || 'payment-core', v.verifierVersion || v.verifier_version || null, now
+      );
+    }
+    const decision = input.decision || {};
+    const decisionId = String(decision.id || crypto.randomUUID());
+    db.prepare("INSERT INTO payment_decisions (id, organization_id, payment_id, payment_intent_id, evidence_id, verification_id, decision, target_state, reason_codes_json, invariant_results_json, decision_source, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+      decisionId, organizationId, paymentId, decision.paymentIntentId || decision.payment_intent_id || row.payment_intent_id || null,
+      decision.evidenceId || decision.evidence_id || null, decision.verificationId || decision.verification_id || null,
+      String(decision.decision || '').toUpperCase(), target, json(decision.reasonCodes || decision.reason_codes || []),
+      json(decision.invariantResults || decision.invariant_results || {}), decision.decisionSource || 'PAYMENT_CORE', actor?.userId || null, now
+    );
+    const result = db.prepare("UPDATE payments SET state = ?, updated_at = ?, claimed_at = CASE WHEN ? = 'CLAIMED' THEN ? ELSE claimed_at END, received_at = CASE WHEN ? = 'RECEIVED' THEN ? ELSE received_at END, verified_at = CASE WHEN ? = 'VERIFIED' THEN ? ELSE verified_at END, reconciled_at = CASE WHEN ? = 'RECONCILED' THEN ? ELSE reconciled_at END WHERE id = ? AND organization_id = ?" + (expectedState ? " AND state = ?" : ""))
+      .run(target, now, target, now, target, now, target, now, target, now, paymentId, organizationId, ...(expectedState ? [expectedState] : []));
+    if (Number(result.changes || 0) !== 1) throw Object.assign(new Error('Payment state changed before commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
+    db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+      crypto.randomUUID(), paymentId, organizationId, String(decision.entryType || target), Number(row.amount_minor), normaliseCurrency(row.currency, 'ETB'),
+      row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now
+    );
+    const marketplaceAllocation = db.prepare("SELECT a.*, so.id AS canonical_seller_order_id FROM marketplace_payment_allocations a JOIN marketplace_seller_orders so ON so.id = a.seller_order_id WHERE a.payment_id = ? LIMIT 1").get(paymentId);
+    if (marketplaceAllocation) {
+      if (target === 'REFUNDED') {
+        db.prepare("UPDATE marketplace_payment_allocations SET status = 'REFUNDED', updated_at = ? WHERE id = ?").run(now, marketplaceAllocation.id);
+        db.prepare("UPDATE marketplace_settlements SET status = 'REVERSED' WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')").run(marketplaceAllocation.canonical_seller_order_id);
+      } else if (['VERIFIED','RECONCILED'].includes(target) && Number(row.amount_minor) === Number(marketplaceAllocation.amount_minor)) {
+        db.prepare("UPDATE marketplace_payment_allocations SET status = 'ALLOCATED', updated_at = ? WHERE id = ?").run(now, marketplaceAllocation.id);
+        db.prepare("UPDATE marketplace_settlements SET status = 'READY' WHERE seller_order_id = ? AND status = 'PENDING'").run(marketplaceAllocation.canonical_seller_order_id);
+      }
+    }
+    audit(String(chatId), 'payment.' + target.toLowerCase(), 'payment', paymentId, { fromState: row.state, toState: target, decision: decision.decision || null, reasonCodes: decision.reasonCodes || decision.reason_codes || [] }, { organizationId, locationId: row.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null, reason: decision.reason || '' });
+    db.exec('COMMIT');
+    return paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId));
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
+
 
 const PAYMENT_STATES = new Set(['UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','REJECTED','DUPLICATE','MISMATCH','EXPIRED','PARTIAL','REFUNDED']);
 const PAYMENT_TRANSITIONS = Object.freeze({
@@ -5225,8 +5688,9 @@ export async function createPayment(chatId, input = {}, actor = null) {
     const account = db.prepare('SELECT id FROM payment_accounts WHERE id = ? AND organization_id = ? AND status = \'active\'').get(String(accountId), organizationId);
     if (!account) throw Object.assign(new Error('Payment account does not belong to this organization'), { statusCode: 400 });
   }
-  const state = String(input.state || 'UNPAID').toUpperCase();
-  if (!PAYMENT_STATES.has(state)) throw Object.assign(new Error('Invalid payment state'), { statusCode: 400 });
+  const suppliedState = input.state == null ? null : String(input.state).toUpperCase();
+  if (suppliedState && suppliedState !== 'UNPAID') throw Object.assign(new Error('Payment state is controlled by PaymentCore commands'), { statusCode: 409, code: 'STATE_NOT_CLIENT_CONTROLLED' });
+  const state = 'UNPAID';
   const now = nowIso();
   const id = String(input.id || crypto.randomUUID());
   const providerId = String(input.providerId || input.provider_id || 'manual').trim().toLowerCase();
