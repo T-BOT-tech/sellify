@@ -5634,6 +5634,34 @@ async function resolvePaymentContext(chatId, input = {}) {
   return { tenant, organizationId, locationId: locationId ? String(locationId) : null };
 }
 
+export async function getPaymentAccountForProviderNotification(providerId, accountIdentifier) {
+  ensureDatabase();
+  const id = String(providerId || '').trim().toLowerCase();
+  const account = String(accountIdentifier || '').trim();
+  const rows = db.prepare(`
+    SELECT pa.*, t.chat_id
+    FROM payment_accounts pa
+    JOIN tenants t ON t.organization_id = pa.organization_id
+    WHERE pa.provider_id = ? AND pa.account_identifier = ? AND pa.status = 'active'
+    ORDER BY pa.created_at ASC
+  `).all(id, account);
+  if (rows.length === 0) {
+    throw Object.assign(new Error('No active payment account matches provider notification'), { statusCode: 404, code: 'UNMATCHED_PROVIDER_NOTIFICATION' });
+  }
+  if (rows.length > 1) {
+    throw Object.assign(new Error('Multiple active payment accounts match provider notification'), { statusCode: 409, code: 'AMBIGUOUS_PAYMENT_ACCOUNT' });
+  }
+  const row = rows[0];
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    chatId: row.chat_id,
+    providerId: row.provider_id,
+    accountIdentifier: row.account_identifier,
+    metadata: parseJSON(row.metadata_json, {}),
+  };
+}
+
 export async function resolvePaymentIntentForProviderEvidence(input = {}) {
   ensureDatabase();
   const providerId = String(input.providerId || '').trim().toLowerCase();
