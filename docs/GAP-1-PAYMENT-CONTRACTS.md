@@ -244,3 +244,26 @@ Version independently:
 - public API
 
 Do not make database migration versions the only compatibility mechanism.
+
+
+## 12. Evidence parser boundary
+
+Cheki-derived parser concepts are observation infrastructure only.
+
+Raw channel input -> Evidence Parser -> Parsed Evidence -> PaymentEvidence -> Provider Verification -> VerificationResult -> PaymentCore
+
+Parser responsibilities:
+- identify and parse provider-specific evidence;
+- normalize reference, transaction ID, amount, currency, sender/receiver and timestamp where available;
+- preserve provider payload for audit;
+- return structured extraction errors;
+- remain stateless with respect to payment lifecycle.
+
+Parser prohibitions:
+- no payment-state mutation;
+- no ledger writes;
+- no merchant-account authorization;
+- no settlement/reconciliation decisions;
+- no direct database access.
+
+Provider manifests describe parser and endpoint requirements only. They are configuration metadata, not payment authority.
