@@ -2332,6 +2332,45 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(46, nowIso());
   }
 
+  // GAP-1.7.4 — durable independent provider confirmation attempts.
+  // Attempts are observations/work items only. Payment Core remains the sole
+  // authority allowed to commit a financial state or ledger transition.
+  if (!applied.includes(50)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS payment_confirmation_attempts (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
+        payment_intent_id TEXT NOT NULL REFERENCES payment_intents(id) ON DELETE CASCADE,
+        evidence_id TEXT NOT NULL REFERENCES payment_evidence(id) ON DELETE CASCADE,
+        payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL,
+        provider_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'REQUESTED'
+          CHECK (status IN ('REQUESTED','PENDING','CONFIRMED','NOT_FOUND','FAILED','EXPIRED','UNKNOWN')),
+        attempt_number INTEGER NOT NULL DEFAULT 1 CHECK (attempt_number > 0),
+        provider_transaction_id TEXT,
+        reason_codes_json TEXT NOT NULL DEFAULT '[]',
+        observation_json TEXT NOT NULL DEFAULT '{}',
+        requested_at TEXT NOT NULL,
+        observed_at TEXT,
+        expires_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(payment_intent_id, evidence_id, attempt_number)
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_org_status
+        ON payment_confirmation_attempts(organization_id,status,updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_evidence
+        ON payment_confirmation_attempts(evidence_id,created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_intent
+        ON payment_confirmation_attempts(payment_intent_id,created_at DESC);
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_confirmation_attempts_provider_tx
+        ON payment_confirmation_attempts(organization_id,provider_id,payment_account_id,provider_transaction_id)
+        WHERE provider_transaction_id IS NOT NULL AND provider_transaction_id <> '';
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(50, nowIso());
+  }
+
   // FUX-2 Section 6 — additive multi-role compatibility bridge.
   // memberships.role remains the legacy/default role authority while
   // membership_roles provides an additive path for multiple contextual roles.
@@ -8308,4 +8347,119 @@ export function getDatabasePath() {
 export function getDatabaseForTests() {
   ensureDatabase();
   return db;
+}
+
+
+function paymentConfirmationAttemptFromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    paymentId: row.payment_id || null,
+    paymentIntentId: row.payment_intent_id,
+    evidenceId: row.evidence_id,
+    paymentAccountId: row.payment_account_id || null,
+    providerId: row.provider_id,
+    status: row.status,
+    attemptNumber: Number(row.attempt_number),
+    providerTransactionId: row.provider_transaction_id || null,
+    reasonCodes: parseJSON(row.reason_codes_json, []),
+    observation: parseJSON(row.observation_json, {}),
+    requestedAt: row.requested_at,
+    observedAt: row.observed_at || null,
+    expiresAt: row.expires_at || null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function createPaymentConfirmationAttempt(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const organizationId = await tenantOrganizationId(chatId);
+  const evidenceId = String(input.evidenceId ?? input.evidence_id ?? '').trim();
+  const paymentIntentId = String(input.paymentIntentId ?? input.payment_intent_id ?? '').trim();
+  if (!evidenceId || !paymentIntentId) {
+    throw Object.assign(new Error('evidenceId and paymentIntentId are required'), { statusCode: 400, code: 'CONFIRMATION_CONTEXT_REQUIRED' });
+  }
+  const evidence = db.prepare('SELECT * FROM payment_evidence WHERE id=? AND organization_id=?').get(evidenceId, organizationId);
+  const intent = db.prepare('SELECT * FROM payment_intents WHERE id=? AND organization_id=?').get(paymentIntentId, organizationId);
+  if (!evidence || !intent || String(evidence.payment_intent_id || '') !== paymentIntentId) {
+    throw Object.assign(new Error('Confirmation attempt does not match evidence and payment intent'), { statusCode: 409, code: 'PAYMENT_INTENT_MISMATCH' });
+  }
+  if (String(evidence.provider_id).toLowerCase() !== String(intent.provider_id).toLowerCase()) {
+    throw Object.assign(new Error('Confirmation provider mismatch'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
+  }
+  const account = intent.payment_account_id
+    ? db.prepare('SELECT * FROM payment_accounts WHERE id=? AND organization_id=?').get(intent.payment_account_id, organizationId)
+    : null;
+  const latest = db.prepare('SELECT MAX(attempt_number) AS n FROM payment_confirmation_attempts WHERE payment_intent_id=? AND evidence_id=?').get(paymentIntentId,evidenceId);
+  const attemptNumber = Number(input.attemptNumber ?? input.attempt_number ?? Number(latest?.n || 0) + 1);
+  if (!Number.isInteger(attemptNumber) || attemptNumber < 1) {
+    throw Object.assign(new Error('attemptNumber must be a positive integer'), { statusCode: 400, code: 'INVALID_CONFIRMATION_ATTEMPT' });
+  }
+  const existing = db.prepare('SELECT * FROM payment_confirmation_attempts WHERE payment_intent_id=? AND evidence_id=? AND attempt_number=?').get(paymentIntentId,evidenceId,attemptNumber);
+  if (existing) return paymentConfirmationAttemptFromRow(existing);
+  const now = nowIso();
+  const id = String(input.id || crypto.randomUUID());
+  db.prepare(`
+    INSERT INTO payment_confirmation_attempts
+      (id,organization_id,payment_id,payment_intent_id,evidence_id,payment_account_id,provider_id,status,attempt_number,requested_at,expires_at,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,'REQUESTED',?,?,?, ?,?)
+  `).run(
+    id, organizationId, intent.payment_id || null, paymentIntentId, evidenceId, intent.payment_account_id || null,
+    intent.provider_id, attemptNumber, now, input.expiresAt ?? input.expires_at ?? null, now, now
+  );
+  audit(String(chatId), 'payment.confirmation_attempt.created', 'payment_confirmation_attempt', id,
+    { paymentIntentId, evidenceId, providerId: intent.provider_id, attemptNumber },
+    { organizationId, actorId: actor?.userId || null });
+  return paymentConfirmationAttemptFromRow(db.prepare('SELECT * FROM payment_confirmation_attempts WHERE id=?').get(id));
+}
+
+export async function updatePaymentConfirmationAttempt(chatId, attemptId, input = {}, actor = null) {
+  ensureDatabase();
+  const organizationId = await tenantOrganizationId(chatId);
+  const id = String(attemptId || '').trim();
+  const row = db.prepare('SELECT * FROM payment_confirmation_attempts WHERE id=? AND organization_id=?').get(id, organizationId);
+  if (!row) throw Object.assign(new Error('Confirmation attempt not found'), { statusCode: 404, code: 'CONFIRMATION_ATTEMPT_NOT_FOUND' });
+  const status = String(input.status ?? row.status).toUpperCase();
+  const allowed = new Set(['REQUESTED','PENDING','CONFIRMED','NOT_FOUND','FAILED','EXPIRED','UNKNOWN']);
+  if (!allowed.has(status)) throw Object.assign(new Error('Invalid confirmation attempt status'), { statusCode: 400, code: 'INVALID_CONFIRMATION_ATTEMPT_STATUS' });
+  const terminal = new Set(['CONFIRMED','NOT_FOUND','FAILED','EXPIRED']);
+  if (terminal.has(row.status) && status !== row.status) {
+    throw Object.assign(new Error('Terminal confirmation attempt cannot transition'), { statusCode: 409, code: 'CONFIRMATION_ATTEMPT_TERMINAL' });
+  }
+  const observation = input.observation == null ? parseJSON(row.observation_json, {}) : input.observation;
+  const reasonCodes = Array.isArray(input.reasonCodes) ? input.reasonCodes : parseJSON(row.reason_codes_json, []);
+  const now = nowIso();
+  db.prepare(`
+    UPDATE payment_confirmation_attempts
+    SET status=?, provider_transaction_id=COALESCE(?,provider_transaction_id),
+        reason_codes_json=?, observation_json=?, observed_at=COALESCE(?,observed_at),
+        updated_at=?
+    WHERE id=? AND organization_id=?
+  `).run(
+    status, input.providerTransactionId ?? input.provider_transaction_id ?? null,
+    json(reasonCodes), json(observation), input.observedAt ?? input.observed_at ?? null, now, id, organizationId
+  );
+  audit(String(chatId), 'payment.confirmation_attempt.updated', 'payment_confirmation_attempt', id,
+    { fromStatus: row.status, toStatus: status, providerTransactionId: input.providerTransactionId ?? input.provider_transaction_id ?? null },
+    { organizationId, actorId: actor?.userId || null });
+  return paymentConfirmationAttemptFromRow(db.prepare('SELECT * FROM payment_confirmation_attempts WHERE id=?').get(id));
+}
+
+export async function getPaymentConfirmationAttempt(chatId, attemptId) {
+  ensureDatabase();
+  const organizationId = await tenantOrganizationId(chatId);
+  return paymentConfirmationAttemptFromRow(db.prepare('SELECT * FROM payment_confirmation_attempts WHERE id=? AND organization_id=?').get(String(attemptId), organizationId));
+}
+
+export async function listPaymentConfirmationAttempts(chatId, { paymentIntentId = '', evidenceId = '', limit = 100 } = {}) {
+  ensureDatabase();
+  const organizationId = await tenantOrganizationId(chatId);
+  const params = [organizationId];
+  const where = ['organization_id=?'];
+  if (paymentIntentId) { where.push('payment_intent_id=?'); params.push(String(paymentIntentId)); }
+  if (evidenceId) { where.push('evidence_id=?'); params.push(String(evidenceId)); }
+  params.push(Math.min(500, Math.max(1, Number(limit) || 100)));
+  return db.prepare(`SELECT * FROM payment_confirmation_attempts WHERE ${where.join(' AND ')} ORDER BY created_at DESC LIMIT ?`).all(...params).map(paymentConfirmationAttemptFromRow);
 }
