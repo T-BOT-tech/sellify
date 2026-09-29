@@ -86,10 +86,16 @@ export class PaymentCore {
     const providerId = String(payment.providerId || paymentIntent.providerId || '').toLowerCase();
     const provider = this.providerRegistry.getPaymentProvider(providerId);
     if (!provider) throw Object.assign(new Error('Unknown payment provider'), { statusCode: 400, code: 'UNKNOWN_PAYMENT_PROVIDER' });
-    let observed;
-    if (operation === 'reconcile' && provider.capabilities.reconcile) observed = await provider.reconcile({ payment, paymentIntent, evidence, command });
-    else observed = await provider.verify({ payment, paymentIntent, evidence, command });
-    const verification = this.#normalizeVerification({ ...observed, providerId, paymentId, paymentIntentId: paymentIntent.id, evidenceId, verifier: provider.id, verifierVersion: provider.version }, evidence);
+    if (operation === 'reconcile' && !provider.capabilities.reconcile) {
+      throw Object.assign(new Error('Payment provider does not support reconciliation'), { statusCode: 501, code: 'PAYMENT_PROVIDER_RECONCILE_UNSUPPORTED' });
+    }
+    if (operation !== 'reconcile' && !provider.capabilities.verify) {
+      throw Object.assign(new Error('Payment provider does not support verification'), { statusCode: 501, code: 'PAYMENT_PROVIDER_VERIFY_UNSUPPORTED' });
+    }
+    let observed = operation === 'reconcile'
+      ? await provider.reconcile({ payment, paymentIntent, evidence, command })
+      : await provider.verify({ payment, paymentIntent, evidence, command });
+    const verification = await this.#normalizeVerification({ ...observed, providerId, paymentId, paymentIntentId: paymentIntent.id, evidenceId, verifier: provider.id, verifierVersion: provider.version }, evidence, chatId);
     const invariants = this.invariantGate.evaluate({ payment, paymentIntent, paymentAccount, evidence, verification, now: this.clock() });
     const decision = this.decisionEngine.decide({ payment, verification, invariants });
     if (!decision.targetState) return { payment, paymentIntent, evidence, verification, invariants, decision };
@@ -100,9 +106,17 @@ export class PaymentCore {
     return { ...committed, evidence, verification, invariants, decision };
   }
 
-  #normalizeVerification(observed = {}, evidence = {}) {
+  async #normalizeVerification(observed = {}, evidence = {}, chatId = null) {
     const result = String(observed.result || (observed.verified === true ? 'MATCH' : observed.matched === true ? 'MATCH' : 'UNVERIFIABLE')).toUpperCase();
-    return { id: observed.id, paymentId: observed.paymentId, paymentIntentId: observed.paymentIntentId, evidenceId: observed.evidenceId, providerId: observed.providerId, result, confidence: observed.confidence ?? null, observedAmountMinor: observed.observedAmountMinor ?? observed.amountMinor ?? observed.amount_minor ?? null, observedCurrency: observed.observedCurrency || observed.currency || null, observedReceiver: observed.observedReceiver || observed.receiver || null, observedReceiverAccount: observed.observedReceiverAccount || observed.receiverAccount || observed.receiver_account || null, observedReference: observed.observedReference || observed.reference || evidence.externalReference || null, observedTransactionId: observed.observedTransactionId || observed.transactionId || observed.transaction_id || null, observedAt: observed.observedAt || observed.observed_at || this.clock().toISOString(), reasonCodes: Array.isArray(observed.reasonCodes) ? observed.reasonCodes : [], rawResult: observed.rawResult ?? observed.raw ?? observed, verifier: observed.verifier, verifierVersion: observed.verifierVersion };
+    const transactionId = observed.observedTransactionId || observed.transactionId || observed.transaction_id || null;
+    const reference = observed.observedReference || observed.reference || evidence.externalReference || null;
+    const duplicateTransaction = transactionId && this.store.findPaymentEvidenceByProviderTransaction
+      ? await this.store.findPaymentEvidenceByProviderTransaction(chatId, observed.providerId, transactionId, evidence.id)
+      : null;
+    const duplicateReference = reference && this.store.findPaymentEvidenceByReference
+      ? await this.store.findPaymentEvidenceByReference(chatId, observed.providerId, reference, evidence.id)
+      : null;
+    return { id: observed.id, paymentId: observed.paymentId, paymentIntentId: observed.paymentIntentId, evidenceId: observed.evidenceId, providerId: observed.providerId, result, confidence: observed.confidence ?? null, observedAmountMinor: observed.observedAmountMinor ?? observed.amountMinor ?? observed.amount_minor ?? null, observedCurrency: observed.observedCurrency || observed.currency || null, observedReceiver: observed.observedReceiver || observed.receiver || null, observedReceiverAccount: observed.observedReceiverAccount || observed.receiverAccount || observed.receiver_account || null, observedReference: reference, observedTransactionId: transactionId, providerTransactionUnique: !duplicateTransaction, referenceUnique: !duplicateReference, observedAt: observed.observedAt || observed.observed_at || this.clock().toISOString(), reasonCodes: Array.isArray(observed.reasonCodes) ? observed.reasonCodes : [], rawResult: observed.rawResult ?? observed.raw ?? observed, verifier: observed.verifier, verifierVersion: observed.verifierVersion };
   }
   #authorize(command, permission) {
     if (!this.authorization) return;
