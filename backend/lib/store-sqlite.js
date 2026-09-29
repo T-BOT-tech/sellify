@@ -5459,6 +5459,52 @@ export async function getPaymentIdempotency(chatId, key, commandType) {
   const { organizationId } = await resolvePaymentContext(chatId);
   return db.prepare('SELECT * FROM payment_idempotency_keys WHERE organization_id = ? AND idempotency_key = ? AND command_type = ?').get(organizationId, String(key), String(commandType));
 }
+export async function claimPaymentIdempotency(chatId, input = {}) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const key = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  const commandType = String(input.commandType || input.command_type || '').trim();
+  const requestHash = String(input.requestHash || input.request_hash || '').trim();
+  if (!key || !commandType || !requestHash) throw Object.assign(new Error('Idempotency key, command type and request hash are required'), { statusCode: 400, code: 'IDEMPOTENCY_CONTEXT_REQUIRED' });
+  const existing = db.prepare('SELECT * FROM payment_idempotency_keys WHERE organization_id = ? AND idempotency_key = ? AND command_type = ?').get(organizationId, key, commandType);
+  if (existing) {
+    if (String(existing.request_hash) !== requestHash) {
+      throw Object.assign(new Error('Idempotency key was already used with a different request'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
+    }
+    return { created: false, record: existing };
+  }
+  const now = nowIso();
+  const expiresAt = input.expiresAt || input.expires_at || new Date(Date.now() + 24 * 60 * 60_000).toISOString();
+  try {
+    db.prepare("INSERT INTO payment_idempotency_keys (id, organization_id, idempotency_key, command_type, request_hash, response_status, response_json, resource_type, resource_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)").run(
+      String(input.id || crypto.randomUUID()), organizationId, key, commandType, requestHash,
+      input.resourceType || input.resource_type || null, input.resourceId || input.resource_id || null, now, expiresAt
+    );
+  } catch (error) {
+    if (!String(error?.message || '').includes('UNIQUE constraint failed')) throw error;
+  }
+  const record = db.prepare('SELECT * FROM payment_idempotency_keys WHERE organization_id = ? AND idempotency_key = ? AND command_type = ?').get(organizationId, key, commandType);
+  if (!record) throw new Error('Could not claim idempotency key');
+  if (String(record.request_hash) !== requestHash) throw Object.assign(new Error('Idempotency key was already used with a different request'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
+  return { created: String(record.response_json || '') === '' && record.response_json == null, record };
+}
+
+export async function finalizePaymentIdempotency(chatId, input = {}) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const key = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  const commandType = String(input.commandType || input.command_type || '').trim();
+  const requestHash = String(input.requestHash || input.request_hash || '').trim();
+  const response = input.response;
+  const result = db.prepare('UPDATE payment_idempotency_keys SET response_status = ?, response_json = ?, resource_type = COALESCE(?, resource_type), resource_id = COALESCE(?, resource_id) WHERE organization_id = ? AND idempotency_key = ? AND command_type = ? AND request_hash = ?').run(
+    input.responseStatus ?? input.response_status ?? 200, response == null ? null : json(response),
+    input.resourceType || input.resource_type || null, input.resourceId || input.resource_id || null,
+    organizationId, key, commandType, requestHash
+  );
+  if (Number(result.changes || 0) !== 1) throw Object.assign(new Error('Idempotency record not found'), { statusCode: 409, code: 'IDEMPOTENCY_RECORD_NOT_FOUND' });
+  return getPaymentIdempotency(chatId, key, commandType);
+}
+
 export async function insertPaymentIdempotency(chatId, input = {}) {
   ensureDatabase();
   const { organizationId } = await resolvePaymentContext(chatId);
