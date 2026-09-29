@@ -72,6 +72,20 @@ export class PaymentCore {
     const paymentId = String(command.paymentId || command.payment_id || '').trim();
     const evidenceId = String(command.evidenceId || command.evidence_id || '').trim();
     if (!chatId || !paymentId || !evidenceId) throw Object.assign(new Error('chatId, paymentId and evidenceId are required'), { statusCode: 400, code: 'PAYMENT_VERIFICATION_CONTEXT_REQUIRED' });
+    const idempotencyKey = String(command.idempotencyKey || command.idempotency_key || '').trim();
+    const commandType = 'payment.' + operation;
+    const requestHash = idempotencyKey ? this.#commandHash(command, operation) : null;
+    let idempotencyClaim = null;
+    if (idempotencyKey && this.store.claimPaymentIdempotency) {
+      idempotencyClaim = await this.store.claimPaymentIdempotency(chatId, {
+        idempotencyKey, commandType, requestHash,
+        resourceType: 'payment', resourceId: paymentId,
+      });
+      if (!idempotencyClaim.created) {
+        if (idempotencyClaim.record.response_json != null) return JSON.parse(idempotencyClaim.record.response_json);
+        throw Object.assign(new Error('Payment command is already in progress'), { statusCode: 409, code: 'IDEMPOTENCY_IN_PROGRESS' });
+      }
+    }
     const payment = await this.store.getPayment(chatId, paymentId);
     if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
     const intentId = payment.paymentIntentId || command.paymentIntentId || command.payment_intent_id;
@@ -98,12 +112,18 @@ export class PaymentCore {
     const verification = await this.#normalizeVerification({ ...observed, providerId, paymentId, paymentIntentId: paymentIntent.id, evidenceId, verifier: provider.id, verifierVersion: provider.version }, evidence, chatId);
     const invariants = this.invariantGate.evaluate({ payment, paymentIntent, paymentAccount, evidence, verification, now: this.clock() });
     const decision = this.decisionEngine.decide({ payment, verification, invariants });
-    if (!decision.targetState) return { payment, paymentIntent, evidence, verification, invariants, decision };
+    if (!decision.targetState) {
+      const response = { payment, paymentIntent, evidence, verification, invariants, decision };
+      if (idempotencyKey && this.store.finalizePaymentIdempotency) await this.store.finalizePaymentIdempotency(chatId, { idempotencyKey, commandType, requestHash, response, responseStatus: 200, resourceType: 'payment', resourceId: paymentId });
+      return response;
+    }
     const committed = await this.store.commitPaymentDecision(chatId, {
       paymentId, paymentIntentId: paymentIntent.id, evidenceId, expectedState: payment.state, targetState: decision.targetState, verification,
       decision: { ...decision, paymentIntentId: paymentIntent.id, evidenceId, decisionSource: operation === 'retry' ? 'payment-core-retry' : 'payment-core-' + operation, actorId: command.actor?.userId || null }
     }, command.actor || null);
-    return { ...committed, evidence, verification, invariants, decision };
+    const response = { ...committed, evidence, verification, invariants, decision };
+    if (idempotencyKey && this.store.finalizePaymentIdempotency) await this.store.finalizePaymentIdempotency(chatId, { idempotencyKey, commandType, requestHash, response, responseStatus: 200, resourceType: 'payment', resourceId: paymentId });
+    return response;
   }
 
   async #normalizeVerification(observed = {}, evidence = {}, chatId = null) {
