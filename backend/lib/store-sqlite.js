@@ -5447,6 +5447,61 @@ export async function listPaymentEvidence(chatId, paymentId) {
   if (!payment) return null;
   return db.prepare('SELECT * FROM payment_evidence WHERE payment_id = ? AND organization_id = ? ORDER BY created_at DESC').all(String(paymentId), payment.organizationId).map(paymentEvidenceFromRow);
 }
+export async function transitionPayment(chatId, paymentId, nextState, actor = null, input = {}) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const target = String(nextState || '').trim().toUpperCase();
+  const allowed = new Set(['UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','REJECTED','DUPLICATE','MISMATCH','EXPIRED','PARTIAL','REFUNDED']);
+  if (!allowed.has(target)) throw Object.assign(new Error('Invalid payment state'), { statusCode: 400, code: 'INVALID_PAYMENT_STATE' });
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const payment = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(String(paymentId), organizationId);
+    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    if (payment.state === target) {
+      db.exec('COMMIT');
+      return paymentFromRow(payment);
+    }
+
+    const now = nowIso();
+    const timestampColumn = {
+      CLAIMED: 'claimed_at',
+      RECEIVED: 'received_at',
+      VERIFIED: 'verified_at',
+      RECONCILED: 'reconciled_at',
+    }[target];
+    const sets = ['state = ?', 'updated_at = ?'];
+    const params = [target, now];
+    if (timestampColumn) {
+      sets.push(`${timestampColumn} = ?`);
+      params.push(now);
+    }
+    params.push(String(paymentId), organizationId);
+    db.prepare(`UPDATE payments SET ${sets.join(', ')} WHERE id = ? AND organization_id = ?`).run(...params);
+
+    db.prepare(`
+      INSERT INTO payment_ledger_entries
+        (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      crypto.randomUUID(), String(paymentId), organizationId, target, Number(payment.amount_minor),
+      normaliseCurrency(payment.currency, 'ETB'), payment.state, target, actor?.userId || null,
+      String(input.reason || ''), json(input.metadata || {}), now,
+    );
+
+    if (input.evidenceId) {
+      db.prepare('UPDATE payment_evidence SET status = ?, updated_at = ? WHERE id = ? AND organization_id = ?')
+        .run(target === 'VERIFIED' ? 'VERIFIED' : target, now, String(input.evidenceId), organizationId);
+    }
+
+    db.exec('COMMIT');
+    return paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(String(paymentId), organizationId));
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
 export async function insertPaymentVerification(chatId, input = {}, actor = null) {
   ensureDatabase();
   const { organizationId } = await resolvePaymentContext(chatId);
