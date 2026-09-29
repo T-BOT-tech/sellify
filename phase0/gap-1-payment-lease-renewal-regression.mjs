@@ -19,14 +19,14 @@ const store = {
 
 const core = new PaymentCore({
   store,
-  verificationTimeoutMs: 100,
-  evidenceLeaseSeconds: 1,
+  verificationTimeoutMs: 1500,
+  evidenceLeaseSeconds: 2,
   providerRegistry: {
     getPaymentProvider() {
       return {
         capabilities: { verify: true, reconcile: false },
         async verify() {
-          await new Promise(resolve => setTimeout(resolve, 25));
+          await new Promise(resolve => setTimeout(resolve, 1100));
           return { providerId: 'manual', result: 'UNVERIFIABLE', amountMinor: 10000, currency: 'ETB' };
         },
       };
@@ -35,7 +35,7 @@ const core = new PaymentCore({
 });
 
 await core.verifyPayment({ chatId: 'tenant-1', paymentId: 'pay-1', evidenceId: 'ev-1' });
-assert.equal(renewals, 0);
+assert.ok(renewals >= 1);
 assert.deepEqual(released, { evidenceId: 'ev-1', status: 'UNVERIFIABLE', processingAttempt: 1 });
 
 console.log('GAP-1 payment lease renewal regression: PASS');
