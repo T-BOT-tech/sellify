@@ -65,6 +65,7 @@ export class PaymentCore {
       channel: command.channel || 'webhook',
       evidenceType: command.evidenceType || 'PROVIDER_NOTIFICATION',
       actor: command.actor || { userId: null, type: 'system' },
+      allowOrphanNotification: true,
     });
     return { evidence: result.evidence, duplicate: Boolean(result.duplicate) };
   }
@@ -77,11 +78,15 @@ export class PaymentCore {
       throw Object.assign(new Error('paymentIntentId is required'), { statusCode: 400, code: 'PAYMENT_INTENT_REQUIRED' });
     }
 
-    const paymentIntentId = command.paymentIntentId || command.payment_intent_id;
-    const intent = await this.store.getPaymentIntent(chatId, paymentIntentId);
-    if (!intent) throw Object.assign(new Error('Payment intent not found'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND' });
+    const paymentIntentId = command.paymentIntentId || command.payment_intent_id || null;
+    const isProviderNotification = ['provider_webhook', 'provider_callback'].includes(String(command.source || '').toLowerCase());
+    if (!paymentIntentId && !isProviderNotification) {
+      throw Object.assign(new Error('paymentIntentId is required'), { statusCode: 400, code: 'PAYMENT_INTENT_REQUIRED' });
+    }
+    const intent = paymentIntentId ? await this.store.getPaymentIntent(chatId, paymentIntentId) : null;
+    if (paymentIntentId && !intent) throw Object.assign(new Error('Payment intent not found'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND' });
 
-    const providerId = String(command.providerId || command.provider_id || intent.providerId || '').trim().toLowerCase();
+    const providerId = String(command.providerId || command.provider_id || intent?.providerId || '').trim().toLowerCase();
     if (!providerId || (intent && providerId !== String(intent.providerId || '').toLowerCase())) {
       throw Object.assign(new Error('Evidence provider does not match payment intent provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
     }
