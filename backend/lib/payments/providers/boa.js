@@ -19,7 +19,7 @@ function fromText(text) {
   };
   return {
     reference: get(/(?:Reference|20 Reference)\s*[:\-]?\s*([A-Z0-9\-\/]+)/i),
-    amount: get(/(?:Amount|32A Date, Currency, Amount)\s*[:\-]?\s*(?:\d{6})?\s*ETB\s*([\d,]+(?:\.\d+)?)/i),
+    amount: get(/(?:Amount)\s*[:\-]?\s*([\d,]+(?:\.\d+)?)\s*ETB/i),
     currency: get(/32A Date, Currency, Amount\s*[:\-]?\s*\d{6}([A-Z]{3})/i) || 'ETB',
     sender: get(/(?:Ordering Customer|From)\s*[:\-]?\s*([^\n]+)/i),
     receiver: get(/(?:Beneficiary Customer|To)\s*[:\-]?\s*([^\n]+)/i),
