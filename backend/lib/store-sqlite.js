@@ -5319,6 +5319,44 @@ export async function createPaymentWithIntent(chatId, input = {}, actor = null) 
     return { payment: paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(id, organizationId)), intent: paymentIntentFromRow(db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(intentId, organizationId)), idempotent: false };
   } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
+export async function findPaymentIntentForProviderEvidence(input = {}) {
+  ensureDatabase();
+  const providerId = String(input.providerId || '').trim().toLowerCase();
+  const amountMinor = Number(input.amountMinor);
+  const currency = normaliseCurrency(input.currency, 'ETB');
+  const receiverAccount = String(input.receiverAccount || '').trim();
+  if (!providerId) throw Object.assign(new Error('providerId is required'), { statusCode: 400, code: 'PROVIDER_REQUIRED' });
+  if (!Number.isInteger(amountMinor) || amountMinor < 0) throw Object.assign(new Error('amountMinor is required for notification intent resolution'), { statusCode: 422, code: 'NOTIFICATION_AMOUNT_REQUIRED' });
+
+  const rows = db.prepare(`
+    SELECT pi.*, p.id AS payment_id, t.chat_id, pa.account_identifier
+      FROM payment_intents pi
+      JOIN tenants t ON t.organization_id = pi.organization_id
+      LEFT JOIN payments p ON p.payment_intent_id = pi.id
+      LEFT JOIN payment_accounts pa ON pa.id = pi.payment_account_id
+     WHERE pi.provider_id = ?
+       AND pi.amount_minor = ?
+       AND pi.currency = ?
+       AND pi.status IN ('OPEN','PAYMENT_ATTEMPTED')
+       AND (pi.expires_at IS NULL OR pi.expires_at > datetime('now'))
+       AND (? = '' OR pa.account_identifier = ?)
+     ORDER BY pi.created_at DESC
+     LIMIT 2
+  `).all(providerId, amountMinor, currency, receiverAccount, receiverAccount);
+
+  if (rows.length > 1) {
+    throw Object.assign(new Error('Provider notification matches multiple payment intents'), { statusCode: 409, code: 'AMBIGUOUS_PAYMENT_INTENT_FOR_NOTIFICATION' });
+  }
+  if (!rows.length) return null;
+  const row = rows[0];
+  return paymentIntentFromRow(row) ? {
+    ...paymentIntentFromRow(row),
+    paymentId: row.payment_id || null,
+    chatId: row.chat_id,
+    organizationId: row.organization_id,
+  } : null;
+}
+
 export async function getPaymentIntent(chatId, intentId) {
   ensureDatabase();
   const { organizationId } = await resolvePaymentContext(chatId);
