@@ -235,6 +235,9 @@ assert.equal(paymentLedger.at(-1).entryType, 'VERIFIED');
 assert.equal(paymentLedger.at(-1).fromState, 'UNPAID');
 assert.equal(paymentLedger.at(-1).toState, 'VERIFIED');
 
+const storedDecisions = await store.listPaymentDecisions(chatId, first.payment.id);
+assert.equal(storedDecisions.filter(item => item.verificationId === verified.verification.id).length, 1);
+
 const verifiedReplay = await paymentCore.verifyEvidence({
   chatId,
   evidenceId: verificationEvidence.evidence.id,
