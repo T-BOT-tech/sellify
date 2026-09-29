@@ -5518,6 +5518,39 @@ export async function transitionPayment(chatId, paymentId, nextState, actor = nu
       db.exec('COMMIT');
       return paymentFromRow(payment);
     }
+    if (!PAYMENT_TRANSITIONS[payment.state]?.has(target)) {
+      throw Object.assign(new Error(`Invalid payment transition ${payment.state} -> ${target}`), {
+        statusCode: 409,
+        code: 'INVALID_PAYMENT_TRANSITION',
+      });
+    }
+    const evidenceId = String(input.evidenceId || input.evidence_id || '').trim() || null;
+    if (target === 'VERIFIED') {
+      if (!evidenceId) {
+        throw Object.assign(new Error('Verified payment transition requires canonical evidence'), {
+          statusCode: 409,
+          code: 'PAYMENT_VERIFICATION_REQUIRED',
+        });
+      }
+      const verification = db.prepare(
+        'SELECT result FROM payment_verifications WHERE evidence_id = ? AND payment_id = ? AND organization_id = ? ORDER BY rowid ASC LIMIT 1'
+      ).get(evidenceId, String(paymentId), organizationId);
+      if (!verification || String(verification.result || '').toUpperCase() !== 'MATCH') {
+        throw Object.assign(new Error('Verified payment transition requires a matching Payment Core verification'), {
+          statusCode: 409,
+          code: 'PAYMENT_VERIFICATION_REQUIRED',
+        });
+      }
+      const decision = db.prepare(
+        "SELECT decision FROM payment_decisions WHERE verification_id = (SELECT id FROM payment_verifications WHERE evidence_id = ? AND payment_id = ? AND organization_id = ? ORDER BY rowid ASC LIMIT 1) AND organization_id = ? ORDER BY rowid ASC LIMIT 1"
+      ).get(evidenceId, String(paymentId), organizationId, organizationId);
+      if (!decision || String(decision.decision || '').toUpperCase() !== 'ACCEPT') {
+        throw Object.assign(new Error('Verified payment transition requires an ACCEPT decision'), {
+          statusCode: 409,
+          code: 'PAYMENT_VERIFICATION_REQUIRED',
+        });
+      }
+    }
 
     const now = nowIso();
     const timestampColumn = {
@@ -5545,9 +5578,11 @@ export async function transitionPayment(chatId, paymentId, nextState, actor = nu
       String(input.reason || ''), json(input.metadata || {}), now,
     );
 
-    if (input.evidenceId) {
+    if (evidenceId) {
+      const evidence = db.prepare('SELECT id FROM payment_evidence WHERE id = ? AND organization_id = ?').get(evidenceId, organizationId);
+      if (!evidence) throw Object.assign(new Error('Evidence not found'), { statusCode: 404, code: 'EVIDENCE_NOT_FOUND' });
       db.prepare('UPDATE payment_evidence SET status = ?, updated_at = ? WHERE id = ? AND organization_id = ?')
-        .run(target === 'VERIFIED' ? 'VERIFIED' : target, now, String(input.evidenceId), organizationId);
+        .run(target === 'VERIFIED' ? 'VERIFIED' : target, now, evidenceId, organizationId);
     }
 
     db.exec('COMMIT');
