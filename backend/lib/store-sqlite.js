@@ -5634,6 +5634,87 @@ async function resolvePaymentContext(chatId, input = {}) {
   return { tenant, organizationId, locationId: locationId ? String(locationId) : null };
 }
 
+export async function resolvePaymentIntentForProviderEvidence(input = {}) {
+  ensureDatabase();
+  const providerId = String(input.providerId || '').trim().toLowerCase();
+  const accountIdentifier = String(input.accountIdentifier || '').trim();
+  const providerTransactionId = String(input.providerTransactionId || '').trim();
+  const externalReference = String(input.externalReference || '').trim();
+
+  if (!providerId || !accountIdentifier) {
+    throw Object.assign(new Error('Provider and account identity are required'), { statusCode: 400, code: 'PAYMENT_NOTIFICATION_CONTEXT_REQUIRED' });
+  }
+
+  const accounts = db.prepare(`
+    SELECT pa.*, t.chat_id
+    FROM payment_accounts pa
+    JOIN organizations o ON o.id = pa.organization_id
+    JOIN tenants t ON t.organization_id = o.id
+    WHERE pa.provider_id = ? AND pa.account_identifier = ? AND pa.status = 'active'
+    ORDER BY pa.created_at ASC
+  `).all(providerId, accountIdentifier);
+
+  if (accounts.length === 0) {
+    throw Object.assign(new Error('No active payment account matches provider notification'), {
+      statusCode: 404, code: 'UNMATCHED_PROVIDER_NOTIFICATION',
+    });
+  }
+  if (accounts.length > 1) {
+    throw Object.assign(new Error('Multiple active payment accounts match provider notification'), {
+      statusCode: 409, code: 'AMBIGUOUS_PAYMENT_ACCOUNT',
+    });
+  }
+
+  const account = accounts[0];
+  const conditions = [];
+  const params = [account.organization_id, providerId, account.id];
+  if (providerTransactionId) {
+    conditions.push('EXISTS (SELECT 1 FROM payment_evidence e WHERE e.payment_intent_id = pi.id AND e.provider_id = ? AND e.provider_transaction_id = ?)');
+    params.push(providerId, providerTransactionId);
+  }
+  if (externalReference) {
+    conditions.push('json_extract(pi.metadata_json, "$.externalReference") = ?');
+    params.push(externalReference);
+  }
+  const candidates = db.prepare(`
+    SELECT pi.*
+    FROM payment_intents pi
+    WHERE pi.organization_id = ?
+      AND pi.provider_id = ?
+      AND pi.payment_account_id = ?
+      AND pi.status IN ('OPEN','PAYMENT_ATTEMPTED')
+      AND (
+        pi.expires_at IS NULL OR pi.expires_at > ?
+      )
+      ${conditions.length ? `AND (${conditions.join(' OR ')})` : ''}
+    ORDER BY pi.created_at ASC
+  `).all(...params.slice(0, 3), nowIso(), ...params.slice(3));
+
+  if (candidates.length > 1) {
+    throw Object.assign(new Error('Provider notification matches multiple active payment intents'), {
+      statusCode: 409, code: 'AMBIGUOUS_PAYMENT_INTENT',
+    });
+  }
+  if (candidates.length === 0) {
+    throw Object.assign(new Error('Provider notification did not match an active payment intent'), {
+      statusCode: 202, code: 'UNMATCHED_PROVIDER_NOTIFICATION',
+    });
+  }
+
+  return {
+    chatId: account.chat_id,
+    organizationId: account.organization_id,
+    locationId: candidates[0].location_id || null,
+    paymentAccount: {
+      id: account.id,
+      providerId: account.provider_id,
+      accountIdentifier: account.account_identifier,
+      metadata: parseJSON(account.metadata_json, {}),
+    },
+    paymentIntent: paymentIntentFromRow(candidates[0]),
+  };
+}
+
 export async function listPaymentAccounts(chatId, options = {}) {
   ensureDatabase();
   const { organizationId } = await resolvePaymentContext(chatId);
