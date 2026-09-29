@@ -46,10 +46,28 @@ export class PaymentCore {
       throw Object.assign(new Error('chatId and evidenceId are required'), { statusCode: 400, code: 'PAYMENT_VERIFICATION_CONTEXT_REQUIRED' });
     }
 
+    const actorOrganizationId = String(command.actor?.organizationId || '').trim();
+    const actorLocationId = String(command.actor?.locationId || '').trim();
+    const commandOrganizationId = String(command.organizationId || '').trim();
+    const commandLocationId = String(command.locationId || '').trim();
+    if (commandOrganizationId && actorOrganizationId && commandOrganizationId !== actorOrganizationId) {
+      throw Object.assign(new Error('Payment verification organization context mismatch'), { statusCode: 403, code: 'TENANT_SCOPE_DENIED' });
+    }
+    if (commandLocationId && actorLocationId && commandLocationId !== actorLocationId) {
+      throw Object.assign(new Error('Payment verification location context mismatch'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
+    }
+
     const evidence = await this.store.getPaymentEvidence(chatId, evidenceId);
     if (!evidence) throw Object.assign(new Error('Evidence not found'), { statusCode: 404, code: 'EVIDENCE_NOT_FOUND' });
     if (!evidence.paymentIntentId) {
       return { outcome: 'UNMATCHED', evidence, verification: null, decision: null };
+    }
+
+    if (commandOrganizationId && String(evidence.organizationId || '') !== commandOrganizationId) {
+      throw Object.assign(new Error('Evidence is outside the requested organization scope'), { statusCode: 403, code: 'TENANT_SCOPE_DENIED' });
+    }
+    if (commandLocationId && String(evidence.locationId || '') !== commandLocationId) {
+      throw Object.assign(new Error('Evidence is outside the requested location scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
     }
 
     const paymentIntent = await this.store.getPaymentIntent(chatId, evidence.paymentIntentId);
