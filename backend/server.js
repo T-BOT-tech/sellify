@@ -160,7 +160,6 @@ const paymentCore = new PaymentCore({
     findPaymentIntentForProviderEvidence,
     getPaymentIntent,
     getPayment,
-    getPaymentEvidence,
     listPaymentEvidence,
     listPaymentAccounts,
     claimPaymentIdempotency,
