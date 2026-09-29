@@ -5394,6 +5394,24 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
     if (String(error?.message || '').includes('UNIQUE constraint failed: payment_evidence')) {
       const existing = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND fingerprint = ?').get(organizationId, providerId, fingerprint);
       if (existing) return { evidence: paymentEvidenceFromRow(existing), duplicate: true };
+
+      // The provider transaction unique constraint is the authoritative race winner
+      // when two callbacks arrive concurrently. Re-read after the failed INSERT
+      // and classify the loser deterministically.
+      if (providerTransactionId) {
+        const transactionWinner = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND provider_transaction_id = ?').get(
+          organizationId, providerId, providerTransactionId
+        );
+        if (transactionWinner) {
+          if (transactionWinner.fingerprint === fingerprint) {
+            return { evidence: paymentEvidenceFromRow(transactionWinner), duplicate: true };
+          }
+          throw Object.assign(new Error('Provider transaction already exists with different evidence'), {
+            statusCode: 409,
+            code: 'PROVIDER_TRANSACTION_EVIDENCE_CONFLICT',
+          });
+        }
+      }
     }
     throw error;
   }
