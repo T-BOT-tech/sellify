@@ -8459,6 +8459,32 @@ export async function updatePaymentConfirmationAttempt(chatId, attemptId, input 
   return paymentConfirmationAttemptFromRow(db.prepare('SELECT * FROM payment_confirmation_attempts WHERE id=?').get(id));
 }
 
+export async function getPaymentConfirmationAttemptByProviderTransaction(chatId, { providerId = '', providerTransactionId = '', paymentAccountId = null } = {}) {
+  ensureDatabase();
+  const organizationId = await tenantOrganizationId(chatId);
+  const provider = String(providerId || '').trim().toLowerCase();
+  const transactionId = String(providerTransactionId || '').trim();
+  if (!provider || !transactionId) return null;
+  const params = [organizationId, provider, transactionId];
+  let accountClause = '';
+  if (paymentAccountId) {
+    accountClause = ' AND a.payment_account_id=?';
+    params.push(String(paymentAccountId));
+  }
+  const row = db.prepare(`
+    SELECT a.*
+    FROM payment_confirmation_attempts a
+    LEFT JOIN payment_evidence e ON e.id=a.evidence_id AND e.organization_id=a.organization_id
+    WHERE a.organization_id=? AND LOWER(a.provider_id)=?
+      AND (a.provider_transaction_id=? OR e.provider_transaction_id=?)
+      AND a.status NOT IN ('EXPIRED')
+      ${accountClause}
+    ORDER BY a.attempt_number DESC, a.created_at DESC
+    LIMIT 1
+  `).get(organizationId, provider, transactionId, transactionId, ...(paymentAccountId ? [String(paymentAccountId)] : []));
+  return paymentConfirmationAttemptFromRow(row);
+}
+
 export async function getPaymentConfirmationAttempt(chatId, attemptId) {
   ensureDatabase();
   const organizationId = await tenantOrganizationId(chatId);
