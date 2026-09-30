@@ -111,6 +111,63 @@ export class PaymentCore {
     };
   }
 
+  async recordProviderConfirmationObservation(command = {}) {
+    this.#authorize(command, 'payments:accept');
+    const chatId = String(command.chatId || '').trim();
+    const attemptId = String(command.confirmationAttemptId || command.confirmation_attempt_id || '').trim();
+    if (!chatId || !attemptId) {
+      throw Object.assign(new Error('chatId and confirmationAttemptId are required'), { statusCode: 400, code: 'CONFIRMATION_OBSERVATION_CONTEXT_REQUIRED' });
+    }
+
+    const attempt = await this.store.getPaymentConfirmationAttempt(chatId, attemptId);
+    if (!attempt) throw Object.assign(new Error('Confirmation attempt not found'), { statusCode: 404, code: 'CONFIRMATION_ATTEMPT_NOT_FOUND' });
+    const evidence = await this.store.getPaymentEvidence(chatId, attempt.evidenceId);
+    if (!evidence) throw Object.assign(new Error('Confirmation evidence not found'), { statusCode: 409, code: 'EVIDENCE_NOT_FOUND' });
+
+    const providerId = String(command.providerId || '').trim().toLowerCase();
+    if (!providerId || providerId !== String(attempt.providerId || '').trim().toLowerCase() ||
+        providerId !== String(evidence.providerId || '').trim().toLowerCase()) {
+      throw Object.assign(new Error('Confirmation observation provider mismatch'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
+    }
+
+    const status = String(command.status || 'UNKNOWN').toUpperCase();
+    if (!['CONFIRMED', 'PENDING', 'NOT_FOUND', 'FAILED', 'EXPIRED', 'UNKNOWN'].includes(status)) {
+      throw Object.assign(new Error('Unsupported confirmation observation status'), { statusCode: 400, code: 'CONFIRMATION_STATUS_INVALID' });
+    }
+
+    const observation = command.observation && typeof command.observation === 'object'
+      ? command.observation
+      : {};
+    const updated = await this.store.updatePaymentConfirmationAttempt(chatId, attempt.id, {
+      status,
+      providerTransactionId: command.providerTransactionId || observation.providerTransactionId || null,
+      reasonCodes: Array.isArray(command.reasonCodes) ? command.reasonCodes : (Array.isArray(observation.reasonCodes) ? observation.reasonCodes : []),
+      observation: {
+        ...observation,
+        providerId,
+        status,
+        source: command.source || 'provider-callback',
+      },
+      observedAt: command.observedAt || this.clock().toISOString(),
+    }, command.actor || null);
+
+    if (status === 'CONFIRMED') {
+      return this.finalizeProviderConfirmation({
+        chatId,
+        confirmationAttemptId: updated.id,
+        actor: command.actor || null,
+      });
+    }
+
+    return {
+      outcome: 'PENDING_CONFIRMATION',
+      payment: await this.store.getPaymentForIntent(chatId, attempt.paymentIntentId),
+      evidence,
+      confirmationAttempt: updated,
+      pending: true,
+    };
+  }
+
   async observeProviderConfirmation(command = {}) {
     this.#authorize(command, 'payments:accept');
     const chatId = String(command.chatId || '').trim();
