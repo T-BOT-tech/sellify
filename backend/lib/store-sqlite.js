@@ -8426,12 +8426,23 @@ export async function updatePaymentConfirmationAttempt(chatId, attemptId, input 
   const allowed = new Set(['REQUESTED','PENDING','CONFIRMED','NOT_FOUND','FAILED','EXPIRED','UNKNOWN']);
   if (!allowed.has(status)) throw Object.assign(new Error('Invalid confirmation attempt status'), { statusCode: 400, code: 'INVALID_CONFIRMATION_ATTEMPT_STATUS' });
   const terminal = new Set(['CONFIRMED','NOT_FOUND','FAILED','EXPIRED']);
-  if (terminal.has(row.status) && status !== row.status) {
-    throw Object.assign(new Error('Terminal confirmation attempt cannot transition'), { statusCode: 409, code: 'CONFIRMATION_ATTEMPT_TERMINAL' });
+  const incomingTransactionId = input.providerTransactionId ?? input.provider_transaction_id ?? null;
+  if (terminal.has(row.status)) {
+    if (status !== row.status) {
+      throw Object.assign(new Error('Terminal confirmation attempt cannot transition'), { statusCode: 409, code: 'CONFIRMATION_ATTEMPT_TERMINAL' });
+    }
+    if (incomingTransactionId && row.provider_transaction_id &&
+        String(incomingTransactionId) !== String(row.provider_transaction_id)) {
+      throw Object.assign(new Error('Terminal confirmation attempt transaction mismatch'), { statusCode: 409, code: 'PROVIDER_TRANSACTION_MISMATCH' });
+    }
+    return paymentConfirmationAttemptFromRow(row);
+  }
+  const now = nowIso();
+  if (status === 'CONFIRMED' && row.expires_at && new Date(row.expires_at).getTime() <= new Date(now).getTime()) {
+    throw Object.assign(new Error('Confirmation attempt has expired'), { statusCode: 409, code: 'CONFIRMATION_ATTEMPT_EXPIRED' });
   }
   const observation = input.observation == null ? parseJSON(row.observation_json, {}) : input.observation;
   const reasonCodes = Array.isArray(input.reasonCodes) ? input.reasonCodes : parseJSON(row.reason_codes_json, []);
-  const now = nowIso();
   db.prepare(`
     UPDATE payment_confirmation_attempts
     SET status=?, provider_transaction_id=COALESCE(?,provider_transaction_id),
@@ -8439,7 +8450,7 @@ export async function updatePaymentConfirmationAttempt(chatId, attemptId, input 
         updated_at=?
     WHERE id=? AND organization_id=?
   `).run(
-    status, input.providerTransactionId ?? input.provider_transaction_id ?? null,
+    status, incomingTransactionId,
     json(reasonCodes), json(observation), input.observedAt ?? input.observed_at ?? null, now, id, organizationId
   );
   audit(String(chatId), 'payment.confirmation_attempt.updated', 'payment_confirmation_attempt', id,
