@@ -121,11 +121,61 @@ export class PaymentCore {
       throw Object.assign(new Error('chatId, providerId, and confirmationAttemptId or providerTransactionId are required'), { statusCode: 400, code: 'CONFIRMATION_OBSERVATION_CONTEXT_REQUIRED' });
     }
 
+    let correlationChatId = chatId;
+    let resolvedPaymentAccount = null;
+
+    if (!attemptId && providerTransactionId) {
+      const providerAccountReference = String(
+        command.providerAccountReference ||
+        command.provider_account_reference ||
+        command.accountIdentifier ||
+        command.account_identifier ||
+        ''
+      ).trim();
+
+      if (!providerAccountReference) {
+        throw Object.assign(
+          new Error('providerAccountReference is required for provider transaction correlation'),
+          { statusCode: 400, code: 'PAYMENT_ACCOUNT_REFERENCE_REQUIRED' }
+        );
+      }
+
+      if (typeof this.store.getPaymentAccountForProviderNotification !== 'function') {
+        throw Object.assign(
+          new Error('Canonical payment-account notification resolver is unavailable'),
+          { statusCode: 503, code: 'PAYMENT_ACCOUNT_RESOLVER_UNAVAILABLE' }
+        );
+      }
+
+      resolvedPaymentAccount = await this.store.getPaymentAccountForProviderNotification(
+        providerIdInput,
+        providerAccountReference
+      );
+
+      if (!resolvedPaymentAccount?.id || !resolvedPaymentAccount?.chatId) {
+        throw Object.assign(
+          new Error('Provider notification payment account could not be resolved'),
+          { statusCode: 404, code: 'PAYMENT_ACCOUNT_NOT_FOUND' }
+        );
+      }
+
+      if (resolvedPaymentAccount.providerId &&
+          String(resolvedPaymentAccount.providerId).toLowerCase() !== providerIdInput) {
+        throw Object.assign(
+          new Error('Provider notification payment account provider mismatch'),
+          { statusCode: 409, code: 'PAYMENT_ACCOUNT_PROVIDER_MISMATCH' }
+        );
+      }
+
+      correlationChatId = String(resolvedPaymentAccount.chatId);
+    }
+
     const attempt = attemptId
-      ? await this.store.getPaymentConfirmationAttempt(chatId, attemptId)
-      : await this.store.getPaymentConfirmationAttemptByProviderTransaction(chatId, {
+      ? await this.store.getPaymentConfirmationAttempt(correlationChatId, attemptId)
+      : await this.store.getPaymentConfirmationAttemptByProviderTransaction(correlationChatId, {
           providerId: providerIdInput,
           providerTransactionId,
+          paymentAccountId: resolvedPaymentAccount?.id || null,
         });
     if (!attempt) throw Object.assign(new Error('Confirmation attempt not found'), { statusCode: 404, code: 'CONFIRMATION_ATTEMPT_NOT_FOUND' });
     const evidence = await this.store.getPaymentEvidence(chatId, attempt.evidenceId);
