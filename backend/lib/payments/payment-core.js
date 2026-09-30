@@ -111,6 +111,50 @@ export class PaymentCore {
     };
   }
 
+  async observeProviderConfirmation(command = {}) {
+    this.#authorize(command, 'payments:accept');
+    const chatId = String(command.chatId || '').trim();
+    const evidenceId = String(command.evidenceId || command.evidence_id || '').trim();
+    if (!chatId || !evidenceId) {
+      throw Object.assign(new Error('chatId and evidenceId are required'), { statusCode: 400, code: 'CONFIRMATION_OBSERVATION_CONTEXT_REQUIRED' });
+    }
+
+    const evidence = await this.store.getPaymentEvidence(chatId, evidenceId);
+    if (!evidence) throw Object.assign(new Error('Evidence not found'), { statusCode: 404, code: 'EVIDENCE_NOT_FOUND' });
+    const paymentIntent = evidence.paymentIntentId ? await this.store.getPaymentIntent(chatId, evidence.paymentIntentId) : null;
+    const payment = evidence.paymentIntentId ? await this.store.getPaymentForIntent(chatId, evidence.paymentIntentId) : null;
+    const paymentAccount = paymentIntent?.paymentAccountId
+      ? await this.store.getPaymentAccountById(chatId, paymentIntent.paymentAccountId)
+      : null;
+    if (!paymentIntent || !payment) throw Object.assign(new Error('Payment intent/payment could not be resolved for evidence'), { statusCode: 409, code: 'PAYMENT_INTENT_MISMATCH' });
+
+    const result = await this.#observeProviderConfirmation({
+      chatId,
+      evidence,
+      paymentIntent,
+      payment,
+      paymentAccount,
+      actor: command.actor || null,
+    });
+
+    if (result.status === 'CONFIRMED') {
+      return this.finalizeProviderConfirmation({
+        chatId,
+        confirmationAttemptId: result.confirmationAttempt.id,
+        actor: command.actor || null,
+      });
+    }
+
+    return {
+      outcome: 'PENDING_CONFIRMATION',
+      payment,
+      evidence,
+      confirmationAttempt: result.confirmationAttempt,
+      providerStatus: result.providerStatus,
+      pending: true,
+    };
+  }
+
   async verifyEvidence(command = {}) {
     this.#authorize(command, 'payments:accept');
     const evidenceId = String(command.evidenceId || command.evidence_id || '').trim();
