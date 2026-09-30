@@ -115,17 +115,24 @@ export class PaymentCore {
     this.#authorize(command, 'payments:accept');
     const chatId = String(command.chatId || '').trim();
     const attemptId = String(command.confirmationAttemptId || command.confirmation_attempt_id || '').trim();
-    if (!chatId || !attemptId) {
-      throw Object.assign(new Error('chatId and confirmationAttemptId are required'), { statusCode: 400, code: 'CONFIRMATION_OBSERVATION_CONTEXT_REQUIRED' });
+    const providerIdInput = String(command.providerId || '').trim().toLowerCase();
+    const providerTransactionId = String(command.providerTransactionId || command.provider_transaction_id || '').trim();
+    if (!chatId || (!attemptId && !providerTransactionId) || !providerIdInput) {
+      throw Object.assign(new Error('chatId, providerId, and confirmationAttemptId or providerTransactionId are required'), { statusCode: 400, code: 'CONFIRMATION_OBSERVATION_CONTEXT_REQUIRED' });
     }
 
-    const attempt = await this.store.getPaymentConfirmationAttempt(chatId, attemptId);
+    const attempt = attemptId
+      ? await this.store.getPaymentConfirmationAttempt(chatId, attemptId)
+      : await this.store.getPaymentConfirmationAttemptByProviderTransaction(chatId, {
+          providerId: providerIdInput,
+          providerTransactionId,
+        });
     if (!attempt) throw Object.assign(new Error('Confirmation attempt not found'), { statusCode: 404, code: 'CONFIRMATION_ATTEMPT_NOT_FOUND' });
     const evidence = await this.store.getPaymentEvidence(chatId, attempt.evidenceId);
     if (!evidence) throw Object.assign(new Error('Confirmation evidence not found'), { statusCode: 409, code: 'EVIDENCE_NOT_FOUND' });
 
-    const providerId = String(command.providerId || '').trim().toLowerCase();
-    if (!providerId || providerId !== String(attempt.providerId || '').trim().toLowerCase() ||
+    const providerId = providerIdInput;
+    if (providerId !== String(attempt.providerId || '').trim().toLowerCase() ||
         providerId !== String(evidence.providerId || '').trim().toLowerCase()) {
       throw Object.assign(new Error('Confirmation observation provider mismatch'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
     }
@@ -140,7 +147,7 @@ export class PaymentCore {
       : {};
     const updated = await this.store.updatePaymentConfirmationAttempt(chatId, attempt.id, {
       status,
-      providerTransactionId: command.providerTransactionId || observation.providerTransactionId || null,
+      providerTransactionId: providerTransactionId || observation.providerTransactionId || null,
       reasonCodes: Array.isArray(command.reasonCodes) ? command.reasonCodes : (Array.isArray(observation.reasonCodes) ? observation.reasonCodes : []),
       observation: {
         ...observation,
