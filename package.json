@@ -285,6 +285,7 @@
     "test:fux-55": "node phase0/fux-55-seller-storefront-channel-authority-regression.mjs",
     "test:fux-56": "node phase0/fux-56-b2b-customer-pricing-frontend-authority-regression.mjs",
     "test:fux-57": "node phase0/fux-57-canonical-location-management-regression.mjs",
+    "gap1:account-transaction-correlation-test": "node phase0/gap-1-confirmation-account-transaction-collision-regression.mjs",
     "test:gap-2-logistics-authz": "node phase0/gap-2-logistics-authorization-foundation-regression.mjs",
     "test:gap-2-delivery-assignment": "node phase0/gap-2-delivery-assignment-authority-regression.mjs",
     "test:gap-2-delivery-lifecycle": "node phase0/gap-2-delivery-assignment-lifecycle-regression.mjs",
