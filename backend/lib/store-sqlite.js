@@ -4669,6 +4669,10 @@ function ensureDatabase() {
   if (db) return db;
   mkdirSync(DATA_DIR, { recursive: true });
   db = new DatabaseSync(DB_PATH);
+  // GAP-1.10: concurrent Payment Core commands may legitimately contend for
+  // BEGIN IMMEDIATE. Wait briefly for the current transaction rather than
+  // surfacing SQLITE_BUSY as a false payment failure.
+  db.exec('PRAGMA busy_timeout = 5000');
   runMigrations();
   importLegacyJSON();
   for (const tenant of db.prepare('SELECT chat_id FROM tenants ORDER BY chat_id').all()) {
