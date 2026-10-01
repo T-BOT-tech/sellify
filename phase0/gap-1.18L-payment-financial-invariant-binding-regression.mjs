@@ -65,7 +65,7 @@ const intentMismatch = evaluatePaymentInvariants({
   ...base,
   paymentIntent: { ...base.paymentIntent, amountMinor: 900 },
 });
-assert.ok(intentMismatch.reasonCodes.includes('PAYMENT_INTENT_AMOUNT_MATCH'));
+assert.ok(intentMismatch.reasonCodes.includes('AMOUNT_MISMATCH'));
 
 const currencyMismatch = evaluatePaymentInvariants({
   ...base,
