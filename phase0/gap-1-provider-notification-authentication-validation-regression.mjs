@@ -146,3 +146,31 @@ assert.equal(valid.inserted[0].command.providerNotificationId, 'notif-1');
 assert.equal(result.id, 'evidence-1');
 
 console.log('GAP-1 Provider Notification Authentication Validation Regression: PASS');
+
+
+const direct = buildCore({
+  authentication: {
+    authenticated: true,
+    providerId: 'gap1-auth-validation',
+    providerAccountReference: 'acct-1',
+    authenticationReference: 'auth-direct',
+    notificationId: 'notif-direct',
+  },
+  parsed: { providerTransactionId: 'tx-direct', providerNotificationId: 'notif-direct' },
+});
+
+await assert.rejects(
+  () => direct.core.ingestAuthenticatedProviderNotification({
+    providerId: 'gap1-auth-validation',
+    providerAccountReference: 'acct-1',
+    providerNotificationId: 'notif-direct',
+    notificationAuthentication: {
+      authenticated: true,
+      providerId: 'gap1-auth-validation',
+      providerAccountReference: 'acct-1',
+    },
+  }),
+  error => error?.code === 'PAYMENT_NOTIFICATION_CONTEXT_REQUIRED' && error?.statusCode === 400
+);
+
+console.log('GAP-1 Durable Authenticated Evidence Context Regression: PASS');
