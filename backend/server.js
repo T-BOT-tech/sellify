@@ -1832,18 +1832,6 @@ async function handlePaymentProviderNotification(req, res, providerId) {
   // Payment Core owns authentication, parsing, account resolution, intent
   // resolution and evidence persistence. No tenant/payment identity from the
   // callback is promoted here.
-  const callbackAccountIdentifier = String(
-    body?.BusinessShortCode ||
-    body?.businessShortCode ||
-    ''
-  ).trim();
-  if (!callbackAccountIdentifier) {
-    throw Object.assign(new Error('Provider notification account identity is required'), {
-      statusCode: 400,
-      code: 'PAYMENT_NOTIFICATION_ACCOUNT_REQUIRED',
-    });
-  }
-
   const submitted = await notificationPaymentCore.ingestProviderNotification({
     providerId: provider.id,
     rawRequest: {
@@ -1859,9 +1847,10 @@ async function handlePaymentProviderNotification(req, res, providerId) {
       providerAuthenticated: /^(1|true|yes)$/i.test(
         String(req.headers['x-sellify-provider-authenticated'] || '')
       ),
-      providerAccountReferenceHint: callbackAccountIdentifier,
+      // Provider-specific account identity extraction belongs to the provider
+      // adapter, not this generic HTTP transport.
     },
-    config,
+    config: {},
   });
 
   const outcome = submitted.duplicate ? 'DUPLICATE' : 'RECEIVED';
