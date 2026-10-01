@@ -789,7 +789,23 @@ export class PaymentCore {
       }, command.actor || null);
     }
 
+    const notificationAuthentication = command.notificationAuthentication || command.notification_authentication || null;
+    if (!notificationAuthentication || notificationAuthentication.authenticated !== true) {
+      throw Object.assign(
+        new Error('Provider notification must be authenticated before evidence ingestion'),
+        { statusCode: 401, code: 'PROVIDER_NOTIFICATION_NOT_AUTHENTICATED' }
+      );
+    }
+
     const providerId = String(command.providerId || command.provider_id || '').trim().toLowerCase();
+    if (notificationAuthentication.providerId &&
+        String(notificationAuthentication.providerId).trim().toLowerCase() !== providerId) {
+      throw Object.assign(
+        new Error('Authenticated notification provider does not match notification provider'),
+        { statusCode: 401, code: 'PROVIDER_NOTIFICATION_AUTHENTICATION_MISMATCH' }
+      );
+    }
+
     const providerAccountReference = String(
       command.providerAccountReference ||
       command.provider_account_reference ||
