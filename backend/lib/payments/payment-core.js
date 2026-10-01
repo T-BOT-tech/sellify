@@ -355,6 +355,12 @@ export class PaymentCore {
       throw Object.assign(new Error('Payment intent/payment could not be resolved for evidence'), { statusCode: 409, code: 'PAYMENT_INTENT_MISMATCH' });
     }
 
+    this.#assertEvidencePaymentAccountBinding({
+      evidence,
+      paymentIntent,
+      paymentAccount,
+    });
+
     const priorVerifications = await this.store.listPaymentVerifications(chatId, payment.id);
     const priorVerification = priorVerifications?.find(item => String(item.evidenceId) === evidence.id);
     if (priorVerification) {
@@ -1217,6 +1223,68 @@ export class PaymentCore {
     delete serverCommand.location_id;
 
     return this.store.insertPaymentEvidence(chatId, serverCommand, command.actor || null);
+  }
+
+
+  #assertEvidencePaymentAccountBinding({ evidence, paymentIntent, paymentAccount }) {
+    const evidenceSource = String(evidence?.source || '').trim().toLowerCase();
+    const evidenceOrganizationId = String(evidence?.organizationId || '').trim();
+    const intentOrganizationId = String(paymentIntent?.organizationId || '').trim();
+    const accountOrganizationId = String(paymentAccount?.organizationId || '').trim();
+
+    if (!paymentAccount?.id || !paymentIntent?.paymentAccountId) {
+      throw Object.assign(
+        new Error('Payment evidence is missing a canonical payment account binding'),
+        { statusCode: 409, code: 'PAYMENT_EVIDENCE_ACCOUNT_BINDING_MISMATCH' }
+      );
+    }
+
+    if (String(paymentAccount.id) !== String(paymentIntent.paymentAccountId)) {
+      throw Object.assign(
+        new Error('Payment intent payment account does not match canonical payment account'),
+        { statusCode: 409, code: 'PAYMENT_EVIDENCE_ACCOUNT_BINDING_MISMATCH' }
+      );
+    }
+
+    if (evidence.paymentAccountId == null ||
+        String(evidence.paymentAccountId) !== String(paymentAccount.id)) {
+      throw Object.assign(
+        new Error('Payment evidence payment account does not match payment intent account'),
+        { statusCode: 409, code: 'PAYMENT_EVIDENCE_ACCOUNT_BINDING_MISMATCH' }
+      );
+    }
+
+    if ((evidenceOrganizationId && intentOrganizationId &&
+         evidenceOrganizationId !== intentOrganizationId) ||
+        (evidenceOrganizationId && accountOrganizationId &&
+         evidenceOrganizationId !== accountOrganizationId) ||
+        (intentOrganizationId && accountOrganizationId &&
+         intentOrganizationId !== accountOrganizationId)) {
+      throw Object.assign(
+        new Error('Payment evidence organization does not match its canonical payment account'),
+        { statusCode: 409, code: 'PAYMENT_EVIDENCE_ACCOUNT_BINDING_MISMATCH' }
+      );
+    }
+
+    const evidenceProviderId = String(evidence?.providerId || '').trim().toLowerCase();
+    const intentProviderId = String(paymentIntent?.providerId || '').trim().toLowerCase();
+    const accountProviderId = String(paymentAccount?.providerId || '').trim().toLowerCase();
+    if (!evidenceProviderId || evidenceProviderId !== intentProviderId ||
+        evidenceProviderId !== accountProviderId) {
+      throw Object.assign(
+        new Error('Payment evidence provider does not match its canonical payment account'),
+        { statusCode: 409, code: 'PAYMENT_EVIDENCE_ACCOUNT_BINDING_MISMATCH' }
+      );
+    }
+
+    if (evidenceSource === 'provider-notification' &&
+        (!String(evidence.authenticationReference || '').trim() ||
+         !String(evidence.providerNotificationId || '').trim())) {
+      throw Object.assign(
+        new Error('Authenticated provider evidence is missing durable notification identity'),
+        { statusCode: 409, code: 'PAYMENT_EVIDENCE_AUTHENTICATION_CONTEXT_MISSING' }
+      );
+    }
   }
 
   #authorize(command, permission) {
