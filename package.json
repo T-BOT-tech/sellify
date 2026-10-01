@@ -310,7 +310,8 @@
     "gap-1.18:provider-verification-result-test": "node phase0/gap-1.18-provider-verification-result-regression.mjs",
     "gap-1.18:provider-local-parsers-test": "node phase0/gap-1.18-provider-local-parsers-regression.mjs",
     "gap-1.18:provider-verification-lifecycle-test": "node phase0/gap-1.18-provider-verification-lifecycle-regression.mjs",
-    "gap-1.18:provider-error-taxonomy-test": "node phase0/gap-1.18-provider-error-taxonomy-regression.mjs"
+    "gap-1.18:provider-error-taxonomy-test": "node phase0/gap-1.18-provider-error-taxonomy-regression.mjs",
+    "gap-1.18:provider-batch-verification-test": "node phase0/gap-1.18H-provider-batch-verification-regression.mjs"
   },
   "engines": {
     "node": ">=24"
