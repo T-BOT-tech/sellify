@@ -75,6 +75,8 @@ jobs:
         run: npm run gap-1.10:payment-concurrency-test
       - name: GAP-1.11 payment provider status lifecycle regression
         run: npm run gap-1.11:payment-status-test
+      - name: GAP-1.12 provider-neutral payment reconciliation regression
+        run: npm run gap-1.12:payment-reconciliation-test
       - name: GAP-2 logistics authorization foundation regression
         run: npm run test:gap-2-logistics-authz
       - name: GAP-2 delivery assignment authority regression
