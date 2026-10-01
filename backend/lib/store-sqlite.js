@@ -5831,11 +5831,17 @@ export async function insertPaymentDecision(chatId, input = {}, actor = null) {
     }
   }
   const id = String(input.id || crypto.randomUUID()); const now = nowIso();
+  const decisionSource = String(input.decisionSource || input.decision_source || 'PAYMENT_CORE').trim().toUpperCase();
+  if (decisionSource !== 'PAYMENT_CORE') {
+    throw Object.assign(new Error('Payment decisions must originate from Payment Core'), {
+      statusCode: 409, code: 'UNTRUSTED_PAYMENT_DECISION_SOURCE',
+    });
+  }
   db.prepare("INSERT INTO payment_decisions (id, organization_id, payment_id, payment_intent_id, evidence_id, verification_id, decision, target_state, reason_codes_json, invariant_results_json, decision_source, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
     id, organizationId, paymentId, decisionIntentId, decisionEvidenceId,
     decisionVerificationId, String(input.decision || '').toUpperCase(), input.targetState || input.target_state || null,
     json(input.reasonCodes || input.reason_codes || []), json(input.invariantResults || input.invariant_results || {}),
-    String(input.decisionSource || input.decision_source || 'PAYMENT_CORE'), actor?.userId || null, now
+    decisionSource, actor?.userId || null, now
   );
   return paymentDecisionFromRow(db.prepare('SELECT * FROM payment_decisions WHERE id = ?').get(id));
 }
