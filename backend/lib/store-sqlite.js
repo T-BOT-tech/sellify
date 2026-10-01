@@ -2253,6 +2253,46 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(46, nowIso());
   }
 
+  // GAP-1.15 — canonical settlement and fee model.
+  // Settlement is distinct from payment confirmation: it records the
+  // provider/merchant settlement obligation and fee breakdown without
+  // creating a second financial ledger.
+  if (!applied.includes(50)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS payment_settlements (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        payment_id TEXT NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+        provider_id TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        gross_amount_minor INTEGER NOT NULL CHECK (gross_amount_minor >= 0),
+        provider_fee_minor INTEGER NOT NULL DEFAULT 0 CHECK (provider_fee_minor >= 0),
+        sellify_fee_minor INTEGER NOT NULL DEFAULT 0 CHECK (sellify_fee_minor >= 0),
+        net_amount_minor INTEGER NOT NULL CHECK (net_amount_minor >= 0),
+        currency TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','READY','SETTLED','HELD','FAILED','REVERSED')),
+        settlement_reference TEXT,
+        reconciliation_id TEXT,
+        provider_settlement_reference TEXT,
+        evidence_json TEXT,
+        reason TEXT NOT NULL DEFAULT '',
+        created_by_user_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        settled_at TEXT,
+        UNIQUE(organization_id, idempotency_key),
+        UNIQUE(organization_id, provider_id, settlement_reference)
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_settlements_payment
+        ON payment_settlements(payment_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_settlements_org_status
+        ON payment_settlements(organization_id, status, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_settlements_provider_reference
+        ON payment_settlements(organization_id, provider_id, provider_settlement_reference);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(50, nowIso());
+  }
+
   // GAP-1.14 — durable Payment Core refund identity and idempotency.
   // Refund records are the durable command/effect identity. Provider adapters
   // never own refund persistence or the financial ledger.
@@ -5857,6 +5897,160 @@ export async function createPayment(chatId, input = {}, actor = null) {
   } catch (error) { db.exec('ROLLBACK'); throw error; }
   audit(String(chatId), 'payment.created', 'payment', id, { amountMinor, currency, state, orderId }, { organizationId, locationId, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
   return paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ?').get(id));
+}
+
+export async function getPaymentSettlementByIdempotencyKey(chatId, idempotencyKey) {
+  const db = ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const row = db.prepare('SELECT * FROM payment_settlements WHERE organization_id = ? AND idempotency_key = ?').get(tenant.organization_id, String(idempotencyKey));
+  return row ? normalizePaymentSettlement(row) : null;
+}
+
+export async function createPaymentSettlement(chatId, input = {}, actor = null) {
+  const db = ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const payment = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(String(input.paymentId), tenant.organization_id);
+  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+
+  const key = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  if (!key) throw Object.assign(new Error('Settlement idempotencyKey is required'), { statusCode: 400, code: 'SETTLEMENT_IDEMPOTENCY_REQUIRED' });
+  const existing = db.prepare('SELECT * FROM payment_settlements WHERE organization_id = ? AND idempotency_key = ?').get(tenant.organization_id, key);
+  if (existing) return { settlement: normalizePaymentSettlement(existing), duplicate: true };
+
+  if (!['VERIFIED','RECONCILED'].includes(String(payment.state).toUpperCase())) {
+    throw Object.assign(new Error('Only VERIFIED or RECONCILED payments can enter settlement'), { statusCode: 409, code: 'PAYMENT_NOT_SETTLEABLE' });
+  }
+
+  const gross = Number(input.grossAmountMinor ?? input.gross_amount_minor ?? payment.amount_minor);
+  const providerFee = Number(input.providerFeeMinor ?? input.provider_fee_minor ?? 0);
+  const sellifyFee = Number(input.sellifyFeeMinor ?? input.sellify_fee_minor ?? 0);
+  const net = gross - providerFee - sellifyFee;
+  if (![gross, providerFee, sellifyFee, net].every(Number.isInteger) || gross < 0 || providerFee < 0 || sellifyFee < 0 || net < 0) {
+    throw Object.assign(new Error('Invalid settlement amount or fee model'), { statusCode: 400, code: 'INVALID_SETTLEMENT_AMOUNTS' });
+  }
+  if (gross > Number(payment.amount_minor)) {
+    throw Object.assign(new Error('Settlement gross cannot exceed payment amount'), { statusCode: 409, code: 'SETTLEMENT_GROSS_EXCEEDS_PAYMENT' });
+  }
+  const currency = normaliseCurrency(input.currency || payment.currency, payment.currency);
+  if (currency !== normaliseCurrency(payment.currency, currency)) {
+    throw Object.assign(new Error('Settlement currency must match payment currency'), { statusCode: 409, code: 'SETTLEMENT_CURRENCY_MISMATCH' });
+  }
+
+  const now = nowIso();
+  const settlement = {
+    id: String(input.settlementId || crypto.randomUUID()),
+    organization_id: tenant.organization_id,
+    payment_id: payment.id,
+    provider_id: payment.provider_id,
+    idempotency_key: key,
+    gross_amount_minor: gross,
+    provider_fee_minor: providerFee,
+    sellify_fee_minor: sellifyFee,
+    net_amount_minor: net,
+    currency,
+    status: 'PENDING',
+    settlement_reference: input.settlementReference || input.settlement_reference || null,
+    reconciliation_id: input.reconciliationId || input.reconciliation_id || null,
+    provider_settlement_reference: input.providerSettlementReference || input.provider_settlement_reference || null,
+    evidence_json: input.evidence == null ? null : json(input.evidence),
+    reason: String(input.reason || ''),
+    created_by_user_id: actor?.userId || actor?.user_id || null,
+    created_at: now,
+    updated_at: now,
+    settled_at: null,
+  };
+  db.prepare(`INSERT INTO payment_settlements
+    (id,organization_id,payment_id,provider_id,idempotency_key,gross_amount_minor,provider_fee_minor,sellify_fee_minor,net_amount_minor,currency,status,settlement_reference,reconciliation_id,provider_settlement_reference,evidence_json,reason,created_by_user_id,created_at,updated_at,settled_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      settlement.id, tenant.organization_id, payment.id, payment.provider_id, key,
+      gross, providerFee, sellifyFee, net, currency, 'PENDING',
+      settlement.settlement_reference, settlement.reconciliation_id, settlement.provider_settlement_reference,
+      settlement.evidence_json, settlement.reason, settlement.created_by_user_id, now, now, null
+  );
+  audit(String(chatId), 'payment.settlement.requested', payment.id, actor?.userId || null, {
+    settlementId: settlement.id, grossAmountMinor: gross, providerFeeMinor: providerFee,
+    sellifyFeeMinor: sellifyFee, netAmountMinor: net, currency,
+  });
+  return { settlement: normalizePaymentSettlement(settlement), duplicate: false };
+}
+
+export async function finalizePaymentSettlement(chatId, settlementId, input = {}, actor = null) {
+  const db = ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const status = String(input.status || '').toUpperCase();
+  if (!['READY','SETTLED','HELD','FAILED','REVERSED'].includes(status)) {
+    throw Object.assign(new Error('Invalid settlement status'), { statusCode: 400, code: 'INVALID_SETTLEMENT_STATUS' });
+  }
+  const now = nowIso();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const row = db.prepare('SELECT * FROM payment_settlements WHERE id = ? AND organization_id = ?').get(String(settlementId), tenant.organization_id);
+    if (!row) throw Object.assign(new Error('Settlement not found'), { statusCode: 404, code: 'SETTLEMENT_NOT_FOUND' });
+    if (row.status === 'SETTLED' && status !== 'SETTLED') {
+      db.exec('COMMIT');
+      return normalizePaymentSettlement(row);
+    }
+    db.prepare(`UPDATE payment_settlements
+      SET status=?, settlement_reference=?, provider_settlement_reference=?, evidence_json=?, reason=?, updated_at=?, settled_at=?
+      WHERE id=? AND organization_id=?`).run(
+      status,
+      input.settlementReference || input.settlement_reference || row.settlement_reference || null,
+      input.providerSettlementReference || input.provider_settlement_reference || row.provider_settlement_reference || null,
+      input.evidence == null ? row.evidence_json : json(input.evidence),
+      String(input.reason || row.reason || ''),
+      now,
+      status === 'SETTLED' ? now : row.settled_at,
+      row.id, tenant.organization_id
+    );
+    audit(String(chatId), `payment.settlement.${status.toLowerCase()}`, row.payment_id, actor?.userId || null, {
+      settlementId: row.id, status, grossAmountMinor: row.gross_amount_minor,
+      providerFeeMinor: row.provider_fee_minor, sellifyFeeMinor: row.sellify_fee_minor,
+      netAmountMinor: row.net_amount_minor,
+    });
+    db.exec('COMMIT');
+    return normalizePaymentSettlement(db.prepare('SELECT * FROM payment_settlements WHERE id = ?').get(row.id));
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
+export async function listPaymentSettlements(chatId, paymentId, { status = null } = {}) {
+  const db = ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const rows = db.prepare(`SELECT * FROM payment_settlements WHERE organization_id = ? AND payment_id = ? ${status ? 'AND status = ?' : ''} ORDER BY created_at DESC`).all(
+    tenant.organization_id, paymentId, ...(status ? [String(status).toUpperCase()] : [])
+  );
+  return rows.map(normalizePaymentSettlement);
+}
+
+function normalizePaymentSettlement(row) {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    paymentId: row.payment_id,
+    providerId: row.provider_id,
+    idempotencyKey: row.idempotency_key,
+    grossAmountMinor: Number(row.gross_amount_minor),
+    providerFeeMinor: Number(row.provider_fee_minor),
+    sellifyFeeMinor: Number(row.sellify_fee_minor),
+    netAmountMinor: Number(row.net_amount_minor),
+    currency: row.currency,
+    status: row.status,
+    settlementReference: row.settlement_reference,
+    reconciliationId: row.reconciliation_id,
+    providerSettlementReference: row.provider_settlement_reference,
+    evidence: parseJSON(row.evidence_json, null),
+    reason: row.reason || '',
+    createdByUserId: row.created_by_user_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    settledAt: row.settled_at,
+  };
 }
 
 export async function getPaymentRefunds(chatId, paymentId, { status = null } = {}) {
