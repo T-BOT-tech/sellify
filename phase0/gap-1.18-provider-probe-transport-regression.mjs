@@ -12,7 +12,7 @@ const fetchImpl = async (url, options) => {
 
 const result = await requestProviderProbe({
   baseUrl: 'https://provider.example',
-  apiKey: 'secret',
+  headers: { authorization: 'Bearer secret' },
   path: '/health',
   timeoutMs: 1000,
   fetchImpl,
@@ -27,7 +27,7 @@ let timedOut = false;
 try {
   await requestProviderProbe({
     baseUrl: 'https://provider.example',
-    apiKey: 'secret',
+    headers: { authorization: 'Bearer secret' },
     timeoutMs: 250,
     fetchImpl: async (_url, options) => new Promise((resolve, reject) => {
       options.signal.addEventListener('abort', () => {
@@ -42,4 +42,5 @@ try {
 }
 assert.equal(timedOut, true);
 
+assert.equal(calls[0].options.headers.authorization, 'Bearer secret');
 console.log('GAP-1.18 provider probe transport regression passed');
