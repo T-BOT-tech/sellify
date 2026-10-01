@@ -296,7 +296,8 @@
     "gap-1.12:payment-reconciliation-test": "node phase0/gap-1.12-payment-reconciliation-regression.mjs",
     "gap-1.13:payment-lifecycle-test": "node phase0/gap-1.13-payment-lifecycle-regression.mjs",
     "gap-1.14:payment-refund-test": "node phase0/gap-1.14-payment-refund-regression.mjs",
-    "gap-1.15:payment-settlement-test": "node phase0/gap-1.15-payment-settlement-regression.mjs"
+    "gap-1.15:payment-settlement-test": "node phase0/gap-1.15-payment-settlement-regression.mjs",
+    "gap-1.16:payment-routing-test": "node phase0/gap-1.16-payment-routing-regression.mjs"
   },
   "engines": {
     "node": ">=24"
