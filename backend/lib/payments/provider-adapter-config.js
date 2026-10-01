@@ -1,6 +1,6 @@
-// GAP-1.18 deployment-only provider configuration.
-// Values are read from process.env; credentials are never returned to callers.
-// No provider endpoint is invented here: deployments must supply approved URLs.
+// GAP-1.18B deployment-only provider configuration.
+// Credentials remain process-local. Configuration metadata never returns
+// credential values. Authentication interpretation belongs to adapters.
 
 const PROVIDER_ENV = Object.freeze({
   telebirr: { baseUrl: 'SELLIFY_TELEBIRR_BASE_URL', apiKey: 'SELLIFY_TELEBIRR_API_KEY' },
