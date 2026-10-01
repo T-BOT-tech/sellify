@@ -51,15 +51,17 @@ async function concurrentCreate(count, base) {
       channel: 'manual',
       amountMinor: 150000,
       currency: 'ETB',
-      idempotencyKey: 'gap1-10-create-same',
+      idempotencyKey: base.idempotencyKey,
     },
   })));
 }
 
 test('GAP-1.10 durable idempotency: concurrent duplicate CREATE_PAYMENT requests produce one payment', async () => {
-  const base = await setup();
+  const createdPayments = [];
 
   for (const count of [1, 10, 100]) {
+    const base = await setup();
+    base.idempotencyKey = `gap1-10-create-${count}`;
     const results = await concurrentCreate(count, base);
     const failures = results.filter(result => !result.ok);
     assert.deepEqual(failures, [], `concurrency=${count} produced failures`);
