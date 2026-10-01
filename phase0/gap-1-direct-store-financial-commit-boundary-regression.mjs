@@ -56,6 +56,34 @@ const before = db.prepare('SELECT state FROM payments WHERE id = ?').get(payment
 assert.equal(before.state, 'RECEIVED');
 
 await assert.rejects(
+  (async () => {
+    db.prepare(
+      'INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(
+      'gap1-ledger-invalid-amount',
+      paymentId,
+      organizationId,
+      'VERIFIED',
+      9999,
+      'ETB',
+      'RECEIVED',
+      'VERIFIED',
+      null,
+      'tamper',
+      '{}',
+      now,
+    );
+  })(),
+  /payment ledger amount mismatch/,
+);
+
+assert.equal(
+  db.prepare('SELECT COUNT(*) AS count FROM payment_ledger_entries WHERE payment_id = ?').get(paymentId).count,
+  0,
+  'rejected ledger insert must not leave a ledger row',
+);
+
+await assert.rejects(
   commitPaymentDecision(
     tenant.chatId,
     {
@@ -119,6 +147,38 @@ assert.equal(
   'RECEIVED',
   'verified commit without verification must not mutate payment state',
 );
+
+await commitPaymentDecision(
+  tenant.chatId,
+  {
+    paymentId,
+    expectedState: 'RECEIVED',
+    targetState: 'REJECTED',
+    decision: {
+      decision: 'REJECT',
+      targetState: 'REJECTED',
+      paymentIntentId: intentId,
+    },
+  },
+);
+
+assert.equal(
+  db.prepare('SELECT state FROM payments WHERE id = ?').get(paymentId).state,
+  'REJECTED',
+  'valid financial transition must update the canonical payment state',
+);
+
+const ledger = db.prepare(
+  'SELECT entry_type, amount_minor, currency, from_state, to_state FROM payment_ledger_entries WHERE payment_id = ? ORDER BY created_at DESC LIMIT 1'
+).get(paymentId);
+
+assert.deepEqual(ledger, {
+  entry_type: 'REJECTED',
+  amount_minor: 1000,
+  currency: 'ETB',
+  from_state: 'RECEIVED',
+  to_state: 'REJECTED',
+}, 'ledger entry must describe the exact canonical payment transition');
 
 await rm(tempDir, { recursive: true, force: true });
 
