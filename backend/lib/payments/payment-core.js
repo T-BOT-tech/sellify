@@ -774,18 +774,85 @@ export class PaymentCore {
 
   async submitEvidence(command = {}) {
     this.#authorize(command, 'payments:accept');
-    const chatId = String(command.chatId || '').trim();
+    let chatId = String(command.chatId || '').trim();
     if (!chatId) throw Object.assign(new Error('chatId is required'), { statusCode: 400, code: 'PAYMENT_CONTEXT_REQUIRED' });
-    const paymentIntentId = command.paymentIntentId || command.payment_intent_id || null;
+
     const evidenceSource = String(command.source || '').trim().toLowerCase();
-    if (!paymentIntentId && evidenceSource !== 'provider-notification') {
-      throw Object.assign(new Error('paymentIntentId is required'), { statusCode: 400, code: 'PAYMENT_INTENT_REQUIRED' });
+    if (evidenceSource !== 'provider-notification') {
+      const paymentIntentId = command.paymentIntentId || command.payment_intent_id || null;
+      if (!paymentIntentId) {
+        throw Object.assign(new Error('paymentIntentId is required'), { statusCode: 400, code: 'PAYMENT_INTENT_REQUIRED' });
+      }
+      return this.store.insertPaymentEvidence(chatId, {
+        ...command,
+        paymentIntentId,
+      }, command.actor || null);
     }
 
-    return this.store.insertPaymentEvidence(chatId, {
+    const providerId = String(command.providerId || command.provider_id || '').trim().toLowerCase();
+    const providerAccountReference = String(
+      command.providerAccountReference ||
+      command.provider_account_reference ||
+      command.accountIdentifier ||
+      command.account_identifier ||
+      ''
+    ).trim();
+    if (!providerId || !providerAccountReference) {
+      throw Object.assign(
+        new Error('Provider notification requires canonical provider and account identity'),
+        { statusCode: 400, code: 'PAYMENT_NOTIFICATION_CONTEXT_REQUIRED' }
+      );
+    }
+
+    if (typeof this.store.getPaymentAccountForProviderNotification !== 'function' ||
+        typeof this.store.resolvePaymentIntentForProviderEvidence !== 'function') {
+      throw Object.assign(
+        new Error('Provider notification evidence resolver is unavailable'),
+        { statusCode: 503, code: 'PAYMENT_NOTIFICATION_RESOLVER_UNAVAILABLE' }
+      );
+    }
+
+    const paymentAccount = await this.store.getPaymentAccountForProviderNotification(
+      providerId,
+      providerAccountReference
+    );
+    if (!paymentAccount?.id || !paymentAccount?.chatId) {
+      throw Object.assign(
+        new Error('Provider notification payment account could not be resolved'),
+        { statusCode: 404, code: 'PAYMENT_ACCOUNT_NOT_FOUND' }
+      );
+    }
+
+    const resolution = await this.store.resolvePaymentIntentForProviderEvidence({
+      providerId,
+      accountIdentifier: providerAccountReference,
+      providerTransactionId: command.providerTransactionId || command.provider_transaction_id || '',
+      externalReference: command.externalReference || command.external_reference || '',
+    });
+
+    chatId = String(paymentAccount.chatId);
+
+    // For provider notifications, all payment/tenant identity below is server-owned.
+    // Caller-supplied paymentId, paymentIntentId, organizationId, locationId, and
+    // chatId are deliberately ignored.
+    const serverCommand = {
       ...command,
-      paymentIntentId,
-    }, command.actor || null);
+      chatId,
+      organizationId: paymentAccount.organizationId,
+      locationId: resolution.locationId || null,
+      paymentAccountId: paymentAccount.id,
+      providerId: paymentAccount.providerId,
+      providerAccountReference: paymentAccount.accountIdentifier,
+      paymentIntentId: resolution.paymentIntent?.id || null,
+      paymentId: null,
+      source: 'provider-notification',
+    };
+    delete serverCommand.payment_intent_id;
+    delete serverCommand.payment_id;
+    delete serverCommand.organization_id;
+    delete serverCommand.location_id;
+
+    return this.store.insertPaymentEvidence(chatId, serverCommand, command.actor || null);
   }
 
   #authorize(command, permission) {
