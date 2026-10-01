@@ -19,6 +19,10 @@ assert.doesNotMatch(handler, /paymentIntentId:/);
 assert.doesNotMatch(handler, /organizationId:/);
 assert.doesNotMatch(handler, /locationId:/);
 assert.doesNotMatch(handler, /getPaymentAccountForProviderNotification\(/);
+assert.doesNotMatch(handler, /BusinessShortCode/);
+assert.doesNotMatch(handler, /businessShortCode/);
+assert.doesNotMatch(handler, /providerAccountReferenceHint/);
+assert.match(handler, /config: \{\}/);
 assert.match(handler, /providerAccountReferenceHint: callbackAccountIdentifier/);
 assert.match(handler, /config: \{\}/);
 
