@@ -1861,6 +1861,21 @@ async function handlePaymentLedger(req, res, chatId, paymentId) {
   sendJSON(res, 200, { ledger }, req);
 }
 
+async function handlePaymentLifecycle(req, res, chatId, paymentId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+  const body = await readBody(req);
+  const result = await paymentCore.transitionLifecycle({
+    ...body,
+    chatId,
+    paymentId,
+    organizationId: tenant.organizationId,
+    actor: session,
+  });
+  return sendJSON(res, 200, result, req);
+}
+
 async function handlePaymentStatusQuery(req, res, chatId, paymentId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -2700,6 +2715,7 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/reconciliation$/, handler: (req, res, m) => handlePaymentCoreReconciliation(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/reconciliation$/, handler: (req, res, m) => handlePaymentReconciliationHistory(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/status$/, handler: (req, res, m) => handlePaymentStatusQuery(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/lifecycle$/, handler: (req, res, m) => handlePaymentLifecycle(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)$/, handler: (req, res, m) => handlePayments(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments$/, handler: (req, res, m) => handlePayments(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments$/, handler: (req, res, m) => handlePayments(req, res, decodeURIComponent(m[1])) },
