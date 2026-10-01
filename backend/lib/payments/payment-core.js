@@ -1,4 +1,5 @@
 import { assertUntrustedPaymentEvidenceShape } from './payment-evidence-authority.js';
+import { evaluateCapabilityCertification } from './capability-certification.js';
 
 export class PaymentCore {
   constructor({
@@ -642,6 +643,39 @@ export class PaymentCore {
     }
 
     return { probe: result, evidence: null, certification: 'UNCHANGED' };
+  }
+
+  async certifyProviderCapability(command = {}) {
+    this.#authorize(command, 'payments:manage');
+    const chatId = String(command.chatId || '').trim();
+    const providerId = String(command.providerId || command.provider_id || '').trim().toLowerCase();
+    const capability = String(command.capability || '').trim();
+    const evidenceId = String(command.evidenceId || command.evidence_id || '').trim();
+    if (!chatId || !providerId || !capability || !evidenceId) {
+      throw Object.assign(new Error('chatId, providerId, capability and evidenceId are required'), { statusCode: 400, code: 'PROVIDER_CERTIFICATION_CONTEXT_REQUIRED' });
+    }
+    const contract = this.providerRegistry?.certifyPaymentProviderCapabilities
+      ? this.providerRegistry.certifyPaymentProviderCapabilities(providerId)
+      : null;
+    if (!contract) throw Object.assign(new Error('Provider capability certification is unavailable'), { statusCode: 503, code: 'PROVIDER_CERTIFICATION_UNAVAILABLE' });
+
+    const evidenceRows = this.store.listPaymentProviderCapabilityEvidence
+      ? await this.store.listPaymentProviderCapabilityEvidence(chatId, providerId, { capability, scope: 'LIVE_EXTERNAL' })
+      : [];
+    const evidence = evidenceRows.find(item => item.id === evidenceId);
+    const decision = evaluateCapabilityCertification({
+      providerContractCertified: contract.status === 'ADAPTER_CONTRACT_CERTIFIED',
+      evidence,
+      now: this.clock().toISOString(),
+    });
+    if (!decision.certified) {
+      return { certification: decision, contract, evidence: evidence || null };
+    }
+
+    const certification = await this.store.certifyPaymentProviderCapability(chatId, {
+      providerId, capability, evidenceId, reason: command.reason,
+    }, command.actor || null);
+    return { certification, decision, contract, evidence };
   }
 
   async certifyProviderCapabilities(command = {}) {
