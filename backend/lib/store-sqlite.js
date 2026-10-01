@@ -5865,6 +5865,31 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
     if (row.state !== target && !PAYMENT_TRANSITIONS[row.state]?.has(target)) throw Object.assign(new Error('Invalid payment transition'), { statusCode: 409, code: 'INVALID_PAYMENT_TRANSITION' });
     const verification = input.verification || null;
     const decision = input.decision || {};
+
+    const paymentIntentRow = row.payment_intent_id
+      ? db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(row.payment_intent_id, organizationId)
+      : null;
+    if (row.payment_intent_id && !paymentIntentRow) {
+      throw Object.assign(new Error('Payment intent is not available in organization scope'), { statusCode: 409, code: 'PAYMENT_DECISION_BINDING_CONFLICT' });
+    }
+
+    if (paymentIntentRow &&
+        (String(paymentIntentRow.organization_id) !== String(row.organization_id) ||
+         String(paymentIntentRow.provider_id).toLowerCase() !== String(row.provider_id).toLowerCase() ||
+         String(paymentIntentRow.payment_account_id || '') !== String(row.payment_account_id || ''))) {
+      throw Object.assign(new Error('Stored payment intent does not match payment identity'), { statusCode: 409, code: 'PAYMENT_DECISION_BINDING_CONFLICT' });
+    }
+
+    if (row.payment_account_id) {
+      const paymentAccountRow = db.prepare(
+        'SELECT id, organization_id, provider_id FROM payment_accounts WHERE id = ? AND organization_id = ?'
+      ).get(row.payment_account_id, organizationId);
+      if (!paymentAccountRow ||
+          String(paymentAccountRow.provider_id).toLowerCase() !== String(row.provider_id).toLowerCase()) {
+        throw Object.assign(new Error('Stored payment account does not match payment identity'), { statusCode: 409, code: 'PAYMENT_DECISION_BINDING_CONFLICT' });
+      }
+    }
+
     const verificationId = verification ? String(verification.id || crypto.randomUUID()) : null;
     const decisionVerificationId = String(decision.verificationId || decision.verification_id || '').trim() || null;
     const verificationEvidenceId = verification ? String(verification.evidenceId || verification.evidence_id || '').trim() : null;
