@@ -1909,8 +1909,14 @@ async function handlePaymentReconciliation(req, res, chatId, paymentId) {
   const session = await requireSession(req, tenant.chatId);
   await requireAuthorization(session, tenant, 'payments', 'payments:reconcile', { deniedMessage: 'Payment reconciliation permission required' });
   const body = await readBody(req);
-  const reconciliation = await reconcilePayment(chatId, paymentId, body, session);
-  sendJSON(res, 201, { reconciliation }, req);
+  const result = await paymentCore.reconcile({
+    ...body,
+    chatId,
+    paymentId,
+    organizationId: tenant.organizationId,
+    actor: session,
+  });
+  return sendJSON(res, 200, result, req);
 }
 
 async function handleB2BReceivables(req, res, chatId, receivableId = null, ledger = false, allocate = false) {
