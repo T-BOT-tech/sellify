@@ -1013,10 +1013,40 @@ export class PaymentCore {
       ''
     ).trim();
 
-    if (!providerId || !providerAccountReference) {
+    const authenticationReference = String(
+      authenticatedContext.authenticationReference ||
+      authenticatedContext.authentication_reference ||
+      ''
+    ).trim();
+    const notificationId = String(
+      authenticatedContext.providerNotificationId ||
+      authenticatedContext.provider_notification_id ||
+      authenticatedContext.notificationId ||
+      authenticatedContext.notification_id ||
+      notification.providerNotificationId ||
+      notification.provider_notification_id ||
+      ''
+    ).trim();
+
+    if (!providerId || !providerAccountReference || !authenticationReference) {
       throw Object.assign(
         new Error('Authenticated provider notification context is incomplete'),
         { statusCode: 400, code: 'PAYMENT_NOTIFICATION_CONTEXT_REQUIRED' }
+      );
+    }
+
+    if (authenticatedContext.providerId &&
+        String(authenticatedContext.providerId).trim().toLowerCase() !== providerId) {
+      throw Object.assign(
+        new Error('Authenticated provider notification provider mismatch'),
+        { statusCode: 401, code: 'PROVIDER_NOTIFICATION_AUTHENTICATION_MISMATCH' }
+      );
+    }
+    if (authenticatedContext.providerAccountReference &&
+        String(authenticatedContext.providerAccountReference).trim() !== providerAccountReference) {
+      throw Object.assign(
+        new Error('Authenticated provider notification account mismatch'),
+        { statusCode: 401, code: 'PROVIDER_NOTIFICATION_AUTHENTICATION_MISMATCH' }
       );
     }
 
@@ -1031,6 +1061,8 @@ export class PaymentCore {
         authenticated: true,
         providerId,
         providerAccountReference,
+        authenticationReference,
+        providerNotificationId: notificationId || null,
       },
       source: 'provider-notification',
       chatId: undefined,
@@ -1068,6 +1100,38 @@ export class PaymentCore {
       throw Object.assign(
         new Error('Provider notification must be authenticated before evidence ingestion'),
         { statusCode: 401, code: 'PROVIDER_NOTIFICATION_NOT_AUTHENTICATED' }
+      );
+    }
+
+    const authenticationReference = String(
+      notificationAuthentication.authenticationReference ||
+      notificationAuthentication.authentication_reference ||
+      ''
+    ).trim();
+    const authenticatedNotificationId = String(
+      notificationAuthentication.providerNotificationId ||
+      notificationAuthentication.provider_notification_id ||
+      notificationAuthentication.notificationId ||
+      notificationAuthentication.notification_id ||
+      ''
+    ).trim();
+    const commandNotificationId = String(
+      command.providerNotificationId ||
+      command.provider_notification_id ||
+      ''
+    ).trim();
+
+    if (!authenticationReference) {
+      throw Object.assign(
+        new Error('Authenticated provider notification is missing an authentication reference'),
+        { statusCode: 401, code: 'PROVIDER_NOTIFICATION_AUTHENTICATION_INVALID' }
+      );
+    }
+    if (authenticatedNotificationId && commandNotificationId &&
+        authenticatedNotificationId !== commandNotificationId) {
+      throw Object.assign(
+        new Error('Authenticated provider notification ID does not match evidence notification ID'),
+        { statusCode: 401, code: 'PROVIDER_NOTIFICATION_AUTHENTICATION_MISMATCH' }
       );
     }
 
