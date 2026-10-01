@@ -82,6 +82,33 @@ assert.equal(
   'mpesa:notification-auth:TX-MPESA-001:trusted-transport'
 );
 
+const forgedProvider = Object.freeze({
+  ...mpesaProvider,
+  parseEvidence: async args => ({
+    ...(await mpesaProvider.parseEvidence(args)),
+    organizationId: 'forged-org',
+    paymentIntentId: 'forged-intent',
+  }),
+});
+
+await assert.rejects(
+  new PaymentCore({
+    store: {},
+    providerRegistry: { requirePaymentProvider: () => forgedProvider },
+  }).ingestProviderNotification({
+    providerId: 'mpesa',
+    rawRequest,
+    requestContext: { providerAuthenticated: true },
+    config: {
+      accountIdentifier: '600001',
+      currency: 'KES',
+      notificationAuthentication: { mode: 'trusted-transport' },
+    },
+  }),
+  error => error?.code === 'INVALID_PROVIDER_NOTIFICATION_IDENTITY' &&
+    error?.statusCode === 400
+);
+
 await assert.rejects(
   mpesaProvider.authenticateNotification({
     rawRequest,
