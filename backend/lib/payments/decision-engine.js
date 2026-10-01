@@ -7,6 +7,8 @@ const PRECEDENCE = Object.freeze([
   'CURRENCY_MISMATCH',
   'AMOUNT_MISMATCH',
   'REFERENCE_MISMATCH',
+  'TRANSACTION_MISMATCH',
+  'TRANSACTION_ID_MISSING',
   'VERIFICATION',
   'ACCEPT',
 ]);
@@ -49,7 +51,8 @@ export class PaymentDecisionEngine {
       reasons.push('PARTIAL_PAYMENT');
     } else if (has(reasons, 'RECEIVER_MISMATCH') || has(reasons, 'RECEIVER_UNAVAILABLE') ||
                has(reasons, 'CURRENCY_MISMATCH') || has(reasons, 'AMOUNT_MISMATCH') ||
-               has(reasons, 'REFERENCE_MISMATCH')) {
+               has(reasons, 'REFERENCE_MISMATCH') || has(reasons, 'TRANSACTION_MISMATCH') ||
+               has(reasons, 'TRANSACTION_ID_MISSING')) {
       decision = 'MARK_MISMATCH';
       targetState = 'MISMATCH';
     } else if (String(verification?.result).toUpperCase() === 'MATCH' && invariants?.passed) {
