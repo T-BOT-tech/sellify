@@ -600,7 +600,15 @@ export class PaymentCore {
     if (!registry?.certifyPaymentProviderCapabilities) {
       throw Object.assign(new Error('Provider capability certification is unavailable'), { statusCode: 503, code: 'PROVIDER_CERTIFICATION_UNAVAILABLE' });
     }
-    return registry.certifyPaymentProviderCapabilities(providerId);
+    const certification = registry.certifyPaymentProviderCapabilities(providerId);
+    const evidence = this.store.listPaymentProviderCapabilityEvidence
+      ? await this.store.listPaymentProviderCapabilityEvidence(
+          String(command.chatId || '').trim(),
+          providerId,
+          {},
+        )
+      : [];
+    return { ...certification, evidence };
   }
 
   async certifyAllProviders(command = {}) {
@@ -608,7 +616,16 @@ export class PaymentCore {
     if (!this.providerRegistry?.certifyAllPaymentProviders) {
       throw Object.assign(new Error('Provider capability certification is unavailable'), { statusCode: 503, code: 'PROVIDER_CERTIFICATION_UNAVAILABLE' });
     }
-    return { providers: this.providerRegistry.certifyAllPaymentProviders() };
+    const providers = this.providerRegistry.certifyAllPaymentProviders();
+    if (!this.store.listPaymentProviderCapabilityEvidence) return { providers };
+    const chatId = String(command.chatId || '').trim();
+    const evidence = await this.store.listPaymentProviderCapabilityEvidence(chatId, null, {});
+    return {
+      providers: providers.map(provider => ({
+        ...provider,
+        evidence: evidence.filter(item => item.providerId === provider.providerId),
+      })),
+    };
   }
 
   #authorize(command, permission) {
