@@ -51,6 +51,73 @@ export class PaymentCore {
   // GAP-1.11: query provider status through the adapter boundary, normalize
   // the result into canonical evidence/verification, and only then allow the
   // existing invariant/decision/ledger machinery to change Payment state.
+  // GAP-1.12: provider reconciliation is evidence collection only. It does
+  // not mutate Payment state or write the ledger; later canonical decisions
+  // must continue through the invariant/decision/commit path.
+  async reconcile(command = {}) {
+    this.#authorize(command, 'payments:reconcile');
+    const chatId = String(command.chatId || '').trim();
+    const paymentId = String(command.paymentId || command.payment_id || '').trim();
+    if (!chatId || !paymentId) {
+      throw Object.assign(new Error('chatId and paymentId are required'), { statusCode: 400, code: 'PAYMENT_CONTEXT_REQUIRED' });
+    }
+    const payment = await this.store.getPayment(chatId, paymentId);
+    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+
+    const provider = this.providerRegistry?.getPaymentProvider
+      ? this.providerRegistry.getPaymentProvider(payment.providerId)
+      : null;
+    if (!provider) throw Object.assign(new Error('Unknown payment provider'), { statusCode: 400, code: 'UNKNOWN_PAYMENT_PROVIDER' });
+
+    const intent = payment.paymentIntentId ? await this.store.getPaymentIntent(chatId, payment.paymentIntentId) : null;
+    const accounts = await this.store.listPaymentAccounts(chatId, { status: 'all' });
+    const paymentAccount = accounts.find(account => String(account.id) === String(payment.paymentAccountId)) || null;
+
+    let raw;
+    try {
+      raw = await provider.reconcile({
+        payment,
+        paymentIntent: intent,
+        paymentAccount,
+        input: command.evidence || command,
+      });
+    } catch (error) {
+      if (['PAYMENT_PROVIDER_OPERATION_UNSUPPORTED', 'PAYMENT_PROVIDER_NOT_CONFIGURED'].includes(error?.code)) {
+        return {
+          payment,
+          supported: false,
+          status: 'pending',
+          reasonCodes: ['PROVIDER_RECONCILIATION_UNAVAILABLE'],
+        };
+      }
+      throw error;
+    }
+
+    const normalized = normalizeReconciliation(raw, payment);
+    const fingerprint = fingerprintReconciliation(payment, normalized);
+    const recorded = await this.store.recordPaymentReconciliation(chatId, paymentId, {
+      status: normalized.status,
+      providerId: payment.providerId,
+      externalReference: normalized.externalReference,
+      amountMinor: normalized.amountMinor,
+      currency: normalized.currency,
+      reason: normalized.reason,
+      fingerprint,
+      observedAt: normalized.observedAt,
+      evidence: normalized,
+      source: 'PAYMENT_CORE',
+    }, command.actor || null);
+
+    return {
+      payment,
+      supported: true,
+      status: normalized.status,
+      reconciliation: recorded.reconciliation,
+      duplicate: recorded.duplicate,
+      ledgerMutated: false,
+    };
+  }
+
   async queryStatus(command = {}) {
     this.#authorize(command, 'payments:accept');
     const chatId = String(command.chatId || '').trim();
@@ -249,5 +316,36 @@ function fingerprintStatusQuery(paymentId, providerId, verification) {
     String(verification.result),
     String(verification.observedAmountMinor ?? ''),
     String(verification.observedReference || ''),
+  ].join('|');
+}
+
+function normalizeReconciliation(raw = {}, payment = {}) {
+  const value = String(raw.status ?? raw.result ?? raw.matched ?? '').trim().toUpperCase();
+  let status = 'pending';
+  if (['MATCH', 'MATCHED', 'TRUE', 'CONFIRMED', 'SUCCESS', 'RECONCILED'].includes(value) || raw.matched === true) status = 'matched';
+  else if (['MISMATCH', 'MISMATCHED', 'FALSE', 'FAILED', 'REJECTED'].includes(value) || raw.matched === false) status = 'mismatched';
+  const amountMinor = raw.amountMinor ?? raw.amount_minor ?? raw.observedAmountMinor ?? raw.observed_amount_minor ?? null;
+  return {
+    status,
+    amountMinor: Number.isInteger(Number(amountMinor)) ? Number(amountMinor) : Number(payment.amountMinor || 0),
+    currency: String(raw.currency || raw.observedCurrency || payment.currency || '').toUpperCase(),
+    externalReference: raw.externalReference ?? raw.external_reference ?? raw.reference ?? null,
+    providerTransactionId: raw.providerTransactionId ?? raw.provider_transaction_id ?? raw.transactionId ?? raw.transaction_id ?? null,
+    reason: String(raw.reason || ''),
+    observedAt: raw.observedAt ?? raw.observed_at ?? null,
+    rawResult: raw,
+  };
+}
+
+function fingerprintReconciliation(payment, normalized) {
+  return [
+    'GAP-1.12',
+    String(payment.providerId),
+    String(payment.id),
+    String(normalized.status),
+    String(normalized.providerTransactionId || ''),
+    String(normalized.externalReference || ''),
+    String(normalized.amountMinor),
+    String(normalized.currency),
   ].join('|');
 }
