@@ -5675,7 +5675,7 @@ export async function insertPaymentVerification(chatId, input = {}, actor = null
   const id = String(input.id || crypto.randomUUID()); const now = nowIso();
   const verifier = String(input.verifier || 'payment-core').trim();
   if (!verifier.startsWith('payment-core.')) throw Object.assign(new Error('Payment verification must originate from a trusted Payment Core verifier'), { statusCode: 409, code: 'UNTRUSTED_PAYMENT_VERIFIER' });
-  const verifierVersion = input.verifierVersion || input.verifier_version || null;
+  const verifierVersion = String(input.verifierVersion || input.verifier_version || '1').trim() || '1';
   const existing = db.prepare(
     'SELECT * FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND (verifier_version = ? OR (verifier_version IS NULL AND ? IS NULL)) ORDER BY created_at DESC LIMIT 1'
   ).get(evidence.id, verifier, verifierVersion, verifierVersion);
