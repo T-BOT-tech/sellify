@@ -514,6 +514,58 @@ export class PaymentCore {
     };
   }
 
+  async recordOperationalAction(command = {}) {
+    const actionType=String(command.actionType||command.action_type||'').trim().toUpperCase();
+    this.#authorize(command,actionType==='MANUAL_REVIEW'?'payments:manage':'payments:view');
+    const chatId=String(command.chatId||'').trim(),paymentId=String(command.paymentId||command.payment_id||'').trim();
+    if(!chatId||!paymentId) throw Object.assign(new Error('chatId and paymentId are required'),{statusCode:400,code:'PAYMENT_CONTEXT_REQUIRED'});
+    return this.store.createPaymentOperationalAction(chatId,command,command.actor||null);
+  }
+
+  async listOperationalActions(command = {}) {
+    this.#authorize(command,'payments:view');
+    const chatId=String(command.chatId||'').trim(),paymentId=String(command.paymentId||command.payment_id||'').trim();
+    if(!chatId||!paymentId) throw Object.assign(new Error('chatId and paymentId are required'),{statusCode:400,code:'PAYMENT_CONTEXT_REQUIRED'});
+    const actions=await this.store.listPaymentOperationalActions(chatId,paymentId,command);
+    if(actions===null) throw Object.assign(new Error('Payment not found'),{statusCode:404,code:'PAYMENT_NOT_FOUND'});
+    return {actions};
+  }
+
+  async resolveManualReview(command = {}) {
+    this.#authorize(command,'payments:manage');
+    const actionId=String(command.actionId||command.action_id||'').trim(),chatId=String(command.chatId||'').trim();
+    const status=String(command.status||'').trim().toUpperCase();
+    if(!actionId||!chatId) throw Object.assign(new Error('chatId and actionId are required'),{statusCode:400,code:'OPERATIONAL_ACTION_CONTEXT_REQUIRED'});
+    if(!['RESOLVED','DISMISSED'].includes(status)) throw Object.assign(new Error('Manual review must resolve or dismiss'),{statusCode:400,code:'INVALID_MANUAL_REVIEW_STATUS'});
+    return {action:await this.store.updatePaymentOperationalAction(chatId,actionId,{...command,status},command.actor||null)};
+  }
+
+  async retryOperationalAction(command = {}) {
+    this.#authorize(command,'payments:manage');
+    const chatId=String(command.chatId||'').trim(),paymentId=String(command.paymentId||command.payment_id||'').trim();
+    const actionType=String(command.actionType||command.action_type||'').trim().toUpperCase();
+    if(!chatId||!paymentId||!actionType) throw Object.assign(new Error('chatId, paymentId and actionType are required'),{statusCode:400,code:'OPERATIONAL_ACTION_CONTEXT_REQUIRED'});
+    if(!['STATUS_QUERY','RECONCILIATION'].includes(actionType)){
+      const created=await this.store.createPaymentOperationalAction(chatId,{paymentId,actionType:'MANUAL_REVIEW',operation:'RETRY_BLOCKED',reason:'Financial mutation retry requires manual review',idempotencyKey:command.idempotencyKey||command.idempotency_key},command.actor||null);
+      await this.store.updatePaymentOperationalAction(chatId,created.action.id,{status:'BLOCKED',reason:'Financial mutation retry requires manual review'},command.actor||null);
+      return {status:'BLOCKED',reasonCodes:['MANUAL_REVIEW_REQUIRED'],actionId:created.action.id};
+    }
+    const action=await this.store.createPaymentOperationalAction(chatId,{paymentId,actionType,operation:actionType+'_RETRY',reason:command.reason||'Operational retry requested',idempotencyKey:command.idempotencyKey||command.idempotency_key||null},command.actor||null);
+    if(action.duplicate)return action;
+    try{
+      await this.store.updatePaymentOperationalAction(chatId,action.action.id,{status:'RUNNING'},command.actor||null);
+      const result=actionType==='STATUS_QUERY'?await this.queryStatus(command):await this.reconcile(command);
+      const saved=await this.store.updatePaymentOperationalAction(chatId,action.action.id,{status:'SUCCEEDED',result},command.actor||null);
+      return {status:'SUCCEEDED',action:saved,result};
+    }catch(error){
+      const unknown=['PAYMENT_PROVIDER_OPERATION_UNSUPPORTED','PAYMENT_PROVIDER_NOT_CONFIGURED'].includes(error?.code);
+      const status=unknown?'UNKNOWN':'FAILED';
+      const saved=await this.store.updatePaymentOperationalAction(chatId,action.action.id,{status,errorCode:error?.code||'OPERATIONAL_RETRY_FAILED',reason:error?.message||'Operational retry failed'},command.actor||null);
+      if(unknown)return {status:'UNKNOWN',action:saved,reasonCodes:['PROVIDER_OPERATION_UNKNOWN']};
+      throw error;
+    }
+  }
+
   #authorize(command, permission) {
     if (!this.authorization) return;
     const allowed = this.authorization(command.actor || null, command.organizationId || null, command.locationId || null, 'payments', permission);
