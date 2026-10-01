@@ -39,8 +39,7 @@ const store = {
 const core = new PaymentCore({ store });
 
 await assert.rejects(
-  core.submitEvidence({
-    chatId: 'attacker-chat',
+  core.ingestAuthenticatedProviderNotification({
     providerId: 'mpesa',
     providerAccountReference: '600001',
     providerTransactionId: 'TX-UNAUTH',
