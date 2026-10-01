@@ -1,8 +1,44 @@
 import assert from 'node:assert/strict';
 
 const { PaymentCore } = await import('../backend/lib/payments/payment-core.js');
+const { InvariantGate } = await import('../backend/lib/payments/invariant-gate.js');
 
 let verifyCalls = 0;
+
+const invariantGate = new InvariantGate();
+const invariantInput = {
+  payment: {
+    id: 'payment-001',
+    paymentIntentId: 'intent-001',
+    organizationId: 'org-001',
+    providerId: 'mpesa',
+    amountMinor: 1000,
+    currency: 'ETB',
+  },
+  paymentIntent: canonicalIntent,
+  paymentAccount: canonicalAccount,
+  evidence: baseEvidence(),
+  verification: {
+    providerId: 'mpesa',
+    observedAmountMinor: 1000,
+    observedCurrency: 'ETB',
+    observedReceiverAccount: '600001',
+    observedReference: null,
+  },
+};
+assert.equal(invariantGate.evaluate(invariantInput).passed, true);
+
+for (const [label, mutate] of [
+  ['account mismatch', value => ({ paymentAccount: { ...canonicalAccount, id: value } })],
+  ['intent account mismatch', value => ({ paymentIntent: { ...canonicalIntent, paymentAccountId: value } })],
+  ['evidence account mismatch', value => ({ evidence: baseEvidence({ paymentAccountId: value }) })],
+  ['evidence intent mismatch', value => ({ evidence: baseEvidence({ paymentIntentId: value }) })],
+  ['account provider mismatch', value => ({ paymentAccount: { ...canonicalAccount, providerId: value } })],
+]) {
+  const input = { ...invariantInput, ...mutate('attacker-value') };
+  const result = invariantGate.evaluate(input);
+  assert.equal(result.passed, false, label);
+}
 
 const canonicalIntent = {
   id: 'intent-001',
