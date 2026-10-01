@@ -129,4 +129,36 @@ await assert.rejects(
 );
 assert.equal(verifyCalls, 1, 'valid canonical binding must reach provider verification');
 
-console.log('GAP-1 verification-time payment-account binding regression: PASS');
+
+verifyCalls = 0;
+const mismatchedEvidence = baseEvidence({ paymentAccountId: 'account-attacker' });
+const observationCore = new PaymentCore({
+  store: {
+    ...makeStore(mismatchedEvidence),
+    getPaymentConfirmationAttempt: async () => ({
+      id: 'attempt-001',
+      evidenceId: 'evidence-001',
+      paymentIntentId: 'intent-001',
+      paymentAccountId: 'account-001',
+      providerId: 'mpesa',
+    }),
+    updatePaymentConfirmationAttempt: async () => {
+      throw new Error('confirmation attempt must not be updated after binding failure');
+    },
+  },
+  providerRegistry: { requirePaymentProvider: provider },
+});
+await assert.rejects(
+  observationCore.recordProviderConfirmationObservation({
+    chatId: 'chat-001',
+    confirmationAttemptId: 'attempt-001',
+    providerId: 'mpesa',
+    status: 'CONFIRMED',
+  }),
+  error =>
+    error?.code === 'PAYMENT_EVIDENCE_ACCOUNT_BINDING_MISMATCH' &&
+    error?.statusCode === 409,
+);
+assert.equal(verifyCalls, 0, 'confirmation binding failure must not reach provider verification');
+
+console.log('GAP-1 verification/confirmation payment-account binding regression: PASS');
