@@ -119,11 +119,18 @@ export const mpesaProvider = Object.freeze({
 
     const boundary = authenticateByConfiguredBoundary({ rawRequest, requestContext, config });
 
+    const notificationId = normalized(body?.TransID) || null;
+    const authenticationReference = notificationId
+      ? `mpesa:notification-auth:${notificationId}:${boundary.signatureVersion}`
+      : `mpesa:notification-auth:unidentified:${boundary.signatureVersion}`;
+
     return {
       authenticated: true,
       providerId: PROVIDER_ID,
       accountIdentifier: configuredAccount,
-      notificationId: normalized(body?.TransID) || null,
+      providerAccountReference: configuredAccount,
+      notificationId,
+      authenticationReference,
       signatureVersion: boundary.signatureVersion,
       receivedAt: new Date().toISOString(),
     };
