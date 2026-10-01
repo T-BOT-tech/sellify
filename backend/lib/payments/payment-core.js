@@ -16,6 +16,46 @@ export class PaymentCore {
     this.clock = clock;
   }
 
+  async resolveRouting(command = {}) {
+    this.#authorize(command, 'payments:route');
+    const chatId = String(command.chatId || '').trim();
+    const channel = String(command.channel || '').trim().toLowerCase();
+    const currency = String(command.currency || '').trim().toUpperCase();
+    if (!chatId || !channel) throw Object.assign(new Error('chatId and channel are required'), { statusCode: 400, code: 'ROUTING_CONTEXT_REQUIRED' });
+    const policies = await this.store.listPaymentRoutingPolicies(chatId, {
+      channel, locationId: command.locationId || command.location_id || null, activeOnly: true,
+    });
+    const candidates = [];
+    for (const policy of policies) {
+      if (policy.currencies.length && currency && !policy.currencies.includes(currency)) continue;
+      const provider = this.providerRegistry?.getPaymentProvider
+        ? this.providerRegistry.getPaymentProvider(policy.providerId)
+        : null;
+      if (!provider) continue;
+      const required = Array.isArray(policy.requiredCapabilities) ? policy.requiredCapabilities : [];
+      if (required.some(capability => provider.capabilities?.[capability] !== true)) continue;
+      const accounts = await this.store.listPaymentAccounts(chatId, { status: 'active' });
+      const account = accounts.find(a => String(a.providerId) === String(policy.providerId) &&
+        (!command.paymentAccountId || String(a.id) === String(command.paymentAccountId)));
+      if (!account && command.requireAccount !== false) continue;
+      candidates.push({ policy, provider, account: account || null });
+    }
+    if (!candidates.length) {
+      return { status: 'UNKNOWN', reasonCodes: ['NO_ELIGIBLE_PAYMENT_ROUTE'], candidates: [] };
+    }
+    const selected = candidates[0];
+    return {
+      status: 'ROUTED',
+      providerId: selected.provider.id,
+      providerName: selected.provider.name,
+      paymentAccountId: selected.account?.id || null,
+      channel,
+      policyId: selected.policy.id,
+      priority: selected.policy.priority,
+      reasonCodes: [],
+    };
+  }
+
   async createPayment(command = {}) {
     this.#authorize(command, 'payments:accept');
     if (command.state != null && String(command.state).toUpperCase() !== 'UNPAID') {
@@ -25,8 +65,17 @@ export class PaymentCore {
     const chatId = String(command.chatId || '').trim();
     if (!organizationId || !chatId) throw Object.assign(new Error('organizationId and chatId are required'), { statusCode: 400, code: 'PAYMENT_CONTEXT_REQUIRED' });
 
+    let routedCommand = { ...command };
+    if (!routedCommand.providerId && !routedCommand.provider_id) {
+      const route = await this.resolveRouting({ ...command, actor: command.actor });
+      if (route.status !== 'ROUTED') {
+        throw Object.assign(new Error('No eligible payment route'), { statusCode: 409, code: 'NO_ELIGIBLE_PAYMENT_ROUTE', reasonCodes: route.reasonCodes });
+      }
+      routedCommand.providerId = route.providerId;
+      routedCommand.paymentAccountId = routedCommand.paymentAccountId || route.paymentAccountId || undefined;
+    }
     const result = await this.store.createPaymentWithIntent(chatId, {
-      ...command,
+      ...routedCommand,
       organizationId,
       idempotencyKey: command.idempotencyKey || command.idempotency_key,
     }, command.actor || null);
