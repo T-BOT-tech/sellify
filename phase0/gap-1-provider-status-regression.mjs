@@ -11,7 +11,7 @@ function makeStore() {
   const account = { id: 'acct-1', organizationId: 'org-1', providerId: 'telebirr', accountIdentifier: 'ACC-1', status: 'active' };
   const evidence = { id: 'ev-1', organizationId: 'org-1', paymentId: 'pay-1', paymentIntentId: 'intent-1', providerId: 'telebirr', status: 'RECEIVED', externalReference: 'REF-1' };
   const calls = { committed: 0, verification: 0 };
-  return { calls, getPayment: async () => payment, getPaymentIntent: async () => intent, listPaymentAccounts: async () => [account], insertPaymentEvidence: async () => ({ evidence, duplicate: false }), insertPaymentVerification: async () => { calls.verification++; return { id: 'ver-1', result: 'PENDING' }; }, commitPaymentDecision: async (_chatId, input) => { calls.committed++; return { ...payment, state: input.decision.targetState }; } };
+  return { calls, __payment: payment, getPayment: async () => payment, getPaymentIntent: async () => intent, listPaymentAccounts: async () => [account], insertPaymentEvidence: async () => ({ evidence, duplicate: false }), insertPaymentVerification: async () => { calls.verification++; return { id: 'ver-1', result: 'PENDING' }; }, commitPaymentDecision: async (_chatId, input) => { calls.committed++; return { ...payment, state: input.decision.targetState }; } };
 }
 test('provider status success reaches Payment Core and commits once', async () => {
   const registry = await import('../backend/lib/payments/provider-registry.js');
@@ -63,6 +63,40 @@ test('provider failure is normalized as an upstream error and does not commit pa
     error => error.code === 'PAYMENT_PROVIDER_STATUS_FAILED' && error.statusCode === 502,
   );
   assert.equal(store.calls.committed, 0);
+});
+
+test('concurrent provider confirmations treat the losing state conflict as an idempotent replay', async () => {
+  const registry = await import('../backend/lib/payments/provider-registry.js');
+  registry.registerPaymentProvider(provider(), { replace: true });
+  const store = makeStore();
+  let commitCalls = 0;
+  store.commitPaymentDecision = async (_chatId, input) => {
+    commitCalls += 1;
+    if (commitCalls === 1) {
+      // The winning transaction makes the state change before the losing
+      // transaction observes its optimistic-concurrency conflict.
+      store.__payment.state = input.decision.targetState;
+      await new Promise(resolve => setTimeout(resolve, 10));
+      return { ...store.__payment };
+    }
+    const error = new Error('Payment state changed before decision could commit');
+    error.code = 'PAYMENT_STATE_CONFLICT';
+    error.statusCode = 409;
+    throw error;
+  };
+  const originalGetPayment = store.getPayment;
+  store.__payment = await originalGetPayment('chat-1', 'pay-1');
+  store.getPayment = async (...args) => ({ ...store.__payment });
+
+  const results = await Promise.all([
+    queryPaymentStatus({ chatId: 'chat-1', paymentId: 'pay-1', store }),
+    queryPaymentStatus({ chatId: 'chat-1', paymentId: 'pay-1', store }),
+  ]);
+
+  assert.equal(commitCalls, 2);
+  assert.equal(results.filter(result => result.payment.state === 'VERIFIED').length, 2);
+  assert.equal(results.filter(result => result.idempotentReplay).length, 1);
+  assert.equal(results.filter(result => result.concurrentDecisionConflict).length, 1);
 });
 
 test('terminal duplicate status query is an idempotent replay', async () => {
