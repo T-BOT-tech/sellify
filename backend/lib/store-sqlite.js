@@ -2253,6 +2253,83 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(46, nowIso());
   }
 
+  // GAP-1.13 — explicit failure/expiration/cancellation/reversal states.
+  // SQLite CHECK constraints are rebuilt additively so historical payment and
+  // ledger rows remain intact while the canonical state matrix gains the
+  // required lifecycle states.
+  if (!applied.includes(48)) {
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.exec(`
+      CREATE TABLE payments_gap113 (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        location_id TEXT REFERENCES locations(id) ON DELETE SET NULL,
+        order_id TEXT,
+        customer_id TEXT,
+        payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL,
+        provider_id TEXT NOT NULL DEFAULT 'manual',
+        channel TEXT NOT NULL DEFAULT 'manual' CHECK (channel IN ('manual','sms','api')),
+        method_id TEXT,
+        method_name TEXT,
+        amount_minor INTEGER NOT NULL CHECK (amount_minor >= 0),
+        currency TEXT NOT NULL,
+        state TEXT NOT NULL DEFAULT 'UNPAID' CHECK (state IN ('UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','REJECTED','FAILED','DUPLICATE','MISMATCH','EXPIRED','CANCELLED','PARTIAL','REVERSED','REFUNDED')),
+        external_reference TEXT,
+        claimed_at TEXT,
+        received_at TEXT,
+        verified_at TEXT,
+        reconciled_at TEXT,
+        metadata_json TEXT,
+        created_by_user_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        payment_intent_id TEXT REFERENCES payment_intents(id) ON DELETE SET NULL
+      );
+      INSERT INTO payments_gap113 SELECT
+        id,organization_id,location_id,order_id,customer_id,payment_account_id,
+        provider_id,channel,method_id,method_name,amount_minor,currency,state,
+        external_reference,claimed_at,received_at,verified_at,reconciled_at,
+        metadata_json,created_by_user_id,created_at,updated_at,payment_intent_id
+      FROM payments;
+      DROP TABLE payments;
+      ALTER TABLE payments_gap113 RENAME TO payments;
+      CREATE INDEX IF NOT EXISTS idx_payments_org_created ON payments(organization_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(organization_id, order_id);
+      CREATE INDEX IF NOT EXISTS idx_payments_state ON payments(organization_id, state);
+      CREATE INDEX IF NOT EXISTS idx_payments_payment_intent ON payments(payment_intent_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_external_reference
+        ON payments(organization_id, provider_id, external_reference)
+        WHERE external_reference IS NOT NULL AND external_reference != '';
+
+      CREATE TABLE payment_ledger_entries_gap113 (
+        id TEXT PRIMARY KEY,
+        payment_id TEXT NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        entry_type TEXT NOT NULL CHECK (entry_type IN ('CREATED','CLAIMED','RECEIVED','VERIFIED','RECONCILED','REJECTED','FAILED','DUPLICATE','MISMATCH','EXPIRED','CANCELLED','PARTIAL','REVERSED','REFUNDED')),
+        amount_minor INTEGER NOT NULL CHECK (amount_minor >= 0),
+        currency TEXT NOT NULL,
+        from_state TEXT,
+        to_state TEXT NOT NULL,
+        actor_id TEXT,
+        reason TEXT,
+        metadata_json TEXT,
+        created_at TEXT NOT NULL
+      );
+      INSERT INTO payment_ledger_entries_gap113 SELECT * FROM payment_ledger_entries;
+      DROP TABLE payment_ledger_entries;
+      ALTER TABLE payment_ledger_entries_gap113 RENAME TO payment_ledger_entries;
+      CREATE INDEX IF NOT EXISTS idx_payment_ledger_payment ON payment_ledger_entries(payment_id, created_at);
+      CREATE TRIGGER IF NOT EXISTS trg_payment_ledger_no_update
+      BEFORE UPDATE ON payment_ledger_entries
+      BEGIN SELECT RAISE(ABORT, 'payment ledger entries are append-only'); END;
+      CREATE TRIGGER IF NOT EXISTS trg_payment_ledger_no_delete
+      BEFORE DELETE ON payment_ledger_entries
+      BEGIN SELECT RAISE(ABORT, 'payment ledger entries are append-only'); END;
+    `);
+    db.exec('PRAGMA foreign_keys = ON');
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(48, nowIso());
+  }
+
   // GAP-1.12 — provider-neutral reconciliation evidence.
   // Reconciliation records findings only; they never mutate Payment state or
   // write the financial ledger. Canonical state changes remain PaymentCore decisions.
@@ -5531,15 +5608,16 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
 }
 
 
-const PAYMENT_STATES = new Set(['UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','REJECTED','DUPLICATE','MISMATCH','EXPIRED','PARTIAL','REFUNDED']);
+const PAYMENT_STATES = new Set(['UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','REJECTED','FAILED','DUPLICATE','MISMATCH','EXPIRED','CANCELLED','PARTIAL','REVERSED','REFUNDED']);
 const PAYMENT_TRANSITIONS = Object.freeze({
-  UNPAID: new Set(['CLAIMED','RECEIVED','REJECTED','EXPIRED']),
-  CLAIMED: new Set(['RECEIVED','VERIFIED','REJECTED','DUPLICATE','MISMATCH','EXPIRED','PARTIAL']),
-  RECEIVED: new Set(['VERIFIED','RECONCILED','REJECTED','MISMATCH','PARTIAL']),
-  VERIFIED: new Set(['RECONCILED','REFUNDED','MISMATCH']),
-  RECONCILED: new Set(['REFUNDED']),
-  REJECTED: new Set(), DUPLICATE: new Set(), MISMATCH: new Set(['RECEIVED','VERIFIED','REJECTED']),
-  EXPIRED: new Set(), PARTIAL: new Set(['RECEIVED','VERIFIED','REJECTED']), REFUNDED: new Set(),
+  UNPAID: new Set(['CLAIMED','RECEIVED','FAILED','EXPIRED','CANCELLED']),
+  CLAIMED: new Set(['RECEIVED','VERIFIED','FAILED','REJECTED','DUPLICATE','MISMATCH','EXPIRED','CANCELLED','PARTIAL']),
+  RECEIVED: new Set(['VERIFIED','RECONCILED','FAILED','REJECTED','MISMATCH','PARTIAL','CANCELLED']),
+  VERIFIED: new Set(['RECONCILED','REVERSED','REFUNDED','MISMATCH']),
+  RECONCILED: new Set(['REVERSED','REFUNDED']),
+  REJECTED: new Set(), FAILED: new Set(), DUPLICATE: new Set(), MISMATCH: new Set(['RECEIVED','VERIFIED','REJECTED']),
+  EXPIRED: new Set(['RECEIVED']), CANCELLED: new Set(['RECEIVED']),
+  PARTIAL: new Set(['RECEIVED','VERIFIED','FAILED','REJECTED']), REVERSED: new Set(), REFUNDED: new Set(),
 });
 
 function paymentStateTimestampColumn(state) {
