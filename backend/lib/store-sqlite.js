@@ -5906,6 +5906,9 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       }
     }
     if (verification && !verificationEvidenceId) throw Object.assign(new Error('verification evidenceId is required'), { statusCode: 400, code: 'EVIDENCE_REQUIRED' });
+    if (!verification && (decisionVerificationId || decisionEvidenceId)) {
+      throw Object.assign(new Error('Decision evidence/verification requires the same commit verification context'), { statusCode: 409, code: 'PAYMENT_DECISION_BINDING_CONFLICT' });
+    }
     if (verification && decisionVerificationId && decisionVerificationId !== verificationId) throw Object.assign(new Error('Decision verification does not match committed verification'), { statusCode: 409, code: 'PAYMENT_DECISION_BINDING_CONFLICT' });
     if (verification && decisionEvidenceId && decisionEvidenceId !== verificationEvidenceId) throw Object.assign(new Error('Decision evidence does not match committed verification'), { statusCode: 409, code: 'PAYMENT_DECISION_BINDING_CONFLICT' });
     if (input.verification) {
