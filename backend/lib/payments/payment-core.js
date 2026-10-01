@@ -772,6 +772,67 @@ export class PaymentCore {
     }
   }
 
+  async ingestAuthenticatedProviderNotification(notification = {}, actor = null) {
+    const authenticatedContext = notification.notificationAuthentication ||
+      notification.notification_authentication ||
+      null;
+
+    if (!authenticatedContext || authenticatedContext.authenticated !== true) {
+      throw Object.assign(
+        new Error('Provider notification must be authenticated before ingestion'),
+        { statusCode: 401, code: 'PROVIDER_NOTIFICATION_NOT_AUTHENTICATED' }
+      );
+    }
+
+    const providerId = String(
+      authenticatedContext.providerId ||
+      authenticatedContext.provider_id ||
+      notification.providerId ||
+      notification.provider_id ||
+      ''
+    ).trim().toLowerCase();
+
+    const providerAccountReference = String(
+      authenticatedContext.providerAccountReference ||
+      authenticatedContext.provider_account_reference ||
+      notification.providerAccountReference ||
+      notification.provider_account_reference ||
+      ''
+    ).trim();
+
+    if (!providerId || !providerAccountReference) {
+      throw Object.assign(
+        new Error('Authenticated provider notification context is incomplete'),
+        { statusCode: 400, code: 'PAYMENT_NOTIFICATION_CONTEXT_REQUIRED' }
+      );
+    }
+
+    // Adapter-owned identity is authoritative. Do not copy tenant/payment
+    // identity from the raw provider payload into the PaymentCore command.
+    return this.submitEvidence({
+      ...notification,
+      providerId,
+      providerAccountReference,
+      notificationAuthentication: {
+        ...authenticatedContext,
+        authenticated: true,
+        providerId,
+        providerAccountReference,
+      },
+      source: 'provider-notification',
+      chatId: undefined,
+      organizationId: undefined,
+      locationId: undefined,
+      paymentId: undefined,
+      paymentIntentId: undefined,
+      payment_id: undefined,
+      payment_intent_id: undefined,
+      organization_id: undefined,
+      location_id: undefined,
+      actor,
+    });
+  }
+
   async submitEvidence(command = {}) {
     this.#authorize(command, 'payments:accept');
     let chatId = String(command.chatId || '').trim();
