@@ -16,6 +16,7 @@ import { mkdir, readdir, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
+import { assertVerificationFreshness } from './payments/verification-freshness.js';
 import { requirePaymentProvider } from './payments/provider-registry.js';
 import { requirePaymentChannel } from './payments/channel-registry.js';
 import { decideEventReplay } from './event-replay.js';
@@ -5825,6 +5826,12 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       if (String(row.payment_intent_id || '') !== verificationPaymentIntentId || String(row.provider_id || '').toLowerCase() !== verificationProviderId) {
         throw Object.assign(new Error('Verification does not match payment context'), { statusCode: 409, code: 'VERIFICATION_CONTEXT_MISMATCH' });
       }
+      assertVerificationFreshness({
+        observedAt: v.observedAt || v.observed_at || null,
+        createdAt: v.createdAt || v.created_at || now,
+        now: new Date(now),
+        maxAgeMs: input.maxVerificationAgeMs || input.max_verification_age_ms,
+      });
       const verificationId = String(v.id || crypto.randomUUID());
       const verifier = String(v.verifier || 'payment-core').trim();
       const verifierVersion = String(v.verifierVersion || v.verifier_version || '1').trim() || '1';
