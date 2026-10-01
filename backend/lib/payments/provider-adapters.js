@@ -4,6 +4,7 @@
 
 import { getProviderAdapterConfig } from './provider-adapter-config.js';
 import { requestProviderProbe } from './provider-probe-transport.js';
+import { PROVIDER_VERIFICATION_PARSERS } from './provider-verification-parsers.js';
 
 const PROVIDERS = Object.freeze([
   ['telebirr', 'Telebirr'],
@@ -68,17 +69,22 @@ function createProviderAdapter(id, name) {
         fetchImpl: context.fetchImpl,
       });
 
-      return {
-        status: response.ok ? 'VERIFIED' : 'FAILED',
+      const parsed = PROVIDER_VERIFICATION_PARSERS[id](response.payload || {}, {
+        operation: 'probeCapability',
         capability,
-        providerReference: response.payload?.reference || response.payload?.transactionId || null,
+      });
+      return {
+        ...parsed,
+        status: response.ok ? parsed.status : 'FAILED',
+        capability,
+        reasonCodes: response.ok
+          ? parsed.reasonCodes
+          : ['PROVIDER_HTTP_RESPONSE_NOT_OK', ...parsed.reasonCodes],
         evidence: {
-          providerId: id,
-          capability,
+          ...parsed.evidence,
           httpStatus: response.statusCode,
-          response: response.payload,
+          transportOk: response.ok,
         },
-        reasonCodes: response.ok ? ['PROVIDER_RESPONSE_OK'] : ['PROVIDER_RESPONSE_NOT_OK'],
       };
     },
   };
