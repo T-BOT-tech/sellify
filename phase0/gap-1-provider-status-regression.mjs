@@ -6,7 +6,7 @@ function provider(overrides = {}) {
   return { id: 'telebirr', version: '1', capabilities: { getStatus: true }, getStatus: async () => ({ status: 'SUCCESS', providerTransactionId: 'TX-1', amountMinor: 150000, currency: 'ETB', receiverAccount: 'ACC-1', externalReference: 'REF-1', ...overrides }) };
 }
 function makeStore() {
-  const payment = { id: 'pay-1', organizationId: 'org-1', paymentIntentId: 'intent-1', paymentAccountId: 'acct-1', providerId: 'telebirr', amountMinor: 150000, currency: 'ETB', state: 'UNPAID', externalReference: null };
+  const payment = { id: 'pay-1', organizationId: 'org-1', paymentIntentId: 'intent-1', paymentAccountId: 'acct-1', providerId: 'telebirr', amountMinor: 150000, currency: 'ETB', state: 'RECEIVED', externalReference: null };
   const intent = { id: 'intent-1', organizationId: 'org-1', providerId: 'telebirr', paymentAccountId: 'acct-1', amountMinor: 150000, currency: 'ETB', expiresAt: '2099-01-01T00:00:00.000Z' };
   const account = { id: 'acct-1', organizationId: 'org-1', providerId: 'telebirr', accountIdentifier: 'ACC-1', status: 'active' };
   const evidence = { id: 'ev-1', organizationId: 'org-1', paymentId: 'pay-1', paymentIntentId: 'intent-1', providerId: 'telebirr', status: 'RECEIVED', externalReference: 'REF-1' };

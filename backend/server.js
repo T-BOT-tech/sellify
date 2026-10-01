@@ -1837,7 +1837,7 @@ async function handlePaymentStatusQuery(req, res, chatId, paymentId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
   const session = await requireSession(req, tenant.chatId);
-  await requireAuthorization(session, tenant, 'payments', 'payments:verify', { deniedMessage: 'Payment verification permission required' });
+  await requireAuthorization(session, tenant, 'payments', 'payments:accept', { deniedMessage: 'Payment verification permission required' });
   if (req.method !== 'POST') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
   const body = await readBody(req);
   const result = await queryPaymentStatus({
