@@ -8,6 +8,8 @@ const HARD_FAILURES = new Set([
   'AMOUNT_MISMATCH',
   'CURRENCY_MISMATCH',
   'REFERENCE_MISMATCH',
+  'TRANSACTION_MISMATCH',
+  'TRANSACTION_ID_MISSING',
   'PROVIDER_TRANSACTION_DUPLICATE',
   'EVIDENCE_REPLAY',
   'INTENT_EXPIRED',
@@ -51,14 +53,24 @@ export class InvariantGate {
       { required: true }));
 
     const observedAmount = verification?.observedAmountMinor;
+    const paymentAmount = Number(payment?.amountMinor);
+    const intentAmount = Number(paymentIntent?.amountMinor);
     checks.push(check('AMOUNT_MATCH',
-      Number.isInteger(observedAmount) && Number(observedAmount) === Number(payment.amountMinor),
-      { required: true, expected: payment?.amountMinor ?? null, observed: observedAmount ?? null }));
+      Number.isInteger(observedAmount) && Number.isInteger(paymentAmount) && Number(observedAmount) === paymentAmount,
+      { required: true, expected: paymentAmount, observed: observedAmount ?? null }));
+    checks.push(check('PAYMENT_INTENT_AMOUNT_MATCH',
+      Number.isInteger(paymentAmount) && Number.isInteger(intentAmount) && paymentAmount === intentAmount,
+      { required: true, expected: intentAmount, observed: paymentAmount }));
 
+    const observedCurrency = String(verification?.observedCurrency || '').toUpperCase();
+    const paymentCurrency = String(payment?.currency || '').toUpperCase();
+    const intentCurrency = String(paymentIntent?.currency || '').toUpperCase();
     checks.push(check('CURRENCY_MATCH',
-      Boolean(verification?.observedCurrency) &&
-        String(verification.observedCurrency).toUpperCase() === String(payment.currency).toUpperCase(),
-      { required: true, expected: payment?.currency ?? null, observed: verification?.observedCurrency ?? null }));
+      Boolean(observedCurrency && paymentCurrency && observedCurrency === paymentCurrency),
+      { required: true, expected: paymentCurrency || null, observed: observedCurrency || null }));
+    checks.push(check('PAYMENT_INTENT_CURRENCY_MATCH',
+      Boolean(paymentCurrency && intentCurrency && paymentCurrency === intentCurrency),
+      { required: true, expected: intentCurrency || null, observed: paymentCurrency || null }));
 
     const receiverExpected = String(paymentAccount?.accountIdentifier || '').trim();
     const receiverObserved = String(verification?.observedReceiverAccount || '').trim();
@@ -67,11 +79,21 @@ export class InvariantGate {
       required: true, available: receiverAvailable, expected: receiverExpected || null, observed: receiverObserved || null,
     }));
 
-    const referenceExpected = String(payment.externalReference || evidence?.externalReference || '').trim();
+    const referenceExpected = String(payment?.externalReference || '').trim();
     const referenceObserved = String(verification?.observedReference || '').trim();
+    const referenceRequired = Boolean(referenceExpected);
     checks.push(check('REFERENCE_MATCH',
-      !referenceExpected || !referenceObserved || referenceExpected === referenceObserved,
-      { required: false, expected: referenceExpected || null, observed: referenceObserved || null }));
+      !referenceRequired || (Boolean(referenceObserved) && referenceExpected === referenceObserved),
+      { required: referenceRequired, expected: referenceExpected || null, observed: referenceObserved || null }));
+
+    const transactionObserved = String(verification?.observedTransactionId || '').trim();
+    const evidenceTransaction = String(evidence?.providerTransactionId || '').trim();
+    checks.push(check('TRANSACTION_ID_PRESENT', Boolean(transactionObserved), {
+      required: true, observed: transactionObserved || null,
+    }));
+    checks.push(check('TRANSACTION_EVIDENCE_BINDING',
+      Boolean(transactionObserved && evidenceTransaction && transactionObserved === evidenceTransaction),
+      { required: true, expected: evidenceTransaction || null, observed: transactionObserved || null }));
 
     checks.push(check('INTENT_NOT_EXPIRED',
       !paymentIntent?.expiresAt || new Date(paymentIntent.expiresAt).getTime() > new Date(now).getTime(),
