@@ -43,6 +43,7 @@ const core = new PaymentCore({
       assert.equal(accountIdentifier, '600001');
       resolvedNotificationConfig = true;
       return {
+        providerId: 'mpesa',
         accountIdentifier: '600001',
         currency: 'KES',
         notificationAuthentication: { mode: 'trusted-transport' },
