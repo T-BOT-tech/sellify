@@ -5826,6 +5826,78 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       if (String(row.payment_intent_id || '') !== verificationPaymentIntentId || String(row.provider_id || '').toLowerCase() !== verificationProviderId) {
         throw Object.assign(new Error('Verification does not match payment context'), { statusCode: 409, code: 'VERIFICATION_CONTEXT_MISMATCH' });
       }
+
+      // GAP-1.18L: authoritative financial transitions must re-check the
+      // canonical payment obligation inside the same transaction immediately
+      // before state/ledger mutation. Provider success alone is insufficient.
+      if (['VERIFIED', 'RECONCILED'].includes(target)) {
+        const observedAmount = Number(v.observedAmountMinor ?? v.observed_amount_minor);
+        const expectedAmount = Number(row.amount_minor);
+        if (!Number.isInteger(observedAmount) || observedAmount !== expectedAmount) {
+          throw Object.assign(new Error('Verification amount does not match payment obligation'), {
+            statusCode: 409, code: 'VERIFICATION_AMOUNT_MISMATCH',
+          });
+        }
+
+        const observedCurrency = String(v.observedCurrency || v.observed_currency || '').trim().toUpperCase();
+        const expectedCurrency = normaliseCurrency(row.currency, 'ETB');
+        if (!observedCurrency || observedCurrency !== expectedCurrency) {
+          throw Object.assign(new Error('Verification currency does not match payment obligation'), {
+            statusCode: 409, code: 'VERIFICATION_CURRENCY_MISMATCH',
+          });
+        }
+
+        const intent = db.prepare('SELECT amount_minor, currency FROM payment_intents WHERE id = ? AND organization_id = ?').get(verificationPaymentIntentId, organizationId);
+        if (!intent || Number(intent.amount_minor) !== expectedAmount || normaliseCurrency(intent.currency, expectedCurrency) !== expectedCurrency) {
+          throw Object.assign(new Error('Payment intent financial obligation does not match payment'), {
+            statusCode: 409, code: 'VERIFICATION_INTENT_FINANCIAL_MISMATCH',
+          });
+        }
+
+        const account = db.prepare('SELECT account_identifier FROM payment_accounts WHERE id = ? AND organization_id = ?').get(row.payment_account_id, organizationId);
+        const expectedReceiver = String(account?.account_identifier || '').trim();
+        const observedReceiver = String(v.observedReceiverAccount || v.observed_receiver_account || '').trim();
+        if (!expectedReceiver || !observedReceiver || expectedReceiver !== observedReceiver) {
+          throw Object.assign(new Error('Verification receiver does not match payment account'), {
+            statusCode: 409, code: 'VERIFICATION_RECEIVER_MISMATCH',
+          });
+        }
+
+        const expectedReference = String(row.external_reference || '').trim();
+        const observedReference = String(v.observedReference || v.observed_reference || '').trim();
+        if (expectedReference && (!observedReference || expectedReference !== observedReference)) {
+          throw Object.assign(new Error('Verification reference does not match payment obligation'), {
+            statusCode: 409, code: 'VERIFICATION_REFERENCE_MISMATCH',
+          });
+        }
+
+        const observedTransactionId = String(v.observedTransactionId || v.observed_transaction_id || '').trim();
+        const evidenceTransactionId = String(evidenceRow.provider_transaction_id || '').trim();
+        if (!observedTransactionId || !evidenceTransactionId || observedTransactionId !== evidenceTransactionId) {
+          throw Object.assign(new Error('Verification transaction identity is not bound to evidence'), {
+            statusCode: 409, code: 'VERIFICATION_TRANSACTION_MISMATCH',
+          });
+        }
+
+        const reusedTransaction = db.prepare(`
+          SELECT id, payment_id
+          FROM payment_verifications
+          WHERE organization_id = ?
+            AND provider_id = ?
+            AND observed_transaction_id = ?
+            AND payment_id <> ?
+          ORDER BY created_at DESC
+          LIMIT 1
+        `).get(organizationId, verificationProviderId, observedTransactionId, paymentId);
+        if (reusedTransaction) {
+          throw Object.assign(new Error('Provider transaction identity is already bound to another payment'), {
+            statusCode: 409, code: 'PROVIDER_TRANSACTION_DUPLICATE',
+            paymentId: reusedTransaction.payment_id,
+            verificationId: reusedTransaction.id,
+          });
+        }
+      }
+
       assertVerificationFreshness({
         observedAt: v.observedAt || v.observed_at || null,
         createdAt: null,
