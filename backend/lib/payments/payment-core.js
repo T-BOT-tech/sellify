@@ -623,6 +623,31 @@ export class PaymentCore {
       throw Object.assign(new Error('Confirmation payment account mismatch'), { statusCode: 409, code: 'PAYMENT_ACCOUNT_BINDING_MISMATCH' });
     }
 
+    this.#assertEvidencePaymentAccountBinding({
+      evidence,
+      paymentIntent,
+      paymentAccount,
+    });
+
+    if (String(attempt.paymentAccountId || '') !== String(paymentAccount?.id || '')) {
+      throw Object.assign(
+        new Error('Confirmation attempt does not match canonical payment account'),
+        { statusCode: 409, code: 'PAYMENT_ACCOUNT_BINDING_MISMATCH' }
+      );
+    }
+    if (String(attempt.paymentIntentId || '') !== String(paymentIntent.id || '')) {
+      throw Object.assign(
+        new Error('Confirmation attempt does not match canonical payment intent'),
+        { statusCode: 409, code: 'PAYMENT_INTENT_MISMATCH' }
+      );
+    }
+    if (String(attempt.providerId || '').toLowerCase() !== String(paymentAccount?.providerId || '').toLowerCase()) {
+      throw Object.assign(
+        new Error('Confirmation attempt does not match canonical provider account'),
+        { statusCode: 409, code: 'PROVIDER_MISMATCH' }
+      );
+    }
+
     const observation = attempt.observation || {};
     const verification = {
       providerId: evidence.providerId,
