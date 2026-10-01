@@ -2278,6 +2278,38 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(51, nowIso());
   }
 
+  // GAP-1.17 — durable payment operational action / retry / manual-review journal.
+  if (!applied.includes(52)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS payment_operational_actions (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        payment_id TEXT NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+        action_type TEXT NOT NULL CHECK (action_type IN ('STATUS_QUERY','RECONCILIATION','REFUND','SETTLEMENT','LIFECYCLE','MANUAL_REVIEW')),
+        operation TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED','RUNNING','SUCCEEDED','FAILED','UNKNOWN','BLOCKED','RESOLVED','DISMISSED')),
+        attempt INTEGER NOT NULL DEFAULT 1 CHECK (attempt > 0),
+        idempotency_key TEXT,
+        reason TEXT NOT NULL DEFAULT '',
+        error_code TEXT,
+        result_json TEXT,
+        next_retry_at TEXT,
+        actor_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        completed_at TEXT
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_operational_idempotency
+        ON payment_operational_actions(organization_id, idempotency_key)
+        WHERE idempotency_key IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_payment_operational_payment
+        ON payment_operational_actions(payment_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_operational_status
+        ON payment_operational_actions(organization_id, status, next_retry_at, created_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(52, nowIso());
+  }
+
   // GAP-1.15 — canonical settlement and fee model.
   // Settlement is distinct from payment confirmation: it records the
   // provider/merchant settlement obligation and fee breakdown without
@@ -8403,6 +8435,70 @@ export async function consumeInvite(token, userId) {
   const finalRole = db.prepare('SELECT role FROM memberships WHERE user_id = ? AND chat_id = ?').get(String(userId), String(row.chat_id))?.role || row.role;
   return { chatId: row.chat_id, tenantId: tenant?.tenant_id, sellerName: tenant?.seller_name, role: finalRole, alreadyMember, roleChanged };
 }
+
+export async function createPaymentOperationalAction(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const payment = await getPayment(chatId, input.paymentId || input.payment_id);
+  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  const actionType = String(input.actionType || input.action_type || '').trim().toUpperCase();
+  const operation = String(input.operation || '').trim().toUpperCase();
+  const allowed = new Set(['STATUS_QUERY','RECONCILIATION','REFUND','SETTLEMENT','LIFECYCLE','MANUAL_REVIEW']);
+  if (!allowed.has(actionType) || !operation) throw Object.assign(new Error('Valid actionType and operation are required'), { statusCode: 400, code: 'INVALID_OPERATIONAL_ACTION' });
+  const organizationId = payment.organizationId;
+  const idempotencyKey = input.idempotencyKey || input.idempotency_key || null;
+  if (idempotencyKey) {
+    const existing = db.prepare('SELECT * FROM payment_operational_actions WHERE organization_id = ? AND idempotency_key = ?').get(organizationId, String(idempotencyKey));
+    if (existing) return { action: normalizePaymentOperationalAction(existing), duplicate: true };
+  }
+  const id = crypto.randomUUID(), now = nowIso();
+  db.prepare(`INSERT INTO payment_operational_actions
+    (id, organization_id, payment_id, action_type, operation, status, attempt, idempotency_key, reason, actor_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'REQUESTED', 1, ?, ?, ?, ?, ?)`).run(
+      id, organizationId, payment.id, actionType, operation,
+      idempotencyKey == null ? null : String(idempotencyKey), String(input.reason || ''),
+      actor?.userId || actor?.id || null, now, now);
+  audit(String(chatId), 'payment.operational_action.requested', 'payment_operational_action', id,
+    { paymentId: payment.id, actionType, operation, attempt: 1 },
+    { organizationId, actorId: actor?.userId || actor?.id || null, reason: input.reason || '' });
+  return { action: normalizePaymentOperationalAction(db.prepare('SELECT * FROM payment_operational_actions WHERE id = ?').get(id)), duplicate: false };
+}
+
+export async function updatePaymentOperationalAction(chatId, actionId, patch = {}, actor = null) {
+  ensureDatabase();
+  const row=db.prepare(`SELECT a.* FROM payment_operational_actions a
+    JOIN payments p ON p.id=a.payment_id AND p.organization_id=a.organization_id
+    JOIN tenants t ON t.organization_id=a.organization_id
+    WHERE a.id=? AND t.chat_id=?`).get(String(actionId),String(chatId));
+  if(!row) throw Object.assign(new Error('Operational action not found'),{statusCode:404,code:'OPERATIONAL_ACTION_NOT_FOUND'});
+  const status=patch.status==null?row.status:String(patch.status).trim().toUpperCase();
+  if(!new Set(['REQUESTED','RUNNING','SUCCEEDED','FAILED','UNKNOWN','BLOCKED','RESOLVED','DISMISSED']).has(status))
+    throw Object.assign(new Error('Invalid operational action status'),{statusCode:400,code:'INVALID_OPERATIONAL_ACTION_STATUS'});
+  const attempt=patch.attempt==null?row.attempt:Number(patch.attempt);
+  if(!Number.isInteger(attempt)||attempt<1) throw Object.assign(new Error('Attempt must be an integer'),{statusCode:400,code:'INVALID_OPERATIONAL_ATTEMPT'});
+  const now=nowIso(), completedAt=['SUCCEEDED','FAILED','UNKNOWN','BLOCKED','RESOLVED','DISMISSED'].includes(status)?(patch.completedAt||now):null;
+  db.prepare(`UPDATE payment_operational_actions SET status=?,attempt=?,reason=?,error_code=?,result_json=?,next_retry_at=?,updated_at=?,completed_at=? WHERE id=?`).run(
+    status,attempt,String(patch.reason??row.reason??''),patch.errorCode??row.error_code??null,
+    patch.result==null?row.result_json:json(patch.result),patch.nextRetryAt??patch.next_retry_at??row.next_retry_at??null,now,completedAt,row.id);
+  audit(String(chatId),'payment.operational_action.updated','payment_operational_action',row.id,
+    {paymentId:row.payment_id,actionType:row.action_type,operation:row.operation,from:row.status,to:status,attempt},
+    {organizationId:row.organization_id,actorId:actor?.userId||actor?.id||null,reason:patch.reason||row.reason||''});
+  return normalizePaymentOperationalAction(db.prepare('SELECT * FROM payment_operational_actions WHERE id=?').get(row.id));
+}
+
+export async function listPaymentOperationalActions(chatId,paymentId,options={}) {
+  ensureDatabase();
+  const payment=await getPayment(chatId,paymentId); if(!payment)return null;
+  const params=[payment.id,payment.organizationId]; let sql='SELECT * FROM payment_operational_actions WHERE payment_id=? AND organization_id=?';
+  if(options.status){sql+=' AND status=?';params.push(String(options.status).toUpperCase());}
+  if(options.actionType){sql+=' AND action_type=?';params.push(String(options.actionType).toUpperCase());}
+  sql+=' ORDER BY created_at DESC,id DESC';
+  return db.prepare(sql).all(...params).map(normalizePaymentOperationalAction);
+}
+function normalizePaymentOperationalAction(row){if(!row)return null;return{
+  id:row.id,organizationId:row.organization_id,paymentId:row.payment_id,actionType:row.action_type,operation:row.operation,status:row.status,
+  attempt:row.attempt,idempotencyKey:row.idempotency_key,reason:row.reason,errorCode:row.error_code,result:parseJSON(row.result_json,null),
+  nextRetryAt:row.next_retry_at,actorId:row.actor_id,createdAt:row.created_at,updatedAt:row.updated_at,completedAt:row.completed_at
+};}
 
 export function getDatabasePath() {
   return DB_PATH;
