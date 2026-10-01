@@ -303,7 +303,8 @@
     "test:gap-1-mpesa-resolution": "node phase0/gap-1-mpesa-notification-intent-resolution-regression.mjs",
     "gap1:notification-auth-validation-test": "node phase0/gap-1-provider-notification-authentication-validation-regression.mjs",
     "gap1:verification-account-binding-test": "node phase0/gap-1-verification-payment-account-binding-regression.mjs",
-    "gap1:direct-store-commit-boundary-test": "node phase0/gap-1-direct-store-financial-commit-boundary-regression.mjs"
+    "gap1:direct-store-commit-boundary-test": "node phase0/gap-1-direct-store-financial-commit-boundary-regression.mjs",
+    "gap1:ledger-boundary-test": "node phase0/gap-1-payment-ledger-boundary-regression.mjs"
   },
   "engines": {
     "node": ">=24"
