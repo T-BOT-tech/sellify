@@ -2310,6 +2310,37 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(52, nowIso());
   }
 
+  // GAP-1.18 — durable provider capability certification evidence.
+  // Evidence is scoped to an organization because provider configuration and
+  // account readiness are organization-scoped. Adapter contract certification
+  // remains registry-owned; live external certification is never inferred from
+  // a caller-supplied flag.
+  if (!applied.includes(53)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS payment_provider_capability_certifications (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        provider_id TEXT NOT NULL,
+        capability TEXT NOT NULL,
+        certification_scope TEXT NOT NULL CHECK (certification_scope IN ('ADAPTER_CONTRACT','LIVE_EXTERNAL')),
+        status TEXT NOT NULL CHECK (status IN ('UNKNOWN','OBSERVED','CERTIFIED','FAILED','EXPIRED')),
+        evidence_json TEXT,
+        evidence_fingerprint TEXT NOT NULL,
+        provider_reference TEXT,
+        observed_at TEXT,
+        expires_at TEXT,
+        reason TEXT NOT NULL DEFAULT '',
+        certified_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(organization_id, provider_id, capability, certification_scope, evidence_fingerprint)
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_provider_capability_certification
+        ON payment_provider_capability_certifications(organization_id, provider_id, capability, certification_scope, updated_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(53, nowIso());
+  }
+
   // GAP-1.15 — canonical settlement and fee model.
   // Settlement is distinct from payment confirmation: it records the
   // provider/merchant settlement obligation and fee breakdown without
@@ -8499,6 +8530,97 @@ function normalizePaymentOperationalAction(row){if(!row)return null;return{
   attempt:row.attempt,idempotencyKey:row.idempotency_key,reason:row.reason,errorCode:row.error_code,result:parseJSON(row.result_json,null),
   nextRetryAt:row.next_retry_at,actorId:row.actor_id,createdAt:row.created_at,updatedAt:row.updated_at,completedAt:row.completed_at
 };}
+
+export async function recordPaymentProviderCapabilityEvidence(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+
+  const providerId = String(input.providerId || input.provider_id || '').trim().toLowerCase();
+  const capability = String(input.capability || '').trim();
+  const scope = String(input.certificationScope || input.certification_scope || 'LIVE_EXTERNAL').trim().toUpperCase();
+  if (!providerId || !capability) throw Object.assign(new Error('providerId and capability are required'), { statusCode: 400, code: 'PROVIDER_CAPABILITY_CONTEXT_REQUIRED' });
+  if (!['ADAPTER_CONTRACT','LIVE_EXTERNAL'].includes(scope)) throw Object.assign(new Error('Invalid certification scope'), { statusCode: 400, code: 'INVALID_PROVIDER_CERTIFICATION_SCOPE' });
+
+  const evidence = input.evidence && typeof input.evidence === 'object' ? input.evidence : {};
+  const evidenceJson = json(evidence);
+  const fingerprint = crypto.createHash('sha256').update([
+    providerId, capability, scope, evidenceJson,
+  ].join('|')).digest('hex');
+
+  // External evidence supplied through the API is recorded as OBSERVED/UNKNOWN.
+  // It cannot promote itself to LIVE_EXTERNAL/CERTIFIED.
+  const requestedStatus = String(input.status || 'UNKNOWN').trim().toUpperCase();
+  const status = requestedStatus === 'FAILED' ? 'FAILED' : requestedStatus === 'OBSERVED' ? 'OBSERVED' : 'UNKNOWN';
+  const providerReference = input.providerReference || input.provider_reference || null;
+  const observedAt = input.observedAt || input.observed_at || nowIso();
+  const expiresAt = input.expiresAt || input.expires_at || null;
+  const now = nowIso();
+  const id = crypto.randomUUID();
+
+  const existing = db.prepare(`
+    SELECT * FROM payment_provider_capability_certifications
+    WHERE organization_id = ? AND provider_id = ? AND capability = ?
+      AND certification_scope = ? AND evidence_fingerprint = ?
+  `).get(tenant.organization_id, providerId, capability, scope, fingerprint);
+  if (existing) return normalizePaymentProviderCapabilityCertification(existing);
+
+  db.prepare(`
+    INSERT INTO payment_provider_capability_certifications
+      (id, organization_id, provider_id, capability, certification_scope, status,
+       evidence_json, evidence_fingerprint, provider_reference, observed_at,
+       expires_at, reason, certified_by_user_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id, tenant.organization_id, providerId, capability, scope, status,
+    evidenceJson, fingerprint, providerReference == null ? null : String(providerReference),
+    observedAt, expiresAt, String(input.reason || ''), actor?.userId || actor?.id || null, now, now,
+  );
+
+  audit(String(chatId), 'payment.provider_capability.evidence.recorded',
+    'payment_provider_capability_certification', id,
+    { providerId, capability, certificationScope: scope, status, evidenceFingerprint: fingerprint },
+    { organizationId: tenant.organization_id, actorId: actor?.userId || actor?.id || null, reason: input.reason || '' });
+
+  return normalizePaymentProviderCapabilityCertification(
+    db.prepare('SELECT * FROM payment_provider_capability_certifications WHERE id = ?').get(id),
+  );
+}
+
+export async function listPaymentProviderCapabilityEvidence(chatId, providerId = null, options = {}) {
+  ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const clauses = ['organization_id = ?'];
+  const params = [tenant.organization_id];
+  if (providerId) { clauses.push('provider_id = ?'); params.push(String(providerId).trim().toLowerCase()); }
+  if (options.capability) { clauses.push('capability = ?'); params.push(String(options.capability).trim()); }
+  if (options.scope) { clauses.push('certification_scope = ?'); params.push(String(options.scope).trim().toUpperCase()); }
+  clauses.push("status <> 'EXPIRED'");
+  const rows = db.prepare(`SELECT * FROM payment_provider_capability_certifications WHERE ${clauses.join(' AND ')} ORDER BY updated_at DESC, id DESC`).all(...params);
+  return rows.map(normalizePaymentProviderCapabilityCertification);
+}
+
+function normalizePaymentProviderCapabilityCertification(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    providerId: row.provider_id,
+    capability: row.capability,
+    certificationScope: row.certification_scope,
+    status: row.status,
+    evidence: parseJSON(row.evidence_json, null),
+    evidenceFingerprint: row.evidence_fingerprint,
+    providerReference: row.provider_reference,
+    observedAt: row.observed_at,
+    expiresAt: row.expires_at,
+    reason: row.reason || '',
+    certifiedByUserId: row.certified_by_user_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 
 export function getDatabasePath() {
   return DB_PATH;
