@@ -8513,13 +8513,15 @@ export async function getPaymentConfirmationAttemptByProviderTransaction(chatId,
   const organizationId = await tenantOrganizationId(chatId);
   const provider = String(providerId || '').trim().toLowerCase();
   const transactionId = String(providerTransactionId || '').trim();
+  const accountId = String(paymentAccountId || '').trim();
   if (!provider || !transactionId) return null;
-  const params = [organizationId, provider, transactionId, transactionId];
-  let accountClause = '';
-  if (paymentAccountId) {
-    accountClause = ' AND a.payment_account_id=?';
-    params.push(String(paymentAccountId));
+  if (!accountId) {
+    throw Object.assign(
+      new Error('Provider transaction correlation requires a canonical payment account'),
+      { statusCode: 409, code: 'PAYMENT_ACCOUNT_REQUIRED' }
+    );
   }
+  const params = [organizationId, provider, transactionId, transactionId, accountId];
   const rows = db.prepare(`
     SELECT a.*
     FROM payment_confirmation_attempts a
@@ -8527,7 +8529,9 @@ export async function getPaymentConfirmationAttemptByProviderTransaction(chatId,
     WHERE a.organization_id=? AND LOWER(a.provider_id)=?
       AND (a.provider_transaction_id=? OR e.provider_transaction_id=?)
       AND a.status NOT IN ('EXPIRED')
-      ${accountClause}
+      AND a.payment_account_id=?
+      AND (e.id IS NULL OR e.payment_account_id=a.payment_account_id)
+      AND (e.id IS NULL OR LOWER(e.provider_id)=LOWER(a.provider_id))
     ORDER BY a.attempt_number DESC, a.created_at DESC
   `).all(...params);
 
