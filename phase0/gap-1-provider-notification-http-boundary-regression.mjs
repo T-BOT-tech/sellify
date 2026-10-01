@@ -18,5 +18,8 @@ assert.doesNotMatch(handler, /resolved\.paymentIntent/);
 assert.doesNotMatch(handler, /paymentIntentId:/);
 assert.doesNotMatch(handler, /organizationId:/);
 assert.doesNotMatch(handler, /locationId:/);
+assert.doesNotMatch(handler, /getPaymentAccountForProviderNotification\(/);
+assert.match(handler, /providerAccountReferenceHint: callbackAccountIdentifier/);
+assert.match(handler, /config: \{\}/);
 
 console.log('GAP-1 provider notification HTTP boundary regression: PASS');
