@@ -772,6 +772,67 @@ export class PaymentCore {
     }
   }
 
+  async ingestProviderNotification({ providerId, rawRequest, requestContext = {}, config = {} } = {}, actor = null) {
+    const id = String(providerId || '').trim().toLowerCase();
+    if (!id) {
+      throw Object.assign(
+        new Error('providerId is required for provider notification ingestion'),
+        { statusCode: 400, code: 'PROVIDER_REQUIRED' }
+      );
+    }
+
+    const provider = this.providerRegistry.requirePaymentProvider(id);
+    if (typeof provider.authenticateNotification !== 'function' ||
+        typeof provider.parseEvidence !== 'function') {
+      throw Object.assign(
+        new Error(`Payment provider ${id} cannot ingest notifications`),
+        { statusCode: 501, code: 'PAYMENT_PROVIDER_NOTIFICATION_UNSUPPORTED', providerId: id }
+      );
+    }
+
+    // Authentication is performed before parsing is trusted. Parsing may inspect
+    // the raw callback, but its output cannot establish tenant/payment identity.
+    const authentication = await provider.authenticateNotification({
+      rawRequest,
+      requestContext,
+      config,
+    });
+
+    if (!authentication?.authenticated) {
+      throw Object.assign(
+        new Error('Provider notification authentication failed'),
+        { statusCode: 401, code: 'PROVIDER_NOTIFICATION_NOT_AUTHENTICATED', providerId: id }
+      );
+    }
+
+    const parsed = await provider.parseEvidence({ rawRequest, config });
+    if (!parsed || typeof parsed !== 'object') {
+      throw Object.assign(
+        new Error('Provider notification parser returned no evidence'),
+        { statusCode: 400, code: 'INVALID_PROVIDER_NOTIFICATION', providerId: id }
+      );
+    }
+
+    const notificationId = String(
+      authentication.providerNotificationId ||
+      authentication.notificationId ||
+      parsed.providerNotificationId ||
+      parsed.provider_notification_id ||
+      ''
+    ).trim() || null;
+
+    return this.ingestAuthenticatedProviderNotification({
+      ...parsed,
+      providerId: id,
+      providerAccountReference:
+        authentication.providerAccountReference ||
+        authentication.accountIdentifier,
+      providerNotificationId: notificationId,
+      notificationAuthentication: authentication,
+      source: 'provider-notification',
+    }, actor);
+  }
+
   async ingestAuthenticatedProviderNotification(notification = {}, actor = null) {
     const authenticatedContext = notification.notificationAuthentication ||
       notification.notification_authentication ||
