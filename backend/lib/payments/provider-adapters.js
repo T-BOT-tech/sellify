@@ -90,7 +90,8 @@ function createProviderAdapter(id, name) {
     capabilities: { getMetadata: true, probeCapability: true },
     configured: getProviderAdapterConfig(id).configured,
     getMetadata: async () => ({ id, name, version: '1' }),
-    verify: async ({ context = {}, payment = null, paymentIntent = null, paymentAccount = null } = {}) => {
+    verify: async ({ context = {}, query = {}, payment = null, paymentIntent = null, paymentAccount = null } = {}) => {
+      context = { ...query, ...context };
       const config = getProviderAdapterConfig(id, context.env || process.env);
       if (!config.configured) {
         const error = new Error(`${name} is not configured`);
@@ -108,7 +109,8 @@ function createProviderAdapter(id, name) {
         paymentAccount,
       });
     },
-    getStatus: async ({ context = {}, payment = null, paymentIntent = null, paymentAccount = null } = {}) => {
+    getStatus: async ({ context = {}, query = {}, payment = null, paymentIntent = null, paymentAccount = null } = {}) => {
+      context = { ...query, ...context };
       const config = getProviderAdapterConfig(id, context.env || process.env);
       if (!config.configured) {
         const error = new Error(`${name} is not configured`);
