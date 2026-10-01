@@ -514,6 +514,15 @@ export class PaymentCore {
     verification.reasonCodes = invariants.reasonCodes;
 
     const decision = this.decisionEngine.decide({ verification, invariants, payment });
+    this.#assertDecisionBinding({
+      payment,
+      paymentIntent,
+      evidence,
+      paymentAccount,
+      verification,
+      invariants,
+      decision,
+    });
     const verificationId = crypto.randomUUID();
     const decisionId = crypto.randomUUID();
     let committedPayment;
@@ -590,6 +599,50 @@ export class PaymentCore {
       invariants,
       decision: storedDecision,
     };
+  }
+
+  #assertDecisionBinding({ payment, paymentIntent, evidence, paymentAccount, verification, invariants, decision }) {
+    const ids = [
+      ['payment', payment?.id],
+      ['paymentIntent', paymentIntent?.id],
+      ['evidence', evidence?.id],
+      ['paymentAccount', paymentAccount?.id],
+    ];
+    if (ids.some(([, value]) => !String(value || '').trim())) {
+      throw Object.assign(
+        new Error('Financial decision context is incomplete'),
+        { statusCode: 409, code: 'PAYMENT_DECISION_BINDING_MISMATCH' }
+      );
+    }
+
+    if (String(payment.paymentIntentId || '') !== String(paymentIntent.id || '') ||
+        String(evidence.paymentIntentId || '') !== String(paymentIntent.id || '') ||
+        String(paymentIntent.paymentAccountId || '') !== String(paymentAccount.id || '') ||
+        String(evidence.paymentAccountId || '') !== String(paymentAccount.id || '') ||
+        String(payment.providerId || '').toLowerCase() !== String(paymentIntent.providerId || '').toLowerCase() ||
+        String(evidence.providerId || '').toLowerCase() !== String(paymentIntent.providerId || '').toLowerCase() ||
+        String(paymentAccount.providerId || '').toLowerCase() !== String(paymentIntent.providerId || '').toLowerCase() ||
+        String(verification.providerId || '').toLowerCase() !== String(paymentIntent.providerId || '').toLowerCase()) {
+      throw Object.assign(
+        new Error('Financial decision identity binding mismatch'),
+        { statusCode: 409, code: 'PAYMENT_DECISION_BINDING_MISMATCH' }
+      );
+    }
+
+    if (!invariants?.passed && String(decision?.targetState || '').toUpperCase() === 'VERIFIED') {
+      throw Object.assign(
+        new Error('Verified financial decision requires passing invariants'),
+        { statusCode: 409, code: 'PAYMENT_DECISION_INVARIANT_BYPASS' }
+      );
+    }
+
+    if (String(decision?.decision || '').toUpperCase() === 'ACCEPT' &&
+        String(decision?.targetState || '').toUpperCase() !== 'VERIFIED') {
+      throw Object.assign(
+        new Error('Accept decision must target VERIFIED'),
+        { statusCode: 409, code: 'PAYMENT_DECISION_INVALID' }
+      );
+    }
   }
 
   async finalizeProviderConfirmation(command = {}) {
