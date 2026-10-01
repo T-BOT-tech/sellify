@@ -1,3 +1,5 @@
+import { assertUntrustedPaymentEvidenceShape, normalizePaymentEvidenceSource } from './payment-evidence-authority.js';
+
 export class PaymentCore {
   constructor({
     store,
@@ -291,9 +293,11 @@ export class PaymentCore {
       throw Object.assign(new Error('paymentIntentId is required'), { statusCode: 400, code: 'PAYMENT_INTENT_REQUIRED' });
     }
 
+    assertUntrustedPaymentEvidenceShape(command);
     return this.store.insertPaymentEvidence(chatId, {
       ...command,
       paymentIntentId: command.paymentIntentId || command.payment_intent_id,
+      source: 'caller.submitted',
     }, command.actor || null);
   }
 
