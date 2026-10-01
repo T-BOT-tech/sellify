@@ -8514,13 +8514,13 @@ export async function getPaymentConfirmationAttemptByProviderTransaction(chatId,
   const provider = String(providerId || '').trim().toLowerCase();
   const transactionId = String(providerTransactionId || '').trim();
   if (!provider || !transactionId) return null;
-  const params = [organizationId, provider, transactionId];
+  const params = [organizationId, provider, transactionId, transactionId];
   let accountClause = '';
   if (paymentAccountId) {
     accountClause = ' AND a.payment_account_id=?';
     params.push(String(paymentAccountId));
   }
-  const row = db.prepare(`
+  const rows = db.prepare(`
     SELECT a.*
     FROM payment_confirmation_attempts a
     LEFT JOIN payment_evidence e ON e.id=a.evidence_id AND e.organization_id=a.organization_id
@@ -8529,9 +8529,16 @@ export async function getPaymentConfirmationAttemptByProviderTransaction(chatId,
       AND a.status NOT IN ('EXPIRED')
       ${accountClause}
     ORDER BY a.attempt_number DESC, a.created_at DESC
-    LIMIT 1
-  `).get(organizationId, provider, transactionId, transactionId, ...(paymentAccountId ? [String(paymentAccountId)] : []));
-  return paymentConfirmationAttemptFromRow(row);
+  `).all(...params);
+
+  if (rows.length === 0) return null;
+  if (rows.length > 1) {
+    throw Object.assign(
+      new Error('Provider transaction matches multiple confirmation attempts'),
+      { statusCode: 409, code: 'AMBIGUOUS_PROVIDER_TRANSACTION_CORRELATION' }
+    );
+  }
+  return paymentConfirmationAttemptFromRow(rows[0]);
 }
 
 export async function getPaymentConfirmationAttempt(chatId, attemptId) {
