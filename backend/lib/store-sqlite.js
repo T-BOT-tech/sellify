@@ -5526,7 +5526,15 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
         organizationId, providerId, String(paymentAccountId), providerNotificationId
       )
     : null;
-  if (notificationDuplicate) return { evidence: paymentEvidenceFromRow(notificationDuplicate), duplicate: true };
+  if (notificationDuplicate) {
+    if (notificationDuplicate.fingerprint === fingerprint) {
+      return { evidence: paymentEvidenceFromRow(notificationDuplicate), duplicate: true };
+    }
+    throw Object.assign(new Error('Provider notification already exists with different evidence'), {
+      statusCode: 409,
+      code: 'PROVIDER_NOTIFICATION_EVIDENCE_CONFLICT',
+    });
+  }
 
   if (providerTransactionId && paymentAccountId) {
     const transactionMatch = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND payment_account_id = ? AND provider_transaction_id = ?').get(
@@ -5557,6 +5565,21 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
       // The provider transaction unique constraint is the authoritative race winner
       // when two callbacks arrive concurrently. Re-read after the failed INSERT
       // and classify the loser deterministically.
+      if (providerNotificationId && paymentAccountId) {
+        const notificationWinner = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND payment_account_id = ? AND provider_notification_id = ?').get(
+          organizationId, providerId, String(paymentAccountId), providerNotificationId
+        );
+        if (notificationWinner) {
+          if (notificationWinner.fingerprint === fingerprint) {
+            return { evidence: paymentEvidenceFromRow(notificationWinner), duplicate: true };
+          }
+          throw Object.assign(new Error('Provider notification already exists with different evidence'), {
+            statusCode: 409,
+            code: 'PROVIDER_NOTIFICATION_EVIDENCE_CONFLICT',
+          });
+        }
+      }
+
       if (providerTransactionId) {
         const transactionWinner = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND provider_transaction_id = ?').get(
           organizationId, providerId, providerTransactionId
