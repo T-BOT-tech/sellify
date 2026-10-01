@@ -288,6 +288,7 @@
     "gap1:account-transaction-correlation-test": "node phase0/gap-1-confirmation-account-transaction-collision-regression.mjs",
     "gap1:evidence-confirmation-binding-test": "node phase0/gap-1-evidence-confirmation-account-binding-regression.mjs",
     "gap1:ambiguous-correlation-test": "node phase0/gap-1-ambiguous-provider-transaction-correlation-regression.mjs",
+    "gap1:notification-idempotency-test": "node phase0/gap-1-provider-notification-idempotency-regression.mjs",
     "test:gap-2-logistics-authz": "node phase0/gap-2-logistics-authorization-foundation-regression.mjs",
     "test:gap-2-delivery-assignment": "node phase0/gap-2-delivery-assignment-authority-regression.mjs",
     "test:gap-2-delivery-lifecycle": "node phase0/gap-2-delivery-assignment-lifecycle-regression.mjs",
