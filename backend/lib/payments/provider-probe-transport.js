@@ -3,6 +3,8 @@
 // provider adapter. Retries are bounded and apply only to explicitly retryable
 // responses; provider semantics remain outside this transport.
 
+import { ProviderNetworkError, ProviderTimeoutError } from './provider-errors.js';
+
 const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 
 function sleep(ms) {
@@ -73,11 +75,9 @@ export async function requestProviderProbe({
       await sleep(retryDelay(attempt, retryAfter, backoffBaseMs, backoffMaxMs));
     } catch (error) {
       if (error?.name === 'AbortError') {
-        const timeoutError = new Error('Provider probe timed out');
-        timeoutError.code = 'PAYMENT_PROVIDER_PROBE_TIMEOUT';
-        lastError = timeoutError;
+        lastError = new ProviderTimeoutError(null, 'probeCapability', error);
       } else {
-        lastError = error;
+        lastError = new ProviderNetworkError(null, 'probeCapability', error);
       }
       if (attempt === attempts) throw lastError;
       await sleep(retryDelay(attempt, null, backoffBaseMs, backoffMaxMs));
