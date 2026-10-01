@@ -796,11 +796,11 @@ export class PaymentCore {
     // configuration inside the Payment Core boundary so the HTTP adapter never
     // performs or exposes a pre-auth account lookup.
     let notificationConfig = config && typeof config === 'object' ? { ...config } : {};
-    const accountHint = String(
-      requestContext?.providerAccountReferenceHint ||
-      requestContext?.provider_account_reference_hint ||
-      ''
-    ).trim();
+    const accountHint = typeof provider.getNotificationAccountReferenceHint === 'function'
+      ? String(await provider.getNotificationAccountReferenceHint({ rawRequest, requestContext }) || '').trim()
+      : '';
+
+
     if (!Object.keys(notificationConfig).length && accountHint &&
         typeof this.store.getPaymentNotificationConfig === 'function') {
       try {
