@@ -5672,6 +5672,36 @@ export async function insertPaymentVerification(chatId, input = {}, actor = null
   const { organizationId } = await resolvePaymentContext(chatId);
   const evidence = db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(String(input.evidenceId || input.evidence_id), organizationId);
   if (!evidence) throw Object.assign(new Error('Evidence not found'), { statusCode: 404, code: 'EVIDENCE_NOT_FOUND' });
+
+  const paymentId = String(input.paymentId || input.payment_id || evidence.payment_id || '').trim() || null;
+  const paymentIntentId = String(input.paymentIntentId || input.payment_intent_id || evidence.payment_intent_id || '').trim() || null;
+  const providerId = String(input.providerId || input.provider_id || evidence.provider_id || '').trim().toLowerCase();
+  if (paymentId && evidence.payment_id && String(evidence.payment_id) !== paymentId) {
+    throw Object.assign(new Error('Verification payment does not match evidence payment'), { statusCode: 409, code: 'VERIFICATION_PAYMENT_MISMATCH' });
+  }
+  if (paymentIntentId && evidence.payment_intent_id && String(evidence.payment_intent_id) !== paymentIntentId) {
+    throw Object.assign(new Error('Verification payment intent does not match evidence intent'), { statusCode: 409, code: 'VERIFICATION_INTENT_MISMATCH' });
+  }
+  if (providerId !== String(evidence.provider_id || '').toLowerCase()) {
+    throw Object.assign(new Error('Verification provider does not match evidence provider'), { statusCode: 409, code: 'VERIFICATION_PROVIDER_MISMATCH' });
+  }
+  if (paymentId) {
+    const payment = db.prepare('SELECT id, payment_intent_id, provider_id FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
+    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    if (paymentIntentId && String(payment.payment_intent_id || '') !== paymentIntentId) {
+      throw Object.assign(new Error('Verification payment intent does not match payment'), { statusCode: 409, code: 'VERIFICATION_INTENT_MISMATCH' });
+    }
+    if (String(payment.provider_id || '').toLowerCase() !== providerId) {
+      throw Object.assign(new Error('Verification provider does not match payment'), { statusCode: 409, code: 'VERIFICATION_PROVIDER_MISMATCH' });
+    }
+  }
+  if (paymentIntentId) {
+    const intent = db.prepare('SELECT id, provider_id FROM payment_intents WHERE id = ? AND organization_id = ?').get(paymentIntentId, organizationId);
+    if (!intent) throw Object.assign(new Error('Payment intent not found'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND' });
+    if (String(intent.provider_id || '').toLowerCase() !== providerId) {
+      throw Object.assign(new Error('Verification provider does not match payment intent'), { statusCode: 409, code: 'VERIFICATION_PROVIDER_MISMATCH' });
+    }
+  }
   const id = String(input.id || crypto.randomUUID()); const now = nowIso();
   const verifier = String(input.verifier || 'payment-core').trim();
   if (!verifier.startsWith('payment-core.')) throw Object.assign(new Error('Payment verification must originate from a trusted Payment Core verifier'), { statusCode: 409, code: 'UNTRUSTED_PAYMENT_VERIFIER' });
@@ -5688,8 +5718,8 @@ export async function insertPaymentVerification(chatId, input = {}, actor = null
 
   try {
     db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-      id, organizationId, input.paymentId || input.payment_id || evidence.payment_id || null, input.paymentIntentId || input.payment_intent_id || evidence.payment_intent_id || null,
-      evidence.id, String(input.providerId || input.provider_id || evidence.provider_id), result,
+      id, organizationId, paymentId, paymentIntentId,
+      evidence.id, providerId, result,
       input.confidence == null ? null : Number(input.confidence), input.observedAmountMinor ?? input.observed_amount_minor ?? null,
       input.observedCurrency || input.observed_currency || null, input.observedReceiver || input.observed_receiver || null,
       input.observedReceiverAccount || input.observed_receiver_account || null, input.observedReference || input.observed_reference || null,
