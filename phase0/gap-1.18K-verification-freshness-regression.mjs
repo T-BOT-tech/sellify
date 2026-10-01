@@ -9,11 +9,13 @@ assert.match(freshness, /DEFAULT_MAX_VERIFICATION_AGE_MS = 5 \* 60 \* 1000/);
 assert.match(freshness, /VERIFICATION_STALE/);
 assert.match(freshness, /VERIFICATION_OBSERVATION_TIME_INVALID/);
 assert.match(freshness, /VERIFICATION_OBSERVATION_IN_FUTURE/);
+assert.match(freshness, /ageMs < -60 \* 1000/);
 assert.match(store, /assertVerificationFreshness/);
 assert.match(store, /maxVerificationAgeMs/);
 assert.match(core, /evaluateVerificationFreshness/);
 assert.match(core, /verification\.result = 'EXPIRED'/);
 assert.match(core, /freshness\.reasonCode/);
+assert.match(core, /createdAt: null/);
 
 const commitStart = store.indexOf('export async function commitPaymentDecision');
 const commitEnd = store.indexOf('const PAYMENT_STATES', commitStart);
