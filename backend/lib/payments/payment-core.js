@@ -71,6 +71,16 @@ export class PaymentCore {
     }, command.actor || null);
     if (requested.duplicate) return requested;
 
+    if (provider.capabilities && provider.capabilities.refund === false) {
+      const refund = await this.store.finalizePaymentRefund(chatId, requested.refund.id, {
+        status: 'UNKNOWN',
+        failureCode: 'PAYMENT_PROVIDER_OPERATION_UNSUPPORTED',
+        evidence: { reason: 'Provider refund capability is not supported' },
+        providerResult: { capability: 'refund', supported: false },
+      }, command.actor || null);
+      return { refund, supported: false, status: 'UNKNOWN', reasonCodes: ['PROVIDER_REFUND_UNAVAILABLE'] };
+    }
+
     let raw;
     try {
       raw = await provider.refund({
