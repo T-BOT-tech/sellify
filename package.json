@@ -300,7 +300,8 @@
     "gap-1.16:payment-routing-test": "node phase0/gap-1.16-payment-routing-regression.mjs",
     "gap-1.17:payment-operations-test": "node phase0/gap-1.17-payment-operations-regression.mjs",
     "gap-1.18:payment-provider-capability-test": "node phase0/gap-1.18-payment-provider-capability-regression.mjs",
-    "gap-1.18:payment-provider-evidence-test": "node phase0/gap-1.18-provider-capability-evidence-regression.mjs"
+    "gap-1.18:payment-provider-evidence-test": "node phase0/gap-1.18-provider-capability-evidence-regression.mjs",
+    "gap-1.18:payment-provider-probe-test": "node phase0/gap-1.18-provider-capability-probe-regression.mjs"
   },
   "engines": {
     "node": ">=24"
