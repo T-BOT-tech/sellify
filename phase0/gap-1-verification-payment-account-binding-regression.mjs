@@ -5,6 +5,28 @@ const { InvariantGate } = await import('../backend/lib/payments/invariant-gate.j
 
 let verifyCalls = 0;
 
+const canonicalIntent = {
+  id: 'intent-001',
+  organizationId: 'org-001',
+  paymentAccountId: 'account-001',
+  providerId: 'mpesa',
+};
+
+const canonicalPayment = {
+  id: 'payment-001',
+  organizationId: 'org-001',
+  state: 'RECEIVED',
+};
+
+const canonicalAccount = {
+  id: 'account-001',
+  organizationId: 'org-001',
+  chatId: 'chat-001',
+  providerId: 'mpesa',
+  accountIdentifier: '600001',
+  metadata: {},
+};
+
 const invariantGate = new InvariantGate();
 const invariantInput = {
   payment: {
@@ -40,27 +62,6 @@ for (const [label, mutate] of [
   assert.equal(result.passed, false, label);
 }
 
-const canonicalIntent = {
-  id: 'intent-001',
-  organizationId: 'org-001',
-  paymentAccountId: 'account-001',
-  providerId: 'mpesa',
-};
-
-const canonicalPayment = {
-  id: 'payment-001',
-  organizationId: 'org-001',
-  state: 'RECEIVED',
-};
-
-const canonicalAccount = {
-  id: 'account-001',
-  organizationId: 'org-001',
-  chatId: 'chat-001',
-  providerId: 'mpesa',
-  accountIdentifier: '600001',
-  metadata: {},
-};
 
 const provider = {
   verify: async () => {
