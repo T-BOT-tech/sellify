@@ -12,7 +12,10 @@ process.env.SELLIFY_DB_PATH = path.join(tempDir, 'sellify.sqlite');
 const store = await import('../backend/lib/store-sqlite.js');
 
 async function setup() {
-  const user = await store.getOrCreateUserByTelegram('gap1-10-user', 'GAP1.10 Test User');
+  const user = await store.getOrCreateUserByTelegram(
+    `gap1-10-user-${crypto.randomUUID()}`,
+    'GAP1.10 Test User',
+  );
   const tenant = await store.createTenantForUser({
     userId: user.id,
     sellerName: 'GAP1.10 Test Store',
@@ -23,15 +26,23 @@ async function setup() {
   });
   const account = await store.createPaymentAccount(tenant.chatId, {
     providerId: 'telebirr',
-    accountIdentifier: '251900000000',
+    accountIdentifier: `251900${String(Math.floor(Math.random() * 1000000)).padStart(6, '0')}`,
     phone: '251900000000',
   });
-  const organization = await store.getTenant(tenant.chatId);\n  return { chatId: tenant.chatId, organizationId: organization.organizationId, accountId: account.id };
+  const organization = await store.getTenant(tenant.chatId);
+  return {
+    chatId: tenant.chatId,
+    organizationId: organization.organizationId,
+    accountId: account.id,
+  };
 }
 
 function runWorker(workerData) {
   return new Promise((resolve, reject) => {
-    const worker = new Worker(new URL('./gap-1.10-payment-concurrency-worker.mjs', import.meta.url), { workerData });
+    const worker = new Worker(
+      new URL('./gap-1.10-payment-concurrency-worker.mjs', import.meta.url),
+      { workerData },
+    );
     worker.once('message', resolve);
     worker.once('error', reject);
     worker.once('exit', code => {
@@ -41,19 +52,23 @@ function runWorker(workerData) {
 }
 
 async function concurrentCreate(count, base) {
-  return Promise.all(Array.from({ length: count }, () => runWorker({
-    operation: 'create-payment',
-    chatId: base.chatId,
-    input: {
-      organizationId: base.organizationId,
-      paymentAccountId: base.accountId,
-      providerId: 'telebirr',
-      channel: 'manual',
-      amountMinor: 150000,
-      currency: 'ETB',
-      idempotencyKey: base.idempotencyKey,
-    },
-  })));
+  return Promise.all(
+    Array.from({ length: count }, () =>
+      runWorker({
+        operation: 'create-payment',
+        chatId: base.chatId,
+        input: {
+          organizationId: base.organizationId,
+          paymentAccountId: base.accountId,
+          providerId: 'telebirr',
+          channel: 'manual',
+          amountMinor: 150000,
+          currency: 'ETB',
+          idempotencyKey: base.idempotencyKey,
+        },
+      }),
+    ),
+  );
 }
 
 test('GAP-1.10 durable idempotency: concurrent duplicate CREATE_PAYMENT requests produce one payment', async () => {
@@ -62,22 +77,34 @@ test('GAP-1.10 durable idempotency: concurrent duplicate CREATE_PAYMENT requests
   for (const count of [1, 10, 100]) {
     const base = await setup();
     base.idempotencyKey = `gap1-10-create-${count}`;
+
     const results = await concurrentCreate(count, base);
     const failures = results.filter(result => !result.ok);
     assert.deepEqual(failures, [], `concurrency=${count} produced failures`);
+
     const paymentIds = new Set(results.map(result => result.paymentId));
     const intentIds = new Set(results.map(result => result.intentId));
     assert.equal(paymentIds.size, 1, `concurrency=${count} created multiple payments`);
     assert.equal(intentIds.size, 1, `concurrency=${count} created multiple intents`);
-    assert.equal(results.filter(result => result.idempotent === false).length, count === 1 ? 1 : 0);
-    assert.equal(results.filter(result => result.idempotent === true).length, count === 1 ? 0 : count);
+    assert.equal(
+      results.filter(result => result.idempotent === false).length,
+      count === 1 ? 1 : 0,
+    );
+    assert.equal(
+      results.filter(result => result.idempotent === true).length,
+      count === 1 ? 0 : count,
+    );
+
+    createdPayments.push({ base, paymentId: [...paymentIds][0] });
   }
 
-  const payments = await store.listPayments(base.chatId, { limit: 500 });
-  const ledger = await store.listPaymentLedger(base.chatId, payments[0].id);
-  assert.equal(payments.length, 1);
-  assert.equal(ledger.length, 1);
-  assert.equal(ledger[0].entryType, 'CREATED');
+  for (const { base, paymentId } of createdPayments) {
+    const payments = await store.listPayments(base.chatId, { limit: 500 });
+    const ledger = await store.listPaymentLedger(base.chatId, paymentId);
+    assert.equal(payments.length, 1);
+    assert.equal(ledger.length, 1);
+    assert.equal(ledger[0].entryType, 'CREATED');
+  }
 });
 
 test.after(async () => {
