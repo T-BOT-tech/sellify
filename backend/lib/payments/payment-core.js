@@ -897,6 +897,25 @@ export class PaymentCore {
       );
     }
 
+    const parsedNotificationId = String(
+      parsed.providerNotificationId ||
+      parsed.provider_notification_id ||
+      parsed.notificationId ||
+      parsed.notification_id ||
+      ''
+    ).trim();
+    if (authenticatedNotificationId && parsedNotificationId &&
+        authenticatedNotificationId !== parsedNotificationId) {
+      throw Object.assign(
+        new Error('Authenticated notification ID does not match parsed notification ID'),
+        {
+          statusCode: 401,
+          code: 'PROVIDER_NOTIFICATION_AUTHENTICATION_MISMATCH',
+          providerId: id,
+        }
+      );
+    }
+
     // Provider parsers may emit provider facts only. Sellify tenant/payment
     // identity is never accepted from parser output.
     const forbiddenIdentityFields = [
