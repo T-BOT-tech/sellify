@@ -2378,6 +2378,14 @@ function runMigrations() {
   // GAP-1.18N — verification provenance hardening.
   // The persisted verifier identity is server-owned. Caller-supplied verifier
   // metadata may not masquerade as Payment Core provenance.
+  if (!applied.includes(56)) {
+    db.exec(`
+      ALTER TABLE payment_verifications ADD COLUMN provenance_source TEXT NOT NULL DEFAULT 'PAYMENT_CORE';
+      ALTER TABLE payment_verifications ADD COLUMN provenance_operation TEXT;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(56, nowIso());
+  }
+
   if (!applied.includes(57)) {
     db.exec(`
       ALTER TABLE audit_events ADD COLUMN previous_hash TEXT;
@@ -2387,14 +2395,6 @@ function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_audit_lineage ON audit_events(organization_id, lineage_type, lineage_id, created_at DESC);
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(57, nowIso());
-  }
-
-  if (!applied.includes(56)) {
-    db.exec(`
-      ALTER TABLE payment_verifications ADD COLUMN provenance_source TEXT NOT NULL DEFAULT 'PAYMENT_CORE';
-      ALTER TABLE payment_verifications ADD COLUMN provenance_operation TEXT;
-    `);
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(56, nowIso());
   }
 
   // GAP-1.18M — durable provider transaction identity binding.
