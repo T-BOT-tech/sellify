@@ -317,7 +317,8 @@
     "gap-1.18:verification-freshness-test": "node phase0/gap-1.18K-verification-freshness-regression.mjs",
     "gap-1.18:payment-financial-invariant-binding-test": "node phase0/gap-1.18L-payment-financial-invariant-binding-regression.mjs",
     "gap-1.18:provider-transaction-uniqueness-test": "node phase0/gap-1.18M-provider-transaction-uniqueness-regression.mjs",
-    "gap-1.18:verification-provenance-test": "node phase0/gap-1.18N-verification-provenance-regression.mjs"
+    "gap-1.18:verification-provenance-test": "node phase0/gap-1.18N-verification-provenance-regression.mjs",
+    "gap-1.18:audit-lineage-test": "node phase0/gap-1.18O-audit-lineage-regression.mjs"
   },
   "engines": {
     "node": ">=24"
