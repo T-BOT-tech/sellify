@@ -91,6 +91,8 @@ jobs:
         run: npm run gap-1.18:payment-provider-capability-test
       - name: GAP-1.18 durable provider capability evidence regression
         run: npm run gap-1.18:payment-provider-evidence-test
+      - name: GAP-1.18 provider capability probe regression
+        run: npm run gap-1.18:payment-provider-probe-test
       - name: GAP-2 logistics authorization foundation regression
         run: npm run test:gap-2-logistics-authz
       - name: GAP-2 delivery assignment authority regression
