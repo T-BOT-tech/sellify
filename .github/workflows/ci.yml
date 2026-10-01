@@ -106,6 +106,9 @@ jobs:
 
       - name: GAP-1.18D provider verification result regression
         run: npm run gap-1.18:provider-verification-result-test
+
+      - name: GAP-1.18E provider-local parser regression
+        run: npm run gap-1.18:provider-local-parsers-test
       - name: GAP-2 logistics authorization foundation regression
         run: npm run test:gap-2-logistics-authz
       - name: GAP-2 delivery assignment authority regression
