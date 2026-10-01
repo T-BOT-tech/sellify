@@ -95,6 +95,10 @@ jobs:
         run: npm run gap-1.18:payment-provider-probe-test
       - name: GAP-1.18 provider adapter configuration regression
         run: npm run gap-1.18:payment-provider-config-test
+      - name: GAP-1.18 provider probe transport regression
+        run: npm run gap-1.18:payment-provider-transport-test
+      - name: GAP-1.18 provider adapter skeleton regression
+        run: npm run gap-1.18:payment-provider-adapters-test
       - name: GAP-2 logistics authorization foundation regression
         run: npm run test:gap-2-logistics-authz
       - name: GAP-2 delivery assignment authority regression
