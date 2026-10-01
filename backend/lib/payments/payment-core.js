@@ -41,6 +41,12 @@ export class PaymentCore {
   }
 
   async #observeProviderConfirmation({ chatId, evidence, paymentIntent, payment, paymentAccount, actor = null }) {
+    this.#assertEvidencePaymentAccountBinding({
+      evidence,
+      paymentIntent,
+      paymentAccount,
+    });
+
     const confirmationAttempt = await this.store.createPaymentConfirmationAttempt(chatId, {
       paymentId: payment.id,
       paymentIntentId: paymentIntent.id,
@@ -208,6 +214,25 @@ export class PaymentCore {
 
     const evidence = await this.store.getPaymentEvidence(correlationChatId, attempt.evidenceId);
     if (!evidence) throw Object.assign(new Error('Confirmation evidence not found'), { statusCode: 409, code: 'EVIDENCE_NOT_FOUND' });
+
+    const paymentIntent = evidence.paymentIntentId
+      ? await this.store.getPaymentIntent(correlationChatId, evidence.paymentIntentId)
+      : null;
+    const payment = evidence.paymentIntentId
+      ? await this.store.getPaymentForIntent(correlationChatId, evidence.paymentIntentId)
+      : null;
+    if (!paymentIntent || !payment) {
+      throw Object.assign(
+        new Error('Confirmation evidence payment intent could not be resolved'),
+        { statusCode: 409, code: 'PAYMENT_INTENT_MISMATCH' }
+      );
+    }
+
+    this.#assertEvidencePaymentAccountBinding({
+      evidence,
+      paymentIntent,
+      paymentAccount: attemptAccount,
+    });
 
     if (providerTransactionId &&
         evidence.providerTransactionId &&
