@@ -592,6 +592,54 @@ export class PaymentCore {
     };
   }
 
+  async probeProviderCapability(command = {}) {
+    this.#authorize(command, 'payments:manage');
+    const chatId = String(command.chatId || '').trim();
+    const providerId = String(command.providerId || command.provider_id || '').trim();
+    const capability = String(command.capability || '').trim();
+    if (!chatId) throw Object.assign(new Error('chatId is required'), { statusCode: 400, code: 'PROVIDER_CONTEXT_REQUIRED' });
+    if (!providerId) throw Object.assign(new Error('providerId is required'), { statusCode: 400, code: 'PROVIDER_CONTEXT_REQUIRED' });
+    if (!capability) throw Object.assign(new Error('capability is required'), { statusCode: 400, code: 'PROVIDER_CAPABILITY_REQUIRED' });
+
+    const provider = this.providerRegistry?.getPaymentProvider
+      ? this.providerRegistry.getPaymentProvider(providerId)
+      : null;
+    if (!provider) throw Object.assign(new Error('Unknown payment provider'), { statusCode: 400, code: 'UNKNOWN_PAYMENT_PROVIDER' });
+
+    const { probeProviderCapability } = await import('./provider-capability-probe.js');
+    const result = await probeProviderCapability(provider, {
+      capability,
+      context: {
+        chatId,
+        organizationId: command.organizationId || null,
+        paymentAccountId: command.paymentAccountId || command.payment_account_id || null,
+        request: command.probeContext || command.probe_context || {},
+      },
+    });
+
+    if (this.store.recordPaymentProviderCapabilityEvidence) {
+      const recorded = await this.store.recordPaymentProviderCapabilityEvidence(chatId, {
+        ...result,
+        organizationId: command.organizationId || null,
+        providerId,
+        capability,
+        certificationScope: 'LIVE_EXTERNAL',
+        status: result.status === 'VERIFIED' ? 'OBSERVED' : result.status,
+        evidence: {
+          ...result.evidence,
+          probeStatus: result.status,
+          reasonCodes: result.reasonCodes,
+        },
+        providerReference: result.providerReference,
+        observedAt: result.observedAt,
+        expiresAt: result.expiresAt,
+      }, command.actor || null);
+      return { probe: result, evidence: recorded, certification: 'UNCHANGED' };
+    }
+
+    return { probe: result, evidence: null, certification: 'UNCHANGED' };
+  }
+
   async certifyProviderCapabilities(command = {}) {
     this.#authorize(command, 'payments:view');
     const providerId = String(command.providerId || command.provider_id || '').trim();
