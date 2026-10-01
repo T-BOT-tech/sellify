@@ -1,3 +1,5 @@
+import { UnsupportedProviderOperationError, ProviderNotConfiguredError } from './provider-errors.js';
+
 // Provider-neutral payment adapter boundary.
 // Provider implementations must stay outside the payment core and must not
 // perform persistence directly. The core owns state, ledger and reconciliation.
@@ -5,21 +7,11 @@
 const UNSUPPORTED = Symbol('unsupported-payment-operation');
 
 function unsupported(providerId, operation) {
-  const error = new Error(`Payment provider ${providerId} does not implement ${operation}`);
-  error.code = 'PAYMENT_PROVIDER_OPERATION_UNSUPPORTED';
-  error.statusCode = 501;
-  error.providerId = providerId;
-  error.operation = operation;
-  return error;
+  return new UnsupportedProviderOperationError(providerId, operation);
 }
 
 function notConfigured(providerId, operation) {
-  const error = new Error(`Payment provider ${providerId} is not configured for ${operation}`);
-  error.code = 'PAYMENT_PROVIDER_NOT_CONFIGURED';
-  error.statusCode = 503;
-  error.providerId = providerId;
-  error.operation = operation;
-  return error;
+  return new ProviderNotConfiguredError(providerId, operation);
 }
 
 const METHODS = Object.freeze([
