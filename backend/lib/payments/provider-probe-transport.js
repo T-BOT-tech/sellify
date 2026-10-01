@@ -1,10 +1,9 @@
-// GAP-1.18 provider HTTP probe transport.
-// Deliberately provider-neutral: approved provider adapters supply the endpoint
-// path and method. Secrets stay in memory and are never returned or persisted.
+// GAP-1.18B provider HTTP transport.
+// Provider-neutral: this layer knows HTTP mechanics only. Authentication is
+// constructed by the provider adapter and passed as explicit headers.
 
 export async function requestProviderProbe({
   baseUrl,
-  apiKey,
   path = '/',
   method = 'GET',
   timeoutMs = 5000,
@@ -12,8 +11,8 @@ export async function requestProviderProbe({
   body,
   fetchImpl = globalThis.fetch,
 }) {
-  if (!baseUrl || !apiKey) {
-    const error = new Error('Provider is not configured');
+  if (!baseUrl) {
+    const error = new Error('Provider endpoint is not configured');
     error.code = 'PAYMENT_PROVIDER_NOT_CONFIGURED';
     throw error;
   }
@@ -30,11 +29,7 @@ export async function requestProviderProbe({
     const url = new URL(path, baseUrl).toString();
     const response = await fetchImpl(url, {
       method,
-      headers: {
-        accept: 'application/json',
-        authorization: `Bearer ${apiKey}`,
-        ...headers,
-      },
+      headers: { accept: 'application/json', ...headers },
       body: body == null ? undefined : JSON.stringify(body),
       signal: controller.signal,
     });
@@ -43,11 +38,7 @@ export async function requestProviderProbe({
     let payload = {};
     try { payload = text ? JSON.parse(text) : {}; } catch { payload = { responseText: text.slice(0, 4096) }; }
 
-    return {
-      ok: response.ok,
-      statusCode: response.status,
-      payload,
-    };
+    return { ok: response.ok, statusCode: response.status, payload };
   } catch (error) {
     if (error?.name === 'AbortError') {
       const timeoutError = new Error('Provider probe timed out');
