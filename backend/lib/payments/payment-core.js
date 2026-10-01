@@ -178,8 +178,53 @@ export class PaymentCore {
           paymentAccountId: resolvedPaymentAccount?.id || null,
         });
     if (!attempt) throw Object.assign(new Error('Confirmation attempt not found'), { statusCode: 404, code: 'CONFIRMATION_ATTEMPT_NOT_FOUND' });
-    const evidence = await this.store.getPaymentEvidence(chatId, attempt.evidenceId);
+
+    if (!attempt.paymentAccountId) {
+      throw Object.assign(
+        new Error('Confirmation attempt is missing a canonical payment account'),
+        { statusCode: 409, code: 'PAYMENT_ACCOUNT_REQUIRED' }
+      );
+    }
+
+    const attemptAccount = typeof this.store.getPaymentAccountById === 'function'
+      ? await this.store.getPaymentAccountById(correlationChatId, attempt.paymentAccountId)
+      : null;
+    if (!attemptAccount?.id) {
+      throw Object.assign(
+        new Error('Confirmation attempt payment account could not be resolved'),
+        { statusCode: 409, code: 'PAYMENT_ACCOUNT_NOT_FOUND' }
+      );
+    }
+    if (String(attemptAccount.providerId || '').toLowerCase() !== providerIdInput) {
+      throw Object.assign(
+        new Error('Confirmation attempt payment account provider mismatch'),
+        { statusCode: 409, code: 'PAYMENT_ACCOUNT_PROVIDER_MISMATCH' }
+      );
+    }
+
+    // Once the attempt is resolved, its tenant/account context is authoritative.
+    // Never use the caller-supplied chatId to cross that boundary.
+    correlationChatId = String(attemptAccount.chatId || correlationChatId);
+
+    const evidence = await this.store.getPaymentEvidence(correlationChatId, attempt.evidenceId);
     if (!evidence) throw Object.assign(new Error('Confirmation evidence not found'), { statusCode: 409, code: 'EVIDENCE_NOT_FOUND' });
+
+    if (providerTransactionId &&
+        evidence.providerTransactionId &&
+        String(providerTransactionId) !== String(evidence.providerTransactionId)) {
+      throw Object.assign(
+        new Error('Provider transaction does not match confirmation evidence'),
+        { statusCode: 409, code: 'PROVIDER_TRANSACTION_MISMATCH' }
+      );
+    }
+    if (providerTransactionId &&
+        attempt.providerTransactionId &&
+        String(providerTransactionId) !== String(attempt.providerTransactionId)) {
+      throw Object.assign(
+        new Error('Provider transaction does not match confirmation attempt'),
+        { statusCode: 409, code: 'PROVIDER_TRANSACTION_MISMATCH' }
+      );
+    }
 
     const providerId = providerIdInput;
     if (providerId !== String(attempt.providerId || '').trim().toLowerCase() ||
@@ -195,7 +240,7 @@ export class PaymentCore {
     const observation = command.observation && typeof command.observation === 'object'
       ? command.observation
       : {};
-    const updated = await this.store.updatePaymentConfirmationAttempt(chatId, attempt.id, {
+    const updated = await this.store.updatePaymentConfirmationAttempt(correlationChatId, attempt.id, {
       status,
       providerTransactionId: providerTransactionId || observation.providerTransactionId || null,
       reasonCodes: Array.isArray(command.reasonCodes) ? command.reasonCodes : (Array.isArray(observation.reasonCodes) ? observation.reasonCodes : []),
@@ -210,7 +255,7 @@ export class PaymentCore {
 
     if (status === 'CONFIRMED') {
       return this.finalizeProviderConfirmation({
-        chatId,
+        chatId: correlationChatId,
         confirmationAttemptId: updated.id,
         actor: command.actor || null,
       });
