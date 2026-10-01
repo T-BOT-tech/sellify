@@ -49,7 +49,7 @@ await assert.rejects(
   error => error?.code === 'PROVIDER_NOTIFICATION_NOT_AUTHENTICATED' && error?.statusCode === 401,
 );
 
-const result = await core.submitEvidence({
+const result = await core.ingestAuthenticatedProviderNotification({
   chatId: 'attacker-chat',
   organizationId: 'attacker-org',
   locationId: 'attacker-location',
