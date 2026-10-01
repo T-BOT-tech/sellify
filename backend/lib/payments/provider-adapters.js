@@ -30,6 +30,58 @@ const ADAPTER_AUTH = Object.freeze({
   boa: ({ credential }) => credential ? { authorization: `Bearer ${credential}` } : {},
 });
 
+async function requestAndParseProviderVerification(id, name, operation, {
+  capability = null,
+  context = {},
+  config,
+  credential,
+  payment = null,
+  paymentIntent = null,
+  paymentAccount = null,
+}) {
+  const pathKey = operation === 'verify' ? 'verifyPath' : 'statusPath';
+  const methodKey = operation === 'verify' ? 'verifyMethod' : 'statusMethod';
+  const path = context[pathKey];
+  if (!path) {
+    return {
+      status: 'UNSUPPORTED',
+      providerId: id,
+      reasonCodes: ['PROVIDER_' + operation.toUpperCase() + '_PATH_NOT_CONFIGURED'],
+      evidence: { providerId: id, operation, capability },
+    };
+  }
+
+  const authHeaders = ADAPTER_AUTH[id]?.({ credential, context }) || {};
+  const response = await requestProviderProbe({
+    baseUrl: config.baseUrl,
+    path,
+    method: context[methodKey] || 'GET',
+    timeoutMs: context.timeoutMs || 5000,
+    headers: authHeaders,
+    body: context.body,
+    fetchImpl: context.fetchImpl,
+  });
+
+  const parsed = PROVIDER_VERIFICATION_PARSERS[id](response.payload || {}, {
+    operation,
+    capability,
+  });
+
+  return {
+    ...parsed,
+    status: response.ok ? parsed.status : 'FAILED',
+    providerId: id,
+    reasonCodes: response.ok
+      ? parsed.reasonCodes
+      : ['PROVIDER_HTTP_RESPONSE_NOT_OK', ...parsed.reasonCodes],
+    evidence: {
+      ...parsed.evidence,
+      httpStatus: response.statusCode,
+      transportOk: response.ok,
+    },
+  };
+}
+
 function createProviderAdapter(id, name) {
   return {
     id,
@@ -38,6 +90,42 @@ function createProviderAdapter(id, name) {
     capabilities: { getMetadata: true, probeCapability: true },
     configured: getProviderAdapterConfig(id).configured,
     getMetadata: async () => ({ id, name, version: '1' }),
+    verify: async ({ context = {}, payment = null, paymentIntent = null, paymentAccount = null } = {}) => {
+      const config = getProviderAdapterConfig(id, context.env || process.env);
+      if (!config.configured) {
+        const error = new Error(`${name} is not configured`);
+        error.code = 'PAYMENT_PROVIDER_NOT_CONFIGURED';
+        throw error;
+      }
+      const env = context.env || process.env;
+      const credential = String(env[ENV_CREDENTIAL[id]] || '').trim();
+      return requestAndParseProviderVerification(id, name, 'verify', {
+        context,
+        config,
+        credential,
+        payment,
+        paymentIntent,
+        paymentAccount,
+      });
+    },
+    getStatus: async ({ context = {}, payment = null, paymentIntent = null, paymentAccount = null } = {}) => {
+      const config = getProviderAdapterConfig(id, context.env || process.env);
+      if (!config.configured) {
+        const error = new Error(`${name} is not configured`);
+        error.code = 'PAYMENT_PROVIDER_NOT_CONFIGURED';
+        throw error;
+      }
+      const env = context.env || process.env;
+      const credential = String(env[ENV_CREDENTIAL[id]] || '').trim();
+      return requestAndParseProviderVerification(id, name, 'status', {
+        context,
+        config,
+        credential,
+        payment,
+        paymentIntent,
+        paymentAccount,
+      });
+    },
     probeCapability: async ({ capability, context = {} }) => {
       const config = getProviderAdapterConfig(id, context.env || process.env);
       if (!config.configured) {
