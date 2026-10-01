@@ -79,6 +79,8 @@ jobs:
         run: npm run gap-1.12:payment-reconciliation-test
       - name: GAP-1.13 payment failure expiration cancellation reversal regression
         run: npm run gap-1.13:payment-lifecycle-test
+      - name: GAP-1.14 durable payment refund lifecycle regression
+        run: npm run gap-1.14:payment-refund-test
       - name: GAP-2 logistics authorization foundation regression
         run: npm run test:gap-2-logistics-authz
       - name: GAP-2 delivery assignment authority regression
