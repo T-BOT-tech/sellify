@@ -1798,9 +1798,20 @@ const notificationPaymentCore = new PaymentCore({
     getPaymentAccountForProviderNotification,
     getPaymentNotificationConfig: async (providerId, accountIdentifier) => {
       const account = await getPaymentAccountForProviderNotification(providerId, accountIdentifier);
+      const metadata = account.metadata && typeof account.metadata === 'object'
+        ? account.metadata
+        : {};
+      const authentication = metadata.notificationAuthentication &&
+        typeof metadata.notificationAuthentication === 'object'
+        ? metadata.notificationAuthentication
+        : null;
       return {
-        ...account.metadata,
+        providerId: account.providerId,
         accountIdentifier: account.accountIdentifier,
+        currency: metadata.currency || null,
+        notificationAuthentication: authentication
+          ? { ...authentication }
+          : null,
       };
     },
     resolvePaymentIntentForProviderEvidence,
