@@ -127,6 +127,8 @@ jobs:
         run: npm run gap-1.18:provider-transaction-uniqueness-test
       - name: GAP-1.18N verification provenance regression
         run: npm run gap-1.18:verification-provenance-test
+      - name: GAP-1.18O audit lineage regression
+        run: npm run gap-1.18:audit-lineage-test
       - name: GAP-2 logistics authorization foundation regression
         run: npm run test:gap-2-logistics-authz
       - name: GAP-2 delivery assignment authority regression
