@@ -566,6 +566,32 @@ export class PaymentCore {
     }
   }
 
+  async recordProviderCapabilityEvidence(command = {}) {
+    this.#authorize(command, 'payments:manage');
+    const chatId = String(command.chatId || '').trim();
+    if (!chatId) throw Object.assign(new Error('chatId is required'), { statusCode: 400, code: 'PROVIDER_CONTEXT_REQUIRED' });
+    if (!this.store.recordPaymentProviderCapabilityEvidence) {
+      throw Object.assign(new Error('Provider capability evidence storage is unavailable'), { statusCode: 503, code: 'PROVIDER_EVIDENCE_UNAVAILABLE' });
+    }
+    return this.store.recordPaymentProviderCapabilityEvidence(chatId, command, command.actor || null);
+  }
+
+  async listProviderCapabilityEvidence(command = {}) {
+    this.#authorize(command, 'payments:view');
+    const chatId = String(command.chatId || '').trim();
+    if (!chatId) throw Object.assign(new Error('chatId is required'), { statusCode: 400, code: 'PROVIDER_CONTEXT_REQUIRED' });
+    if (!this.store.listPaymentProviderCapabilityEvidence) {
+      throw Object.assign(new Error('Provider capability evidence storage is unavailable'), { statusCode: 503, code: 'PROVIDER_EVIDENCE_UNAVAILABLE' });
+    }
+    return {
+      evidence: await this.store.listPaymentProviderCapabilityEvidence(
+        chatId,
+        command.providerId || command.provider_id || null,
+        { capability: command.capability, scope: command.certificationScope || command.certification_scope },
+      ),
+    };
+  }
+
   async certifyProviderCapabilities(command = {}) {
     this.#authorize(command, 'payments:view');
     const providerId = String(command.providerId || command.provider_id || '').trim();
