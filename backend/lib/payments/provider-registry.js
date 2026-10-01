@@ -66,6 +66,7 @@ function normalizeProvider(adapter) {
     name: String(adapter.name || providerId),
     version: String(adapter.version || '1'),
     capabilities,
+    configured: adapter.configured !== false,
     getMetadata: methods.getMetadata,
     validateAccount: methods.validateAccount,
     parseEvidence: methods.parseEvidence,
@@ -124,6 +125,7 @@ export function createUnconfiguredPaymentProvider({ id, name, version = '1', cap
     name,
     version,
     capabilities,
+    configured: false,
     getMetadata: async () => ({ id: providerId, name: String(name || providerId), version }),
     validateAccount: async () => { throw notConfigured(providerId, 'validateAccount'); },
     parseEvidence: async () => { throw notConfigured(providerId, 'parseEvidence'); },
@@ -145,7 +147,7 @@ export function certifyPaymentProviderCapabilities(providerId) {
   }
   const declaredExecutable = METHODS.filter(method => capabilities[method] === true);
   const contractMismatches = declaredExecutable.filter(method => !methods[method]);
-  const unconfigured = provider.name && /unconfigured/i.test(provider.name);
+  const unconfigured = provider.configured === false;
   return {
     providerId: provider.id,
     providerName: provider.name,
@@ -158,6 +160,7 @@ export function certifyPaymentProviderCapabilities(providerId) {
           ? 'ADAPTER_CONTRACT_CERTIFIED'
           : 'NO_EXECUTABLE_CAPABILITIES',
     liveExternalCertification: false,
+    certificationScope: 'ADAPTER_CONTRACT_ONLY',
     capabilities,
     implementedMethods: methods,
     declaredExecutableCapabilities: declaredExecutable,
