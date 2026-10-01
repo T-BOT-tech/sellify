@@ -8594,6 +8594,76 @@ export async function recordPaymentProviderCapabilityEvidence(chatId, input = {}
   );
 }
 
+export async function certifyPaymentProviderCapability(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+
+  const providerId = String(input.providerId || input.provider_id || '').trim().toLowerCase();
+  const capability = String(input.capability || '').trim();
+  const evidenceId = String(input.evidenceId || input.evidence_id || '').trim();
+  if (!providerId || !capability || !evidenceId) {
+    throw Object.assign(new Error('providerId, capability and evidenceId are required'), { statusCode: 400, code: 'PROVIDER_CERTIFICATION_CONTEXT_REQUIRED' });
+  }
+
+  const evidence = db.prepare(`
+    SELECT * FROM payment_provider_capability_certifications
+    WHERE id = ? AND organization_id = ? AND provider_id = ? AND capability = ?
+  `).get(evidenceId, tenant.organization_id, providerId, capability);
+  if (!evidence) throw Object.assign(new Error('Capability evidence not found'), { statusCode: 404, code: 'PROVIDER_CAPABILITY_EVIDENCE_NOT_FOUND' });
+
+  if (evidence.certification_scope !== 'LIVE_EXTERNAL' || evidence.status !== 'OBSERVED') {
+    throw Object.assign(new Error('Only observed live-external evidence can be certified'), { statusCode: 409, code: 'CAPABILITY_CERTIFICATION_EVIDENCE_NOT_ELIGIBLE' });
+  }
+  if (evidence.expires_at && new Date(evidence.expires_at).getTime() <= Date.now()) {
+    throw Object.assign(new Error('Capability evidence is expired'), { statusCode: 409, code: 'CAPABILITY_EVIDENCE_EXPIRED' });
+  }
+
+  const now = nowIso();
+  const fingerprint = crypto.createHash('sha256').update([
+    providerId, capability, 'LIVE_EXTERNAL', evidence.evidence_fingerprint, 'CERTIFIED',
+  ].join('|')).digest('hex');
+  const existing = db.prepare(`
+    SELECT * FROM payment_provider_capability_certifications
+    WHERE organization_id = ? AND provider_id = ? AND capability = ?
+      AND certification_scope = 'LIVE_EXTERNAL' AND evidence_fingerprint = ?
+  `).get(tenant.organization_id, providerId, capability, fingerprint);
+  if (existing) return normalizePaymentProviderCapabilityCertification(existing);
+
+  const id = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO payment_provider_capability_certifications
+      (id, organization_id, provider_id, capability, certification_scope, status,
+       evidence_json, evidence_fingerprint, provider_reference, observed_at,
+       expires_at, reason, certified_by_user_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'LIVE_EXTERNAL', 'CERTIFIED', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id, tenant.organization_id, providerId, capability,
+    json({
+      sourceEvidenceId: evidence.id,
+      sourceEvidenceFingerprint: evidence.evidence_fingerprint,
+      observationStatus: evidence.status,
+      certificationDecision: 'CERTIFIED',
+    }),
+    fingerprint,
+    evidence.provider_reference,
+    evidence.observed_at,
+    evidence.expires_at,
+    String(input.reason || 'Live external capability certification'),
+    actor?.userId || actor?.id || null,
+    now, now,
+  );
+
+  audit(String(chatId), 'payment.provider_capability.certified',
+    'payment_provider_capability_certification', id,
+    { providerId, capability, sourceEvidenceId: evidence.id, evidenceFingerprint: evidence.evidence_fingerprint },
+    { organizationId: tenant.organization_id, actorId: actor?.userId || actor?.id || null, reason: input.reason || '' });
+
+  return normalizePaymentProviderCapabilityCertification(
+    db.prepare('SELECT * FROM payment_provider_capability_certifications WHERE id = ?').get(id),
+  );
+}
+
 export async function listPaymentProviderCapabilityEvidence(chatId, providerId = null, options = {}) {
   ensureDatabase();
   const tenant = getTenantByChatId(chatId);
