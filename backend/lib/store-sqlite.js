@@ -5818,7 +5818,7 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       const verificationEvidenceId = String(v.evidenceId || v.evidence_id || '').trim() || null;
       const verificationProviderId = String(v.providerId || v.provider_id || row.provider_id || '').trim().toLowerCase();
       if (!verificationEvidenceId) throw Object.assign(new Error('Decision verification requires evidenceId'), { statusCode: 409, code: 'VERIFICATION_EVIDENCE_REQUIRED' });
-      const evidenceRow = db.prepare('SELECT payment_id, payment_intent_id, provider_id FROM payment_evidence WHERE id = ? AND organization_id = ?').get(verificationEvidenceId, organizationId);
+      const evidenceRow = db.prepare('SELECT payment_id, payment_intent_id, provider_id, provider_transaction_id FROM payment_evidence WHERE id = ? AND organization_id = ?').get(verificationEvidenceId, organizationId);
       if (!evidenceRow) throw Object.assign(new Error('Decision verification evidence not found'), { statusCode: 409, code: 'VERIFICATION_EVIDENCE_NOT_FOUND' });
       if (String(evidenceRow.payment_id || '') !== paymentId || String(evidenceRow.payment_intent_id || '') !== verificationPaymentIntentId || String(evidenceRow.provider_id || '').toLowerCase() !== verificationProviderId) {
         throw Object.assign(new Error('Verification is not bound to the decision payment context'), { statusCode: 409, code: 'VERIFICATION_CONTEXT_MISMATCH' });
