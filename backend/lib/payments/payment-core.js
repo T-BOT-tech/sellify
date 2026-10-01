@@ -452,7 +452,7 @@ export class PaymentCore {
       : { decision: 'RETRY_VERIFICATION', targetState: null, reasonCodes: verification.reasonCodes || [] };
 
     if (!decision.targetState) {
-      const persistedVerification = await this.store.insertPaymentVerification(chatId, {
+      const persistedVerificationResult = await this.store.insertPaymentVerification(chatId, {
         paymentId,
         paymentIntentId: intent.id,
         evidenceId: evidence.id,
@@ -462,6 +462,7 @@ export class PaymentCore {
         verifier: 'payment-core.provider-status',
         verifierVersion: '1',
       }, command.actor || null);
+      const persistedVerification = persistedVerificationResult.verification || persistedVerificationResult;
       const persistedDecision = await this.store.insertPaymentDecision(chatId, {
         paymentId,
         paymentIntentId: intent.id,
