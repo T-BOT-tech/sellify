@@ -5674,17 +5674,41 @@ export async function insertPaymentVerification(chatId, input = {}, actor = null
   const id = String(input.id || crypto.randomUUID()); const now = nowIso();
   const verifier = String(input.verifier || 'payment-core').trim();
   if (!verifier.startsWith('payment-core.')) throw Object.assign(new Error('Payment verification must originate from a trusted Payment Core verifier'), { statusCode: 409, code: 'UNTRUSTED_PAYMENT_VERIFIER' });
-  db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-    id, organizationId, input.paymentId || input.payment_id || evidence.payment_id || null, input.paymentIntentId || input.payment_intent_id || evidence.payment_intent_id || null,
-    evidence.id, String(input.providerId || input.provider_id || evidence.provider_id), String(input.result || '').toUpperCase(),
-    input.confidence == null ? null : Number(input.confidence), input.observedAmountMinor ?? input.observed_amount_minor ?? null,
-    input.observedCurrency || input.observed_currency || null, input.observedReceiver || input.observed_receiver || null,
-    input.observedReceiverAccount || input.observed_receiver_account || null, input.observedReference || input.observed_reference || null,
-    input.observedTransactionId || input.observed_transaction_id || null, input.observedAt || input.observed_at || null,
-    json(input.reasonCodes || input.reason_codes || []), input.rawResult == null ? null : json(input.rawResult || input.raw_result),
-    verifier, input.verifierVersion || input.verifier_version || null, now
-  );
-  return paymentVerificationFromRow(db.prepare('SELECT * FROM payment_verifications WHERE id = ?').get(id));
+  const verifierVersion = input.verifierVersion || input.verifier_version || null;
+  const existing = db.prepare(
+    'SELECT * FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND (verifier_version = ? OR (verifier_version IS NULL AND ? IS NULL)) ORDER BY created_at DESC LIMIT 1'
+  ).get(evidence.id, verifier, verifierVersion, verifierVersion);
+  if (existing) return { verification: paymentVerificationFromRow(existing), duplicate: true };
+
+  const result = String(input.result || '').toUpperCase();
+  if (!['MATCH','MISMATCH','DUPLICATE','UNVERIFIABLE','EXPIRED','PENDING','ERROR'].includes(result)) {
+    throw Object.assign(new Error('Invalid payment verification result'), { statusCode: 400, code: 'INVALID_PAYMENT_VERIFICATION_RESULT' });
+  }
+
+  try {
+    db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+      id, organizationId, input.paymentId || input.payment_id || evidence.payment_id || null, input.paymentIntentId || input.payment_intent_id || evidence.payment_intent_id || null,
+      evidence.id, String(input.providerId || input.provider_id || evidence.provider_id), result,
+      input.confidence == null ? null : Number(input.confidence), input.observedAmountMinor ?? input.observed_amount_minor ?? null,
+      input.observedCurrency || input.observed_currency || null, input.observedReceiver || input.observed_receiver || null,
+      input.observedReceiverAccount || input.observed_receiver_account || null, input.observedReference || input.observed_reference || null,
+      input.observedTransactionId || input.observed_transaction_id || null, input.observedAt || input.observed_at || null,
+      json(input.reasonCodes || input.reason_codes || []), input.rawResult == null ? null : json(input.rawResult || input.raw_result),
+      verifier, verifierVersion, now
+    );
+  } catch (error) {
+    if (String(error?.message || '').includes('UNIQUE constraint failed: payment_verifications')) {
+      const existing = db.prepare(
+        'SELECT * FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND (verifier_version = ? OR (verifier_version IS NULL AND ? IS NULL)) ORDER BY created_at DESC LIMIT 1'
+      ).get(evidence.id, verifier, verifierVersion, verifierVersion);
+      if (existing) return { verification: paymentVerificationFromRow(existing), duplicate: true };
+    }
+    throw error;
+  }
+  return {
+    verification: paymentVerificationFromRow(db.prepare('SELECT * FROM payment_verifications WHERE id = ?').get(id)),
+    duplicate: false,
+  };
 }
 export async function listPaymentVerifications(chatId, paymentId) {
   ensureDatabase();
