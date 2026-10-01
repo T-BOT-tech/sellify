@@ -116,7 +116,7 @@ import {
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
   createComplianceRequest, getComplianceRequest, listComplianceRequests, resolveComplianceRequest, buildComplianceExport,
-  listPaymentAccounts, createPaymentAccount, createPayment, getPayment, listPayments, transitionPayment, listPaymentLedger, reconcilePayment, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
+  listPaymentAccounts, createPaymentAccount, createPayment, getPayment, getPaymentIntent, listPayments, transitionPayment, listPaymentLedger, reconcilePayment, insertPaymentEvidence, insertPaymentVerification, insertPaymentDecision, commitPaymentDecision, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
   listCustomerPricing, getCustomerPricing, upsertCustomerPricing, updateCustomerPricing,
   listQuotes, getQuote, createQuote, transitionQuote,
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, createPurchaseOrderFromProcurementAward, transitionPurchaseOrder,
@@ -144,11 +144,28 @@ import {
 } from './lib/store-sqlite.js';
 import { AUTHZ, authorize, ROLES, getRolePermissions } from './lib/authorization.js';
 import { assertTenantScope, assertLocationScope } from './lib/tenant-isolation.js';
-import { listPaymentProviders } from './lib/payments/provider-registry.js';
+import { getPaymentProvider, listPaymentProviders } from './lib/payments/provider-registry.js';
+import { PaymentCore } from './lib/payments/payment-core.js';
+import { InvariantGate } from './lib/payments/invariant-gate.js';
+import { PaymentDecisionEngine } from './lib/payments/decision-engine.js';
 import { listPaymentChannels } from './lib/payments/channel-registry.js';
 import { processEventIsolated } from './lib/event-failure-isolation.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = path.dirname(fileURLToPath(import.meta.url));\n\nconst paymentCore = new PaymentCore({
+  store: {
+    getPayment,
+    getPaymentIntent,
+    listPaymentAccounts,
+    insertPaymentEvidence,
+    insertPaymentVerification,
+    insertPaymentDecision,
+    commitPaymentDecision,
+  },
+  providerRegistry: { getPaymentProvider },
+  invariantGate: new InvariantGate(),
+  decisionEngine: new PaymentDecisionEngine(),
+});
+
 
 // ---------- env-driven config ----------
 
@@ -1842,6 +1859,22 @@ async function handlePaymentLedger(req, res, chatId, paymentId) {
   sendJSON(res, 200, { ledger }, req);
 }
 
+async function handlePaymentStatusQuery(req, res, chatId, paymentId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+  await requireAuthorization(session, tenant, 'payments', 'payments:accept', { deniedMessage: 'Payment status query permission required' });
+  const body = await readBody(req);
+  const result = await paymentCore.queryStatus({
+    ...body,
+    chatId,
+    paymentId,
+    organizationId: tenant.organizationId,
+    actor: session,
+  });
+  return sendJSON(res, 200, result, req);
+}
+
 async function handlePaymentReconciliation(req, res, chatId, paymentId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -2630,6 +2663,7 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/procurement-settlements\/purchase-orders\/([^/]+)\/allocate$/, handler:(req,res,m)=>handleProcurementSettlement(req,res,decodeURIComponent(m[1]),decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/ledger$/, handler: (req, res, m) => handlePaymentLedger(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/reconcile$/, handler: (req, res, m) => handlePaymentReconciliation(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/status$/, handler: (req, res, m) => handlePaymentStatusQuery(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)$/, handler: (req, res, m) => handlePayments(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments$/, handler: (req, res, m) => handlePayments(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments$/, handler: (req, res, m) => handlePayments(req, res, decodeURIComponent(m[1])) },
