@@ -5948,6 +5948,30 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       });
     }
 
+    // Expiration, mismatch reversal, and partial-payment states are financial
+    // corrections, not arbitrary state writes. They must carry verification
+    // provenance so a caller cannot manufacture a reversal/expiry directly.
+    if (['EXPIRED', 'PARTIAL'].includes(target) && !verification) {
+      throw Object.assign(new Error('Financial correction requires verification context'), {
+        statusCode: 409,
+        code: 'PAYMENT_VERIFICATION_REQUIRED',
+      });
+    }
+
+    if (target === 'MISMATCH' && row.state === 'VERIFIED' && !verification) {
+      throw Object.assign(new Error('Verified payment reversal requires verification context'), {
+        statusCode: 409,
+        code: 'PAYMENT_VERIFICATION_REQUIRED',
+      });
+    }
+
+    if (target === 'REFUNDED') {
+      throw Object.assign(new Error('Refunded payment transition requires the canonical refund workflow'), {
+        statusCode: 409,
+        code: 'PAYMENT_REFUND_REQUIRED',
+      });
+    }
+
     const paymentIntentRow = row.payment_intent_id
       ? db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(row.payment_intent_id, organizationId)
       : null;
