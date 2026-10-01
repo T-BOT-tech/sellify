@@ -34,6 +34,49 @@ export class PaymentCore {
     return result;
   }
 
+  async createSettlement(command = {}) {
+    this.#authorize(command, 'payments:settlement:allocate');
+    const chatId = String(command.chatId || '').trim();
+    const paymentId = String(command.paymentId || command.payment_id || '').trim();
+    const idempotencyKey = String(command.idempotencyKey || command.idempotency_key || '').trim();
+    if (!chatId || !paymentId || !idempotencyKey) {
+      throw Object.assign(new Error('chatId, paymentId and idempotencyKey are required'), { statusCode: 400, code: 'SETTLEMENT_CONTEXT_REQUIRED' });
+    }
+    const existing = await this.store.getPaymentSettlementByIdempotencyKey(chatId, idempotencyKey);
+    if (existing) return { settlement: existing, duplicate: true };
+    const payment = await this.store.getPayment(chatId, paymentId);
+    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    const result = await this.store.createPaymentSettlement(chatId, {
+      ...command,
+      paymentId,
+      idempotencyKey,
+    }, command.actor || null);
+    return { ...result, financialEffect: false };
+  }
+
+  async finalizeSettlement(command = {}) {
+    this.#authorize(command, 'payments:settlement:allocate');
+    const chatId = String(command.chatId || '').trim();
+    const settlementId = String(command.settlementId || command.settlement_id || '').trim();
+    if (!chatId || !settlementId) {
+      throw Object.assign(new Error('chatId and settlementId are required'), { statusCode: 400, code: 'SETTLEMENT_CONTEXT_REQUIRED' });
+    }
+    const settlement = await this.store.finalizePaymentSettlement(chatId, settlementId, command, command.actor || null);
+    return {
+      settlement,
+      financialEffect: false,
+      paymentStateMutated: false,
+    };
+  }
+
+  async listSettlements(command = {}) {
+    this.#authorize(command, 'payments:settlement:view');
+    const chatId = String(command.chatId || '').trim();
+    const paymentId = String(command.paymentId || command.payment_id || '').trim();
+    if (!chatId || !paymentId) throw Object.assign(new Error('chatId and paymentId are required'), { statusCode: 400, code: 'SETTLEMENT_CONTEXT_REQUIRED' });
+    return { settlements: await this.store.listPaymentSettlements(chatId, paymentId, command.status ? { status: command.status } : {}) };
+  }
+
   async refund(command = {}) {
     this.#authorize(command, 'payments:manage');
     const chatId = String(command.chatId || '').trim();
