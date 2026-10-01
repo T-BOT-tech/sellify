@@ -5840,10 +5840,19 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       );
     }
     const decision = input.decision || {};
+    const decisionVerificationId = String(decision.verificationId || decision.verification_id || (input.verification ? (db.prepare('SELECT id FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND verifier_version = ?').get(
+      String(input.verification.evidenceId || input.verification.evidence_id), String(input.verification.verifier || 'payment-core'), String(input.verification.verifierVersion || input.verification.verifier_version || '1')
+    )?.id || '') : '')).trim() || null;
+    if (decisionVerificationId) {
+      const linked = db.prepare('SELECT payment_id, payment_intent_id, evidence_id FROM payment_verifications WHERE id = ? AND organization_id = ?').get(decisionVerificationId, organizationId);
+      if (!linked || String(linked.payment_id) !== paymentId || String(linked.payment_intent_id || '') !== String(decision.paymentIntentId || decision.payment_intent_id || row.payment_intent_id || '') || String(linked.evidence_id || '') !== String(decision.evidenceId || decision.evidence_id || input.verification?.evidenceId || input.verification?.evidence_id || '')) {
+        throw Object.assign(new Error('Decision verification reference is not bound to the committed context'), { statusCode: 409, code: 'DECISION_VERIFICATION_CONTEXT_MISMATCH' });
+      }
+    }
     const decisionId = String(decision.id || crypto.randomUUID());
     db.prepare("INSERT INTO payment_decisions (id, organization_id, payment_id, payment_intent_id, evidence_id, verification_id, decision, target_state, reason_codes_json, invariant_results_json, decision_source, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
       decisionId, organizationId, paymentId, decision.paymentIntentId || decision.payment_intent_id || row.payment_intent_id || null,
-      decision.evidenceId || decision.evidence_id || null, decision.verificationId || decision.verification_id || null,
+      decision.evidenceId || decision.evidence_id || input.verification?.evidenceId || input.verification?.evidence_id || null, decisionVerificationId,
       String(decision.decision || '').toUpperCase(), target, json(decision.reasonCodes || decision.reason_codes || []),
       json(decision.invariantResults || decision.invariant_results || {}), decision.decisionSource || 'PAYMENT_CORE', actor?.userId || null, now
     );
