@@ -5828,7 +5828,7 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       }
       assertVerificationFreshness({
         observedAt: v.observedAt || v.observed_at || null,
-        createdAt: v.createdAt || v.created_at || now,
+        createdAt: null,
         now: new Date(now),
         maxAgeMs: input.maxVerificationAgeMs || input.max_verification_age_ms,
       });
