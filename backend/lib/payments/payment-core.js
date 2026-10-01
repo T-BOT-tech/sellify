@@ -34,6 +34,89 @@ export class PaymentCore {
     return result;
   }
 
+  async refund(command = {}) {
+    this.#authorize(command, 'payments:manage');
+    const chatId = String(command.chatId || '').trim();
+    const paymentId = String(command.paymentId || command.payment_id || '').trim();
+    const idempotencyKey = String(command.idempotencyKey || command.idempotency_key || '').trim();
+    if (!chatId || !paymentId || !idempotencyKey) {
+      throw Object.assign(new Error('chatId, paymentId and idempotencyKey are required'), { statusCode: 400, code: 'REFUND_CONTEXT_REQUIRED' });
+    }
+
+    const existing = await this.store.getPaymentRefundByIdempotencyKey(chatId, idempotencyKey);
+    if (existing) return { refund: existing, duplicate: true };
+
+    const payment = await this.store.getPayment(chatId, paymentId);
+    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    if (!['VERIFIED', 'RECONCILED'].includes(String(payment.state).toUpperCase())) {
+      throw Object.assign(new Error('Only VERIFIED or RECONCILED payments can be refunded'), { statusCode: 409, code: 'PAYMENT_NOT_REFUNDABLE' });
+    }
+
+    const amountMinor = Number(command.amountMinor ?? command.amount_minor);
+    if (!Number.isInteger(amountMinor) || amountMinor <= 0) {
+      throw Object.assign(new Error('Refund amount must be a positive integer'), { statusCode: 400, code: 'INVALID_REFUND_AMOUNT' });
+    }
+
+    const provider = this.providerRegistry?.getPaymentProvider
+      ? this.providerRegistry.getPaymentProvider(payment.providerId)
+      : null;
+    if (!provider) throw Object.assign(new Error('Unknown payment provider'), { statusCode: 400, code: 'UNKNOWN_PAYMENT_PROVIDER' });
+
+    const requested = await this.store.createPaymentRefundRequest(chatId, {
+      paymentId,
+      amountMinor,
+      currency: command.currency || payment.currency,
+      idempotencyKey,
+      reason: command.reason || '',
+    }, command.actor || null);
+    if (requested.duplicate) return requested;
+
+    let raw;
+    try {
+      raw = await provider.refund({
+        payment,
+        paymentIntent: payment.paymentIntentId ? await this.store.getPaymentIntent(chatId, payment.paymentIntentId) : null,
+        paymentAccount: (await this.store.listPaymentAccounts(chatId, { status: 'all' })).find(a => String(a.id) === String(payment.paymentAccountId)) || null,
+        refund: requested.refund,
+        request: command,
+      });
+    } catch (error) {
+      if (['PAYMENT_PROVIDER_OPERATION_UNSUPPORTED', 'PAYMENT_PROVIDER_NOT_CONFIGURED'].includes(error?.code)) {
+        const refund = await this.store.finalizePaymentRefund(chatId, requested.refund.id, {
+          status: 'UNKNOWN',
+          failureCode: error.code,
+          evidence: { reason: error.message },
+          providerResult: { error: error.code },
+        }, command.actor || null);
+        return { refund, supported: false, status: 'UNKNOWN', reasonCodes: ['PROVIDER_REFUND_UNAVAILABLE'] };
+      }
+      throw error;
+    }
+
+    const normalized = normalizeRefundResult(raw, requested.refund);
+    const refund = await this.store.finalizePaymentRefund(chatId, requested.refund.id, {
+      ...normalized,
+      providerResult: raw,
+      evidence: normalized,
+    }, command.actor || null);
+
+    return {
+      refund,
+      supported: true,
+      status: normalized.status,
+      duplicate: false,
+      financialEffect: normalized.status === 'SUCCEEDED',
+    };
+  }
+
+  async listRefunds(command = {}) {
+    this.#authorize(command, 'payments:view');
+    const chatId = String(command.chatId || '').trim();
+    const paymentId = String(command.paymentId || command.payment_id || '').trim();
+    if (!chatId || !paymentId) throw Object.assign(new Error('chatId and paymentId are required'), { statusCode: 400, code: 'REFUND_CONTEXT_REQUIRED' });
+    return { refunds: await this.store.getPaymentRefunds(chatId, paymentId, command.status ? { status: command.status } : {}) };
+  }
+
   async transitionLifecycle(command = {}) {
     const target = String(command.targetState || command.target_state || '').trim().toUpperCase();
     const permission = target === 'CANCELLED' || target === 'REVERSED' ? 'payments:manage' : 'payments:accept';
@@ -336,6 +419,20 @@ export class PaymentCore {
       throw Object.assign(new Error('Payment permission required'), { statusCode: 403, code: 'UNAUTHORIZED_OPERATION' });
     }
   }
+}
+
+function normalizeRefundResult(raw = {}, refund = {}) {
+  const value = String(raw.status ?? raw.result ?? raw.state ?? '').trim().toUpperCase();
+  let status = 'UNKNOWN';
+  if (['SUCCESS','SUCCEEDED','COMPLETED','REFUNDED','PROCESSED'].includes(value)) status = 'SUCCEEDED';
+  else if (['FAILED','DECLINED','REJECTED'].includes(value)) status = 'FAILED';
+  else if (['CANCELLED','CANCELED'].includes(value)) status = 'CANCELLED';
+  return {
+    status,
+    providerRefundId: raw.refundId ?? raw.refund_id ?? raw.providerRefundId ?? raw.provider_refund_id ?? null,
+    providerTransactionId: raw.transactionId ?? raw.transaction_id ?? raw.providerTransactionId ?? raw.provider_transaction_id ?? null,
+    failureCode: raw.failureCode ?? raw.failure_code ?? null,
+  };
 }
 
 function normalizeProviderStatus(raw = {}) {
