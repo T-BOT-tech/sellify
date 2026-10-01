@@ -104,6 +104,11 @@ export const mpesaProvider = Object.freeze({
     providerId: PROVIDER_ID,
   }),
 
+  getNotificationAccountReferenceHint: async ({ rawRequest } = {}) => {
+    const body = callbackBody(rawRequest);
+    return normalized(body?.BusinessShortCode || body?.businessShortCode) || null;
+  },
+
   authenticateNotification: async ({ rawRequest, requestContext, config }) => {
     const body = callbackBody(rawRequest);
     const configuredAccount = normalized(config?.accountIdentifier);
