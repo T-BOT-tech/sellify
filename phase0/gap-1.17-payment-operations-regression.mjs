@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+const dir=await mkdtemp(path.join(tmpdir(),'sellify-gap-1-17-'));
+process.env.SELLIFY_DATA_DIR=dir; process.env.SELLIFY_DB_PATH=path.join(dir,'test.sqlite');
+const store=await import('../backend/lib/store-sqlite.js?gap117='+Date.now());
+const { PaymentCore }=await import('../backend/lib/payments/payment-core.js?gap117='+Date.now());
+const { InvariantGate }=await import('../backend/lib/payments/invariant-gate.js?gap117='+Date.now());
+const { PaymentDecisionEngine }=await import('../backend/lib/payments/decision-engine.js?gap117='+Date.now());
+const { getPaymentProvider }=await import('../backend/lib/payments/provider-registry.js?gap117='+Date.now());
+const chatId='gap117-chat'; const organizationId='gap117-org';
+try{
+  await store.ensureTenant(chatId,{tenantId:'gap117-tenant',apiKey:'gap117-key',sellerName:'GAP117',organizationId});
+  const account=await store.createPaymentAccount(chatId,{providerId:'manual',accountName:'Manual',accountReference:'gap117',status:'active'});
+  const payment=await store.createPaymentWithIntent(chatId,{organizationId,providerId:'manual',channel:'manual',amountMinor:1000,currency:'ETB',paymentAccountId:account.id,idempotencyKey:'gap117-payment'},null);
+  const core=new PaymentCore({store:{getPayment:store.getPayment,getPaymentIntent:store.getPaymentIntent,listPaymentAccounts:store.listPaymentAccounts,insertPaymentEvidence:store.insertPaymentEvidence,insertPaymentVerification:store.insertPaymentVerification,insertPaymentDecision:store.insertPaymentDecision,commitPaymentDecision:store.commitPaymentDecision,recordPaymentReconciliation:store.recordPaymentReconciliation,listPaymentReconciliations:store.listPaymentReconciliations,createPaymentOperationalAction:store.createPaymentOperationalAction,updatePaymentOperationalAction:store.updatePaymentOperationalAction,listPaymentOperationalActions:store.listPaymentOperationalActions},providerRegistry:{getPaymentProvider},invariantGate:new InvariantGate(),decisionEngine:new PaymentDecisionEngine()});
+  const actor={userId:'gap117-user',role:'owner'};
+  const recorded=await core.recordOperationalAction({chatId,paymentId:payment.payment.id,organizationId,actionType:'MANUAL_REVIEW',operation:'REFUND_REVIEW',reason:'Provider returned UNKNOWN',idempotencyKey:'gap117-review-1',actor});
+  assert.equal(recorded.duplicate,false);
+  const duplicate=await core.recordOperationalAction({chatId,paymentId:payment.payment.id,organizationId,actionType:'MANUAL_REVIEW',operation:'REFUND_REVIEW',reason:'duplicate',idempotencyKey:'gap117-review-1',actor});
+  assert.equal(duplicate.duplicate,true);
+  const listed=await core.listOperationalActions({chatId,paymentId:payment.payment.id,organizationId,actor});
+  assert.equal(listed.actions.length,1);
+  const blocked=await core.retryOperationalAction({chatId,paymentId:payment.payment.id,organizationId,actionType:'REFUND',idempotencyKey:'gap117-retry-refund',actor});
+  assert.equal(blocked.status,'BLOCKED');
+  const resolved=await core.resolveManualReview({chatId,paymentId:payment.payment.id,organizationId,actionId:recorded.action.id,status:'RESOLVED',reason:'Reviewed provider evidence',actor});
+  assert.equal(resolved.action.status,'RESOLVED');
+  console.log('GAP-1.17 payment operational timeline/retry/manual-review regression passed');
+}finally{await rm(dir,{recursive:true,force:true});}
