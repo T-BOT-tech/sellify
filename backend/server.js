@@ -140,7 +140,7 @@ import {
   listSupplierNetworkPerformance,
   listSupplierNetworkTrustEvidence, getSupplierNetworkTrustEvidence, refreshSupplierNetworkTrustEvidence, getSupplierNetworkPerformance, recalculateSupplierNetworkPerformance,
   discoverSupplierNetwork, getSupplierNetworkMarketplaceIntegration, setProcurementSupplierParticipation,
-  getPackLifecycle, transitionPackLifecycle, getPaymentSettlementByIdempotencyKey, createPaymentSettlement, finalizePaymentSettlement, listPaymentSettlements, listPaymentRoutingPolicies, upsertPaymentRoutingPolicy, listPaymentOperationalActions, createPaymentOperationalAction, updatePaymentOperationalAction,
+  getPackLifecycle, transitionPackLifecycle, getPaymentSettlementByIdempotencyKey, createPaymentSettlement, finalizePaymentSettlement, listPaymentSettlements, listPaymentRoutingPolicies, upsertPaymentRoutingPolicy, listPaymentOperationalActions, createPaymentOperationalAction, updatePaymentOperationalAction, recordPaymentProviderCapabilityEvidence, listPaymentProviderCapabilityEvidence,
 } from './lib/store-sqlite.js';
 import { AUTHZ, authorize, ROLES, getRolePermissions } from './lib/authorization.js';
 import { assertTenantScope, assertLocationScope } from './lib/tenant-isolation.js';
@@ -171,6 +171,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));\n\nconst payment
     listPaymentOperationalActions,
     createPaymentOperationalAction,
     updatePaymentOperationalAction,
+    recordPaymentProviderCapabilityEvidence,
+    listPaymentProviderCapabilityEvidence,
   },
   providerRegistry: { getPaymentProvider, certifyPaymentProviderCapabilities, certifyAllPaymentProviders },
   invariantGate: new InvariantGate(),
@@ -1903,6 +1905,25 @@ async function handlePaymentProviderCertification(req,res,chatId){
   if(providerId)return sendJSON(res,200,await paymentCore.certifyProviderCapabilities({chatId,organizationId:tenant.organizationId,providerId,actor:session}),req);
   return sendJSON(res,200,await paymentCore.certifyAllProviders({chatId,organizationId:tenant.organizationId,actor:session}),req);
 }
+async function handlePaymentProviderCapabilityEvidence(req,res,chatId){
+  const tenant=await getTenant(chatId);if(!tenant)return sendJSON(res,404,{error:{message:'Unknown store',status:404}},req);
+  const session=await requireSession(req,tenant.chatId);
+  if(req.method==='GET'){
+    const query=new URL(req.url,'http://localhost').searchParams;
+    return sendJSON(res,200,await paymentCore.listProviderCapabilityEvidence({
+      chatId,organizationId:tenant.organizationId,providerId:query.get('providerId'),capability:query.get('capability'),
+      certificationScope:query.get('scope'),actor:session,
+    }),req);
+  }
+  if(req.method==='POST'){
+    const body=await readBody(req);
+    return sendJSON(res,200,await paymentCore.recordProviderCapabilityEvidence({
+      ...body,chatId,organizationId:tenant.organizationId,actor:session,
+    }),req);
+  }
+  return sendJSON(res,405,{error:{message:'Method not allowed',status:405}},req);
+}
+
 
 async function handlePaymentOperationalActions(req,res,chatId,paymentId){
   const tenant=await getTenant(chatId);if(!tenant)return sendJSON(res,404,{error:{message:'Unknown store',status:404}},req);
