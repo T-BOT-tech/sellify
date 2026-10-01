@@ -1897,13 +1897,19 @@ async function handlePaymentRoutingPolicies(req, res, chatId) {
   return sendJSON(res, 200, { policy: await store.upsertPaymentRoutingPolicy(chatId, body, session) }, req);
 }
 
-async function handlePaymentProviderCertification(req,res,chatId){
+async async function handlePaymentProviderCertification(req,res,chatId){
   const tenant=await getTenant(chatId);if(!tenant)return sendJSON(res,404,{error:{message:'Unknown store',status:404}},req);
   const session=await requireSession(req,tenant.chatId);
-  if(req.method!=='GET')return sendJSON(res,405,{error:{message:'Method not allowed',status:405}},req);
-  const providerId=new URL(req.url, 'http://localhost').searchParams.get('providerId');
-  if(providerId)return sendJSON(res,200,await paymentCore.certifyProviderCapabilities({chatId,organizationId:tenant.organizationId,providerId,actor:session}),req);
-  return sendJSON(res,200,await paymentCore.certifyAllProviders({chatId,organizationId:tenant.organizationId,actor:session}),req);
+  if(req.method==='GET'){
+    const providerId=new URL(req.url, 'http://localhost').searchParams.get('providerId');
+    if(providerId)return sendJSON(res,200,await paymentCore.certifyProviderCapabilities({chatId,organizationId:tenant.organizationId,providerId,actor:session}),req);
+    return sendJSON(res,200,await paymentCore.certifyAllProviders({chatId,organizationId:tenant.organizationId,actor:session}),req);
+  }
+  if(req.method==='POST'){
+    const body=await readBody(req);
+    return sendJSON(res,200,await paymentCore.certifyProviderCapability({...body,chatId,organizationId:tenant.organizationId,actor:session}),req);
+  }
+  return sendJSON(res,405,{error:{message:'Method not allowed',status:405}},req);
 }
 async function handlePaymentProviderCapabilityProbe(req,res,chatId){
   const tenant=await getTenant(chatId);if(!tenant)return sendJSON(res,404,{error:{message:'Unknown store',status:404}},req);
