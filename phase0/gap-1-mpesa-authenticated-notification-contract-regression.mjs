@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import mpesaProvider from '../backend/lib/payments/providers/mpesa.js';
+import { PaymentCore } from '../backend/lib/payments/payment-core.js';
 
 const rawRequest = {
   headers: {
@@ -29,6 +30,55 @@ assert.equal(authenticated.accountIdentifier, '600001');
 assert.equal(authenticated.notificationId, 'TX-MPESA-001');
 assert.equal(
   authenticated.authenticationReference,
+  'mpesa:notification-auth:TX-MPESA-001:trusted-transport'
+);
+
+
+const captured = [];
+const core = new PaymentCore({
+  store: {
+    getPaymentAccountForProviderNotification: async () => ({
+      id: 'account-mpesa',
+      organizationId: 'org-mpesa',
+      chatId: 'chat-mpesa',
+      providerId: 'mpesa',
+      accountIdentifier: '600001',
+    }),
+    resolvePaymentIntentForProviderEvidence: async () => ({
+      locationId: 'location-mpesa',
+      paymentIntent: { id: 'intent-mpesa' },
+    }),
+    insertPaymentEvidence: async (chatId, input) => {
+      captured.push({ chatId, input });
+      return { evidence: { id: 'evidence-mpesa' }, duplicate: false };
+    },
+  },
+  providerRegistry: {
+    requirePaymentProvider: id => {
+      assert.equal(id, 'mpesa');
+      return mpesaProvider;
+    },
+  },
+});
+
+await core.ingestProviderNotification({
+  providerId: 'mpesa',
+  rawRequest,
+  requestContext: { providerAuthenticated: true },
+  config: {
+    accountIdentifier: '600001',
+    currency: 'KES',
+    notificationAuthentication: { mode: 'trusted-transport' },
+  },
+});
+
+assert.equal(captured.length, 1);
+assert.equal(captured[0].chatId, 'chat-mpesa');
+assert.equal(captured[0].input.paymentAccountId, 'account-mpesa');
+assert.equal(captured[0].input.paymentIntentId, 'intent-mpesa');
+assert.equal(captured[0].input.providerNotificationId, 'TX-MPESA-001');
+assert.equal(
+  captured[0].input.authenticationReference,
   'mpesa:notification-auth:TX-MPESA-001:trusted-transport'
 );
 
