@@ -1205,11 +1205,8 @@ export class PaymentCore {
       paymentAccountId: paymentAccount.id,
       providerId: paymentAccount.providerId,
       providerAccountReference: paymentAccount.accountIdentifier,
-      authenticationReference: String(
-        notificationAuthentication.authenticationReference ||
-        notificationAuthentication.authentication_reference ||
-        ''
-      ).trim() || null,
+      authenticationReference,
+      providerNotificationId: authenticatedNotificationId || commandNotificationId || null,
       paymentIntentId: resolution.paymentIntent?.id || null,
       paymentId: null,
       source: 'provider-notification',
