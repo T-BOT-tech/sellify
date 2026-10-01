@@ -35,8 +35,19 @@ assert.equal(
 
 
 const captured = [];
+let resolvedNotificationConfig = null;
 const core = new PaymentCore({
   store: {
+    getPaymentNotificationConfig: async (providerId, accountIdentifier) => {
+      assert.equal(providerId, 'mpesa');
+      assert.equal(accountIdentifier, '600001');
+      resolvedNotificationConfig = true;
+      return {
+        accountIdentifier: '600001',
+        currency: 'KES',
+        notificationAuthentication: { mode: 'trusted-transport' },
+      };
+    },
     getPaymentAccountForProviderNotification: async () => ({
       id: 'account-mpesa',
       organizationId: 'org-mpesa',
@@ -65,13 +76,10 @@ await core.ingestProviderNotification({
   providerId: 'mpesa',
   rawRequest,
   requestContext: { providerAuthenticated: true },
-  config: {
-    accountIdentifier: '600001',
-    currency: 'KES',
-    notificationAuthentication: { mode: 'trusted-transport' },
-  },
+  config: {},
 });
 
+assert.equal(resolvedNotificationConfig, true);
 assert.equal(captured.length, 1);
 assert.equal(captured[0].chatId, 'chat-mpesa');
 assert.equal(captured[0].input.paymentAccountId, 'account-mpesa');
