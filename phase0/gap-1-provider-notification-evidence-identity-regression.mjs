@@ -83,6 +83,7 @@ assert.equal(call.input.paymentIntentId, 'intent-canonical');
 assert.equal(call.input.paymentId, null);
 assert.equal(call.input.providerId, 'mpesa');
 assert.equal(call.input.providerAccountReference, '600001');
+assert.equal(call.input.authenticationReference, 'auth-001');
 assert.equal(call.input.locationId, 'location-canonical');
 assert.equal(call.input.payment_intent_id, undefined);
 assert.equal(call.input.payment_id, undefined);
