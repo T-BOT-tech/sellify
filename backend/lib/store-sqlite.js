@@ -2354,6 +2354,17 @@ function runMigrations() {
 
   }
 
+  // GAP-1.18N — verification provenance hardening.
+  // The persisted verifier identity is server-owned. Caller-supplied verifier
+  // metadata may not masquerade as Payment Core provenance.
+  if (!applied.includes(56)) {
+    db.exec(`
+      ALTER TABLE payment_verifications ADD COLUMN provenance_source TEXT NOT NULL DEFAULT 'PAYMENT_CORE';
+      ALTER TABLE payment_verifications ADD COLUMN provenance_operation TEXT;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(56, nowIso());
+  }
+
   // GAP-1.18M — durable provider transaction identity binding.
   // A provider transaction may authorize at most one Payment within an
   // organization/provider scope. NULLs remain allowed for legacy evidence,
@@ -5509,7 +5520,7 @@ function paymentVerificationFromRow(row) {
     observedReceiverAccount: row.observed_receiver_account || null, observedReference: row.observed_reference || null,
     observedTransactionId: row.observed_transaction_id || null, observedAt: row.observed_at || null,
     reasonCodes: parseJSON(row.reason_codes_json, []), rawResult: parseJSON(row.raw_result_json, null),
-    verifier: row.verifier, verifierVersion: row.verifier_version || null, createdAt: row.created_at,
+    verifier: row.verifier, verifierVersion: row.verifier_version || null, provenanceSource: row.provenance_source || null, provenanceOperation: row.provenance_operation || null, createdAt: row.created_at,
   };
 }
 function paymentDecisionFromRow(row) {
@@ -5734,9 +5745,22 @@ export async function insertPaymentVerification(chatId, input = {}, actor = null
       });
     }
   }
-  const verifier = String(input.verifier || 'payment-core').trim();
-  if (!verifier.startsWith('payment-core.')) throw Object.assign(new Error('Payment verification must originate from a trusted Payment Core verifier'), { statusCode: 409, code: 'UNTRUSTED_PAYMENT_VERIFIER' });
-  const verifierVersion = String(input.verifierVersion || input.verifier_version || '1').trim() || '1';
+  const verifier = String(input.verifier || '').trim();
+  if (!verifier.startsWith('payment-core.')) {
+    throw Object.assign(new Error('Payment verification must originate from a trusted Payment Core verifier'), {
+      statusCode: 409, code: 'UNTRUSTED_PAYMENT_VERIFIER',
+    });
+  }
+  const verifierVersion = String(input.verifierVersion || input.verifier_version || '').trim();
+  if (!verifierVersion || verifierVersion.length > 64) {
+    throw Object.assign(new Error('Trusted verifier version is required and bounded'), {
+      statusCode: 409, code: 'INVALID_VERIFIER_VERSION',
+    });
+  }
+  const provenanceSource = 'PAYMENT_CORE';
+  const provenanceOperation = verifier === 'payment-core.provider-status'
+    ? 'provider-status'
+    : verifier.replace(/^payment-core\./, '') || 'unknown';
   const existing = db.prepare(
     'SELECT * FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND (verifier_version = ? OR (verifier_version IS NULL AND ? IS NULL)) ORDER BY created_at DESC LIMIT 1'
   ).get(evidence.id, verifier, verifierVersion, verifierVersion);
@@ -5748,7 +5772,7 @@ export async function insertPaymentVerification(chatId, input = {}, actor = null
   }
 
   try {
-    db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+    db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, provenance_source, provenance_operation, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
       id, organizationId, paymentId, paymentIntentId,
       evidence.id, providerId, result,
       input.confidence == null ? null : Number(input.confidence), input.observedAmountMinor ?? input.observed_amount_minor ?? null,
@@ -5756,7 +5780,7 @@ export async function insertPaymentVerification(chatId, input = {}, actor = null
       input.observedReceiverAccount || input.observed_receiver_account || null, input.observedReference || input.observed_reference || null,
       observedTransactionId, input.observedAt || input.observed_at || null,
       json(input.reasonCodes || input.reason_codes || []), input.rawResult == null ? null : json(input.rawResult || input.raw_result),
-      verifier, verifierVersion, now
+      verifier, verifierVersion, provenanceSource, provenanceOperation, now
     );
   } catch (error) {
     if (String(error?.message || '').includes('uq_payment_verifications_provider_transaction') ||
