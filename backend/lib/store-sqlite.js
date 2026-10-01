@@ -5894,6 +5894,17 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
     const decisionVerificationId = String(decision.verificationId || decision.verification_id || '').trim() || null;
     const verificationEvidenceId = verification ? String(verification.evidenceId || verification.evidence_id || '').trim() : null;
     const decisionEvidenceId = String(decision.evidenceId || decision.evidence_id || '').trim() || null;
+    const decisionIntentId = String(decision.paymentIntentId || decision.payment_intent_id || '').trim() || null;
+    const storedIntentId = String(row.payment_intent_id || '').trim() || null;
+    if (decisionIntentId && decisionIntentId !== storedIntentId) {
+      throw Object.assign(new Error('Decision payment intent does not match stored payment'), { statusCode: 409, code: 'PAYMENT_DECISION_BINDING_CONFLICT' });
+    }
+    if (decision.targetState || decision.target_state) {
+      const decisionTarget = String(decision.targetState || decision.target_state).toUpperCase();
+      if (decisionTarget !== target) {
+        throw Object.assign(new Error('Decision target state does not match commit target state'), { statusCode: 409, code: 'PAYMENT_DECISION_BINDING_CONFLICT' });
+      }
+    }
     if (verification && !verificationEvidenceId) throw Object.assign(new Error('verification evidenceId is required'), { statusCode: 400, code: 'EVIDENCE_REQUIRED' });
     if (verification && decisionVerificationId && decisionVerificationId !== verificationId) throw Object.assign(new Error('Decision verification does not match committed verification'), { statusCode: 409, code: 'PAYMENT_DECISION_BINDING_CONFLICT' });
     if (verification && decisionEvidenceId && decisionEvidenceId !== verificationEvidenceId) throw Object.assign(new Error('Decision evidence does not match committed verification'), { statusCode: 409, code: 'PAYMENT_DECISION_BINDING_CONFLICT' });
@@ -5926,8 +5937,15 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
         || (expectedReference !== null && observedReference !== expectedReference)
         || (expectedTransaction !== null && observedTransaction !== expectedTransaction);
       if (bindingMismatch) throw Object.assign(new Error('Verification observations contradict stored evidence'), { statusCode: 409, code: 'PAYMENT_VERIFICATION_EVIDENCE_CONFLICT' });
-      if (verificationEvidence.payment_account_id && input.paymentAccountId && String(input.paymentAccountId) !== String(verificationEvidence.payment_account_id)) {
-        throw Object.assign(new Error('Verification payment account does not match stored evidence'), { statusCode: 409, code: 'PAYMENT_VERIFICATION_BINDING_CONFLICT' });
+      if (verificationEvidence.payment_account_id && String(verificationEvidence.payment_account_id) !== String(row.payment_account_id || '')) {
+        throw Object.assign(new Error('Verification evidence account does not match stored payment'), { statusCode: 409, code: 'PAYMENT_VERIFICATION_BINDING_CONFLICT' });
+      }
+      if (verificationEvidence.organization_id !== row.organization_id ||
+          String(verificationEvidence.provider_id).toLowerCase() !== String(row.provider_id).toLowerCase()) {
+        throw Object.assign(new Error('Verification evidence identity does not match stored payment'), { statusCode: 409, code: 'PAYMENT_VERIFICATION_BINDING_CONFLICT' });
+      }
+      if (verificationEvidence.payment_id && String(verificationEvidence.payment_id) !== paymentId) {
+        throw Object.assign(new Error('Verification evidence payment does not match committed payment'), { statusCode: 409, code: 'PAYMENT_VERIFICATION_BINDING_CONFLICT' });
       }
 
       db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
