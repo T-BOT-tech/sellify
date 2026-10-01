@@ -83,6 +83,8 @@ jobs:
         run: npm run gap-1.14:payment-refund-test
       - name: GAP-1.15 settlement and fee model regression
         run: npm run gap-1.15:payment-settlement-test
+      - name: GAP-1.16 executable payment routing regression
+        run: npm run gap-1.16:payment-routing-test
       - name: GAP-2 logistics authorization foundation regression
         run: npm run test:gap-2-logistics-authz
       - name: GAP-2 delivery assignment authority regression
