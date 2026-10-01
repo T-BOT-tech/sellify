@@ -45,7 +45,8 @@ export class PaymentDecisionEngine {
                verification.observedAmountMinor < payment.amountMinor &&
                !has(reasons, 'CURRENCY_MISMATCH') &&
                !has(reasons, 'RECEIVER_MISMATCH') &&
-               !has(reasons, 'RECEIVER_UNAVAILABLE')) {
+               !has(reasons, 'RECEIVER_UNAVAILABLE') &&
+               !has(reasons, 'TRANSACTION_MISMATCH') && !has(reasons, 'TRANSACTION_ID_MISSING')) {
       decision = 'MARK_PARTIAL';
       targetState = 'PARTIAL';
       reasons.push('PARTIAL_PAYMENT');
