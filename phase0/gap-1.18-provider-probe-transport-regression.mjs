@@ -44,3 +44,36 @@ assert.equal(timedOut, true);
 
 assert.equal(calls[0].options.headers.authorization, 'Bearer secret');
 console.log('GAP-1.18 provider probe transport regression passed');
+
+
+// GAP-1.18D: bounded retries recover from transient provider responses.
+{
+  let calls = 0;
+  const result = await requestProviderProbe({
+    baseUrl: 'https://provider.example', path: '/probe', maxRetries: 2, backoffBaseMs: 0,
+    fetchImpl: async () => ({
+      status: ++calls < 3 ? 503 : 200,
+      ok: calls >= 3,
+      headers: { get: () => null },
+      text: async () => JSON.stringify({ reference: 'REF-1' }),
+    }),
+  });
+  assert.equal(calls, 3);
+  assert.equal(result.ok, true);
+}
+
+// GAP-1.18D: non-retryable failures are returned immediately.
+{
+  let calls = 0;
+  const result = await requestProviderProbe({
+    baseUrl: 'https://provider.example', path: '/probe', maxRetries: 2, backoffBaseMs: 0,
+    fetchImpl: async () => ({
+      status: ++calls === 1 ? 400 : 200,
+      ok: calls !== 1,
+      headers: { get: () => null },
+      text: async () => JSON.stringify({ error: 'bad request' }),
+    }),
+  });
+  assert.equal(calls, 1);
+  assert.equal(result.ok, false);
+}
