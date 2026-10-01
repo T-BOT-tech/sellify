@@ -9,6 +9,41 @@ const STATUS_TO_VERIFICATION = Object.freeze({
   UNKNOWN: 'UNVERIFIABLE',
 });
 
+const DEFAULT_PROVIDER_STATUS_TIMEOUT_MS = 15000;
+const TERMINAL_PAYMENT_STATES = new Set(['VERIFIED', 'MISMATCH', 'PARTIAL', 'DUPLICATE', 'EXPIRED', 'REFUNDED']);
+
+function providerStatusError(error, providerId) {
+  const normalized = error instanceof Error ? error : new Error(String(error || 'Provider status query failed'));
+  if (normalized.code || normalized.statusCode) return normalized;
+  normalized.code = 'PAYMENT_PROVIDER_STATUS_FAILED';
+  normalized.statusCode = 502;
+  normalized.providerId = providerId;
+  return normalized;
+}
+
+async function withTimeout(operation, timeoutMs, providerId) {
+  const ms = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_PROVIDER_STATUS_TIMEOUT_MS;
+  let timer;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(operation),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          const error = new Error(`Payment provider ${providerId} status query timed out`);
+          error.code = 'PAYMENT_PROVIDER_STATUS_TIMEOUT';
+          error.statusCode = 504;
+          error.providerId = providerId;
+          reject(error);
+        }, ms);
+      }),
+    ]);
+  } catch (error) {
+    throw providerStatusError(error, providerId);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function statusReasonCodes(status) {
   if (status === 'PENDING') return ['PROVIDER_PAYMENT_PENDING'];
   if (status === 'FAILED') return ['PROVIDER_PAYMENT_FAILED'];
@@ -16,7 +51,7 @@ function statusReasonCodes(status) {
   return [];
 }
 
-export async function queryPaymentStatus({ chatId, paymentId, transactionId = null, externalReference = null, actor = null, store, clock = () => new Date() }) {
+export async function queryPaymentStatus({ chatId, paymentId, transactionId = null, externalReference = null, actor = null, store, clock = () => new Date(), providerStatusTimeoutMs = DEFAULT_PROVIDER_STATUS_TIMEOUT_MS }) {
   if (!store) throw new TypeError('queryPaymentStatus requires store');
   const payment = await store.getPayment(chatId, paymentId);
   if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
@@ -37,7 +72,7 @@ export async function queryPaymentStatus({ chatId, paymentId, transactionId = nu
     throw error;
   }
 
-  const providerStatus = await provider.getStatus({
+  const providerStatus = await withTimeout(() => provider.getStatus({
     providerId: provider.id,
     paymentAccountId: account.id,
     accountIdentifier: account.accountIdentifier,
@@ -47,7 +82,7 @@ export async function queryPaymentStatus({ chatId, paymentId, transactionId = nu
     externalReference: externalReference || payment.externalReference || null,
     amountMinor: payment.amountMinor,
     currency: payment.currency,
-  });
+  }), providerStatusTimeoutMs, provider.id);
 
   const observedReference = providerStatus.externalReference || externalReference || payment.externalReference || null;
   const fingerprint = `status:${provider.id}:${providerStatus.providerTransactionId || observedReference || payment.id}:${providerStatus.status}`;
@@ -66,6 +101,23 @@ export async function queryPaymentStatus({ chatId, paymentId, transactionId = nu
     observedAt: providerStatus.occurredAt,
   }, actor);
   const evidence = evidenceResult.evidence;
+
+  if (evidenceResult.duplicate) {
+    const currentPayment = await store.getPayment(chatId, payment.id);
+    if (currentPayment && TERMINAL_PAYMENT_STATES.has(String(currentPayment.state).toUpperCase())) {
+      return {
+        payment: currentPayment,
+        intent,
+        evidence,
+        verification: null,
+        invariants: null,
+        decision: null,
+        providerStatus,
+        duplicateEvidence: true,
+        idempotentReplay: true,
+      };
+    }
+  }
 
   const verification = {
     providerId: provider.id,

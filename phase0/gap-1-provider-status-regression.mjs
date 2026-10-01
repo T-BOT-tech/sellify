@@ -33,6 +33,55 @@ test('pending status is evidence and verification only', async () => {
   assert.equal(result.payment.state, 'RECEIVED');
   assert.equal(store.calls.committed, 0);
 });
+test('provider timeout is bounded and classified without creating financial evidence', async () => {
+  const registry = await import('../backend/lib/payments/provider-registry.js');
+  registry.registerPaymentProvider({
+    id: 'telebirr',
+    version: '1',
+    capabilities: { getStatus: true },
+    getStatus: () => new Promise(() => {}),
+  }, { replace: true });
+  const store = makeStore();
+  await assert.rejects(
+    () => queryPaymentStatus({ chatId: 'chat-1', paymentId: 'pay-1', store, providerStatusTimeoutMs: 10 }),
+    error => error.code === 'PAYMENT_PROVIDER_STATUS_TIMEOUT' && error.statusCode === 504,
+  );
+  assert.equal(store.calls.committed, 0);
+});
+
+test('provider failure is normalized as an upstream error and does not commit payment state', async () => {
+  const registry = await import('../backend/lib/payments/provider-registry.js');
+  registry.registerPaymentProvider({
+    id: 'telebirr',
+    version: '1',
+    capabilities: { getStatus: true },
+    getStatus: async () => { throw new Error('provider unavailable'); },
+  }, { replace: true });
+  const store = makeStore();
+  await assert.rejects(
+    () => queryPaymentStatus({ chatId: 'chat-1', paymentId: 'pay-1', store }),
+    error => error.code === 'PAYMENT_PROVIDER_STATUS_FAILED' && error.statusCode === 502,
+  );
+  assert.equal(store.calls.committed, 0);
+});
+
+test('terminal duplicate status query is an idempotent replay', async () => {
+  const registry = await import('../backend/lib/payments/provider-registry.js');
+  registry.registerPaymentProvider(provider(), { replace: true });
+  const store = makeStore();
+  const originalGetPayment = store.getPayment;
+  let reads = 0;
+  store.getPayment = async (...args) => {
+    reads += 1;
+    const payment = await originalGetPayment(...args);
+    return reads > 1 ? { ...payment, state: 'VERIFIED' } : payment;
+  };
+  const result = await queryPaymentStatus({ chatId: 'chat-1', paymentId: 'pay-1', store });
+  assert.equal(result.idempotentReplay, true);
+  assert.equal(result.payment.state, 'VERIFIED');
+  assert.equal(store.calls.committed, 0);
+});
+
 test('wrong receiver becomes a mismatch through invariant evaluation', async () => {
   const registry = await import('../backend/lib/payments/provider-registry.js');
   registry.registerPaymentProvider(provider({ receiverAccount: 'WRONG' }), { replace: true });
