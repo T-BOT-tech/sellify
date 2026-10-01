@@ -566,6 +566,25 @@ export class PaymentCore {
     }
   }
 
+  async certifyProviderCapabilities(command = {}) {
+    this.#authorize(command, 'payments:view');
+    const providerId = String(command.providerId || command.provider_id || '').trim();
+    if (!providerId) throw Object.assign(new Error('providerId is required'), { statusCode: 400, code: 'PROVIDER_CONTEXT_REQUIRED' });
+    const registry = this.providerRegistry;
+    if (!registry?.certifyPaymentProviderCapabilities) {
+      throw Object.assign(new Error('Provider capability certification is unavailable'), { statusCode: 503, code: 'PROVIDER_CERTIFICATION_UNAVAILABLE' });
+    }
+    return registry.certifyPaymentProviderCapabilities(providerId);
+  }
+
+  async certifyAllProviders(command = {}) {
+    this.#authorize(command, 'payments:view');
+    if (!this.providerRegistry?.certifyAllPaymentProviders) {
+      throw Object.assign(new Error('Provider capability certification is unavailable'), { statusCode: 503, code: 'PROVIDER_CERTIFICATION_UNAVAILABLE' });
+    }
+    return { providers: this.providerRegistry.certifyAllPaymentProviders() };
+  }
+
   #authorize(command, permission) {
     if (!this.authorization) return;
     const allowed = this.authorization(command.actor || null, command.organizationId || null, command.locationId || null, 'payments', permission);
