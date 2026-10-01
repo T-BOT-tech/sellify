@@ -292,6 +292,7 @@
     "gap1:notification-evidence-identity-test": "node phase0/gap-1-provider-notification-evidence-identity-regression.mjs",
     "gap1:authenticated-notification-ingestion-test": "node phase0/gap-1-provider-notification-evidence-identity-regression.mjs",
     "gap1:mpesa-authenticated-notification-test": "node phase0/gap-1-mpesa-authenticated-notification-contract-regression.mjs",
+    "gap1:provider-notification-http-boundary-test": "node phase0/gap-1-provider-notification-http-boundary-regression.mjs",
     "test:gap-2-logistics-authz": "node phase0/gap-2-logistics-authorization-foundation-regression.mjs",
     "test:gap-2-delivery-assignment": "node phase0/gap-2-delivery-assignment-authority-regression.mjs",
     "test:gap-2-delivery-lifecycle": "node phase0/gap-2-delivery-assignment-lifecycle-regression.mjs",
