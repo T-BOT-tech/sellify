@@ -5803,9 +5803,28 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
     if (row.state !== target && !PAYMENT_TRANSITIONS[row.state]?.has(target)) throw Object.assign(new Error('Invalid payment transition'), { statusCode: 409, code: 'INVALID_PAYMENT_TRANSITION' });
     if (input.verification) {
       const v = input.verification;
+      const verificationPaymentIntentId = String(v.paymentIntentId || v.payment_intent_id || row.payment_intent_id || '').trim() || null;
+      const verificationEvidenceId = String(v.evidenceId || v.evidence_id || '').trim() || null;
+      const verificationProviderId = String(v.providerId || v.provider_id || row.provider_id || '').trim().toLowerCase();
+      if (!verificationEvidenceId) throw Object.assign(new Error('Decision verification requires evidenceId'), { statusCode: 409, code: 'VERIFICATION_EVIDENCE_REQUIRED' });
+      const evidenceRow = db.prepare('SELECT payment_id, payment_intent_id, provider_id FROM payment_evidence WHERE id = ? AND organization_id = ?').get(verificationEvidenceId, organizationId);
+      if (!evidenceRow) throw Object.assign(new Error('Decision verification evidence not found'), { statusCode: 409, code: 'VERIFICATION_EVIDENCE_NOT_FOUND' });
+      if (String(evidenceRow.payment_id || '') !== paymentId || String(evidenceRow.payment_intent_id || '') !== verificationPaymentIntentId || String(evidenceRow.provider_id || '').toLowerCase() !== verificationProviderId) {
+        throw Object.assign(new Error('Verification is not bound to the decision payment context'), { statusCode: 409, code: 'VERIFICATION_CONTEXT_MISMATCH' });
+      }
+      if (String(row.payment_intent_id || '') !== verificationPaymentIntentId || String(row.provider_id || '').toLowerCase() !== verificationProviderId) {
+        throw Object.assign(new Error('Verification does not match payment context'), { statusCode: 409, code: 'VERIFICATION_CONTEXT_MISMATCH' });
+      }
+      const verificationId = String(v.id || crypto.randomUUID());
+      const verifier = String(v.verifier || 'payment-core').trim();
+      const verifierVersion = String(v.verifierVersion || v.verifier_version || '1').trim() || '1';
+      const existingVerification = db.prepare('SELECT id FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND verifier_version = ?').get(verificationEvidenceId, verifier, verifierVersion);
+      if (existingVerification) {
+        v.id = existingVerification.id;
+      }
       db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-        String(v.id || crypto.randomUUID()), organizationId, paymentId, v.paymentIntentId || v.payment_intent_id || row.payment_intent_id || null, v.evidenceId || v.evidence_id || null,
-        v.providerId || v.provider_id || row.provider_id, String(v.result || '').toUpperCase(), v.confidence == null ? null : Number(v.confidence),
+        verificationId, organizationId, paymentId, verificationPaymentIntentId, verificationEvidenceId,
+        verificationProviderId, String(v.result || '').toUpperCase(), v.confidence == null ? null : Number(v.confidence),
         v.observedAmountMinor ?? v.observed_amount_minor ?? null, v.observedCurrency || v.observed_currency || null,
         v.observedReceiver || v.observed_receiver || null, v.observedReceiverAccount || v.observed_receiver_account || null,
         v.observedReference || v.observed_reference || null, v.observedTransactionId || v.observed_transaction_id || null,
