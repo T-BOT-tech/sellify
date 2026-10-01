@@ -5865,6 +5865,12 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
     if (row.state !== target && !PAYMENT_TRANSITIONS[row.state]?.has(target)) throw Object.assign(new Error('Invalid payment transition'), { statusCode: 409, code: 'INVALID_PAYMENT_TRANSITION' });
     const verification = input.verification || null;
     const decision = input.decision || {};
+    if (['VERIFIED', 'RECONCILED'].includes(target) && !verification) {
+      throw Object.assign(new Error('Financially verified payment state requires verification context'), {
+        statusCode: 409,
+        code: 'PAYMENT_VERIFICATION_REQUIRED',
+      });
+    }
 
     const paymentIntentRow = row.payment_intent_id
       ? db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(row.payment_intent_id, organizationId)
