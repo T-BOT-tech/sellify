@@ -133,24 +133,45 @@ function audit(chatId, action, entityType, entityId, metadata = {}, context = {}
   if (!organizationId && chatId != null) {
     organizationId = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(String(chatId))?.organization_id || null;
   }
-  db.prepare(`
+  const lineageType = context.lineageType == null ? null : String(context.lineageType);
+  const lineageId = context.lineageId == null ? null : String(context.lineageId);
+  const previousHash = organizationId
+    ? (db.prepare('SELECT event_hash FROM audit_events WHERE organization_id = ? AND event_hash IS NOT NULL ORDER BY id DESC LIMIT 1').get(organizationId)?.event_hash || null)
+    : null;
+  const metadataJson = json(metadata || {});
+  const result = String(context.result || 'success');
+  const actionValue = String(action || '');
+  const entityTypeValue = String(entityType || '');
+  const entityIdValue = entityId == null ? null : String(entityId);
+  const canonical = [
+    previousHash || '', organizationId || '', String(chatId ?? ''), String(context.locationId ?? ''),
+    String(context.actorId ?? ''), String(context.deviceId ?? ''), actionValue, entityTypeValue,
+    entityIdValue || '', String(context.reason || ''), result, metadataJson, createdAt,
+    lineageType || '', lineageId || '',
+  ].join('|');
+  const eventHash = crypto.createHash('sha256').update(canonical).digest('hex');
+  const info = db.prepare(`
     INSERT INTO audit_events
-      (chat_id, organization_id, location_id, actor_id, device_id, action, entity_type, entity_id, reason, result, metadata_json, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (chat_id, organization_id, location_id, actor_id, device_id, action, entity_type, entity_id, reason, result, metadata_json, created_at, previous_hash, event_hash, lineage_type, lineage_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     chatId == null ? null : String(chatId),
     organizationId,
     context.locationId == null ? null : String(context.locationId),
     context.actorId == null ? null : String(context.actorId),
-    context.deviceId == null ? null : String(context.deviceId),
-    String(action || ''),
-    String(entityType || ''),
-    entityId == null ? null : String(entityId),
+    actionValue,
+    entityTypeValue,
+    entityIdValue,
     String(context.reason || ''),
-    String(context.result || 'success'),
-    json(metadata || {}),
+    result,
+    metadataJson,
     createdAt,
+    previousHash,
+    eventHash,
+    lineageType,
+    lineageId,
   );
+  return { id: Number(info.lastInsertRowid), eventHash, previousHash };
 }
 
 function runMigrations() {
@@ -2357,6 +2378,17 @@ function runMigrations() {
   // GAP-1.18N — verification provenance hardening.
   // The persisted verifier identity is server-owned. Caller-supplied verifier
   // metadata may not masquerade as Payment Core provenance.
+  if (!applied.includes(57)) {
+    db.exec(`
+      ALTER TABLE audit_events ADD COLUMN previous_hash TEXT;
+      ALTER TABLE audit_events ADD COLUMN event_hash TEXT;
+      ALTER TABLE audit_events ADD COLUMN lineage_type TEXT;
+      ALTER TABLE audit_events ADD COLUMN lineage_id TEXT;
+      CREATE INDEX IF NOT EXISTS idx_audit_lineage ON audit_events(organization_id, lineage_type, lineage_id, created_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(57, nowIso());
+  }
+
   if (!applied.includes(56)) {
     db.exec(`
       ALTER TABLE payment_verifications ADD COLUMN provenance_source TEXT NOT NULL DEFAULT 'PAYMENT_CORE';
