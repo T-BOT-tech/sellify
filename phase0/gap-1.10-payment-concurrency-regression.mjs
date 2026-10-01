@@ -26,7 +26,7 @@ async function setup() {
     accountIdentifier: '251900000000',
     phone: '251900000000',
   });
-  return { chatId: tenant.chatId, organizationId: tenant.tenant.organizationId, accountId: account.id };
+  const organization = await store.getTenant(tenant.chatId);\n  return { chatId: tenant.chatId, organizationId: organization.organizationId, accountId: account.id };
 }
 
 function runWorker(workerData) {
