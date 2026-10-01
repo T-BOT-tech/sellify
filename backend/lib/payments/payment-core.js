@@ -782,6 +782,25 @@ export class PaymentCore {
     }
 
     const provider = this.providerRegistry.requirePaymentProvider(id);
+
+    // Provider authentication may require account-scoped configuration (for
+    // example an M-Pesa shortcode and shared-secret policy). Resolve that
+    // configuration inside the Payment Core boundary so the HTTP adapter never
+    // performs or exposes a pre-auth account lookup.
+    let notificationConfig = config && typeof config === 'object' ? { ...config } : {};
+    const accountHint = String(
+      requestContext?.providerAccountReferenceHint ||
+      requestContext?.provider_account_reference_hint ||
+      ''
+    ).trim();
+    if (!Object.keys(notificationConfig).length && accountHint &&
+        typeof this.store.getPaymentNotificationConfig === 'function') {
+      const resolvedConfig = await this.store.getPaymentNotificationConfig(id, accountHint);
+      notificationConfig = resolvedConfig && typeof resolvedConfig === 'object'
+        ? { ...resolvedConfig }
+        : {};
+    }
+
     if (typeof provider.authenticateNotification !== 'function' ||
         typeof provider.parseEvidence !== 'function') {
       throw Object.assign(
@@ -795,7 +814,7 @@ export class PaymentCore {
     const authentication = await provider.authenticateNotification({
       rawRequest,
       requestContext,
-      config,
+      config: notificationConfig,
     });
 
     if (!authentication?.authenticated) {
@@ -805,7 +824,7 @@ export class PaymentCore {
       );
     }
 
-    const parsed = await provider.parseEvidence({ rawRequest, config });
+    const parsed = await provider.parseEvidence({ rawRequest, config: notificationConfig });
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw Object.assign(
         new Error('Provider notification parser returned no evidence'),
