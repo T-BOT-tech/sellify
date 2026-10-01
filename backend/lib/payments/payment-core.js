@@ -1,4 +1,4 @@
-import { assertUntrustedPaymentEvidenceShape, normalizePaymentEvidenceSource } from './payment-evidence-authority.js';
+import { assertUntrustedPaymentEvidenceShape } from './payment-evidence-authority.js';
 
 export class PaymentCore {
   constructor({
