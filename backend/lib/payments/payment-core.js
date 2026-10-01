@@ -841,6 +841,54 @@ export class PaymentCore {
       );
     }
 
+    // Payment Core independently validates the authentication result before
+    // allowing the provider parser to establish any evidence facts. A provider
+    // adapter may authenticate correctly but still return an incomplete or
+    // internally inconsistent trust context; that must fail closed here.
+    const authenticatedProviderId = String(
+      authentication.providerId ||
+      authentication.provider_id ||
+      ''
+    ).trim().toLowerCase();
+    const authenticatedAccountReference = String(
+      authentication.providerAccountReference ||
+      authentication.provider_account_reference ||
+      authentication.accountIdentifier ||
+      authentication.account_identifier ||
+      ''
+    ).trim();
+    const authenticationReference = String(
+      authentication.authenticationReference ||
+      authentication.authentication_reference ||
+      ''
+    ).trim();
+    const authenticatedNotificationId = String(
+      authentication.providerNotificationId ||
+      authentication.provider_notification_id ||
+      authentication.notificationId ||
+      authentication.notification_id ||
+      ''
+    ).trim();
+    const configuredAccountReference = String(
+      notificationConfig.accountIdentifier ||
+      notificationConfig.account_identifier ||
+      ''
+    ).trim();
+
+    if (authenticatedProviderId !== id ||
+        !authenticatedAccountReference ||
+        !authenticationReference ||
+        (configuredAccountReference && authenticatedAccountReference !== configuredAccountReference)) {
+      throw Object.assign(
+        new Error('Provider notification authentication result is incomplete or inconsistent'),
+        {
+          statusCode: 401,
+          code: 'PROVIDER_NOTIFICATION_AUTHENTICATION_INVALID',
+          providerId: id,
+        }
+      );
+    }
+
     const parsed = await provider.parseEvidence({ rawRequest, config: notificationConfig });
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw Object.assign(
