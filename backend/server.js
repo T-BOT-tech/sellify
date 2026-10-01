@@ -1837,17 +1837,6 @@ async function handlePaymentProviderNotification(req, res, providerId) {
     });
   }
 
-  // Account metadata is configuration for provider authentication only. The
-  // Payment Core ingestion path resolves the canonical account independently.
-  const account = await getPaymentAccountForProviderNotification(
-    provider.id,
-    callbackAccountIdentifier
-  );
-  const config = {
-    ...account.metadata,
-    accountIdentifier: account.accountIdentifier,
-  };
-
   const submitted = await notificationPaymentCore.ingestProviderNotification({
     providerId: provider.id,
     rawRequest: {
@@ -1863,6 +1852,7 @@ async function handlePaymentProviderNotification(req, res, providerId) {
       providerAuthenticated: /^(1|true|yes)$/i.test(
         String(req.headers['x-sellify-provider-authenticated'] || '')
       ),
+      providerAccountReferenceHint: callbackAccountIdentifier,
     },
     config,
   });
