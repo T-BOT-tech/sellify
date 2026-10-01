@@ -136,6 +136,46 @@ export function createUnconfiguredPaymentProvider({ id, name, version = '1', cap
   });
 }
 
+export function certifyPaymentProviderCapabilities(providerId) {
+  const provider = requirePaymentProvider(providerId);
+  const capabilities = { ...provider.capabilities };
+  const methods = {};
+  for (const method of METHODS) {
+    methods[method] = typeof provider[method] === 'function';
+  }
+  const declaredExecutable = METHODS.filter(method => capabilities[method] === true);
+  const contractMismatches = declaredExecutable.filter(method => !methods[method]);
+  const unconfigured = provider.name && /unconfigured/i.test(provider.name);
+  return {
+    providerId: provider.id,
+    providerName: provider.name,
+    adapterVersion: provider.version,
+    status: unconfigured
+      ? 'UNCONFIGURED'
+      : contractMismatches.length
+        ? 'CONTRACT_INVALID'
+        : declaredExecutable.length
+          ? 'ADAPTER_CONTRACT_CERTIFIED'
+          : 'NO_EXECUTABLE_CAPABILITIES',
+    liveExternalCertification: false,
+    capabilities,
+    implementedMethods: methods,
+    declaredExecutableCapabilities: declaredExecutable,
+    contractMismatches,
+    reasonCodes: unconfigured
+      ? ['PROVIDER_NOT_CONFIGURED']
+      : contractMismatches.length
+        ? ['CAPABILITY_METHOD_MISMATCH']
+        : declaredExecutable.length
+          ? ['ADAPTER_METHODS_PRESENT']
+          : ['NO_EXECUTABLE_CAPABILITIES'],
+  };
+}
+
+export function certifyAllPaymentProviders() {
+  return listPaymentProviders().map(provider => certifyPaymentProviderCapabilities(provider.id));
+}
+
 export const PAYMENT_PROVIDER_IDS = Object.freeze(['manual', 'telebirr', 'cbe', 'mpesa', 'boa']);
 
 registerPaymentProvider({
