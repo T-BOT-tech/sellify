@@ -306,7 +306,8 @@
     "gap-1.18:payment-provider-transport-test": "node phase0/gap-1.18-provider-probe-transport-regression.mjs",
     "gap-1.18:payment-provider-adapters-test": "node phase0/gap-1.18-provider-adapters-regression.mjs",
     "gap-1.18:payment-evidence-authority-test": "node phase0/gap-1.18A-payment-evidence-authority-regression.mjs",
-    "gap-1.18:capability-certification-test": "node phase0/gap-1.18C-capability-certification-regression.mjs"
+    "gap-1.18:capability-certification-test": "node phase0/gap-1.18C-capability-certification-regression.mjs",
+    "gap-1.18:provider-verification-result-test": "node phase0/gap-1.18-provider-verification-result-regression.mjs"
   },
   "engines": {
     "node": ">=24"
