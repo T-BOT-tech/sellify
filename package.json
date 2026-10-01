@@ -291,7 +291,8 @@
     "test:gap-2-delivery-exception": "node phase0/gap-2-delivery-assignment-lifecycle-regression.mjs",
     "test:gap-2-dispatch-workload": "node phase0/gap-2-dispatch-workload-regression.mjs",
     "test:gap-2-delivery-frontend": "node phase0/gap-2-delivery-frontend-contract-regression.mjs",
-    "gap-1.10:payment-concurrency-test": "node phase0/gap-1.10-payment-concurrency-regression.mjs"
+    "gap-1.10:payment-concurrency-test": "node phase0/gap-1.10-payment-concurrency-regression.mjs",
+    "gap-1.11:payment-status-test": "node phase0/gap-1.11-payment-provider-status-regression.mjs"
   },
   "engines": {
     "node": ">=24"
