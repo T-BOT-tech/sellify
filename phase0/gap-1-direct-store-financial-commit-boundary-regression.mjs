@@ -11,6 +11,7 @@ const {
   createTenantForUser,
   getDatabaseForTests,
   commitPaymentDecision,
+  insertPaymentEvidence,
 } = await import('../backend/lib/store-sqlite.js');
 
 const db = getDatabaseForTests();
@@ -179,6 +180,126 @@ assert.deepEqual(ledger, {
   from_state: 'RECEIVED',
   to_state: 'REJECTED',
 }, 'ledger entry must describe the exact canonical payment transition');
+
+const replayIntentId = 'gap1-intent-replay';
+const replayPaymentId = 'gap1-payment-replay';
+const replayEvidenceId = 'gap1-evidence-replay';
+
+db.prepare(
+  'INSERT INTO payment_intents (id, organization_id, provider_id, payment_account_id, amount_minor, currency, status, metadata_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+).run(replayIntentId, organizationId, 'mpesa', accountA, 1000, 'ETB', 'PAYMENT_ATTEMPTED', '{}', now, now);
+
+db.prepare(
+  'INSERT INTO payments (id, organization_id, payment_intent_id, payment_account_id, provider_id, channel, amount_minor, currency, state, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+).run(replayPaymentId, organizationId, replayIntentId, accountA, 'mpesa', 'api', 1000, 'ETB', 'RECEIVED', now, now);
+
+const replayEvidence = await insertPaymentEvidence(tenant.chatId, {
+  id: replayEvidenceId,
+  paymentId: replayPaymentId,
+  paymentIntentId: replayIntentId,
+  paymentAccountId: accountA,
+  providerId: 'mpesa',
+  channel: 'manual',
+  evidenceType: 'PROVIDER_TRANSACTION',
+  providerTransactionId: 'gap1-replay-tx',
+  externalReference: 'gap1-replay-ref',
+  fingerprint: 'gap1-replay-fingerprint',
+  normalizedPayload: {
+    amountMinor: 1000,
+    currency: 'ETB',
+    providerTransactionId: 'gap1-replay-tx',
+    merchantReference: 'gap1-replay-ref',
+  },
+  rawPayload: {},
+  source: 'test',
+});
+
+assert.equal(replayEvidence.duplicate, false);
+
+const firstReplayCommit = await commitPaymentDecision(tenant.chatId, {
+  paymentId: replayPaymentId,
+  expectedState: 'RECEIVED',
+  targetState: 'VERIFIED',
+  verification: {
+    id: 'gap1-replay-verification-a',
+    paymentId: replayPaymentId,
+    paymentIntentId: replayIntentId,
+    evidenceId: replayEvidenceId,
+    providerId: 'mpesa',
+    result: 'MATCH',
+    observedAmountMinor: 1000,
+    observedCurrency: 'ETB',
+    observedReference: 'gap1-replay-ref',
+    observedTransactionId: 'gap1-replay-tx',
+    verifier: 'gap1-test',
+  },
+  decision: {
+    id: 'gap1-replay-decision-a',
+    paymentId: replayPaymentId,
+    paymentIntentId: replayIntentId,
+    evidenceId: replayEvidenceId,
+    verificationId: 'gap1-replay-verification-a',
+    decision: 'ACCEPT',
+    targetState: 'VERIFIED',
+    entryType: 'VERIFIED',
+  },
+});
+
+assert.equal(firstReplayCommit.state, 'VERIFIED');
+assert.equal(
+  db.prepare('SELECT COUNT(*) AS count FROM payment_verifications WHERE evidence_id = ?').get(replayEvidenceId).count,
+  1,
+);
+assert.equal(
+  db.prepare('SELECT COUNT(*) AS count FROM payment_decisions WHERE verification_id = ?').get('gap1-replay-verification-a').count,
+  1,
+);
+
+const replayCommit = await commitPaymentDecision(tenant.chatId, {
+  paymentId: replayPaymentId,
+  expectedState: 'VERIFIED',
+  targetState: 'VERIFIED',
+  verification: {
+    id: 'gap1-replay-verification-b',
+    paymentId: replayPaymentId,
+    paymentIntentId: replayIntentId,
+    evidenceId: replayEvidenceId,
+    providerId: 'mpesa',
+    result: 'MATCH',
+    observedAmountMinor: 1000,
+    observedCurrency: 'ETB',
+    observedReference: 'gap1-replay-ref',
+    observedTransactionId: 'gap1-replay-tx',
+    verifier: 'gap1-test-replay',
+  },
+  decision: {
+    id: 'gap1-replay-decision-b',
+    paymentId: replayPaymentId,
+    paymentIntentId: replayIntentId,
+    evidenceId: replayEvidenceId,
+    verificationId: 'gap1-replay-verification-b',
+    decision: 'ACCEPT',
+    targetState: 'VERIFIED',
+    entryType: 'VERIFIED',
+  },
+});
+
+assert.equal(replayCommit.state, 'VERIFIED');
+assert.equal(
+  db.prepare('SELECT COUNT(*) AS count FROM payment_verifications WHERE evidence_id = ?').get(replayEvidenceId).count,
+  1,
+  'replaying the same evidence must not create a second verification',
+);
+assert.equal(
+  db.prepare('SELECT COUNT(*) AS count FROM payment_decisions WHERE payment_id = ?').get(replayPaymentId).count,
+  1,
+  'replaying the same evidence must not create a second financial decision',
+);
+assert.equal(
+  db.prepare('SELECT COUNT(*) AS count FROM payment_ledger_entries WHERE payment_id = ?').get(replayPaymentId).count,
+  1,
+  'replaying the same evidence must not create a second ledger effect',
+);
 
 await rm(tempDir, { recursive: true, force: true });
 
