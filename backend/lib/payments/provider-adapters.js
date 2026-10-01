@@ -1,7 +1,6 @@
-// GAP-1.18 provider adapter skeletons.
-// These adapters intentionally do not assume undocumented provider APIs.
-// A deployment must supply both an approved base URL and credential; until
-// then probes return UNKNOWN through the standard unconfigured boundary.
+// GAP-1.18B provider adapters.
+// Authentication belongs to each provider adapter. The shared transport never
+// interprets credentials, API keys, OAuth tokens, signatures, or certificates.
 
 import { getProviderAdapterConfig } from './provider-adapter-config.js';
 import { requestProviderProbe } from './provider-probe-transport.js';
@@ -13,15 +12,29 @@ const PROVIDERS = Object.freeze([
   ['boa', 'Bank of Abyssinia'],
 ]);
 
+const ENV_CREDENTIAL = Object.freeze({
+  telebirr: 'SELLIFY_TELEBIRR_API_KEY',
+  cbe: 'SELLIFY_CBE_API_KEY',
+  mpesa: 'SELLIFY_MPESA_API_KEY',
+  boa: 'SELLIFY_BOA_API_KEY',
+});
+
+// Temporary deployment authentication contract. It is intentionally selected
+// by the adapter, not the transport. Provider-specific OAuth/HMAC/signature
+// implementations can replace these functions without changing HTTP transport.
+const ADAPTER_AUTH = Object.freeze({
+  telebirr: ({ credential }) => credential ? { authorization: `Bearer ${credential}` } : {},
+  cbe: ({ credential }) => credential ? { authorization: `Bearer ${credential}` } : {},
+  mpesa: ({ credential }) => credential ? { authorization: `Bearer ${credential}` } : {},
+  boa: ({ credential }) => credential ? { authorization: `Bearer ${credential}` } : {},
+});
+
 function createProviderAdapter(id, name) {
   return {
     id,
     name,
     version: '1',
-    capabilities: {
-      getMetadata: true,
-      probeCapability: true,
-    },
+    capabilities: { getMetadata: true, probeCapability: true },
     configured: getProviderAdapterConfig(id).configured,
     getMetadata: async () => ({ id, name, version: '1' }),
     probeCapability: async ({ capability, context = {} }) => {
@@ -32,8 +45,6 @@ function createProviderAdapter(id, name) {
         throw error;
       }
 
-      // The path is intentionally supplied by deployment context because
-      // provider API contracts must be verified from current provider docs.
       const path = context.probePath;
       if (!path) {
         return {
@@ -44,15 +55,17 @@ function createProviderAdapter(id, name) {
         };
       }
 
+      const env = context.env || process.env;
+      const credential = String(env[ENV_CREDENTIAL[id]] || '').trim();
+      const authHeaders = ADAPTER_AUTH[id]?.({ credential, context }) || {};
       const response = await requestProviderProbe({
         baseUrl: config.baseUrl,
-        apiKey: process.env[
-          ({ telebirr: 'SELLIFY_TELEBIRR_API_KEY', cbe: 'SELLIFY_CBE_API_KEY',
-             mpesa: 'SELLIFY_MPESA_API_KEY', boa: 'SELLIFY_BOA_API_KEY' })[id]
-        ],
         path,
         method: context.probeMethod || 'GET',
         timeoutMs: context.timeoutMs || 5000,
+        headers: authHeaders,
+        body: context.body,
+        fetchImpl: context.fetchImpl,
       });
 
       return {
