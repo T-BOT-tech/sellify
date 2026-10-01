@@ -813,6 +813,14 @@ export class PaymentCore {
       command.account_identifier ||
       ''
     ).trim();
+    if (notificationAuthentication.providerAccountReference &&
+        String(notificationAuthentication.providerAccountReference).trim() !== providerAccountReference) {
+      throw Object.assign(
+        new Error('Authenticated notification account does not match notification account'),
+        { statusCode: 401, code: 'PROVIDER_NOTIFICATION_AUTHENTICATION_MISMATCH' }
+      );
+    }
+
     if (!providerId || !providerAccountReference) {
       throw Object.assign(
         new Error('Provider notification requires canonical provider and account identity'),
