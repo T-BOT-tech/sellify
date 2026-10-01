@@ -301,6 +301,51 @@ assert.equal(
   'replaying the same evidence must not create a second ledger effect',
 );
 
+await assert.rejects(
+  () => commitPaymentDecision(tenant.chatId, {
+    paymentId: replayPaymentId,
+    expectedState: 'VERIFIED',
+    targetState: 'MISMATCH',
+    decision: {
+      paymentId: replayPaymentId,
+      paymentIntentId: replayIntentId,
+      decision: 'MARK_MISMATCH',
+      targetState: 'MISMATCH',
+      entryType: 'MISMATCH',
+    },
+  }),
+  error => error?.code === 'PAYMENT_VERIFICATION_REQUIRED' && error?.statusCode === 409,
+  'verified payment reversal must require verification provenance',
+);
+
+await assert.rejects(
+  () => commitPaymentDecision(tenant.chatId, {
+    paymentId: replayPaymentId,
+    expectedState: 'VERIFIED',
+    targetState: 'REFUNDED',
+    decision: {
+      paymentId: replayPaymentId,
+      paymentIntentId: replayIntentId,
+      decision: 'REFUND',
+      targetState: 'REFUNDED',
+      entryType: 'REFUNDED',
+    },
+  }),
+  error => error?.code === 'PAYMENT_REFUND_REQUIRED' && error?.statusCode === 409,
+  'refunds must not bypass the canonical refund workflow',
+);
+
+assert.equal(
+  db.prepare('SELECT state FROM payments WHERE id = ?').get(replayPaymentId).state,
+  'VERIFIED',
+  'rejected reversal/refund attempts must not mutate canonical payment state',
+);
+assert.equal(
+  db.prepare('SELECT COUNT(*) AS count FROM payment_ledger_entries WHERE payment_id = ?').get(replayPaymentId).count,
+  1,
+  'rejected reversal/refund attempts must not create ledger effects',
+);
+
 await rm(tempDir, { recursive: true, force: true });
 
 console.log('GAP-1 direct store financial commit boundary regression: PASS');
