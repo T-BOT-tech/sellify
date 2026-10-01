@@ -422,7 +422,7 @@ export class PaymentCore {
     const verification = normalizeStatusVerification({ raw, status, payment, paymentIntent: intent });
     const freshness = evaluateVerificationFreshness({
       observedAt: verification.observedAt,
-      createdAt: this.clock().toISOString(),
+      createdAt: null,
       now: this.clock(),
       maxAgeMs: command.maxVerificationAgeMs || command.max_verification_age_ms,
     });
