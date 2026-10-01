@@ -22,5 +22,7 @@ assert.ok(commitSection.includes('existingVerification'));
 const queryStart = core.indexOf('const persistedVerificationResult = await this.store.insertPaymentVerification');
 assert.ok(queryStart >= 0);
 assert.ok(core.slice(queryStart, queryStart + 1200).includes('persistedVerificationResult.verification'));
+assert.match(store, /decisionVerificationId/);
+assert.match(store, /DECISION_VERIFICATION_CONTEXT_MISMATCH/);
 
 console.log('GAP-1.18J verification decision binding regression passed');
