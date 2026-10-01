@@ -1795,6 +1795,8 @@ async function handleTenantPatch(req, res, chatId) {
 
 const notificationPaymentCore = new PaymentCore({
   store: {
+    getPaymentAccountForProviderNotification,
+    resolvePaymentIntentForProviderEvidence,
     insertPaymentEvidence,
   },
 });
@@ -1819,7 +1821,15 @@ async function handlePaymentProviderNotification(req, res, providerId) {
     });
   }
 
-  const callbackAccountIdentifier = String(body?.BusinessShortCode || body?.businessShortCode || '').trim();
+  // The HTTP layer supplies only transport data and provider configuration.
+  // Payment Core owns authentication, parsing, account resolution, intent
+  // resolution and evidence persistence. No tenant/payment identity from the
+  // callback is promoted here.
+  const callbackAccountIdentifier = String(
+    body?.BusinessShortCode ||
+    body?.businessShortCode ||
+    ''
+  ).trim();
   if (!callbackAccountIdentifier) {
     throw Object.assign(new Error('Provider notification account identity is required'), {
       statusCode: 400,
@@ -1827,13 +1837,19 @@ async function handlePaymentProviderNotification(req, res, providerId) {
     });
   }
 
-  const account = await getPaymentAccountForProviderNotification(provider.id, callbackAccountIdentifier);
+  // Account metadata is configuration for provider authentication only. The
+  // Payment Core ingestion path resolves the canonical account independently.
+  const account = await getPaymentAccountForProviderNotification(
+    provider.id,
+    callbackAccountIdentifier
+  );
   const config = {
     ...account.metadata,
     accountIdentifier: account.accountIdentifier,
   };
 
-  const authenticated = await provider.authenticateNotification({
+  const submitted = await notificationPaymentCore.ingestProviderNotification({
+    providerId: provider.id,
     rawRequest: {
       body,
       rawBody,
@@ -1844,90 +1860,18 @@ async function handlePaymentProviderNotification(req, res, providerId) {
     requestContext: {
       requestId: req._requestId,
       remoteAddress: req.socket.remoteAddress || null,
-      providerAuthenticated: /^(1|true|yes)$/i.test(String(req.headers['x-sellify-provider-authenticated'] || '')),
+      providerAuthenticated: /^(1|true|yes)$/i.test(
+        String(req.headers['x-sellify-provider-authenticated'] || '')
+      ),
     },
     config,
   });
 
-  if (!authenticated?.authenticated) {
-    throw Object.assign(new Error('Provider notification authentication failed'), {
-      statusCode: 401,
-      code: 'PAYMENT_NOTIFICATION_AUTH_FAILED',
-    });
-  }
-
-  const evidence = await provider.parseEvidence({
-    rawRequest: { body, rawBody, headers: req.headers, method: req.method, url: req.url },
-    config: { ...config, currency: config.currency || null },
-    authentication: authenticated,
-  });
-
-  const resolved = await resolvePaymentIntentForProviderEvidence({
-    providerId: provider.id,
-    accountIdentifier: authenticated.accountIdentifier,
-    providerTransactionId: evidence.providerTransactionId,
-    externalReference: evidence.merchantReference || evidence.externalReference || '',
-  });
-
-  if (resolved.duplicateEvidence) {
-    const incomingFingerprint = crypto.createHash('sha256').update(JSON.stringify({
-      providerId: provider.id,
-      accountIdentifier: authenticated.accountIdentifier,
-      providerTransactionId: evidence.providerTransactionId || null,
-      externalReference: evidence.merchantReference || evidence.externalReference || null,
-      amountMinor: evidence.amountMinor,
-      currency: evidence.currency,
-    })).digest('hex');
-    if (resolved.duplicateEvidence.fingerprint !== incomingFingerprint) {
-      throw Object.assign(new Error('Provider transaction already exists with different evidence'), {
-        statusCode: 409,
-        code: 'PROVIDER_TRANSACTION_EVIDENCE_CONFLICT',
-      });
-    }
-    return sendJSON(res, 200, {
-      accepted: true,
-      notification_id: authenticated.notificationId || null,
-      evidence_id: resolved.duplicateEvidence.id,
-      status: 'DUPLICATE',
-      outcome_code: 'DUPLICATE',
-    }, req);
-  }
-
-  const fingerprint = crypto.createHash('sha256').update(JSON.stringify({
-    providerId: provider.id,
-    accountIdentifier: authenticated.accountIdentifier,
-    providerTransactionId: evidence.providerTransactionId || null,
-    externalReference: evidence.merchantReference || evidence.externalReference || null,
-    amountMinor: evidence.amountMinor,
-    currency: evidence.currency,
-  })).digest('hex');
-
-  const submitted = await notificationPaymentCore.submitEvidence({
-    chatId: resolved.chatId,
-    organizationId: resolved.organizationId,
-    locationId: resolved.locationId,
-    paymentIntentId: resolved.paymentIntent?.id || null,
-    paymentAccountId: resolved.paymentAccount.id,
-    providerId: provider.id,
-    channel: 'api',
-    evidenceType: 'PROVIDER_NOTIFICATION',
-    externalReference: evidence.merchantReference || evidence.externalReference || null,
-    providerTransactionId: evidence.providerTransactionId || null,
-    fingerprint,
-    rawPayload: body,
-    normalizedPayload: evidence,
-    source: 'provider-notification',
-    observedAt: evidence.providerTimestamp || null,
-    actor: null,
-  });
-
-  const outcome = submitted.duplicate
-    ? 'DUPLICATE'
-    : (resolved.resolutionStatus === 'UNMATCHED' ? 'UNMATCHED' : 'RECEIVED');
+  const outcome = submitted.duplicate ? 'DUPLICATE' : 'RECEIVED';
 
   return sendJSON(res, submitted.duplicate ? 200 : 202, {
     accepted: true,
-    notification_id: authenticated.notificationId || null,
+    notification_id: submitted.evidence?.providerNotificationId || null,
     evidence_id: submitted.evidence?.id || null,
     status: outcome,
     outcome_code: outcome,
