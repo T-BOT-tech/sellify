@@ -1,6 +1,24 @@
-// GAP-1.18B provider HTTP transport.
-// Provider-neutral: this layer knows HTTP mechanics only. Authentication is
-// constructed by the provider adapter and passed as explicit headers.
+// GAP-1.18D provider HTTP transport.
+// Provider-neutral: HTTP mechanics only. Authentication is supplied by the
+// provider adapter. Retries are bounded and apply only to explicitly retryable
+// responses; provider semantics remain outside this transport.
+
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function retryDelay(attempt, retryAfter, backoffBaseMs, backoffMaxMs) {
+  const retryAfterMs = Number.isFinite(Number(retryAfter))
+    ? Math.max(0, Number(retryAfter) * 1000)
+    : 0;
+  const exponential = Math.min(
+    backoffMaxMs,
+    Math.max(0, backoffBaseMs) * (2 ** Math.max(0, attempt - 1)),
+  );
+  return Math.min(backoffMaxMs, Math.max(retryAfterMs, exponential));
+}
 
 export async function requestProviderProbe({
   baseUrl,
@@ -10,6 +28,9 @@ export async function requestProviderProbe({
   headers = {},
   body,
   fetchImpl = globalThis.fetch,
+  maxRetries = 2,
+  backoffBaseMs = 250,
+  backoffMaxMs = 2000,
 }) {
   if (!baseUrl) {
     const error = new Error('Provider endpoint is not configured');
@@ -22,31 +43,48 @@ export async function requestProviderProbe({
     throw error;
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Math.max(250, Number(timeoutMs) || 5000));
+  const attempts = Math.max(0, Number(maxRetries) || 0) + 1;
+  let lastResponse = null;
+  let lastError = null;
 
-  try {
-    const url = new URL(path, baseUrl).toString();
-    const response = await fetchImpl(url, {
-      method,
-      headers: { accept: 'application/json', ...headers },
-      body: body == null ? undefined : JSON.stringify(body),
-      signal: controller.signal,
-    });
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Math.max(250, Number(timeoutMs) || 5000));
 
-    const text = await response.text();
-    let payload = {};
-    try { payload = text ? JSON.parse(text) : {}; } catch { payload = { responseText: text.slice(0, 4096) }; }
+    try {
+      const url = new URL(path, baseUrl).toString();
+      const response = await fetchImpl(url, {
+        method,
+        headers: { accept: 'application/json', ...headers },
+        body: body == null ? undefined : JSON.stringify(body),
+        signal: controller.signal,
+      });
 
-    return { ok: response.ok, statusCode: response.status, payload };
-  } catch (error) {
-    if (error?.name === 'AbortError') {
-      const timeoutError = new Error('Provider probe timed out');
-      timeoutError.code = 'PAYMENT_PROVIDER_PROBE_TIMEOUT';
-      throw timeoutError;
+      const text = await response.text();
+      let payload = {};
+      try { payload = text ? JSON.parse(text) : {}; } catch { payload = { responseText: text.slice(0, 4096) }; }
+      lastResponse = { ok: response.ok, statusCode: response.status, payload };
+
+      if (!RETRYABLE_STATUS.has(response.status) || attempt === attempts) {
+        return lastResponse;
+      }
+
+      const retryAfter = response.headers?.get?.('retry-after');
+      await sleep(retryDelay(attempt, retryAfter, backoffBaseMs, backoffMaxMs));
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        const timeoutError = new Error('Provider probe timed out');
+        timeoutError.code = 'PAYMENT_PROVIDER_PROBE_TIMEOUT';
+        lastError = timeoutError;
+      } else {
+        lastError = error;
+      }
+      if (attempt === attempts) throw lastError;
+      await sleep(retryDelay(attempt, null, backoffBaseMs, backoffMaxMs));
+    } finally {
+      clearTimeout(timeout);
     }
-    throw error;
-  } finally {
-    clearTimeout(timeout);
   }
+
+  return lastResponse;
 }
