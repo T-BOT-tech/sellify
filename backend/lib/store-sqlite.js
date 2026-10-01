@@ -2387,6 +2387,20 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(51, nowIso());
   }
 
+  // GAP-1 — durable provider notification authentication reference.
+  // This records the provider/channel authentication decision that admitted
+  // trusted notification evidence. It is deliberately separate from the
+  // provider notification ID and provider transaction ID.
+  if (!applied.includes(52)) {
+    db.exec(`
+      ALTER TABLE payment_evidence ADD COLUMN authentication_reference TEXT;
+      CREATE INDEX IF NOT EXISTS idx_payment_evidence_auth_reference
+        ON payment_evidence(organization_id, provider_id, payment_account_id, authentication_reference)
+        WHERE authentication_reference IS NOT NULL AND authentication_reference <> '';
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(52, nowIso());
+  }
+
   // FUX-2 Section 6 — additive multi-role compatibility bridge.
   // memberships.role remains the legacy/default role authority while
   // membership_roles provides an additive path for multiple contextual roles.
@@ -5330,6 +5344,7 @@ function paymentEvidenceFromRow(row) {
     providerId: row.provider_id, channel: row.channel, evidenceType: row.evidence_type,
     externalReference: row.external_reference || null, providerTransactionId: row.provider_transaction_id || null,
     providerNotificationId: row.provider_notification_id || null,
+    authenticationReference: row.authentication_reference || null,
     fingerprint: row.fingerprint, rawPayload: parseJSON(row.raw_payload_json, null),
     normalizedPayload: parseJSON(row.normalized_payload_json, null), source: row.source || null,
     observedAt: row.observed_at || null, receivedAt: row.received_at,
@@ -5512,8 +5527,15 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
   }
   const providerTransactionId = String(input.providerTransactionId || input.provider_transaction_id || '').trim() || null;
   const providerNotificationId = String(input.providerNotificationId || input.provider_notification_id || '').trim() || null;
+  const authenticationReference = String(input.authenticationReference || input.authentication_reference || '').trim() || null;
   const externalReference = input.externalReference || input.external_reference || null;
-  if (providerNotificationId && !paymentAccountId) {
+  if (authenticationReference && !providerNotificationId) {
+    throw Object.assign(new Error('Authentication reference requires a provider notification identity'), {
+      statusCode: 400,
+      code: 'PROVIDER_NOTIFICATION_ID_REQUIRED',
+    });
+  }
+  if (authenticationReference && !paymentAccountId) {
     throw Object.assign(new Error('Provider notification identity requires a canonical payment account'), {
       statusCode: 409,
       code: 'PAYMENT_ACCOUNT_REQUIRED',
@@ -5551,9 +5573,9 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
   }
   const id = String(input.id || crypto.randomUUID()); const now = nowIso();
   try {
-    db.prepare("INSERT INTO payment_evidence (id, organization_id, location_id, payment_id, payment_intent_id, payment_account_id, provider_id, channel, evidence_type, external_reference, provider_transaction_id, provider_notification_id, fingerprint, raw_payload_json, normalized_payload_json, source, observed_at, received_at, submitted_by_user_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?, ?)").run(
+    db.prepare("INSERT INTO payment_evidence (id, organization_id, location_id, payment_id, payment_intent_id, payment_account_id, provider_id, channel, evidence_type, external_reference, provider_transaction_id, provider_notification_id, authentication_reference, fingerprint, raw_payload_json, normalized_payload_json, source, observed_at, received_at, submitted_by_user_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?, ?)").run(
       id, organizationId, locationId, paymentId ? String(paymentId) : null, intentId || null, paymentAccountId ? String(paymentAccountId) : null, providerId, channel, evidenceType,
-      externalReference, providerTransactionId, providerNotificationId,
+      externalReference, providerTransactionId, providerNotificationId, authenticationReference,
       fingerprint, rawPayload == null ? null : json(rawPayload), normalizedPayload == null ? null : json(normalizedPayload),
       input.source || null, input.observedAt || input.observed_at || null, now, actor?.userId || null, now, now
     );
