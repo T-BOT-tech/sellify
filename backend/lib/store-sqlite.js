@@ -5988,6 +5988,55 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       }
     }
     if (verification && !verificationEvidenceId) throw Object.assign(new Error('verification evidenceId is required'), { statusCode: 400, code: 'EVIDENCE_REQUIRED' });
+
+    // Durable replay convergence: evidence is the canonical verification
+    // identity. If another worker already verified this evidence and committed
+    // the same financial target, return the canonical payment instead of
+    // attempting a second financial effect.
+    if (verificationEvidenceId) {
+      const existingVerification = db.prepare(
+        'SELECT * FROM payment_verifications WHERE evidence_id = ? AND organization_id = ? ORDER BY created_at ASC, rowid ASC LIMIT 1'
+      ).get(verificationEvidenceId, organizationId);
+      if (existingVerification) {
+        if (String(existingVerification.payment_id || '') !== paymentId ||
+            String(existingVerification.payment_intent_id || '') !== String(row.payment_intent_id || '') ||
+            String(existingVerification.provider_id || '').toLowerCase() !== String(row.provider_id || '').toLowerCase()) {
+          throw Object.assign(new Error('Existing verification does not match canonical payment identity'), {
+            statusCode: 409,
+            code: 'PAYMENT_VERIFICATION_REPLAY_CONFLICT',
+          });
+        }
+
+        const existingDecision = db.prepare(
+          'SELECT * FROM payment_decisions WHERE verification_id = ? AND organization_id = ? ORDER BY created_at ASC, rowid ASC LIMIT 1'
+        ).get(existingVerification.id, organizationId);
+
+        if (existingDecision) {
+          if (String(existingDecision.payment_id || '') !== paymentId ||
+              String(existingDecision.target_state || '').toUpperCase() !== target) {
+            throw Object.assign(new Error('Existing financial decision conflicts with replayed target'), {
+              statusCode: 409,
+              code: 'PAYMENT_DECISION_REPLAY_CONFLICT',
+            });
+          }
+
+          const currentPayment = db.prepare(
+            'SELECT * FROM payments WHERE id = ? AND organization_id = ?'
+          ).get(paymentId, organizationId);
+
+          if (!currentPayment || String(currentPayment.state || '').toUpperCase() !== target) {
+            throw Object.assign(new Error('Existing financial decision is detached from canonical payment state'), {
+              statusCode: 409,
+              code: 'PAYMENT_DECISION_REPLAY_CONFLICT',
+            });
+          }
+
+          db.exec('COMMIT');
+          return paymentFromRow(currentPayment);
+        }
+      }
+    }
+
     if (!verification && (decisionVerificationId || decisionEvidenceId)) {
       throw Object.assign(new Error('Decision evidence/verification requires the same commit verification context'), { statusCode: 409, code: 'PAYMENT_DECISION_BINDING_CONFLICT' });
     }
