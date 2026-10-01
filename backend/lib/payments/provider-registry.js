@@ -32,6 +32,7 @@ const METHODS = Object.freeze([
   'getStatus',
   'refund',
   'reconcile',
+  'probeCapability',
 ]);
 
 function normalizeCapabilities(capabilities = {}) {
@@ -76,6 +77,7 @@ function normalizeProvider(adapter) {
     getStatus: methods.getStatus,
     refund: methods.refund,
     reconcile: methods.reconcile,
+    probeCapability: methods.probeCapability,
   });
 }
 
@@ -135,6 +137,7 @@ export function createUnconfiguredPaymentProvider({ id, name, version = '1', cap
     getStatus: async () => { throw notConfigured(providerId, 'getStatus'); },
     refund: async () => { throw notConfigured(providerId, 'refund'); },
     reconcile: async () => { throw notConfigured(providerId, 'reconcile'); },
+    probeCapability: async () => { throw notConfigured(providerId, 'probeCapability'); },
   });
 }
 
