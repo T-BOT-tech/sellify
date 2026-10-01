@@ -115,6 +115,8 @@ jobs:
         run: npm run gap-1.18:provider-error-taxonomy-test
       - name: GAP-1.18H provider batch verification regression
         run: npm run gap-1.18:provider-batch-verification-test
+      - name: GAP-1.18I provider verification persistence regression
+        run: npm run gap-1.18:provider-verification-persistence-test
       - name: GAP-2 logistics authorization foundation regression
         run: npm run test:gap-2-logistics-authz
       - name: GAP-2 delivery assignment authority regression
