@@ -2253,6 +2253,27 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(46, nowIso());
   }
 
+  // GAP-1.12 — provider-neutral reconciliation evidence.
+  // Reconciliation records findings only; they never mutate Payment state or
+  // write the financial ledger. Canonical state changes remain PaymentCore decisions.
+  if (!applied.includes(47)) {
+    const columns = db.prepare('PRAGMA table_info(payment_reconciliations)').all();
+    const addColumn = (name, definition) => {
+      if (!columns.some(column => String(column.name) === name)) {
+        db.exec(`ALTER TABLE payment_reconciliations ADD COLUMN ${name} ${definition}`);
+      }
+    };
+    addColumn('provider_id', 'TEXT');
+    addColumn('source', "TEXT NOT NULL DEFAULT 'PAYMENT_CORE'");
+    addColumn('fingerprint', 'TEXT');
+    addColumn('evidence_json', "TEXT NOT NULL DEFAULT '{}'");
+    addColumn('observed_at', 'TEXT');
+    addColumn('updated_at', 'TEXT');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_payment_reconciliation_payment_created ON payment_reconciliations(payment_id, created_at DESC)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_payment_reconciliation_fingerprint ON payment_reconciliations(organization_id, fingerprint)');
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(47, nowIso());
+  }
+
   // FUX-2 Section 6 — additive multi-role compatibility bridge.
   // memberships.role remains the legacy/default role authority while
   // membership_roles provides an additive path for multiple contextual roles.
@@ -5790,6 +5811,60 @@ export async function listPaymentLedger(chatId, paymentId) {
     id: row.id, paymentId: row.payment_id, entryType: row.entry_type, amountMinor: Number(row.amount_minor), currency: normaliseCurrency(row.currency, 'ETB'),
     fromState: row.from_state, toState: row.to_state, actorId: row.actor_id, reason: row.reason || '', metadata: parseJSON(row.metadata_json, {}), createdAt: row.created_at,
   }));
+}
+
+export async function recordPaymentReconciliation(chatId, paymentId, input = {}, actor = null) {
+  ensureDatabase();
+  const payment = await getPayment(chatId, paymentId);
+  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  const now = nowIso();
+  const reconciliationId = String(input.id || crypto.randomUUID());
+  const status = ['matched', 'mismatched', 'pending'].includes(String(input.status || '').toLowerCase())
+    ? String(input.status).toLowerCase()
+    : 'pending';
+  const amountMinor = Number(input.amountMinor ?? input.amount_minor ?? 0);
+  const currency = normaliseCurrency(input.currency, payment.currency);
+  const fingerprint = String(input.fingerprint || '').trim() || null;
+  const existing = fingerprint
+    ? db.prepare('SELECT * FROM payment_reconciliations WHERE organization_id = ? AND fingerprint = ? ORDER BY created_at DESC LIMIT 1').get(payment.organizationId, fingerprint)
+    : null;
+  if (existing) {
+    return { reconciliation: existing, duplicate: true };
+  }
+  db.prepare(`INSERT INTO payment_reconciliations
+    (id, payment_id, organization_id, status, external_reference, amount_minor, currency, reason, actor_id, created_at, resolved_at, provider_id, source, fingerprint, evidence_json, observed_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    reconciliationId,
+    payment.id,
+    payment.organizationId,
+    status,
+    input.externalReference || input.external_reference || payment.externalReference || null,
+    Number.isInteger(amountMinor) && amountMinor >= 0 ? amountMinor : 0,
+    currency,
+    String(input.reason || ''),
+    actor?.userId || null,
+    now,
+    status === 'matched' ? (input.resolvedAt || now) : null,
+    input.providerId || payment.providerId || null,
+    String(input.source || 'PAYMENT_CORE'),
+    fingerprint,
+    json(input.evidence || input.normalizedPayload || {}),
+    input.observedAt || null,
+    now,
+  );
+  return {
+    reconciliation: db.prepare('SELECT * FROM payment_reconciliations WHERE id = ?').get(reconciliationId),
+    duplicate: false,
+  };
+}
+
+export async function listPaymentReconciliations(chatId, paymentId, options = {}) {
+  ensureDatabase();
+  const payment = await getPayment(chatId, paymentId);
+  if (!payment) return null;
+  const limit = Math.min(Math.max(Number(options.limit || 100), 1), 500);
+  return db.prepare('SELECT * FROM payment_reconciliations WHERE payment_id = ? ORDER BY created_at DESC LIMIT ?')
+    .all(payment.id, limit);
 }
 
 export async function reconcilePayment(chatId, paymentId, input = {}, actor = null) {
