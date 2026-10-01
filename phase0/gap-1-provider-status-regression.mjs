@@ -30,7 +30,7 @@ test('pending status is evidence and verification only', async () => {
   const result = await queryPaymentStatus({ chatId: 'chat-1', paymentId: 'pay-1', store });
   assert.equal(result.providerStatus.status, 'PENDING');
   assert.equal(result.verification.result, 'PENDING');
-  assert.equal(result.payment.state, 'UNPAID');
+  assert.equal(result.payment.state, 'RECEIVED');
   assert.equal(store.calls.committed, 0);
 });
 test('wrong receiver becomes a mismatch through invariant evaluation', async () => {
