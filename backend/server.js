@@ -151,7 +151,9 @@ import { PaymentDecisionEngine } from './lib/payments/decision-engine.js';
 import { listPaymentChannels } from './lib/payments/channel-registry.js';
 import { processEventIsolated } from './lib/event-failure-isolation.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));\n\nconst paymentCore = new PaymentCore({
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const paymentCore = new PaymentCore({
   store: {
     getPayment,
     getPaymentIntent,
