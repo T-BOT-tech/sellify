@@ -2253,6 +2253,31 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(46, nowIso());
   }
 
+  // GAP-1.16 — executable organization-scoped payment routing policy.
+  if (!applied.includes(51)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS payment_routing_policies (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        channel TEXT NOT NULL CHECK (channel IN ('manual','sms','api')),
+        provider_id TEXT NOT NULL,
+        priority INTEGER NOT NULL DEFAULT 100 CHECK (priority >= 0),
+        status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','INACTIVE')),
+        currencies_json TEXT NOT NULL DEFAULT '[]',
+        required_capabilities_json TEXT NOT NULL DEFAULT '[]',
+        location_id TEXT REFERENCES locations(id) ON DELETE CASCADE,
+        reason TEXT NOT NULL DEFAULT '',
+        created_by_user_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(organization_id, channel, provider_id, location_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_routing_policy_match
+        ON payment_routing_policies(organization_id, channel, status, priority, location_id);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(51, nowIso());
+  }
+
   // GAP-1.15 — canonical settlement and fee model.
   // Settlement is distinct from payment confirmation: it records the
   // provider/merchant settlement obligation and fee breakdown without
@@ -5897,6 +5922,53 @@ export async function createPayment(chatId, input = {}, actor = null) {
   } catch (error) { db.exec('ROLLBACK'); throw error; }
   audit(String(chatId), 'payment.created', 'payment', id, { amountMinor, currency, state, orderId }, { organizationId, locationId, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
   return paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ?').get(id));
+}
+
+export async function listPaymentRoutingPolicies(chatId, { channel = null, locationId = null, activeOnly = true } = {}) {
+  ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404 });
+  const clauses = ['organization_id = ?'];
+  const params = [tenant.organization_id];
+  if (channel) { clauses.push('channel = ?'); params.push(String(channel).toLowerCase()); }
+  if (locationId) { clauses.push('(location_id IS NULL OR location_id = ?)'); params.push(String(locationId)); }
+  if (activeOnly) clauses.push("status = 'ACTIVE'");
+  const rows = db.prepare(`SELECT * FROM payment_routing_policies WHERE ${clauses.join(' AND ')} ORDER BY priority ASC, created_at ASC`).all(...params);
+  return rows.map(row => ({
+    id: row.id, organizationId: row.organization_id, channel: row.channel, providerId: row.provider_id,
+    priority: Number(row.priority), status: row.status, currencies: parseJSON(row.currencies_json, []),
+    requiredCapabilities: parseJSON(row.required_capabilities_json, []), locationId: row.location_id,
+    reason: row.reason || '', createdByUserId: row.created_by_user_id, createdAt: row.created_at, updatedAt: row.updated_at,
+  }));
+}
+
+export async function upsertPaymentRoutingPolicy(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404 });
+  const channel = String(input.channel || '').trim().toLowerCase();
+  const providerId = String(input.providerId || input.provider_id || '').trim().toLowerCase();
+  if (!['manual','sms','api'].includes(channel) || !providerId) throw Object.assign(new Error('Valid channel and providerId are required'), { statusCode: 400, code: 'INVALID_ROUTING_POLICY' });
+  const currencies = Array.isArray(input.currencies) ? [...new Set(input.currencies.map(v => String(v).trim().toUpperCase()).filter(v => /^[A-Z]{3}$/.test(v)))] : [];
+  const requiredCapabilities = Array.isArray(input.requiredCapabilities || input.required_capabilities) ? [...new Set((input.requiredCapabilities || input.required_capabilities).map(v => String(v).trim()).filter(Boolean))] : [];
+  const locationId = input.locationId || input.location_id || null;
+  const now = nowIso();
+  const id = String(input.id || crypto.randomUUID());
+  const existing = db.prepare('SELECT id FROM payment_routing_policies WHERE organization_id = ? AND channel = ? AND provider_id = ? AND location_id IS ?').get(tenant.organization_id, channel, providerId, locationId);
+  if (existing) {
+    db.prepare(`UPDATE payment_routing_policies SET priority=?, status=?, currencies_json=?, required_capabilities_json=?, reason=?, updated_at=? WHERE id=?`).run(
+      Number.isInteger(Number(input.priority)) ? Number(input.priority) : 100,
+      String(input.status || 'ACTIVE').toUpperCase(),
+      json(currencies), json(requiredCapabilities), String(input.reason || ''), now, existing.id);
+    return (await listPaymentRoutingPolicies(chatId, { channel, locationId, activeOnly: false })).find(p => p.id === existing.id);
+  }
+  db.prepare(`INSERT INTO payment_routing_policies
+    (id,organization_id,channel,provider_id,priority,status,currencies_json,required_capabilities_json,location_id,reason,created_by_user_id,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      id, tenant.organization_id, channel, providerId, Number.isInteger(Number(input.priority)) ? Number(input.priority) : 100,
+      String(input.status || 'ACTIVE').toUpperCase(), json(currencies), json(requiredCapabilities), locationId,
+      String(input.reason || ''), actor?.userId || actor?.user_id || null, now, now);
+  return (await listPaymentRoutingPolicies(chatId, { channel, locationId, activeOnly: false })).find(p => p.id === id);
 }
 
 export async function getPaymentSettlementByIdempotencyKey(chatId, idempotencyKey) {
