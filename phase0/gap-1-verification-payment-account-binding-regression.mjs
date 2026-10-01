@@ -227,4 +227,23 @@ await assert.rejects(
     error?.statusCode === 409,
 );
 
-console.log('GAP-1 verification/confirmation/finalization payment-account binding regression: PASS');
+
+const decisionBindingCore = new PaymentCore({
+  store: {
+    ...makeStore(baseEvidence()),
+    getPaymentConfirmationAttempt: async () => ({
+      id: 'attempt-decision', evidenceId: 'evidence-001', paymentIntentId: 'intent-001',
+      paymentAccountId: 'account-001', providerId: 'mpesa', status: 'CONFIRMED', observation: {},
+    }),
+    commitPaymentDecision: async () => ({ id: 'payment-001', state: 'VERIFIED' }),
+  },
+  providerRegistry: { requirePaymentProvider: provider },
+  invariantGate: { evaluate: () => ({ passed: false, reasonCodes: ['PAYMENT_ACCOUNT_BINDING_MISMATCH'], hardFailures: ['PAYMENT_ACCOUNT_BINDING_MISMATCH'] }) },
+  decisionEngine: { decide: () => ({ decision: 'ACCEPT', targetState: 'VERIFIED', reasonCodes: [] }) },
+});
+await assert.rejects(
+  decisionBindingCore.finalizeProviderConfirmation({ chatId: 'chat-001', confirmationAttemptId: 'attempt-decision' }),
+  error => error?.code === 'PAYMENT_DECISION_INVARIANT_BYPASS' && error?.statusCode === 409,
+);
+
+console.log('GAP-1 verification/confirmation/finalization/decision binding regression: PASS');
