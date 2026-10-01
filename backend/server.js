@@ -2863,6 +2863,7 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/lifecycle$/, handler: (req, res, m) => handlePaymentLifecycle(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/refund$/, handler: (req, res, m) => handlePaymentRefund(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/providers\/certification$/, handler: (req,res,m)=>handlePaymentProviderCertification(req,res,decodeURIComponent(m[1])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/providers\/capability-probe$/, handler: (req,res,m)=>handlePaymentProviderCapabilityProbe(req,res,decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/providers\/capability-evidence$/, handler: (req,res,m)=>handlePaymentProviderCapabilityEvidence(req,res,decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/providers\/capability-evidence$/, handler: (req,res,m)=>handlePaymentProviderCapabilityEvidence(req,res,decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/operations$/, handler: (req,res,m)=>handlePaymentOperationalActions(req,res,decodeURIComponent(m[1]),decodeURIComponent(m[2])) },
