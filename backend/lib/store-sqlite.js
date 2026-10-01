@@ -2253,6 +2253,44 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(46, nowIso());
   }
 
+  // GAP-1.14 — durable Payment Core refund identity and idempotency.
+  // Refund records are the durable command/effect identity. Provider adapters
+  // never own refund persistence or the financial ledger.
+  if (!applied.includes(49)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS payment_refunds (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        payment_id TEXT NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+        payment_intent_id TEXT REFERENCES payment_intents(id) ON DELETE SET NULL,
+        provider_id TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
+        currency TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED','PROCESSING','SUCCEEDED','FAILED','UNKNOWN','CANCELLED')),
+        reason TEXT NOT NULL DEFAULT '',
+        provider_refund_id TEXT,
+        provider_transaction_id TEXT,
+        provider_result_json TEXT,
+        evidence_json TEXT,
+        failure_code TEXT,
+        requested_by_user_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        processed_at TEXT,
+        UNIQUE(organization_id, idempotency_key),
+        UNIQUE(organization_id, provider_id, provider_refund_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_refunds_payment
+        ON payment_refunds(payment_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_refunds_org_status
+        ON payment_refunds(organization_id, status, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_refunds_provider
+        ON payment_refunds(organization_id, provider_id, provider_refund_id);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(49, nowIso());
+  }
+
   // GAP-1.13 — explicit failure/expiration/cancellation/reversal states.
   // SQLite CHECK constraints are rebuilt additively so historical payment and
   // ledger rows remain intact while the canonical state matrix gains the
@@ -5819,6 +5857,174 @@ export async function createPayment(chatId, input = {}, actor = null) {
   } catch (error) { db.exec('ROLLBACK'); throw error; }
   audit(String(chatId), 'payment.created', 'payment', id, { amountMinor, currency, state, orderId }, { organizationId, locationId, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
   return paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ?').get(id));
+}
+
+export async function getPaymentRefunds(chatId, paymentId, { status = null } = {}) {
+  const db = ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const rows = db.prepare(`SELECT * FROM payment_refunds WHERE organization_id = ? AND payment_id = ? ${status ? 'AND status = ?' : ''} ORDER BY created_at DESC`).all(
+    tenant.organization_id, paymentId, ...(status ? [String(status).toUpperCase()] : [])
+  );
+  return rows.map(normalizePaymentRefund);
+}
+
+export async function getPaymentRefundByIdempotencyKey(chatId, idempotencyKey) {
+  const db = ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const row = db.prepare('SELECT * FROM payment_refunds WHERE organization_id = ? AND idempotency_key = ?').get(tenant.organization_id, String(idempotencyKey));
+  return row ? normalizePaymentRefund(row) : null;
+}
+
+export async function createPaymentRefundRequest(chatId, input = {}, actor = null) {
+  const db = ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const payment = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(String(input.paymentId), tenant.organization_id);
+  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  const key = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  if (!key) throw Object.assign(new Error('Refund idempotencyKey is required'), { statusCode: 400, code: 'REFUND_IDEMPOTENCY_REQUIRED' });
+  const existing = db.prepare('SELECT * FROM payment_refunds WHERE organization_id = ? AND idempotency_key = ?').get(tenant.organization_id, key);
+  if (existing) return { refund: normalizePaymentRefund(existing), duplicate: true };
+
+  const amountMinor = Number(input.amountMinor ?? input.amount_minor);
+  if (!Number.isInteger(amountMinor) || amountMinor <= 0) throw Object.assign(new Error('Refund amount must be a positive integer'), { statusCode: 400, code: 'INVALID_REFUND_AMOUNT' });
+  const currency = normaliseCurrency(input.currency || payment.currency, payment.currency);
+  if (currency !== normaliseCurrency(payment.currency, currency)) {
+    throw Object.assign(new Error('Refund currency must match payment currency'), { statusCode: 409, code: 'REFUND_CURRENCY_MISMATCH' });
+  }
+  if (!['VERIFIED','RECONCILED'].includes(String(payment.state).toUpperCase())) {
+    throw Object.assign(new Error('Only VERIFIED or RECONCILED payments can be refunded'), { statusCode: 409, code: 'PAYMENT_NOT_REFUNDABLE' });
+  }
+
+  const refunded = Number(db.prepare("SELECT COALESCE(SUM(amount_minor),0) AS total FROM payment_refunds WHERE payment_id = ? AND status = 'SUCCEEDED'").get(payment.id).total || 0);
+  if (refunded + amountMinor > Number(payment.amount_minor)) {
+    throw Object.assign(new Error('Refund exceeds refundable payment amount'), { statusCode: 409, code: 'REFUND_AMOUNT_EXCEEDS_PAYMENT' });
+  }
+
+  const now = nowIso();
+  const refund = {
+    id: String(input.refundId || crypto.randomUUID()),
+    organization_id: tenant.organization_id,
+    payment_id: payment.id,
+    payment_intent_id: payment.payment_intent_id || null,
+    provider_id: payment.provider_id,
+    idempotency_key: key,
+    amount_minor: amountMinor,
+    currency,
+    status: 'REQUESTED',
+    reason: String(input.reason || ''),
+    provider_refund_id: null,
+    provider_transaction_id: null,
+    provider_result_json: null,
+    evidence_json: null,
+    failure_code: null,
+    requested_by_user_id: actor?.userId || actor?.user_id || null,
+    created_at: now,
+    updated_at: now,
+    processed_at: null,
+  };
+  db.prepare(`INSERT INTO payment_refunds
+    (id,organization_id,payment_id,payment_intent_id,provider_id,idempotency_key,amount_minor,currency,status,reason,provider_refund_id,provider_transaction_id,provider_result_json,evidence_json,failure_code,requested_by_user_id,created_at,updated_at,processed_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      refund.id, refund.organization_id, refund.payment_id, refund.payment_intent_id, refund.provider_id,
+      refund.idempotency_key, refund.amount_minor, refund.currency, refund.status, refund.reason,
+      null, null, null, null, null, refund.requested_by_user_id, now, now, null
+    );
+  audit(String(chatId), 'payment.refund.requested', payment.id, actor?.userId || null, {
+    refundId: refund.id, amountMinor, currency, idempotencyKey: key,
+  });
+  return { refund: normalizePaymentRefund(refund), duplicate: false };
+}
+
+export async function finalizePaymentRefund(chatId, refundId, input = {}, actor = null) {
+  const db = ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const now = nowIso();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const refund = db.prepare('SELECT * FROM payment_refunds WHERE id = ? AND organization_id = ?').get(String(refundId), tenant.organization_id);
+    if (!refund) throw Object.assign(new Error('Refund not found'), { statusCode: 404, code: 'REFUND_NOT_FOUND' });
+    if (refund.status === 'SUCCEEDED') {
+      db.exec('COMMIT');
+      return normalizePaymentRefund(refund);
+    }
+    const payment = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(refund.payment_id, tenant.organization_id);
+    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+
+    const status = String(input.status || '').toUpperCase();
+    if (status !== 'SUCCEEDED') {
+      db.prepare(`UPDATE payment_refunds SET status = ?, provider_refund_id = ?, provider_transaction_id = ?, provider_result_json = ?, evidence_json = ?, failure_code = ?, updated_at = ?, processed_at = ? WHERE id = ? AND organization_id = ?`).run(
+        status || 'UNKNOWN', input.providerRefundId || input.provider_refund_id || null,
+        input.providerTransactionId || input.provider_transaction_id || null,
+        input.providerResult == null ? null : json(input.providerResult),
+        input.evidence == null ? null : json(input.evidence),
+        input.failureCode || input.failure_code || null, now, now, refund.id, tenant.organization_id
+      );
+      audit(String(chatId), 'payment.refund.result', payment.id, actor?.userId || null, { refundId: refund.id, status: status || 'UNKNOWN' });
+      db.exec('COMMIT');
+      return normalizePaymentRefund(db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(refund.id));
+    }
+
+    const successfulBefore = Number(db.prepare("SELECT COALESCE(SUM(amount_minor),0) AS total FROM payment_refunds WHERE payment_id = ? AND status = 'SUCCEEDED' AND id <> ?").get(payment.id, refund.id).total || 0);
+    if (successfulBefore + Number(refund.amount_minor) > Number(payment.amount_minor)) {
+      throw Object.assign(new Error('Refund exceeds refundable payment amount'), { statusCode: 409, code: 'REFUND_AMOUNT_EXCEEDS_PAYMENT' });
+    }
+    const fullRefund = successfulBefore + Number(refund.amount_minor) === Number(payment.amount_minor);
+    db.prepare(`UPDATE payment_refunds SET status='SUCCEEDED', provider_refund_id=?, provider_transaction_id=?, provider_result_json=?, evidence_json=?, updated_at=?, processed_at=? WHERE id=? AND organization_id=?`).run(
+      input.providerRefundId || input.provider_refund_id || null,
+      input.providerTransactionId || input.provider_transaction_id || null,
+      input.providerResult == null ? null : json(input.providerResult),
+      input.evidence == null ? null : json(input.evidence),
+      now, now, refund.id, tenant.organization_id
+    );
+    if (fullRefund) {
+      db.prepare('UPDATE payments SET state = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND state IN (\'VERIFIED\',\'RECONCILED\')').run('REFUNDED', now, payment.id, tenant.organization_id);
+    }
+    db.prepare(`INSERT INTO payment_ledger_entries
+      (id,payment_id,organization_id,entry_type,amount_minor,currency,from_state,to_state,actor_id,reason,metadata_json,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      crypto.randomUUID(), payment.id, tenant.organization_id, 'REFUNDED', Number(refund.amount_minor), refund.currency,
+      payment.state, fullRefund ? 'REFUNDED' : payment.state, actor?.userId || null,
+      refund.reason || 'Payment refund',
+      json({ lifecycle: 'GAP-1.14', refundId: refund.id, providerRefundId: input.providerRefundId || input.provider_refund_id || null }),
+      now
+    );
+    audit(String(chatId), 'payment.refund.succeeded', payment.id, actor?.userId || null, {
+      refundId: refund.id, amountMinor: refund.amount_minor, fullRefund,
+    });
+    db.exec('COMMIT');
+    return normalizePaymentRefund(db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(refund.id));
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
+function normalizePaymentRefund(row) {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    paymentId: row.payment_id,
+    paymentIntentId: row.payment_intent_id,
+    providerId: row.provider_id,
+    idempotencyKey: row.idempotency_key,
+    amountMinor: Number(row.amount_minor),
+    currency: row.currency,
+    status: row.status,
+    reason: row.reason || '',
+    providerRefundId: row.provider_refund_id,
+    providerTransactionId: row.provider_transaction_id,
+    providerResult: parseJSON(row.provider_result_json, null),
+    evidence: parseJSON(row.evidence_json, null),
+    failureCode: row.failure_code,
+    requestedByUserId: row.requested_by_user_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    processedAt: row.processed_at,
+  };
 }
 
 export async function getPayment(chatId, paymentId) {
