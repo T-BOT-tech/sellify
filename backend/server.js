@@ -1796,6 +1796,13 @@ async function handleTenantPatch(req, res, chatId) {
 const notificationPaymentCore = new PaymentCore({
   store: {
     getPaymentAccountForProviderNotification,
+    getPaymentNotificationConfig: async (providerId, accountIdentifier) => {
+      const account = await getPaymentAccountForProviderNotification(providerId, accountIdentifier);
+      return {
+        ...account.metadata,
+        accountIdentifier: account.accountIdentifier,
+      };
+    },
     resolvePaymentIntentForProviderEvidence,
     insertPaymentEvidence,
   },
