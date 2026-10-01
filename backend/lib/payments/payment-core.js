@@ -34,6 +34,70 @@ export class PaymentCore {
     return result;
   }
 
+  async transitionLifecycle(command = {}) {
+    const target = String(command.targetState || command.target_state || '').trim().toUpperCase();
+    const permission = target === 'CANCELLED' || target === 'REVERSED' ? 'payments:manage' : 'payments:accept';
+    this.#authorize(command, permission);
+
+    const chatId = String(command.chatId || '').trim();
+    const paymentId = String(command.paymentId || command.payment_id || '').trim();
+    if (!chatId || !paymentId || !target) {
+      throw Object.assign(new Error('chatId, paymentId and targetState are required'), { statusCode: 400, code: 'PAYMENT_CONTEXT_REQUIRED' });
+    }
+
+    const payment = await this.store.getPayment(chatId, paymentId);
+    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+
+    const allowed = new Set([
+      'FAILED', 'EXPIRED', 'CANCELLED', 'REVERSED', 'RECEIVED',
+    ]);
+    if (!allowed.has(target)) {
+      throw Object.assign(new Error('Unsupported lifecycle target'), { statusCode: 400, code: 'INVALID_PAYMENT_LIFECYCLE_TARGET' });
+    }
+
+    if (target === 'REVERSED' && !['VERIFIED', 'RECONCILED'].includes(String(payment.state).toUpperCase())) {
+      throw Object.assign(new Error('Only VERIFIED or RECONCILED payments can be reversed'), { statusCode: 409, code: 'INVALID_REVERSAL_STATE' });
+    }
+
+    if (target === 'RECEIVED' && !['EXPIRED', 'CANCELLED'].includes(String(payment.state).toUpperCase())) {
+      throw Object.assign(new Error('Late-success recovery is only valid from EXPIRED or CANCELLED'), { statusCode: 409, code: 'INVALID_LATE_SUCCESS_STATE' });
+    }
+    if (target === 'RECEIVED' && command.lateSuccess !== true && command.late_success !== true) {
+      throw Object.assign(new Error('Late success must be explicitly identified'), { statusCode: 409, code: 'LATE_SUCCESS_CONFIRMATION_REQUIRED' });
+    }
+
+    const reason = String(command.reason || '').trim();
+    if (!reason) throw Object.assign(new Error('A lifecycle transition reason is required'), { statusCode: 400, code: 'PAYMENT_REASON_REQUIRED' });
+
+    const committed = await this.store.commitPaymentDecision(chatId, {
+      paymentId,
+      expectedState: payment.state,
+      targetState: target,
+      decision: {
+        decision: target === 'REVERSED' ? 'REVERSE' : target === 'CANCELLED' ? 'CANCEL' : target === 'FAILED' ? 'FAIL' : target === 'EXPIRED' ? 'EXPIRE' : 'LATE_SUCCESS',
+        targetState: target,
+        reasonCodes: [target === 'REVERSED' ? 'PROVIDER_REVERSAL' : `PAYMENT_${target}`],
+        decisionSource: 'PAYMENT_CORE',
+        entryType: target,
+        reason,
+        metadata: {
+          lifecycle: 'GAP-1.13',
+          lateSuccess: target === 'RECEIVED',
+          source: command.source || 'PAYMENT_CORE',
+        },
+      },
+    }, command.actor || null);
+
+    return {
+      payment: committed,
+      transition: {
+        fromState: payment.state,
+        toState: target,
+        reason,
+      },
+    };
+  }
+
   async submitEvidence(command = {}) {
     this.#authorize(command, 'payments:accept');
     const chatId = String(command.chatId || '').trim();
