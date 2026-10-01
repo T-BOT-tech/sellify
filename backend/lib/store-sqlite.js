@@ -20,6 +20,8 @@ import { requirePaymentProvider } from './payments/provider-registry.js';
 import { requirePaymentChannel } from './payments/channel-registry.js';
 import { decideEventReplay } from './event-replay.js';
 import { assertPackLifecyclePrecondition, getPackLifecycleManifest } from './pack-lifecycle-readiness.js';
+import { assertUntrustedPaymentEvidenceShape, normalizePaymentEvidenceSource } from './payments/payment-evidence-authority.js';
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.SELLIFY_DATA_DIR
@@ -5608,6 +5610,7 @@ export async function insertPaymentIntent(chatId, input = {}, actor = null) {
 }
 export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
   ensureDatabase();
+  assertUntrustedPaymentEvidenceShape(input);
   const { organizationId, locationId } = await resolvePaymentContext(chatId, input);
   const intentId = String(input.paymentIntentId || input.payment_intent_id || '').trim();
   if (!intentId) throw Object.assign(new Error('paymentIntentId is required'), { statusCode: 400, code: 'PAYMENT_INTENT_REQUIRED' });
@@ -5622,6 +5625,7 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
   if (providerId !== String(intent.provider_id)) throw Object.assign(new Error('Evidence provider does not match payment intent provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
   const channel = String(input.channel || 'manual').trim().toLowerCase();
   const evidenceType = String(input.evidenceType || input.evidence_type || '').trim().toUpperCase();
+  const source = normalizePaymentEvidenceSource(input.source);
   if (!evidenceType) throw Object.assign(new Error('evidenceType is required'), { statusCode: 400, code: 'EVIDENCE_TYPE_REQUIRED' });
   const rawPayload = input.rawPayload ?? input.raw_payload ?? input.payload ?? null;
   const normalizedPayload = input.normalizedPayload ?? input.normalized_payload ?? null;
@@ -5635,7 +5639,8 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
       id, organizationId, locationId, paymentId ? String(paymentId) : null, intentId, providerId, channel, evidenceType,
       input.externalReference || input.external_reference || null, input.providerTransactionId || input.provider_transaction_id || null,
       fingerprint, rawPayload == null ? null : json(rawPayload), normalizedPayload == null ? null : json(normalizedPayload),
-      input.source || null, input.observedAt || input.observed_at || null, now, actor?.userId || null, now, now
+      source, input.observedAt || input.observed_at || null, now,
+      source === 'caller.submitted' ? (actor?.userId || null) : null, now, now
     );
   } catch (error) {
     if (String(error?.message || '').includes('UNIQUE constraint failed: payment_evidence')) {
@@ -5658,6 +5663,8 @@ export async function insertPaymentVerification(chatId, input = {}, actor = null
   const evidence = db.prepare('SELECT * FROM payment_evidence WHERE id = ? AND organization_id = ?').get(String(input.evidenceId || input.evidence_id), organizationId);
   if (!evidence) throw Object.assign(new Error('Evidence not found'), { statusCode: 404, code: 'EVIDENCE_NOT_FOUND' });
   const id = String(input.id || crypto.randomUUID()); const now = nowIso();
+  const verifier = String(input.verifier || 'payment-core').trim();
+  if (!verifier.startsWith('payment-core.')) throw Object.assign(new Error('Payment verification must originate from a trusted Payment Core verifier'), { statusCode: 409, code: 'UNTRUSTED_PAYMENT_VERIFIER' });
   db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
     id, organizationId, input.paymentId || input.payment_id || evidence.payment_id || null, input.paymentIntentId || input.payment_intent_id || evidence.payment_intent_id || null,
     evidence.id, String(input.providerId || input.provider_id || evidence.provider_id), String(input.result || '').toUpperCase(),
@@ -5666,7 +5673,7 @@ export async function insertPaymentVerification(chatId, input = {}, actor = null
     input.observedReceiverAccount || input.observed_receiver_account || null, input.observedReference || input.observed_reference || null,
     input.observedTransactionId || input.observed_transaction_id || null, input.observedAt || input.observed_at || null,
     json(input.reasonCodes || input.reason_codes || []), input.rawResult == null ? null : json(input.rawResult || input.raw_result),
-    String(input.verifier || 'payment-core'), input.verifierVersion || input.verifier_version || null, now
+    verifier, input.verifierVersion || input.verifier_version || null, now
   );
   return paymentVerificationFromRow(db.prepare('SELECT * FROM payment_verifications WHERE id = ?').get(id));
 }
