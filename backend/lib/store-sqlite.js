@@ -5719,6 +5719,21 @@ export async function insertPaymentVerification(chatId, input = {}, actor = null
     }
   }
   const id = String(input.id || crypto.randomUUID()); const now = nowIso();
+  const observedTransactionId = String(input.observedTransactionId || input.observed_transaction_id || '').trim() || null;
+  if (observedTransactionId) {
+    const bound = db.prepare(`
+      SELECT id, payment_id
+      FROM payment_verifications
+      WHERE organization_id = ? AND provider_id = ? AND observed_transaction_id = ?
+      ORDER BY created_at DESC LIMIT 1
+    `).get(organizationId, providerId, observedTransactionId);
+    if (bound && String(bound.payment_id || '') !== String(paymentId || '')) {
+      throw Object.assign(new Error('Provider transaction identity is already bound to another payment'), {
+        statusCode: 409, code: 'PROVIDER_TRANSACTION_DUPLICATE',
+        paymentId: bound.payment_id, verificationId: bound.id,
+      });
+    }
+  }
   const verifier = String(input.verifier || 'payment-core').trim();
   if (!verifier.startsWith('payment-core.')) throw Object.assign(new Error('Payment verification must originate from a trusted Payment Core verifier'), { statusCode: 409, code: 'UNTRUSTED_PAYMENT_VERIFIER' });
   const verifierVersion = String(input.verifierVersion || input.verifier_version || '1').trim() || '1';
@@ -5739,12 +5754,23 @@ export async function insertPaymentVerification(chatId, input = {}, actor = null
       input.confidence == null ? null : Number(input.confidence), input.observedAmountMinor ?? input.observed_amount_minor ?? null,
       input.observedCurrency || input.observed_currency || null, input.observedReceiver || input.observed_receiver || null,
       input.observedReceiverAccount || input.observed_receiver_account || null, input.observedReference || input.observed_reference || null,
-      input.observedTransactionId || input.observed_transaction_id || null, input.observedAt || input.observed_at || null,
+      observedTransactionId, input.observedAt || input.observed_at || null,
       json(input.reasonCodes || input.reason_codes || []), input.rawResult == null ? null : json(input.rawResult || input.raw_result),
       verifier, verifierVersion, now
     );
   } catch (error) {
-    if (String(error?.message || '').includes('UNIQUE constraint failed: payment_verifications')) {
+    if (String(error?.message || '').includes('uq_payment_verifications_provider_transaction') ||
+        String(error?.message || '').includes('UNIQUE constraint failed: payment_verifications.organization_id, payment_verifications.provider_id, payment_verifications.observed_transaction_id')) {
+      const conflicting = observedTransactionId
+        ? db.prepare('SELECT * FROM payment_verifications WHERE organization_id = ? AND provider_id = ? AND observed_transaction_id = ? ORDER BY created_at DESC LIMIT 1')
+          .get(organizationId, providerId, observedTransactionId)
+        : null;
+      if (conflicting && String(conflicting.payment_id || '') !== String(paymentId || '')) {
+        throw Object.assign(new Error('Provider transaction identity is already bound to another payment'), {
+          statusCode: 409, code: 'PROVIDER_TRANSACTION_DUPLICATE',
+          paymentId: conflicting.payment_id, verificationId: conflicting.id,
+        });
+      }
       const existing = db.prepare(
         'SELECT * FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND (verifier_version = ? OR (verifier_version IS NULL AND ? IS NULL)) ORDER BY created_at DESC LIMIT 1'
       ).get(evidence.id, verifier, verifierVersion, verifierVersion);
