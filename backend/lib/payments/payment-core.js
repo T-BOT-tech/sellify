@@ -806,10 +806,48 @@ export class PaymentCore {
     }
 
     const parsed = await provider.parseEvidence({ rawRequest, config });
-    if (!parsed || typeof parsed !== 'object') {
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw Object.assign(
         new Error('Provider notification parser returned no evidence'),
         { statusCode: 400, code: 'INVALID_PROVIDER_NOTIFICATION', providerId: id }
+      );
+    }
+
+    // Provider parsers may emit provider facts only. Sellify tenant/payment
+    // identity is never accepted from parser output.
+    const forbiddenIdentityFields = [
+      'chatId', 'chat_id',
+      'organizationId', 'organization_id',
+      'locationId', 'location_id',
+      'paymentId', 'payment_id',
+      'paymentIntentId', 'payment_intent_id',
+      'paymentAccountId', 'payment_account_id',
+      'actor',
+      'source',
+      'notificationAuthentication', 'notification_authentication',
+      'providerAccountReference', 'provider_account_reference',
+      'accountIdentifier', 'account_identifier',
+    ];
+    const forbidden = forbiddenIdentityFields.filter(field =>
+      Object.prototype.hasOwnProperty.call(parsed, field)
+    );
+    if (forbidden.length) {
+      throw Object.assign(
+        new Error(`Provider notification parser returned forbidden identity fields: ${forbidden.join(', ')}`),
+        {
+          statusCode: 400,
+          code: 'INVALID_PROVIDER_NOTIFICATION_IDENTITY',
+          providerId: id,
+          fields: forbidden,
+        }
+      );
+    }
+
+    if (parsed.providerId != null &&
+        String(parsed.providerId).trim().toLowerCase() !== id) {
+      throw Object.assign(
+        new Error('Provider notification parser provider does not match registered provider'),
+        { statusCode: 400, code: 'PROVIDER_NOTIFICATION_PROVIDER_MISMATCH', providerId: id }
       );
     }
 
@@ -828,7 +866,18 @@ export class PaymentCore {
         authentication.providerAccountReference ||
         authentication.accountIdentifier,
       providerNotificationId: notificationId,
-      notificationAuthentication: authentication,
+      notificationAuthentication: {
+        authenticated: true,
+        providerId: id,
+        providerAccountReference:
+          authentication.providerAccountReference ||
+          authentication.accountIdentifier,
+        authenticationReference:
+          authentication.authenticationReference ||
+          authentication.authentication_reference ||
+          null,
+        providerNotificationId: notificationId,
+      },
       source: 'provider-notification',
     }, actor);
   }
