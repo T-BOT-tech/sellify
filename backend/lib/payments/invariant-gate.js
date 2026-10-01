@@ -4,6 +4,9 @@ const HARD_FAILURES = new Set([
   'PAYMENT_ACCOUNT_OWNERSHIP',
   'PROVIDER_MISMATCH',
   'PAYMENT_ACCOUNT_PROVIDER_MISMATCH',
+  'PAYMENT_ACCOUNT_BINDING_MISMATCH',
+  'EVIDENCE_PROVIDER_MISMATCH',
+  'PAYMENT_EVIDENCE_AUTHENTICATION_CONTEXT_MISSING',
   'RECEIVER_MISMATCH',
   'AMOUNT_MISMATCH',
   'CURRENCY_MISMATCH',
@@ -38,6 +41,38 @@ export class InvariantGate {
       Boolean(paymentAccount && org && String(paymentAccount.organizationId) === org),
       { required: true }));
 
+    const canonicalAccountId = String(paymentAccount?.id || '').trim();
+    const intentAccountId = String(paymentIntent?.paymentAccountId || '').trim();
+    const evidenceAccountId = String(evidence?.paymentAccountId || '').trim();
+    checks.push(check('PAYMENT_ACCOUNT_BINDING_MISMATCH',
+      Boolean(canonicalAccountId && intentAccountId && evidenceAccountId &&
+        canonicalAccountId === intentAccountId &&
+        canonicalAccountId === evidenceAccountId),
+      {
+        required: true,
+        expected: canonicalAccountId || null,
+        intent: intentAccountId || null,
+        evidence: evidenceAccountId || null,
+      }));
+
+    const evidenceIntentId = String(evidence?.paymentIntentId || '').trim();
+    checks.push(check('PAYMENT_INTENT_EVIDENCE_MATCH',
+      Boolean(paymentIntent && evidence && evidenceIntentId &&
+        evidenceIntentId === String(paymentIntent.id || '').trim()),
+      {
+        required: true,
+        expected: paymentIntent?.id || null,
+        observed: evidenceIntentId || null,
+      }));
+
+    const paymentIntentProviderId = String(paymentIntent?.providerId || '').trim().toLowerCase();
+    const accountProviderId = String(paymentAccount?.providerId || '').trim().toLowerCase();
+    checks.push(check('PAYMENT_ACCOUNT_PROVIDER_MATCH',
+      Boolean(paymentAccount && paymentIntent &&
+        accountProviderId &&
+        accountProviderId === paymentIntentProviderId),
+      { required: true }));
+
     checks.push(check('PROVIDER_MATCH',
       Boolean(payment && paymentIntent && evidence && verification &&
         String(payment.providerId) === String(paymentIntent.providerId) &&
@@ -54,11 +89,6 @@ export class InvariantGate {
     checks.push(check('EVIDENCE_PROVIDER_MISMATCH',
       Boolean(evidence && paymentIntent && String(evidence.providerId) === String(paymentIntent.providerId)),
       { required: true, expected: paymentIntent?.providerId || null, observed: evidence?.providerId || null }));
-
-    checks.push(check('PAYMENT_ACCOUNT_PROVIDER_MATCH',
-      Boolean(paymentAccount && paymentIntent &&
-        String(paymentAccount.providerId) === String(paymentIntent.providerId)),
-      { required: true }));
 
     const observedAmount = verification?.observedAmountMinor;
     checks.push(check('AMOUNT_MATCH',
