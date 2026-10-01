@@ -1905,6 +1905,13 @@ async function handlePaymentProviderCertification(req,res,chatId){
   if(providerId)return sendJSON(res,200,await paymentCore.certifyProviderCapabilities({chatId,organizationId:tenant.organizationId,providerId,actor:session}),req);
   return sendJSON(res,200,await paymentCore.certifyAllProviders({chatId,organizationId:tenant.organizationId,actor:session}),req);
 }
+async function handlePaymentProviderCapabilityProbe(req,res,chatId){
+  const tenant=await getTenant(chatId);if(!tenant)return sendJSON(res,404,{error:{message:'Unknown store',status:404}},req);
+  const session=await requireSession(req,tenant.chatId);
+  if(req.method!=='POST')return sendJSON(res,405,{error:{message:'Method not allowed',status:405}},req);
+  const body=await readBody(req);
+  return sendJSON(res,200,await paymentCore.probeProviderCapability({...body,chatId,organizationId:tenant.organizationId,actor:session}),req);
+}
 async function handlePaymentProviderCapabilityEvidence(req,res,chatId){
   const tenant=await getTenant(chatId);if(!tenant)return sendJSON(res,404,{error:{message:'Unknown store',status:404}},req);
   const session=await requireSession(req,tenant.chatId);
