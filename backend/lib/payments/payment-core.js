@@ -48,6 +48,156 @@ export class PaymentCore {
     }, command.actor || null);
   }
 
+  // GAP-1.11: query provider status through the adapter boundary, normalize
+  // the result into canonical evidence/verification, and only then allow the
+  // existing invariant/decision/ledger machinery to change Payment state.
+  async queryStatus(command = {}) {
+    this.#authorize(command, 'payments:accept');
+    const chatId = String(command.chatId || '').trim();
+    const paymentId = String(command.paymentId || command.payment_id || '').trim();
+    if (!chatId || !paymentId) {
+      throw Object.assign(new Error('chatId and paymentId are required'), { statusCode: 400, code: 'PAYMENT_CONTEXT_REQUIRED' });
+    }
+
+    const payment = await this.store.getPayment(chatId, paymentId);
+    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    const intent = payment.paymentIntentId
+      ? await this.store.getPaymentIntent(chatId, payment.paymentIntentId)
+      : null;
+    if (!intent) throw Object.assign(new Error('Payment intent not found'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND' });
+
+    const accounts = await this.store.listPaymentAccounts(chatId, { status: 'all' });
+    const paymentAccount = accounts.find(account => String(account.id) === String(payment.paymentAccountId));
+    if (!paymentAccount) throw Object.assign(new Error('Payment account not found'), { statusCode: 404, code: 'PAYMENT_ACCOUNT_NOT_FOUND' });
+
+    const provider = this.providerRegistry?.getPaymentProvider
+      ? this.providerRegistry.getPaymentProvider(payment.providerId)
+      : null;
+    if (!provider) throw Object.assign(new Error('Unknown payment provider'), { statusCode: 400, code: 'UNKNOWN_PAYMENT_PROVIDER' });
+
+    let raw;
+    try {
+      raw = await provider.getStatus({
+        payment,
+        paymentIntent: intent,
+        paymentAccount,
+        query: command.query || command,
+      });
+    } catch (error) {
+      if (['PAYMENT_PROVIDER_OPERATION_UNSUPPORTED', 'PAYMENT_PROVIDER_NOT_CONFIGURED'].includes(error?.code)) {
+        return {
+          payment,
+          status: 'UNKNOWN',
+          supported: false,
+          reasonCodes: ['PROVIDER_STATUS_UNAVAILABLE'],
+          providerId: payment.providerId,
+        };
+      }
+      throw error;
+    }
+
+    const status = normalizeProviderStatus(raw);
+    const verification = normalizeStatusVerification({ raw, status, payment, paymentIntent: intent });
+    const evidencePayload = {
+      paymentId,
+      paymentIntentId: intent.id,
+      providerId: payment.providerId,
+      channel: 'api',
+      evidenceType: 'PROVIDER_STATUS',
+      externalReference: verification.observedReference || payment.externalReference || null,
+      providerTransactionId: verification.observedTransactionId || null,
+      observedAt: verification.observedAt || null,
+      rawPayload: raw,
+      normalizedPayload: verification,
+      fingerprint: fingerprintStatusQuery(paymentId, payment.providerId, verification),
+      source: 'provider.getStatus',
+    };
+    const evidenceResult = await this.store.insertPaymentEvidence(chatId, evidencePayload, command.actor || null);
+    const evidence = evidenceResult.evidence;
+
+    const invariants = this.invariantGate
+      ? this.invariantGate.evaluate({
+          payment,
+          paymentIntent: intent,
+          paymentAccount,
+          evidence,
+          verification,
+          now: this.clock(),
+        })
+      : { passed: true, checks: [], reasonCodes: [], hardFailures: [] };
+
+    const decision = this.decisionEngine
+      ? this.decisionEngine.decide({ verification, invariants, payment })
+      : { decision: 'RETRY_VERIFICATION', targetState: null, reasonCodes: verification.reasonCodes || [] };
+
+    if (!decision.targetState) {
+      const persistedVerification = await this.store.insertPaymentVerification(chatId, {
+        paymentId,
+        paymentIntentId: intent.id,
+        evidenceId: evidence.id,
+        providerId: payment.providerId,
+        ...verification,
+        reasonCodes: decision.reasonCodes,
+        verifier: 'payment-core.provider-status',
+        verifierVersion: '1',
+      }, command.actor || null);
+      const persistedDecision = await this.store.insertPaymentDecision(chatId, {
+        paymentId,
+        paymentIntentId: intent.id,
+        evidenceId: evidence.id,
+        verificationId: persistedVerification.id,
+        decision: decision.decision,
+        targetState: null,
+        reasonCodes: decision.reasonCodes,
+        invariantResults: invariants,
+        decisionSource: 'PAYMENT_CORE',
+      }, command.actor || null);
+      return {
+        payment,
+        status: verification.result,
+        supported: true,
+        evidence,
+        verification: persistedVerification,
+        decision: persistedDecision,
+        invariants,
+      };
+    }
+
+    const committed = await this.store.commitPaymentDecision(chatId, {
+      paymentId,
+      expectedState: payment.state,
+      targetState: decision.targetState,
+      verification: {
+        paymentIntentId: intent.id,
+        evidenceId: evidence.id,
+        providerId: payment.providerId,
+        ...verification,
+        reasonCodes: decision.reasonCodes,
+        verifier: 'payment-core.provider-status',
+        verifierVersion: '1',
+      },
+      decision: {
+        paymentIntentId: intent.id,
+        evidenceId: evidence.id,
+        decision: decision.decision,
+        targetState: decision.targetState,
+        reasonCodes: decision.reasonCodes,
+        invariantResults: invariants,
+        decisionSource: 'PAYMENT_CORE',
+        entryType: decision.targetState,
+      },
+    }, command.actor || null);
+
+    return {
+      payment: committed,
+      status: verification.result,
+      supported: true,
+      evidence,
+      invariants,
+      decision,
+    };
+  }
+
   #authorize(command, permission) {
     if (!this.authorization) return;
     const allowed = this.authorization(command.actor || null, command.organizationId || null, command.locationId || null, 'payments', permission);
@@ -55,4 +205,49 @@ export class PaymentCore {
       throw Object.assign(new Error('Payment permission required'), { statusCode: 403, code: 'UNAUTHORIZED_OPERATION' });
     }
   }
+}
+
+function normalizeProviderStatus(raw = {}) {
+  const value = String(raw.status ?? raw.result ?? raw.state ?? '').trim().toUpperCase();
+  if (['SUCCESS', 'SUCCEEDED', 'COMPLETED', 'PAID', 'SETTLED', 'MATCH', 'CONFIRMED'].includes(value)) return 'MATCH';
+  if (['FAILED', 'DECLINED', 'REJECTED', 'MISMATCH'].includes(value)) return 'MISMATCH';
+  if (['DUPLICATE'].includes(value)) return 'DUPLICATE';
+  if (['EXPIRED'].includes(value)) return 'EXPIRED';
+  if (['PARTIAL'].includes(value)) return 'PARTIAL';
+  return 'UNKNOWN';
+}
+
+function normalizeStatusVerification({ raw = {}, status, payment }) {
+  const observedAmountMinor = raw.amountMinor ?? raw.amount_minor ?? raw.observedAmountMinor ?? raw.observed_amount_minor ?? null;
+  const observedCurrency = raw.currency ?? raw.observedCurrency ?? raw.observed_currency ?? null;
+  const observedReceiverAccount = raw.receiverAccount ?? raw.receiver_account ?? raw.observedReceiverAccount ?? raw.observed_receiver_account ?? null;
+  const observedReference = raw.reference ?? raw.externalReference ?? raw.external_reference ?? raw.observedReference ?? raw.observed_reference ?? null;
+  const observedTransactionId = raw.transactionId ?? raw.transaction_id ?? raw.providerTransactionId ?? raw.provider_transaction_id ?? null;
+  const observedAt = raw.observedAt ?? raw.observed_at ?? null;
+  return {
+    result: status,
+    confidence: raw.confidence == null ? null : Number(raw.confidence),
+    observedAmountMinor: observedAmountMinor == null ? null : Number(observedAmountMinor),
+    observedCurrency: observedCurrency == null ? null : String(observedCurrency).toUpperCase(),
+    observedReceiver: raw.receiver ?? raw.observedReceiver ?? raw.observed_receiver ?? null,
+    observedReceiverAccount: observedReceiverAccount == null ? null : String(observedReceiverAccount),
+    observedReference: observedReference == null ? null : String(observedReference),
+    observedTransactionId: observedTransactionId == null ? null : String(observedTransactionId),
+    observedAt,
+    rawResult: raw,
+    reasonCodes: status === 'UNKNOWN' ? ['PROVIDER_STATUS_UNKNOWN'] : [],
+    paymentId: payment.id,
+  };
+}
+
+function fingerprintStatusQuery(paymentId, providerId, verification) {
+  return [
+    'GAP-1.11',
+    String(providerId),
+    String(paymentId),
+    String(verification.observedTransactionId || ''),
+    String(verification.result),
+    String(verification.observedAmountMinor ?? ''),
+    String(verification.observedReference || ''),
+  ].join('|');
 }
