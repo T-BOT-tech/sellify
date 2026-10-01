@@ -138,15 +138,37 @@ export async function queryPaymentStatus({ chatId, paymentId, transactionId = nu
     const invariants = new InvariantGate().evaluate({ payment, paymentIntent: intent, paymentAccount: account, evidence, verification, now: clock() });
     const decision = new PaymentDecisionEngine().decide({ payment, verification, invariants });
     if (decision.targetState && ['VERIFIED','MISMATCH','PARTIAL','DUPLICATE','EXPIRED'].includes(decision.targetState)) {
-      const committed = await store.commitPaymentDecision(chatId, {
-        paymentId: payment.id,
-        paymentIntentId: intent.id,
-        evidenceId: evidence.id,
-        expectedState: payment.state,
-        verification,
-        decision: { ...decision, evidenceId: evidence.id, decisionSource: 'PROVIDER_STATUS', invariantResults: invariants },
-      }, actor);
-      return { payment: committed, intent, evidence, verification, invariants, decision, providerStatus, duplicateEvidence: evidenceResult.duplicate };
+      try {
+        const committed = await store.commitPaymentDecision(chatId, {
+          paymentId: payment.id,
+          paymentIntentId: intent.id,
+          evidenceId: evidence.id,
+          expectedState: payment.state,
+          verification,
+          decision: { ...decision, evidenceId: evidence.id, decisionSource: 'PROVIDER_STATUS', invariantResults: invariants },
+        }, actor);
+        return { payment: committed, intent, evidence, verification, invariants, decision, providerStatus, duplicateEvidence: evidenceResult.duplicate };
+      } catch (error) {
+        if (error?.code !== 'PAYMENT_STATE_CONFLICT') throw error;
+        const currentPayment = await store.getPayment(chatId, payment.id);
+        const currentState = String(currentPayment?.state || '').toUpperCase();
+        const targetState = String(decision.targetState || '').toUpperCase();
+        if (currentPayment && currentState === targetState) {
+          return {
+            payment: currentPayment,
+            intent,
+            evidence,
+            verification: null,
+            invariants: null,
+            decision: null,
+            providerStatus,
+            duplicateEvidence: evidenceResult.duplicate,
+            idempotentReplay: true,
+            concurrentDecisionConflict: true,
+          };
+        }
+        throw error;
+      }
     }
     return { payment, intent, evidence, verification, invariants, decision, providerStatus, duplicateEvidence: evidenceResult.duplicate };
   }
