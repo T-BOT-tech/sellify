@@ -5373,6 +5373,11 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
     if (String(error?.message || '').includes('UNIQUE constraint failed: payment_evidence')) {
       const existing = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND fingerprint = ?').get(organizationId, providerId, fingerprint);
       if (existing) return { evidence: paymentEvidenceFromRow(existing), duplicate: true };
+      const transactionId = String(input.providerTransactionId || input.provider_transaction_id || '').trim();
+      if (transactionId) {
+        const transactionEvidence = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND provider_transaction_id = ?').get(organizationId, providerId, transactionId);
+        if (transactionEvidence) return { evidence: paymentEvidenceFromRow(transactionEvidence), duplicate: true, duplicateReason: 'PROVIDER_TRANSACTION_ID' };
+      }
     }
     throw error;
   }

@@ -34,6 +34,26 @@ const METHODS = Object.freeze([
   'reconcile',
 ]);
 
+function normalizeStatusResult(result = {}, context = {}) {
+  const value = result && typeof result === 'object' ? result : {};
+  const status = String(value.status || value.result || 'UNKNOWN').trim().toUpperCase();
+  const allowed = new Set(['PENDING', 'SUCCESS', 'FAILED', 'UNKNOWN']);
+  return Object.freeze({
+    status: allowed.has(status) ? status : 'UNKNOWN',
+    providerId: String(value.providerId || context.providerId || '').trim().toLowerCase() || null,
+    paymentAccountId: value.paymentAccountId || context.paymentAccountId || null,
+    providerTransactionId: value.providerTransactionId || value.transactionId || null,
+    externalReference: value.externalReference || value.reference || context.externalReference || null,
+    amountMinor: Number.isInteger(value.amountMinor) ? value.amountMinor : null,
+    currency: value.currency ? String(value.currency).trim().toUpperCase() : null,
+    receiverAccount: value.receiverAccount || value.receiver || null,
+    senderAccount: value.senderAccount || value.sender || null,
+    occurredAt: value.occurredAt || value.providerTimestamp || null,
+    raw: value.raw ?? value,
+    reasonCodes: Array.isArray(value.reasonCodes) ? [...new Set(value.reasonCodes.map(String))] : [],
+  });
+}
+
 function normalizeCapabilities(capabilities = {}) {
   return Object.freeze(Object.fromEntries(METHODS.map(method => [method, Boolean(capabilities[method])] )));
 }
@@ -72,7 +92,7 @@ function normalizeProvider(adapter) {
     parseConfirmation: methods.parseConfirmation,
     verify: methods.verify,
     initiate: methods.initiate,
-    getStatus: methods.getStatus,
+    getStatus: async (input = {}) => normalizeStatusResult(await methods.getStatus(input), input),
     refund: methods.refund,
     reconcile: methods.reconcile,
   });
