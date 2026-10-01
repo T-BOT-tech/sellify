@@ -48,6 +48,12 @@ const result = await core.submitEvidence({
   payment_intent_id: 'attacker-intent-2',
   providerId: 'mpesa',
   providerAccountReference: '600001',
+  notificationAuthentication: {
+    authenticated: true,
+    providerId: 'mpesa',
+    providerAccountReference: '600001',
+    authenticationReference: 'auth-001',
+  },
   providerTransactionId: 'TX-001',
   source: 'provider-notification',
   amount: 1000,
