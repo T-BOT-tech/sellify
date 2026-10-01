@@ -161,4 +161,33 @@ await assert.rejects(
 );
 assert.equal(verifyCalls, 0, 'confirmation binding failure must not reach provider verification');
 
-console.log('GAP-1 verification/confirmation payment-account binding regression: PASS');
+
+const finalizationCore = new PaymentCore({
+  store: {
+    ...makeStore(baseEvidence({ paymentAccountId: 'account-attacker' })),
+    getPaymentConfirmationAttempt: async () => ({
+      id: 'attempt-002',
+      evidenceId: 'evidence-001',
+      paymentIntentId: 'intent-001',
+      paymentAccountId: 'account-001',
+      providerId: 'mpesa',
+      status: 'CONFIRMED',
+      observation: { providerId: 'mpesa' },
+    }),
+    commitPaymentDecision: async () => {
+      throw new Error('financial decision must not be committed after binding failure');
+    },
+  },
+  providerRegistry: { requirePaymentProvider: provider },
+});
+await assert.rejects(
+  finalizationCore.finalizeProviderConfirmation({
+    chatId: 'chat-001',
+    confirmationAttemptId: 'attempt-002',
+  }),
+  error =>
+    error?.code === 'PAYMENT_EVIDENCE_ACCOUNT_BINDING_MISMATCH' &&
+    error?.statusCode === 409,
+);
+
+console.log('GAP-1 verification/confirmation/finalization payment-account binding regression: PASS');
