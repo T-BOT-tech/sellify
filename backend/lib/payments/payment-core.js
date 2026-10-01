@@ -783,6 +783,14 @@ export class PaymentCore {
 
     const provider = this.providerRegistry.requirePaymentProvider(id);
 
+    if (typeof provider.authenticateNotification !== 'function' ||
+        typeof provider.parseEvidence !== 'function') {
+      throw Object.assign(
+        new Error(`Payment provider ${id} cannot ingest notifications`),
+        { statusCode: 501, code: 'PAYMENT_PROVIDER_NOTIFICATION_UNSUPPORTED', providerId: id }
+      );
+    }
+
     // Provider authentication may require account-scoped configuration (for
     // example an M-Pesa shortcode and shared-secret policy). Resolve that
     // configuration inside the Payment Core boundary so the HTTP adapter never
@@ -795,18 +803,21 @@ export class PaymentCore {
     ).trim();
     if (!Object.keys(notificationConfig).length && accountHint &&
         typeof this.store.getPaymentNotificationConfig === 'function') {
-      const resolvedConfig = await this.store.getPaymentNotificationConfig(id, accountHint);
-      notificationConfig = resolvedConfig && typeof resolvedConfig === 'object'
-        ? { ...resolvedConfig }
-        : {};
-    }
-
-    if (typeof provider.authenticateNotification !== 'function' ||
-        typeof provider.parseEvidence !== 'function') {
-      throw Object.assign(
-        new Error(`Payment provider ${id} cannot ingest notifications`),
-        { statusCode: 501, code: 'PAYMENT_PROVIDER_NOTIFICATION_UNSUPPORTED', providerId: id }
-      );
+      try {
+        const resolvedConfig = await this.store.getPaymentNotificationConfig(id, accountHint);
+        notificationConfig = resolvedConfig && typeof resolvedConfig === 'object'
+          ? { ...resolvedConfig }
+          : {};
+      } catch (error) {
+        if (error?.code === 'UNMATCHED_PROVIDER_NOTIFICATION') {
+          throw Object.assign(new Error('Provider notification authentication failed'), {
+            statusCode: 401,
+            code: 'PROVIDER_NOTIFICATION_NOT_AUTHENTICATED',
+            providerId: id,
+          });
+        }
+        throw error;
+      }
     }
 
     // Authentication is performed before parsing is trusted. Parsing may inspect
