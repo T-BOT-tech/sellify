@@ -2371,6 +2371,22 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(50, nowIso());
   }
 
+  // GAP-1 — durable provider notification identity. Notification IDs are
+  // provider/channel event identities, distinct from provider transaction IDs.
+  // They deduplicate callback retries without conflating transaction identity.
+  if (!applied.includes(51)) {
+    db.exec(`
+      ALTER TABLE payment_evidence ADD COLUMN provider_notification_id TEXT;
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_evidence_notification
+        ON payment_evidence(organization_id, provider_id, payment_account_id, provider_notification_id)
+        WHERE provider_notification_id IS NOT NULL AND provider_notification_id <> '';
+      CREATE INDEX IF NOT EXISTS idx_payment_evidence_notification
+        ON payment_evidence(organization_id, provider_id, payment_account_id, provider_notification_id)
+        WHERE provider_notification_id IS NOT NULL AND provider_notification_id <> '';
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(51, nowIso());
+  }
+
   // FUX-2 Section 6 — additive multi-role compatibility bridge.
   // memberships.role remains the legacy/default role authority while
   // membership_roles provides an additive path for multiple contextual roles.
@@ -5313,6 +5329,7 @@ function paymentEvidenceFromRow(row) {
     paymentId: row.payment_id || null, paymentIntentId: row.payment_intent_id || null,
     providerId: row.provider_id, channel: row.channel, evidenceType: row.evidence_type,
     externalReference: row.external_reference || null, providerTransactionId: row.provider_transaction_id || null,
+    providerNotificationId: row.provider_notification_id || null,
     fingerprint: row.fingerprint, rawPayload: parseJSON(row.raw_payload_json, null),
     normalizedPayload: parseJSON(row.normalized_payload_json, null), source: row.source || null,
     observedAt: row.observed_at || null, receivedAt: row.received_at,
@@ -5494,9 +5511,22 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
     }
   }
   const providerTransactionId = String(input.providerTransactionId || input.provider_transaction_id || '').trim() || null;
+  const providerNotificationId = String(input.providerNotificationId || input.provider_notification_id || '').trim() || null;
   const externalReference = input.externalReference || input.external_reference || null;
+  if (providerNotificationId && !paymentAccountId) {
+    throw Object.assign(new Error('Provider notification identity requires a canonical payment account'), {
+      statusCode: 409,
+      code: 'PAYMENT_ACCOUNT_REQUIRED',
+    });
+  }
   const duplicate = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND fingerprint = ?').get(organizationId, providerId, fingerprint);
   if (duplicate) return { evidence: paymentEvidenceFromRow(duplicate), duplicate: true };
+  const notificationDuplicate = providerNotificationId
+    ? db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND payment_account_id = ? AND provider_notification_id = ?').get(
+        organizationId, providerId, String(paymentAccountId), providerNotificationId
+      )
+    : null;
+  if (notificationDuplicate) return { evidence: paymentEvidenceFromRow(notificationDuplicate), duplicate: true };
 
   if (providerTransactionId && paymentAccountId) {
     const transactionMatch = db.prepare('SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND payment_account_id = ? AND provider_transaction_id = ?').get(
@@ -5513,9 +5543,9 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
   }
   const id = String(input.id || crypto.randomUUID()); const now = nowIso();
   try {
-    db.prepare("INSERT INTO payment_evidence (id, organization_id, location_id, payment_id, payment_intent_id, payment_account_id, provider_id, channel, evidence_type, external_reference, provider_transaction_id, fingerprint, raw_payload_json, normalized_payload_json, source, observed_at, received_at, submitted_by_user_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?, ?)").run(
+    db.prepare("INSERT INTO payment_evidence (id, organization_id, location_id, payment_id, payment_intent_id, payment_account_id, provider_id, channel, evidence_type, external_reference, provider_transaction_id, provider_notification_id, fingerprint, raw_payload_json, normalized_payload_json, source, observed_at, received_at, submitted_by_user_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?, ?)").run(
       id, organizationId, locationId, paymentId ? String(paymentId) : null, intentId || null, paymentAccountId ? String(paymentAccountId) : null, providerId, channel, evidenceType,
-      externalReference, providerTransactionId,
+      externalReference, providerTransactionId, providerNotificationId,
       fingerprint, rawPayload == null ? null : json(rawPayload), normalizedPayload == null ? null : json(normalizedPayload),
       input.source || null, input.observedAt || input.observed_at || null, now, actor?.userId || null, now, now
     );
