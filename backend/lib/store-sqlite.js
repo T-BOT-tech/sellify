@@ -8389,10 +8389,59 @@ export async function createPaymentConfirmationAttempt(chatId, input = {}, actor
   if (String(evidence.provider_id).toLowerCase() !== String(intent.provider_id).toLowerCase()) {
     throw Object.assign(new Error('Confirmation provider mismatch'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
   }
+  if (evidence.payment_account_id && intent.payment_account_id &&
+      String(evidence.payment_account_id) !== String(intent.payment_account_id)) {
+    throw Object.assign(new Error('Confirmation evidence account does not match payment intent account'), {
+      statusCode: 409,
+      code: 'PAYMENT_ACCOUNT_BINDING_MISMATCH',
+    });
+  }
+  if (evidence.payment_id) {
+    const evidencePayment = db.prepare(
+      'SELECT id, payment_intent_id, payment_account_id, provider_id FROM payments WHERE id=? AND organization_id=?'
+    ).get(String(evidence.payment_id), organizationId);
+    if (!evidencePayment) {
+      throw Object.assign(new Error('Confirmation evidence payment not found'), {
+        statusCode: 409,
+        code: 'PAYMENT_NOT_FOUND',
+      });
+    }
+    if (String(evidencePayment.payment_intent_id) !== paymentIntentId) {
+      throw Object.assign(new Error('Confirmation evidence payment does not match payment intent'), {
+        statusCode: 409,
+        code: 'PAYMENT_INTENT_MISMATCH',
+      });
+    }
+    if (evidencePayment.payment_account_id && intent.payment_account_id &&
+        String(evidencePayment.payment_account_id) !== String(intent.payment_account_id)) {
+      throw Object.assign(new Error('Confirmation evidence payment account does not match payment intent account'), {
+        statusCode: 409,
+        code: 'PAYMENT_ACCOUNT_BINDING_MISMATCH',
+      });
+    }
+    if (String(evidencePayment.provider_id).toLowerCase() !== String(intent.provider_id).toLowerCase()) {
+      throw Object.assign(new Error('Confirmation evidence payment provider does not match payment intent provider'), {
+        statusCode: 409,
+        code: 'PROVIDER_MISMATCH',
+      });
+    }
+  }
   const account = intent.payment_account_id
     ? db.prepare('SELECT * FROM payment_accounts WHERE id=? AND organization_id=?').get(intent.payment_account_id, organizationId)
     : null;
   const payment = db.prepare('SELECT id FROM payments WHERE payment_intent_id=? AND organization_id=? LIMIT 1').get(paymentIntentId, organizationId);
+  if (!intent.payment_account_id || !account) {
+    throw Object.assign(new Error('Confirmation attempt requires a canonical payment account'), {
+      statusCode: 409,
+      code: 'PAYMENT_ACCOUNT_REQUIRED',
+    });
+  }
+  if (evidence.payment_account_id && String(evidence.payment_account_id) !== String(account.id)) {
+    throw Object.assign(new Error('Confirmation evidence account does not match canonical payment account'), {
+      statusCode: 409,
+      code: 'PAYMENT_ACCOUNT_BINDING_MISMATCH',
+    });
+  }
   const latest = db.prepare('SELECT MAX(attempt_number) AS n FROM payment_confirmation_attempts WHERE payment_intent_id=? AND evidence_id=?').get(paymentIntentId,evidenceId);
   const attemptNumber = Number(input.attemptNumber ?? input.attempt_number ?? Number(latest?.n || 0) + 1);
   if (!Number.isInteger(attemptNumber) || attemptNumber < 1) {
