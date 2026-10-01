@@ -1861,6 +1861,31 @@ async function handlePaymentLedger(req, res, chatId, paymentId) {
   sendJSON(res, 200, { ledger }, req);
 }
 
+async function handlePaymentRoutingResolve(req, res, chatId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+  const body = await readBody(req);
+  return sendJSON(res, 200, await paymentCore.resolveRouting({
+    ...body, chatId, organizationId: tenant.organizationId, actor: session,
+  }), req);
+}
+
+async function handlePaymentRoutingPolicies(req, res, chatId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+  if (req.method === 'GET') {
+    return sendJSON(res, 200, { policies: await store.listPaymentRoutingPolicies(chatId, {
+      channel: new URL(req.url, 'http://localhost').searchParams.get('channel'),
+      locationId: new URL(req.url, 'http://localhost').searchParams.get('locationId'),
+      activeOnly: true,
+    }) }, req);
+  }
+  const body = await readBody(req);
+  return sendJSON(res, 200, { policy: await store.upsertPaymentRoutingPolicy(chatId, body, session) }, req);
+}
+
 async function handlePaymentSettlement(req, res, chatId, paymentId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -2774,6 +2799,9 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/lifecycle$/, handler: (req, res, m) => handlePaymentLifecycle(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/refund$/, handler: (req, res, m) => handlePaymentRefund(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/settlement$/, handler: (req, res, m) => handlePaymentSettlement(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/routing\/resolve$/, handler: (req, res, m) => handlePaymentRoutingResolve(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/routing\/policies$/, handler: (req, res, m) => handlePaymentRoutingPolicies(req, res, decodeURIComponent(m[1])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/routing\/policies$/, handler: (req, res, m) => handlePaymentRoutingPolicies(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/settlement\/finalize$/, handler: (req, res, m) => handlePaymentSettlementFinalize(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/settlement$/, handler: (req, res, m) => handlePaymentSettlementHistory(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/refund$/, handler: (req, res, m) => handlePaymentRefundHistory(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
