@@ -16,7 +16,7 @@ const AUTHORITY_FIELDS = new Set([
   'paymentState', 'payment_state', 'ledgerMutated', 'ledger_mutated',
   'financialEffect', 'financial_effect', 'certification',
   'certificationStatus', 'certification_status', 'authoritative',
-  'authority', 'verificationId', 'verification_id', 'verifier',
+  'authority', 'verification', 'verificationResult', 'verification_result', 'verificationId', 'verification_id', 'verifier',
 ]);
 
 const SENSITIVE_FIELDS = new Set([
