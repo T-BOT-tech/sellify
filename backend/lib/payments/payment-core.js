@@ -1,5 +1,6 @@
 import { assertUntrustedPaymentEvidenceShape } from './payment-evidence-authority.js';
 import { evaluateCapabilityCertification } from './capability-certification.js';
+import { evaluateVerificationFreshness } from './verification-freshness.js';
 
 export class PaymentCore {
   constructor({
@@ -419,6 +420,16 @@ export class PaymentCore {
 
     const status = normalizeProviderStatus(raw);
     const verification = normalizeStatusVerification({ raw, status, payment, paymentIntent: intent });
+    const freshness = evaluateVerificationFreshness({
+      observedAt: verification.observedAt,
+      createdAt: this.clock().toISOString(),
+      now: this.clock(),
+      maxAgeMs: command.maxVerificationAgeMs || command.max_verification_age_ms,
+    });
+    if (!freshness.fresh && ['MATCH', 'VERIFIED', 'SUCCESS', 'SUCCEEDED', 'COMPLETED', 'PAID', 'CONFIRMED'].includes(String(verification.result || status || '').toUpperCase())) {
+      verification.result = 'EXPIRED';
+      verification.reasonCodes = [...new Set([...(verification.reasonCodes || []), freshness.reasonCode])];
+    }
     const evidencePayload = {
       paymentId,
       paymentIntentId: intent.id,
