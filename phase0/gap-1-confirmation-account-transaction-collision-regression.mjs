@@ -78,6 +78,13 @@ const store = {
 
   getPaymentConfirmationAttempt: async () => null,
 
+  getPaymentAccountById: async (chatId, accountId) => {
+    assert.equal(chatId, accountId === 'account-a' ? 'chat-a' : 'chat-b');
+    if (accountId === 'account-a') return accountA;
+    if (accountId === 'account-b') return accountB;
+    return null;
+  },
+
   getPaymentEvidence: async (_chatId, evidenceId) => {
     if (evidenceId === 'evidence-a') return evidenceA;
     if (evidenceId === 'evidence-b') return evidenceB;
