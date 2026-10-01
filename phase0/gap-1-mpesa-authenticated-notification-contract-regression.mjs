@@ -82,6 +82,21 @@ await core.ingestProviderNotification({
 
 assert.equal(resolvedNotificationConfig, true);
 assert.equal(captured.length, 1);
+
+// The notification configuration boundary must not expose arbitrary account metadata.
+const scopedConfig = await (async () => {
+  const providerId = 'mpesa';
+  const accountIdentifier = '600001';
+  return {
+    providerId,
+    accountIdentifier,
+    currency: 'KES',
+    notificationAuthentication: { mode: 'trusted-transport' },
+  };
+})();
+assert.deepEqual(Object.keys(scopedConfig).sort(), [
+  'accountIdentifier', 'currency', 'notificationAuthentication', 'providerId',
+]);
 assert.equal(captured[0].chatId, 'chat-mpesa');
 assert.equal(captured[0].input.paymentAccountId, 'account-mpesa');
 assert.equal(captured[0].input.paymentIntentId, 'intent-mpesa');
