@@ -5819,10 +5819,7 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       const verifier = String(v.verifier || 'payment-core').trim();
       const verifierVersion = String(v.verifierVersion || v.verifier_version || '1').trim() || '1';
       const existingVerification = db.prepare('SELECT id FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND verifier_version = ?').get(verificationEvidenceId, verifier, verifierVersion);
-      if (existingVerification) {
-        v.id = existingVerification.id;
-      }
-      db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+      if (!existingVerification) db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
         verificationId, organizationId, paymentId, verificationPaymentIntentId, verificationEvidenceId,
         verificationProviderId, String(v.result || '').toUpperCase(), v.confidence == null ? null : Number(v.confidence),
         v.observedAmountMinor ?? v.observed_amount_minor ?? null, v.observedCurrency || v.observed_currency || null,
