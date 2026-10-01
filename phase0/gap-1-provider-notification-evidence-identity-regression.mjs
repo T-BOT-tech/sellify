@@ -38,6 +38,17 @@ const store = {
 
 const core = new PaymentCore({ store });
 
+await assert.rejects(
+  core.submitEvidence({
+    chatId: 'attacker-chat',
+    providerId: 'mpesa',
+    providerAccountReference: '600001',
+    providerTransactionId: 'TX-UNAUTH',
+    source: 'provider-notification',
+  }),
+  error => error?.code === 'PROVIDER_NOTIFICATION_NOT_AUTHENTICATED' && error?.statusCode === 401,
+);
+
 const result = await core.submitEvidence({
   chatId: 'attacker-chat',
   organizationId: 'attacker-org',
