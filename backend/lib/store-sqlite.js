@@ -2401,6 +2401,82 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(52, nowIso());
   }
 
+  if (!applied.includes(53)) {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS trg_payment_ledger_identity_insert
+      BEFORE INSERT ON payment_ledger_entries
+      BEGIN
+        SELECT CASE
+          WHEN NOT EXISTS (
+            SELECT 1 FROM payments p
+            WHERE p.id = NEW.payment_id
+              AND p.organization_id = NEW.organization_id
+          )
+          THEN RAISE(ABORT, 'payment ledger payment identity mismatch')
+        END;
+
+        SELECT CASE
+          WHEN NEW.amount_minor != (
+            SELECT p.amount_minor FROM payments p WHERE p.id = NEW.payment_id
+          )
+          THEN RAISE(ABORT, 'payment ledger amount mismatch')
+        END;
+
+        SELECT CASE
+          WHEN UPPER(NEW.currency) != UPPER((
+            SELECT p.currency FROM payments p WHERE p.id = NEW.payment_id
+          ))
+          THEN RAISE(ABORT, 'payment ledger currency mismatch')
+        END;
+
+        SELECT CASE
+          WHEN NEW.entry_type != CASE
+            WHEN NEW.to_state = 'CREATED' THEN 'CREATED'
+            ELSE NEW.to_state
+          END
+          THEN RAISE(ABORT, 'payment ledger entry type mismatch')
+        END;
+
+        SELECT CASE
+          WHEN NEW.to_state = 'CREATED' AND NEW.from_state IS NOT NULL
+          THEN RAISE(ABORT, 'created ledger entry must not have a from state')
+          WHEN NEW.to_state != 'CREATED' AND NEW.from_state != (
+            SELECT p.state FROM payments p WHERE p.id = NEW.payment_id
+          )
+          THEN RAISE(ABORT, 'payment ledger from state mismatch')
+        END;
+
+        SELECT CASE
+          WHEN NEW.to_state = 'CREATED' AND NEW.to_state != (
+            SELECT p.state FROM payments p WHERE p.id = NEW.payment_id
+          )
+          THEN RAISE(ABORT, 'created ledger state mismatch')
+          WHEN NEW.to_state = 'CLAIMED' AND NEW.from_state NOT IN ('UNPAID','MISMATCH')
+          THEN RAISE(ABORT, 'invalid payment ledger transition')
+          WHEN NEW.to_state = 'RECEIVED' AND NEW.from_state NOT IN ('UNPAID','CLAIMED','MISMATCH','PARTIAL')
+          THEN RAISE(ABORT, 'invalid payment ledger transition')
+          WHEN NEW.to_state = 'VERIFIED' AND NEW.from_state NOT IN ('CLAIMED','RECEIVED','PARTIAL','MISMATCH')
+          THEN RAISE(ABORT, 'invalid payment ledger transition')
+          WHEN NEW.to_state = 'RECONCILED' AND NEW.from_state != 'VERIFIED'
+          THEN RAISE(ABORT, 'invalid payment ledger transition')
+          WHEN NEW.to_state = 'REFUNDED' AND NEW.from_state NOT IN ('VERIFIED','RECONCILED')
+          THEN RAISE(ABORT, 'invalid payment ledger transition')
+          WHEN NEW.to_state = 'REJECTED' AND NEW.from_state NOT IN ('UNPAID','CLAIMED','RECEIVED','PARTIAL','MISMATCH')
+          THEN RAISE(ABORT, 'invalid payment ledger transition')
+          WHEN NEW.to_state = 'DUPLICATE' AND NEW.from_state != 'CLAIMED'
+          THEN RAISE(ABORT, 'invalid payment ledger transition')
+          WHEN NEW.to_state = 'MISMATCH' AND NEW.from_state NOT IN ('UNPAID','CLAIMED','RECEIVED','VERIFIED')
+          THEN RAISE(ABORT, 'invalid payment ledger transition')
+          WHEN NEW.to_state = 'EXPIRED' AND NEW.from_state NOT IN ('UNPAID','CLAIMED')
+          THEN RAISE(ABORT, 'invalid payment ledger transition')
+          WHEN NEW.to_state = 'PARTIAL' AND NEW.from_state NOT IN ('CLAIMED','RECEIVED')
+          THEN RAISE(ABORT, 'invalid payment ledger transition')
+        END;
+      END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(53, nowIso());
+  }
+
   // FUX-2 Section 6 — additive multi-role compatibility bridge.
   // memberships.role remains the legacy/default role authority while
   // membership_roles provides an additive path for multiple contextual roles.
@@ -5974,13 +6050,20 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       String(decision.decision || '').toUpperCase(), target, json(decision.reasonCodes || decision.reason_codes || []),
       json(decision.invariantResults || decision.invariant_results || {}), decision.decisionSource || 'PAYMENT_CORE', actor?.userId || null, now
     );
+    const ledgerEntryType = String(decision.entryType || target).toUpperCase();
+    if (ledgerEntryType !== target) {
+      throw Object.assign(new Error('Ledger entry type must match committed payment target state'), {
+        statusCode: 409,
+        code: 'PAYMENT_LEDGER_BINDING_CONFLICT',
+      });
+    }
+    db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+      crypto.randomUUID(), paymentId, organizationId, ledgerEntryType, Number(row.amount_minor), normaliseCurrency(row.currency, 'ETB'),
+      row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now
+    );
     const result = db.prepare("UPDATE payments SET state = ?, updated_at = ?, claimed_at = CASE WHEN ? = 'CLAIMED' THEN ? ELSE claimed_at END, received_at = CASE WHEN ? = 'RECEIVED' THEN ? ELSE received_at END, verified_at = CASE WHEN ? = 'VERIFIED' THEN ? ELSE verified_at END, reconciled_at = CASE WHEN ? = 'RECONCILED' THEN ? ELSE reconciled_at END WHERE id = ? AND organization_id = ?" + (expectedState ? " AND state = ?" : ""))
       .run(target, now, target, now, target, now, target, now, target, now, paymentId, organizationId, ...(expectedState ? [expectedState] : []));
     if (Number(result.changes || 0) !== 1) throw Object.assign(new Error('Payment state changed before commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
-    db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), paymentId, organizationId, String(decision.entryType || target), Number(row.amount_minor), normaliseCurrency(row.currency, 'ETB'),
-      row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now
-    );
     const marketplaceAllocation = db.prepare("SELECT a.*, so.id AS canonical_seller_order_id FROM marketplace_payment_allocations a JOIN marketplace_seller_orders so ON so.id = a.seller_order_id WHERE a.payment_id = ? LIMIT 1").get(paymentId);
     if (marketplaceAllocation) {
       if (target === 'REFUNDED') {
