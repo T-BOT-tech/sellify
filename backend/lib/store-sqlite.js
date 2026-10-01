@@ -6055,7 +6055,23 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
         db.prepare("UPDATE marketplace_settlements SET status = 'READY' WHERE seller_order_id = ? AND status = 'PENDING'").run(marketplaceAllocation.canonical_seller_order_id);
       }
     }
-    audit(String(chatId), 'payment.' + target.toLowerCase(), 'payment', paymentId, { fromState: row.state, toState: target, decision: decision.decision || null, reasonCodes: decision.reasonCodes || decision.reason_codes || [] }, { organizationId, locationId: row.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null, reason: decision.reason || '' });
+    audit(String(chatId), 'payment.' + target.toLowerCase(), 'payment', paymentId, {
+      fromState: row.state,
+      toState: target,
+      decision: decision.decision || null,
+      reasonCodes: decision.reasonCodes || decision.reason_codes || [],
+      evidenceId: input.verification?.evidenceId || input.verification?.evidence_id || decision.evidenceId || decision.evidence_id || null,
+      verificationId: decisionVerificationId,
+      decisionId,
+    }, {
+      organizationId,
+      locationId: row.location_id,
+      actorId: actor?.userId || null,
+      deviceId: actor?.deviceId || null,
+      reason: decision.reason || '',
+      lineageType: 'payment_decision',
+      lineageId: decisionId,
+    });
     db.exec('COMMIT');
     return paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId));
   } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
