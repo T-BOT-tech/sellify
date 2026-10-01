@@ -5754,10 +5754,20 @@ export async function insertPaymentDecision(chatId, input = {}, actor = null) {
   if (!paymentId) throw Object.assign(new Error('paymentId is required'), { statusCode: 400, code: 'PAYMENT_REQUIRED' });
   const payment = db.prepare('SELECT id FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
   if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+  const decisionIntentId = String(input.paymentIntentId || input.payment_intent_id || '').trim() || null;
+  const decisionEvidenceId = String(input.evidenceId || input.evidence_id || '').trim() || null;
+  const decisionVerificationId = String(input.verificationId || input.verification_id || '').trim() || null;
+  if (decisionVerificationId) {
+    const verification = db.prepare('SELECT payment_id, payment_intent_id, evidence_id, provider_id FROM payment_verifications WHERE id = ? AND organization_id = ?').get(decisionVerificationId, organizationId);
+    if (!verification) throw Object.assign(new Error('Decision verification not found'), { statusCode: 409, code: 'DECISION_VERIFICATION_NOT_FOUND' });
+    if (String(verification.payment_id || '') !== paymentId || String(verification.payment_intent_id || '') !== decisionIntentId || (decisionEvidenceId && String(verification.evidence_id || '') !== decisionEvidenceId)) {
+      throw Object.assign(new Error('Decision verification context does not match decision'), { statusCode: 409, code: 'DECISION_VERIFICATION_CONTEXT_MISMATCH' });
+    }
+  }
   const id = String(input.id || crypto.randomUUID()); const now = nowIso();
   db.prepare("INSERT INTO payment_decisions (id, organization_id, payment_id, payment_intent_id, evidence_id, verification_id, decision, target_state, reason_codes_json, invariant_results_json, decision_source, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-    id, organizationId, paymentId, input.paymentIntentId || input.payment_intent_id || null, input.evidenceId || input.evidence_id || null,
-    input.verificationId || input.verification_id || null, String(input.decision || '').toUpperCase(), input.targetState || input.target_state || null,
+    id, organizationId, paymentId, decisionIntentId, decisionEvidenceId,
+    decisionVerificationId, String(input.decision || '').toUpperCase(), input.targetState || input.target_state || null,
     json(input.reasonCodes || input.reason_codes || []), json(input.invariantResults || input.invariant_results || {}),
     String(input.decisionSource || input.decision_source || 'PAYMENT_CORE'), actor?.userId || null, now
   );
