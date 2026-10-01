@@ -2124,6 +2124,15 @@ function runMigrations() {
   }
 
 
+  // GAP-1.18I — provider verification persistence idempotency.
+  if (!applied.includes(54)) {
+    db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_verifications_evidence_verifier
+        ON payment_verifications(evidence_id, verifier, verifier_version);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(54, nowIso());
+  }
+
   // GAP-1.1 — payment intent/evidence/verification/decision foundation.
   if (!applied.includes(45)) {
     db.exec(\`
