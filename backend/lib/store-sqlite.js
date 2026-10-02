@@ -2659,6 +2659,17 @@ function runMigrations() {
         END;
       END;
     `);
+      CREATE TRIGGER IF NOT EXISTS trg_payment_reconciliation_lineage_immutable
+      BEFORE UPDATE ON payment_reconciliations
+      FOR EACH ROW
+      WHEN NEW.organization_id IS NOT OLD.organization_id
+        OR NEW.payment_id IS NOT OLD.payment_id
+        OR NEW.payment_evidence_id IS NOT OLD.payment_evidence_id
+        OR NEW.payment_verification_id IS NOT OLD.payment_verification_id
+        OR NEW.payment_decision_id IS NOT OLD.payment_decision_id
+      BEGIN
+        SELECT RAISE(ABORT, 'PAYMENT_RECONCILIATION_LINEAGE_IMMUTABLE');
+      END;
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(68, nowIso());
   }
 
