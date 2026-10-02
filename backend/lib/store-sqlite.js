@@ -2545,6 +2545,27 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(63, nowIso());
   }
 
+  // GAP-1.18V — authoritative ledger lineage binding.
+  // Any ledger entry created by the authoritative payment-decision path must
+  // carry the complete Decision -> Verification -> Evidence chain explicitly.
+  // Legacy/non-authoritative ledger entries remain nullable for compatibility.
+  if (!applied.includes(64)) {
+    db.exec(`
+      ALTER TABLE payment_ledger_entries ADD COLUMN payment_verification_id TEXT REFERENCES payment_verifications(id) ON DELETE SET NULL;
+      ALTER TABLE payment_ledger_entries ADD COLUMN payment_evidence_id TEXT REFERENCES payment_evidence(id) ON DELETE SET NULL;
+      UPDATE payment_ledger_entries SET payment_verification_id = (SELECT d.verification_id FROM payment_decisions d WHERE d.id = payment_ledger_entries.payment_decision_id AND d.organization_id = payment_ledger_entries.organization_id), payment_evidence_id = (SELECT d.evidence_id FROM payment_decisions d WHERE d.id = payment_ledger_entries.payment_decision_id AND d.organization_id = payment_ledger_entries.organization_id) WHERE payment_decision_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_payment_ledger_lineage ON payment_ledger_entries(organization_id, payment_evidence_id, payment_verification_id, payment_decision_id, created_at DESC);
+      CREATE TRIGGER IF NOT EXISTS trg_payment_ledger_authoritative_lineage BEFORE INSERT ON payment_ledger_entries FOR EACH ROW WHEN NEW.payment_decision_id IS NOT NULL BEGIN
+        SELECT CASE
+          WHEN NEW.payment_verification_id IS NULL OR NEW.payment_evidence_id IS NULL THEN RAISE(ABORT, 'PAYMENT_LEDGER_LINEAGE_INCOMPLETE')
+          WHEN NOT EXISTS (SELECT 1 FROM payment_decisions d WHERE d.id = NEW.payment_decision_id AND d.organization_id = NEW.organization_id AND d.payment_id = NEW.payment_id AND d.verification_id = NEW.payment_verification_id AND d.evidence_id = NEW.payment_evidence_id) THEN RAISE(ABORT, 'PAYMENT_LEDGER_DECISION_LINEAGE_INVALID')
+          WHEN NOT EXISTS (SELECT 1 FROM payment_verifications v WHERE v.id = NEW.payment_verification_id AND v.organization_id = NEW.organization_id AND v.payment_id = NEW.payment_id AND v.evidence_id = NEW.payment_evidence_id) THEN RAISE(ABORT, 'PAYMENT_LEDGER_VERIFICATION_LINEAGE_INVALID')
+          WHEN NOT EXISTS (SELECT 1 FROM payment_evidence e WHERE e.id = NEW.payment_evidence_id AND e.organization_id = NEW.organization_id AND e.payment_id = NEW.payment_id) THEN RAISE(ABORT, 'PAYMENT_LEDGER_EVIDENCE_LINEAGE_INVALID')
+        END;
+      END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(64, nowIso());
+  }
   // GAP-1.18T — audit tamper evidence.
   if (!applied.includes(62)) {
     const rows = db.prepare('SELECT * FROM audit_events ORDER BY id').all();
@@ -6379,9 +6400,9 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       if (!currentPayment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
       return paymentFromRow(currentPayment);
     }
-    db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at, payment_decision_id, transition_fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+    db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at, payment_decision_id, payment_verification_id, payment_evidence_id, transition_fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
       paymentTransitionId, paymentId, organizationId, String(decision.entryType || target), Number(row.amount_minor), normaliseCurrency(row.currency, 'ETB'),
-      row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now, decisionId, transitionFingerprint
+      row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now, decisionId, decisionVerificationId, decisionEvidenceId, transitionFingerprint
     );
     const marketplaceAllocation = db.prepare("SELECT a.*, so.id AS canonical_seller_order_id FROM marketplace_payment_allocations a JOIN marketplace_seller_orders so ON so.id = a.seller_order_id WHERE a.payment_id = ? LIMIT 1").get(paymentId);
     if (marketplaceAllocation) {
