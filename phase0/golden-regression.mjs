@@ -181,7 +181,7 @@ try {
     let r=await request('POST','/admin/backup'); assert.equal(r.response.status,401);
     r=await request('POST','/admin/backup',undefined,{Authorization:'Bearer phase0-test-backup-token'}); assert.equal(r.response.status,201); assert.ok(r.json.file);
     const backupPath=path.join(dataDir,'backups',r.json.file); backupPathForRestore=backupPath; const info=await stat(backupPath); assert.ok(info.size>0);
-    const db=new DatabaseSync(backupPath); const migrations=db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(x=>x.version); assert.deepEqual(migrations,[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44]); const tenantCount=db.prepare('SELECT COUNT(*) AS c FROM tenants').get().c; assert.ok(tenantCount>=2); db.close();
+    const db=new DatabaseSync(backupPath); const migrations=db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(x=>x.version); assert.deepEqual(migrations,Array.from({ length: 57 }, (_, index) => index + 1)); const tenantCount=db.prepare('SELECT COUNT(*) AS c FROM tenants').get().c; assert.ok(tenantCount>=2); db.close();
   });
   await test('backup restore opens and preserves core rows', async () => {
     assert.ok(backupPathForRestore);
@@ -192,7 +192,7 @@ try {
     await writeFile(restorePath, bytes);
     const restored = new DatabaseSync(restorePath);
     const migrations=restored.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(x=>x.version);
-    assert.deepEqual(migrations,[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44]);
+    assert.deepEqual(migrations,Array.from({ length: 57 }, (_, index) => index + 1));
     assert.ok(restored.prepare('SELECT COUNT(*) AS c FROM tenants').get().c >= 2);
     assert.ok(restored.prepare('SELECT COUNT(*) AS c FROM orders').get().c >= 1);
     restored.close();
@@ -201,7 +201,7 @@ try {
   await test('migration idempotency on second process start', async () => {
     child.kill('SIGTERM'); await new Promise(resolve=>child.once('exit',resolve));
     const second=spawn(process.execPath,[path.join(backend,'server.js')],{cwd:root,env,stdio:['ignore','ignore','pipe']});
-    try { await waitForHealth(second); const db=new DatabaseSync(path.join(dataDir,'sellify.sqlite')); const migrations=db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(x=>x.version); assert.deepEqual(migrations,[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44]); db.close(); } finally { second.kill('SIGTERM'); await new Promise(resolve=>second.once('exit',resolve)); }
+    try { await waitForHealth(second); const db=new DatabaseSync(path.join(dataDir,'sellify.sqlite')); const migrations=db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(x=>x.version); assert.deepEqual(migrations,Array.from({ length: 57 }, (_, index) => index + 1)); db.close(); } finally { second.kill('SIGTERM'); await new Promise(resolve=>second.once('exit',resolve)); }
   });
   console.log(`\nPhase 0 Golden Regression: ${results.filter(x=>x[0]==='PASS').length} PASS, 0 FAIL`);
   for (const [status,name] of results) console.log(`${status}  ${name}`);
