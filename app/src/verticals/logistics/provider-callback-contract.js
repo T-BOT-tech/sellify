@@ -5,7 +5,9 @@
 // authenticate secrets, persist callbacks, or mutate Logistics/Fulfillment.
 // Deployment transport/authentication remains outside this contract.
 
-const VERSION = '1.0';
+const VERSION = '1.1';
+
+import { normalizeLogisticsProviderExecutionResult } from './provider-execution-result-contract.js';
 const RESULT_STATUSES = new Set([
   'accepted', 'in_progress', 'tracking_update', 'proof',
   'delivered', 'failed', 'returned',
@@ -70,10 +72,24 @@ export function normalizeLogisticsProviderCallback({
   });
 }
 
+export function toLogisticsProviderExecutionResult(callback) {
+  const normalized = normalizeLogisticsProviderCallback(callback);
+  return normalizeLogisticsProviderExecutionResult({
+    provider_id: normalized.provider_id,
+    operation: normalized.operation,
+    result_status: normalized.result_status,
+    callback_id: normalized.callback_id,
+    tracking: normalized.tracking,
+    proof: normalized.proof,
+    error: normalized.raw_metadata?.error ?? null,
+  });
+}
+
 export function logisticsProviderCallbackContract() {
   return Object.freeze({
     version: VERSION,
     phase: '16.13.18',
+    result_projection: 'app/src/verticals/logistics/provider-execution-result-contract.js',
     purpose: 'normalize authenticated inbound provider callbacks into the existing execution result boundary',
     authentication: 'deployment_supplied_existing_authorization_boundary',
     transport: 'deployment_supplied',
