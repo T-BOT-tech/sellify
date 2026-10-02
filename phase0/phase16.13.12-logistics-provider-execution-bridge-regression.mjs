@@ -75,7 +75,7 @@ assert.equal(duplicate.reliability.apply, false);
 assert.equal(duplicate.canonical_result, null);
 assert.equal(duplicate.canonical_application, null);
 
-assert.rejects(() => executeLogisticsProviderExecutionBridge({
+await assert.rejects(() => executeLogisticsProviderExecutionBridge({
   handoff: { ...handoff, selected_provider_id: 'other-provider' },
   invokeProvider() {
     return { provider_id: 'provider-bridge', operation: 'delivery', result_status: 'delivered', callback_id: 'cb-mismatch' };
