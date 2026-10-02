@@ -2566,6 +2566,26 @@ function runMigrations() {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(64, nowIso());
   }
+  // GAP-1.18V compatibility refinement — only authoritative target states
+  // require explicit Decision -> Verification -> Evidence ledger lineage.
+  if (!applied.includes(65)) {
+    db.exec(`
+      DROP TRIGGER IF EXISTS trg_payment_ledger_authoritative_lineage;
+      CREATE TRIGGER trg_payment_ledger_authoritative_lineage
+      BEFORE INSERT ON payment_ledger_entries
+      FOR EACH ROW
+      WHEN NEW.payment_decision_id IS NOT NULL AND NEW.to_state IN ('VERIFIED', 'RECONCILED')
+      BEGIN
+        SELECT CASE
+          WHEN NEW.payment_verification_id IS NULL OR NEW.payment_evidence_id IS NULL THEN RAISE(ABORT, 'PAYMENT_LEDGER_LINEAGE_INCOMPLETE')
+          WHEN NOT EXISTS (SELECT 1 FROM payment_decisions d WHERE d.id = NEW.payment_decision_id AND d.organization_id = NEW.organization_id AND d.payment_id = NEW.payment_id AND d.verification_id = NEW.payment_verification_id AND d.evidence_id = NEW.payment_evidence_id) THEN RAISE(ABORT, 'PAYMENT_LEDGER_DECISION_LINEAGE_INVALID')
+          WHEN NOT EXISTS (SELECT 1 FROM payment_verifications v WHERE v.id = NEW.payment_verification_id AND v.organization_id = NEW.organization_id AND v.payment_id = NEW.payment_id AND v.evidence_id = NEW.payment_evidence_id) THEN RAISE(ABORT, 'PAYMENT_LEDGER_VERIFICATION_LINEAGE_INVALID')
+          WHEN NOT EXISTS (SELECT 1 FROM payment_evidence e WHERE e.id = NEW.payment_evidence_id AND e.organization_id = NEW.organization_id AND e.payment_id = NEW.payment_id) THEN RAISE(ABORT, 'PAYMENT_LEDGER_EVIDENCE_LINEAGE_INVALID')
+        END;
+      END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(65, nowIso());
+  }
   // GAP-1.18T — audit tamper evidence.
   if (!applied.includes(62)) {
     const rows = db.prepare('SELECT * FROM audit_events ORDER BY id').all();
