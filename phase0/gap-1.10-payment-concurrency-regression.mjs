@@ -88,11 +88,11 @@ test('GAP-1.10 durable idempotency: concurrent duplicate CREATE_PAYMENT requests
     assert.equal(intentIds.size, 1, `concurrency=${count} created multiple intents`);
     assert.equal(
       results.filter(result => result.idempotent === false).length,
-      count === 1 ? 1 : 0,
+      1,
     );
     assert.equal(
       results.filter(result => result.idempotent === true).length,
-      count === 1 ? 0 : count,
+      count - 1,
     );
 
     createdPayments.push({ base, paymentId: [...paymentIds][0] });
