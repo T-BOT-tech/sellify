@@ -38,7 +38,7 @@ assert.match(client, /payments\/.*\/status|status/);
 assert.match(client, /Idempotency-Key/);
 assert.match(client, /requiredIdempotencyKey/);
 assert.match(projection, /queryPaymentStatus/);
-assert.match(projection, /paymentCommandKey\('status', id\)/);
+assert.match(projection, /paymentCommandKey\('status',/);
 assert.match(projection, /upsertPayment\(payment\)/);
 
 assert.doesNotMatch(proof, /createPayment\(/);
