@@ -262,6 +262,7 @@ export class PaymentCore {
       paymentId,
       expectedState: payment.state,
       targetState: target,
+      idempotencyKey: String(command.idempotencyKey || command.idempotency_key || '').trim(),
       decision: {
         decision: target === 'REVERSED' ? 'REVERSE' : target === 'CANCELLED' ? 'CANCEL' : target === 'FAILED' ? 'FAIL' : target === 'EXPIRED' ? 'EXPIRE' : 'LATE_SUCCESS',
         targetState: target,
