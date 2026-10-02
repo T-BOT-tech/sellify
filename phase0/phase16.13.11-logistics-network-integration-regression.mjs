@@ -3,6 +3,14 @@ import {
   defineLogisticsNetworkIntegration,
   logisticsNetworkIntegrationContract,
 } from '../app/src/verticals/logistics/network-integration-contract.js';
+import { registerPlatformAdapter } from '../app/src/platform/adapter-framework.js';
+
+registerPlatformAdapter({
+  id: 'carrier-a-v1',
+  capability: 'logistics.operations',
+  provider: 'carrier-a',
+  operations: ['pickup', 'delivery', 'tracking'],
+}, { replace: true });
 
 const integration = defineLogisticsNetworkIntegration({
   id: 'logistics-carrier-a',
