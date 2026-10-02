@@ -501,6 +501,7 @@ export class PaymentCore {
       paymentId,
       expectedState: payment.state,
       targetState: decision.targetState,
+      idempotencyKey: String(command.idempotencyKey || command.idempotency_key || '').trim(),
       verification: {
         paymentIntentId: intent.id,
         evidenceId: evidence.id,
