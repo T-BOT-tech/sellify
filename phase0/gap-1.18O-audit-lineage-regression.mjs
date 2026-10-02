@@ -179,3 +179,21 @@ assert.match(source, /trg_payment_settlement_tenant_boundary/);
 assert.match(source, /PAYMENT_SETTLEMENT_ORGANIZATION_MISMATCH/);
 assert.match(source, /payment_id = \? AND organization_id = \?/);
 console.log('GAP-1.18Y cross-tenant isolation regression passed');
+
+
+assert.match(source, /GAP-1\.18Z — concurrency\/race hardening/);
+assert.match(source, /if \(!applied\.includes\(70\)\)/);
+assert.match(source, /PAYMENT_VERIFICATION_IDENTITY_DUPLICATES_EXIST/);
+assert.match(source, /uq_payment_verifications_identity/);
+assert.match(source, /uq_payment_reconciliations_fingerprint/);
+assert.match(source, /idx_payment_reconciliations_payment_fingerprint/);
+assert.match(source, /UNIQUE constraint failed: payment_verifications\.organization_id, payment_verifications\.evidence_id, payment_verifications\.verifier, payment_verifications\.verifier_version/);
+assert.match(source, /GAP-1\.18Z: serialize refundable-balance check and refund reservation/);
+assert.match(source, /BEGIN IMMEDIATE/);
+assert.match(source, /status IN \('REQUESTED','PROCESSING','SUCCEEDED'\)/);
+assert.match(source, /db\.exec\('COMMIT'\)/);
+assert.match(source, /db\.exec\('ROLLBACK'\)/);
+assert.match(source, /GAP-1\.18Z: reconciliation finding creation is serialized and idempotent/);
+assert.match(source, /reconciliationFingerprint = crypto\.createHash\('sha256'/);
+assert.match(source, /WHERE organization_id = \? AND fingerprint = \?/);
+console.log('GAP-1.18Z concurrency/race regression passed');
