@@ -336,7 +336,8 @@
     "test:gap-2-production-readiness": "node phase0/gap-2-production-readiness-regression.mjs",
     "test:pf-1-final-certification": "node phase0/gap-pf-1J-final-certification.mjs",
     "test:pf-1k-frontend-payment-lifecycle": "node phase0/gap-pf-1K-frontend-payment-lifecycle.mjs",
-    "test:phase13.10.17": "node phase0/phase13.10.17-logistics-pack-productization-regression.mjs"
+    "test:phase13.10.17": "node phase0/phase13.10.17-logistics-pack-productization-regression.mjs",
+    "test:phase13.10.18": "node phase0/phase13.10.18-logistics-workspace-composition-regression.mjs"
   },
   "engines": {
     "node": ">=24"
