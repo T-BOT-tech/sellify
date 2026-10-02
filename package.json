@@ -347,7 +347,8 @@
     "test:phase16.13.11": "node phase0/phase16.13.11-logistics-network-integration-regression.mjs",
     "test:phase16.13.12": "node phase0/phase16.13.12-logistics-provider-execution-bridge-regression.mjs",
     "test:phase16.13.13": "node phase0/phase16.13.13-logistics-provider-canonical-application-regression.mjs",
-    "test:phase16.13.14": "node phase0/phase16.13.14-logistics-provider-execution-service-regression.mjs"
+    "test:phase16.13.14": "node phase0/phase16.13.14-logistics-provider-execution-service-regression.mjs",
+    "test:phase16.13.15": "node phase0/phase16.13.15-logistics-provider-execution-runtime-regression.mjs"
   },
   "engines": {
     "node": ">=24"
