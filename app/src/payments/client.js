@@ -32,7 +32,7 @@ export async function createPayment(body, { idempotencyKey } = {}) {
   return normalizePaymentResponse(data);
 }
 export async function transitionPayment(paymentId, body, { idempotencyKey } = {}) {
-  const headers = idempotencyKey ? { 'Idempotency-Key': String(idempotencyKey) } : {};
+  const headers = { 'Idempotency-Key': requiredIdempotencyKey(idempotencyKey) };
   const data = await request(buildPaymentPath(config.chatId, '/' + encodeURIComponent(paymentId)), { method: 'PATCH', headers, body: JSON.stringify(normalizePaymentMutation(body)) });
   return normalizePaymentResponse(data);
 }
