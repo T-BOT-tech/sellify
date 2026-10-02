@@ -159,8 +159,7 @@ await pass('forbidden provider selection execution fields fail closed', () => {
     deliveryMode: 'delivery',
     providerCandidates: [{
       provider_id: 'carrier-et-ke',
-      execute: true,
-      evidence: verifiedCarrier.evidence,
+      evidence: { ...verifiedCarrier.evidence, credentials: 'forbidden' },
     }],
     selectedProviderId: 'carrier-et-ke',
   }), /selection cannot contain|not a verified feasible candidate/);
