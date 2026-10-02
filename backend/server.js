@@ -1845,8 +1845,16 @@ async function handlePayments(req, res, chatId, paymentId = null) {
   if (req.method === 'POST') {
     await requireAuthorization(session, tenant, 'payments', 'payments:accept', { deniedMessage: 'Payment acceptance permission required' });
     const body = await readBody(req);
-    const payment = await createPayment(chatId, body, session);
-    return sendJSON(res, 201, { payment }, req);
+    const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
+    if (!idempotencyKey) return sendJSON(res, 400, { error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' } }, req);
+    const result = await paymentCore.createPayment({
+      ...body,
+      idempotencyKey,
+      chatId,
+      organizationId: tenant.organizationId,
+      actor: session,
+    });
+    return sendJSON(res, 201, result, req);
   }
   if (req.method === 'PATCH' && paymentId) {
     const body = await readBody(req);
