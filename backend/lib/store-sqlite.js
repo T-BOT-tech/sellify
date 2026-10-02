@@ -7104,9 +7104,31 @@ export async function getDeliveryAssignment(chatId, serverOrderId, actor = null)
 }
 
 export async function assertCourierOwnsDelivery(chatId, serverOrderId, actor) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  const actorUserId = String(actor?.userId || '').trim();
+  if (!tenant?.organization_id || !actorUserId) {
+    throw Object.assign(new Error('Courier identity is required'), { statusCode: 403, code: 'COURIER_IDENTITY_REQUIRED' });
+  }
+  const membership = db.prepare(`
+    SELECT m.user_id, mr.scope_type, mr.scope_id
+    FROM memberships m
+    JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
+    WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
+      AND mr.role_id = 'logistics_courier'
+  `).get(actorUserId, String(chatId));
+  if (!membership) {
+    throw Object.assign(new Error('Active logistics courier role is required'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
+  }
   const assignment = await getDeliveryAssignment(chatId, serverOrderId, actor);
-  if (!assignment || String(assignment.courier_user_id) !== String(actor?.userId || '')) {
+  if (!assignment || String(assignment.courier_user_id) !== actorUserId) {
     throw Object.assign(new Error('Courier is not assigned to this delivery'), { statusCode: 403, code: 'COURIER_ASSIGNMENT_REQUIRED' });
+  }
+  if (membership.scope_type === 'LOCATION' && String(membership.scope_id || '') !== String(assignment.location_id || '')) {
+    throw Object.assign(new Error('Courier role is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
+  }
+  if (String(assignment.organization_id) !== String(tenant.organization_id)) {
+    throw Object.assign(new Error('Courier assignment organization mismatch'), { statusCode: 403, code: 'COURIER_ORGANIZATION_DENIED' });
   }
   if (['CANCELLED','FAILED','REASSIGNED'].includes(String(assignment.status))) {
     throw Object.assign(new Error('Courier assignment is no longer active'), { statusCode: 403, code: 'COURIER_ASSIGNMENT_INACTIVE' });
