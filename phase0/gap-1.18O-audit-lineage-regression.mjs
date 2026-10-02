@@ -88,3 +88,14 @@ assert.match(source, /idx_audit_chain/);
 assert.match(source, /export function verifyAuditIntegrity/);
 assert.match(source, /PREVIOUS_HASH_MISMATCH/);
 assert.match(source, /EVENT_HASH_MISMATCH/);
+
+assert.match(source, /GAP-1\.18U — financial transition idempotency/);
+assert.match(source, /if \(!applied\.includes\(63\)\)/);
+assert.match(source, /payment_decision_id TEXT REFERENCES payment_decisions/);
+assert.match(source, /transition_fingerprint TEXT/);
+assert.match(source, /uq_payment_ledger_decision/);
+assert.match(source, /uq_payment_ledger_transition_fingerprint/);
+assert.match(source, /idx_payment_ledger_decision/);
+assert.match(source, /existingTransition = db\.prepare/);
+assert.match(source, /existingTransitionByFingerprint = db\.prepare/);
+assert.match(source, /const transitionFingerprint = crypto\.createHash\('sha256'/);
