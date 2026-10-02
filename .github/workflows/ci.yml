@@ -155,3 +155,5 @@ jobs:
         run: npm run test:gap-2-route-dispatch-scope
       - name: GAP-2.9 cross-feature consistency regression
         run: npm run test:gap-2-cross-feature-consistency
+      - name: GAP-2.10 adversarial delivery regression
+        run: npm run test:gap-2-adversarial-delivery
