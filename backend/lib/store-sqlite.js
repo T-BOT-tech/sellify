@@ -5687,8 +5687,19 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
   if (!intent) throw Object.assign(new Error('Payment intent not found'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND' });
   const paymentId = input.paymentId || input.payment_id || null;
   if (paymentId) {
-    const payment = db.prepare('SELECT id FROM payments WHERE id = ? AND organization_id = ?').get(String(paymentId), organizationId);
+    const payment = db.prepare('SELECT id, payment_intent_id, provider_id FROM payments WHERE id = ? AND organization_id = ?')
+      .get(String(paymentId), organizationId);
     if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    if (String(payment.payment_intent_id || '') !== intentId) {
+      throw Object.assign(new Error('Evidence payment does not match payment intent'), {
+        statusCode: 409, code: 'EVIDENCE_INTENT_PAYMENT_MISMATCH',
+      });
+    }
+    if (String(payment.provider_id || '').toLowerCase() !== String(intent.provider_id || '').toLowerCase()) {
+      throw Object.assign(new Error('Evidence provider does not match payment'), {
+        statusCode: 409, code: 'EVIDENCE_PROVIDER_PAYMENT_MISMATCH',
+      });
+    }
   }
   const providerId = String(input.providerId || input.provider_id || intent.provider_id).trim().toLowerCase();
   if (providerId !== String(intent.provider_id)) throw Object.assign(new Error('Evidence provider does not match payment intent provider'), { statusCode: 409, code: 'PROVIDER_MISMATCH' });
@@ -5943,6 +5954,11 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
   if (!PAYMENT_STATES.has(target)) throw Object.assign(new Error('Invalid payment target state'), { statusCode: 400, code: 'INVALID_PAYMENT_STATE' });
   const expectedState = String(input.expectedState || input.expected_state || '').toUpperCase();
   const idempotencyKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  if (['VERIFIED', 'RECONCILED'].includes(target) && !idempotencyKey) {
+    throw Object.assign(new Error('Financial payment decisions require an idempotency key'), {
+      statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED',
+    });
+  }
   const requestHash = crypto.createHash('sha256').update(JSON.stringify({ paymentId, target, expectedState, reason: String(input.decision?.reason || input.reason || ''), decision: input.decision || {} })).digest('hex');
   const now = nowIso();
   db.exec('BEGIN IMMEDIATE');
@@ -6081,6 +6097,31 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       );
     }
     const decision = input.decision || {};
+    const decisionSource = String(decision.decisionSource || decision.decision_source || '').trim().toUpperCase();
+    const decisionName = String(decision.decision || '').trim().toUpperCase();
+    const invariantResults = decision.invariantResults || decision.invariant_results || {};
+    if (decisionSource !== 'PAYMENT_CORE') {
+      throw Object.assign(new Error('Financial payment decisions must originate from Payment Core'), {
+        statusCode: 409, code: 'UNTRUSTED_PAYMENT_DECISION_SOURCE',
+      });
+    }
+    if (['VERIFIED', 'RECONCILED'].includes(target)) {
+      if (decisionName !== 'ACCEPT') {
+        throw Object.assign(new Error('Financial acceptance requires an ACCEPT decision'), {
+          statusCode: 409, code: 'INVALID_FINANCIAL_DECISION',
+        });
+      }
+      if (invariantResults?.passed !== true) {
+        throw Object.assign(new Error('Financial acceptance requires a passed invariant gate'), {
+          statusCode: 409, code: 'INVARIANT_GATE_REQUIRED',
+        });
+      }
+      if (String(input.verification?.result || '').toUpperCase() !== 'MATCH') {
+        throw Object.assign(new Error('Financial acceptance requires MATCH verification'), {
+          statusCode: 409, code: 'VERIFICATION_MATCH_REQUIRED',
+        });
+      }
+    }
     const decisionVerificationId = String(decision.verificationId || decision.verification_id || (input.verification ? (db.prepare('SELECT id FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND verifier_version = ?').get(
       String(input.verification.evidenceId || input.verification.evidence_id), verifier, verifierVersion
     )?.id || '') : '')).trim() || null;
@@ -6104,7 +6145,7 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       crypto.randomUUID(), paymentId, organizationId, String(decision.entryType || target), Number(row.amount_minor), normaliseCurrency(row.currency, 'ETB'),
       row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now
     );
-    const marketplaceAllocation = db.prepare("SELECT a.*, so.id AS canonical_seller_order_id FROM marketplace_payment_allocations a JOIN marketplace_seller_orders so ON so.id = a.seller_order_id WHERE a.payment_id = ? LIMIT 1").get(paymentId);
+    const marketplaceAllocation = db.prepare("SELECT a.*, so.id AS canonical_seller_order_id FROM marketplace_payment_allocations a JOIN marketplace_seller_orders so ON so.id = a.seller_order_id WHERE a.payment_id = ? AND a.organization_id = ? LIMIT 1").get(paymentId, organizationId);
     if (marketplaceAllocation) {
       if (target === 'REFUNDED') {
         db.prepare("UPDATE marketplace_payment_allocations SET status = 'REFUNDED', updated_at = ? WHERE id = ?").run(now, marketplaceAllocation.id);
@@ -6788,7 +6829,7 @@ export async function listPaymentLedger(chatId, paymentId) {
   ensureDatabase();
   const payment = await getPayment(chatId, paymentId);
   if (!payment) return null;
-  return db.prepare('SELECT * FROM payment_ledger_entries WHERE payment_id = ? ORDER BY rowid ASC').all(String(paymentId)).map(row => ({
+  return db.prepare('SELECT * FROM payment_ledger_entries WHERE payment_id = ? AND organization_id = ? ORDER BY rowid ASC').all(String(paymentId), payment.organizationId).map(row => ({
     id: row.id, paymentId: row.payment_id, entryType: row.entry_type, amountMinor: Number(row.amount_minor), currency: normaliseCurrency(row.currency, 'ETB'),
     fromState: row.from_state, toState: row.to_state, actorId: row.actor_id, reason: row.reason || '', metadata: parseJSON(row.metadata_json, {}), createdAt: row.created_at,
   }));
@@ -6844,8 +6885,8 @@ export async function listPaymentReconciliations(chatId, paymentId, options = {}
   const payment = await getPayment(chatId, paymentId);
   if (!payment) return null;
   const limit = Math.min(Math.max(Number(options.limit || 100), 1), 500);
-  return db.prepare('SELECT * FROM payment_reconciliations WHERE payment_id = ? ORDER BY created_at DESC LIMIT ?')
-    .all(payment.id, limit);
+  return db.prepare('SELECT * FROM payment_reconciliations WHERE payment_id = ? AND organization_id = ? ORDER BY created_at DESC LIMIT ?')
+    .all(payment.id, payment.organizationId, limit);
 }
 
 export async function reconcilePayment(chatId, paymentId, input = {}, actor = null) {
@@ -6883,10 +6924,8 @@ function ensureCanonicalPaymentForOrder(chatId, order, serverOrderId, actor = nu
   if (existing) return existing.id;
 
   // PF-1B: order synchronization establishes identity/linkage only.
-  // Local payment proof, cash tendered, or legacy payment fields are
-  // operational evidence/claims and MUST NOT select a financial state.
-  // PaymentCore verification/decision is the only authority allowed to
-  // advance the canonical payment into CLAIMED/RECEIVED/VERIFIED/etc.
+  // Local proof, cash tendered, or legacy payment fields are not financial
+  // authorization. PaymentCore owns verification and financial decisions.
   const now = nowIso();
   const id = crypto.randomUUID();
   const amountMinor = Math.max(0, Number(order.total || 0));
@@ -6913,11 +6952,9 @@ function ensureCanonicalPaymentForOrder(chatId, order, serverOrderId, actor = nu
     actor?.userId || null, now, now
   );
 
-  // Deliberately no payment_ledger_entries INSERT here. Creating the
-  // canonical payment shell is not a financial transition.
+  // Creating the canonical shell is not a financial transition.
   return id;
 }
-
 
 const CORE_FULFILLMENT_TRANSITIONS = Object.freeze({
   delivery: Object.freeze({
