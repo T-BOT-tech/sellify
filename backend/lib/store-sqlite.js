@@ -7256,7 +7256,17 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
   };
   if (!transitions[current]?.has(normalizedAction)) throw Object.assign(new Error('Cannot move assignment from ' + current + ' to ' + normalizedAction), { statusCode: 409, code: 'INVALID_ASSIGNMENT_TRANSITION' });
   if (['CANCELLED','FAILED'].includes(normalizedAction) && !exceptionReason) throw Object.assign(new Error('A reason is required when cancelling or failing a delivery assignment'), { statusCode: 400, code: 'EXCEPTION_REASON_REQUIRED' });
-  if (normalizedAction === 'DELIVERED' && (input.proof == null || (typeof input.proof === 'string' && !input.proof.trim()))) throw Object.assign(new Error('Delivery proof is required before delivery completion'), { statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED' });
+  const proofInput = input.proof;
+  if (normalizedAction === 'DELIVERED' && (proofInput == null || (typeof proofInput === 'string' && !proofInput.trim()))) {
+    throw Object.assign(new Error('Delivery proof is required before delivery completion'), { statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED' });
+  }
+  if (normalizedAction === 'DELIVERED' && typeof proofInput === 'object' && !Array.isArray(proofInput)) {
+    const proofType = String(proofInput.type || proofInput.kind || '').trim().toLowerCase();
+    const proofReference = String(proofInput.reference || proofInput.referenceId || proofInput.reference_id || '').trim();
+    if (!proofType || !proofReference) {
+      throw Object.assign(new Error('Delivery proof type and reference are required'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
+    }
+  }
 
   if (normalizedAction === 'REASSIGNED') {
     if (!targetCourierId || targetCourierId === String(active.courier_user_id)) throw Object.assign(new Error('A different courier is required for reassignment'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
@@ -7271,6 +7281,12 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     const fulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ? AND organization_id = ?').get(active.fulfillment_id, organizationId);
     if (!fulfillment) throw Object.assign(new Error('Fulfillment not found'), { statusCode: 404, code: 'FULFILLMENT_NOT_FOUND' });
     const fulfillmentTarget = normalizedAction === 'OUT_FOR_DELIVERY' ? 'out_for_delivery' : normalizedAction === 'DELIVERED' ? 'delivered' : null;
+    if (normalizedAction === 'DELIVERED') {
+      const existingProof = fulfillment.proof_json ? (() => { try { return JSON.parse(fulfillment.proof_json); } catch { return fulfillment.proof_json; } })() : null;
+      if (existingProof && JSON.stringify(existingProof) !== JSON.stringify(proofInput)) {
+        throw Object.assign(new Error('Delivery proof cannot be changed after capture'), { statusCode: 409, code: 'DELIVERY_PROOF_IMMUTABLE' });
+      }
+    }
     if (fulfillmentTarget) {
       const currentFulfillment = normalizeCoreFulfillmentStatus(fulfillment.status);
       if (!CORE_FULFILLMENT_TRANSITIONS.delivery[currentFulfillment]?.has(fulfillmentTarget)) throw Object.assign(new Error('Cannot move fulfillment from ' + currentFulfillment + ' to ' + fulfillmentTarget), { statusCode: 409, code: 'INVALID_FULFILLMENT_TRANSITION' });
