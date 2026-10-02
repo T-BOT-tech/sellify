@@ -2619,6 +2619,27 @@ function runMigrations() {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(67, nowIso());
   }
+  // GAP-1.18Z — concurrency/race hardening.
+  if (!applied.includes(70)) {
+    db.exec(`
+      SELECT CASE WHEN EXISTS (
+        SELECT 1 FROM payment_verifications
+        WHERE verifier IS NOT NULL
+        GROUP BY organization_id, evidence_id, verifier, verifier_version
+        HAVING COUNT(*) > 1
+      ) THEN RAISE(ABORT, 'PAYMENT_VERIFICATION_IDENTITY_DUPLICATES_EXIST') END;
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_verifications_identity
+        ON payment_verifications(organization_id, evidence_id, verifier, verifier_version)
+        WHERE verifier_version IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_reconciliations_fingerprint
+        ON payment_reconciliations(organization_id, fingerprint)
+        WHERE fingerprint IS NOT NULL AND trim(fingerprint) <> '';
+      CREATE INDEX IF NOT EXISTS idx_payment_reconciliations_payment_fingerprint
+        ON payment_reconciliations(organization_id, payment_id, fingerprint, created_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(70, nowIso());
+  }
+
   // GAP-1.18Y — database-level cross-tenant payment-core isolation.
   // Child financial records must never bind to a parent from another
   // organization, even if an application caller bypasses normal service checks.
