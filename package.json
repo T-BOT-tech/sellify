@@ -339,7 +339,8 @@
     "test:phase13.10.17": "node phase0/phase13.10.17-logistics-pack-productization-regression.mjs",
     "test:phase13.10.18": "node phase0/phase13.10.18-logistics-workspace-composition-regression.mjs",
     "test:phase13.10.19": "node phase0/phase13.10.19-logistics-movement-shipment-regression.mjs",
-    "test:phase13.10.20": "node phase0/phase13.10.20-logistics-tracking-evidence-regression.mjs"
+    "test:phase13.10.20": "node phase0/phase13.10.20-logistics-tracking-evidence-regression.mjs",
+    "test:phase13.10.21": "node phase0/phase13.10.21-logistics-workspace-projection-regression.mjs"
   },
   "engines": {
     "node": ">=24"
