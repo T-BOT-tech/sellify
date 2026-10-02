@@ -35,6 +35,8 @@ console.log('PASS GAP PF-1 payment frontend contract boundary regression');
 const paymentServer = fs.readFileSync('backend/server.js', 'utf8');
 assert.match(paymentServer, /paymentCore\.transitionLifecycle/);
 assert.match(paymentServer, /IDEMPOTENCY_KEY_REQUIRED/);
+const paymentCore = fs.readFileSync('backend/lib/payments/payment-core.js', 'utf8');
+assert.match(paymentCore, /idempotencyKey: String\(command\.idempotencyKey/);
 const paymentStore = fs.readFileSync('backend/lib/store-sqlite.js', 'utf8');
 assert.match(paymentStore, /TRANSITION_LIFECYCLE/);
 assert.match(paymentStore, /requestHash/);
