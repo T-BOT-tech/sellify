@@ -185,9 +185,9 @@ test('GAP-1.13 VERIFIED payment can be reversed exactly once without rewriting h
 
   const ledger = await store.listPaymentLedger(base.chatId, base.payment.id);
   assert.deepEqual(ledger.map(x => x.entryType), ['CREATED', 'VERIFIED', 'REVERSED']);
-  assert.equal(ledger[1].to_state, 'VERIFIED');
-  assert.equal(ledger[2].from_state, 'VERIFIED');
-  assert.equal(ledger[2].to_state, 'REVERSED');
+  assert.equal(ledger[1].toState, 'VERIFIED');
+  assert.equal(ledger[2].fromState, 'VERIFIED');
+  assert.equal(ledger[2].toState, 'REVERSED');
 
   await assert.rejects(
     () => core().transitionLifecycle({
