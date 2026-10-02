@@ -153,3 +153,5 @@ jobs:
         run: npm run test:gap-2-delivery-certification
       - name: GAP-2.8 route and dispatch scope regression
         run: npm run test:gap-2-route-dispatch-scope
+      - name: GAP-2.9 cross-feature consistency regression
+        run: npm run test:gap-2-cross-feature-consistency
