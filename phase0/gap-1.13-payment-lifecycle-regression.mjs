@@ -54,11 +54,12 @@ async function verifyPayment(base) {
     paymentId: base.payment.id,
     expectedState: 'UNPAID',
     targetState: 'VERIFIED',
+    idempotencyKey: 'gap1-13-verify-1',
     decision: {
       decision: 'ACCEPT',
       targetState: 'VERIFIED',
       reasonCodes: [],
-      decisionSource: 'GAP1.13_TEST',
+      decisionSource: 'PAYMENT_CORE',
       entryType: 'VERIFIED',
     },
   });
