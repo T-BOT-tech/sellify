@@ -99,3 +99,16 @@ assert.match(source, /idx_payment_ledger_decision/);
 assert.match(source, /existingTransition = db\.prepare/);
 assert.match(source, /existingTransitionByFingerprint = db\.prepare/);
 assert.match(source, /const transitionFingerprint = crypto\.createHash\('sha256'/);
+
+assert.match(source, /GAP-1\.18V — authoritative ledger lineage binding/);
+assert.match(source, /if \(!applied\.includes\(64\)\)/);
+assert.match(source, /payment_verification_id TEXT REFERENCES payment_verifications/);
+assert.match(source, /payment_evidence_id TEXT REFERENCES payment_evidence/);
+assert.match(source, /idx_payment_ledger_lineage/);
+assert.match(source, /trg_payment_ledger_authoritative_lineage/);
+assert.match(source, /PAYMENT_LEDGER_LINEAGE_INCOMPLETE/);
+assert.match(source, /PAYMENT_LEDGER_DECISION_LINEAGE_INVALID/);
+assert.match(source, /PAYMENT_LEDGER_VERIFICATION_LINEAGE_INVALID/);
+assert.match(source, /PAYMENT_LEDGER_EVIDENCE_LINEAGE_INVALID/);
+assert.match(source, /decisionVerificationId, decisionEvidenceId, transitionFingerprint/);
+console.log('GAP-1.18V authoritative ledger lineage regression passed');
