@@ -119,7 +119,18 @@ export async function syncOrders() {
     saveJSON(STORAGE_KEYS.orders, orders);
     renderAll();
     const syncedOrders = orders.filter(o => resultMap[o.id]?.status === 'synced' && o.server_order_id);
-    for (const order of syncedOrders) { try { await ensurePaymentForSyncedOrder(order); } catch (error) { console.warn('[Payment] Canonical payment creation deferred:', error?.code || error?.message || error); } }
+    for (const order of syncedOrders) {
+      try {
+        // PF-1K: the sync acknowledgement establishes the canonical order
+        // identity; ensurePaymentForSyncedOrder() then resolves the
+        // canonical Payment and refreshes provider status through
+        // PaymentCore. Status-query failures are operationally non-fatal:
+        // local proof/order sync must never manufacture financial state.
+        await ensurePaymentForSyncedOrder(order);
+      } catch (error) {
+        console.warn('[Payment] Canonical payment/status refresh deferred:', error?.code || error?.message || error);
+      }
+    }
     await pullServerOrders();
     await pullNewOrders();
     const count = (data && data.results && Array.isArray(data.results)) ? data.results.length : 0;
