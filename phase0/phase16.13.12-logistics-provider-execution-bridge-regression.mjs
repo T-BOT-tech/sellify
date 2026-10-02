@@ -3,7 +3,7 @@ import {
   executeLogisticsProviderExecutionBridge,
   logisticsProviderExecutionBridgeContract,
 } from '../app/src/verticals/logistics/provider-execution-bridge-contract.js';
-import { registerPlatformAdapter } from '../app/src/platform/adapter-framework.js';
+import { registerPlatformAdapter, registerPlatformAdapterExecution } from '../app/src/platform/adapter-framework.js';
 
 registerPlatformAdapter({
   id: 'bridge-provider-adapter',
@@ -11,6 +11,13 @@ registerPlatformAdapter({
   provider: 'provider-bridge',
   operations: ['delivery', 'tracking', 'cross_border'],
 }, { replace: true });
+
+registerPlatformAdapterExecution('bridge-provider-adapter', async (input) => ({
+  provider_id: input.provider_id,
+  operation: input.operation,
+  result_status: 'delivered',
+  callback_id: 'callback-platform-adapter-1',
+}));
 
 const handoff = {
   operation: 'delivery',
