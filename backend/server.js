@@ -140,7 +140,7 @@ import {
   listSupplierNetworkPerformance,
   listSupplierNetworkTrustEvidence, getSupplierNetworkTrustEvidence, refreshSupplierNetworkTrustEvidence, getSupplierNetworkPerformance, recalculateSupplierNetworkPerformance,
   discoverSupplierNetwork, getSupplierNetworkMarketplaceIntegration, setProcurementSupplierParticipation,
-  getPackLifecycle, transitionPackLifecycle, getPaymentSettlementByIdempotencyKey, createPaymentSettlement, finalizePaymentSettlement, listPaymentSettlements, listPaymentRoutingPolicies, upsertPaymentRoutingPolicy, listPaymentOperationalActions, createPaymentOperationalAction, updatePaymentOperationalAction, recordPaymentProviderCapabilityEvidence, listPaymentProviderCapabilityEvidence,
+  getPackLifecycle, transitionPackLifecycle, getPaymentSettlementByIdempotencyKey, createPaymentSettlement, finalizePaymentSettlement, listPaymentSettlements, listPaymentRoutingPolicies, upsertPaymentRoutingPolicy, listPaymentOperationalActions, createPaymentOperationalAction, updatePaymentOperationalAction, recordPaymentProviderCapabilityEvidence, listPaymentProviderCapabilityEvidence, recordPaymentProductionCertification, listPaymentProductionCertifications,
 } from './lib/store-sqlite.js';
 import { AUTHZ, authorize, ROLES, getRolePermissions } from './lib/authorization.js';
 import { assertTenantScope, assertLocationScope } from './lib/tenant-isolation.js';
@@ -175,6 +175,8 @@ const paymentCore = new PaymentCore({
     updatePaymentOperationalAction,
     recordPaymentProviderCapabilityEvidence,
     listPaymentProviderCapabilityEvidence,
+    recordPaymentProductionCertification,
+    listPaymentProductionCertifications,
   },
   providerRegistry: { getPaymentProvider, certifyPaymentProviderCapabilities, certifyAllPaymentProviders },
   invariantGate: new InvariantGate(),
