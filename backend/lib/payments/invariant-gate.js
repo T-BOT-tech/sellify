@@ -14,6 +14,10 @@ const HARD_FAILURES = new Set([
   'EVIDENCE_REPLAY',
   'INTENT_EXPIRED',
   'AUTHORIZATION_INVALID',
+  'EVIDENCE_PAYMENT_MATCH',
+  'EVIDENCE_INTENT_MATCH',
+  'VERIFICATION_EVIDENCE_MATCH',
+  'VERIFICATION_RESULT_MATCH',
 ]);
 
 function check(code, passed, details = {}) {
@@ -35,6 +39,22 @@ export class InvariantGate {
     checks.push(check('PAYMENT_INTENT_MATCH',
       Boolean(payment && paymentIntent && String(payment.paymentIntentId || '') === String(paymentIntent.id || '')),
       { required: true }));
+
+    checks.push(check('EVIDENCE_PAYMENT_MATCH',
+      Boolean(payment && evidence && String(evidence.paymentId || '') === String(payment.id || '')),
+      { required: true }));
+
+    checks.push(check('EVIDENCE_INTENT_MATCH',
+      Boolean(paymentIntent && evidence && String(evidence.paymentIntentId || '') === String(paymentIntent.id || '')),
+      { required: true }));
+
+    checks.push(check('VERIFICATION_EVIDENCE_MATCH',
+      Boolean(evidence && verification && String(verification.evidenceId || '') === String(evidence.id || '')),
+      { required: true }));
+
+    checks.push(check('VERIFICATION_RESULT_MATCH',
+      String(verification?.result || '').toUpperCase() === 'MATCH',
+      { required: true, observed: verification?.result || null }));
 
     checks.push(check('PAYMENT_ACCOUNT_OWNERSHIP',
       Boolean(paymentAccount && org && String(paymentAccount.organizationId) === org),
