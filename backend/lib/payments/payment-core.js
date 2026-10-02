@@ -448,13 +448,20 @@ export class PaymentCore {
     const evidenceResult = await this.store.insertPaymentEvidence(chatId, evidencePayload, command.actor || null);
     const evidence = evidenceResult.evidence;
 
+    const boundVerification = {
+      ...verification,
+      paymentId,
+      paymentIntentId: intent.id,
+      evidenceId: evidence.id,
+      providerId: payment.providerId,
+    };
     const invariants = this.invariantGate
       ? this.invariantGate.evaluate({
           payment,
           paymentIntent: intent,
           paymentAccount,
           evidence,
-          verification,
+          verification: boundVerification,
           now: this.clock(),
         })
       : { passed: true, checks: [], reasonCodes: [], hardFailures: [] };
@@ -507,7 +514,7 @@ export class PaymentCore {
         paymentIntentId: intent.id,
         evidenceId: evidence.id,
         providerId: payment.providerId,
-        ...verification,
+        ...boundVerification,
         reasonCodes: decision.reasonCodes,
         verifier: 'payment-core.provider-status',
         verifierVersion: '1',

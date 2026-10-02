@@ -90,8 +90,6 @@ test('GAP-1.11 provider getStatus MATCH flows through evidence, invariants, deci
     idempotencyKey: 'gap1-11-status-match-1',
   });
 
-  console.log('GAP-1.11 lineage diagnostic', JSON.stringify({ evidence: result.evidence, verification: result.verification, invariantReasons: result.invariants.reasonCodes }, null, 2));
-
   assert.equal(result.supported, true);
   assert.equal(result.status, 'MATCH');
   assert.equal(result.payment.state, 'VERIFIED');
