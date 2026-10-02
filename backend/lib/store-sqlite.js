@@ -7434,7 +7434,9 @@ export function coreFulfillmentContract() {
     pickup_transitions: 'pending -> ready_for_pickup -> picked_up',
     idempotency: 'client command key; replay returns current canonical state',
     inventory_consequence: 'terminal fulfillment atomically records SALE movements in existing inventory_movements authority',
-    payment_authority: 'unchanged',
+    cross_feature_boundary: 'delivery terminal transition may invoke existing inventory consequence only; payment and settlement remain read-only external authorities',
+    payment_authority: 'unchanged; delivery does not mutate payment state or payment ledger',
+    settlement_authority: 'unchanged; delivery does not create, settle, reverse, or mutate settlement records',
     marketplace_fulfillment_reuse: false,
   });
 }
