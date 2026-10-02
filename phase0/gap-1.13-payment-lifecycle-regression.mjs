@@ -50,15 +50,57 @@ async function setup() {
 }
 
 async function verifyPayment(base) {
+  const intent = await store.getPaymentIntent(base.chatId, base.payment.paymentIntentId);
+  const transactionId = `GAP1.13-TX-${base.payment.id}`;
+  const reference = `GAP1.13-REF-${base.payment.id}`;
+  const evidenceResult = await store.insertPaymentEvidence(base.chatId, {
+    paymentId: base.payment.id,
+    paymentIntentId: intent.id,
+    providerId: base.payment.providerId,
+    channel: 'manual',
+    evidenceType: 'PROVIDER_STATUS',
+    externalReference: reference,
+    providerTransactionId: transactionId,
+    rawPayload: { status: 'COMPLETED', amountMinor: base.payment.amountMinor, currency: base.payment.currency, receiverAccount: 'GAP1.13-ACCOUNT', reference, transactionId },
+    normalizedPayload: { result: 'MATCH', observedAmountMinor: base.payment.amountMinor, observedCurrency: base.payment.currency, observedReceiverAccount: 'GAP1.13-ACCOUNT', observedReference: reference, observedTransactionId: transactionId },
+    source: 'provider.getStatus',
+  });
+  const evidence = evidenceResult.evidence;
+  const verificationResult = await store.insertPaymentVerification(base.chatId, {
+    paymentId: base.payment.id,
+    paymentIntentId: intent.id,
+    evidenceId: evidence.id,
+    providerId: base.payment.providerId,
+    result: 'MATCH',
+    observedAmountMinor: base.payment.amountMinor,
+    observedCurrency: base.payment.currency,
+    observedReceiverAccount: 'GAP1.13-ACCOUNT',
+    observedReference: reference,
+    observedTransactionId: transactionId,
+    observedAt: new Date().toISOString(),
+    reasonCodes: [],
+    rawResult: { status: 'COMPLETED' },
+    verifier: 'payment-core.gap-1.13-test',
+    verifierVersion: '1',
+  });
+  const verification = verificationResult.verification;
   return store.commitPaymentDecision(base.chatId, {
     paymentId: base.payment.id,
     expectedState: 'UNPAID',
     targetState: 'VERIFIED',
     idempotencyKey: 'gap1-13-verify-1',
+    verification: {
+      ...verification,
+      evidenceId: evidence.id,
+      paymentIntentId: intent.id,
+      providerId: base.payment.providerId,
+      result: 'MATCH',
+    },
     decision: {
       decision: 'ACCEPT',
       targetState: 'VERIFIED',
       reasonCodes: [],
+      invariantResults: { passed: true },
       decisionSource: 'PAYMENT_CORE',
       entryType: 'VERIFIED',
     },
