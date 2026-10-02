@@ -2619,6 +2619,27 @@ function runMigrations() {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(67, nowIso());
   }
+  // GAP-1.18Z — concurrency/race hardening.
+  if (!applied.includes(70)) {
+    db.exec(`
+      SELECT CASE WHEN EXISTS (
+        SELECT 1 FROM payment_verifications
+        WHERE verifier IS NOT NULL
+        GROUP BY organization_id, evidence_id, verifier, verifier_version
+        HAVING COUNT(*) > 1
+      ) THEN RAISE(ABORT, 'PAYMENT_VERIFICATION_IDENTITY_DUPLICATES_EXIST') END;
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_verifications_identity
+        ON payment_verifications(organization_id, evidence_id, verifier, verifier_version)
+        WHERE verifier_version IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_reconciliations_fingerprint
+        ON payment_reconciliations(organization_id, fingerprint)
+        WHERE fingerprint IS NOT NULL AND trim(fingerprint) <> '';
+      CREATE INDEX IF NOT EXISTS idx_payment_reconciliations_payment_fingerprint
+        ON payment_reconciliations(organization_id, payment_id, fingerprint, created_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(70, nowIso());
+  }
+
   // GAP-1.18Y — database-level cross-tenant payment-core isolation.
   // Child financial records must never bind to a parent from another
   // organization, even if an application caller bypasses normal service checks.
@@ -6253,7 +6274,9 @@ export async function insertPaymentVerification(chatId, input = {}, actor = null
       verifier, verifierVersion, provenanceSource, provenanceOperation, now
     );
   } catch (error) {
-    if (String(error?.message || '').includes('uq_payment_verifications_provider_transaction') ||
+    if (String(error?.message || '').includes('uq_payment_verifications_identity') ||
+        String(error?.message || '').includes('UNIQUE constraint failed: payment_verifications.organization_id, payment_verifications.evidence_id, payment_verifications.verifier, payment_verifications.verifier_version') ||
+        String(error?.message || '').includes('uq_payment_verifications_provider_transaction') ||
         String(error?.message || '').includes('UNIQUE constraint failed: payment_verifications.organization_id, payment_verifications.provider_id, payment_verifications.observed_transaction_id')) {
       const conflicting = observedTransactionId
         ? db.prepare('SELECT * FROM payment_verifications WHERE organization_id = ? AND provider_id = ? AND observed_transaction_id = ? ORDER BY created_at DESC LIMIT 1')
@@ -7091,7 +7114,10 @@ export async function createPaymentRefundRequest(chatId, input = {}, actor = nul
   const originalEvidence = db.prepare('SELECT id FROM payment_evidence WHERE id = ? AND organization_id = ? AND payment_id = ?').get(originalLineage.evidence_id, tenant.organization_id, payment.id);
   if (!originalVerification || originalVerification.evidence_id !== originalLineage.evidence_id || !originalEvidence) throw Object.assign(new Error('Refund original payment provenance is invalid'), { statusCode: 409, code: 'REFUND_PROVENANCE_INVALID' });
 
-  const refunded = Number(db.prepare("SELECT COALESCE(SUM(amount_minor),0) AS total FROM payment_refunds WHERE payment_id = ? AND status = 'SUCCEEDED'").get(payment.id).total || 0);
+  // GAP-1.18Z: serialize refundable-balance check and refund reservation.
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const refunded = Number(db.prepare("SELECT COALESCE(SUM(amount_minor),0) AS total FROM payment_refunds WHERE payment_id = ? AND status IN ('REQUESTED','PROCESSING','SUCCEEDED')").get(payment.id).total || 0);
   if (refunded + amountMinor > Number(payment.amount_minor)) {
     throw Object.assign(new Error('Refund exceeds refundable payment amount'), { statusCode: 409, code: 'REFUND_AMOUNT_EXCEEDS_PAYMENT' });
   }
@@ -7129,10 +7155,12 @@ export async function createPaymentRefundRequest(chatId, input = {}, actor = nul
       refund.idempotency_key, refund.amount_minor, refund.currency, refund.status, refund.reason,
       null, null, null, null, null, refund.requested_by_user_id, now, now, null, refund.original_payment_evidence_id, refund.original_payment_verification_id, refund.original_payment_decision_id, null
     );
-  audit(String(chatId), 'payment.refund.requested', payment.id, actor?.userId || null, {
-    refundId: refund.id, amountMinor, currency, idempotencyKey: key,
-  });
-  return { refund: normalizePaymentRefund(refund), duplicate: false };
+    audit(String(chatId), 'payment.refund.requested', payment.id, actor?.userId || null, {
+      refundId: refund.id, amountMinor, currency, idempotencyKey: key,
+    });
+    db.exec('COMMIT');
+    return { refund: normalizePaymentRefund(refund), duplicate: false };
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
 
 export async function finalizePaymentRefund(chatId, refundId, input = {}, actor = null) {
@@ -7391,6 +7419,16 @@ export async function reconcilePayment(chatId, paymentId, input = {}, actor = nu
   const currency = normaliseCurrency(input.currency, payment.currency);
   const matched = Number.isInteger(amountMinor) && amountMinor === payment.amountMinor && currency === payment.currency;
   const now = nowIso();
+  const reconciliationFingerprint = crypto.createHash('sha256').update([
+    payment.organizationId, payment.id,
+    String(input.externalReference || input.external_reference || payment.externalReference || ''),
+    String(amountMinor), currency, matched ? 'matched' : 'mismatched',
+  ].join('|')).digest('hex');
+  // GAP-1.18Z: reconciliation finding creation is serialized and idempotent.
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const existingReconciliation = db.prepare('SELECT * FROM payment_reconciliations WHERE organization_id = ? AND fingerprint = ?').get(payment.organizationId, reconciliationFingerprint);
+    if (existingReconciliation) { db.exec('COMMIT'); return existingReconciliation; }
   const latestDecision = db.prepare(`
     SELECT d.*, v.result AS verification_result, v.confidence, v.observed_amount_minor,
            v.observed_currency, v.observed_receiver, v.observed_receiver_account,
@@ -7418,8 +7456,8 @@ export async function reconcilePayment(chatId, paymentId, input = {}, actor = nu
   db.prepare(`
     INSERT INTO payment_reconciliations
       (id, payment_id, organization_id, status, external_reference, amount_minor, currency,
-       reason, actor_id, created_at, resolved_at, payment_evidence_id, payment_verification_id, payment_decision_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       reason, actor_id, created_at, resolved_at, payment_evidence_id, payment_verification_id, payment_decision_id, fingerprint)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     reconciliationId, payment.id, payment.organizationId, matched ? 'matched' : 'mismatched',
     input.externalReference || input.external_reference || payment.externalReference || null,
@@ -7457,7 +7495,10 @@ export async function reconcilePayment(chatId, paymentId, input = {}, actor = nu
   // Reconciliation is deliberately non-authoritative. It records the finding
   // and its provenance but never mutates Payment state or writes a ledger entry.
   // A separate Payment Core decision/transition remains the sole authority.
-  return db.prepare('SELECT * FROM payment_reconciliations WHERE id = ? AND organization_id = ?').get(reconciliationId, payment.organizationId);
+  const result = db.prepare('SELECT * FROM payment_reconciliations WHERE id = ? AND organization_id = ?').get(reconciliationId, payment.organizationId);
+  db.exec('COMMIT');
+  return result;
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
 
 
