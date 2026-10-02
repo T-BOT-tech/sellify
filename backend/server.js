@@ -2055,8 +2055,11 @@ async function handlePaymentStatusQuery(req, res, chatId, paymentId) {
   const session = await requireSession(req, tenant.chatId);
   await requireAuthorization(session, tenant, 'payments', 'payments:accept', { deniedMessage: 'Payment status query permission required' });
   const body = await readBody(req);
+  const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
+  if (!idempotencyKey) return sendJSON(res, 400, { error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' } }, req);
   const result = await paymentCore.queryStatus({
     ...body,
+    idempotencyKey,
     chatId,
     paymentId,
     organizationId: tenant.organizationId,
