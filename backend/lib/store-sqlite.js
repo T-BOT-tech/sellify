@@ -5621,7 +5621,7 @@ export async function createPaymentWithIntent(chatId, input = {}, actor = null) 
       intentId, organizationId, locationId, orderId ? String(orderId) : null, String(accountId), providerId, amountMinor, currency,
       input.expiresAt || input.expires_at || null, json(input.metadata || {}), actor?.userId || null, now, now
     );
-    db.prepare("INSERT INTO payments (id, organization_id, location_id, order_id, customer_id, payment_account_id, provider_id, channel, method_id, method_name, amount_minor, currency, state, payment_intent_id, external_reference, claimed_at, received_at, verified_at, reconciled_at, metadata_json, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'UNPAID', ?, ?, NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?)").run(
+    db.prepare("INSERT INTO payments (id, organization_id, location_id, order_id, customer_id, payment_account_id, provider_id, channel, method_id, method_name, amount_minor, currency, state, payment_intent_id, external_reference, claimed_at, received_at, verified_at, reconciled_at, metadata_json, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'UNPAID', ?, NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?)").run(
       id, organizationId, locationId, orderId ? String(orderId) : null, customerId, String(accountId), providerId, channel,
       input.methodId || input.method_id || null, input.methodName || input.method_name || null, amountMinor, currency, intentId,
       json(input.metadata || {}), actor?.userId || null, now, now
