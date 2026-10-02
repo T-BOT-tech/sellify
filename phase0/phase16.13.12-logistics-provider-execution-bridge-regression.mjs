@@ -16,6 +16,7 @@ registerPlatformAdapterExecution('bridge-provider-adapter', async (input) => ({
   provider_id: input.provider_id,
   operation: input.operation,
   result_status: 'delivered',
+  tracking: { status: 'delivered', occurred_at: '2026-10-02T00:00:00Z' },
   callback_id: 'callback-platform-adapter-1',
 }));
 
@@ -42,6 +43,7 @@ const applied = await executeLogisticsProviderExecutionBridge({
       provider_id: 'provider-bridge',
       operation: 'delivery',
       result_status: 'delivered',
+      tracking: { status: 'delivered', occurred_at: '2026-10-02T00:00:00Z' },
       callback_id: 'callback-bridge-1',
     };
   },
@@ -82,7 +84,7 @@ assert.equal(duplicate.reliability.apply, false);
 assert.equal(duplicate.canonical_result, null);
 assert.equal(duplicate.canonical_application, null);
 
-await assert.rejects(() => executeLogisticsProviderExecutionBridge({
+await await assert.rejects(() => executeLogisticsProviderExecutionBridge({
   handoff: { ...handoff, selected_provider_id: 'other-provider' },
   invokeProvider() {
     return { provider_id: 'provider-bridge', operation: 'delivery', result_status: 'delivered', callback_id: 'cb-mismatch' };
