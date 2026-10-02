@@ -8,6 +8,8 @@ import { RESTAURANT_PACK } from '../verticals/restaurant/pack.js';
 import { WAREHOUSE_PACK } from '../verticals/warehouse/pack.js';
 import { LOGISTICS_PACK } from '../verticals/logistics/pack.js';
 import { renderPackJourneyComposition } from './pack-journey-composition.js';
+import { getLogisticsWorkspaceComposition } from '../verticals/logistics/workspace-contract.js';
+import { currentStaff } from '../state.js';
 
 const PACKS = Object.freeze([AGRICULTURE_PACK, RESTAURANT_PACK, WAREHOUSE_PACK, LOGISTICS_PACK]);
 const ENTRY_TO_TAB = Object.freeze({
@@ -82,6 +84,11 @@ export function renderPackWorkspace(containerId = 'fux-pack-workspace') {
             </div>
             <div class="hint">${pack.capabilities.slice(0, 4).map(esc).join(' · ') || 'No declared capabilities'}</div>
             ${active && usableEntries.length ? `<div class="fux-pack-actions">${usableEntries.map(entry => `<button class="fux-action" type="button" data-pack-tab="${esc(entry.tab)}"><strong>${esc(entry.label)}</strong><small>Open existing workspace</small></button>`).join('')}</div>` : ''}
+            ${active && pack.pack_id === 'logistics' ? (() => {
+              const composition = getLogisticsWorkspaceComposition(currentStaff?.role || 'staff');
+              const labels = composition.views.map(view => esc(view.label)).join(' · ');
+              return '<div class="hint">Role workspace composition: ' + (labels || 'No Logistics Pack role workspace declared for this role.') + '</div>';
+            })() : ''}
             ${declarative ? '<div class="hint">This Pack is declarative in the current source; no executable Pack activation state is claimed.</div>' : ''}
             ${!active && !declarative ? '<div class="hint">No Pack workspace entry is offered because the existing configuration is inactive.</div>' : ''}
           </article>`;
