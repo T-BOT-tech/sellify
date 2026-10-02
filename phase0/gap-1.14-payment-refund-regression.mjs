@@ -79,8 +79,9 @@ async function setup(providerId = 'gap1-14-test') {
   });
   await store.commitPaymentDecision(tenant.chatId, {
     paymentId: result.payment.id, expectedState: 'UNPAID', targetState: 'VERIFIED',
+     idempotencyKey: `gap1-14-verify-${crypto.randomUUID()}`,
     decision: { decision: 'ACCEPT', targetState: 'VERIFIED', reasonCodes: [],
-      decisionSource: 'GAP1.14_TEST', entryType: 'VERIFIED' },
+      decisionSource: 'PAYMENT_CORE', entryType: 'VERIFIED' },
   });
   return { chatId: tenant.chatId, paymentId: result.payment.id };
 }
