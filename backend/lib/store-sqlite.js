@@ -6969,6 +6969,41 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
   return movements;
 }
 
+export async function selectDeliveryCourier(chatId, organizationId, locationId) {
+  ensureDatabase();
+  const location = locationId ? String(locationId) : null;
+  const candidate = db.prepare(`
+    SELECT m.user_id, mr.scope_type, mr.scope_id,
+           COUNT(DISTINCT da.id) AS active_workload
+    FROM memberships m
+    JOIN membership_roles mr
+      ON mr.membership_id = m.id
+     AND mr.status = 'active'
+     AND mr.role_id = 'logistics_courier'
+    LEFT JOIN delivery_assignments da
+      ON da.courier_user_id = m.user_id
+     AND da.organization_id = ?
+     AND da.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY')
+     AND (? IS NULL OR da.location_id = ?)
+    WHERE m.chat_id = ?
+      AND m.status = 'active'
+      AND (
+        mr.scope_type IS NULL
+        OR mr.scope_type != 'LOCATION'
+        OR mr.scope_id = ?
+      )
+    GROUP BY m.user_id, mr.scope_type, mr.scope_id
+    ORDER BY active_workload ASC, m.user_id ASC
+    LIMIT 1
+  `).get(String(organizationId), location, location, String(chatId), location);
+  if (!candidate) {
+    throw Object.assign(new Error('No eligible logistics courier is available'), {
+      statusCode: 409, code: 'COURIER_CAPACITY_UNAVAILABLE',
+    });
+  }
+  return candidate;
+}
+
 export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId, actor = null, input = {}) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
@@ -6976,25 +7011,30 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
   const order = await getCoreFulfillmentOrder(String(chatId), String(serverOrderId));
   const organizationId = String(order.tenant_organization_id || '');
   if (organizationId !== String(tenant.organization_id)) throw Object.assign(new Error('Order organization mismatch'), { statusCode: 403 });
-  const courier = db.prepare(`
-    SELECT m.user_id, mr.role_id, mr.scope_type, mr.scope_id
-    FROM memberships m
-    JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
-    WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
-      AND mr.role_id = 'logistics_courier'
-  `).get(String(courierUserId), String(chatId));
-  if (!courier) throw Object.assign(new Error('Courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
-  const scopeId = courier.scope_type === 'LOCATION' ? String(courier.scope_id || '') : null;
   const locationId = input.locationId || input.location_id || order.location_id || null;
-  if (scopeId && String(locationId || '') !== scopeId) throw Object.assign(new Error('Courier role is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
   const type = normalizeCoreFulfillmentType(order.fulfillment_type || 'delivery');
   if (type !== 'delivery') throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
   const actorUserId = actor?.userId ? String(actor.userId) : null;
+  let selectedCourierUserId = String(courierUserId || '').trim();
+  const key = String(input.assignmentKey || input.assignment_key || `courier:auto:${serverOrderId}`).trim();
   let fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), organizationId);
-  const key = String(input.assignmentKey || input.assignment_key || `courier:${serverOrderId}:${courierUserId}`).trim();
   if (!key) throw Object.assign(new Error('Assignment key is required'), { statusCode: 400 });
   db.exec('BEGIN IMMEDIATE');
   try {
+    if (!selectedCourierUserId) {
+      const selected = await selectDeliveryCourier(chatId, organizationId, locationId);
+      selectedCourierUserId = String(selected.user_id);
+    }
+    const courier = db.prepare(`
+      SELECT m.user_id, mr.role_id, mr.scope_type, mr.scope_id
+      FROM memberships m
+      JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
+      WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
+        AND mr.role_id = 'logistics_courier'
+    `).get(selectedCourierUserId, String(chatId));
+    if (!courier) throw Object.assign(new Error('Courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
+    const scopeId = courier.scope_type === 'LOCATION' ? String(courier.scope_id || '') : null;
+    if (scopeId && String(locationId || '') !== scopeId) throw Object.assign(new Error('Courier role is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
     if (!fulfillment) {
       const now = nowIso();
       const fulfillmentId = crypto.randomUUID();
@@ -7013,7 +7053,7 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
     }
     const existing = db.prepare('SELECT * FROM delivery_assignments WHERE fulfillment_id = ?').get(fulfillment.id);
     if (existing) {
-      if (existing.courier_user_id !== String(courierUserId)) throw Object.assign(new Error('Delivery is already assigned to another courier'), { statusCode: 409, code: 'ASSIGNMENT_CONFLICT' });
+      if (existing.courier_user_id !== selectedCourierUserId) throw Object.assign(new Error('Delivery is already assigned to another courier'), { statusCode: 409, code: 'ASSIGNMENT_CONFLICT' });
       db.exec('COMMIT');
       return existing;
     }
@@ -7023,10 +7063,10 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
       INSERT INTO delivery_assignments
         (id,fulfillment_id,organization_id,location_id,courier_user_id,status,assignment_key,assigned_by_user_id,assigned_at,updated_at,version,last_command_key)
       VALUES (?,?,?,?,?,'ASSIGNED',?,?,?,?,1,?)
-    `).run(id, fulfillment.id, organizationId, locationId ? String(locationId) : null, String(courierUserId), key, actorUserId, now, now, key);
+    `).run(id, fulfillment.id, organizationId, locationId ? String(locationId) : null, selectedCourierUserId, key, actorUserId, now, now, key);
     const row = db.prepare('SELECT * FROM delivery_assignments WHERE id = ?').get(id);
     audit(String(chatId), 'delivery.assignment.created', 'delivery_assignment', id, {
-      orderId: String(serverOrderId), courierUserId: String(courierUserId), locationId: locationId ? String(locationId) : null,
+      orderId: String(serverOrderId), courierUserId: selectedCourierUserId, locationId: locationId ? String(locationId) : null,
     }, { organizationId, locationId: locationId ? String(locationId) : null, actorId: actorUserId });
     db.exec('COMMIT');
     return row;
