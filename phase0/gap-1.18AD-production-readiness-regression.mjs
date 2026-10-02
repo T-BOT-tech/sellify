@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const pkg=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
+const ci=readFileSync(new URL('../.github/workflows/ci.yml',import.meta.url),'utf8');
+const core=readFileSync(new URL('../backend/lib/payments/payment-core.js',import.meta.url),'utf8');
+const store=readFileSync(new URL('../backend/lib/store-sqlite.js',import.meta.url),'utf8');
+assert.equal(pkg.engines.node,'>=24');
+for(const s of ['gap-1.18:payment-failure-recovery-test','gap-1.18:payment-security-boundary-test','gap-1.18:payment-invariant-certification-test'])assert.equal(typeof pkg.scripts[s],'string',s);
+assert.match(ci,/node-version: \[24\]/);assert.match(ci,/GAP-1\.18AA/);assert.match(ci,/GAP-1\.18AB/);assert.match(ci,/GAP-1\.18AC/);
+assert.match(core,/this\.#authorize\(command,/);assert.match(store,/BEGIN IMMEDIATE/);assert.match(store,/organization_id = \?/);
+console.log('GAP-1.18AD production-readiness gate passed');
