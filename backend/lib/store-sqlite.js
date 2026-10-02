@@ -2812,6 +2812,8 @@ export async function transitionPackLifecycle(chatId, packId, targetState, actor
     ? String(existing?.pack_version || manifest?.version || '')
     : String(input.packVersion);
   const now = nowIso();
+  const decisionInput = input.decision || {};
+  const authoritativeTarget = ['VERIFIED', 'RECONCILED'].includes(target);
   db.exec('BEGIN IMMEDIATE');
   try {
     if (!existing) {
@@ -5997,8 +5999,17 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
     if (!row) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
     if (expectedState && row.state !== expectedState) throw Object.assign(new Error('Payment state changed before decision could commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
     if (row.state !== target && !PAYMENT_TRANSITIONS[row.state]?.has(target)) throw Object.assign(new Error('Invalid payment transition'), { statusCode: 409, code: 'INVALID_PAYMENT_TRANSITION' });
+    if (authoritativeTarget) {
+      const requestedVerificationId = String(decisionInput.verificationId || decisionInput.verification_id || '').trim();
+      if (!requestedVerificationId) throw Object.assign(new Error('Authoritative payment decision requires a persisted verificationId'), { statusCode: 409, code: 'PERSISTED_VERIFICATION_REQUIRED' });
+      const persistedVerification = db.prepare('SELECT * FROM payment_verifications WHERE id = ? AND organization_id = ?').get(requestedVerificationId, organizationId);
+      if (!persistedVerification) throw Object.assign(new Error('Authoritative payment decision requires an existing persisted verification'), { statusCode: 409, code: 'PERSISTED_VERIFICATION_NOT_FOUND' });
+      if (String(persistedVerification.payment_id) !== paymentId) throw Object.assign(new Error('Persisted verification is bound to another payment'), { statusCode: 409, code: 'VERIFICATION_CONTEXT_MISMATCH' });
+      input.verification = input.verification || {};
+      input.verification.id = requestedVerificationId;
+    }
     if (input.verification) {
-      const v = input.verification;
+      let v = input.verification;
       const verificationPaymentIntentId = String(v.paymentIntentId || v.payment_intent_id || row.payment_intent_id || '').trim() || null;
       const verificationEvidenceId = String(v.evidenceId || v.evidence_id || '').trim() || null;
       const verificationProviderId = String(v.providerId || v.provider_id || row.provider_id || '').trim().toLowerCase();
@@ -6107,20 +6118,38 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
         ? 'provider-status'
         : verifier.replace(/^payment-core\./, '') || 'unknown';
       const existingVerification = db.prepare('SELECT id FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND verifier_version = ?').get(verificationEvidenceId, verifier, verifierVersion);
-      if (!existingVerification) db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, provenance_source, provenance_operation, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-        verificationId, organizationId, paymentId, verificationPaymentIntentId, verificationEvidenceId,
-        verificationProviderId, String(v.result || '').toUpperCase(), v.confidence == null ? null : Number(v.confidence),
-        v.observedAmountMinor ?? v.observed_amount_minor ?? null, v.observedCurrency || v.observed_currency || null,
-        v.observedReceiver || v.observed_receiver || null, v.observedReceiverAccount || v.observed_receiver_account || null,
-        v.observedReference || v.observed_reference || null, v.observedTransactionId || v.observed_transaction_id || null,
-        v.observedAt || v.observed_at || null, json(v.reasonCodes || v.reason_codes || []),
-        v.rawResult == null ? null : json(v.rawResult || v.raw_result), verifier, verifierVersion, provenanceSource, provenanceOperation, now
-      );
+      if (!existingVerification) {
+        if (authoritativeTarget) throw Object.assign(new Error('commitPaymentDecision cannot manufacture verification provenance for an authoritative transition'), { statusCode: 409, code: 'VERIFICATION_PROVENANCE_NOT_PERSISTED' });
+        db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, provenance_source, provenance_operation, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+          verificationId, organizationId, paymentId, verificationPaymentIntentId, verificationEvidenceId,
+          verificationProviderId, String(v.result || '').toUpperCase(), v.confidence == null ? null : Number(v.confidence),
+          v.observedAmountMinor ?? v.observed_amount_minor ?? null, v.observedCurrency || v.observed_currency || null,
+          v.observedReceiver || v.observed_receiver || null, v.observedReceiverAccount || v.observed_receiver_account || null,
+          v.observedReference || v.observed_reference || null, v.observedTransactionId || v.observed_transaction_id || null,
+          v.observedAt || v.observed_at || null, json(v.reasonCodes || v.reason_codes || []),
+          v.rawResult == null ? null : json(v.rawResult || v.raw_result), verifier, verifierVersion, provenanceSource, provenanceOperation, now
+        );
+      }
+      if (authoritativeTarget) {
+        const persisted = db.prepare('SELECT * FROM payment_verifications WHERE id = ? AND organization_id = ?').get(verificationId, organizationId);
+        if (!persisted) throw Object.assign(new Error('Persisted verification disappeared before decision commit'), { statusCode: 409, code: 'PERSISTED_VERIFICATION_NOT_FOUND' });
+        v = {
+          ...v,
+          id: persisted.id, paymentIntentId: persisted.payment_intent_id, evidenceId: persisted.evidence_id,
+          providerId: persisted.provider_id, result: persisted.result, confidence: persisted.confidence,
+          observedAmountMinor: persisted.observed_amount_minor, observedCurrency: persisted.observed_currency,
+          observedReceiver: persisted.observed_receiver, observedReceiverAccount: persisted.observed_receiver_account,
+          observedReference: persisted.observed_reference, observedTransactionId: persisted.observed_transaction_id,
+          observedAt: persisted.observed_at, verifier: persisted.verifier, verifierVersion: persisted.verifier_version,
+          provenanceSource: persisted.provenance_source, provenanceOperation: persisted.provenance_operation
+        };
+      }
     }
-    const decision = input.decision || {};
+    const decision = decisionInput;
     const decisionVerificationId = String(decision.verificationId || decision.verification_id || (input.verification ? (db.prepare('SELECT id FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND verifier_version = ?').get(
       String(input.verification.evidenceId || input.verification.evidence_id), verifier, verifierVersion
     )?.id || '') : '')).trim() || null;
+    if (authoritativeTarget && !decisionVerificationId) throw Object.assign(new Error('Authoritative decision cannot commit without persisted verification provenance'), { statusCode: 409, code: 'PERSISTED_VERIFICATION_REQUIRED' });
     if (decisionVerificationId) {
       const linked = db.prepare('SELECT payment_id, payment_intent_id, evidence_id FROM payment_verifications WHERE id = ? AND organization_id = ?').get(decisionVerificationId, organizationId);
       if (!linked || String(linked.payment_id) !== paymentId || String(linked.payment_intent_id || '') !== String(decision.paymentIntentId || decision.payment_intent_id || row.payment_intent_id || '') || String(linked.evidence_id || '') !== String(decision.evidenceId || decision.evidence_id || input.verification?.evidenceId || input.verification?.evidence_id || '')) {
