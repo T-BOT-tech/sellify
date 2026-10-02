@@ -30,6 +30,7 @@ import { isVolumeDiscountEnabled, getVolumeDiscountForQty } from '../b2b/pricing
 import { t } from '../ui/i18n.js';
 import { patchList, renderStatus } from '../ui/render.js';
 import { showUndoToast } from '../ui/toast.js';
+import { getPaymentForOrder } from '../payments/projection.js';
 
 export function renderDailySummary() {
   const container = document.getElementById('dailySummaryContainer');
@@ -100,6 +101,9 @@ export function ticketInnerHtml(o) {
     ? `<div class="ticket-customer">${escapeHtml(o.customer_name || '')} ${escapeHtml(o.customer_phone || '')}</div>` : '';
   const cashLine = (o.cash_tendered !== null && o.cash_tendered !== undefined)
     ? `<div class="ticket-customer">${t('cashTendered')}: ${CS()}${formatMoney(o.cash_tendered)} · ${t('changeDue')}: ${CS()}${formatMoney(o.change_due || 0)}</div>` : '';
+  const payment = o.server_order_id ? getPaymentForOrder(o.server_order_id) : null;
+  const paymentStateLine = payment?.state
+    ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Payment Core: ${escapeHtml(String(payment.state).replaceAll('_', ' '))}</div>` : '';
   const payMethodLine = o.payment_method_name
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> ${escapeHtml(o.payment_method_name)}${o.payment_proof ? ' · <svg class="icon icon-sm"><use href="#i-paperclip"/></svg> proof attached' : ''}</div>` : '';
   const staffLine = o.created_by_role
@@ -133,6 +137,7 @@ export function ticketInnerHtml(o) {
     <div class="ticket-items">${itemsHtml}</div>
     <div class="ticket-total"><span>${t('total')}</span><span>${CS()}${formatMoney(o.total)}</span></div>
     ${payMethodLine}
+    ${paymentStateLine}
     ${cashLine}
     ${customerLine}
     ${b2bLine}
