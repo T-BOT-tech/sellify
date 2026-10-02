@@ -189,6 +189,8 @@ assert.match(source, /uq_payment_reconciliations_fingerprint/);
 assert.match(source, /idx_payment_reconciliations_payment_fingerprint/);
 assert.match(source, /UNIQUE constraint failed: payment_verifications\.organization_id, payment_verifications\.evidence_id, payment_verifications\.verifier, payment_verifications\.verifier_version/);
 assert.match(source, /GAP-1\.18Z: serialize refundable-balance check and refund reservation/);
+assert.match(source, /const lockedExisting = db\.prepare\('SELECT \* FROM payment_refunds WHERE organization_id = \\? AND idempotency_key = \\?'\)/);
+assert.match(source, /two concurrent callers cannot both/);
 assert.match(source, /BEGIN IMMEDIATE/);
 assert.match(source, /status IN \('REQUESTED','PROCESSING','SUCCEEDED'\)/);
 assert.match(source, /db\.exec\('COMMIT'\)/);
