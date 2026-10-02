@@ -1,4 +1,4 @@
-import { listPayments, resolvePaymentRouting, createPayment, paymentCommandKey } from './client.js';
+import { listPayments, resolvePaymentRouting, createPayment, queryPaymentStatus, paymentCommandKey } from './client.js';
 import { setPayments, getPayments, setPaymentError, upsertPayment } from './state.js';
 
 export async function refreshPaymentProjection() {
@@ -13,19 +13,77 @@ export async function refreshPaymentProjection() {
   }
 }
 
-export async function ensurePaymentForSyncedOrder(order) {
+export async function ensurePaymentForSyncedOrder(order, { statusQueryKey = null } = {}) {
   const serverOrderId = String(order?.server_order_id || order?.serverOrderId || '').trim();
   if (!serverOrderId) return { status: 'SKIPPED', reason: 'ORDER_NOT_SYNCED' };
-  const existing = getPaymentForOrder(serverOrderId) || (await listPayments({ orderId: serverOrderId, limit: 10 }))[0] || null;
-  if (existing) { upsertPayment(existing); return { status: 'EXISTS', payment: existing }; }
-  const route = await resolvePaymentRouting({ channel: 'manual', locationId: order?.location_id || order?.locationId || null, requireAccount: true });
-  if (route.status !== 'ROUTED' || !route.providerId || !route.paymentAccountId) return { status: 'DEFERRED', reason: 'NO_ELIGIBLE_PAYMENT_ROUTE' };
-  const result = await createPayment({ orderId: serverOrderId, amountMinor: Number(order?.total), providerId: route.providerId, paymentAccountId: route.paymentAccountId, channel: route.channel || 'manual', methodId: order?.payment_method_id || null, methodName: order?.payment_method_name || null, metadata: { source: 'SELLIFY_FRONTEND_ORDER_SYNC', localOrderId: order?.id || null } }, { idempotencyKey: paymentCommandKey('create-order', serverOrderId) });
-  const created = result?.payment || result; if (created) upsertPayment(created); return { status: 'CREATED', payment: created };
+
+  let payment = getPaymentForOrder(serverOrderId) || (await listPayments({ orderId: serverOrderId, limit: 10 }))[0] || null;
+  let creationStatus = 'EXISTS';
+
+  if (!payment) {
+    const route = await resolvePaymentRouting({
+      channel: 'manual',
+      locationId: order?.location_id || order?.locationId || null,
+      requireAccount: true,
+    });
+    if (route.status !== 'ROUTED' || !route.providerId || !route.paymentAccountId) {
+      return { status: 'DEFERRED', reason: 'NO_ELIGIBLE_PAYMENT_ROUTE' };
+    }
+
+    const result = await createPayment({
+      orderId: serverOrderId,
+      amountMinor: Number(order?.total),
+      providerId: route.providerId,
+      paymentAccountId: route.paymentAccountId,
+      channel: route.channel || 'manual',
+      methodId: order?.payment_method_id || null,
+      methodName: order?.payment_method_name || null,
+      metadata: {
+        source: 'SELLIFY_FRONTEND_ORDER_SYNC',
+        localOrderId: order?.id || null,
+      },
+    }, { idempotencyKey: paymentCommandKey('create-order', serverOrderId) });
+
+    payment = result?.payment || result || null;
+    creationStatus = 'CREATED';
+  }
+
+  if (!payment?.id) {
+    return { status: 'DEFERRED', reason: 'CANONICAL_PAYMENT_UNAVAILABLE' };
+  }
+
+  upsertPayment(payment);
+
+  // PF-1K: provider status is queried only after the canonical Payment
+  // exists. The status endpoint is a PaymentCore command, not a local
+  // projection read, so its result is the only source allowed to advance
+  // canonical financial state. A fresh operation key is used for each sync
+  // cycle; reusing one forever would replay an old provider observation.
+  const queryKey = String(statusQueryKey || '').trim() || paymentCommandKey(
+    'status',
+    `${payment.id}:${Date.now()}`,
+  );
+  const refreshed = await refreshCanonicalPaymentStatus(payment.id, {}, { idempotencyKey: queryKey });
+  return {
+    status: creationStatus,
+    payment: refreshed || payment,
+    statusQueried: true,
+  };
 }
 
 export function getPaymentForOrder(orderId) {
   const id = String(orderId || '');
   if (!id) return null;
   return getPayments().find(payment => String(payment?.orderId || payment?.order_id || '') === id) || null;
+}
+
+
+export async function refreshCanonicalPaymentStatus(paymentId, body = {}, { idempotencyKey = null } = {}) {
+  const id = String(paymentId || '').trim();
+  if (!id) throw Object.assign(new Error('paymentId is required'), { code: 'PAYMENT_REQUIRED', status: 400 });
+  const queryKey = String(idempotencyKey || '').trim() || paymentCommandKey('status', `${id}:${Date.now()}`);
+  const data = await queryPaymentStatus(id, body, { idempotencyKey: queryKey });
+  const payment = data?.payment || data;
+  if (payment && typeof payment === 'object' && (payment.id || payment.paymentId || payment.payment_id)) upsertPayment(payment);
+  return payment;
 }
