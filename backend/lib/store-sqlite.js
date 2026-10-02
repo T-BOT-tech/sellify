@@ -2445,6 +2445,31 @@ function runMigrations() {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(58, nowIso());
   }
+  // GAP-1.18Q — immutable payment decision identity and verification binding.
+  if (!applied.includes(59)) {
+    const duplicateVerificationDecision = db.prepare("SELECT organization_id, verification_id, COUNT(*) AS count FROM payment_decisions WHERE verification_id IS NOT NULL GROUP BY organization_id, verification_id HAVING COUNT(*) > 1 LIMIT 1").get();
+    if (duplicateVerificationDecision) {
+      throw Object.assign(new Error('Existing payment decision verification bindings are not unique'), {
+        statusCode: 500, code: 'PAYMENT_DECISION_VERIFICATION_DUPLICATES_EXIST',
+        organizationId: duplicateVerificationDecision.organization_id, verificationId: duplicateVerificationDecision.verification_id,
+      });
+    }
+    db.exec('ALTER TABLE payment_decisions ADD COLUMN decision_fingerprint TEXT');
+    const existingDecisions = db.prepare('SELECT * FROM payment_decisions ORDER BY created_at, id').all();
+    const updateFingerprint = db.prepare('UPDATE payment_decisions SET decision_fingerprint = ? WHERE id = ?');
+    for (const existing of existingDecisions) {
+      updateFingerprint.run(paymentDecisionFingerprint({
+        paymentId: existing.payment_id, paymentIntentId: existing.payment_intent_id,
+        evidenceId: existing.evidence_id, verificationId: existing.verification_id,
+        decision: existing.decision, targetState: existing.target_state,
+        reasonCodesJson: existing.reason_codes_json, invariantResultsJson: existing.invariant_results_json,
+        decisionSource: existing.decision_source,
+      }), existing.id);
+    }
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_decisions_verification ON payment_decisions(organization_id, verification_id) WHERE verification_id IS NOT NULL; CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_decisions_fingerprint ON payment_decisions(organization_id, decision_fingerprint) WHERE decision_fingerprint IS NOT NULL; CREATE INDEX IF NOT EXISTS idx_payment_decisions_immutable_identity ON payment_decisions(organization_id, payment_id, verification_id, decision_fingerprint)");
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(59, nowIso());
+  }
+
   // GAP-1.18M — durable provider transaction identity binding.
   // A provider transaction may authorize at most one Payment within an
   // organization/provider scope. NULLs remain allowed for legacy evidence,
@@ -5984,6 +6009,15 @@ export async function insertPaymentIdempotency(chatId, input = {}) {
   );
   return getPaymentIdempotency(chatId, input.idempotencyKey || input.idempotency_key, input.commandType || input.command_type);
 }
+function paymentDecisionFingerprint({ paymentId, paymentIntentId, evidenceId, verificationId, decision, targetState, reasonCodesJson, invariantResultsJson, decisionSource }) {
+  const canonical = [
+    String(paymentId || ''), String(paymentIntentId || ''), String(evidenceId || ''),
+    String(verificationId || ''), String(decision || '').toUpperCase(), String(targetState || '').toUpperCase(),
+    String(reasonCodesJson || '[]'), String(invariantResultsJson || '{}'), String(decisionSource || 'PAYMENT_CORE').toUpperCase(),
+  ].join('|');
+  return crypto.createHash('sha256').update(canonical).digest('hex');
+}
+
 export async function commitPaymentDecision(chatId, input = {}, actor = null) {
   ensureDatabase();
   const { organizationId } = await resolvePaymentContext(chatId);
@@ -6156,12 +6190,35 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
         throw Object.assign(new Error('Decision verification reference is not bound to the committed context'), { statusCode: 409, code: 'DECISION_VERIFICATION_CONTEXT_MISMATCH' });
       }
     }
+    const decisionPaymentIntentId = decision.paymentIntentId || decision.payment_intent_id || row.payment_intent_id || null;
+    const decisionEvidenceId = decision.evidenceId || decision.evidence_id || input.verification?.evidenceId || input.verification?.evidence_id || null;
+    const decisionValue = String(decision.decision || '').toUpperCase();
+    const decisionReasonCodesJson = json(decision.reasonCodes || decision.reason_codes || []);
+    const decisionInvariantResultsJson = json(decision.invariantResults || decision.invariant_results || {});
+    const decisionSource = String(decision.decisionSource || 'PAYMENT_CORE').trim().toUpperCase();
+    if (decisionSource !== 'PAYMENT_CORE') throw Object.assign(new Error('Payment decisions must originate from Payment Core'), { statusCode: 409, code: 'UNTRUSTED_PAYMENT_DECISION_SOURCE' });
+    const decisionFingerprint = paymentDecisionFingerprint({
+      paymentId, paymentIntentId: decisionPaymentIntentId, evidenceId: decisionEvidenceId,
+      verificationId: decisionVerificationId, decision: decisionValue, targetState: target,
+      reasonCodesJson: decisionReasonCodesJson, invariantResultsJson: decisionInvariantResultsJson, decisionSource,
+    });
+    const existingDecision = decisionVerificationId
+      ? db.prepare('SELECT * FROM payment_decisions WHERE organization_id = ? AND verification_id = ?').get(organizationId, decisionVerificationId)
+      : db.prepare('SELECT * FROM payment_decisions WHERE organization_id = ? AND decision_fingerprint = ?').get(organizationId, decisionFingerprint);
+    if (existingDecision) {
+      if (String(existingDecision.decision_fingerprint || '') !== decisionFingerprint) {
+        throw Object.assign(new Error('A different immutable payment decision already exists for this verification'), {
+          statusCode: 409, code: 'PAYMENT_DECISION_CONFLICT', decisionId: existingDecision.id, verificationId: existingDecision.verification_id || null,
+        });
+      }
+      const currentPayment = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
+      if (!currentPayment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+      return paymentFromRow(currentPayment);
+    }
     const decisionId = String(decision.id || crypto.randomUUID());
-    db.prepare("INSERT INTO payment_decisions (id, organization_id, payment_id, payment_intent_id, evidence_id, verification_id, decision, target_state, reason_codes_json, invariant_results_json, decision_source, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-      decisionId, organizationId, paymentId, decision.paymentIntentId || decision.payment_intent_id || row.payment_intent_id || null,
-      decision.evidenceId || decision.evidence_id || input.verification?.evidenceId || input.verification?.evidence_id || null, decisionVerificationId,
-      String(decision.decision || '').toUpperCase(), target, json(decision.reasonCodes || decision.reason_codes || []),
-      json(decision.invariantResults || decision.invariant_results || {}), decision.decisionSource || 'PAYMENT_CORE', actor?.userId || null, now
+    db.prepare("INSERT INTO payment_decisions (id, organization_id, payment_id, payment_intent_id, evidence_id, verification_id, decision, target_state, reason_codes_json, invariant_results_json, decision_source, actor_id, created_at, decision_fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+      decisionId, organizationId, paymentId, decisionPaymentIntentId, decisionEvidenceId, decisionVerificationId,
+      decisionValue, target, decisionReasonCodesJson, decisionInvariantResultsJson, decisionSource, actor?.userId || null, now, decisionFingerprint
     );
     const result = db.prepare("UPDATE payments SET state = ?, updated_at = ?, claimed_at = CASE WHEN ? = 'CLAIMED' THEN ? ELSE claimed_at END, received_at = CASE WHEN ? = 'RECEIVED' THEN ? ELSE received_at END, verified_at = CASE WHEN ? = 'VERIFIED' THEN ? ELSE verified_at END, reconciled_at = CASE WHEN ? = 'RECONCILED' THEN ? ELSE reconciled_at END WHERE id = ? AND organization_id = ?" + (expectedState ? " AND state = ?" : ""))
       .run(target, now, target, now, target, now, target, now, target, now, paymentId, organizationId, ...(expectedState ? [expectedState] : []));
