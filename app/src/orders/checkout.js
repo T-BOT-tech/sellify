@@ -163,6 +163,15 @@ export function saveOrder(payMethodId, proofMeta) {
     payment_method_id: resolvedMethodId,
     payment_method_name: methodMeta ? methodMeta.name : 'Cash',
     payment_proof: proofMeta || null,
+    // PF-1A: local proof is operational evidence only. The canonical payment
+    // is created/linked by the backend payment flow; checkout must not invent
+    // or mutate financial state. Keep an explicit linkage envelope so later
+    // order/payment synchronization can establish the immutable relationship.
+    payment_linkage: {
+      status: 'UNLINKED',
+      payment_id: null,
+      payment_intent_id: null,
+    },
     status: 'queued',
     created_at: Date.now(),
     created_by_role: currentStaff ? currentStaff.role : 'owner',
