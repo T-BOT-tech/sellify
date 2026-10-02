@@ -23,6 +23,8 @@ import {
 // nothing imports main.js back except window-bridge.js.
 import { t } from '../ui/i18n.js';
 import { switchTab } from '../ui/tabs.js';
+import { buildLogisticsOperationalWorkspaceProjection } from '../verticals/logistics/workspace-projection.js';
+import { getLogisticsWorkspaceComposition } from '../verticals/logistics/workspace-contract.js';
 
 export function applyLogisticsUI() {
   const enabled = isLogisticsEnabled();
@@ -97,6 +99,28 @@ function renderDeliveryWorkloadSummary(assignments) {
 
 let logisticsDispatchFilters = { status: '', courierUserId: '' };
 
+function currentStaffRole() {
+  return config.currentStaffRole || config.authRole || 'staff';
+}
+
+function renderOperationalWorkspaceSummary(workspace, views) {
+  const sections = [];
+  if (views.includes('dispatch')) sections.push(`<span>Dispatch: ${workspace.dispatch.length}</span>`);
+  if (views.includes('tracking')) sections.push(`<span>Tracking: ${workspace.tracking.length}</span>`);
+  if (views.includes('proof')) sections.push(`<span>Proof: ${workspace.proof.length}</span>`);
+  if (views.includes('exceptions')) sections.push(`<span>Exceptions: ${workspace.exceptions.length}</span>`);
+  if (views.includes('workload')) {
+    sections.push(`<span>Active workload: ${workspace.workload.active_count}</span>`);
+  }
+  if (!sections.length) return '';
+  return `
+    <div class="logistics-meta" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;"
+         data-logistics-workspace-projection="1">
+      <strong>Logistics workspace</strong>
+      ${sections.join(' · ')}
+    </div>`;
+}
+
 export function renderLogistics() {
   const list = document.getElementById('logisticsList');
   if (!list) return;
@@ -170,7 +194,16 @@ export function renderLogistics() {
       <button type="button" class="btn-secondary" id="logistics-filter-apply">Filter</button>
       <button type="button" class="btn-secondary" id="logistics-filter-clear">Clear</button>
     </div>`;
+  const workspaceRole = String(config.authRoles?.find?.(role => String(role).startsWith('logistics_')) || currentStaffRole()).toLowerCase();
+  const workspace = buildLogisticsOperationalWorkspaceProjection({
+    orders,
+    assignments: canonicalAssignments,
+  });
+  const composition = getLogisticsWorkspaceComposition(workspaceRole);
   let html = filterBar + renderDeliveryWorkloadSummary(canonicalAssignments);
+  if (composition.views.some(view => view.id === 'tracking')) {
+    html += renderOperationalWorkspaceSummary(workspace, composition.views.map(view => view.id));
+  }
   if (pending.length > 0) {
     html += `<div class="settings-section-label">${t('whPendingFulfillment')}</div>` + pending.map(renderCard).join('');
   }
