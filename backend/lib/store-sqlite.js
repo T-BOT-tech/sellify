@@ -2470,6 +2470,51 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(59, nowIso());
   }
 
+  // GAP-1.18R — authoritative verification freezes payment evidence identity.
+  if (!applied.includes(60)) {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS trg_payment_evidence_immutable_after_verification
+      BEFORE UPDATE OF organization_id, location_id, payment_id, payment_intent_id,
+        provider_id, channel, evidence_type, external_reference, provider_transaction_id,
+        fingerprint, observed_at ON payment_evidence
+      FOR EACH ROW
+      WHEN EXISTS (
+        SELECT 1 FROM payment_verifications v
+        WHERE v.evidence_id = OLD.id
+          AND v.organization_id = OLD.organization_id
+      )
+      AND (
+        NEW.organization_id IS NOT OLD.organization_id OR
+        NEW.location_id IS NOT OLD.location_id OR
+        NEW.payment_id IS NOT OLD.payment_id OR
+        NEW.payment_intent_id IS NOT OLD.payment_intent_id OR
+        NEW.provider_id IS NOT OLD.provider_id OR
+        NEW.channel IS NOT OLD.channel OR
+        NEW.evidence_type IS NOT OLD.evidence_type OR
+        NEW.external_reference IS NOT OLD.external_reference OR
+        NEW.provider_transaction_id IS NOT OLD.provider_transaction_id OR
+        NEW.fingerprint IS NOT OLD.fingerprint OR
+        NEW.observed_at IS NOT OLD.observed_at
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'PAYMENT_EVIDENCE_IMMUTABLE_AFTER_VERIFICATION');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_payment_evidence_delete_after_verification
+      BEFORE DELETE ON payment_evidence
+      FOR EACH ROW
+      WHEN EXISTS (
+        SELECT 1 FROM payment_verifications v
+        WHERE v.evidence_id = OLD.id
+          AND v.organization_id = OLD.organization_id
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'PAYMENT_EVIDENCE_DELETE_BLOCKED_AFTER_VERIFICATION');
+      END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(60, nowIso());
+  }
+
   // GAP-1.18M — durable provider transaction identity binding.
   // A provider transaction may authorize at most one Payment within an
   // organization/provider scope. NULLs remain allowed for legacy evidence,
