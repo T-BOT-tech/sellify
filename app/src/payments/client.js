@@ -3,6 +3,7 @@ import { authHeaders } from '../auth/tenant.js';
 import { buildPaymentPath, buildPaymentIdempotencyKey, normalizePaymentError, normalizePaymentListQuery, normalizePaymentMutation, normalizePaymentResponse } from './contract.js';
 
 function baseUrl() { return (config.syncUrl || window.location.origin).replace(/\/$/, ''); }
+function requiredIdempotencyKey(value) { const key = String(value || '').trim(); if (!key) throw Object.assign(new Error('Idempotency-Key is required'), { code: 'IDEMPOTENCY_KEY_REQUIRED', status: 400 }); return key; }
 async function request(path, options = {}) {
   const headers = { ...authHeaders(), ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) };
   const response = await fetch(baseUrl() + path, { ...options, headers });
@@ -26,7 +27,7 @@ export async function getPayment(paymentId) {
   return normalizePaymentResponse(data);
 }
 export async function createPayment(body, { idempotencyKey } = {}) {
-  const headers = idempotencyKey ? { 'Idempotency-Key': String(idempotencyKey) } : {};
+  const headers = { 'Idempotency-Key': requiredIdempotencyKey(idempotencyKey) };
   const data = await request(buildPaymentPath(config.chatId), { method: 'POST', headers, body: JSON.stringify(normalizePaymentMutation(body)) });
   return normalizePaymentResponse(data);
 }
