@@ -13,6 +13,10 @@ assert.match(store, /ASSIGNED: new Set\(\['ACCEPTED','CANCELLED','FAILED','REASS
 assert.match(store, /ACCEPTED: new Set\(\['OUT_FOR_DELIVERY','CANCELLED','FAILED','REASSIGNED'\]\)/);
 assert.match(store, /OUT_FOR_DELIVERY: new Set\(\['DELIVERED','CANCELLED','FAILED','REASSIGNED'\]\)/);
 assert.match(store, /DELIVERY_PROOF_REQUIRED/);
+assert.match(store, /DELIVERY_PROOF_INVALID/);
+assert.match(store, /DELIVERY_PROOF_IMMUTABLE/);
+assert.match(store, /proofReference/);
+assert.match(store, /existingProof/);
 assert.match(store, /EXCEPTION_REASON_REQUIRED/);
 assert.match(store, /REASSIGN_EXCEPTION/);
 assert.match(store, /EXCEPTION_NOT_FOUND/);
