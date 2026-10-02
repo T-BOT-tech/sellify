@@ -9,12 +9,16 @@ const server = fs.readFileSync('backend/server.js', 'utf8');
 assert.match(client, /requiredIdempotencyKey/);
 assert.match(client, /Idempotency-Key/);
 assert.match(client, /createPayment/);
+assert.match(client, /resolvePaymentRouting/);
 assert.match(client, /transitionPaymentLifecycle/);
 assert.match(server, /paymentCore\.transitionLifecycle/);
 assert.match(server, /Idempotency-Key is required/);
+assert.match(server, /paymentCore\.resolveRouting/);
+assert.match(server, /\/payments\/routing\/resolve/);
 assert.match(client, /requiredIdempotencyKey\(idempotencyKey\)/g);
 assert.match(proof, /payment_proof/);
 assert.match(checkout, /payment_method_id/);
 assert.doesNotMatch(checkout, /payments\/ledger|payment_ledger_entries/);
+assert.doesNotMatch(checkout, /createPayment\(/);
 
 console.log('PASS PF-1 payment frontend mutation/idempotency integration boundary');
