@@ -142,7 +142,7 @@ test('GAP-1.12 unsupported provider reconciliation remains UNKNOWN/pending', asy
   assert.equal(result.ledgerMutated, undefined);
 
   const history = await store.listPaymentReconciliations(base.chatId, base.payment.id);
-  assert.equal(history, []);
+  assert.deepEqual(history, []);
 });
 
 test.after(async () => {
