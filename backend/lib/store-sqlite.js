@@ -7004,24 +7004,55 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
       throw Object.assign(new Error('Refund exceeds refundable payment amount'), { statusCode: 409, code: 'REFUND_AMOUNT_EXCEEDS_PAYMENT' });
     }
     const fullRefund = successfulBefore + Number(refund.amount_minor) === Number(payment.amount_minor);
-    db.prepare(`UPDATE payment_refunds SET status='SUCCEEDED', provider_refund_id=?, provider_transaction_id=?, provider_result_json=?, evidence_json=?, updated_at=?, processed_at=? WHERE id=? AND organization_id=?`).run(
-      input.providerRefundId || input.provider_refund_id || null,
-      input.providerTransactionId || input.provider_transaction_id || null,
+    const providerRefundId = input.providerRefundId || input.provider_refund_id || null;
+    const providerTransactionId = input.providerTransactionId || input.provider_transaction_id || null;
+    let refundEvidenceId = input.refundEvidenceId || input.refund_evidence_id || null;
+    if (refundEvidenceId) {
+      const existingEvidence = db.prepare('SELECT id, organization_id, payment_id FROM payment_evidence WHERE id = ?').get(String(refundEvidenceId));
+      if (!existingEvidence || existingEvidence.organization_id !== tenant.organization_id || existingEvidence.payment_id !== payment.id) {
+        throw Object.assign(new Error('Refund provider evidence is invalid'), { statusCode: 409, code: 'REFUND_PROVIDER_EVIDENCE_INVALID' });
+      }
+      refundEvidenceId = existingEvidence.id;
+    } else {
+      if (input.evidence == null) {
+        throw Object.assign(new Error('Successful refund requires persisted provider evidence'), { statusCode: 409, code: 'REFUND_PROVIDER_EVIDENCE_REQUIRED' });
+      }
+      const evidencePayload = input.evidence;
+      const evidenceFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+        refundId: refund.id,
+        providerRefundId,
+        providerTransactionId,
+        evidence: evidencePayload,
+      })).digest('hex');
+      refundEvidenceId = crypto.randomUUID();
+      db.prepare(`INSERT INTO payment_evidence
+        (id,organization_id,location_id,payment_id,payment_intent_id,provider_id,channel,evidence_type,external_reference,provider_transaction_id,fingerprint,raw_payload_json,normalized_payload_json,source,observed_at,received_at,status,created_at,updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+        refundEvidenceId, tenant.organization_id, payment.location_id || null, payment.id, payment.payment_intent_id || null,
+        payment.provider_id, payment.channel || 'api', 'REFUND_RESULT', providerRefundId, providerTransactionId,
+        evidenceFingerprint, json(evidencePayload), json(evidencePayload), 'PAYMENT_REFUND',
+        input.observedAt || input.observed_at || now, now, 'RECEIVED', now, now
+      );
+    }
+    db.prepare(`UPDATE payment_refunds SET status='SUCCEEDED', provider_refund_id=?, provider_transaction_id=?, provider_result_json=?, evidence_json=?, refund_evidence_id=?, updated_at=?, processed_at=? WHERE id=? AND organization_id=?`).run(
+      providerRefundId,
+      providerTransactionId,
       input.providerResult == null ? null : json(input.providerResult),
       input.evidence == null ? null : json(input.evidence),
+      refundEvidenceId,
       now, now, refund.id, tenant.organization_id
     );
     if (fullRefund) {
       db.prepare('UPDATE payments SET state = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND state IN (\'VERIFIED\',\'RECONCILED\')').run('REFUNDED', now, payment.id, tenant.organization_id);
     }
     db.prepare(`INSERT INTO payment_ledger_entries
-      (id,payment_id,organization_id,entry_type,amount_minor,currency,from_state,to_state,actor_id,reason,metadata_json,created_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      (id,payment_id,organization_id,entry_type,amount_minor,currency,from_state,to_state,actor_id,reason,metadata_json,created_at,payment_refund_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
       crypto.randomUUID(), payment.id, tenant.organization_id, 'REFUNDED', Number(refund.amount_minor), refund.currency,
       payment.state, fullRefund ? 'REFUNDED' : payment.state, actor?.userId || null,
       refund.reason || 'Payment refund',
       json({ lifecycle: 'GAP-1.14', refundId: refund.id, providerRefundId: input.providerRefundId || input.provider_refund_id || null }),
-      now
+      now, refund.id
     );
     audit(String(chatId), 'payment.refund.succeeded', payment.id, actor?.userId || null, {
       refundId: refund.id, amountMinor: refund.amount_minor, fullRefund,
