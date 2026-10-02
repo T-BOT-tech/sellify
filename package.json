@@ -318,7 +318,11 @@
     "gap-1.18:payment-financial-invariant-binding-test": "node phase0/gap-1.18L-payment-financial-invariant-binding-regression.mjs",
     "gap-1.18:provider-transaction-uniqueness-test": "node phase0/gap-1.18M-provider-transaction-uniqueness-regression.mjs",
     "gap-1.18:verification-provenance-test": "node phase0/gap-1.18N-verification-provenance-regression.mjs",
-    "gap-1.18:audit-lineage-test": "node phase0/gap-1.18O-audit-lineage-regression.mjs"
+    "gap-1.18:audit-lineage-test": "node phase0/gap-1.18O-audit-lineage-regression.mjs",
+    "gap-1.18:payment-failure-recovery-test": "node phase0/gap-1.18AA-payment-failure-recovery-regression.mjs",
+    "gap-1.18:payment-security-boundary-test": "node phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
+    "gap-1.18:payment-invariant-certification-test": "node phase0/gap-1.18AC-payment-invariant-certification-regression.mjs",
+    "gap-1.18:payment-production-readiness-test": "node phase0/gap-1.18AD-production-readiness-regression.mjs"
   },
   "engines": {
     "node": ">=24"
