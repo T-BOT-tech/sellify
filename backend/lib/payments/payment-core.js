@@ -524,8 +524,9 @@ export class PaymentCore {
       },
     }, command.actor || null);
 
+    const refreshedPayment = await this.store.getPayment(chatId, paymentId);
     return {
-      payment: committed,
+      payment: refreshedPayment || committed,
       status: verification.result,
       supported: true,
       evidence,
