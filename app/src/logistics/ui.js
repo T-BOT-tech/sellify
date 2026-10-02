@@ -9,7 +9,7 @@
 // — see that file for the fuller explanation. See fulfillment.js for the
 // matching note on the circular import in the other direction.
 import { escapeHtml, escapeAttr } from '../utils/index.js';
-import { config, orders, warehouseLocations } from '../state.js';
+import { config, currentStaff, orders, warehouseLocations } from '../state.js';
 import {
   deliveryAssignments, isLogisticsEnabled, selectedFulfillmentType, setSelectedFulfillmentType,
   nextFulfillmentStatus, isFulfillmentFinal, fulfillmentStatusLabel, canonicalDeliveryAssignment,
@@ -194,7 +194,7 @@ export function renderLogistics() {
       <button type="button" class="btn-secondary" id="logistics-filter-apply">Filter</button>
       <button type="button" class="btn-secondary" id="logistics-filter-clear">Clear</button>
     </div>`;
-  const workspaceRole = String(config.authRoles?.find?.(role => String(role).startsWith('logistics_')) || currentStaffRole()).toLowerCase();
+  const workspaceRole = String(currentStaff?.role || currentStaffRole()).toLowerCase();
   const workspace = buildLogisticsOperationalWorkspaceProjection({
     orders,
     assignments: canonicalAssignments,
