@@ -58,3 +58,16 @@ assert.match(source, /trg_payment_evidence_immutable_after_verification/);
 assert.match(source, /PAYMENT_EVIDENCE_IMMUTABLE_AFTER_VERIFICATION/);
 assert.match(source, /trg_payment_evidence_delete_after_verification/);
 assert.match(source, /PAYMENT_EVIDENCE_DELETE_BLOCKED_AFTER_VERIFICATION/);
+
+assert.match(source, /GAP-1\.18S — persisted payment verification is immutable/);
+assert.match(source, /if \(!applied\.includes\(61\)\)/);
+assert.match(source, /trg_payment_verification_immutable/);
+assert.match(source, /PAYMENT_VERIFICATION_IMMUTABLE_AFTER_PERSISTENCE/);
+assert.match(source, /NEW\.result IS NOT OLD\.result/);
+assert.match(source, /NEW\.observed_amount_minor IS NOT OLD\.observed_amount_minor/);
+assert.match(source, /NEW\.observed_currency IS NOT OLD\.observed_currency/);
+assert.match(source, /NEW\.observed_transaction_id IS NOT OLD\.observed_transaction_id/);
+assert.match(source, /NEW\.observed_at IS NOT OLD\.observed_at/);
+assert.match(source, /NEW\.verifier IS NOT OLD\.verifier/);
+assert.match(source, /NEW\.provenance_source IS NOT OLD\.provenance_source/);
+assert.match(source, /NEW\.provenance_operation IS NOT OLD\.provenance_operation/);
