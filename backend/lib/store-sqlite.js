@@ -2533,6 +2533,35 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(60, nowIso());
   }
 
+  // GAP-1.18T — audit tamper evidence.
+  if (!applied.includes(62)) {
+    const rows = db.prepare('SELECT * FROM audit_events ORDER BY id').all();
+    const previousByOrganization = new Map();
+    const updateHash = db.prepare('UPDATE audit_events SET previous_hash = ?, event_hash = ? WHERE id = ?');
+    for (const row of rows) {
+      const previousHash = previousByOrganization.get(row.organization_id) || null;
+      row.previous_hash = previousHash;
+      const eventHash = auditEventHash(row);
+      updateHash.run(previousHash, eventHash, row.id);
+      previousByOrganization.set(row.organization_id, eventHash);
+    }
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS trg_audit_events_immutable
+      BEFORE UPDATE ON audit_events
+      FOR EACH ROW BEGIN
+        SELECT RAISE(ABORT, 'AUDIT_EVENT_IMMUTABLE');
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_audit_events_delete_blocked
+      BEFORE DELETE ON audit_events
+      FOR EACH ROW BEGIN
+        SELECT RAISE(ABORT, 'AUDIT_EVENT_DELETE_BLOCKED');
+      END;
+      CREATE INDEX IF NOT EXISTS idx_audit_chain
+        ON audit_events(organization_id, id, previous_hash, event_hash);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(62, nowIso());
+  }
+
   // GAP-1.18U — financial transition idempotency.
   if (!applied.includes(63)) {
     db.exec(`
@@ -2619,6 +2648,60 @@ function runMigrations() {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(67, nowIso());
   }
+  // GAP-1.18X — reconciliation lineage without alternate financial authority.
+  // Reconciliation is evidence/findings only. Any authoritative payment state
+  // change must still pass through a persisted Payment Core decision.
+  if (!applied.includes(68)) {
+    db.exec(`
+      ALTER TABLE payment_reconciliations ADD COLUMN payment_evidence_id TEXT REFERENCES payment_evidence(id) ON DELETE SET NULL;
+      ALTER TABLE payment_reconciliations ADD COLUMN payment_verification_id TEXT REFERENCES payment_verifications(id) ON DELETE SET NULL;
+      ALTER TABLE payment_reconciliations ADD COLUMN payment_decision_id TEXT REFERENCES payment_decisions(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS idx_payment_reconciliation_lineage
+        ON payment_reconciliations(organization_id, payment_evidence_id, payment_verification_id, payment_decision_id, created_at DESC);
+      CREATE TRIGGER IF NOT EXISTS trg_payment_reconciliation_lineage
+      BEFORE INSERT ON payment_reconciliations
+      FOR EACH ROW
+      BEGIN
+        SELECT CASE
+          WHEN NEW.status = 'matched' AND (NEW.payment_evidence_id IS NULL OR NEW.payment_verification_id IS NULL OR NEW.payment_decision_id IS NULL)
+            THEN RAISE(ABORT, 'PAYMENT_RECONCILIATION_LINEAGE_REQUIRED')
+          WHEN NEW.payment_evidence_id IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM payment_evidence e
+            WHERE e.id = NEW.payment_evidence_id AND e.organization_id = NEW.organization_id AND e.payment_id = NEW.payment_id
+          ) THEN RAISE(ABORT, 'PAYMENT_RECONCILIATION_EVIDENCE_INVALID')
+          WHEN NEW.payment_verification_id IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM payment_verifications v
+            WHERE v.id = NEW.payment_verification_id AND v.organization_id = NEW.organization_id
+              AND v.payment_id = NEW.payment_id AND v.evidence_id = NEW.payment_evidence_id
+          ) THEN RAISE(ABORT, 'PAYMENT_RECONCILIATION_VERIFICATION_INVALID')
+          WHEN NEW.payment_decision_id IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM payment_decisions d
+            WHERE d.id = NEW.payment_decision_id AND d.organization_id = NEW.organization_id
+              AND d.payment_id = NEW.payment_id AND d.verification_id = NEW.payment_verification_id
+              AND d.evidence_id = NEW.payment_evidence_id
+          ) THEN RAISE(ABORT, 'PAYMENT_RECONCILIATION_DECISION_INVALID')
+          WHEN NEW.status = 'matched' AND NOT EXISTS (
+            SELECT 1 FROM payment_decisions d
+            WHERE d.id = NEW.payment_decision_id AND d.organization_id = NEW.organization_id
+              AND d.payment_id = NEW.payment_id AND d.target_state IN ('VERIFIED','RECONCILED')
+          ) THEN RAISE(ABORT, 'PAYMENT_RECONCILIATION_AUTHORITY_INVALID')
+        END;
+      END;
+    `);
+      CREATE TRIGGER IF NOT EXISTS trg_payment_reconciliation_lineage_immutable
+      BEFORE UPDATE ON payment_reconciliations
+      FOR EACH ROW
+      WHEN NEW.organization_id IS NOT OLD.organization_id
+        OR NEW.payment_id IS NOT OLD.payment_id
+        OR NEW.payment_evidence_id IS NOT OLD.payment_evidence_id
+        OR NEW.payment_verification_id IS NOT OLD.payment_verification_id
+        OR NEW.payment_decision_id IS NOT OLD.payment_decision_id
+      BEGIN
+        SELECT RAISE(ABORT, 'PAYMENT_RECONCILIATION_LINEAGE_IMMUTABLE');
+      END;
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(68, nowIso());
+  }
+
   // GAP-1.18Y — database-level cross-tenant payment-core isolation.
   // Child financial records must never bind to a parent from another
   // organization, even if an application caller bypasses normal service checks.
@@ -2717,89 +2800,6 @@ function runMigrations() {
         ON payment_reconciliations(organization_id, payment_id, fingerprint, created_at DESC);
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(70, nowIso());
-  }
-
-  // GAP-1.18X — reconciliation lineage without alternate financial authority.
-  // Reconciliation is evidence/findings only. Any authoritative payment state
-  // change must still pass through a persisted Payment Core decision.
-  if (!applied.includes(68)) {
-    db.exec(`
-      ALTER TABLE payment_reconciliations ADD COLUMN payment_evidence_id TEXT REFERENCES payment_evidence(id) ON DELETE SET NULL;
-      ALTER TABLE payment_reconciliations ADD COLUMN payment_verification_id TEXT REFERENCES payment_verifications(id) ON DELETE SET NULL;
-      ALTER TABLE payment_reconciliations ADD COLUMN payment_decision_id TEXT REFERENCES payment_decisions(id) ON DELETE SET NULL;
-      CREATE INDEX IF NOT EXISTS idx_payment_reconciliation_lineage
-        ON payment_reconciliations(organization_id, payment_evidence_id, payment_verification_id, payment_decision_id, created_at DESC);
-      CREATE TRIGGER IF NOT EXISTS trg_payment_reconciliation_lineage
-      BEFORE INSERT ON payment_reconciliations
-      FOR EACH ROW
-      BEGIN
-        SELECT CASE
-          WHEN NEW.status = 'matched' AND (NEW.payment_evidence_id IS NULL OR NEW.payment_verification_id IS NULL OR NEW.payment_decision_id IS NULL)
-            THEN RAISE(ABORT, 'PAYMENT_RECONCILIATION_LINEAGE_REQUIRED')
-          WHEN NEW.payment_evidence_id IS NOT NULL AND NOT EXISTS (
-            SELECT 1 FROM payment_evidence e
-            WHERE e.id = NEW.payment_evidence_id AND e.organization_id = NEW.organization_id AND e.payment_id = NEW.payment_id
-          ) THEN RAISE(ABORT, 'PAYMENT_RECONCILIATION_EVIDENCE_INVALID')
-          WHEN NEW.payment_verification_id IS NOT NULL AND NOT EXISTS (
-            SELECT 1 FROM payment_verifications v
-            WHERE v.id = NEW.payment_verification_id AND v.organization_id = NEW.organization_id
-              AND v.payment_id = NEW.payment_id AND v.evidence_id = NEW.payment_evidence_id
-          ) THEN RAISE(ABORT, 'PAYMENT_RECONCILIATION_VERIFICATION_INVALID')
-          WHEN NEW.payment_decision_id IS NOT NULL AND NOT EXISTS (
-            SELECT 1 FROM payment_decisions d
-            WHERE d.id = NEW.payment_decision_id AND d.organization_id = NEW.organization_id
-              AND d.payment_id = NEW.payment_id AND d.verification_id = NEW.payment_verification_id
-              AND d.evidence_id = NEW.payment_evidence_id
-          ) THEN RAISE(ABORT, 'PAYMENT_RECONCILIATION_DECISION_INVALID')
-          WHEN NEW.status = 'matched' AND NOT EXISTS (
-            SELECT 1 FROM payment_decisions d
-            WHERE d.id = NEW.payment_decision_id AND d.organization_id = NEW.organization_id
-              AND d.payment_id = NEW.payment_id AND d.target_state IN ('VERIFIED','RECONCILED')
-          ) THEN RAISE(ABORT, 'PAYMENT_RECONCILIATION_AUTHORITY_INVALID')
-        END;
-      END;
-    `);
-      CREATE TRIGGER IF NOT EXISTS trg_payment_reconciliation_lineage_immutable
-      BEFORE UPDATE ON payment_reconciliations
-      FOR EACH ROW
-      WHEN NEW.organization_id IS NOT OLD.organization_id
-        OR NEW.payment_id IS NOT OLD.payment_id
-        OR NEW.payment_evidence_id IS NOT OLD.payment_evidence_id
-        OR NEW.payment_verification_id IS NOT OLD.payment_verification_id
-        OR NEW.payment_decision_id IS NOT OLD.payment_decision_id
-      BEGIN
-        SELECT RAISE(ABORT, 'PAYMENT_RECONCILIATION_LINEAGE_IMMUTABLE');
-      END;
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(68, nowIso());
-  }
-
-  // GAP-1.18T — audit tamper evidence.
-  if (!applied.includes(62)) {
-    const rows = db.prepare('SELECT * FROM audit_events ORDER BY id').all();
-    const previousByOrganization = new Map();
-    const updateHash = db.prepare('UPDATE audit_events SET previous_hash = ?, event_hash = ? WHERE id = ?');
-    for (const row of rows) {
-      const previousHash = previousByOrganization.get(row.organization_id) || null;
-      row.previous_hash = previousHash;
-      const eventHash = auditEventHash(row);
-      updateHash.run(previousHash, eventHash, row.id);
-      previousByOrganization.set(row.organization_id, eventHash);
-    }
-    db.exec(`
-      CREATE TRIGGER IF NOT EXISTS trg_audit_events_immutable
-      BEFORE UPDATE ON audit_events
-      FOR EACH ROW BEGIN
-        SELECT RAISE(ABORT, 'AUDIT_EVENT_IMMUTABLE');
-      END;
-      CREATE TRIGGER IF NOT EXISTS trg_audit_events_delete_blocked
-      BEFORE DELETE ON audit_events
-      FOR EACH ROW BEGIN
-        SELECT RAISE(ABORT, 'AUDIT_EVENT_DELETE_BLOCKED');
-      END;
-      CREATE INDEX IF NOT EXISTS idx_audit_chain
-        ON audit_events(organization_id, id, previous_hash, event_hash);
-    `);
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(62, nowIso());
   }
 
   // GAP-1.18S — persisted payment verification is immutable.
