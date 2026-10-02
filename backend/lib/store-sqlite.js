@@ -5143,6 +5143,13 @@ export async function getTenant(chatId) {
   return tenantFromRow(db.prepare('SELECT * FROM tenants WHERE chat_id = ?').get(String(chatId)));
 }
 
+// Synchronous tenant lookup used by the existing organization-scoped store paths.
+// Keep this on the same canonical tenants table/normalizer as getTenant().
+function getTenantByChatId(chatId) {
+  ensureDatabase();
+  return tenantFromRow(db.prepare('SELECT * FROM tenants WHERE chat_id = ?').get(String(chatId)));
+}
+
 export async function getTenantByApiKey(apiKey) {
   ensureDatabase();
   if (!apiKey) return null;
