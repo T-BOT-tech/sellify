@@ -126,6 +126,29 @@ await assert.rejects(
   (e) => e.code === 'PROVIDER_UNAVAILABLE',
 );
 
+
+await assert.rejects(
+  () => executeLogisticsProviderExecutionBridge({
+    handoff,
+    invokeProvider() {
+      return { provider_id: 'provider-bridge', operation: 'delivery', result_status: 'delivered', callback_id: 'cb-no-evidence' };
+    },
+    applyCanonicalResult() {},
+  }),
+  /Delivered result requires proof or tracking evidence/,
+);
+
+await assert.rejects(
+  () => executeLogisticsProviderExecutionBridge({
+    handoff,
+    invokeProvider() {
+      return { provider_id: 'provider-bridge', operation: 'delivery', result_status: 'returned', callback_id: 'cb-return-no-evidence' };
+    },
+    applyCanonicalResult() {},
+  }),
+  /Returned result requires proof or tracking evidence/,
+);
+
 const contract = logisticsProviderExecutionBridgeContract();
 assert.equal(contract.provider_registry, false);
 assert.equal(contract.callback_store, false);
