@@ -87,6 +87,7 @@ test('GAP-1.11 provider getStatus MATCH flows through evidence, invariants, deci
     chatId: base.chatId,
     paymentId: base.payment.id,
     actor: null,
+    idempotencyKey: 'gap1-11-status-match-1',
   });
 
   assert.equal(result.supported, true);
@@ -108,6 +109,7 @@ test('GAP-1.11 unknown/pending provider status never becomes payment success', a
     chatId: base.chatId,
     paymentId: base.payment.id,
     actor: null,
+    idempotencyKey: 'gap1-11-status-pending-1',
   });
 
   assert.equal(result.supported, true);
@@ -122,7 +124,7 @@ test('GAP-1.11 unknown/pending provider status never becomes payment success', a
 
   const verifications = await store.listPaymentVerifications(base.chatId, base.payment.id);
   assert.equal(verifications.length, 1);
-  assert.equal(verifications[0].result, 'UNKNOWN');
+  assert.equal(verifications[0].result, 'PENDING');
 });
 
 test.after(async () => {
