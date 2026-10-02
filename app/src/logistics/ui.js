@@ -109,16 +109,39 @@ function renderOperationalWorkspaceSummary(workspace, views) {
   if (views.includes('tracking')) sections.push(`<span>Tracking: ${workspace.tracking.length}</span>`);
   if (views.includes('proof')) sections.push(`<span>Proof: ${workspace.proof.length}</span>`);
   if (views.includes('exceptions')) sections.push(`<span>Exceptions: ${workspace.exceptions.length}</span>`);
-  if (views.includes('workload')) {
-    sections.push(`<span>Active workload: ${workspace.workload.active_count}</span>`);
-  }
+  if (views.includes('workload')) sections.push(`<span>Active workload: ${workspace.workload.active_count}</span>`);
+
+  const trackingRows = views.includes('tracking')
+    ? workspace.tracking.slice(0, 8).map(record =>
+      `<div class="logistics-meta"><strong>${escapeHtml(record.server_order_id || record.order_id || 'Order')}</strong> ·
+       ${escapeHtml(record.fulfillment_status || 'unknown')}
+       ${record.shipment_id ? ' · Shipment ' + escapeHtml(record.shipment_id) : ''}
+       ${record.tracking_reference ? ' · Tracking ' + escapeHtml(record.tracking_reference) : ''}</div>`).join('')
+    : '';
+
+  const proofRows = views.includes('proof')
+    ? workspace.proof.slice(0, 8).map(record =>
+      `<div class="logistics-meta"><strong>${escapeHtml(record.server_order_id || record.order_id || 'Order')}</strong> ·
+       Proof ${escapeHtml(record.proof_reference)}</div>`).join('')
+    : '';
+
+  const exceptionRows = views.includes('exceptions')
+    ? workspace.exceptions.slice(0, 8).map(record =>
+      `<div class="logistics-meta"><strong>${escapeHtml(record.server_order_id || record.order_id || 'Order')}</strong> ·
+       ${escapeHtml(record.exception)}</div>`).join('')
+    : '';
+
   if (!sections.length) return '';
   return `
-    <div class="logistics-meta" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;"
-         data-logistics-workspace-projection="1">
-      <strong>Logistics workspace</strong>
-      ${sections.join(' · ')}
-    </div>`;
+    <section class="logistics-workspace-summary" data-logistics-workspace-projection="1"
+             style="margin-bottom:10px;">
+      <div class="logistics-meta" style="display:flex;gap:10px;flex-wrap:wrap;">
+        <strong>Logistics workspace</strong> ${sections.join(' · ')}
+      </div>
+      ${trackingRows ? `<div class="settings-section-label">Tracking</div>${trackingRows}` : ''}
+      ${proofRows ? `<div class="settings-section-label">Proof</div>${proofRows}` : ''}
+      ${exceptionRows ? `<div class="settings-section-label">Exceptions</div>${exceptionRows}` : ''}
+    </section>`;
 }
 
 export function renderLogistics() {
