@@ -26,7 +26,7 @@ function fn(value, field) {
   return value;
 }
 
-export function executeLogisticsProviderExecutionBridge({
+export async function executeLogisticsProviderExecutionBridge({
   handoff,
   currentStatus = null,
   processedCallbackIds = [],
@@ -56,10 +56,10 @@ export function executeLogisticsProviderExecutionBridge({
 
   // The injected delegate is the external-provider boundary. No transport,
   // credentials, provider state, or network call is implemented here.
-  const providerRawResult = invoke(providerInput, Object.freeze({
+  const providerRawResult = await Promise.resolve(invoke(providerInput, Object.freeze({
     adapter: adapterBoundary,
     handoff: normalizedHandoff,
-  }));
+  })));
 
   const result = normalizeLogisticsProviderExecutionResult(providerRawResult);
   if (result.provider_id.toLowerCase() !== normalizedHandoff.selected_provider_id) {
@@ -86,7 +86,7 @@ export function executeLogisticsProviderExecutionBridge({
       provider_result: result,
       reliability,
       canonical_result: canonical,
-      canonical_application: apply(canonical),
+      canonical_application: await Promise.resolve(apply(canonical)),
       external_execution: true,
       provider_execution_authority: 'injected_external_provider_delegate',
       mutation_authority: 'existing_domain_transaction',
