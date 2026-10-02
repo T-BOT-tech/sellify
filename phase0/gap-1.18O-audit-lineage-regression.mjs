@@ -102,6 +102,8 @@ assert.match(source, /const transitionFingerprint = crypto\.createHash\('sha256'
 
 assert.match(source, /GAP-1\.18V — authoritative ledger lineage binding/);
 assert.match(source, /if \(!applied\.includes\(64\)\)/);
+assert.match(source, /if \(!applied\.includes\(65\)\)/);
+assert.match(source, /NEW\.to_state IN \('VERIFIED', 'RECONCILED'\)/);
 assert.match(source, /payment_verification_id TEXT REFERENCES payment_verifications/);
 assert.match(source, /payment_evidence_id TEXT REFERENCES payment_evidence/);
 assert.match(source, /idx_payment_ledger_lineage/);
