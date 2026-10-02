@@ -127,6 +127,19 @@ function validateAndTotalOrderItems(rawItems, expectedCurrency = null) {
   };
 }
 
+function auditEventCanonical(row) {
+  return [
+    row.previous_hash || '', row.organization_id || '', String(row.chat_id ?? ''), String(row.location_id ?? ''),
+    String(row.actor_id ?? ''), String(row.device_id ?? ''), String(row.action || ''), String(row.entity_type || ''),
+    row.entity_id == null ? '' : String(row.entity_id), String(row.reason || ''), String(row.result || 'success'),
+    String(row.metadata_json || ''), String(row.created_at || ''), row.lineage_type || '', row.lineage_id || '',
+    row.payment_evidence_id || '', row.payment_verification_id || '', row.payment_decision_id || '',
+    row.payment_transition_id || '',
+  ].join('|');
+}
+function auditEventHash(row) {
+  return crypto.createHash('sha256').update(auditEventCanonical(row)).digest('hex');
+}
 function audit(chatId, action, entityType, entityId, metadata = {}, context = {}) {
   const createdAt = nowIso();
   let organizationId = context.organizationId == null ? null : String(context.organizationId);
@@ -171,13 +184,18 @@ function audit(chatId, action, entityType, entityId, metadata = {}, context = {}
   const actionValue = String(action || '');
   const entityTypeValue = String(entityType || '');
   const entityIdValue = entityId == null ? null : String(entityId);
-  const canonical = [
-    previousHash || '', organizationId || '', String(chatId ?? ''), String(context.locationId ?? ''),
-    String(context.actorId ?? ''), String(context.deviceId ?? ''), actionValue, entityTypeValue,
-    entityIdValue || '', String(context.reason || ''), result, metadataJson, createdAt,
-    lineageType || '', lineageId || '',
-  ].join('|');
-  const eventHash = crypto.createHash('sha256').update(canonical).digest('hex');
+  const eventHash = auditEventHash({
+    previous_hash: previousHash, organization_id: organizationId,
+    chat_id: chatId == null ? null : String(chatId),
+    location_id: context.locationId == null ? null : String(context.locationId),
+    actor_id: context.actorId == null ? null : String(context.actorId),
+    device_id: context.deviceId == null ? null : String(context.deviceId),
+    action: actionValue, entity_type: entityTypeValue, entity_id: entityIdValue,
+    reason: String(context.reason || ''), result, metadata_json: metadataJson, created_at: createdAt,
+    lineage_type: lineageType, lineage_id: lineageId,
+    payment_evidence_id: paymentEvidenceId, payment_verification_id: paymentVerificationId,
+    payment_decision_id: paymentDecisionId, payment_transition_id: paymentTransitionId,
+  });
   const info = db.prepare(`
     INSERT INTO audit_events
       (chat_id, organization_id, location_id, actor_id, device_id, action, entity_type, entity_id, reason, result, metadata_json, created_at, previous_hash, event_hash, lineage_type, lineage_id, payment_evidence_id, payment_verification_id, payment_decision_id, payment_transition_id)
@@ -2513,6 +2531,35 @@ function runMigrations() {
       END;
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(60, nowIso());
+  }
+
+  // GAP-1.18T — audit tamper evidence.
+  if (!applied.includes(62)) {
+    const rows = db.prepare('SELECT * FROM audit_events ORDER BY id').all();
+    const previousByOrganization = new Map();
+    const updateHash = db.prepare('UPDATE audit_events SET previous_hash = ?, event_hash = ? WHERE id = ?');
+    for (const row of rows) {
+      const previousHash = previousByOrganization.get(row.organization_id) || null;
+      row.previous_hash = previousHash;
+      const eventHash = auditEventHash(row);
+      updateHash.run(previousHash, eventHash, row.id);
+      previousByOrganization.set(row.organization_id, eventHash);
+    }
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS trg_audit_events_immutable
+      BEFORE UPDATE ON audit_events
+      FOR EACH ROW BEGIN
+        SELECT RAISE(ABORT, 'AUDIT_EVENT_IMMUTABLE');
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_audit_events_delete_blocked
+      BEFORE DELETE ON audit_events
+      FOR EACH ROW BEGIN
+        SELECT RAISE(ABORT, 'AUDIT_EVENT_DELETE_BLOCKED');
+      END;
+      CREATE INDEX IF NOT EXISTS idx_audit_chain
+        ON audit_events(organization_id, id, previous_hash, event_hash);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(62, nowIso());
   }
 
   // GAP-1.18S — persisted payment verification is immutable.
@@ -9261,6 +9308,25 @@ function normalizePaymentProviderCapabilityCertification(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+export function verifyAuditIntegrity(organizationId = null) {
+  ensureDatabase();
+  const rows = organizationId == null
+    ? db.prepare('SELECT * FROM audit_events ORDER BY organization_id, id').all()
+    : db.prepare('SELECT * FROM audit_events WHERE organization_id = ? ORDER BY id').all(String(organizationId));
+  const previousByOrganization = new Map();
+  const failures = [];
+  for (const row of rows) {
+    const expectedPrevious = previousByOrganization.get(row.organization_id) || null;
+    if ((row.previous_hash || null) !== expectedPrevious) {
+      failures.push({ id: row.id, organizationId: row.organization_id, reason: 'PREVIOUS_HASH_MISMATCH' });
+    } else if (row.event_hash !== auditEventHash(row)) {
+      failures.push({ id: row.id, organizationId: row.organization_id, reason: 'EVENT_HASH_MISMATCH' });
+    }
+    previousByOrganization.set(row.organization_id, row.event_hash || null);
+  }
+  return { valid: failures.length === 0, checked: rows.length, failures };
 }
 
 export function getDatabasePath() {
