@@ -86,7 +86,7 @@ export async function executeLogisticsProviderExecutionBridge({
   const providerRawResult = await invokeWithTimeout(providerInput, Object.freeze({
     adapter: adapterBoundary,
     handoff: normalizedHandoff,
-  })));
+  }));
 
   const result = normalizeLogisticsProviderExecutionResult(providerRawResult);
   if (result.provider_id.toLowerCase() !== normalizedHandoff.selected_provider_id) {
