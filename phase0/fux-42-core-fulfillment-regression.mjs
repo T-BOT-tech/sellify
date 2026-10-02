@@ -79,7 +79,7 @@ assert.equal(contract.entity, 'fulfillments');
 assert.equal(contract.order_authority, 'orders');
 assert.equal(contract.transition_authority, 'server');
 assert.equal(contract.marketplace_fulfillment_reuse, false);
-assert.equal(contract.payment_authority, 'unchanged');
+assert.equal(contract.payment_authority, 'unchanged; delivery does not mutate payment state or payment ledger');
 assert.match(contract.delivery_transitions, /pending -> out_for_delivery -> delivered/);
 
 console.log('FUX-42 Core Fulfillment Authority Regression: PASS');
