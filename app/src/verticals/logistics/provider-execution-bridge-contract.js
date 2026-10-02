@@ -35,6 +35,9 @@ export async function executeLogisticsProviderExecutionBridge({
   applyCanonicalResult,
   timeoutMs = 30000,
 } = {}) {
+  const apply = fn(applyCanonicalResult, 'applyCanonicalResult');
+  const normalizedHandoff = defineLogisticsProviderExecutionHandoff(handoff);
+
   const invoke = invokeProvider
     ? fn(invokeProvider, 'invokeProvider')
     : (input, context) => executePlatformAdapter(normalizedHandoff.adapter_id, input, context);
@@ -61,9 +64,6 @@ export async function executeLogisticsProviderExecutionBridge({
       if (timer) clearTimeout(timer);
     }
   };
-  const apply = fn(applyCanonicalResult, 'applyCanonicalResult');
-
-  const normalizedHandoff = defineLogisticsProviderExecutionHandoff(handoff);
   const adapterBoundary = resolveLogisticsProviderAdapterBoundary(normalizedHandoff.adapter_id);
 
   if (adapterBoundary.provider !== normalizedHandoff.selected_provider_id) {
