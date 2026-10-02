@@ -2335,6 +2335,34 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(52, nowIso());
   }
 
+  // GAP-1.19 — durable production certification gate.
+  // This records certification decisions only. It never mutates Payment state,
+  // the payment ledger, refunds, settlements, or provider configuration.
+  if (!applied.includes(55)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS payment_production_certifications (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        certification_scope TEXT NOT NULL CHECK (certification_scope IN ('PAYMENT_CORE_E2E','PRODUCTION')),
+        status TEXT NOT NULL CHECK (status IN ('UNKNOWN','BLOCKED','FAILED','CERTIFIED','EXPIRED')),
+        provider_id TEXT,
+        required_capabilities_json TEXT NOT NULL,
+        prerequisite_evidence_json TEXT NOT NULL,
+        evidence_fingerprint TEXT NOT NULL,
+        reason TEXT NOT NULL DEFAULT '',
+        certified_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        observed_at TEXT NOT NULL,
+        expires_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(organization_id, certification_scope, evidence_fingerprint)
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_production_certifications
+        ON payment_production_certifications(organization_id, certification_scope, updated_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(55, nowIso());
+  }
+
   // GAP-1.18 — durable provider capability certification evidence.
   // Evidence is scoped to an organization because provider configuration and
   // account readiness are organization-scoped. Adapter contract certification
@@ -9275,6 +9303,84 @@ function normalizePaymentProviderCapabilityCertification(row) {
     expiresAt: row.expires_at,
     reason: row.reason || '',
     certifiedByUserId: row.certified_by_user_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function recordPaymentProductionCertification(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const scope = String(input.certificationScope || input.certification_scope || 'PRODUCTION').trim().toUpperCase();
+  const status = String(input.status || 'UNKNOWN').trim().toUpperCase();
+  if (!['PAYMENT_CORE_E2E','PRODUCTION'].includes(scope)) throw Object.assign(new Error('Invalid production certification scope'), { statusCode: 400, code: 'INVALID_PRODUCTION_CERTIFICATION_SCOPE' });
+  if (!['UNKNOWN','BLOCKED','FAILED','CERTIFIED','EXPIRED'].includes(status)) throw Object.assign(new Error('Invalid production certification status'), { statusCode: 400, code: 'INVALID_PRODUCTION_CERTIFICATION_STATUS' });
+
+  const providerId = input.providerId || input.provider_id || null;
+  const requiredCapabilities = Array.isArray(input.requiredCapabilities) ? input.requiredCapabilities : [];
+  const prerequisites = input.prerequisiteEvidence && typeof input.prerequisiteEvidence === 'object' ? input.prerequisiteEvidence : {};
+  const evidenceJson = json(prerequisites);
+  const capabilitiesJson = json(requiredCapabilities);
+  const fingerprint = crypto.createHash('sha256').update([
+    tenant.organization_id, scope, providerId || '', capabilitiesJson, evidenceJson, status,
+  ].join('|')).digest('hex');
+  const existing = db.prepare(`
+    SELECT * FROM payment_production_certifications
+    WHERE organization_id = ? AND certification_scope = ? AND evidence_fingerprint = ?
+  `).get(tenant.organization_id, scope, fingerprint);
+  if (existing) return normalizePaymentProductionCertification(existing);
+
+  const now = nowIso();
+  const id = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO payment_production_certifications
+      (id, organization_id, certification_scope, status, provider_id,
+       required_capabilities_json, prerequisite_evidence_json, evidence_fingerprint,
+       reason, certified_by_user_id, observed_at, expires_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id, tenant.organization_id, scope, status, providerId,
+    capabilitiesJson, evidenceJson, fingerprint, String(input.reason || ''),
+    actor?.userId || actor?.id || null, input.observedAt || input.observed_at || now,
+    input.expiresAt || input.expires_at || null, now, now,
+  );
+
+  audit(String(chatId), 'payment.production_certification.recorded',
+    'payment_production_certification', id,
+    { certificationScope: scope, status, providerId, evidenceFingerprint: fingerprint },
+    { organizationId: tenant.organization_id, actorId: actor?.userId || actor?.id || null, reason: input.reason || '' });
+
+  return normalizePaymentProductionCertification(
+    db.prepare('SELECT * FROM payment_production_certifications WHERE id = ?').get(id),
+  );
+}
+
+export async function listPaymentProductionCertifications(chatId, scope = null) {
+  ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const rows = scope
+    ? db.prepare('SELECT * FROM payment_production_certifications WHERE organization_id = ? AND certification_scope = ? ORDER BY updated_at DESC, id DESC').all(tenant.organization_id, String(scope).toUpperCase())
+    : db.prepare('SELECT * FROM payment_production_certifications WHERE organization_id = ? ORDER BY updated_at DESC, id DESC').all(tenant.organization_id);
+  return rows.map(normalizePaymentProductionCertification);
+}
+
+function normalizePaymentProductionCertification(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    certificationScope: row.certification_scope,
+    status: row.status,
+    providerId: row.provider_id,
+    requiredCapabilities: parseJSON(row.required_capabilities_json, []),
+    prerequisiteEvidence: parseJSON(row.prerequisite_evidence_json, {}),
+    evidenceFingerprint: row.evidence_fingerprint,
+    reason: row.reason || '',
+    certifiedByUserId: row.certified_by_user_id,
+    observedAt: row.observed_at,
+    expiresAt: row.expires_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
