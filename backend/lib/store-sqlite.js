@@ -135,6 +135,34 @@ function audit(chatId, action, entityType, entityId, metadata = {}, context = {}
   }
   const lineageType = context.lineageType == null ? null : String(context.lineageType);
   const lineageId = context.lineageId == null ? null : String(context.lineageId);
+  const paymentEvidenceId = context.paymentEvidenceId == null ? null : String(context.paymentEvidenceId);
+  const paymentVerificationId = context.paymentVerificationId == null ? null : String(context.paymentVerificationId);
+  const paymentDecisionId = context.paymentDecisionId == null ? null : String(context.paymentDecisionId);
+  const paymentTransitionId = context.paymentTransitionId == null ? null : String(context.paymentTransitionId);
+
+  // GAP-1.18O: a financial payment transition is auditable only when its
+  // complete authoritative chain already exists inside this transaction.
+  if (lineageType === 'payment_transition') {
+    if (!paymentEvidenceId || !paymentVerificationId || !paymentDecisionId || !paymentTransitionId) {
+      throw Object.assign(new Error('Payment transition audit requires complete evidence/verification/decision/transition lineage'), {
+        statusCode: 409, code: 'PAYMENT_AUDIT_LINEAGE_INCOMPLETE',
+      });
+    }
+    const evidence = db.prepare('SELECT id, organization_id FROM payment_evidence WHERE id = ? AND organization_id = ?').get(paymentEvidenceId, organizationId);
+    const verification = db.prepare('SELECT id, organization_id, evidence_id FROM payment_verifications WHERE id = ? AND organization_id = ?').get(paymentVerificationId, organizationId);
+    const decision = db.prepare('SELECT id, organization_id, payment_id, evidence_id, verification_id FROM payment_decisions WHERE id = ? AND organization_id = ?').get(paymentDecisionId, organizationId);
+    const transition = db.prepare('SELECT id, organization_id, payment_id FROM payment_ledger_entries WHERE id = ? AND organization_id = ?').get(paymentTransitionId, organizationId);
+    if (!evidence || !verification || !decision || !transition ||
+        String(verification.evidence_id) !== paymentEvidenceId ||
+        String(decision.evidence_id || '') !== paymentEvidenceId ||
+        String(decision.verification_id || '') !== paymentVerificationId ||
+        String(decision.payment_id || '') !== String(transition.payment_id || '')) {
+      throw Object.assign(new Error('Payment transition audit lineage is not reconstructable'), {
+        statusCode: 409, code: 'PAYMENT_AUDIT_LINEAGE_INVALID',
+      });
+    }
+  }
+
   const previousHash = organizationId
     ? (db.prepare('SELECT event_hash FROM audit_events WHERE organization_id = ? AND event_hash IS NOT NULL ORDER BY id DESC LIMIT 1').get(organizationId)?.event_hash || null)
     : null;
@@ -152,8 +180,8 @@ function audit(chatId, action, entityType, entityId, metadata = {}, context = {}
   const eventHash = crypto.createHash('sha256').update(canonical).digest('hex');
   const info = db.prepare(`
     INSERT INTO audit_events
-      (chat_id, organization_id, location_id, actor_id, device_id, action, entity_type, entity_id, reason, result, metadata_json, created_at, previous_hash, event_hash, lineage_type, lineage_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (chat_id, organization_id, location_id, actor_id, device_id, action, entity_type, entity_id, reason, result, metadata_json, created_at, previous_hash, event_hash, lineage_type, lineage_id, payment_evidence_id, payment_verification_id, payment_decision_id, payment_transition_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     chatId == null ? null : String(chatId),
     organizationId,
@@ -170,6 +198,10 @@ function audit(chatId, action, entityType, entityId, metadata = {}, context = {}
     eventHash,
     lineageType,
     lineageId,
+    paymentEvidenceId,
+    paymentVerificationId,
+    paymentDecisionId,
+    paymentTransitionId,
   );
   return { id: Number(info.lastInsertRowid), eventHash, previousHash };
 }
@@ -2397,6 +2429,22 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(57, nowIso());
   }
 
+  // GAP-1.18O — immutable payment audit lineage.
+  // Financial payment transitions carry first-class, organization-bound links
+  // to the exact evidence, verification, decision, and ledger transition that
+  // produced them. This extends the existing audit_events authority; it does
+  // not create a second audit store.
+  if (!applied.includes(58)) {
+    db.exec(`
+      ALTER TABLE audit_events ADD COLUMN payment_evidence_id TEXT REFERENCES payment_evidence(id) ON DELETE SET NULL;
+      ALTER TABLE audit_events ADD COLUMN payment_verification_id TEXT REFERENCES payment_verifications(id) ON DELETE SET NULL;
+      ALTER TABLE audit_events ADD COLUMN payment_decision_id TEXT REFERENCES payment_decisions(id) ON DELETE SET NULL;
+      ALTER TABLE audit_events ADD COLUMN payment_transition_id TEXT REFERENCES payment_ledger_entries(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS idx_audit_payment_lineage
+        ON audit_events(organization_id, payment_evidence_id, payment_verification_id, payment_decision_id, payment_transition_id);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(58, nowIso());
+  }
   // GAP-1.18M — durable provider transaction identity binding.
   // A provider transaction may authorize at most one Payment within an
   // organization/provider scope. NULLs remain allowed for legacy evidence,
@@ -6089,8 +6137,9 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
     const result = db.prepare("UPDATE payments SET state = ?, updated_at = ?, claimed_at = CASE WHEN ? = 'CLAIMED' THEN ? ELSE claimed_at END, received_at = CASE WHEN ? = 'RECEIVED' THEN ? ELSE received_at END, verified_at = CASE WHEN ? = 'VERIFIED' THEN ? ELSE verified_at END, reconciled_at = CASE WHEN ? = 'RECONCILED' THEN ? ELSE reconciled_at END WHERE id = ? AND organization_id = ?" + (expectedState ? " AND state = ?" : ""))
       .run(target, now, target, now, target, now, target, now, target, now, paymentId, organizationId, ...(expectedState ? [expectedState] : []));
     if (Number(result.changes || 0) !== 1) throw Object.assign(new Error('Payment state changed before commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
+    const paymentTransitionId = crypto.randomUUID();
     db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), paymentId, organizationId, String(decision.entryType || target), Number(row.amount_minor), normaliseCurrency(row.currency, 'ETB'),
+      paymentTransitionId, paymentId, organizationId, String(decision.entryType || target), Number(row.amount_minor), normaliseCurrency(row.currency, 'ETB'),
       row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now
     );
     const marketplaceAllocation = db.prepare("SELECT a.*, so.id AS canonical_seller_order_id FROM marketplace_payment_allocations a JOIN marketplace_seller_orders so ON so.id = a.seller_order_id WHERE a.payment_id = ? LIMIT 1").get(paymentId);
@@ -6117,8 +6166,12 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       actorId: actor?.userId || null,
       deviceId: actor?.deviceId || null,
       reason: decision.reason || '',
-      lineageType: 'payment_decision',
-      lineageId: decisionId,
+      lineageType: ['VERIFIED', 'RECONCILED'].includes(target) ? 'payment_transition' : 'payment_decision',
+      lineageId: ['VERIFIED', 'RECONCILED'].includes(target) ? paymentTransitionId : decisionId,
+      paymentEvidenceId: ['VERIFIED', 'RECONCILED'].includes(target) ? (decision.evidenceId || decision.evidence_id || input.verification?.evidenceId || input.verification?.evidence_id || null) : null,
+      paymentVerificationId: ['VERIFIED', 'RECONCILED'].includes(target) ? decisionVerificationId : null,
+      paymentDecisionId: ['VERIFIED', 'RECONCILED'].includes(target) ? decisionId : null,
+      paymentTransitionId: ['VERIFIED', 'RECONCILED'].includes(target) ? paymentTransitionId : null,
     });
     db.exec('COMMIT');
     return paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId));
