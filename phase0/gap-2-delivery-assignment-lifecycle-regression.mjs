@@ -7,6 +7,7 @@ const server = fs.readFileSync(new URL('../backend/server.js', import.meta.url),
 assert.match(store, /if \(!applied\.includes\(44\)\)/);
 assert.match(store, /CREATE UNIQUE INDEX idx_delivery_assignments_active_fulfillment/);
 assert.match(store, /last_command_key TEXT/);
+assert.match(store, /IDEMPOTENCY_KEY_REUSE_CONFLICT/);
 assert.match(store, /transitionDeliveryAssignment/);
 assert.match(store, /ASSIGNED: new Set\(\['ACCEPTED','CANCELLED','FAILED','REASSIGNED'\]\)/);
 assert.match(store, /ACCEPTED: new Set\(\['OUT_FOR_DELIVERY','CANCELLED','FAILED','REASSIGNED'\]\)/);
