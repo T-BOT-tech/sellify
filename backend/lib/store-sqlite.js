@@ -7245,14 +7245,6 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
   const exceptionReason = String(input.reason || input.exceptionReason || input.exception_reason || '').trim().slice(0, 500);
   const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
   if (!commandKey) throw Object.assign(new Error('Idempotency key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
-  const existingCommand = db.prepare('SELECT * FROM delivery_assignments WHERE organization_id = ? AND last_command_key = ? ORDER BY updated_at DESC LIMIT 1').get(organizationId, commandKey);
-  if (existingCommand) {
-    const replayCompatible = normalizedAction === 'REASSIGN_EXCEPTION'
-      ? String(existingCommand.status) === 'ASSIGNED'
-      : String(existingCommand.status) === normalizedAction;
-    if (!replayCompatible) throw Object.assign(new Error('Idempotency key was already used for a different delivery command'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT' });
-    return existingCommand;
-  }
   if (normalizedAction === 'REASSIGN_EXCEPTION') {
     if (!targetCourierId) throw Object.assign(new Error('A different courier is required to resolve a delivery exception'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
     const courier = db.prepare(`SELECT m.user_id, mr.scope_type, mr.scope_id FROM memberships m JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active' WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active' AND mr.role_id = 'logistics_courier'`).get(targetCourierId, String(chatId));
@@ -7307,6 +7299,15 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
   }
   db.exec('BEGIN IMMEDIATE');
   try {
+    const existingCommand = db.prepare('SELECT * FROM delivery_assignments WHERE organization_id = ? AND last_command_key = ? ORDER BY updated_at DESC LIMIT 1').get(organizationId, commandKey);
+    if (existingCommand) {
+      const replayCompatible = normalizedAction === 'REASSIGN_EXCEPTION'
+        ? String(existingCommand.status) === 'ASSIGNED'
+        : String(existingCommand.status) === normalizedAction;
+      if (!replayCompatible) throw Object.assign(new Error('Idempotency key was already used for a different delivery command'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT' });
+      db.exec('COMMIT');
+      return existingCommand;
+    }
     const now = nowIso();
     const fulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ? AND organization_id = ?').get(active.fulfillment_id, organizationId);
     if (!fulfillment) throw Object.assign(new Error('Fulfillment not found'), { statusCode: 404, code: 'FULFILLMENT_NOT_FOUND' });
