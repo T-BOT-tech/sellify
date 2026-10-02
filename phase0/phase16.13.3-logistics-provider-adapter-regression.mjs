@@ -6,6 +6,8 @@ import {
 } from '../app/src/verticals/logistics/provider-adapter-contract.js';
 import {
   registerPlatformAdapter,
+  registerPlatformAdapterExecution,
+  executePlatformAdapter,
   resolveAdapterBoundary,
 } from '../app/src/platform/adapter-framework.js';
 
@@ -30,6 +32,19 @@ test('credentials rejected', () => throwsCode(() => defineLogisticsProviderAdapt
 test('database claim rejected', () => throwsCode(() => defineLogisticsProviderAdapter({ id:'x', provider:'p', operations:[], ownsDatabase:true }), 'LOGISTICS_PROVIDER_ADAPTER_INVALID'));
 test('wrong capability rejected', () => throwsCode(() => defineLogisticsProviderAdapter({ id:'x', provider:'p', capability:'payments.core', operations:[] }), 'LOGISTICS_PROVIDER_ADAPTER_INVALID'));
 test('boundary assertion', () => assert.equal(assertLogisticsProviderAdapterBoundary({ id:'assert-logistics', provider:'p', operations:['delivery'] }), true));
+test('execution delegate remains runtime-only and adapter-scoped', async () => {
+  registerPlatformAdapter({ id:'runtime-exec-adapter', capability:'logistics.operations', provider:'runtime-provider', operations:['delivery'], status:'active' }, { replace: true });
+  registerPlatformAdapterExecution('runtime-exec-adapter', async (input, context) => ({
+    accepted: input.operation === 'delivery' && context.adapter.provider === 'runtime-provider',
+  }));
+  const result = await executePlatformAdapter('runtime-exec-adapter', { operation:'delivery' });
+  assert.equal(result.accepted, true);
+});
+
+test('missing adapter executor fails closed', async () => {
+  await assert.rejects(() => executePlatformAdapter('registered-logistics-adapter', { operation:'delivery' }), (e) => e.code === 'PLATFORM_ADAPTER_EXECUTOR_UNAVAILABLE');
+});
+
 test('generic adapter resolves logistics authority', () => {
   registerPlatformAdapter({ id:'registered-logistics-adapter', capability:'logistics.operations', provider:'network-x', operations:['delivery'] });
   const b = resolveAdapterBoundary('registered-logistics-adapter');
