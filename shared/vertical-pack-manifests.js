@@ -37,6 +37,12 @@ export const VERTICAL_PACK_MANIFESTS = Object.freeze({
   logistics: Object.freeze({
     pack_id: 'logistics', name: 'Logistics', version: '0.1.0',
     capabilities: Object.freeze(['logistics-fulfillment','logistics-shipment','logistics-delivery','logistics-proof','logistics-returns','logistics-routes','logistics-courier']),
+    optional_capabilities: Object.freeze([]),
+    roles: Object.freeze(['logistics_manager','logistics_dispatcher','logistics_courier','logistics_viewer']),
+    navigation_contributions: Object.freeze(['logistics']),
+    device_requirements: Object.freeze([]),
+    offline_requirements: Object.freeze(['canonical-command-outbox','reconciliation']),
+    localization_resources: Object.freeze(['logistics']),
     configuration: Object.freeze({ implementation: 'existing', fulfillment_module: 'app/src/logistics/fulfillment.js', physical_flow_module: 'app/src/logistics/physical-flow.js', ui_module: 'app/src/logistics/ui.js', niche_switch: 'config.logisticsEnabled=true' }),
     permissions: Object.freeze([]),
     domain_entities: Object.freeze(['Courier','Route','Shipment','Delivery','Proof','Return']),
