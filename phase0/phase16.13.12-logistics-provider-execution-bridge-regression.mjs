@@ -73,6 +73,7 @@ const duplicate = await executeLogisticsProviderExecutionBridge({
       provider_id: 'provider-bridge',
       operation: 'delivery',
       result_status: 'delivered',
+      tracking: { status: 'delivered', occurred_at: '2026-10-02T00:00:00Z' },
       callback_id: 'callback-bridge-2',
     };
   },
@@ -85,7 +86,7 @@ assert.equal(duplicate.reliability.apply, false);
 assert.equal(duplicate.canonical_result, null);
 assert.equal(duplicate.canonical_application, null);
 
-await await assert.rejects(() => executeLogisticsProviderExecutionBridge({
+await assert.rejects(() => executeLogisticsProviderExecutionBridge({
   handoff: { ...handoff, selected_provider_id: 'other-provider' },
   invokeProvider() {
     return { provider_id: 'provider-bridge', operation: 'delivery', result_status: 'delivered', callback_id: 'cb-mismatch' };
@@ -93,10 +94,10 @@ await await assert.rejects(() => executeLogisticsProviderExecutionBridge({
   applyCanonicalResult() {},
 }), /adapter provider must match/);
 
-assert.rejects(() => executeLogisticsProviderExecutionBridge({
+await assert.rejects(() => executeLogisticsProviderExecutionBridge({
   handoff,
   invokeProvider() {
-    return { provider_id: 'wrong-provider', operation: 'delivery', result_status: 'delivered', callback_id: 'cb-provider-mismatch' };
+    return { provider_id: 'wrong-provider', operation: 'delivery', result_status: 'delivered', tracking: { status: 'delivered', occurred_at: '2026-10-02T00:00:00Z' }, callback_id: 'cb-provider-mismatch' };
   },
   applyCanonicalResult() {},
 }), /provider result does not match selected provider/);
@@ -104,7 +105,7 @@ assert.rejects(() => executeLogisticsProviderExecutionBridge({
 assert.rejects(() => executeLogisticsProviderExecutionBridge({
   handoff: { ...handoff, operation: 'cross_border' },
   invokeProvider() {
-    return { provider_id: 'provider-bridge', operation: 'delivery', result_status: 'delivered', callback_id: 'cb-operation-mismatch' };
+    return { provider_id: 'provider-bridge', operation: 'delivery', result_status: 'delivered', tracking: { status: 'delivered', occurred_at: '2026-10-02T00:00:00Z' }, callback_id: 'cb-operation-mismatch' };
   },
   applyCanonicalResult() {},
 }), /provider result operation does not match handoff/);
