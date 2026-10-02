@@ -264,7 +264,7 @@ export class PaymentCore {
       targetState: target,
       idempotencyKey: String(command.idempotencyKey || command.idempotency_key || '').trim(),
       decision: {
-        decision: target === 'REVERSED' ? 'REVERSE' : target === 'CANCELLED' ? 'CANCEL' : target === 'FAILED' ? 'FAIL' : target === 'EXPIRED' ? 'EXPIRE' : 'LATE_SUCCESS',
+        decision: target === 'EXPIRED' ? 'EXPIRE' : target === 'RECEIVED' ? 'ACCEPT' : 'REJECT',
         targetState: target,
         reasonCodes: [target === 'REVERSED' ? 'PROVIDER_REVERSAL' : `PAYMENT_${target}`],
         decisionSource: 'PAYMENT_CORE',
