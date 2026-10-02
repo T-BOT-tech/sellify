@@ -5942,9 +5942,20 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
   const target = String(input.targetState || input.target_state || '').toUpperCase();
   if (!PAYMENT_STATES.has(target)) throw Object.assign(new Error('Invalid payment target state'), { statusCode: 400, code: 'INVALID_PAYMENT_STATE' });
   const expectedState = String(input.expectedState || input.expected_state || '').toUpperCase();
+  const idempotencyKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  const requestHash = crypto.createHash('sha256').update(JSON.stringify({ paymentId, target, expectedState, reason: String(input.decision?.reason || input.reason || ''), decision: input.decision || {} })).digest('hex');
   const now = nowIso();
   db.exec('BEGIN IMMEDIATE');
   try {
+    if (idempotencyKey) {
+      const existingCommand = db.prepare('SELECT * FROM payment_idempotency_keys WHERE organization_id = ? AND idempotency_key = ? AND command_type = ?').get(organizationId, idempotencyKey, 'TRANSITION_LIFECYCLE');
+      if (existingCommand) {
+        if (String(existingCommand.request_hash) !== requestHash) throw Object.assign(new Error('Idempotency key was already used with a different request'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE' });
+        const replay = JSON.parse(existingCommand.response_json || '{}');
+        db.exec('COMMIT');
+        return replay;
+      }
+    }
     const row = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
     if (!row) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
     if (expectedState && row.state !== expectedState) throw Object.assign(new Error('Payment state changed before decision could commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
@@ -6120,8 +6131,13 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       lineageType: 'payment_decision',
       lineageId: decisionId,
     });
+    const committedPayment = paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId));
+    if (idempotencyKey) {
+      const response = { payment: committedPayment, transition: { fromState: row.state, toState: target, reason: decision.reason || '' } };
+      db.prepare("INSERT INTO payment_idempotency_keys (id, organization_id, idempotency_key, command_type, request_hash, response_status, response_json, resource_type, resource_id, created_at) VALUES (?, ?, ?, 'TRANSITION_LIFECYCLE', ?, 200, ?, 'payment', ?, ?, ?)").run(crypto.randomUUID(), organizationId, idempotencyKey, requestHash, json(response), paymentId, now);
+    }
     db.exec('COMMIT');
-    return paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId));
+    return committedPayment;
   } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
 
