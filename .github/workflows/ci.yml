@@ -151,3 +151,5 @@ jobs:
         run: npm run test:gap-2-delivery-frontend
       - name: GAP-2 end-to-end delivery assignment certification
         run: npm run test:gap-2-delivery-certification
+      - name: GAP-2.8 route and dispatch scope regression
+        run: npm run test:gap-2-route-dispatch-scope
