@@ -7,6 +7,7 @@
 
 import { toLogisticsProviderExecutionResult } from '../../../app/src/verticals/logistics/provider-callback-contract.js';
 import { evaluateLogisticsProviderExecutionReliability } from '../../../app/src/verticals/logistics/provider-execution-reliability-contract.js';
+import { projectProviderExecutionResult } from '../../../app/src/verticals/logistics/provider-execution-result-contract.js';
 import { applyLogisticsProviderCanonicalResult, resolveLogisticsProviderCanonicalApplicationPath } from './provider-execution-application.js';
 
 function invalid(message, code = 'LOGISTICS_PROVIDER_CALLBACK_APPLICATION_INVALID') {
@@ -45,16 +46,8 @@ export async function applyLogisticsProviderCallback({
     processedCallbackIds,
   });
 
-  const canonicalResult = ({
-    accepted: 'execution_accepted',
-    in_progress: 'execution_in_progress',
-    tracking_update: 'tracking_update',
-    proof: 'proof_captured',
-    delivered: 'fulfillment_delivered',
-    failed: 'execution_failed',
-    returned: 'return_completed',
-  })[normalized.result_status];
-
+  const projected = projectProviderExecutionResult(normalized);
+  const canonicalResult = projected.canonical_result;
   const applicationPath = resolveLogisticsProviderCanonicalApplicationPath(canonicalResult);
 
   if (!reliability.apply) {
