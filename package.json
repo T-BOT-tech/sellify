@@ -344,7 +344,8 @@
     "test:phase13.10.22": "node phase0/phase13.10.22-logistics-workspace-ui-integration-regression.mjs",
     "test:phase13.10.23": "node phase0/phase13.10.23-logistics-operational-surfaces-regression.mjs",
     "test:phase16.13.10": "node phase0/phase16.13.10-logistics-provider-matching-regression.mjs",
-    "test:phase16.13.11": "node phase0/phase16.13.11-logistics-network-integration-regression.mjs"
+    "test:phase16.13.11": "node phase0/phase16.13.11-logistics-network-integration-regression.mjs",
+    "test:phase16.13.12": "node phase0/phase16.13.12-logistics-provider-execution-bridge-regression.mjs"
   },
   "engines": {
     "node": ">=24"
