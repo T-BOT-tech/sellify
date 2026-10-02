@@ -6123,8 +6123,10 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
         });
       }
     }
-    const decisionVerificationId = String(decision.verificationId || decision.verification_id || (input.verification ? (db.prepare('SELECT id FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND verifier_version = ?').get(
-      String(input.verification.evidenceId || input.verification.evidence_id), verifier, verifierVersion
+    const verificationVerifier = String(input.verification?.verifier || '').trim();
+    const verificationVerifierVersion = String(input.verification?.verifierVersion || input.verification?.verifier_version || '').trim();
+    const decisionVerificationId = String(decision.verificationId || decision.verification_id || (input.verification && verificationVerifier && verificationVerifierVersion ? (db.prepare('SELECT id FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND verifier_version = ?').get(
+      String(input.verification.evidenceId || input.verification.evidence_id), verificationVerifier, verificationVerifierVersion
     )?.id || '') : '')).trim() || null;
     if (decisionVerificationId) {
       const linked = db.prepare('SELECT payment_id, payment_intent_id, evidence_id FROM payment_verifications WHERE id = ? AND organization_id = ?').get(decisionVerificationId, organizationId);
