@@ -470,6 +470,7 @@ export class PaymentCore {
         evidenceId: evidence.id,
         providerId: payment.providerId,
         ...verification,
+        result: verification.result === 'UNKNOWN' ? 'PENDING' : verification.result,
         reasonCodes: decision.reasonCodes,
         verifier: 'payment-core.provider-status',
         verifierVersion: '1',
