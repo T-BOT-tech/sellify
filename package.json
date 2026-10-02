@@ -327,6 +327,7 @@
     "gap-1.18:payment-invariant-certification-test": "node phase0/gap-1.18AC-payment-invariant-certification-regression.mjs",
     "gap-1.18:payment-production-readiness-test": "node phase0/gap-1.18AD-production-readiness-regression.mjs",
     "gap-1.19:payment-production-certification-test": "node phase0/gap-1.19-production-certification-gate-regression.mjs",
+    "gap-1.19:payment-e2e-certification-test": "node phase0/gap-1.19-payment-e2e-certification-regression.mjs",
     "test:gap-2-delivery-certification": "node phase0/gap-2-delivery-end-to-end-certification-regression.mjs",
     "test:gap-2-route-dispatch-scope": "node phase0/gap-2-route-dispatch-scope-regression.mjs",
     "test:gap-2-cross-feature-consistency": "node phase0/gap-2-cross-feature-consistency-regression.mjs",
