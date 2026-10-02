@@ -107,6 +107,16 @@ assert.rejects(() => executeLogisticsProviderExecutionBridge({
 }), /provider result operation does not match handoff/);
 
 
+const platformExecutionResult = await executeLogisticsProviderExecutionBridge({
+  handoff,
+  applyCanonicalResult(canonical) {
+    return { applied: canonical.event_type };
+  },
+});
+if (platformExecutionResult.canonical_application?.applied !== 'fulfillment_delivered') {
+  throw new Error('default platform adapter executor path did not apply canonical result');
+}
+
 await assert.rejects(
   () => executeLogisticsProviderExecutionBridge({
     handoff,
