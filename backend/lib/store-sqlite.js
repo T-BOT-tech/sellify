@@ -7552,9 +7552,9 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         delivered_to_device: true,
       };
       insertOrder(key, localId, stored);
-      ensureCanonicalPaymentForOrder(key, stored, serverOrderId, null);
-      audit(key, 'order.synced', 'order', serverOrderId, { localId, totalMinor: total });
-      results.push({ local_id: order.id, status: 'synced', order_id: serverOrderId });
+      const canonicalPaymentId = ensureCanonicalPaymentForOrder(key, stored, serverOrderId, null);
+      audit(key, 'order.synced', 'order', serverOrderId, { localId, totalMinor: total, canonicalPaymentId });
+      results.push({ local_id: order.id, status: 'synced', order_id: serverOrderId, payment_id: canonicalPaymentId, payment_state: 'UNPAID' });
     }
     db.exec('COMMIT');
     return results;
