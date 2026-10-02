@@ -84,6 +84,12 @@ export function defineVerticalPack(input) {
   const name = cleanString(input.name, 'name');
   const version = cleanString(input.version, 'version');
   const capabilities = cleanList(input.capabilities || [], 'capabilities');
+  const optionalCapabilities = cleanList(input.optional_capabilities || [], 'optional_capabilities');
+  const roles = cleanList(input.roles || [], 'roles');
+  const navigationContributions = cleanList(input.navigation_contributions || [], 'navigation_contributions');
+  const deviceRequirements = cleanList(input.device_requirements || [], 'device_requirements');
+  const offlineRequirements = cleanList(input.offline_requirements || [], 'offline_requirements');
+  const localizationResources = cleanList(input.localization_resources || [], 'localization_resources');
   const permissions = cleanList(input.permissions || [], 'permissions');
   const domainEntities = cleanList(input.domain_entities || [], 'domain_entities');
   const coreDependencies = cleanList(input.core_dependencies || [], 'core_dependencies');
@@ -105,6 +111,12 @@ export function defineVerticalPack(input) {
     name,
     version,
     capabilities: Object.freeze(capabilities),
+    optional_capabilities: Object.freeze(optionalCapabilities),
+    roles: Object.freeze(roles),
+    navigation_contributions: Object.freeze(navigationContributions),
+    device_requirements: Object.freeze(deviceRequirements),
+    offline_requirements: Object.freeze(offlineRequirements),
+    localization_resources: Object.freeze(localizationResources),
     configuration: Object.freeze(configuration),
     permissions: Object.freeze(permissions),
     domain_entities: Object.freeze(domainEntities),
