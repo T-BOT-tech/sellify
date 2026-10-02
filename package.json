@@ -322,7 +322,8 @@
     "gap-1.18:payment-failure-recovery-test": "node phase0/gap-1.18AA-payment-failure-recovery-regression.mjs",
     "gap-1.18:payment-security-boundary-test": "node phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
     "gap-1.18:payment-invariant-certification-test": "node phase0/gap-1.18AC-payment-invariant-certification-regression.mjs",
-    "gap-1.18:payment-production-readiness-test": "node phase0/gap-1.18AD-production-readiness-regression.mjs"
+    "gap-1.18:payment-production-readiness-test": "node phase0/gap-1.18AD-production-readiness-regression.mjs",
+    "test:gap-2-delivery-certification": "node phase0/gap-2-delivery-end-to-end-certification-regression.mjs"
   },
   "engines": {
     "node": ">=24"
