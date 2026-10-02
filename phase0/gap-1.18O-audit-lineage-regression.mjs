@@ -51,3 +51,10 @@ assert.match(source, /const existingDecision = decisionVerificationId/);
 assert.match(source, /PAYMENT_DECISION_CONFLICT/);
 assert.match(source, /return paymentFromRow\(currentPayment\)/);
 assert.match(source, /decision_fingerprint\) VALUES/);
+
+assert.match(source, /GAP-1\.18R — authoritative verification freezes payment evidence identity/);
+assert.match(source, /if \(!applied\.includes\(60\)\)/);
+assert.match(source, /trg_payment_evidence_immutable_after_verification/);
+assert.match(source, /PAYMENT_EVIDENCE_IMMUTABLE_AFTER_VERIFICATION/);
+assert.match(source, /trg_payment_evidence_delete_after_verification/);
+assert.match(source, /PAYMENT_EVIDENCE_DELETE_BLOCKED_AFTER_VERIFICATION/);
