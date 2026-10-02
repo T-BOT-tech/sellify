@@ -6008,22 +6008,36 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
         maxAgeMs: input.maxVerificationAgeMs || input.max_verification_age_ms,
       });
       const verificationId = String(v.id || crypto.randomUUID());
-      const verifier = String(v.verifier || 'payment-core').trim();
-      const verifierVersion = String(v.verifierVersion || v.verifier_version || '1').trim() || '1';
+      const verifier = String(v.verifier || '').trim();
+      if (!verifier.startsWith('payment-core.')) {
+        throw Object.assign(new Error('Payment verification must originate from a trusted Payment Core verifier'), {
+          statusCode: 409, code: 'UNTRUSTED_PAYMENT_VERIFIER',
+        });
+      }
+      const verifierVersion = String(v.verifierVersion || v.verifier_version || '').trim();
+      if (!verifierVersion || verifierVersion.length > 64) {
+        throw Object.assign(new Error('Trusted verifier version is required and bounded'), {
+          statusCode: 409, code: 'INVALID_VERIFIER_VERSION',
+        });
+      }
+      const provenanceSource = 'PAYMENT_CORE';
+      const provenanceOperation = verifier === 'payment-core.provider-status'
+        ? 'provider-status'
+        : verifier.replace(/^payment-core\./, '') || 'unknown';
       const existingVerification = db.prepare('SELECT id FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND verifier_version = ?').get(verificationEvidenceId, verifier, verifierVersion);
-      if (!existingVerification) db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+      if (!existingVerification) db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, provenance_source, provenance_operation, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
         verificationId, organizationId, paymentId, verificationPaymentIntentId, verificationEvidenceId,
         verificationProviderId, String(v.result || '').toUpperCase(), v.confidence == null ? null : Number(v.confidence),
         v.observedAmountMinor ?? v.observed_amount_minor ?? null, v.observedCurrency || v.observed_currency || null,
         v.observedReceiver || v.observed_receiver || null, v.observedReceiverAccount || v.observed_receiver_account || null,
         v.observedReference || v.observed_reference || null, v.observedTransactionId || v.observed_transaction_id || null,
         v.observedAt || v.observed_at || null, json(v.reasonCodes || v.reason_codes || []),
-        v.rawResult == null ? null : json(v.rawResult || v.raw_result), v.verifier || 'payment-core', v.verifierVersion || v.verifier_version || null, now
+        v.rawResult == null ? null : json(v.rawResult || v.raw_result), verifier, verifierVersion, provenanceSource, provenanceOperation, now
       );
     }
     const decision = input.decision || {};
     const decisionVerificationId = String(decision.verificationId || decision.verification_id || (input.verification ? (db.prepare('SELECT id FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND verifier_version = ?').get(
-      String(input.verification.evidenceId || input.verification.evidence_id), String(input.verification.verifier || 'payment-core'), String(input.verification.verifierVersion || input.verification.verifier_version || '1')
+      String(input.verification.evidenceId || input.verification.evidence_id), verifier, verifierVersion
     )?.id || '') : '')).trim() || null;
     if (decisionVerificationId) {
       const linked = db.prepare('SELECT payment_id, payment_intent_id, evidence_id FROM payment_verifications WHERE id = ? AND organization_id = ?').get(decisionVerificationId, organizationId);
