@@ -5623,7 +5623,7 @@ export async function createPaymentWithIntent(chatId, input = {}, actor = null) 
     );
     db.prepare("INSERT INTO payments (id, organization_id, location_id, order_id, customer_id, payment_account_id, provider_id, channel, method_id, method_name, amount_minor, currency, state, payment_intent_id, external_reference, claimed_at, received_at, verified_at, reconciled_at, metadata_json, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'UNPAID', ?, ?, NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?)").run(
       id, organizationId, locationId, orderId ? String(orderId) : null, customerId, String(accountId), providerId, channel,
-      input.methodId || input.method_id || null, input.methodName || input.method_name || null, intentId,
+      input.methodId || input.method_id || null, input.methodName || input.method_name || null, amountMinor, currency, intentId,
       json(input.metadata || {}), actor?.userId || null, now, now
     );
     db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, 'CREATED', ?, ?, NULL, 'UNPAID', ?, ?, ?, ?)").run(
