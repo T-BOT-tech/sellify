@@ -48,6 +48,11 @@ assert.match(ui, /logistics_courier/);
 assert.match(main, /transitionDeliveryAssignmentForOrder/);
 
 assert.match(store, /organization_id = \?/);
+assert.match(store, /cross_feature_boundary/);
+assert.match(store, /payment_authority/);
+assert.match(store, /settlement_authority/);
+assert.match(store, /delivery\.assignment\.exception_resolved/);
+assert.match(store, /inventoryMovementIds/);
 assert.match(store, /location_id = \?/);
 assert.match(server, /assertCourierOwnsDelivery/);
 
@@ -57,4 +62,8 @@ console.log('Organization/location isolation boundary: PASS');
 console.log('Courier assigned-delivery-only mutation boundary: PASS');
 console.log('Idempotent lifecycle command boundary: PASS');
 console.log('Existing fulfillment inventory authority preserved: PASS');
+console.log('Serialized lifecycle race boundary: PASS');
+console.log('Exception recovery replay boundary: PASS');
+console.log('Inventory consequence lineage boundary: PASS');
+console.log('Payment and settlement authority separation: PASS');
 console.log('Advanced runtime certification remains dependent on execution under Node >=24 with realistic tenant fixtures.');
