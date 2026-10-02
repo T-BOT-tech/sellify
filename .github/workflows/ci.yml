@@ -141,6 +141,8 @@ jobs:
         run: npm run test:pf-1-payment-frontend-contract
       - name: PF-1 payment frontend integration regression
         run: npm run test:pf-1-payment-frontend-integration
+      - name: PF-1 payment frontend projection regression
+        run: npm run test:pf-1-payment-frontend-projection
       - name: GAP-2 logistics authorization foundation regression
         run: npm run test:gap-2-logistics-authz
       - name: GAP-2 delivery assignment authority regression
