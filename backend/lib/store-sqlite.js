@@ -5718,7 +5718,24 @@ export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
     }
     throw error;
   }
-  return { evidence: paymentEvidenceFromRow(db.prepare('SELECT * FROM payment_evidence WHERE id = ?').get(id)), duplicate: false };
+  const persistedEvidence = paymentEvidenceFromRow(db.prepare('SELECT * FROM payment_evidence WHERE id = ?').get(id));
+  audit(String(chatId), 'payment.evidence.recorded', 'payment_evidence', id, {
+    paymentId: persistedEvidence.paymentId,
+    paymentIntentId: persistedEvidence.paymentIntentId,
+    providerId: persistedEvidence.providerId,
+    evidenceType: persistedEvidence.evidenceType,
+    fingerprint: persistedEvidence.fingerprint,
+    source: persistedEvidence.source,
+    observedAt: persistedEvidence.observedAt,
+  }, {
+    organizationId,
+    locationId,
+    actorId: actor?.userId || null,
+    deviceId: actor?.deviceId || null,
+    lineageType: 'payment_evidence',
+    lineageId: id,
+  });
+  return { evidence: persistedEvidence, duplicate: false };
 }
 export async function listPaymentEvidence(chatId, paymentId) {
   ensureDatabase();
@@ -5834,10 +5851,27 @@ export async function insertPaymentVerification(chatId, input = {}, actor = null
     }
     throw error;
   }
-  return {
-    verification: paymentVerificationFromRow(db.prepare('SELECT * FROM payment_verifications WHERE id = ?').get(id)),
-    duplicate: false,
-  };
+  const persistedVerification = paymentVerificationFromRow(db.prepare('SELECT * FROM payment_verifications WHERE id = ?').get(id));
+  audit(String(chatId), 'payment.verification.recorded', 'payment_verification', id, {
+    paymentId: persistedVerification.paymentId,
+    paymentIntentId: persistedVerification.paymentIntentId,
+    evidenceId: persistedVerification.evidenceId,
+    providerId: persistedVerification.providerId,
+    result: persistedVerification.result,
+    observedTransactionId: persistedVerification.observedTransactionId,
+    observedAt: persistedVerification.observedAt,
+    verifier: persistedVerification.verifier,
+    verifierVersion: persistedVerification.verifierVersion,
+    provenanceSource: persistedVerification.provenanceSource,
+    provenanceOperation: persistedVerification.provenanceOperation,
+  }, {
+    organizationId,
+    lineageType: 'payment_verification',
+    lineageId: id,
+    actorId: actor?.userId || null,
+    deviceId: actor?.deviceId || null,
+  });
+  return { verification: persistedVerification, duplicate: false };
 }
 export async function listPaymentVerifications(chatId, paymentId) {
   ensureDatabase();
