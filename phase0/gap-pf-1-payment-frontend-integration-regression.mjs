@@ -9,6 +9,7 @@ assert.match(client, /requiredIdempotencyKey/);
 assert.match(client, /Idempotency-Key/);
 assert.match(client, /createPayment/);
 assert.match(client, /transitionPayment/);
+assert.match(client, /requiredIdempotencyKey\(idempotencyKey\)/g);
 assert.match(proof, /payment_proof/);
 assert.match(checkout, /payment_method_id/);
 assert.doesNotMatch(checkout, /payments\/ledger|payment_ledger_entries/);
