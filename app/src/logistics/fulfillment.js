@@ -40,13 +40,19 @@ export async function listLogisticsStaff() {
   return Array.isArray(data.memberships) ? data.memberships : [];
 }
 
-export async function assignDeliveryCourierForOrder(order, courierUserId, input = {}) {
-  if (!order?.server_order_id || !config.chatId || !config.sessionToken || !courierUserId) return null;
+export async function assignDeliveryCourierForOrder(order, courierUserId = null, input = {}) {
+  if (!order?.server_order_id || !config.chatId || !config.sessionToken) return null;
+  const idempotencyKey = String(input.idempotencyKey || `delivery-assignment:${order.server_order_id}:${courierUserId || 'auto'}`);
   const endpoint = `${(config.syncUrl || window.location.origin).replace(/\/$/, '')}/tenants/${encodeURIComponent(config.chatId)}/orders/${encodeURIComponent(order.server_order_id)}/delivery-assignment`;
+  const body = {
+    locationId: input.locationId || config.locationId || null,
+    idempotencyKey,
+  };
+  if (courierUserId) body.courierUserId = String(courierUserId);
   const response = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ courierUserId: String(courierUserId), locationId: input.locationId || config.locationId || null }),
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify(body),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error?.message || `Courier assignment failed (${response.status})`);
