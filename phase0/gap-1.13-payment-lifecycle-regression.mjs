@@ -135,6 +135,7 @@ test('GAP-1.13 VERIFIED payment can be reversed exactly once without rewriting h
     paymentId: base.payment.id,
     targetState: 'REVERSED',
     source: 'provider.reversal',
+    idempotencyKey: 'gap1-13-reversal-1',
     reason: 'Provider reversal notification',
   });
   assert.equal(reversed.payment.state, 'REVERSED');
