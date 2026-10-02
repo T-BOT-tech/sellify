@@ -6913,6 +6913,17 @@ export async function createPaymentRefundRequest(chatId, input = {}, actor = nul
   if (!['VERIFIED','RECONCILED'].includes(String(payment.state).toUpperCase())) {
     throw Object.assign(new Error('Only VERIFIED or RECONCILED payments can be refunded'), { statusCode: 409, code: 'PAYMENT_NOT_REFUNDABLE' });
   }
+  const originalLineage = db.prepare(`
+    SELECT d.id AS decision_id, d.verification_id, d.evidence_id
+    FROM payment_decisions d
+    WHERE d.organization_id = ? AND d.payment_id = ? AND d.target_state IN ('VERIFIED','RECONCILED')
+      AND d.verification_id IS NOT NULL AND d.evidence_id IS NOT NULL
+    ORDER BY d.created_at DESC LIMIT 1
+  `).get(tenant.organization_id, payment.id);
+  if (!originalLineage) throw Object.assign(new Error('Refund requires persisted authoritative payment decision lineage'), { statusCode: 409, code: 'REFUND_PROVENANCE_REQUIRED' });
+  const originalVerification = db.prepare('SELECT id, evidence_id FROM payment_verifications WHERE id = ? AND organization_id = ? AND payment_id = ?').get(originalLineage.verification_id, tenant.organization_id, payment.id);
+  const originalEvidence = db.prepare('SELECT id FROM payment_evidence WHERE id = ? AND organization_id = ? AND payment_id = ?').get(originalLineage.evidence_id, tenant.organization_id, payment.id);
+  if (!originalVerification || originalVerification.evidence_id !== originalLineage.evidence_id || !originalEvidence) throw Object.assign(new Error('Refund original payment provenance is invalid'), { statusCode: 409, code: 'REFUND_PROVENANCE_INVALID' });
 
   const refunded = Number(db.prepare("SELECT COALESCE(SUM(amount_minor),0) AS total FROM payment_refunds WHERE payment_id = ? AND status = 'SUCCEEDED'").get(payment.id).total || 0);
   if (refunded + amountMinor > Number(payment.amount_minor)) {
@@ -6940,13 +6951,17 @@ export async function createPaymentRefundRequest(chatId, input = {}, actor = nul
     created_at: now,
     updated_at: now,
     processed_at: null,
+    original_payment_evidence_id: originalLineage.evidence_id,
+    original_payment_verification_id: originalLineage.verification_id,
+    original_payment_decision_id: originalLineage.decision_id,
+    refund_evidence_id: null,
   };
   db.prepare(`INSERT INTO payment_refunds
-    (id,organization_id,payment_id,payment_intent_id,provider_id,idempotency_key,amount_minor,currency,status,reason,provider_refund_id,provider_transaction_id,provider_result_json,evidence_json,failure_code,requested_by_user_id,created_at,updated_at,processed_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+    (id,organization_id,payment_id,payment_intent_id,provider_id,idempotency_key,amount_minor,currency,status,reason,provider_refund_id,provider_transaction_id,provider_result_json,evidence_json,failure_code,requested_by_user_id,created_at,updated_at,processed_at,original_payment_evidence_id,original_payment_verification_id,original_payment_decision_id,refund_evidence_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
       refund.id, refund.organization_id, refund.payment_id, refund.payment_intent_id, refund.provider_id,
       refund.idempotency_key, refund.amount_minor, refund.currency, refund.status, refund.reason,
-      null, null, null, null, null, refund.requested_by_user_id, now, now, null
+      null, null, null, null, null, refund.requested_by_user_id, now, now, null, refund.original_payment_evidence_id, refund.original_payment_verification_id, refund.original_payment_decision_id, null
     );
   audit(String(chatId), 'payment.refund.requested', payment.id, actor?.userId || null, {
     refundId: refund.id, amountMinor, currency, idempotencyKey: key,
