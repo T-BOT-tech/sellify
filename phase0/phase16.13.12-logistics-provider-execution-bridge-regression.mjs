@@ -10,6 +10,7 @@ registerPlatformAdapter({
   capability: 'logistics.operations',
   provider: 'provider-bridge',
   operations: ['delivery', 'tracking', 'cross_border'],
+  status: 'active',
 }, { replace: true });
 
 registerPlatformAdapterExecution('bridge-provider-adapter', async (input) => ({
