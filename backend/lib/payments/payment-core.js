@@ -668,6 +668,16 @@ export class PaymentCore {
     return { probe: result, evidence: null, certification: 'UNCHANGED' };
   }
 
+  async listProductionCertifications(command = {}) {
+    this.#authorize(command, 'payments:view');
+    const chatId = String(command.chatId || '').trim();
+    if (!chatId) throw Object.assign(new Error('chatId is required'), { statusCode: 400, code: 'PRODUCTION_CERTIFICATION_CONTEXT_REQUIRED' });
+    if (!this.store.listPaymentProductionCertifications) {
+      throw Object.assign(new Error('Production certification storage is unavailable'), { statusCode: 503, code: 'PRODUCTION_CERTIFICATION_UNAVAILABLE' });
+    }
+    return this.store.listPaymentProductionCertifications(chatId, command.certificationScope || command.certification_scope || null);
+  }
+
   async certifyProductionReadiness(command = {}) {
     this.#authorize(command, 'payments:manage');
     const chatId = String(command.chatId || '').trim();
