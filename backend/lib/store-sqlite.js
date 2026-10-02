@@ -159,6 +159,7 @@ function audit(chatId, action, entityType, entityId, metadata = {}, context = {}
     organizationId,
     context.locationId == null ? null : String(context.locationId),
     context.actorId == null ? null : String(context.actorId),
+    context.deviceId == null ? null : String(context.deviceId),
     actionValue,
     entityTypeValue,
     entityIdValue,
