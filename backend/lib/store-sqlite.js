@@ -6178,7 +6178,7 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
     const committedPayment = paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId));
     if (idempotencyKey) {
       const response = { payment: committedPayment, transition: { fromState: row.state, toState: target, reason: decision.reason || '' } };
-      db.prepare("INSERT INTO payment_idempotency_keys (id, organization_id, idempotency_key, command_type, request_hash, response_status, response_json, resource_type, resource_id, created_at) VALUES (?, ?, ?, 'TRANSITION_LIFECYCLE', ?, 200, ?, 'payment', ?, ?, ?)").run(crypto.randomUUID(), organizationId, idempotencyKey, requestHash, json(response), paymentId, now);
+      db.prepare("INSERT INTO payment_idempotency_keys (id, organization_id, idempotency_key, command_type, request_hash, response_status, response_json, resource_type, resource_id, created_at) VALUES (?, ?, ?, 'TRANSITION_LIFECYCLE', ?, 200, ?, 'payment', ?, ?)").run(crypto.randomUUID(), organizationId, idempotencyKey, requestHash, json(response), paymentId, now);
     }
     db.exec('COMMIT');
     return committedPayment;
