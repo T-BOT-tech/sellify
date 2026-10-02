@@ -5,7 +5,7 @@
 // It does not create an HTTP route, callback store, provider registry,
 // credential store, or alternate fulfillment lifecycle.
 
-import { normalizeLogisticsProviderCallback } from '../../../app/src/verticals/logistics/provider-callback-contract.js';
+import { toLogisticsProviderExecutionResult } from '../../../app/src/verticals/logistics/provider-callback-contract.js';
 import { evaluateLogisticsProviderExecutionReliability } from '../../../app/src/verticals/logistics/provider-execution-reliability-contract.js';
 import { applyLogisticsProviderCanonicalResult, resolveLogisticsProviderCanonicalApplicationPath } from './provider-execution-application.js';
 
@@ -36,7 +36,7 @@ export async function applyLogisticsProviderCallback({
   requiredText(idempotencyKey, 'idempotencyKey');
   if (!actor || typeof actor !== 'object') invalid('actor is required', 'LOGISTICS_PROVIDER_CALLBACK_ACTOR_REQUIRED');
 
-  const normalized = normalizeLogisticsProviderCallback(callback);
+  const normalized = toLogisticsProviderExecutionResult(callback);
   const reliability = evaluateLogisticsProviderExecutionReliability({
     providerId: normalized.provider_id,
     callbackId: normalized.callback_id,
