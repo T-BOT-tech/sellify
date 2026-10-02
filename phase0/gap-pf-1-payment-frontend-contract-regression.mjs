@@ -30,3 +30,11 @@ assert.match(server, /payments:reconcile/);
 assert.match(server, /payments:manage/);
 
 console.log('PASS GAP PF-1 payment frontend contract boundary regression');
+
+
+const paymentServer = fs.readFileSync('backend/server.js', 'utf8');
+assert.match(paymentServer, /paymentCore\.transitionLifecycle/);
+assert.match(paymentServer, /IDEMPOTENCY_KEY_REQUIRED/);
+assert.doesNotMatch(paymentServer, /const payment = await transitionPayment\(chatId, paymentId, target, session, body\)/);
+assert.match(client, /transitionPaymentLifecycle/);
+assert.doesNotMatch(client, /export async function transitionPayment\(/);
