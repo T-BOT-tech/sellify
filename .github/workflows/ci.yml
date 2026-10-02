@@ -129,6 +129,14 @@ jobs:
         run: npm run gap-1.18:verification-provenance-test
       - name: GAP-1.18O audit lineage regression
         run: npm run gap-1.18:audit-lineage-test
+      - name: GAP-1.18AA failure/recovery semantics regression
+        run: npm run gap-1.18:payment-failure-recovery-test
+      - name: GAP-1.18AB Payment Core security boundary regression
+        run: npm run gap-1.18:payment-security-boundary-test
+      - name: GAP-1.18AC end-to-end invariant certification regression
+        run: npm run gap-1.18:payment-invariant-certification-test
+      - name: GAP-1.18AD production-readiness gate regression
+        run: npm run gap-1.18:payment-production-readiness-test
       - name: GAP-2 logistics authorization foundation regression
         run: npm run test:gap-2-logistics-authz
       - name: GAP-2 delivery assignment authority regression
