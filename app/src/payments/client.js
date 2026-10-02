@@ -43,8 +43,9 @@ export async function transitionPaymentLifecycle(paymentId, body, { idempotencyK
 export async function getPaymentLedger(paymentId) {
   const data = await request(buildPaymentPath(config.chatId, '/' + encodeURIComponent(paymentId) + '/ledger')); return data.ledger || [];
 }
-export async function queryPaymentStatus(paymentId, body = {}) {
-  return request(buildPaymentPath(config.chatId, '/' + encodeURIComponent(paymentId) + '/status'), { method: 'POST', body: JSON.stringify(normalizePaymentMutation(body)) });
+export async function queryPaymentStatus(paymentId, body = {}, { idempotencyKey } = {}) {
+  const headers = { 'Idempotency-Key': requiredIdempotencyKey(idempotencyKey) };
+  return request(buildPaymentPath(config.chatId, '/' + encodeURIComponent(paymentId) + '/status'), { method: 'POST', headers, body: JSON.stringify(normalizePaymentMutation(body)) });
 }
 export async function reconcilePayment(paymentId, body = {}) {
   return request(buildPaymentPath(config.chatId, '/' + encodeURIComponent(paymentId) + '/reconciliation'), { method: 'POST', body: JSON.stringify(normalizePaymentMutation(body)) });
