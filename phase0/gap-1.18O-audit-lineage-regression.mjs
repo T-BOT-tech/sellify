@@ -30,3 +30,11 @@ assert.match(source, /paymentDecisionId: \['VERIFIED', 'RECONCILED'\]\.includes\
 assert.match(source, /paymentTransitionId: \['VERIFIED', 'RECONCILED'\]\.includes\(target\)/);
 
 console.log('GAP-1.18O audit lineage regression passed');
+
+assert.match(source, /PERSISTED_VERIFICATION_REQUIRED/);
+assert.match(source, /PERSISTED_VERIFICATION_NOT_FOUND/);
+assert.match(source, /VERIFICATION_PROVENANCE_NOT_PERSISTED/);
+assert.match(source, /const authoritativeTarget = \['VERIFIED', 'RECONCILED'\]\.includes\(target\)/);
+assert.match(source, /const persistedVerification = db\.prepare\('SELECT \* FROM payment_verifications/);
+assert.match(source, /if \(authoritativeTarget\) \{/);
+assert.match(source, /v = \{/);
