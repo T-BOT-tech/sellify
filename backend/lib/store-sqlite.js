@@ -5953,7 +5953,7 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
         if (String(existingCommand.request_hash) !== requestHash) throw Object.assign(new Error('Idempotency key was already used with a different request'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE' });
         const replay = JSON.parse(existingCommand.response_json || '{}');
         db.exec('COMMIT');
-        return replay;
+        return replay.payment || replay;
       }
     }
     const row = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
