@@ -206,7 +206,7 @@ try {
   console.log(`\nPhase 0 Golden Regression: ${results.filter(x=>x[0]==='PASS').length} PASS, 0 FAIL`);
   for (const [status,name] of results) console.log(`${status}  ${name}`);
 } catch (e) {
-  console.error(`\nPhase 0 Golden Regression: FAILED`);
+  console.error(`\nPhase 0 Golden Regression: FAILED`);\n  console.error('Golden regression error:', e);\n  if (e?.stack) console.error(e.stack);
   for (const [status,name,err] of results) console.error(`${status}  ${name}${err ? ` — ${err.message}`:''}`);
   if (stderr) console.error('\nServer stderr:\n'+stderr);
   process.exitCode=1;
