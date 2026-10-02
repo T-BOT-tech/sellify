@@ -2619,6 +2619,85 @@ function runMigrations() {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(67, nowIso());
   }
+  // GAP-1.18Y — database-level cross-tenant payment-core isolation.
+  // Child financial records must never bind to a parent from another
+  // organization, even if an application caller bypasses normal service checks.
+  if (!applied.includes(69)) {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS trg_payment_evidence_tenant_boundary
+      BEFORE INSERT ON payment_evidence
+      FOR EACH ROW
+      WHEN NOT EXISTS (SELECT 1 FROM payments p WHERE p.id = NEW.payment_id AND p.organization_id = NEW.organization_id)
+      BEGIN SELECT RAISE(ABORT, 'PAYMENT_EVIDENCE_ORGANIZATION_MISMATCH'); END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_payment_verification_tenant_boundary
+      BEFORE INSERT ON payment_verifications
+      FOR EACH ROW
+      WHEN NOT EXISTS (
+        SELECT 1 FROM payments p
+        WHERE p.id = NEW.payment_id AND p.organization_id = NEW.organization_id
+      ) OR NOT EXISTS (
+        SELECT 1 FROM payment_evidence e
+        WHERE e.id = NEW.evidence_id AND e.organization_id = NEW.organization_id
+          AND e.payment_id = NEW.payment_id
+      )
+      BEGIN SELECT RAISE(ABORT, 'PAYMENT_VERIFICATION_ORGANIZATION_MISMATCH'); END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_payment_decision_tenant_boundary
+      BEFORE INSERT ON payment_decisions
+      FOR EACH ROW
+      WHEN NOT EXISTS (
+        SELECT 1 FROM payments p WHERE p.id = NEW.payment_id AND p.organization_id = NEW.organization_id
+      ) OR (
+        NEW.verification_id IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM payment_verifications v
+          WHERE v.id = NEW.verification_id AND v.organization_id = NEW.organization_id
+            AND v.payment_id = NEW.payment_id
+        )
+      ) OR (
+        NEW.evidence_id IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM payment_evidence e
+          WHERE e.id = NEW.evidence_id AND e.organization_id = NEW.organization_id
+            AND e.payment_id = NEW.payment_id
+        )
+      )
+      BEGIN SELECT RAISE(ABORT, 'PAYMENT_DECISION_ORGANIZATION_MISMATCH'); END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_payment_ledger_tenant_boundary
+      BEFORE INSERT ON payment_ledger_entries
+      FOR EACH ROW
+      WHEN NOT EXISTS (
+        SELECT 1 FROM payments p WHERE p.id = NEW.payment_id AND p.organization_id = NEW.organization_id
+      )
+      BEGIN SELECT RAISE(ABORT, 'PAYMENT_LEDGER_ORGANIZATION_MISMATCH'); END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_payment_refund_tenant_boundary
+      BEFORE INSERT ON payment_refunds
+      FOR EACH ROW
+      WHEN NOT EXISTS (
+        SELECT 1 FROM payments p WHERE p.id = NEW.payment_id AND p.organization_id = NEW.organization_id
+      )
+      BEGIN SELECT RAISE(ABORT, 'PAYMENT_REFUND_ORGANIZATION_MISMATCH'); END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_payment_reconciliation_tenant_boundary
+      BEFORE INSERT ON payment_reconciliations
+      FOR EACH ROW
+      WHEN NOT EXISTS (
+        SELECT 1 FROM payments p WHERE p.id = NEW.payment_id AND p.organization_id = NEW.organization_id
+      )
+      BEGIN SELECT RAISE(ABORT, 'PAYMENT_RECONCILIATION_ORGANIZATION_MISMATCH'); END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_payment_settlement_tenant_boundary
+      BEFORE INSERT ON payment_settlements
+      FOR EACH ROW
+      WHEN NOT EXISTS (
+        SELECT 1 FROM payments p WHERE p.id = NEW.payment_id AND p.organization_id = NEW.organization_id
+      )
+      BEGIN SELECT RAISE(ABORT, 'PAYMENT_SETTLEMENT_ORGANIZATION_MISMATCH'); END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(69, nowIso());
+  }
+
   // GAP-1.18X — reconciliation lineage without alternate financial authority.
   // Reconciliation is evidence/findings only. Any authoritative payment state
   // change must still pass through a persisted Payment Core decision.
@@ -6758,7 +6837,7 @@ export async function createPayment(chatId, input = {}, actor = null) {
     db.exec('COMMIT');
   } catch (error) { db.exec('ROLLBACK'); throw error; }
   audit(String(chatId), 'payment.created', 'payment', id, { amountMinor, currency, state, orderId }, { organizationId, locationId, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
-  return paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ?').get(id));
+  return paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(id, organizationId));
 }
 
 export async function listPaymentRoutingPolicies(chatId, { channel = null, locationId = null, activeOnly = true } = {}) {
@@ -6920,7 +6999,7 @@ export async function finalizePaymentSettlement(chatId, settlementId, input = {}
       netAmountMinor: row.net_amount_minor,
     });
     db.exec('COMMIT');
-    return normalizePaymentSettlement(db.prepare('SELECT * FROM payment_settlements WHERE id = ?').get(row.id));
+    return normalizePaymentSettlement(db.prepare('SELECT * FROM payment_settlements WHERE id = ? AND organization_id = ?').get(row.id, tenant.organization_id));
   } catch (error) {
     try { db.exec('ROLLBACK'); } catch {}
     throw error;
@@ -7083,7 +7162,7 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
       );
       audit(String(chatId), 'payment.refund.result', payment.id, actor?.userId || null, { refundId: refund.id, status: status || 'UNKNOWN' });
       db.exec('COMMIT');
-      return normalizePaymentRefund(db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(refund.id));
+      return normalizePaymentRefund(db.prepare('SELECT * FROM payment_refunds WHERE id = ? AND organization_id = ?').get(refund.id, tenant.organization_id));
     }
 
     const successfulBefore = Number(db.prepare("SELECT COALESCE(SUM(amount_minor),0) AS total FROM payment_refunds WHERE payment_id = ? AND status = 'SUCCEEDED' AND id <> ?").get(payment.id, refund.id).total || 0);
@@ -7145,7 +7224,7 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
       refundId: refund.id, amountMinor: refund.amount_minor, fullRefund,
     });
     db.exec('COMMIT');
-    return normalizePaymentRefund(db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(refund.id));
+    return normalizePaymentRefund(db.prepare('SELECT * FROM payment_refunds WHERE id = ? AND organization_id = ?').get(refund.id, tenant.organization_id));
   } catch (error) {
     try { db.exec('ROLLBACK'); } catch {}
     throw error;
@@ -7244,7 +7323,7 @@ export async function listPaymentLedger(chatId, paymentId) {
   ensureDatabase();
   const payment = await getPayment(chatId, paymentId);
   if (!payment) return null;
-  return db.prepare('SELECT * FROM payment_ledger_entries WHERE payment_id = ? ORDER BY rowid ASC').all(String(paymentId)).map(row => ({
+  return db.prepare('SELECT * FROM payment_ledger_entries WHERE payment_id = ? AND organization_id = ? ORDER BY rowid ASC') .all(String(paymentId), payment.organizationId).map(row => ({
     id: row.id, paymentId: row.payment_id, entryType: row.entry_type, amountMinor: Number(row.amount_minor), currency: normaliseCurrency(row.currency, 'ETB'),
     fromState: row.from_state, toState: row.to_state, actorId: row.actor_id, reason: row.reason || '', metadata: parseJSON(row.metadata_json, {}), createdAt: row.created_at,
   }));
@@ -7290,7 +7369,7 @@ export async function recordPaymentReconciliation(chatId, paymentId, input = {},
     now,
   );
   return {
-    reconciliation: db.prepare('SELECT * FROM payment_reconciliations WHERE id = ?').get(reconciliationId),
+    reconciliation: db.prepare('SELECT * FROM payment_reconciliations WHERE id = ? AND organization_id = ?').get(reconciliationId, payment.organizationId),
     duplicate: false,
   };
 }
@@ -7300,8 +7379,8 @@ export async function listPaymentReconciliations(chatId, paymentId, options = {}
   const payment = await getPayment(chatId, paymentId);
   if (!payment) return null;
   const limit = Math.min(Math.max(Number(options.limit || 100), 1), 500);
-  return db.prepare('SELECT * FROM payment_reconciliations WHERE payment_id = ? ORDER BY created_at DESC LIMIT ?')
-    .all(payment.id, limit);
+  return db.prepare('SELECT * FROM payment_reconciliations WHERE payment_id = ? AND organization_id = ? ORDER BY created_at DESC LIMIT ?')
+    .all(payment.id, payment.organizationId, limit);
 }
 
 export async function reconcilePayment(chatId, paymentId, input = {}, actor = null) {
@@ -7378,7 +7457,7 @@ export async function reconcilePayment(chatId, paymentId, input = {}, actor = nu
   // Reconciliation is deliberately non-authoritative. It records the finding
   // and its provenance but never mutates Payment state or writes a ledger entry.
   // A separate Payment Core decision/transition remains the sole authority.
-  return db.prepare('SELECT * FROM payment_reconciliations WHERE id = ?').get(reconciliationId);
+  return db.prepare('SELECT * FROM payment_reconciliations WHERE id = ? AND organization_id = ?').get(reconciliationId, payment.organizationId);
 }
 
 
