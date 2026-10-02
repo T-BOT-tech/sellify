@@ -90,7 +90,7 @@ test('GAP-1.11 provider getStatus MATCH flows through evidence, invariants, deci
     idempotencyKey: 'gap1-11-status-match-1',
   });
 
-  console.log('GAP-1.11 invariant diagnostic', JSON.stringify({ payment: base.payment, intent: await store.getPaymentIntent(base.chatId, base.payment.paymentIntentId), resultStatus: result.status, invariants: result.invariants, decision: result.decision }, null, 2));
+  console.log('GAP-1.11 lineage diagnostic', JSON.stringify({ evidence: result.evidence, verification: result.verification, invariantReasons: result.invariants.reasonCodes }, null, 2));
 
   assert.equal(result.supported, true);
   assert.equal(result.status, 'MATCH');
