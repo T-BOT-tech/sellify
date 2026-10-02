@@ -106,6 +106,26 @@ assert.rejects(() => executeLogisticsProviderExecutionBridge({
   applyCanonicalResult() {},
 }), /provider result operation does not match handoff/);
 
+
+await assert.rejects(
+  () => executeLogisticsProviderExecutionBridge({
+    handoff,
+    timeoutMs: 5,
+    invokeProvider: async () => new Promise(() => {}),
+    applyCanonicalResult() {},
+  }),
+  (e) => e.code === 'LOGISTICS_PROVIDER_EXECUTION_TIMEOUT',
+);
+
+await assert.rejects(
+  () => executeLogisticsProviderExecutionBridge({
+    handoff,
+    invokeProvider: async () => { throw Object.assign(new Error('provider unavailable'), { code: 'PROVIDER_UNAVAILABLE' }); },
+    applyCanonicalResult() {},
+  }),
+  (e) => e.code === 'PROVIDER_UNAVAILABLE',
+);
+
 const contract = logisticsProviderExecutionBridgeContract();
 assert.equal(contract.provider_registry, false);
 assert.equal(contract.callback_store, false);
