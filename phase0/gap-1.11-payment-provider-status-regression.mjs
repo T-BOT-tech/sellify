@@ -93,6 +93,7 @@ test('GAP-1.11 provider getStatus MATCH flows through evidence, invariants, deci
   assert.equal(result.supported, true);
   assert.equal(result.status, 'MATCH');
   assert.equal(result.payment.state, 'VERIFIED');
+  assert.equal((await store.getPayment(base.chatId, base.payment.id)).state, 'VERIFIED');
   assert.equal(result.invariants.passed, true);
   assert.equal(result.decision.targetState, 'VERIFIED');
   assert.equal(result.evidence.evidenceType, 'PROVIDER_STATUS');
