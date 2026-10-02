@@ -7140,16 +7140,29 @@ export async function listDeliveryAssignments(chatId, actor = null, filters = {}
            da.assignment_key, da.assigned_by_user_id, da.assigned_at,
            da.updated_at, da.version, f.server_order_id,
            f.fulfillment_type, f.status AS fulfillment_status,
-           f.destination_json
+           f.scheduled_at, f.tracking_reference, f.destination_json,
+           l.code AS location_code, l.name AS location_name, l.type AS location_type
     FROM delivery_assignments da
     JOIN fulfillments f ON f.id = da.fulfillment_id
     LEFT JOIN users u ON u.id = da.courier_user_id
+    LEFT JOIN locations l ON l.id = da.location_id AND l.organization_id = da.organization_id
     WHERE ${clauses.join(' AND ')}
     ORDER BY
       CASE da.status WHEN 'OUT_FOR_DELIVERY' THEN 1 WHEN 'ACCEPTED' THEN 2 ELSE 3 END,
       da.updated_at DESC
     LIMIT 200
-  `).all(...params);
+  `).all(...params).map(row => ({
+    ...row,
+    dispatch: {
+      locationId: row.location_id || null,
+      locationCode: row.location_code || null,
+      locationName: row.location_name || null,
+      locationType: row.location_type || null,
+      scheduledAt: row.scheduled_at || null,
+      trackingReference: row.tracking_reference || null,
+      destination: parseJSON(row.destination_json, null),
+    },
+  }));
 }
 
 export async function getDeliveryAssignment(chatId, serverOrderId, actor = null) {
@@ -7157,17 +7170,34 @@ export async function getDeliveryAssignment(chatId, serverOrderId, actor = null)
   const tenant = await getTenant(chatId);
   if (!tenant?.organization_id) return null;
   const row = db.prepare(`
-    SELECT da.*
+    SELECT da.*,
+           f.scheduled_at AS fulfillment_scheduled_at,
+           f.tracking_reference AS fulfillment_tracking_reference,
+           f.destination_json AS fulfillment_destination_json,
+           l.code AS location_code,
+           l.name AS location_name,
+           l.type AS location_type
     FROM delivery_assignments da
     JOIN fulfillments f ON f.id = da.fulfillment_id
+    LEFT JOIN locations l ON l.id = da.location_id AND l.organization_id = da.organization_id
     WHERE f.server_order_id = ? AND da.organization_id = ?
       AND da.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY')
     ORDER BY da.updated_at DESC
     LIMIT 1
   `).get(String(serverOrderId), String(tenant.organization_id));
   if (!row) return null;
-  if (actor?.userId && String(actor.userId) === String(row.courier_user_id)) return row;
-  return row;
+  return {
+    ...row,
+    dispatch: {
+      locationId: row.location_id || null,
+      locationCode: row.location_code || null,
+      locationName: row.location_name || null,
+      locationType: row.location_type || null,
+      scheduledAt: row.fulfillment_scheduled_at || null,
+      trackingReference: row.fulfillment_tracking_reference || null,
+      destination: parseJSON(row.fulfillment_destination_json, null),
+    },
+  };
 }
 
 export async function assertCourierOwnsDelivery(chatId, serverOrderId, actor) {
