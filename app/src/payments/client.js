@@ -31,9 +31,12 @@ export async function createPayment(body, { idempotencyKey } = {}) {
   const data = await request(buildPaymentPath(config.chatId), { method: 'POST', headers, body: JSON.stringify(normalizePaymentMutation(body)) });
   return normalizePaymentResponse(data);
 }
-export async function transitionPayment(paymentId, body, { idempotencyKey } = {}) {
+export async function transitionPaymentLifecycle(paymentId, body, { idempotencyKey } = {}) {
   const headers = { 'Idempotency-Key': requiredIdempotencyKey(idempotencyKey) };
-  const data = await request(buildPaymentPath(config.chatId, '/' + encodeURIComponent(paymentId)), { method: 'PATCH', headers, body: JSON.stringify(normalizePaymentMutation(body)) });
+  const mutation = normalizePaymentMutation(body);
+  const targetState = String(mutation.targetState || mutation.target_state || '').trim().toUpperCase();
+  if (!targetState) throw Object.assign(new Error('targetState is required'), { code: 'PAYMENT_CONTEXT_REQUIRED', status: 400 });
+  const data = await request(buildPaymentPath(config.chatId, '/' + encodeURIComponent(paymentId)), { method: 'PATCH', headers, body: JSON.stringify({ ...mutation, targetState }) });
   return normalizePaymentResponse(data);
 }
 export async function getPaymentLedger(paymentId) {
