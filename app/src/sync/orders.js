@@ -14,7 +14,7 @@ import { authHeaders as tenantAuthHeaders } from '../auth/tenant.js';
 import { applyStoreBranding } from '../ui/branding.js';
 import { t } from '../ui/i18n.js';
 import { renderAll } from '../ui/render.js';
-import { refreshPaymentProjection } from '../payments/projection.js';
+import { refreshPaymentProjection, ensurePaymentForSyncedOrder } from '../payments/projection.js';
 
 // Seller sync is authenticated with a tenant-scoped device session.
 // Tenant-wide API keys are not sent by the PWA.
@@ -118,6 +118,8 @@ export async function syncOrders() {
     }));
     saveJSON(STORAGE_KEYS.orders, orders);
     renderAll();
+    const syncedOrders = orders.filter(o => resultMap[o.id]?.status === 'synced' && o.server_order_id);
+    for (const order of syncedOrders) { try { await ensurePaymentForSyncedOrder(order); } catch (error) { console.warn('[Payment] Canonical payment creation deferred:', error?.code || error?.message || error); } }
     await pullServerOrders();
     await pullNewOrders();
     const count = (data && data.results && Array.isArray(data.results)) ? data.results.length : 0;
