@@ -38,3 +38,16 @@ assert.match(source, /const authoritativeTarget = \['VERIFIED', 'RECONCILED'\]\.
 assert.match(source, /const persistedVerification = db\.prepare\('SELECT \* FROM payment_verifications/);
 assert.match(source, /if \(authoritativeTarget\) \{/);
 assert.match(source, /v = \{/);
+
+assert.match(source, /GAP-1\.18Q — immutable payment decision identity and verification binding/);
+assert.match(source, /if \(!applied\.includes\(59\)\)/);
+assert.match(source, /decision_fingerprint TEXT/);
+assert.match(source, /uq_payment_decisions_verification/);
+assert.match(source, /uq_payment_decisions_fingerprint/);
+assert.match(source, /PAYMENT_DECISION_VERIFICATION_DUPLICATES_EXIST/);
+assert.match(source, /function paymentDecisionFingerprint/);
+assert.match(source, /const decisionFingerprint = paymentDecisionFingerprint/);
+assert.match(source, /const existingDecision = decisionVerificationId/);
+assert.match(source, /PAYMENT_DECISION_CONFLICT/);
+assert.match(source, /return paymentFromRow\(currentPayment\)/);
+assert.match(source, /decision_fingerprint\) VALUES/);
