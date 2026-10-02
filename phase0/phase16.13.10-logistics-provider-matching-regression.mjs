@@ -30,7 +30,6 @@ const matched = matchLogisticsProviders(providers, {
   capability: 'delivery',
   countryCode: 'ET',
   geoCode: 'ADDIS_ABABA',
-  productId: 'parcel',
   minimumQuantity: 20,
   unit: 'parcel',
 });
