@@ -12,6 +12,7 @@ async function request(path, options = {}) {
   return data;
 }
 export async function listPaymentProviders() { return request(buildPaymentPath(config.chatId, '/providers')); }
+export async function resolvePaymentRouting(body = {}) { const data = await request(buildPaymentPath(config.chatId, '/routing/resolve'), { method: 'POST', body: JSON.stringify(normalizePaymentMutation(body)) }); return data && typeof data === 'object' ? data : { status: 'UNKNOWN' }; }
 export async function listPaymentAccounts(status = 'active') {
   const query = new URLSearchParams({ status: String(status || 'active') });
   return request(buildPaymentPath(config.chatId, '/accounts?' + query));
