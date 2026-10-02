@@ -1,0 +1,32 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+
+const contract = fs.readFileSync('app/src/payments/contract.js', 'utf8');
+const client = fs.readFileSync('app/src/payments/client.js', 'utf8');
+const state = fs.readFileSync('app/src/payments/state.js', 'utf8');
+const ui = fs.readFileSync('app/src/payments/ui.js', 'utf8');
+const server = fs.readFileSync('backend/server.js', 'utf8');
+
+for (const file of ['app/src/payments/contract.js','app/src/payments/client.js','app/src/payments/state.js','app/src/payments/ui.js']) {
+  assert.ok(fs.existsSync(file), file + ' missing');
+}
+assert.match(contract, /PAYMENT_STATES/);
+assert.match(contract, /buildPaymentPath/);
+assert.match(contract, /buildPaymentIdempotencyKey/);
+assert.match(client, /authHeaders/);
+assert.match(client, /Idempotency-Key/);
+assert.match(client, /\/providers/);
+assert.match(client, /\/accounts/);
+assert.match(client, /\/ledger/);
+assert.match(client, /\/reconciliation/);
+assert.match(client, /\/status/);
+assert.match(state, /In-memory frontend projection only/);
+assert.doesNotMatch(state, /localStorage|saveJSON|STORAGE_KEYS/);
+assert.match(ui, /never decides financial outcomes/);
+assert.match(server, /\/tenants\/\(\[\^\/\]\+\)\/payments/);
+assert.match(server, /payments:view/);
+assert.match(server, /payments:accept/);
+assert.match(server, /payments:reconcile/);
+assert.match(server, /payments:manage/);
+
+console.log('PASS GAP PF-1 payment frontend contract boundary regression');
