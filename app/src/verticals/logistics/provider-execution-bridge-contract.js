@@ -12,6 +12,7 @@ import { defineLogisticsProviderExecutionHandoff } from './provider-execution-ha
 import { resolveLogisticsProviderAdapterBoundary } from './provider-adapter-contract.js';
 import { normalizeLogisticsProviderExecutionResult, projectProviderExecutionResult } from './provider-execution-result-contract.js';
 import { projectReliableProviderResult } from './provider-execution-reliability-contract.js';
+import { executePlatformAdapter } from '../../platform/adapter-framework.js';
 
 export const LOGISTICS_PROVIDER_EXECUTION_BRIDGE_CONTRACT_VERSION = '1.0';
 
@@ -30,10 +31,12 @@ export async function executeLogisticsProviderExecutionBridge({
   handoff,
   currentStatus = null,
   processedCallbackIds = [],
-  invokeProvider,
+  invokeProvider = null,
   applyCanonicalResult,
 } = {}) {
-  const invoke = fn(invokeProvider, 'invokeProvider');
+  const invoke = invokeProvider
+    ? fn(invokeProvider, 'invokeProvider')
+    : (input, context) => executePlatformAdapter(normalizedHandoff.adapter_id, input, context);
   const apply = fn(applyCanonicalResult, 'applyCanonicalResult');
 
   const normalizedHandoff = defineLogisticsProviderExecutionHandoff(handoff);
