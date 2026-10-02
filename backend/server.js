@@ -1919,7 +1919,7 @@ async function handlePaymentRoutingPolicies(req, res, chatId) {
   return sendJSON(res, 200, { policy: await store.upsertPaymentRoutingPolicy(chatId, body, session) }, req);
 }
 
-async async function handlePaymentProviderCertification(req,res,chatId){
+async function handlePaymentProviderCertification(req,res,chatId){
   const tenant=await getTenant(chatId);if(!tenant)return sendJSON(res,404,{error:{message:'Unknown store',status:404}},req);
   const session=await requireSession(req,tenant.chatId);
   if(req.method==='GET'){
