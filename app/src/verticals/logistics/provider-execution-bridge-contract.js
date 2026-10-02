@@ -33,10 +33,34 @@ export async function executeLogisticsProviderExecutionBridge({
   processedCallbackIds = [],
   invokeProvider = null,
   applyCanonicalResult,
+  timeoutMs = 30000,
 } = {}) {
   const invoke = invokeProvider
     ? fn(invokeProvider, 'invokeProvider')
     : (input, context) => executePlatformAdapter(normalizedHandoff.adapter_id, input, context);
+
+  const timeout = Number(timeoutMs);
+  if (!Number.isFinite(timeout) || timeout < 1 || timeout > 300000) {
+    invalid('timeoutMs must be between 1 and 300000 milliseconds');
+  }
+
+  const invokeWithTimeout = async (input, context) => {
+    let timer;
+    try {
+      return await Promise.race([
+        Promise.resolve(invoke(input, context)),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => {
+            const error = new Error('External provider execution timed out');
+            error.code = 'LOGISTICS_PROVIDER_EXECUTION_TIMEOUT';
+            reject(error);
+          }, timeout);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
   const apply = fn(applyCanonicalResult, 'applyCanonicalResult');
 
   const normalizedHandoff = defineLogisticsProviderExecutionHandoff(handoff);
@@ -59,7 +83,7 @@ export async function executeLogisticsProviderExecutionBridge({
 
   // The injected delegate is the external-provider boundary. No transport,
   // credentials, provider state, or network call is implemented here.
-  const providerRawResult = await Promise.resolve(invoke(providerInput, Object.freeze({
+  const providerRawResult = await invokeWithTimeout(providerInput, Object.freeze({
     adapter: adapterBoundary,
     handoff: normalizedHandoff,
   })));
