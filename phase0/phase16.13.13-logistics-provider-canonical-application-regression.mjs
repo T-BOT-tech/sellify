@@ -13,5 +13,6 @@ assert.equal(contract.duplicate_fulfillment_authority, false);
 assert.equal(contract.duplicate_inventory_authority, false);
 assert.equal(contract.payment_mutation, false);
 assert.equal(contract.settlement_mutation, false);
+assert.equal(contract.flow, 'provider_result -> existing_domain_transaction -> canonical_fulfillment -> inventory_consequence -> audit');
 
 console.log('Phase 16.13.13 Logistics provider canonical application boundary: PASS');
