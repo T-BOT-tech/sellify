@@ -7364,24 +7364,9 @@ export async function reconcilePayment(chatId, paymentId, input = {}, actor = nu
     provenanceOperation: latestDecision.provenance_operation,
   } : null;
 
-  if (payment.state !== decisionTarget && PAYMENT_TRANSITIONS[payment.state]?.has(decisionTarget)) {
-    await commitPaymentDecision(chatId, {
-      paymentId: payment.id,
-      targetState: decisionTarget,
-      expectedState: payment.state,
-      verification: verification || undefined,
-      decision: {
-        decision: decisionName,
-        targetState: decisionTarget,
-        verificationId: latestDecision?.verification_id || undefined,
-        evidenceId: latestDecision?.evidence_id || undefined,
-        reason: input.reason || (matched ? 'Payment reconciliation matched' : 'Payment reconciliation mismatch'),
-        reasonCodes: matched ? ['RECONCILIATION_MATCHED'] : ['RECONCILIATION_MISMATCH'],
-        decisionSource: 'PAYMENT_CORE',
-      },
-    }, actor);
-  }
-
+  // Reconciliation is deliberately non-authoritative. It records the finding
+  // and its provenance but never mutates Payment state or writes a ledger entry.
+  // A separate Payment Core decision/transition remains the sole authority.
   return db.prepare('SELECT * FROM payment_reconciliations WHERE id = ?').get(reconciliationId);
 }
 
