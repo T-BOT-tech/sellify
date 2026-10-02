@@ -24,7 +24,7 @@ const handoff = {
 let providerCalls = 0;
 let canonicalCalls = 0;
 
-const applied = executeLogisticsProviderExecutionBridge({
+const applied = await executeLogisticsProviderExecutionBridge({
   handoff,
   currentStatus: 'in_progress',
   invokeProvider(input) {
@@ -54,7 +54,7 @@ assert.equal(providerCalls, 1);
 assert.equal(canonicalCalls, 1);
 assert.equal(applied.persistence, 'existing_domain_state_and_outbox_only');
 
-const duplicate = executeLogisticsProviderExecutionBridge({
+const duplicate = await executeLogisticsProviderExecutionBridge({
   handoff,
   currentStatus: 'in_progress',
   processedCallbackIds: ['callback-bridge-2'],
@@ -75,7 +75,7 @@ assert.equal(duplicate.reliability.apply, false);
 assert.equal(duplicate.canonical_result, null);
 assert.equal(duplicate.canonical_application, null);
 
-assert.throws(() => executeLogisticsProviderExecutionBridge({
+assert.rejects(() => executeLogisticsProviderExecutionBridge({
   handoff: { ...handoff, selected_provider_id: 'other-provider' },
   invokeProvider() {
     return { provider_id: 'provider-bridge', operation: 'delivery', result_status: 'delivered', callback_id: 'cb-mismatch' };
@@ -83,7 +83,7 @@ assert.throws(() => executeLogisticsProviderExecutionBridge({
   applyCanonicalResult() {},
 }), /adapter provider must match/);
 
-assert.throws(() => executeLogisticsProviderExecutionBridge({
+assert.rejects(() => executeLogisticsProviderExecutionBridge({
   handoff,
   invokeProvider() {
     return { provider_id: 'wrong-provider', operation: 'delivery', result_status: 'delivered', callback_id: 'cb-provider-mismatch' };
@@ -91,7 +91,7 @@ assert.throws(() => executeLogisticsProviderExecutionBridge({
   applyCanonicalResult() {},
 }), /provider result does not match selected provider/);
 
-assert.throws(() => executeLogisticsProviderExecutionBridge({
+assert.rejects(() => executeLogisticsProviderExecutionBridge({
   handoff: { ...handoff, operation: 'cross_border' },
   invokeProvider() {
     return { provider_id: 'provider-bridge', operation: 'delivery', result_status: 'delivered', callback_id: 'cb-operation-mismatch' };
