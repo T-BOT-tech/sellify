@@ -6877,23 +6877,44 @@ function deriveLegacyPaymentState(order) {
 function ensureCanonicalPaymentForOrder(chatId, order, serverOrderId, actor = null) {
   const organizationId = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(String(chatId))?.organization_id;
   if (!organizationId) return null;
-  const existing = db.prepare('SELECT id FROM payments WHERE organization_id = ? AND order_id = ? LIMIT 1').get(String(organizationId), String(serverOrderId));
+
+  const existing = db.prepare('SELECT id FROM payments WHERE organization_id = ? AND order_id = ? LIMIT 1')
+    .get(String(organizationId), String(serverOrderId));
   if (existing) return existing.id;
-  const state = deriveLegacyPaymentState(order);
+
+  // PF-1B: order synchronization establishes identity/linkage only.
+  // Local payment proof, cash tendered, or legacy payment fields are
+  // operational evidence/claims and MUST NOT select a financial state.
+  // PaymentCore verification/decision is the only authority allowed to
+  // advance the canonical payment into CLAIMED/RECEIVED/VERIFIED/etc.
   const now = nowIso();
   const id = crypto.randomUUID();
-  const amountMinor = Math.max(0, Number.isInteger(Number(order.cash_tendered)) && Number(order.cash_tendered) > 0 ? Math.min(Number(order.cash_tendered), Number(order.total || 0)) : (state === 'CLAIMED' ? Number(order.total || 0) : 0));
+  const amountMinor = Math.max(0, Number(order.total || 0));
   const currency = normaliseCurrency(order.currency, tenantCurrency(chatId));
-  db.prepare(`INSERT INTO payments (id, organization_id, location_id, order_id, customer_id, payment_account_id, provider_id, channel, method_id, method_name, amount_minor, currency, state, external_reference, claimed_at, received_at, verified_at, reconciled_at, metadata_json, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NULL, 'manual', 'manual', ?, ?, ?, ?, ?, NULL, ?, ?, NULL, NULL, ?, ?, ?, ?)`).run(
-    id, String(organizationId), order.location_id || null, String(serverOrderId), order.customer_id || null,
-    order.payment_method_id || null, order.payment_method_name || null, amountMinor, currency, state,
-    state === 'CLAIMED' ? now : null, state === 'RECEIVED' ? now : null,
-    json({ compatibility: 'legacy-order-payment', paymentProofAttached: Boolean(order.payment_proof) }), actor?.userId || null, now, now
+
+  db.prepare(`
+    INSERT INTO payments
+      (id, organization_id, location_id, order_id, customer_id, payment_account_id,
+       provider_id, channel, method_id, method_name, amount_minor, currency, state,
+       external_reference, claimed_at, received_at, verified_at, reconciled_at,
+       metadata_json, created_by_user_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, NULL, 'manual', 'manual', ?, ?, ?, ?, 'UNPAID',
+            NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?)
+  `).run(
+    id, String(organizationId), order.location_id || null, String(serverOrderId),
+    order.customer_id || null, order.payment_method_id || null,
+    order.payment_method_name || null, amountMinor, currency,
+    json({
+      compatibility: 'legacy-order-payment',
+      canonicalLinkageOnly: true,
+      paymentProofAttached: Boolean(order.payment_proof),
+      financialStateAuthority: 'PAYMENT_CORE',
+    }),
+    actor?.userId || null, now, now
   );
-  db.prepare(`INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, 'CREATED', ?, ?, NULL, ?, ?, ?, ?, ?)`).run(
-    crypto.randomUUID(), id, String(organizationId), amountMinor, currency, state, actor?.userId || null,
-    'Compatibility projection from existing order payment fields', json({ compatibility: 'legacy-order-payment' }), now
-  );
+
+  // Deliberately no payment_ledger_entries INSERT here. Creating the
+  // canonical payment shell is not a financial transition.
   return id;
 }
 
@@ -7531,9 +7552,9 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         delivered_to_device: true,
       };
       insertOrder(key, localId, stored);
-      ensureCanonicalPaymentForOrder(key, stored, serverOrderId, null);
-      audit(key, 'order.synced', 'order', serverOrderId, { localId, totalMinor: total });
-      results.push({ local_id: order.id, status: 'synced', order_id: serverOrderId });
+      const canonicalPaymentId = ensureCanonicalPaymentForOrder(key, stored, serverOrderId, null);
+      audit(key, 'order.synced', 'order', serverOrderId, { localId, totalMinor: total, canonicalPaymentId });
+      results.push({ local_id: order.id, status: 'synced', order_id: serverOrderId, payment_id: canonicalPaymentId, payment_state: 'UNPAID' });
     }
     db.exec('COMMIT');
     return results;
