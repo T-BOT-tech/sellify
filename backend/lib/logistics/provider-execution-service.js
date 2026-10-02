@@ -41,6 +41,7 @@ export async function executeLogisticsProviderExecution({
   requiredText(chatId, 'chatId');
   requiredText(serverOrderId, 'serverOrderId');
   requiredText(idempotencyKey, 'idempotencyKey');
+  requiredText(locationId, 'locationId');
 
   if (actor == null || typeof actor !== 'object') {
     invalid('actor is required', 'LOGISTICS_PROVIDER_ACTOR_REQUIRED');
