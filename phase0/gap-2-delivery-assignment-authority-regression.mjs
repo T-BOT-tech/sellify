@@ -14,7 +14,11 @@ assert.match(store, /CREATE TABLE IF NOT EXISTS delivery_assignments/);
 assert.match(store, /UNIQUE\(fulfillment_id\)/);
 assert.match(store, /COURIER_ROLE_REQUIRED/);
 assert.match(store, /COURIER_SCOPE_DENIED/);
-assert.match(store, /COURIER_ASSIGNMENT_REQUIRED/);\nassert.match(store, /assignmentKey/);
+assert.match(store, /COURIER_ASSIGNMENT_REQUIRED/);
+assert.match(store, /COURIER_ROLE_REQUIRED/);
+assert.match(store, /COURIER_ORGANIZATION_DENIED/);
+assert.match(store, /membership_roles/);
+assert.match(store, /scope_type === 'LOCATION'/);\nassert.match(store, /assignmentKey/);
 assert.match(store, /ASSIGNMENT_CONFLICT/);
 assert.match(store, /INSERT INTO fulfillments/);
 
