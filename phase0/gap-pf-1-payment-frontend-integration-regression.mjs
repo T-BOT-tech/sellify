@@ -4,11 +4,14 @@ import assert from 'node:assert/strict';
 const client = fs.readFileSync('app/src/payments/client.js', 'utf8');
 const proof = fs.readFileSync('app/src/orders/payment-proof.js', 'utf8');
 const checkout = fs.readFileSync('app/src/orders/checkout.js', 'utf8');
+const server = fs.readFileSync('backend/server.js', 'utf8');
 
 assert.match(client, /requiredIdempotencyKey/);
 assert.match(client, /Idempotency-Key/);
 assert.match(client, /createPayment/);
-assert.match(client, /transitionPayment/);
+assert.match(client, /transitionPaymentLifecycle/);
+assert.match(server, /paymentCore\.transitionLifecycle/);
+assert.match(server, /Idempotency-Key is required/);
 assert.match(client, /requiredIdempotencyKey\(idempotencyKey\)/g);
 assert.match(proof, /payment_proof/);
 assert.match(checkout, /payment_method_id/);
