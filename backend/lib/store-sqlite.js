@@ -2586,6 +2586,39 @@ function runMigrations() {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(65, nowIso());
   }
+  // GAP-1.18W — refund lineage binding.
+  if (!applied.includes(66)) {
+    db.exec(`
+      ALTER TABLE payment_refunds ADD COLUMN original_payment_evidence_id TEXT REFERENCES payment_evidence(id) ON DELETE SET NULL;
+      ALTER TABLE payment_refunds ADD COLUMN original_payment_verification_id TEXT REFERENCES payment_verifications(id) ON DELETE SET NULL;
+      ALTER TABLE payment_refunds ADD COLUMN original_payment_decision_id TEXT REFERENCES payment_decisions(id) ON DELETE SET NULL;
+      ALTER TABLE payment_refunds ADD COLUMN refund_evidence_id TEXT REFERENCES payment_evidence(id) ON DELETE SET NULL;
+      ALTER TABLE payment_ledger_entries ADD COLUMN payment_refund_id TEXT REFERENCES payment_refunds(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS idx_payment_refunds_lineage ON payment_refunds(organization_id, original_payment_evidence_id, original_payment_verification_id, original_payment_decision_id, refund_evidence_id);
+      CREATE INDEX IF NOT EXISTS idx_payment_ledger_refund ON payment_ledger_entries(organization_id, payment_refund_id, created_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(66, nowIso());
+  }
+
+  if (!applied.includes(67)) {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS trg_payment_refund_ledger_lineage
+      BEFORE INSERT ON payment_ledger_entries
+      FOR EACH ROW
+      WHEN NEW.entry_type = 'REFUNDED'
+      BEGIN
+        SELECT CASE
+          WHEN NEW.payment_refund_id IS NULL THEN RAISE(ABORT, 'PAYMENT_REFUND_LEDGER_BINDING_REQUIRED')
+          WHEN NOT EXISTS (SELECT 1 FROM payment_refunds r WHERE r.id = NEW.payment_refund_id AND r.organization_id = NEW.organization_id AND r.payment_id = NEW.payment_id AND r.status = 'SUCCEEDED') THEN RAISE(ABORT, 'PAYMENT_REFUND_LINEAGE_INVALID')
+          WHEN NOT EXISTS (SELECT 1 FROM payment_refunds r JOIN payment_decisions d ON d.id = r.original_payment_decision_id WHERE r.id = NEW.payment_refund_id AND d.organization_id = NEW.organization_id AND d.payment_id = NEW.payment_id AND d.verification_id = r.original_payment_verification_id AND d.evidence_id = r.original_payment_evidence_id) THEN RAISE(ABORT, 'PAYMENT_REFUND_ORIGINAL_DECISION_LINEAGE_INVALID')
+          WHEN NOT EXISTS (SELECT 1 FROM payment_refunds r JOIN payment_verifications v ON v.id = r.original_payment_verification_id WHERE r.id = NEW.payment_refund_id AND v.organization_id = NEW.organization_id AND v.payment_id = NEW.payment_id AND v.evidence_id = r.original_payment_evidence_id) THEN RAISE(ABORT, 'PAYMENT_REFUND_ORIGINAL_VERIFICATION_LINEAGE_INVALID')
+          WHEN NOT EXISTS (SELECT 1 FROM payment_refunds r JOIN payment_evidence e ON e.id = r.original_payment_evidence_id WHERE r.id = NEW.payment_refund_id AND e.organization_id = NEW.organization_id AND e.payment_id = NEW.payment_id) THEN RAISE(ABORT, 'PAYMENT_REFUND_ORIGINAL_EVIDENCE_LINEAGE_INVALID')
+          WHEN NOT EXISTS (SELECT 1 FROM payment_refunds r JOIN payment_evidence e ON e.id = r.refund_evidence_id WHERE r.id = NEW.payment_refund_id AND r.refund_evidence_id IS NOT NULL AND e.organization_id = NEW.organization_id AND e.payment_id = NEW.payment_id) THEN RAISE(ABORT, 'PAYMENT_REFUND_PROVIDER_EVIDENCE_INVALID')
+        END;
+      END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(67, nowIso());
+  }
   // GAP-1.18T — audit tamper evidence.
   if (!applied.includes(62)) {
     const rows = db.prepare('SELECT * FROM audit_events ORDER BY id').all();
