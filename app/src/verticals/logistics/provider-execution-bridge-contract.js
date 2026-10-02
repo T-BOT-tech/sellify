@@ -33,6 +33,7 @@ export async function executeLogisticsProviderExecutionBridge({
   processedCallbackIds = [],
   invokeProvider = null,
   applyCanonicalResult,
+  canonicalApplicationContext = null,
   timeoutMs = 30000,
 } = {}) {
   const apply = fn(applyCanonicalResult, 'applyCanonicalResult');
@@ -113,7 +114,12 @@ export async function executeLogisticsProviderExecutionBridge({
       provider_result: result,
       reliability,
       canonical_result: canonical,
-      canonical_application: await Promise.resolve(apply(canonical)),
+      canonical_application: await Promise.resolve(apply(canonical, Object.freeze({
+        operation: normalizedHandoff.operation,
+        handoff: normalizedHandoff,
+        provider_result: result,
+        context: canonicalApplicationContext,
+      }))),
       external_execution: true,
       provider_execution_authority: 'injected_external_provider_delegate',
       mutation_authority: 'existing_domain_transaction',
