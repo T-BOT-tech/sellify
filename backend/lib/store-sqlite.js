@@ -2148,7 +2148,7 @@ function runMigrations() {
 
   // GAP-1.1 — payment intent/evidence/verification/decision foundation.
   if (!applied.includes(45)) {
-    db.exec(\`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS payment_intents (
         id TEXT PRIMARY KEY,
         organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -2262,7 +2262,7 @@ function runMigrations() {
         UNIQUE(organization_id, idempotency_key, command_type)
       );
       CREATE INDEX IF NOT EXISTS idx_payment_idempotency_expiry ON payment_idempotency_keys(expires_at);
-    \`);
+    `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(45, nowIso());
   }
 
@@ -2271,9 +2271,9 @@ function runMigrations() {
     const columns = db.prepare('PRAGMA table_info(payments)').all();
     const hasPaymentIntentId = columns.some(column => String(column.name) === 'payment_intent_id');
     if (!hasPaymentIntentId) {
-      db.exec(\`ALTER TABLE payments ADD COLUMN payment_intent_id TEXT REFERENCES payment_intents(id) ON DELETE SET NULL\`);
+      db.exec(`ALTER TABLE payments ADD COLUMN payment_intent_id TEXT REFERENCES payment_intents(id) ON DELETE SET NULL`);
     }
-    db.exec(\`CREATE INDEX IF NOT EXISTS idx_payments_payment_intent ON payments(payment_intent_id)\`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_payments_payment_intent ON payments(payment_intent_id)`);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(46, nowIso());
   }
 
