@@ -90,7 +90,7 @@ test('GAP-1.11 provider getStatus MATCH flows through evidence, invariants, deci
     idempotencyKey: 'gap1-11-status-match-1',
   });
 
-  console.log('GAP-1.11 diagnostic', { returnedState: result.payment?.state, storedState: (await store.getPayment(base.chatId, base.payment.id))?.state, decision: result.decision, ledger: await store.listPaymentLedger(base.chatId, base.payment.id) });
+  console.log('GAP-1.11 invariant diagnostic', JSON.stringify({ payment: base.payment, intent: await store.getPaymentIntent(base.chatId, base.payment.paymentIntentId), resultStatus: result.status, invariants: result.invariants, decision: result.decision }, null, 2));
 
   assert.equal(result.supported, true);
   assert.equal(result.status, 'MATCH');
