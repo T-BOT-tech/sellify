@@ -90,6 +90,8 @@ test('GAP-1.11 provider getStatus MATCH flows through evidence, invariants, deci
     idempotencyKey: 'gap1-11-status-match-1',
   });
 
+  console.log('GAP-1.11 diagnostic', { returnedState: result.payment?.state, storedState: (await store.getPayment(base.chatId, base.payment.id))?.state, decision: result.decision, ledger: await store.listPaymentLedger(base.chatId, base.payment.id) });
+
   assert.equal(result.supported, true);
   assert.equal(result.status, 'MATCH');
   assert.equal(result.payment.state, 'VERIFIED');
