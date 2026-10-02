@@ -668,6 +668,76 @@ export class PaymentCore {
     return { probe: result, evidence: null, certification: 'UNCHANGED' };
   }
 
+  async certifyProductionReadiness(command = {}) {
+    this.#authorize(command, 'payments:manage');
+    const chatId = String(command.chatId || '').trim();
+    const providerId = String(command.providerId || command.provider_id || '').trim().toLowerCase();
+    const requiredCapabilities = Array.isArray(command.requiredCapabilities) && command.requiredCapabilities.length
+      ? [...new Set(command.requiredCapabilities.map(value => String(value).trim()).filter(Boolean))]
+      : ['initiate', 'getStatus', 'verify', 'reconcile', 'refund'];
+    if (!chatId || !providerId) {
+      throw Object.assign(new Error('chatId and providerId are required'), { statusCode: 400, code: 'PRODUCTION_CERTIFICATION_CONTEXT_REQUIRED' });
+    }
+
+    const contract = this.providerRegistry?.certifyPaymentProviderCapabilities
+      ? this.providerRegistry.certifyPaymentProviderCapabilities(providerId)
+      : null;
+    const evidenceRows = this.store.listPaymentProviderCapabilityEvidence
+      ? await this.store.listPaymentProviderCapabilityEvidence(chatId, providerId, {})
+      : [];
+    const live = new Map(
+      evidenceRows
+        .filter(item => item.certificationScope === 'LIVE_EXTERNAL' && item.status === 'CERTIFIED')
+        .map(item => [item.capability, item]),
+    );
+    const runtimeNode = process.versions.node;
+    const major = Number.parseInt(runtimeNode.split('.')[0], 10);
+    const checks = {
+      node24: major >= 24,
+      adapterContract: contract?.status === 'ADAPTER_CONTRACT_CERTIFIED',
+      configured: contract?.configured !== false,
+      capabilities: Object.fromEntries(requiredCapabilities.map(capability => [
+        capability,
+        Boolean(live.get(capability)),
+      ])),
+    };
+    const missingCapabilities = requiredCapabilities.filter(capability => !checks.capabilities[capability]);
+    const reasons = [];
+    if (!checks.node24) reasons.push('NODE_24_REQUIRED');
+    if (!checks.adapterContract) reasons.push('ADAPTER_CONTRACT_NOT_CERTIFIED');
+    if (!checks.configured) reasons.push('PROVIDER_NOT_CONFIGURED');
+    if (missingCapabilities.length) reasons.push('LIVE_EXTERNAL_CAPABILITY_EVIDENCE_MISSING');
+
+    const status = reasons.length ? 'BLOCKED' : 'CERTIFIED';
+    const prerequisiteEvidence = {
+      runtime: { node: runtimeNode, node24: checks.node24 },
+      adapterContract: contract,
+      liveCapabilities: Object.fromEntries(requiredCapabilities.map(capability => [capability, live.get(capability) || null])),
+      checks,
+      missingCapabilities,
+    };
+    const record = this.store.recordPaymentProductionCertification
+      ? await this.store.recordPaymentProductionCertification(chatId, {
+          certificationScope: 'PRODUCTION',
+          status,
+          providerId,
+          requiredCapabilities,
+          prerequisiteEvidence,
+          reason: reasons.join(',') || 'All production certification prerequisites satisfied',
+        }, command.actor || null)
+      : null;
+
+    return {
+      status,
+      providerId,
+      requiredCapabilities,
+      checks,
+      missingCapabilities,
+      reasons,
+      certification: record,
+    };
+  }
+
   async certifyProviderCapability(command = {}) {
     this.#authorize(command, 'payments:manage');
     const chatId = String(command.chatId || '').trim();
