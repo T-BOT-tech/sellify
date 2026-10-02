@@ -1858,11 +1858,23 @@ async function handlePayments(req, res, chatId, paymentId = null) {
   }
   if (req.method === 'PATCH' && paymentId) {
     const body = await readBody(req);
-    const target = String(body.state || '').toUpperCase();
-    const permission = ['RECONCILED'].includes(target) ? 'payments:reconcile' : 'payments:manage';
-    await requireAuthorization(session, tenant, 'payments', permission, { deniedMessage: 'Payment state change permission required' });
-    const payment = await transitionPayment(chatId, paymentId, target, session, body);
-    return sendJSON(res, 200, { payment }, req);
+    const target = String(body.targetState || body.target_state || body.state || '').toUpperCase();
+    if (!target) return sendJSON(res, 400, { error: { message: 'targetState is required', status: 400, code: 'PAYMENT_CONTEXT_REQUIRED' } }, req);
+    if (['RECONCILED', 'VERIFIED'].includes(target)) {
+      return sendJSON(res, 400, { error: { message: 'Use the canonical verification/reconciliation commands for this state', status: 400, code: 'PAYMENT_STATE_COMMAND_REQUIRED' } }, req);
+    }
+    const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
+    if (!idempotencyKey) return sendJSON(res, 400, { error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' } }, req);
+    const result = await paymentCore.transitionLifecycle({
+      ...body,
+      targetState: target,
+      paymentId,
+      idempotencyKey,
+      chatId,
+      organizationId: tenant.organizationId,
+      actor: session,
+    });
+    return sendJSON(res, 200, result, req);
   }
   return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
 }
