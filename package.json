@@ -176,6 +176,7 @@
     "phase17.7:receiving-contract-test": "node phase0/phase17.7-receiving-contract-regression.mjs",
     "phase17.9:procurement-settlement-test": "node phase0/phase17.9-procurement-settlement-regression.mjs",
     "phase17.9:procurement-settlement-contract-test": "node phase0/phase17.9-procurement-settlement-contract-regression.mjs",
+    "test:pf-1-payment-frontend-contract": "node phase0/gap-pf-1-payment-frontend-contract-regression.mjs",
     "test:phase17.10": "node phase0/phase17.10-cumulative-exit-gate.mjs",
     "phase18.1:supplier-network-profile-test": "node phase0/phase18.1-supplier-network-profile-regression.mjs",
     "phase18.2:supplier-network-capability-test": "node phase0/phase18.2-supplier-network-capability-regression.mjs",
