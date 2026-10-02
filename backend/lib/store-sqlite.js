@@ -2515,6 +2515,41 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(60, nowIso());
   }
 
+  // GAP-1.18S — persisted payment verification is immutable.
+  if (!applied.includes(61)) {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS trg_payment_verification_immutable
+      BEFORE UPDATE ON payment_verifications
+      FOR EACH ROW
+      WHEN NEW.id IS NOT OLD.id OR
+           NEW.organization_id IS NOT OLD.organization_id OR
+           NEW.payment_id IS NOT OLD.payment_id OR
+           NEW.payment_intent_id IS NOT OLD.payment_intent_id OR
+           NEW.evidence_id IS NOT OLD.evidence_id OR
+           NEW.provider_id IS NOT OLD.provider_id OR
+           NEW.result IS NOT OLD.result OR
+           NEW.confidence IS NOT OLD.confidence OR
+           NEW.observed_amount_minor IS NOT OLD.observed_amount_minor OR
+           NEW.observed_currency IS NOT OLD.observed_currency OR
+           NEW.observed_receiver IS NOT OLD.observed_receiver OR
+           NEW.observed_receiver_account IS NOT OLD.observed_receiver_account OR
+           NEW.observed_reference IS NOT OLD.observed_reference OR
+           NEW.observed_transaction_id IS NOT OLD.observed_transaction_id OR
+           NEW.observed_at IS NOT OLD.observed_at OR
+           NEW.reason_codes_json IS NOT OLD.reason_codes_json OR
+           NEW.raw_result_json IS NOT OLD.raw_result_json OR
+           NEW.verifier IS NOT OLD.verifier OR
+           NEW.verifier_version IS NOT OLD.verifier_version OR
+           NEW.provenance_source IS NOT OLD.provenance_source OR
+           NEW.provenance_operation IS NOT OLD.provenance_operation OR
+           NEW.created_at IS NOT OLD.created_at
+      BEGIN
+        SELECT RAISE(ABORT, 'PAYMENT_VERIFICATION_IMMUTABLE_AFTER_PERSISTENCE');
+      END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(61, nowIso());
+  }
+
   // GAP-1.18M — durable provider transaction identity binding.
   // A provider transaction may authorize at most one Payment within an
   // organization/provider scope. NULLs remain allowed for legacy evidence,
