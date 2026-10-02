@@ -14,6 +14,7 @@ import { authHeaders as tenantAuthHeaders } from '../auth/tenant.js';
 import { applyStoreBranding } from '../ui/branding.js';
 import { t } from '../ui/i18n.js';
 import { renderAll } from '../ui/render.js';
+import { refreshPaymentProjection } from '../payments/projection.js';
 
 // Seller sync is authenticated with a tenant-scoped device session.
 // Tenant-wide API keys are not sent by the PWA.
@@ -41,6 +42,8 @@ async function pullServerOrders() {
     const fresh = incoming.filter(o => o?.id != null && !existingIds.has(String(o.id)));
     setOrders([...fresh, ...merged].sort((a, b) => Number(b.created_at || 0) - Number(a.created_at || 0)));
     saveJSON(STORAGE_KEYS.orders, orders);
+    renderAll();
+    await refreshPaymentProjection();
     renderAll();
   } catch (e) {
     console.log('[Sync] Pulling server order feed failed (will retry next sync):', e);
