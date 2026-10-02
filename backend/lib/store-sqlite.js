@@ -7463,7 +7463,7 @@ export async function reconcilePayment(chatId, paymentId, input = {}, actor = nu
     input.externalReference || input.external_reference || payment.externalReference || null,
     Number.isInteger(amountMinor) && amountMinor >= 0 ? amountMinor : 0,
     currency, String(input.reason || ''), actor?.userId || null, now, matched ? now : null,
-    latestDecision?.evidence_id || null, latestDecision?.verification_id || null, latestDecision?.id || null,
+    latestDecision?.evidence_id || null, latestDecision?.verification_id || null, latestDecision?.id || null, reconciliationFingerprint,
   );
 
   // GAP-1.18X: reconciliation records the finding; Payment Core remains the
