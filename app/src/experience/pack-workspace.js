@@ -1,7 +1,7 @@
 // P1-11 — Unified Pack Workspace / Navigation Composition.
 // Composition only: Pack manifests + existing configuration determine which
 // product surfaces are offered. Navigation visibility is not authorization.
-import { config } from '../state.js';
+import { config, currentStaff } from '../state.js';
 import { getVerticalPackConfiguration } from '../verticals/configuration.js';
 import { AGRICULTURE_PACK } from '../verticals/agriculture/pack.js';
 import { RESTAURANT_PACK } from '../verticals/restaurant/pack.js';
@@ -9,7 +9,6 @@ import { WAREHOUSE_PACK } from '../verticals/warehouse/pack.js';
 import { LOGISTICS_PACK } from '../verticals/logistics/pack.js';
 import { renderPackJourneyComposition } from './pack-journey-composition.js';
 import { getLogisticsWorkspaceComposition } from '../verticals/logistics/workspace-contract.js';
-import { currentStaff } from '../state.js';
 
 const PACKS = Object.freeze([AGRICULTURE_PACK, RESTAURANT_PACK, WAREHOUSE_PACK, LOGISTICS_PACK]);
 const ENTRY_TO_TAB = Object.freeze({
