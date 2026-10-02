@@ -77,10 +77,52 @@ async function setup(providerId = 'gap1-14-test') {
     externalReference: `GAP1.14-${crypto.randomUUID()}`,
     idempotencyKey: `gap1-14-create-${crypto.randomUUID()}`,
   });
+  const intent = await store.getPaymentIntent(tenant.chatId, result.payment.paymentIntentId);
+  const reference = `GAP1.14-REF-${result.payment.id}`;
+  const transactionId = `GAP1.14-TX-${result.payment.id}`;
+  const evidenceResult = await store.insertPaymentEvidence(tenant.chatId, {
+    paymentId: result.payment.id,
+    paymentIntentId: intent.id,
+    providerId,
+    channel: 'api',
+    evidenceType: 'PROVIDER_STATUS',
+    externalReference: reference,
+    providerTransactionId: transactionId,
+    rawPayload: { status: 'COMPLETED', amountMinor: result.payment.amountMinor, currency: result.payment.currency, receiverAccount: account.accountIdentifier, reference, transactionId },
+    normalizedPayload: { result: 'MATCH', observedAmountMinor: result.payment.amountMinor, observedCurrency: result.payment.currency, observedReceiverAccount: account.accountIdentifier, observedReference: reference, observedTransactionId: transactionId },
+    source: 'gap1-14-test',
+  });
+  const evidence = evidenceResult.evidence;
+  const verificationResult = await store.insertPaymentVerification(tenant.chatId, {
+    paymentId: result.payment.id,
+    paymentIntentId: intent.id,
+    evidenceId: evidence.id,
+    providerId,
+    result: 'MATCH',
+    observedAmountMinor: result.payment.amountMinor,
+    observedCurrency: result.payment.currency,
+    observedReceiverAccount: account.accountIdentifier,
+    observedReference: reference,
+    observedTransactionId: transactionId,
+    observedAt: new Date().toISOString(),
+    reasonCodes: [],
+    rawResult: { status: 'COMPLETED' },
+    verifier: 'payment-core.gap-1.14-test',
+    verifierVersion: '1',
+  });
   await store.commitPaymentDecision(tenant.chatId, {
-    paymentId: result.payment.id, expectedState: 'UNPAID', targetState: 'VERIFIED',
-     idempotencyKey: `gap1-14-verify-${crypto.randomUUID()}`,
-    decision: { decision: 'ACCEPT', targetState: 'VERIFIED', reasonCodes: [],
+    paymentId: result.payment.id,
+    expectedState: 'UNPAID',
+    targetState: 'VERIFIED',
+    idempotencyKey: `gap1-14-verify-${crypto.randomUUID()}`,
+    verification: {
+      ...verificationResult.verification,
+      evidenceId: evidence.id,
+      paymentIntentId: intent.id,
+      providerId,
+      result: 'MATCH',
+    },
+    decision: { decision: 'ACCEPT', targetState: 'VERIFIED', reasonCodes: [], invariantResults: { passed: true },
       decisionSource: 'PAYMENT_CORE', entryType: 'VERIFIED' },
   });
   return { chatId: tenant.chatId, paymentId: result.payment.id };
