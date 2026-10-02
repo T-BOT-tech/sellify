@@ -2533,6 +2533,18 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(60, nowIso());
   }
 
+  // GAP-1.18U — financial transition idempotency.
+  if (!applied.includes(63)) {
+    db.exec(`
+      ALTER TABLE payment_ledger_entries ADD COLUMN payment_decision_id TEXT REFERENCES payment_decisions(id) ON DELETE SET NULL;
+      ALTER TABLE payment_ledger_entries ADD COLUMN transition_fingerprint TEXT;
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_ledger_decision ON payment_ledger_entries(organization_id, payment_decision_id) WHERE payment_decision_id IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_ledger_transition_fingerprint ON payment_ledger_entries(organization_id, transition_fingerprint) WHERE transition_fingerprint IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_payment_ledger_decision ON payment_ledger_entries(organization_id, payment_decision_id, created_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(63, nowIso());
+  }
+
   // GAP-1.18T — audit tamper evidence.
   if (!applied.includes(62)) {
     const rows = db.prepare('SELECT * FROM audit_events ORDER BY id').all();
@@ -6343,6 +6355,12 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       return paymentFromRow(currentPayment);
     }
     const decisionId = String(decision.id || crypto.randomUUID());
+    const existingTransition = db.prepare('SELECT * FROM payment_ledger_entries WHERE organization_id = ? AND payment_decision_id = ?').get(organizationId, decisionId);
+    if (existingTransition) {
+      const currentPayment = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
+      if (!currentPayment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+      return paymentFromRow(currentPayment);
+    }
     db.prepare("INSERT INTO payment_decisions (id, organization_id, payment_id, payment_intent_id, evidence_id, verification_id, decision, target_state, reason_codes_json, invariant_results_json, decision_source, actor_id, created_at, decision_fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
       decisionId, organizationId, paymentId, decisionPaymentIntentId, decisionEvidenceId, decisionVerificationId,
       decisionValue, target, decisionReasonCodesJson, decisionInvariantResultsJson, decisionSource, actor?.userId || null, now, decisionFingerprint
@@ -6351,9 +6369,19 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       .run(target, now, target, now, target, now, target, now, target, now, paymentId, organizationId, ...(expectedState ? [expectedState] : []));
     if (Number(result.changes || 0) !== 1) throw Object.assign(new Error('Payment state changed before commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
     const paymentTransitionId = crypto.randomUUID();
-    db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+    const transitionFingerprint = crypto.createHash('sha256').update([
+      organizationId, paymentId, decisionId, row.state, target, String(row.amount_minor),
+      normaliseCurrency(row.currency, 'ETB'), String(decision.entryType || target),
+    ].join('|')).digest('hex');
+    const existingTransitionByFingerprint = db.prepare('SELECT * FROM payment_ledger_entries WHERE organization_id = ? AND transition_fingerprint = ?').get(organizationId, transitionFingerprint);
+    if (existingTransitionByFingerprint) {
+      const currentPayment = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
+      if (!currentPayment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+      return paymentFromRow(currentPayment);
+    }
+    db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at, payment_decision_id, transition_fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
       paymentTransitionId, paymentId, organizationId, String(decision.entryType || target), Number(row.amount_minor), normaliseCurrency(row.currency, 'ETB'),
-      row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now
+      row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now, decisionId, transitionFingerprint
     );
     const marketplaceAllocation = db.prepare("SELECT a.*, so.id AS canonical_seller_order_id FROM marketplace_payment_allocations a JOIN marketplace_seller_orders so ON so.id = a.seller_order_id WHERE a.payment_id = ? LIMIT 1").get(paymentId);
     if (marketplaceAllocation) {
