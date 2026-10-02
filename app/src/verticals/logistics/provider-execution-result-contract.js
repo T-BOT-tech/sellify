@@ -54,6 +54,12 @@ export function normalizeLogisticsProviderExecutionResult(input = {}) {
   const proof = object(input.proof, 'proof');
   const error = object(input.error, 'error');
 
+  if (resultStatus === 'delivered' && !proof && !tracking) {
+    throw new TypeError('Delivered result requires proof or tracking evidence');
+  }
+  if (resultStatus === 'returned' && !proof && !tracking) {
+    throw new TypeError('Returned result requires proof or tracking evidence');
+  }
   if (resultStatus === 'tracking_update' && !tracking) {
     throw new TypeError('Tracking update requires tracking data');
   }
