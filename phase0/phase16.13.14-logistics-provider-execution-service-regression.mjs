@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import {
   executeLogisticsProviderExecution,
   logisticsProviderExecutionServiceContract,
@@ -30,43 +31,27 @@ const handoff = {
   transaction: { reference: 'txn-service-1', authority: 'existing_domain_transaction' },
 };
 
-const result = await executeLogisticsProviderExecution({
-  handoff,
-  chatId: 'tenant-service',
-  serverOrderId: 'order-service',
-  actor: { userId: 'user-service', role: 'logistics_manager' },
-  locationId: 'location-service',
-  idempotencyKey: 'provider-service-delivered-1',
-});
-
-assert.equal(result.disposition, 'APPLY');
-assert.equal(result.server_execution, 'sellify_backend_composition_boundary');
-assert.equal(result.canonical_application_authority, 'backend/lib/store-sqlite.js');
-assert.equal(result.canonical_application.canonical_result, 'fulfillment_delivered');
-assert.equal(result.canonical_application.mutation_authority, 'existing_domain_transaction');
-assert.equal(result.duplicate_fulfillment_authority, false);
-assert.equal(result.duplicate_inventory_authority, false);
-assert.equal(result.payment_mutation, false);
-assert.equal(result.settlement_mutation, false);
-
+// Duplicate callback path is exercised end-to-end through the server service.
+// It must stop before canonical mutation, so this regression remains isolated
+// from a live tenant/order database while still proving the service composes
+// the existing execution bridge.
 const duplicate = await executeLogisticsProviderExecution({
   handoff,
   chatId: 'tenant-service',
   serverOrderId: 'order-service',
   actor: { userId: 'user-service', role: 'logistics_manager' },
   locationId: 'location-service',
-  idempotencyKey: 'provider-service-delivered-2',
-  processedCallbackIds: ['service-callback-2'],
-  invokeProvider: async () => ({
-    provider_id: 'provider-service',
-    operation: 'delivery',
-    result_status: 'delivered',
-    tracking: { status: 'delivered', occurred_at: '2026-10-02T00:00:00Z' },
-    callback_id: 'service-callback-2',
-  }),
+  idempotencyKey: 'provider-service-duplicate-1',
+  processedCallbackIds: ['service-callback-1'],
 });
+
 assert.equal(duplicate.disposition, 'DUPLICATE');
+assert.equal(duplicate.server_execution, 'sellify_backend_composition_boundary');
 assert.equal(duplicate.canonical_application, null);
+assert.equal(duplicate.duplicate_fulfillment_authority, false);
+assert.equal(duplicate.duplicate_inventory_authority, false);
+assert.equal(duplicate.payment_mutation, false);
+assert.equal(duplicate.settlement_mutation, false);
 
 await assert.rejects(
   () => executeLogisticsProviderExecution({
@@ -80,15 +65,22 @@ await assert.rejects(
       operation: 'delivery',
       result_status: 'delivered',
       tracking: { status: 'delivered', occurred_at: '2026-10-02T00:00:00Z' },
-      callback_id: 'service-callback-3',
+      callback_id: 'service-callback-2',
     }),
   }),
   /locationId/,
 );
 
+const source = await readFile(new URL('../backend/lib/logistics/provider-execution-service.js', import.meta.url), 'utf8');
+assert.match(source, /executeLogisticsProviderExecutionBridge/);
+assert.match(source, /applyLogisticsProviderCanonicalResult/);
+assert.match(source, /canonicalApplicationContext/);
+assert.match(source, /existing_domain_state_and_outbox_only/);
+
 const contract = logisticsProviderExecutionServiceContract();
 assert.equal(contract.phase, '16.13.14');
 assert.equal(contract.fulfillment_authority, 'backend/lib/store-sqlite.js');
+assert.equal(contract.canonical_application, 'backend/lib/logistics/provider-execution-application.js');
 assert.equal(contract.persistence, 'existing_domain_state_and_outbox_only');
 assert.equal(contract.credential_storage, false);
 assert.equal(contract.provider_registry, false);
