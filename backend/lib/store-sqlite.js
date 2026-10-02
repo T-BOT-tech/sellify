@@ -7045,6 +7045,7 @@ export async function listDeliveryAssignments(chatId, actor = null, filters = {}
   const locationId = String(filters.locationId || filters.location_id || '').trim();
   const courierUserId = String(filters.courierUserId || filters.courier_user_id || '').trim();
   const isCourier = Array.isArray(actor?.roles) && actor.roles.includes('logistics_courier') || actor?.role === 'logistics_courier';
+  let courierLocationScoped = false;
 
   const clauses = [
     'da.organization_id = ?',
@@ -7069,6 +7070,7 @@ export async function listDeliveryAssignments(chatId, actor = null, filters = {}
     if (!courierMembership) throw Object.assign(new Error('Active logistics courier role is required'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
     if (courierMembership.scope_type === 'LOCATION') {
       const scopedLocation = String(courierMembership.scope_id || '');
+      courierLocationScoped = true;
       if (locationId && String(locationId) !== scopedLocation) {
         throw Object.assign(new Error('Courier workload is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
       }
@@ -7080,16 +7082,7 @@ export async function listDeliveryAssignments(chatId, actor = null, filters = {}
     clauses[1] = 'da.status = ?';
     params.push(status);
   }
-  if (locationId && !(isCourier && (() => {
-    const membership = db.prepare(`
-      SELECT mr.scope_type, mr.scope_id
-      FROM memberships m
-      JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
-      WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
-        AND mr.role_id = 'logistics_courier'
-    `).get(String(actor?.userId || ''), String(chatId));
-    return membership?.scope_type === 'LOCATION';
-  })())) {
+  if (locationId && !courierLocationScoped) {
     clauses.push('da.location_id = ?');
     params.push(locationId);
   }
