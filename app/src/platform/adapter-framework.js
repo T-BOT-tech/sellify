@@ -22,6 +22,7 @@ const FORBIDDEN_CLAIMS = Object.freeze([
 ]);
 
 const registry = new Map();
+const executionDelegates = new Map();
 
 function invalid(message) {
   const error = new Error(`Invalid platform adapter: ${message}`);
@@ -107,6 +108,45 @@ export function registerPlatformAdapter(input, { replace = false } = {}) {
   return adapter;
 }
 
+export function registerPlatformAdapterExecution(adapterId, executor) {
+  const id = normalize(adapterId, 'adapter');
+  if (typeof executor !== 'function') invalid('adapter execution delegate must be a function');
+  if (!registry.has(id)) {
+    const error = new Error(`Unknown platform adapter: ${adapterId}`);
+    error.code = 'PLATFORM_ADAPTER_UNKNOWN';
+    throw error;
+  }
+  executionDelegates.set(id, executor);
+  return getPlatformAdapter(id);
+}
+
+export function clearPlatformAdapterExecution(adapterId) {
+  const id = normalize(adapterId, 'adapter');
+  executionDelegates.delete(id);
+}
+
+export async function executePlatformAdapter(adapterId, input, context = {}) {
+  const id = normalize(adapterId, 'adapter');
+  const adapter = getPlatformAdapter(id);
+  if (!adapter) {
+    const error = new Error(`Unknown platform adapter: ${adapterId}`);
+    error.code = 'PLATFORM_ADAPTER_UNKNOWN';
+    throw error;
+  }
+  const executor = executionDelegates.get(id);
+  if (!executor) {
+    const error = new Error(`No execution delegate registered for platform adapter: ${id}`);
+    error.code = 'PLATFORM_ADAPTER_EXECUTOR_UNAVAILABLE';
+    throw error;
+  }
+  if (adapter.status !== 'active') {
+    const error = new Error(`Platform adapter ${id} is not active`);
+    error.code = 'PLATFORM_ADAPTER_NOT_ACTIVE';
+    throw error;
+  }
+  return executor(input, Object.freeze({ adapter, ...context }));
+}
+
 export function getPlatformAdapter(adapterId) {
   const id = normalize(adapterId, 'adapter');
   return registry.get(id) || null;
@@ -148,6 +188,9 @@ export function platformAdapterContract() {
     duplicatePersistence: false,
     duplicateLedger: false,
     duplicateEventStore: false,
+    executionDelegates: 'process_local_runtime_only',
+    credentialStorage: false,
+    transportOwnership: false,
     forbiddenClaims: FORBIDDEN_CLAIMS,
   });
 }
