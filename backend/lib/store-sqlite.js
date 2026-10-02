@@ -2619,6 +2619,49 @@ function runMigrations() {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(67, nowIso());
   }
+  // GAP-1.18X — reconciliation lineage without alternate financial authority.
+  // Reconciliation is evidence/findings only. Any authoritative payment state
+  // change must still pass through a persisted Payment Core decision.
+  if (!applied.includes(68)) {
+    db.exec(`
+      ALTER TABLE payment_reconciliations ADD COLUMN payment_evidence_id TEXT REFERENCES payment_evidence(id) ON DELETE SET NULL;
+      ALTER TABLE payment_reconciliations ADD COLUMN payment_verification_id TEXT REFERENCES payment_verifications(id) ON DELETE SET NULL;
+      ALTER TABLE payment_reconciliations ADD COLUMN payment_decision_id TEXT REFERENCES payment_decisions(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS idx_payment_reconciliation_lineage
+        ON payment_reconciliations(organization_id, payment_evidence_id, payment_verification_id, payment_decision_id, created_at DESC);
+      CREATE TRIGGER IF NOT EXISTS trg_payment_reconciliation_lineage
+      BEFORE INSERT ON payment_reconciliations
+      FOR EACH ROW
+      BEGIN
+        SELECT CASE
+          WHEN NEW.status = 'matched' AND (NEW.payment_evidence_id IS NULL OR NEW.payment_verification_id IS NULL OR NEW.payment_decision_id IS NULL)
+            THEN RAISE(ABORT, 'PAYMENT_RECONCILIATION_LINEAGE_REQUIRED')
+          WHEN NEW.payment_evidence_id IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM payment_evidence e
+            WHERE e.id = NEW.payment_evidence_id AND e.organization_id = NEW.organization_id AND e.payment_id = NEW.payment_id
+          ) THEN RAISE(ABORT, 'PAYMENT_RECONCILIATION_EVIDENCE_INVALID')
+          WHEN NEW.payment_verification_id IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM payment_verifications v
+            WHERE v.id = NEW.payment_verification_id AND v.organization_id = NEW.organization_id
+              AND v.payment_id = NEW.payment_id AND v.evidence_id = NEW.payment_evidence_id
+          ) THEN RAISE(ABORT, 'PAYMENT_RECONCILIATION_VERIFICATION_INVALID')
+          WHEN NEW.payment_decision_id IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM payment_decisions d
+            WHERE d.id = NEW.payment_decision_id AND d.organization_id = NEW.organization_id
+              AND d.payment_id = NEW.payment_id AND d.verification_id = NEW.payment_verification_id
+              AND d.evidence_id = NEW.payment_evidence_id
+          ) THEN RAISE(ABORT, 'PAYMENT_RECONCILIATION_DECISION_INVALID')
+          WHEN NEW.status = 'matched' AND NOT EXISTS (
+            SELECT 1 FROM payment_decisions d
+            WHERE d.id = NEW.payment_decision_id AND d.organization_id = NEW.organization_id
+              AND d.payment_id = NEW.payment_id AND d.target_state IN ('VERIFIED','RECONCILED')
+          ) THEN RAISE(ABORT, 'PAYMENT_RECONCILIATION_AUTHORITY_INVALID')
+        END;
+      END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(68, nowIso());
+  }
+
   // GAP-1.18T — audit tamper evidence.
   if (!applied.includes(62)) {
     const rows = db.prepare('SELECT * FROM audit_events ORDER BY id').all();
@@ -7253,18 +7296,92 @@ export async function listPaymentReconciliations(chatId, paymentId, options = {}
 export async function reconcilePayment(chatId, paymentId, input = {}, actor = null) {
   ensureDatabase();
   const payment = await getPayment(chatId, paymentId);
-  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404 });
+  if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
   const amountMinor = Number(input.amountMinor ?? input.amount_minor ?? payment.amountMinor);
   const currency = normaliseCurrency(input.currency, payment.currency);
   const matched = Number.isInteger(amountMinor) && amountMinor === payment.amountMinor && currency === payment.currency;
   const now = nowIso();
+  const latestDecision = db.prepare(`
+    SELECT d.*, v.result AS verification_result, v.confidence, v.observed_amount_minor,
+           v.observed_currency, v.observed_receiver, v.observed_receiver_account,
+           v.observed_reference, v.observed_transaction_id, v.observed_at,
+           v.verifier, v.verifier_version, v.provenance_source, v.provenance_operation,
+           v.reason_codes_json AS verification_reason_codes_json,
+           v.raw_result_json AS verification_raw_result_json
+    FROM payment_decisions d
+    JOIN payment_verifications v
+      ON v.id = d.verification_id AND v.organization_id = d.organization_id
+    WHERE d.organization_id = ? AND d.payment_id = ?
+      AND d.target_state IN ('VERIFIED','RECONCILED')
+      AND d.verification_id IS NOT NULL AND d.evidence_id IS NOT NULL
+    ORDER BY d.created_at DESC, d.id DESC
+    LIMIT 1
+  `).get(payment.organizationId, payment.id);
+
+  if (matched && !latestDecision) {
+    throw Object.assign(new Error('Matched reconciliation requires an existing authoritative verification/decision lineage'), {
+      statusCode: 409, code: 'RECONCILIATION_AUTHORITY_REQUIRED',
+    });
+  }
+
   const reconciliationId = crypto.randomUUID();
-  db.prepare(`INSERT INTO payment_reconciliations (id, payment_id, organization_id, status, external_reference, amount_minor, currency, reason, actor_id, created_at, resolved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    reconciliationId, payment.id, payment.organizationId, matched ? 'matched' : 'mismatched', input.externalReference || input.external_reference || payment.externalReference || null,
-    Number.isInteger(amountMinor) && amountMinor >= 0 ? amountMinor : 0, currency, String(input.reason || ''), actor?.userId || null, now, matched ? now : null
+  db.prepare(`
+    INSERT INTO payment_reconciliations
+      (id, payment_id, organization_id, status, external_reference, amount_minor, currency,
+       reason, actor_id, created_at, resolved_at, payment_evidence_id, payment_verification_id, payment_decision_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    reconciliationId, payment.id, payment.organizationId, matched ? 'matched' : 'mismatched',
+    input.externalReference || input.external_reference || payment.externalReference || null,
+    Number.isInteger(amountMinor) && amountMinor >= 0 ? amountMinor : 0,
+    currency, String(input.reason || ''), actor?.userId || null, now, matched ? now : null,
+    latestDecision?.evidence_id || null, latestDecision?.verification_id || null, latestDecision?.id || null,
   );
-  if (matched && payment.state === 'VERIFIED') await transitionPayment(chatId, payment.id, 'RECONCILED', actor, { reason: input.reason || 'Payment reconciliation matched' });
-  if (!matched && payment.state !== 'MISMATCH' && !['REFUNDED','REJECTED','DUPLICATE','EXPIRED'].includes(payment.state)) await transitionPayment(chatId, payment.id, 'MISMATCH', actor, { reason: input.reason || 'Payment reconciliation mismatch' });
+
+  // GAP-1.18X: reconciliation records the finding; Payment Core remains the
+  // sole authority allowed to produce the resulting financial state transition.
+  const decisionTarget = matched ? 'RECONCILED' : 'MISMATCH';
+  const decisionName = matched ? 'RECONCILE' : 'MARK_MISMATCH';
+  const verification = latestDecision ? {
+    id: latestDecision.verification_id,
+    paymentIntentId: latestDecision.payment_intent_id,
+    evidenceId: latestDecision.evidence_id,
+    providerId: latestDecision.provider_id,
+    result: latestDecision.verification_result,
+    confidence: latestDecision.confidence,
+    observedAmountMinor: latestDecision.observed_amount_minor,
+    observedCurrency: latestDecision.observed_currency,
+    observedReceiver: latestDecision.observed_receiver,
+    observedReceiverAccount: latestDecision.observed_receiver_account,
+    observedReference: latestDecision.observed_reference,
+    observedTransactionId: latestDecision.observed_transaction_id,
+    observedAt: latestDecision.observed_at,
+    reasonCodes: parseJSON(latestDecision.verification_reason_codes_json, []),
+    rawResult: parseJSON(latestDecision.verification_raw_result_json, {}),
+    verifier: latestDecision.verifier,
+    verifierVersion: latestDecision.verifier_version,
+    provenanceSource: latestDecision.provenance_source,
+    provenanceOperation: latestDecision.provenance_operation,
+  } : null;
+
+  if (payment.state !== decisionTarget && PAYMENT_TRANSITIONS[payment.state]?.has(decisionTarget)) {
+    await commitPaymentDecision(chatId, {
+      paymentId: payment.id,
+      targetState: decisionTarget,
+      expectedState: payment.state,
+      verification: verification || undefined,
+      decision: {
+        decision: decisionName,
+        targetState: decisionTarget,
+        verificationId: latestDecision?.verification_id || undefined,
+        evidenceId: latestDecision?.evidence_id || undefined,
+        reason: input.reason || (matched ? 'Payment reconciliation matched' : 'Payment reconciliation mismatch'),
+        reasonCodes: matched ? ['RECONCILIATION_MATCHED'] : ['RECONCILIATION_MISMATCH'],
+        decisionSource: 'PAYMENT_CORE',
+      },
+    }, actor);
+  }
+
   return db.prepare('SELECT * FROM payment_reconciliations WHERE id = ?').get(reconciliationId);
 }
 
