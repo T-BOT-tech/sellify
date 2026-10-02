@@ -149,3 +149,5 @@ jobs:
         run: npm run test:gap-2-dispatch-workload
       - name: GAP-2 delivery frontend contract regression
         run: npm run test:gap-2-delivery-frontend
+      - name: GAP-2 end-to-end delivery assignment certification
+        run: npm run test:gap-2-delivery-certification
