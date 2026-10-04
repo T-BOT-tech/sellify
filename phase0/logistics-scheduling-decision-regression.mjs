@@ -164,6 +164,25 @@ const scheduled = await transitionLogisticsSchedulingActivity(
 assert.equal(scheduled.status, 'SCHEDULED');
 assert.equal(scheduled.version, 2);
 
+const replayed = await transitionLogisticsSchedulingActivity(
+  chatId,
+  first.id,
+  'SCHEDULED',
+  actor,
+  {
+    idempotency_key: 'l11.8-command-1',
+    expectedVersion: 1,
+    externalEvaluation: {
+      outcome: 'FEASIBLE',
+      authority: 'existing-capacity-authority',
+      reference_id: 'l11.8-capacity-1',
+    },
+  },
+);
+assert.equal(replayed.idempotent, true);
+assert.equal(replayed.status, 'SCHEDULED');
+assert.equal(replayed.version, 2);
+
 const confirmed = await transitionLogisticsSchedulingActivity(
   chatId,
   first.id,
@@ -192,25 +211,6 @@ const confirmedReplay = await transitionLogisticsSchedulingActivity(
 assert.equal(confirmedReplay.idempotent, true);
 assert.equal(confirmedReplay.status, 'CONFIRMED');
 assert.equal(confirmedReplay.version, 3);
-
-const replayed = await transitionLogisticsSchedulingActivity(
-  chatId,
-  first.id,
-  'SCHEDULED',
-  actor,
-  {
-    idempotency_key: 'l11.8-command-1',
-    expectedVersion: 1,
-    externalEvaluation: {
-      outcome: 'FEASIBLE',
-      authority: 'existing-capacity-authority',
-      reference_id: 'l11.8-capacity-1',
-    },
-  },
-);
-assert.equal(replayed.idempotent, true);
-assert.equal(replayed.status, 'SCHEDULED');
-assert.equal(replayed.version, 2);
 
 await assert.rejects(
   () => transitionLogisticsSchedulingActivity(
