@@ -802,7 +802,9 @@ const unauthorizedActor = { userId: 'l11.15-unauthorized-user', deviceId: null, 
 db.prepare('INSERT INTO users (id,display_name,created_at,last_seen_at) VALUES (?,?,?,?)').run(unauthorizedActor.userId,'L11.15 Unauthorized Actor',new Date().toISOString(),new Date().toISOString());
 await assert.rejects(() => transitionLogisticsSchedulingActivity(chatId, adversarialActivity.id, 'CANCELLED', unauthorizedActor, { idempotency_key: 'l11.15-unauthorized', expectedVersion: 1 }), error => error?.code === 'SCHEDULING_AUTHORIZATION_DENIED');
 adversarialRow = db.prepare('SELECT status, version, last_command_key FROM logistics_scheduling_activities WHERE id = ?').get(adversarialActivity.id);
-assert.deepEqual(adversarialRow, { status: 'REQUESTED', version: 1, last_command_key: null });
+assert.equal(adversarialRow.status, 'REQUESTED');
+assert.equal(Number(adversarialRow.version), 1);
+assert.equal(adversarialRow.last_command_key, null);
 
 const foreignOrgId='l11.15-foreign-org', foreignChatId='l11.15-foreign-chat';
 db.prepare('INSERT INTO organizations (id,name,country,currency,timezone,created_at) VALUES (?,?,?,?,?,?)').run(foreignOrgId,'L11.15 Foreign Org','ET','ETB','Africa/Addis_Ababa',new Date().toISOString());
@@ -810,7 +812,9 @@ db.prepare('INSERT INTO tenants (chat_id,tenant_id,api_key,created_at,seller_nam
 db.prepare('UPDATE tenants SET organization_id = ? WHERE chat_id = ?').run(foreignOrgId, foreignChatId);
 await assert.rejects(() => transitionLogisticsSchedulingActivity(foreignChatId, adversarialActivity.id, 'CANCELLED', actor, { idempotency_key: 'l11.15-cross-org', expectedVersion: 1 }), error => error?.code === 'SCHEDULING_ACTIVITY_NOT_FOUND');
 adversarialRow = db.prepare('SELECT status, version, last_command_key FROM logistics_scheduling_activities WHERE id = ?').get(adversarialActivity.id);
-assert.deepEqual(adversarialRow, { status: 'REQUESTED', version: 1, last_command_key: null });
+assert.equal(adversarialRow.status, 'REQUESTED');
+assert.equal(Number(adversarialRow.version), 1);
+assert.equal(adversarialRow.last_command_key, null);
 
 const foreignFulfillmentId='l11.15-foreign-fulfillment';
 db.prepare('INSERT INTO fulfillments (id,organization_id,server_order_id,fulfillment_type,status,created_at) VALUES (?,?,?,?,?,?)').run(foreignFulfillmentId,foreignOrgId,'l11.15-foreign-order','DELIVERY','PENDING',new Date().toISOString());
