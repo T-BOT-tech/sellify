@@ -27,6 +27,7 @@ import { normalizeLogisticsSchedulingRequest } from '../../app/src/verticals/log
 import { evaluateLogisticsSchedulingFeasibility } from '../../app/src/verticals/logistics/scheduling-feasibility-contract.js';
 import { decideLogisticsScheduling } from '../../app/src/verticals/logistics/scheduling-decision-contract.js';
 import { decideLogisticsSchedulingConfirmation } from '../../app/src/verticals/logistics/scheduling-confirmation-contract.js';
+import { decideLogisticsSchedulingStart } from '../../app/src/verticals/logistics/scheduling-start-contract.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -7865,6 +7866,23 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
           code: confirmation.reason === 'NOT_SCHEDULED'
             ? 'SCHEDULING_NOT_SCHEDULED'
             : 'SCHEDULING_CONFIRMATION_INVALID',
+        });
+      }
+    }
+
+    if (target === 'IN_PROGRESS') {
+      const startDecision = decideLogisticsSchedulingStart({
+        status: row.status,
+        scheduledStart: row.scheduled_start,
+        scheduledEnd: row.scheduled_end,
+        confirmedAt: row.confirmed_at,
+      });
+      if (startDecision.decision !== 'START') {
+        throw Object.assign(new Error(`Scheduling start blocked: ${startDecision.reason}`), {
+          statusCode: 409,
+          code: startDecision.reason === 'NOT_CONFIRMED'
+            ? 'SCHEDULING_NOT_CONFIRMED'
+            : 'SCHEDULING_START_INVALID',
         });
       }
     }
