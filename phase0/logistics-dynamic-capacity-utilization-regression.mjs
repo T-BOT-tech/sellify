@@ -13,6 +13,8 @@ import {
   normalizeDynamicCapacityUtilizationRequest,
   evaluateDynamicCapacityUtilization,
   composeDynamicCapacityPool,
+  buildDynamicCapacitySchedulingInput,
+  applyDynamicCapacitySchedulingDecision,
   assertDynamicCapacityUtilizationBoundary,
 } from '../app/src/verticals/logistics/dynamic-capacity-utilization-contract.js';
 
@@ -132,6 +134,49 @@ assert.equal(pool.candidates[0].preference, 'PREFERRED');
 assert.equal(pool.candidates[1].preference, 'BASELINE');
 assert.equal(pool.reservation, false);
 assert.equal(pool.persistence, 'none');
+
+const schedulingInput = buildDynamicCapacitySchedulingInput({
+  pool,
+  capacityRef: 'COURIER-42',
+  requestedProfile: 'B2C_DELIVERY',
+  requestedStart: '2026-10-04T12:00:00Z',
+  requestedEnd: '2026-10-04T13:00:00Z',
+  schedulingContext: { related_order_ref: 'ORDER-42' },
+});
+
+assert.equal(schedulingInput.utilization_preference, 'PREFERRED');
+assert.equal(schedulingInput.decision_authority, 'existing_l11_scheduling');
+assert.equal(schedulingInput.reservation, false);
+assert.equal(schedulingInput.authorization, false);
+assert.equal(schedulingInput.assignment, false);
+
+const feasibleDecision = applyDynamicCapacitySchedulingDecision({
+  schedulingInput,
+  evaluation: { evaluation: 'FEASIBLE', feasible: true },
+});
+
+assert.equal(feasibleDecision.scheduling_decision, 'SCHEDULE');
+assert.equal(feasibleDecision.decision_authority, 'existing_l11_scheduling');
+assert.equal(feasibleDecision.authorized, false);
+assert.equal(feasibleDecision.execution, false);
+assert.equal(feasibleDecision.assignment, false);
+
+const conflictDecision = applyDynamicCapacitySchedulingDecision({
+  schedulingInput,
+  evaluation: { evaluation: 'CONFLICT' },
+});
+
+assert.equal(conflictDecision.scheduling_decision, 'BLOCK');
+assert.equal(conflictDecision.reservation, false);
+
+const unknownDecision = applyDynamicCapacitySchedulingDecision({
+  schedulingInput,
+  evaluation: { evaluation: 'UNKNOWN' },
+});
+
+assert.equal(unknownDecision.scheduling_decision, 'BLOCK');
+
+
 
 const mixedTenantPool = composeDynamicCapacityPool({
   requests: [
