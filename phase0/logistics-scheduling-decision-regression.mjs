@@ -659,7 +659,7 @@ await assert.rejects(
   () => transitionLogisticsSchedulingActivity(
     chatId,
     cancelled.id,
-    'CANCELLED',
+    'EXPIRED',
     actor,
     {
       idempotency_key: 'l11.13-cancel-after-terminal',
