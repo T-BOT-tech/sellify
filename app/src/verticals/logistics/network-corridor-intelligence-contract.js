@@ -187,6 +187,65 @@ export function deriveCorridorDemandSignal({ observations } = {}) {
   });
 }
 
+
+export function deriveBackhaulOpportunitySignal({ observations } = {}) {
+  if (!Array.isArray(observations) || observations.length === 0) {
+    invalid('observations must be a non-empty array');
+  }
+
+  const normalized = observations.map(normalizeNetworkIntelligenceObservation);
+  const first = normalized[0];
+
+  for (const item of normalized.slice(1)) {
+    if (item.organization_id !== first.organization_id) {
+      invalid('organization scope conflict');
+    }
+    if (item.corridor_ref !== first.corridor_ref) {
+      invalid('corridor scope conflict');
+    }
+    if (item.service_profile !== first.service_profile) {
+      invalid('service profile scope conflict');
+    }
+  }
+
+  const totalBackhaul = normalized.reduce(
+    (sum, item) => sum + item.backhaul_count,
+    0,
+  );
+  const totalCapacity = normalized.reduce(
+    (sum, item) => sum + item.capacity_count,
+    0,
+  );
+  const totalDemand = normalized.reduce(
+    (sum, item) => sum + item.demand_count,
+    0,
+  );
+  const totalFulfilled = normalized.reduce(
+    (sum, item) => sum + item.fulfilled_count,
+    0,
+  );
+
+  return Object.freeze({
+    contract_version: first.contract_version,
+    organization_id: first.organization_id,
+    corridor_ref: first.corridor_ref,
+    service_profile: first.service_profile,
+    observation_count: normalized.length,
+    backhaul_opportunities: totalBackhaul,
+    available_capacity: totalCapacity,
+    demand: totalDemand,
+    fulfilled_demand: totalFulfilled,
+    utilization_gap: Math.max(totalDemand - totalFulfilled, 0),
+    backhaul_signal: totalBackhaul > 0 ? 'AVAILABLE' : 'NONE_OBSERVED',
+    authority: 'logistics_derived_intelligence',
+    persistence: 'none',
+    routing: false,
+    provider_selection: false,
+    assignment: false,
+    transaction: false,
+  });
+}
+
 export function deriveNetworkCorridorIntelligence({ observation } = {}) {
   const normalized = normalizeNetworkIntelligenceObservation(observation);
 
