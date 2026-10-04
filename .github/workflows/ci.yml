@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  logistics_l15:
+  logistics_l16:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -24,8 +24,8 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - name: Install root dependencies
         run: npm install --ignore-scripts
-      - name: Run L15 Regional Freight product boundary regression
-        run: npm run test:logistics-l15
+      - name: Run L16 B2B Distribution product boundary regression
+        run: npm run test:logistics-l16
 
   baseline:
     runs-on: ubuntu-latest
