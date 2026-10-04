@@ -33,6 +33,81 @@ function requireString(value, field) {
   return value.trim();
 }
 
+
+export function validateExternalAdapterTrust({
+  integration,
+  organization_id,
+  integration_ref,
+  adapter_ref,
+  correlation_ref,
+  capabilities,
+} = {}) {
+  const normalized = validateExternalNetworkIntegration(integration);
+  const organizationId = requireString(organization_id, 'organization_id');
+  const integrationRef = requireString(integration_ref, 'integration_ref');
+  const adapterRef = requireString(adapter_ref, 'adapter_ref');
+  const correlationRef = requireString(correlation_ref, 'correlation_ref');
+
+  if (normalized.organization_id !== organizationId) {
+    invalid('adapter trust organization scope mismatch');
+  }
+  if (normalized.integration_ref !== integrationRef) {
+    invalid('adapter trust integration scope mismatch');
+  }
+  if (normalized.adapter_ref !== adapterRef) {
+    invalid('adapter trust adapter identity mismatch');
+  }
+
+  const declaredCapabilities = validateExternalAdapterCapabilities({
+    ...normalized,
+    capabilities: capabilities ?? ['STATUS_SYNCHRONIZATION'],
+  });
+
+  return Object.freeze({
+    trusted: true,
+    organization_id: organizationId,
+    integration_ref: integrationRef,
+    adapter_ref: adapterRef,
+    correlation_ref: correlationRef,
+    capability_authority: 'existing_integration_or_adapter_declaration',
+    authorization_authority: 'existing_server_side_auth_scope',
+    provider_identity_authority: 'existing_integration_state',
+    provider_business_logic: 'adapter_only',
+    logistics_core_provider_neutral: true,
+    capabilities: declaredCapabilities.capabilities,
+    direct_domain_mutation: false,
+    persistence: 'existing_integration_or_canonical_domain_state_only',
+  });
+}
+
+export function assertExternalAdapterTrustBoundary(value = {}) {
+  if (value.trusted !== true) {
+    invalid('external adapter trust must be established before crossing the boundary');
+  }
+  if (value.authorization_authority !== 'existing_server_side_auth_scope') {
+    invalid('adapter authorization must remain under existing server-side auth scope');
+  }
+  if (value.provider_identity_authority !== 'existing_integration_state') {
+    invalid('adapter identity must remain bound to existing integration state');
+  }
+  if (value.provider_business_logic !== 'adapter_only') {
+    invalid('provider business logic must remain adapter-only');
+  }
+  if (value.logistics_core_provider_neutral !== true) {
+    invalid('Logistics core must remain provider-neutral');
+  }
+  if (value.direct_domain_mutation === true) {
+    invalid('trusted adapter must not directly mutate canonical domain state');
+  }
+  if (value.persistence !== 'existing_integration_or_canonical_domain_state_only') {
+    invalid('adapter trust must not introduce a separate persistence authority');
+  }
+  for (const field of ['organization_id', 'integration_ref', 'adapter_ref', 'correlation_ref']) {
+    requireString(value[field], field);
+  }
+  return true;
+}
+
 export function normalizeExternalNetworkIntegration(input = {}) {
   const organizationId = requireString(input.organization_id, 'organization_id');
   const integrationRef = requireString(input.integration_ref, 'integration_ref');
