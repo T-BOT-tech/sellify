@@ -18,6 +18,17 @@
   .fux-pack-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
   .fux-pack-card-header small { display:block; margin-top:3px; opacity:.7; }
   .fux-pack-actions { display:grid; gap:8px; margin-top:10px; }
+  .logistics-workspace-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; padding:14px; border:1px solid var(--line); border-radius:14px; background:var(--surface); }
+  .logistics-workspace-stats { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; font-size:12px; }
+  .logistics-workspace-stats span { padding:7px 9px; border:1px solid var(--line); border-radius:999px; background:var(--paper-dim); }
+  .logistics-workspace-stats strong { font-size:14px; }
+  @media (max-width:560px) {
+    .logistics-workspace-head { align-items:flex-start; flex-direction:column; }
+    .logistics-workspace-stats { justify-content:flex-start; }
+    .logistics-card { padding:14px; }
+    .delivery-action-btn, .delivery-assign-btn { min-height:42px; }
+    .delivery-proof-input { min-height:42px; box-sizing:border-box; }
+  }
 </style>
 </head>
 <body>
