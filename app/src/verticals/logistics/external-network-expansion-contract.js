@@ -610,6 +610,131 @@ export function buildExternalInboundDisposition({
   });
 }
 
+
+const EXTERNAL_RECONCILIATION_OUTCOMES = Object.freeze([
+  'MATCHED',
+  'CONFLICT',
+  'UNRESOLVED',
+  'NEW_OBSERVATION',
+]);
+
+export function normalizeExternalEvidenceReconciliation({
+  inbound_message,
+  canonical_reference,
+  canonical_status,
+  canonical_evidence_ref,
+} = {}) {
+  assertExternalInboundBoundary(inbound_message);
+  const canonicalRef = canonical_reference == null
+    ? null
+    : requireString(canonical_reference, 'canonical_reference');
+  const canonicalStatus = canonical_status == null
+    ? null
+    : requireString(canonical_status, 'canonical_status').toUpperCase();
+  const canonicalEvidenceRef = canonical_evidence_ref == null
+    ? null
+    : requireString(canonical_evidence_ref, 'canonical_evidence_ref');
+
+  const externalRef = inbound_message.payload?.external_ref == null
+    ? null
+    : requireString(inbound_message.payload.external_ref, 'payload.external_ref');
+  const externalStatus = inbound_message.payload?.status == null
+    ? null
+    : requireString(inbound_message.payload.status, 'payload.status').toUpperCase();
+  const evidenceRef = inbound_message.payload?.evidence_ref == null
+    ? null
+    : requireString(inbound_message.payload.evidence_ref, 'payload.evidence_ref');
+
+  let reconciliation = 'NEW_OBSERVATION';
+  if (canonicalRef && externalRef && canonicalRef !== externalRef) {
+    reconciliation = 'CONFLICT';
+  } else if (canonicalEvidenceRef && evidenceRef && canonicalEvidenceRef !== evidenceRef) {
+    reconciliation = 'CONFLICT';
+  } else if (canonicalStatus && externalStatus && canonicalStatus !== externalStatus) {
+    reconciliation = 'CONFLICT';
+  } else if (canonicalRef || canonicalStatus || canonicalEvidenceRef) {
+    reconciliation = 'MATCHED';
+  }
+
+  return Object.freeze({
+    organization_id: inbound_message.organization_id,
+    integration_ref: inbound_message.integration_ref,
+    adapter_ref: inbound_message.adapter_ref,
+    correlation_ref: inbound_message.correlation_ref,
+    idempotency_key: inbound_message.idempotency_key,
+    message_ref: inbound_message.message_ref,
+    external_ref: externalRef,
+    external_status: externalStatus,
+    external_evidence_ref: evidenceRef,
+    canonical_reference: canonicalRef,
+    canonical_status: canonicalStatus,
+    canonical_evidence_ref: canonicalEvidenceRef,
+    reconciliation_outcome: reconciliation,
+    evidence_authority: 'existing_logistics_evidence_and_proof_boundaries',
+    tracking_authority: 'existing_shipment_tracking_boundary',
+    fulfillment_authority: 'existing_core_fulfillment',
+    canonical_mutation_authority: 'existing_canonical_domain_authority',
+    direct_domain_mutation: false,
+    financial_completion_authority: 'existing_payment_and_settlement_authority',
+    persistence: 'existing_evidence_and_core_state_only',
+    duplicate_reconciliation_store: false,
+  });
+}
+
+export function assertExternalEvidenceReconciliationBoundary(value = {}) {
+  if (!EXTERNAL_RECONCILIATION_OUTCOMES.includes(value.reconciliation_outcome)) {
+    invalid('unsupported external evidence reconciliation outcome');
+  }
+  if (value.direct_domain_mutation === true) {
+    invalid('external evidence reconciliation must not directly mutate canonical state');
+  }
+  if (value.evidence_authority !== 'existing_logistics_evidence_and_proof_boundaries') {
+    invalid('reconciliation evidence must remain within existing Logistics evidence/proof boundaries');
+  }
+  if (value.tracking_authority !== 'existing_shipment_tracking_boundary') {
+    invalid('reconciliation tracking must remain within existing shipment tracking boundary');
+  }
+  if (value.fulfillment_authority !== 'existing_core_fulfillment') {
+    invalid('reconciliation fulfillment authority must remain existing Core fulfillment');
+  }
+  if (value.canonical_mutation_authority !== 'existing_canonical_domain_authority') {
+    invalid('reconciliation canonical mutation authority must remain existing canonical domain authority');
+  }
+  if (value.financial_completion_authority !== 'existing_payment_and_settlement_authority') {
+    invalid('financial completion must remain outside external reconciliation');
+  }
+  if (value.persistence !== 'existing_evidence_and_core_state_only') {
+    invalid('reconciliation must not create a separate evidence/reconciliation store');
+  }
+  if (value.duplicate_reconciliation_store === true) {
+    invalid('reconciliation must not create a duplicate store');
+  }
+  for (const field of ['organization_id', 'integration_ref', 'adapter_ref', 'correlation_ref', 'idempotency_key', 'message_ref']) {
+    requireString(value[field], field);
+  }
+  return true;
+}
+
+export function buildExternalEvidenceReconciliationDisposition({
+  reconciliation,
+} = {}) {
+  assertExternalEvidenceReconciliationBoundary(reconciliation);
+  const outcome = reconciliation.reconciliation_outcome;
+
+  return Object.freeze({
+    outcome,
+    action:
+      outcome === 'MATCHED' ? 'ACCEPT_OBSERVATION' :
+      outcome === 'NEW_OBSERVATION' ? 'PRESERVE_FOR_CANONICAL_EVIDENCE_PROCESSING' :
+      outcome === 'CONFLICT' ? 'BLOCK_CANONICAL_TRANSITION' :
+      'REQUIRE_CANONICAL_REVIEW',
+    canonical_transition_allowed: outcome === 'MATCHED' || outcome === 'NEW_OBSERVATION',
+    canonical_mutation_authority: 'existing_canonical_domain_authority',
+    direct_domain_mutation: false,
+    financial_completion_authority: 'existing_payment_and_settlement_authority',
+  });
+}
+
 export function normalizeExternalStatusEvidence({
   integration,
   operation,
