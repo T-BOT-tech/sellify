@@ -8,6 +8,7 @@ import {
   normalizeExternalCanonicalHandoff,
   assertExternalCanonicalHandoffBoundary,
   buildExternalCanonicalHandoffDisposition,
+  externalNetworkExpansionClosureGate,
   assertExternalEvidenceReconciliationBoundary,
   buildExternalEvidenceReconciliationDisposition,
   assertExternalInboundBoundary,
@@ -765,6 +766,58 @@ assert.throws(() => assertExternalCanonicalHandoffBoundary({
   ...matchedHandoff,
   persistence: 'external_handoff_store',
 }), /canonical domain persistence/i);
+
+const closureLifecycle = normalizeExternalIntegrationLifecycle({ integration, state: 'ENABLED' });
+
+const closure = externalNetworkExpansionClosureGate({
+  integration: normalized,
+  capabilities,
+  lifecycle: closureLifecycle,
+  inbound,
+  reconciliation: matchedReconciliation,
+  handoff: matchedHandoff,
+});
+assert.equal(closure.closed, true);
+assert.equal(closure.provider_neutral, true);
+assert.equal(closure.canonical_mutation_delegated, true);
+assert.equal(closure.persistence, 'existing_integration_or_canonical_domain_state_only');
+assert.equal(closure.integration_ref, 'INT-001');
+
+assert.throws(() => externalNetworkExpansionClosureGate({
+  integration: normalized,
+  capabilities: { ...capabilities, provider_selection_authority: true },
+  lifecycle: closureLifecycle,
+  inbound,
+  reconciliation: matchedReconciliation,
+  handoff: matchedHandoff,
+}), /provider selection authority/i);
+
+assert.throws(() => externalNetworkExpansionClosureGate({
+  integration: normalized,
+  capabilities,
+  lifecycle: closureLifecycle,
+  inbound: { ...inbound, direct_domain_mutation: true },
+  reconciliation: matchedReconciliation,
+  handoff: matchedHandoff,
+}), /direct canonical mutation/i);
+
+assert.throws(() => externalNetworkExpansionClosureGate({
+  integration: normalized,
+  capabilities,
+  lifecycle: closureLifecycle,
+  inbound,
+  reconciliation: matchedReconciliation,
+  handoff: { ...matchedHandoff, external_execution_authority: true },
+}), /external execution authority/i);
+
+assert.throws(() => externalNetworkExpansionClosureGate({
+  integration: normalized,
+  capabilities,
+  lifecycle: closureLifecycle,
+  inbound,
+  reconciliation: matchedReconciliation,
+  handoff: { ...matchedHandoff, persistence: 'external_handoff_store' },
+}), /existing canonical-domain persistence/i);
 
 console.log('L21.10 External Canonical Handoff Boundary Regression: PASS');
 
