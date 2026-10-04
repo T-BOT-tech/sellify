@@ -1,0 +1,25 @@
+name: Logistics Runtime Certification
+
+on:
+  push:
+    paths:
+      - 'phase0/logistics-**.mjs'
+      - 'app/src/verticals/logistics/**'
+      - 'backend/lib/discovery/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/logistics-runtime-certification.yml'
+  workflow_dispatch:
+
+jobs:
+  logistics-certification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:logistics-master-exit
+      - run: npm run test:logistics-l8-l21-certification
