@@ -108,7 +108,7 @@ function currentStaffRole() {
 }
 
 function logisticsWorkspaceRole() {
-  return String(currentStaff?.role || currentStaffRole()).toLowerCase();
+  return String(currentStaffRole()).toLowerCase();
 }
 
 function currentCourierUserId() {
