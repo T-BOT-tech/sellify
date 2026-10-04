@@ -371,6 +371,59 @@ export function deriveCapacityShortageSignal({ observations } = {}) {
 
 
 
+
+export function networkCorridorIntelligenceClosureGate(snapshot = {}) {
+  const requiredAuthority = {
+    authority: 'logistics_derived_intelligence',
+    source_authority: 'existing_operational_domain_data',
+    persistence: 'none',
+    transaction: false,
+    routing_authority: false,
+    provider_selection_authority: false,
+    reservation_authority: false,
+    assignment_authority: false,
+    dispatch_authority: false,
+  };
+
+  for (const [key, expected] of Object.entries(requiredAuthority)) {
+    if (snapshot[key] !== expected) {
+      invalid(`network intelligence closure violation: ${key}`);
+    }
+  }
+
+  if (snapshot.scheduling_authority !== 'existing_l11_scheduling') {
+    invalid('network intelligence closure violation: scheduling_authority');
+  }
+
+  const forbiddenAuthorityFields = [
+    'provider_registry_authority',
+    'capacity_ledger',
+    'shipment_authority',
+    'fulfillment_authority',
+    'payment_authority',
+    'inventory_authority',
+    'event_store_authority',
+    'gps_authority',
+  ];
+
+  for (const field of forbiddenAuthorityFields) {
+    if (snapshot[field] === true || snapshot[field] === 'logistics') {
+      invalid(`network intelligence closure violation: ${field}`);
+    }
+  }
+
+  return Object.freeze({
+    closed: true,
+    contract_version: snapshot.contract_version,
+    organization_id: snapshot.organization_id,
+    corridor_ref: snapshot.corridor_ref,
+    service_profile: snapshot.service_profile,
+    authority: snapshot.authority,
+    persistence: snapshot.persistence,
+    transaction: snapshot.transaction,
+  });
+}
+
 export function composeNetworkIntelligenceSnapshot({
   demandSignal,
   backhaulSignal,
