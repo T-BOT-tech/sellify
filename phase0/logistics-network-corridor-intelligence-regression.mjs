@@ -8,6 +8,7 @@ import {
   logisticsNetworkCorridorIntelligenceContract,
   deriveCorridorDemandSignal,
   deriveBackhaulOpportunitySignal,
+  deriveDepotThroughputSignal,
 } from '../app/src/verticals/logistics/network-corridor-intelligence-contract.js';
 
 const observation = {
@@ -94,6 +95,53 @@ assert.equal(backhaulSignal.routing, false);
 assert.equal(backhaulSignal.provider_selection, false);
 assert.equal(backhaulSignal.assignment, false);
 assert.equal(backhaulSignal.transaction, false);
+
+const depotSignal = deriveDepotThroughputSignal({
+  observations: [
+    observation,
+    { ...observation, observation_ref: 'OBS-004', throughput_count: 8, demand_count: 12, capacity_count: 6 },
+  ],
+});
+assert.equal(depotSignal.organization_id, 'org-1');
+assert.equal(depotSignal.corridor_ref, 'ADDIS-DEPOT-01');
+assert.equal(depotSignal.service_profile, 'REGIONAL_FREIGHT');
+assert.equal(depotSignal.observation_count, 2);
+assert.equal(depotSignal.throughput, 50);
+assert.equal(depotSignal.demand, 32);
+assert.equal(depotSignal.available_capacity, 14);
+assert.equal(depotSignal.throughput_gap, 0);
+assert.equal(depotSignal.throughput_signal, 'THROUGHPUT_COVERS_DEMAND');
+assert.equal(depotSignal.authority, 'logistics_derived_intelligence');
+assert.equal(depotSignal.warehouse_authority, 'existing_warehouse');
+assert.equal(depotSignal.inventory_authority, 'existing_inventory');
+assert.equal(depotSignal.persistence, 'none');
+assert.equal(depotSignal.stock_mutation, false);
+assert.equal(depotSignal.fulfillment_mutation, false);
+assert.equal(depotSignal.routing, false);
+assert.equal(depotSignal.provider_selection, false);
+assert.equal(depotSignal.assignment, false);
+assert.equal(depotSignal.transaction, false);
+
+const constrainedDepot = deriveDepotThroughputSignal({
+  observations: [{
+    ...observation,
+    throughput_count: 3,
+    demand_count: 10,
+    observation_ref: 'OBS-DEPOT-GAP',
+  }],
+});
+assert.equal(constrainedDepot.throughput_gap, 7);
+assert.equal(constrainedDepot.throughput_signal, 'THROUGHPUT_BELOW_DEMAND');
+
+assert.throws(() => deriveDepotThroughputSignal({
+  observations: [observation, { ...observation, organization_id: 'org-2', observation_ref: 'OBS-D1' }],
+}), /organization scope conflict/i);
+assert.throws(() => deriveDepotThroughputSignal({
+  observations: [observation, { ...observation, corridor_ref: 'OTHER-CORRIDOR', observation_ref: 'OBS-D2' }],
+}), /corridor scope conflict/i);
+assert.throws(() => deriveDepotThroughputSignal({
+  observations: [observation, { ...observation, service_profile: 'B2B_DISTRIBUTION', observation_ref: 'OBS-D3' }],
+}), /service profile scope conflict/i);
 
 const noBackhaul = deriveBackhaulOpportunitySignal({
   observations: [{ ...observation, backhaul_count: 0 }],
