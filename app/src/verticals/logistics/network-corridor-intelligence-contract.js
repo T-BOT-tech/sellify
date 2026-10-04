@@ -138,6 +138,55 @@ export function normalizeNetworkIntelligenceObservation(input = {}) {
   });
 }
 
+
+export function deriveCorridorDemandSignal({ observations } = {}) {
+  if (!Array.isArray(observations) || observations.length === 0) {
+    invalid('observations must be a non-empty array');
+  }
+
+  const normalized = observations.map(normalizeNetworkIntelligenceObservation);
+  const first = normalized[0];
+
+  for (const item of normalized.slice(1)) {
+    if (item.organization_id !== first.organization_id) {
+      invalid('organization scope conflict');
+    }
+    if (item.corridor_ref !== first.corridor_ref) {
+      invalid('corridor scope conflict');
+    }
+    if (item.service_profile !== first.service_profile) {
+      invalid('service profile scope conflict');
+    }
+  }
+
+  const totalDemand = normalized.reduce((sum, item) => sum + item.demand_count, 0);
+  const totalFulfilled = normalized.reduce((sum, item) => sum + item.fulfilled_count, 0);
+  const recurringDemand = normalized.reduce(
+    (sum, item) => sum + item.recurring_demand_count,
+    0,
+  );
+  const unmetDemand = totalDemand - totalFulfilled;
+
+  return Object.freeze({
+    contract_version: first.contract_version,
+    organization_id: first.organization_id,
+    corridor_ref: first.corridor_ref,
+    service_profile: first.service_profile,
+    observation_count: normalized.length,
+    total_demand: totalDemand,
+    total_fulfilled: totalFulfilled,
+    unmet_demand: unmetDemand,
+    fulfillment_rate: totalDemand === 0 ? 1 : totalFulfilled / totalDemand,
+    recurring_demand: recurringDemand,
+    authority: 'logistics_derived_intelligence',
+    persistence: 'none',
+    routing: false,
+    provider_selection: false,
+    assignment: false,
+    transaction: false,
+  });
+}
+
 export function deriveNetworkCorridorIntelligence({ observation } = {}) {
   const normalized = normalizeNetworkIntelligenceObservation(observation);
 
