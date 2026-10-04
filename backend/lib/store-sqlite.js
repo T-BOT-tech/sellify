@@ -29,6 +29,7 @@ import { decideLogisticsScheduling } from '../../app/src/verticals/logistics/sch
 import { decideLogisticsSchedulingConfirmation } from '../../app/src/verticals/logistics/scheduling-confirmation-contract.js';
 import { decideLogisticsSchedulingStart } from '../../app/src/verticals/logistics/scheduling-start-contract.js';
 import { decideLogisticsSchedulingCompletion } from '../../app/src/verticals/logistics/scheduling-completion-contract.js';
+import { decideLogisticsSchedulingFailure } from '../../app/src/verticals/logistics/scheduling-failure-contract.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -7900,6 +7901,25 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
       }
     }
 
+    let schedulingFailureReason = null;
+    if (target === 'FAILED') {
+      schedulingFailureReason = String(
+        input.failureReason ?? input.failure_reason ?? ''
+      ).trim();
+      const failure = decideLogisticsSchedulingFailure({
+        status: row.status,
+        reason: schedulingFailureReason,
+      });
+      if (failure.decision !== 'FAIL') {
+        throw Object.assign(new Error(`Scheduling failure blocked: ${failure.reason}`), {
+          statusCode: 409,
+          code: failure.reason === 'FAILURE_REASON_REQUIRED'
+            ? 'SCHEDULING_FAILURE_REASON_REQUIRED'
+            : 'SCHEDULING_FAILURE_NOT_ACTIVE',
+        });
+      }
+    }
+
     const now = nowIso();
     const sets = ['status = ?', 'last_command_key = ?', 'updated_by_user_id = ?', 'updated_at = ?', 'version = version + 1'];
     const params = [target, commandKey, actor?.userId || null, now];
@@ -7939,6 +7959,7 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
       fromState: current,
       toState: target,
       commandKey,
+      ...(target === 'FAILED' ? { failureReason: schedulingFailureReason } : {}),
     }, {
       organizationId,
       locationId: updated.location_id,
