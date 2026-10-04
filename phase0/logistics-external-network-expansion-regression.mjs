@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 
 import {
   normalizeExternalNetworkIntegration,
+  normalizeExternalIntegrationLifecycle,
+  assertExternalIntegrationLifecycleBoundary,
+  assertExternalIntegrationLifecycleTransition,
   validateExternalAdapterTrust,
   assertExternalAdapterTrustBoundary,
   validateExternalNetworkIntegration,
@@ -29,6 +32,73 @@ const integration = {
 };
 
 const normalized = normalizeExternalNetworkIntegration(integration);
+for (const state of ['CONFIGURED', 'ENABLED', 'SUSPENDED', 'DISABLED', 'RETIRED']) {
+  const lifecycle = normalizeExternalIntegrationLifecycle({
+    integration,
+    state,
+  });
+  assert.equal(lifecycle.lifecycle_state, state);
+  assert.equal(lifecycle.lifecycle_authority, 'existing_integration_configuration_authority');
+  assert.equal(lifecycle.authorization_authority, 'existing_server_side_auth_scope');
+  assert.equal(lifecycle.execution_authority, false);
+  assert.equal(lifecycle.provider_registry_authority, false);
+  assert.equal(lifecycle.persistence, 'existing_integration_or_canonical_domain_state_only');
+  assert.equal(assertExternalIntegrationLifecycleBoundary(lifecycle), true);
+}
+
+for (const [from_state, to_state] of [
+  ['CONFIGURED', 'ENABLED'],
+  ['CONFIGURED', 'DISABLED'],
+  ['CONFIGURED', 'RETIRED'],
+  ['ENABLED', 'SUSPENDED'],
+  ['ENABLED', 'DISABLED'],
+  ['ENABLED', 'RETIRED'],
+  ['SUSPENDED', 'ENABLED'],
+  ['SUSPENDED', 'DISABLED'],
+  ['SUSPENDED', 'RETIRED'],
+  ['DISABLED', 'CONFIGURED'],
+  ['DISABLED', 'RETIRED'],
+]) {
+  assert.equal(assertExternalIntegrationLifecycleTransition({ from_state, to_state }), true);
+}
+
+for (const transition of [
+  ['RETIRED', 'ENABLED'],
+  ['RETIRED', 'CONFIGURED'],
+  ['ENABLED', 'CONFIGURED'],
+  ['SUSPENDED', 'CONFIGURED'],
+  ['DISABLED', 'ENABLED'],
+]) {
+  assert.throws(() => assertExternalIntegrationLifecycleTransition({
+    from_state: transition[0],
+    to_state: transition[1],
+  }), /invalid external integration lifecycle transition/i);
+}
+
+assert.throws(() => normalizeExternalIntegrationLifecycle({
+  integration,
+  state: 'ENABLED',
+  organization_id: 'org-other',
+}), /organization scope mismatch/i);
+
+assert.throws(() => normalizeExternalIntegrationLifecycle({
+  integration,
+  state: 'ENABLED',
+  integration_ref: 'INT-other',
+}), /integration scope mismatch/i);
+
+assert.throws(() => normalizeExternalIntegrationLifecycle({
+  integration,
+  state: 'ENABLED',
+  adapter_ref: 'ADAPTER-SPOOFED',
+}), /adapter identity mismatch/i);
+
+assert.throws(() => normalizeExternalIntegrationLifecycle({
+  integration,
+  state: 'UNKNOWN',
+}), /unsupported external integration lifecycle state/i);
+
+
 const trustedAdapter = validateExternalAdapterTrust({
   integration,
   organization_id: 'org-1',
@@ -506,6 +576,26 @@ assert.throws(() => assertExternalAdapterTrustBoundary({
   persistence: 'external_adapter_registry',
 }), /separate persistence authority/i);
 
-console.log('L21.6 External Adapter Security / Trust Boundary Regression: PASS');
+assert.throws(() => assertExternalIntegrationLifecycleBoundary({
+  ...normalizeExternalIntegrationLifecycle({ integration, state: 'ENABLED' }),
+  lifecycle_authority: 'external_adapter',
+}), /existing integration configuration authority/i);
+
+assert.throws(() => assertExternalIntegrationLifecycleBoundary({
+  ...normalizeExternalIntegrationLifecycle({ integration, state: 'ENABLED' }),
+  authorization_authority: 'external_adapter',
+}), /server-side auth scope/i);
+
+assert.throws(() => assertExternalIntegrationLifecycleBoundary({
+  ...normalizeExternalIntegrationLifecycle({ integration, state: 'ENABLED' }),
+  execution_authority: true,
+}), /provider execution authority/i);
+
+assert.throws(() => assertExternalIntegrationLifecycleBoundary({
+  ...normalizeExternalIntegrationLifecycle({ integration, state: 'ENABLED' }),
+  provider_registry_authority: true,
+}), /provider registry authority/i);
+
+console.log('L21.7 External Integration Lifecycle Boundary Regression: PASS');
 
 
