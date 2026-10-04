@@ -352,7 +352,8 @@
     "test:phase16.13.16": "node phase0/phase16.13.16-logistics-provider-deployment-adapter-regression.mjs",
     "test:phase16.13.17": "node phase0/phase16.13.13-logistics-provider-canonical-application-regression.mjs",
     "test:phase16.13.18": "node phase0/phase16.13.18-logistics-provider-callback-regression.mjs",
-    "test:phase16.13.19": "node phase0/phase16.13.19-logistics-provider-callback-application-regression.mjs"
+    "test:phase16.13.19": "node phase0/phase16.13.19-logistics-provider-callback-application-regression.mjs",
+    "test:logistics-l11.1": "node phase0/logistics-scheduling-contract-regression.mjs"
   },
   "engines": {
     "node": ">=24"
