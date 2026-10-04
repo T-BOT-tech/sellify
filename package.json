@@ -372,7 +372,8 @@
     "test:logistics-l13": "node phase0/logistics-multi-leg-movement-regression.mjs",
     "test:logistics-l14": "node phase0/logistics-hub-depot-regression.mjs",
     "test:logistics-l15": "node phase0/logistics-regional-freight-regression.mjs",
-    "test:logistics-l16": "node phase0/logistics-b2b-distribution-regression.mjs"
+    "test:logistics-l16": "node phase0/logistics-b2b-distribution-regression.mjs",
+    "test:logistics-l17": "node phase0/logistics-b2c-delivery-regression.mjs"
   },
   "engines": {
     "node": ">=24"
