@@ -12,6 +12,9 @@ import {
   normalizeExternalAdapterResponse,
   normalizeExternalStatusEvidence,
   assertExternalStatusEvidenceBoundary,
+  classifyExternalAdapterOutcome,
+  buildExternalRetryDecision,
+  assertExternalRetryBoundary,
 } from '../app/src/verticals/logistics/external-network-expansion-contract.js';
 
 const integration = {
@@ -363,5 +366,79 @@ assert.throws(() => assertExternalStatusEvidenceBoundary({
   evidence_authority: 'external_adapter',
 }), /existing Logistics evidence/i);
 
-console.log('L21.4 External Status / Evidence Normalization Boundary Regression: PASS');
+
+const successOutcome = classifyExternalAdapterOutcome({ status: 'COMPLETED' });
+assert.equal(successOutcome.outcome_class, 'SUCCESS');
+assert.equal(successOutcome.retryable, false);
+assert.equal(successOutcome.canonical_state_mutation, false);
+
+const pendingOutcome = classifyExternalAdapterOutcome({ status: 'PENDING' });
+assert.equal(pendingOutcome.outcome_class, 'PENDING');
+assert.equal(pendingOutcome.retryable, true);
+assert.equal(pendingOutcome.resolution_required, true);
+
+const rejectedOutcome = classifyExternalAdapterOutcome({ status: 'REJECTED' });
+assert.equal(rejectedOutcome.outcome_class, 'REJECTED');
+assert.equal(rejectedOutcome.retryable, false);
+
+const timeoutOutcome = classifyExternalAdapterOutcome({
+  status: 'PENDING',
+  timeout: true,
+  response_received: false,
+});
+assert.equal(timeoutOutcome.outcome_class, 'AMBIGUOUS');
+assert.equal(timeoutOutcome.retryable, true);
+assert.equal(timeoutOutcome.canonical_state_mutation, false);
+assert.equal(timeoutOutcome.resolution_required, true);
+
+const retryDecision = buildExternalRetryDecision({
+  idempotency_key: 'idem-retry-001',
+  attempt: 1,
+  max_attempts: 3,
+  outcome: timeoutOutcome,
+});
+assert.equal(retryDecision.retry, true);
+assert.equal(retryDecision.terminal, false);
+assert.equal(retryDecision.canonical_state_mutation, false);
+assert.equal(retryDecision.event_store_authority, false);
+assert.equal(assertExternalRetryBoundary(retryDecision), true);
+
+const terminalRetryDecision = buildExternalRetryDecision({
+  idempotency_key: 'idem-retry-002',
+  attempt: 3,
+  max_attempts: 3,
+  outcome: timeoutOutcome,
+});
+assert.equal(terminalRetryDecision.retry, false);
+assert.equal(terminalRetryDecision.terminal, true);
+assert.equal(terminalRetryDecision.resolution_required, true);
+
+assert.throws(() => buildExternalRetryDecision({
+  idempotency_key: 'idem-retry-003',
+  attempt: 1,
+  max_attempts: 3,
+  outcome: {
+    outcome_class: 'AMBIGUOUS',
+    retryable: true,
+    resolution_required: true,
+  },
+}), /canonical/i);
+
+assert.throws(() => assertExternalRetryBoundary({
+  ...retryDecision,
+  canonical_state_mutation: true,
+}), /must not mutate canonical state/i);
+
+assert.throws(() => assertExternalRetryBoundary({
+  ...retryDecision,
+  event_store_authority: true,
+}), /event-store authority/i);
+
+assert.throws(() => assertExternalRetryBoundary({
+  ...retryDecision,
+  persistence: 'external_retry_store',
+}), /existing integration\/core state/i);
+
+console.log('L21.5 External Adapter Failure / Retry / Idempotency Regression: PASS');
+
 
