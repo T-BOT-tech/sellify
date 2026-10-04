@@ -22,6 +22,11 @@ const {
   logisticsSchedulingDecisionContract,
 } = await import('../app/src/verticals/logistics/scheduling-decision-contract.js');
 
+const {
+  decideLogisticsSchedulingConfirmation,
+  logisticsSchedulingConfirmationContract,
+} = await import('../app/src/verticals/logistics/scheduling-confirmation-contract.js');
+
 const db = getDatabaseForTests();
 const chatId = 'l11.8-regression-chat';
 const organizationId = 'l11.8-regression-org';
@@ -81,6 +86,40 @@ assert.equal(feasibleDecision.authorized, false);
 assert.equal(feasibleDecision.execution, false);
 assert.equal(feasibleDecision.mutation, false);
 
+const confirmationContract = logisticsSchedulingConfirmationContract();
+assert.equal(confirmationContract.scheduled_allows_confirmation, true);
+assert.equal(confirmationContract.unscheduled_allows_confirmation, false);
+assert.equal(confirmationContract.confirmation_is_authorization, false);
+assert.equal(confirmationContract.confirmation_is_execution, false);
+assert.equal(confirmationContract.reserves_capacity, false);
+assert.equal(confirmationContract.selects_provider, false);
+assert.equal(confirmationContract.dispatches, false);
+
+assert.equal(
+  decideLogisticsSchedulingConfirmation({
+    status: 'REQUESTED',
+    scheduledStart: '2026-10-10T09:00:00Z',
+    scheduledEnd: '2026-10-10T10:00:00Z',
+  }).decision,
+  'BLOCK',
+);
+assert.equal(
+  decideLogisticsSchedulingConfirmation({
+    status: 'SCHEDULED',
+    scheduledStart: '2026-10-10T09:00:00Z',
+    scheduledEnd: '2026-10-10T10:00:00Z',
+  }).decision,
+  'CONFIRM',
+);
+assert.equal(
+  decideLogisticsSchedulingConfirmation({
+    status: 'SCHEDULED',
+    scheduledStart: null,
+    scheduledEnd: null,
+  }).decision,
+  'BLOCK',
+);
+
 for (const outcome of ['CONFLICT', 'UNKNOWN']) {
   const decision = decideLogisticsScheduling({
     evaluation: { evaluation: outcome, feasible: false },
@@ -124,6 +163,35 @@ const scheduled = await transitionLogisticsSchedulingActivity(
 );
 assert.equal(scheduled.status, 'SCHEDULED');
 assert.equal(scheduled.version, 2);
+
+const confirmed = await transitionLogisticsSchedulingActivity(
+  chatId,
+  first.id,
+  'CONFIRMED',
+  actor,
+  {
+    idempotency_key: 'l11.9-confirm-1',
+    expectedVersion: 2,
+  },
+);
+assert.equal(confirmed.status, 'CONFIRMED');
+assert.equal(confirmed.version, 3);
+assert.equal(confirmed.confirmedByUserId, userId);
+assert.ok(confirmed.confirmedAt);
+
+const confirmedReplay = await transitionLogisticsSchedulingActivity(
+  chatId,
+  first.id,
+  'CONFIRMED',
+  actor,
+  {
+    idempotency_key: 'l11.9-confirm-1',
+    expectedVersion: 2,
+  },
+);
+assert.equal(confirmedReplay.idempotent, true);
+assert.equal(confirmedReplay.status, 'CONFIRMED');
+assert.equal(confirmedReplay.version, 3);
 
 const replayed = await transitionLogisticsSchedulingActivity(
   chatId,
@@ -224,4 +292,4 @@ assert.equal(unknownRow.status, 'REQUESTED');
 assert.equal(Number(unknownRow.version), 1);
 assert.equal(unknownRow.last_command_key, null);
 
-console.log('L11.8 Logistics Scheduling Decision Boundary Regression: PASS');
+console.log('L11.8/L11.9 Logistics Scheduling Decision + Confirmation Boundary Regression: PASS');
