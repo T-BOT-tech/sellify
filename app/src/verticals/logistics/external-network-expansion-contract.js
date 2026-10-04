@@ -206,6 +206,89 @@ export function normalizeExternalAdapterResponse({
   });
 }
 
+
+export function normalizeExternalStatusEvidence({
+  integration,
+  operation,
+  correlation_ref,
+  service_profile,
+  response,
+} = {}) {
+  const capabilities = validateExternalAdapterCapabilities(integration);
+  const profile = requireString(service_profile ?? capabilities.service_profile, 'service_profile').toUpperCase();
+  if (profile !== capabilities.service_profile) invalid('service_profile does not match integration');
+
+  const normalizedResponse = normalizeExternalAdapterResponse({
+    integration: capabilities,
+    operation,
+    correlation_ref,
+    response,
+  });
+
+  const evidence = Array.isArray(response?.evidence)
+    ? response.evidence.map((item) => Object.freeze({
+        kind: requireString(item.kind, 'evidence.kind').toLowerCase(),
+        ref: requireString(item.ref, 'evidence.ref'),
+        captured_at: item.captured_at ?? normalizedResponse.observed_at,
+        actor_ref: item.actor_ref ? String(item.actor_ref) : null,
+        context_ref: item.context_ref ? String(item.context_ref) : correlation_ref,
+      }))
+    : [];
+
+  return Object.freeze({
+    ...normalizedResponse,
+    service_profile: profile,
+    evidence: Object.freeze(evidence),
+    evidence_authority: 'existing_logistics_evidence_and_proof_boundaries',
+    tracking_authority: 'existing_shipment_tracking_boundary',
+    canonical_mutation_authority: 'existing_canonical_domain_authority',
+    direct_domain_mutation: false,
+    persistence: 'existing_evidence_and_core_state_only',
+    duplicate_evidence_store: false,
+    duplicate_tracking_store: false,
+    duplicate_event_store: false,
+  });
+}
+
+export function assertExternalStatusEvidenceBoundary(value = {}) {
+  if (value.direct_domain_mutation === true) {
+    invalid('external status/evidence must not directly mutate canonical domain state');
+  }
+
+  for (const field of [
+    'shipment_authority',
+    'fulfillment_authority',
+    'payment_authority',
+    'inventory_authority',
+    'assignment_authority',
+    'routing_authority',
+    'provider_selection_authority',
+    'event_store_authority',
+  ]) {
+    if (value[field] === true || value[field] === 'external_adapter') {
+      invalid(`external status/evidence boundary violation: ${field}`);
+    }
+  }
+
+  if (value.evidence_authority !== 'existing_logistics_evidence_and_proof_boundaries') {
+    invalid('evidence must remain within existing Logistics evidence/proof boundaries');
+  }
+
+  if (value.tracking_authority !== 'existing_shipment_tracking_boundary') {
+    invalid('tracking must remain within existing shipment tracking boundary');
+  }
+
+  if (value.canonical_mutation_authority !== 'existing_canonical_domain_authority') {
+    invalid('canonical mutation authority must remain existing canonical domain authority');
+  }
+
+  if (value.persistence !== 'existing_evidence_and_core_state_only') {
+    invalid('external evidence persistence must remain existing evidence/core state only');
+  }
+
+  return true;
+}
+
 export function validateExternalAdapterCapabilities(input = {}) {
   const normalized = normalizeExternalAdapterCapabilities(input);
 
