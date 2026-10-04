@@ -182,6 +182,18 @@ export function normalizeDynamicCapacityUtilizationRequest(input = {}) {
     invalid('duplicate utilization allocation is not allowed');
   }
 
+  // L19.4: deterministic conflict hardening. PREFERRED policies may overlap
+  // across distinct service profiles, but the same capacity/profile/time
+  // interval must not contain competing policy definitions.
+  const policyIdentityKeys = allocations.map((allocation) => [
+    allocation.service_profile,
+    allocation.start,
+    allocation.end,
+  ].join('|'));
+  if (new Set(policyIdentityKeys).size !== policyIdentityKeys.length) {
+    invalid('conflicting utilization policy for the same capacity/profile/window is not allowed');
+  }
+
   return Object.freeze({
     contract_version: LOGISTICS_DYNAMIC_CAPACITY_UTILIZATION_CONTRACT_VERSION,
     organization_id: organizationId,
