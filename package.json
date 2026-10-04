@@ -364,7 +364,8 @@
     "test:logistics-l11.10": "node phase0/logistics-scheduling-decision-regression.mjs",
     "test:logistics-l11.11": "node phase0/logistics-scheduling-decision-regression.mjs",
     "test:logistics-l11.12": "node phase0/logistics-scheduling-decision-regression.mjs",
-    "test:logistics-l11.13": "node phase0/logistics-scheduling-decision-regression.mjs"
+    "test:logistics-l11.13": "node phase0/logistics-scheduling-decision-regression.mjs",
+    "test:logistics-l11.14": "node phase0/logistics-scheduling-decision-regression.mjs"
   },
   "engines": {
     "node": ">=24"
