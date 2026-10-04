@@ -246,6 +246,68 @@ export function deriveBackhaulOpportunitySignal({ observations } = {}) {
   });
 }
 
+
+export function deriveDepotThroughputSignal({ observations } = {}) {
+  if (!Array.isArray(observations) || observations.length === 0) {
+    invalid('observations must be a non-empty array');
+  }
+
+  const normalized = observations.map(normalizeNetworkIntelligenceObservation);
+  const first = normalized[0];
+
+  for (const item of normalized.slice(1)) {
+    if (item.organization_id !== first.organization_id) {
+      invalid('organization scope conflict');
+    }
+    if (item.corridor_ref !== first.corridor_ref) {
+      invalid('corridor scope conflict');
+    }
+    if (item.service_profile !== first.service_profile) {
+      invalid('service profile scope conflict');
+    }
+  }
+
+  const throughput = normalized.reduce(
+    (sum, item) => sum + item.throughput_count,
+    0,
+  );
+  const demand = normalized.reduce(
+    (sum, item) => sum + item.demand_count,
+    0,
+  );
+  const capacity = normalized.reduce(
+    (sum, item) => sum + item.capacity_count,
+    0,
+  );
+
+  return Object.freeze({
+    contract_version: first.contract_version,
+    organization_id: first.organization_id,
+    corridor_ref: first.corridor_ref,
+    service_profile: first.service_profile,
+    observation_count: normalized.length,
+    throughput,
+    demand,
+    available_capacity: capacity,
+    throughput_gap: Math.max(demand - throughput, 0),
+    throughput_signal: throughput === 0
+      ? 'NO_THROUGHPUT_OBSERVED'
+      : throughput >= demand && demand > 0
+        ? 'THROUGHPUT_COVERS_DEMAND'
+        : 'THROUGHPUT_BELOW_DEMAND',
+    authority: 'logistics_derived_intelligence',
+    warehouse_authority: 'existing_warehouse',
+    inventory_authority: 'existing_inventory',
+    persistence: 'none',
+    stock_mutation: false,
+    fulfillment_mutation: false,
+    routing: false,
+    provider_selection: false,
+    assignment: false,
+    transaction: false,
+  });
+}
+
 export function deriveNetworkCorridorIntelligence({ observation } = {}) {
   const normalized = normalizeNetworkIntelligenceObservation(observation);
 
