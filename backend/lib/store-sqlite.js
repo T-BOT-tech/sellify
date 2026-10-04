@@ -7521,7 +7521,7 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
     });
   }
 
-  const organizationId = String(tenant.organization_id);
+  const organizationId = String(tenant.organizationId);
   const request = normalizeLogisticsSchedulingRequest({
     ...input,
     organization_id: organizationId,
@@ -7631,7 +7631,7 @@ export async function getLogisticsSchedulingActivity(chatId, activityId) {
   if (!tenant?.organization_id) return null;
   const row = db.prepare(
     'SELECT * FROM logistics_scheduling_activities WHERE id = ? AND organization_id = ?'
-  ).get(String(activityId), String(tenant.organization_id));
+  ).get(String(activityId), String(tenant.organizationId));
   return logisticsSchedulingRow(row);
 }
 
@@ -7639,7 +7639,7 @@ export async function listLogisticsSchedulingActivities(chatId, filters = {}) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
   if (!tenant?.organization_id) return [];
-  const organizationId = String(tenant.organization_id);
+  const organizationId = String(tenant.organizationId);
   const clauses = ['organization_id = ?'];
   const params = [organizationId];
 
@@ -7679,7 +7679,7 @@ export async function evaluateLogisticsSchedulingActivity(chatId, activityId, ac
     });
   }
 
-  const organizationId = String(tenant.organization_id);
+  const organizationId = String(tenant.organizationId);
   const row = db.prepare(
     'SELECT * FROM logistics_scheduling_activities WHERE id = ? AND organization_id = ?'
   ).get(String(activityId), organizationId);
@@ -7732,7 +7732,7 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
     });
   }
 
-  const organizationId = String(tenant.organization_id);
+  const organizationId = String(tenant.organizationId);
   const target = String(nextStatus || '').trim().toUpperCase();
   const schedulingAction = target === 'CONFIRMED'
     ? 'logistics:scheduling:confirm'
