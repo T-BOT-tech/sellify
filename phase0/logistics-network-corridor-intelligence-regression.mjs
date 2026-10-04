@@ -7,6 +7,7 @@ import {
   assertNetworkCorridorIntelligenceBoundary,
   logisticsNetworkCorridorIntelligenceContract,
   deriveCorridorDemandSignal,
+  deriveBackhaulOpportunitySignal,
 } from '../app/src/verticals/logistics/network-corridor-intelligence-contract.js';
 
 const observation = {
@@ -70,6 +71,44 @@ assert.equal(demandSignal.persistence, 'none');
 assert.equal(demandSignal.routing, false);
 assert.equal(demandSignal.provider_selection, false);
 assert.equal(demandSignal.assignment, false);
+
+const backhaulSignal = deriveBackhaulOpportunitySignal({
+  observations: [
+    observation,
+    { ...observation, observation_ref: 'OBS-003', backhaul_count: 2, capacity_count: 5, demand_count: 8, fulfilled_count: 6 },
+  ],
+});
+assert.equal(backhaulSignal.organization_id, 'org-1');
+assert.equal(backhaulSignal.corridor_ref, 'ADDIS-DEPOT-01');
+assert.equal(backhaulSignal.service_profile, 'REGIONAL_FREIGHT');
+assert.equal(backhaulSignal.observation_count, 2);
+assert.equal(backhaulSignal.backhaul_opportunities, 5);
+assert.equal(backhaulSignal.available_capacity, 13);
+assert.equal(backhaulSignal.demand, 28);
+assert.equal(backhaulSignal.fulfilled_demand, 21);
+assert.equal(backhaulSignal.utilization_gap, 7);
+assert.equal(backhaulSignal.backhaul_signal, 'AVAILABLE');
+assert.equal(backhaulSignal.authority, 'logistics_derived_intelligence');
+assert.equal(backhaulSignal.persistence, 'none');
+assert.equal(backhaulSignal.routing, false);
+assert.equal(backhaulSignal.provider_selection, false);
+assert.equal(backhaulSignal.assignment, false);
+assert.equal(backhaulSignal.transaction, false);
+
+const noBackhaul = deriveBackhaulOpportunitySignal({
+  observations: [{ ...observation, backhaul_count: 0 }],
+});
+assert.equal(noBackhaul.backhaul_signal, 'NONE_OBSERVED');
+
+assert.throws(() => deriveBackhaulOpportunitySignal({
+  observations: [observation, { ...observation, organization_id: 'org-2', observation_ref: 'OBS-B1' }],
+}), /organization scope conflict/i);
+assert.throws(() => deriveBackhaulOpportunitySignal({
+  observations: [observation, { ...observation, corridor_ref: 'OTHER-CORRIDOR', observation_ref: 'OBS-B2' }],
+}), /corridor scope conflict/i);
+assert.throws(() => deriveBackhaulOpportunitySignal({
+  observations: [observation, { ...observation, service_profile: 'P2P_DELIVERY', observation_ref: 'OBS-B3' }],
+}), /service profile scope conflict/i);
 
 assert.throws(() => deriveCorridorDemandSignal({
   observations: [observation, { ...observation, organization_id: 'org-2', observation_ref: 'OBS-X' }],
