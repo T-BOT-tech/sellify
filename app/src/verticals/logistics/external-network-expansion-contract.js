@@ -61,6 +61,103 @@ export function normalizeExternalNetworkIntegration(input = {}) {
   });
 }
 
+
+const ADAPTER_CAPABILITIES = Object.freeze([
+  'DELIVERY_REQUEST',
+  'DELIVERY_CANCEL',
+  'TRACKING_STATUS',
+  'DELIVERY_PROOF',
+  'CAPACITY_INQUIRY',
+  'STATUS_SYNCHRONIZATION',
+]);
+
+export function normalizeExternalAdapterCapabilities(input = {}) {
+  const integration = normalizeExternalNetworkIntegration(input);
+
+  if (!Array.isArray(input.capabilities) || input.capabilities.length === 0) {
+    invalid('capabilities must be a non-empty array');
+  }
+
+  const capabilities = input.capabilities.map((value) => {
+    if (typeof value !== 'string' || value.trim() === '') {
+      invalid('capability must be a non-empty string');
+    }
+    const normalized = value.trim().toUpperCase();
+    if (!ADAPTER_CAPABILITIES.includes(normalized)) {
+      invalid('unsupported adapter capability');
+    }
+    return normalized;
+  });
+
+  if (new Set(capabilities).size !== capabilities.length) {
+    invalid('duplicate adapter capability');
+  }
+
+  return Object.freeze({
+    ...integration,
+    capabilities: Object.freeze(capabilities),
+    capability_authority: 'external_adapter_declaration',
+    execution_authority: false,
+    provider_selection_authority: false,
+    routing_authority: false,
+    assignment_authority: false,
+    persistence: 'existing_integration_or_canonical_domain_state_only',
+  });
+}
+
+export function validateExternalAdapterCapabilities(input = {}) {
+  const normalized = normalizeExternalAdapterCapabilities(input);
+
+  if (
+    normalized.capabilities.includes('DELIVERY_REQUEST') &&
+    normalized.direction === 'READ_ONLY'
+  ) {
+    invalid('READ_ONLY adapters cannot advertise DELIVERY_REQUEST');
+  }
+
+  if (
+    normalized.capabilities.includes('DELIVERY_CANCEL') &&
+    normalized.direction === 'READ_ONLY'
+  ) {
+    invalid('READ_ONLY adapters cannot advertise DELIVERY_CANCEL');
+  }
+
+  return Object.freeze({
+    valid: true,
+    ...normalized,
+  });
+}
+
+export function assertExternalAdapterCapabilityBoundary(capabilities = {}) {
+  const forbidden = [
+    'provider_registry_authority',
+    'provider_selection_authority',
+    'routing_authority',
+    'assignment_authority',
+    'dispatch_authority',
+    'shipment_authority',
+    'fulfillment_authority',
+    'inventory_authority',
+    'payment_authority',
+    'settlement_authority',
+    'identity_authority',
+    'event_store_authority',
+    'execution_authority',
+  ];
+
+  for (const field of forbidden) {
+    if (capabilities[field] === true || capabilities[field] === 'external_adapter') {
+      invalid(`adapter capability boundary violation: ${field}`);
+    }
+  }
+
+  if (capabilities.capability_authority !== 'external_adapter_declaration') {
+    invalid('adapter capability authority must remain declarative');
+  }
+
+  return true;
+}
+
 export function validateExternalNetworkIntegration(input = {}) {
   const normalized = normalizeExternalNetworkIntegration(input);
 
