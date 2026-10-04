@@ -16,6 +16,7 @@ import {
   buildDynamicCapacitySchedulingInput,
   applyDynamicCapacitySchedulingDecision,
   assertDynamicCapacityUtilizationBoundary,
+  dynamicCapacityUtilizationClosureGate,
 } from '../app/src/verticals/logistics/dynamic-capacity-utilization-contract.js';
 
 const base = {
@@ -434,77 +435,22 @@ for (const field of [
   assert.equal(boundary.valid, false, field);
 }
 
-const closure = {
-  version: '1.0',
-  phases: ['L19.1', 'L19.2', 'L19.3', 'L19.4', 'L19.5', 'L19.6'],
-  base_availability: '24/7',
-  allocation_mode: 'PREFERRED',
-  profiles: [
-    'REGIONAL_FREIGHT',
-    'B2B_DISTRIBUTION',
-    'B2C_DELIVERY',
-    'P2P_DELIVERY',
-  ],
-  capacity_authority: 'existing_capacity_authority',
-  matching_authority: 'existing_capacity_matching_or_scheduling_authority',
-  scheduling_authority: 'existing_l11_scheduling',
-  assignment_authority: 'existing_logistics_assignment',
-  persistence: 'none',
-  reservation_authority: 'none',
-  capacity_ledger: false,
-  duplicate_scheduler: false,
-  provider_registry: false,
-  courier_registry: false,
-  dispatch_authority: false,
-  routing_authority: false,
-  gps_authority: false,
-};
+const closure = dynamicCapacityUtilizationClosureGate();
 
-assert.deepEqual(
-  Object.keys(closure),
-  [
-    'version',
-    'phases',
-    'base_availability',
-    'allocation_mode',
-    'profiles',
-    'capacity_authority',
-    'matching_authority',
-    'scheduling_authority',
-    'assignment_authority',
-    'persistence',
-    'reservation_authority',
-    'capacity_ledger',
-    'duplicate_scheduler',
-    'provider_registry',
-    'courier_registry',
-    'dispatch_authority',
-    'routing_authority',
-    'gps_authority',
-  ],
-);
-
-const contract = {
-  ...closure,
-  ...{
-    capacity_authority: 'existing_capacity_authority',
-    scheduling_authority: 'existing_l11_scheduling',
-    assignment_authority: 'existing_logistics_assignment',
-  },
-};
-
-assert.equal(contract.base_availability, '24/7');
-assert.equal(contract.allocation_mode, 'PREFERRED');
-assert.deepEqual(contract.profiles, [
+assert.equal(closure.valid, true);
+assert.equal(closure.reason, 'DYNAMIC_CAPACITY_UTILIZATION_CLOSURE_VALIDATED');
+assert.equal(closure.base_availability, '24/7 capable when supported by existing capacity authority');
+assert.equal(closure.allocation_mode, 'PREFERRED');
+assert.equal(closure.scheduling_authority, 'existing_l11_scheduling');
+assert.equal(closure.assignment_authority, 'existing_logistics_assignment');
+assert.equal(closure.persistence, 'none');
+assert.equal(closure.reservation_authority, 'none');
+assert.deepEqual(closure.profiles, [
   'REGIONAL_FREIGHT',
   'B2B_DISTRIBUTION',
   'B2C_DELIVERY',
   'P2P_DELIVERY',
 ]);
-assert.equal(contract.persistence, 'none');
-assert.equal(contract.reservation_authority, 'none');
-assert.equal(contract.capacity_ledger, false);
-assert.equal(contract.duplicate_scheduler, false);
 
 console.log(
   'L19.6 Dynamic Capacity Utilization Closure Gate: PASS',
