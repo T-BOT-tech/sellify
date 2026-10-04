@@ -5,6 +5,9 @@ import {
   validateExternalNetworkIntegration,
   assertExternalNetworkBoundary,
   buildExternalNetworkEnvelope,
+  normalizeExternalAdapterCapabilities,
+  validateExternalAdapterCapabilities,
+  assertExternalAdapterCapabilityBoundary,
 } from '../app/src/verticals/logistics/external-network-expansion-contract.js';
 
 const integration = {
@@ -122,7 +125,102 @@ assert.throws(() => assertExternalNetworkBoundary({
   adapter_authority: 'logistics_core',
 }), /external_adapter/i);
 
+const capabilities = normalizeExternalAdapterCapabilities({
+  ...integration,
+  capabilities: ['DELIVERY_REQUEST', 'TRACKING_STATUS', 'DELIVERY_PROOF', 'CAPACITY_INQUIRY'],
+});
+assert.deepEqual(capabilities.capabilities, [
+  'DELIVERY_REQUEST',
+  'TRACKING_STATUS',
+  'DELIVERY_PROOF',
+  'CAPACITY_INQUIRY',
+]);
+assert.equal(capabilities.capability_authority, 'external_adapter_declaration');
+assert.equal(capabilities.execution_authority, false);
+assert.equal(capabilities.provider_selection_authority, false);
+assert.equal(capabilities.routing_authority, false);
+assert.equal(capabilities.assignment_authority, false);
+assert.equal(capabilities.persistence, 'existing_integration_or_canonical_domain_state_only');
+
+for (const capability of [
+  'DELIVERY_REQUEST',
+  'DELIVERY_CANCEL',
+  'TRACKING_STATUS',
+  'DELIVERY_PROOF',
+  'CAPACITY_INQUIRY',
+  'STATUS_SYNCHRONIZATION',
+]) {
+  assert.equal(normalizeExternalAdapterCapabilities({
+    ...integration,
+    capabilities: [capability],
+  }).capabilities[0], capability);
+}
+
+assert.throws(() => normalizeExternalAdapterCapabilities({
+  ...integration,
+  capabilities: ['UNKNOWN_CAPABILITY'],
+}), /unsupported adapter capability/i);
+
+assert.throws(() => normalizeExternalAdapterCapabilities({
+  ...integration,
+  capabilities: ['TRACKING_STATUS', 'TRACKING_STATUS'],
+}), /duplicate adapter capability/i);
+
+const readOnlyCapabilities = validateExternalAdapterCapabilities({
+  ...integration,
+  direction: 'READ_ONLY',
+  capabilities: ['TRACKING_STATUS', 'DELIVERY_PROOF', 'CAPACITY_INQUIRY', 'STATUS_SYNCHRONIZATION'],
+});
+assert.equal(readOnlyCapabilities.valid, true);
+
+assert.throws(() => validateExternalAdapterCapabilities({
+  ...integration,
+  direction: 'READ_ONLY',
+  capabilities: ['DELIVERY_REQUEST'],
+}), /READ_ONLY adapters cannot advertise DELIVERY_REQUEST/i);
+
+assert.throws(() => validateExternalAdapterCapabilities({
+  ...integration,
+  direction: 'READ_ONLY',
+  capabilities: ['DELIVERY_CANCEL'],
+}), /READ_ONLY adapters cannot advertise DELIVERY_CANCEL/i);
+
+assert.equal(assertExternalAdapterCapabilityBoundary(capabilities), true);
+
+for (const field of [
+  'provider_registry_authority',
+  'provider_selection_authority',
+  'routing_authority',
+  'assignment_authority',
+  'dispatch_authority',
+  'shipment_authority',
+  'fulfillment_authority',
+  'inventory_authority',
+  'payment_authority',
+  'settlement_authority',
+  'identity_authority',
+  'event_store_authority',
+  'execution_authority',
+]) {
+  assert.throws(() => assertExternalAdapterCapabilityBoundary({
+    ...capabilities,
+    [field]: true,
+  }), new RegExp(field));
+}
+
+assert.throws(() => assertExternalAdapterCapabilityBoundary({
+  ...capabilities,
+  capability_authority: 'external_adapter',
+}), /declarative/i);
+
 assert.throws(() => buildExternalNetworkEnvelope({
+  integration,
+  operation: 'CREATE_DELIVERY_REQUEST',
+  payload: {},
+}), /idempotency_key is required/i);
+
+console.log('L21.1 External Network Expansion Canonical Boundary Regression: PASS');
+
   integration,
   operation: 'CREATE_DELIVERY_REQUEST',
   payload: {},
