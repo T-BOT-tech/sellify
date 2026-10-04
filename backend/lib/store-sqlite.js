@@ -7455,9 +7455,9 @@ function schedulingRequestHash(request) {
     scheduled_end: request.scheduled_end,
     timezone: request.timezone,
     recurrence: request.recurrence,
-    related_order: request.related.order,
-    related_fulfillment: request.related.fulfillment,
-    related_movement: request.related.movement,
+    related_order_id: request.related.order?.id || null,
+    related_fulfillment_id: request.related.fulfillment?.id || null,
+    related_movement_id: request.related.movement?.id || null,
   };
   return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }
