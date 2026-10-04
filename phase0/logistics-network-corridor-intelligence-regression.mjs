@@ -13,6 +13,7 @@ import {
   deriveServiceAreaGapSignal,
   deriveRecurringDemandSignal,
   deriveProviderCapacityVisibilitySignal,
+  composeNetworkIntelligenceSnapshot,
 } from '../app/src/verticals/logistics/network-corridor-intelligence-contract.js';
 
 const observation = {
@@ -238,6 +239,66 @@ const noCapacity = deriveProviderCapacityVisibilitySignal({
   observations: [{ ...observation, capacity_count: 0 }],
 });
 assert.equal(noCapacity.visibility_signal, 'NO_CAPACITY_OBSERVED');
+
+const networkSnapshot = composeNetworkIntelligenceSnapshot({
+  demandSignal,
+  backhaulSignal,
+  depotThroughputSignal,
+  capacityShortageSignal: shortageSignal,
+  serviceAreaGapSignal: serviceAreaSignal,
+  recurringDemandSignal: recurringSignal,
+  providerCapacityVisibilitySignal: providerCapacitySignal,
+});
+assert.equal(networkSnapshot.organization_id, 'org-1');
+assert.equal(networkSnapshot.corridor_ref, 'ADDIS-DEPOT-01');
+assert.equal(networkSnapshot.service_profile, 'REGIONAL_FREIGHT');
+assert.equal(networkSnapshot.authority, 'logistics_derived_intelligence');
+assert.equal(networkSnapshot.source_authority, 'existing_operational_domain_data');
+assert.equal(networkSnapshot.persistence, 'none');
+assert.equal(networkSnapshot.transaction, false);
+assert.equal(networkSnapshot.routing_authority, false);
+assert.equal(networkSnapshot.provider_selection_authority, false);
+assert.equal(networkSnapshot.scheduling_authority, 'existing_l11_scheduling');
+assert.equal(networkSnapshot.reservation_authority, false);
+assert.equal(networkSnapshot.assignment_authority, false);
+assert.equal(networkSnapshot.dispatch_authority, false);
+assert.equal(networkSnapshot.demand, demandSignal);
+assert.equal(networkSnapshot.backhaul, backhaulSignal);
+assert.equal(networkSnapshot.depot_throughput, depotThroughputSignal);
+assert.equal(networkSnapshot.capacity_shortage, shortageSignal);
+assert.equal(networkSnapshot.service_area_gap, serviceAreaSignal);
+assert.equal(networkSnapshot.recurring_demand, recurringSignal);
+assert.equal(networkSnapshot.provider_capacity_visibility, providerCapacitySignal);
+
+assert.throws(() => composeNetworkIntelligenceSnapshot({
+  demandSignal,
+  backhaulSignal: { ...backhaulSignal, organization_id: 'org-2' },
+  depotThroughputSignal,
+  capacityShortageSignal: shortageSignal,
+  serviceAreaGapSignal: serviceAreaSignal,
+  recurringDemandSignal: recurringSignal,
+  providerCapacityVisibilitySignal: providerCapacitySignal,
+}), /organization scope conflict/i);
+
+assert.throws(() => composeNetworkIntelligenceSnapshot({
+  demandSignal,
+  backhaulSignal: { ...backhaulSignal, corridor_ref: 'OTHER-CORRIDOR' },
+  depotThroughputSignal,
+  capacityShortageSignal: shortageSignal,
+  serviceAreaGapSignal: serviceAreaSignal,
+  recurringDemandSignal: recurringSignal,
+  providerCapacityVisibilitySignal: providerCapacitySignal,
+}), /corridor scope conflict/i);
+
+assert.throws(() => composeNetworkIntelligenceSnapshot({
+  demandSignal,
+  backhaulSignal: { ...backhaulSignal, service_profile: 'B2C_DELIVERY' },
+  depotThroughputSignal,
+  capacityShortageSignal: shortageSignal,
+  serviceAreaGapSignal: serviceAreaSignal,
+  recurringDemandSignal: recurringSignal,
+  providerCapacityVisibilitySignal: providerCapacitySignal,
+}), /service profile scope conflict/i);
 
 assert.throws(() => deriveProviderCapacityVisibilitySignal({
   observations: [observation, { ...observation, organization_id: 'org-2', observation_ref: 'OBS-PC3' }],
