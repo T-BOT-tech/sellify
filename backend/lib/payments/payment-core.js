@@ -826,56 +826,6 @@ export class PaymentCore {
   }
 }
 
-function evaluateCapabilityCertification({ providerContractCertified, evidence, now }) {
-  if (!providerContractCertified) {
-    return {
-      certified: false,
-      status: 'UNKNOWN',
-      reasonCodes: ['ADAPTER_CONTRACT_NOT_CERTIFIED'],
-    };
-  }
-  if (!evidence) {
-    return {
-      certified: false,
-      status: 'UNKNOWN',
-      reasonCodes: ['LIVE_EXTERNAL_EVIDENCE_NOT_FOUND'],
-    };
-  }
-  if (evidence.certificationScope !== 'LIVE_EXTERNAL') {
-    return {
-      certified: false,
-      status: 'UNKNOWN',
-      reasonCodes: ['LIVE_EXTERNAL_EVIDENCE_REQUIRED'],
-    };
-  }
-  if (evidence.status !== 'OBSERVED') {
-    return {
-      certified: false,
-      status: 'UNKNOWN',
-      reasonCodes: ['OBSERVED_EVIDENCE_REQUIRED'],
-    };
-  }
-  if (!evidence.providerReference) {
-    return {
-      certified: false,
-      status: 'UNKNOWN',
-      reasonCodes: ['PROVIDER_REFERENCE_REQUIRED'],
-    };
-  }
-  if (evidence.expiresAt && new Date(evidence.expiresAt).getTime() <= new Date(now).getTime()) {
-    return {
-      certified: false,
-      status: 'EXPIRED',
-      reasonCodes: ['CAPABILITY_EVIDENCE_EXPIRED'],
-    };
-  }
-  return {
-    certified: true,
-    status: 'CERTIFIED',
-    reasonCodes: ['LIVE_EXTERNAL_EVIDENCE_VERIFIED'],
-  };
-}
-
 function normalizeRefundResult(raw = {}, refund = {}) {
   const value = String(raw.status ?? raw.result ?? raw.state ?? '').trim().toUpperCase();
   let status = 'UNKNOWN';
