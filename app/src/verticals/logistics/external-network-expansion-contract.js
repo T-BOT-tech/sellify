@@ -735,6 +735,127 @@ export function buildExternalEvidenceReconciliationDisposition({
   });
 }
 
+
+const EXTERNAL_CANONICAL_HANDOFF_ACTIONS = Object.freeze([
+  'OBSERVATION_ONLY',
+  'CANONICAL_PROCESSING_ELIGIBLE',
+  'CANONICAL_TRANSITION_BLOCKED',
+]);
+
+export function normalizeExternalCanonicalHandoff({
+  reconciliation,
+  canonical_target,
+  transition_ref,
+  authorization_scope,
+} = {}) {
+  assertExternalEvidenceReconciliationBoundary(reconciliation);
+
+  const target = requireString(canonical_target, 'canonical_target');
+  const transitionRef = requireString(transition_ref, 'transition_ref');
+  const authorizationScope = requireString(authorization_scope, 'authorization_scope');
+
+  const disposition = buildExternalEvidenceReconciliationDisposition({ reconciliation });
+  let action = 'OBSERVATION_ONLY';
+  if (disposition.action === 'ACCEPT_OBSERVATION') {
+    action = 'CANONICAL_PROCESSING_ELIGIBLE';
+  } else if (disposition.action === 'BLOCK_CANONICAL_TRANSITION') {
+    action = 'CANONICAL_TRANSITION_BLOCKED';
+  }
+
+  return Object.freeze({
+    organization_id: reconciliation.organization_id,
+    integration_ref: reconciliation.integration_ref,
+    adapter_ref: reconciliation.adapter_ref,
+    correlation_ref: reconciliation.correlation_ref,
+    idempotency_key: reconciliation.idempotency_key,
+    message_ref: reconciliation.message_ref,
+    canonical_target: target,
+    transition_ref: transitionRef,
+    authorization_scope: authorizationScope,
+    reconciliation_outcome: reconciliation.reconciliation_outcome,
+    action,
+    canonical_processing_authority: 'existing_canonical_domain_authority',
+    authorization_authority: 'existing_server_side_auth_scope',
+    evidence_authority: 'existing_logistics_evidence_and_proof_boundaries',
+    tracking_authority: 'existing_shipment_tracking_boundary',
+    fulfillment_authority: 'existing_core_fulfillment',
+    financial_completion_authority: 'existing_payment_and_settlement_authority',
+    direct_domain_mutation: false,
+    external_execution_authority: false,
+    provider_selection_authority: false,
+    routing_authority: false,
+    assignment_authority: false,
+    persistence: 'existing_canonical_domain_state_only',
+    duplicate_handoff_store: false,
+  });
+}
+
+export function assertExternalCanonicalHandoffBoundary(value = {}) {
+  if (!EXTERNAL_CANONICAL_HANDOFF_ACTIONS.includes(value.action)) {
+    invalid('unsupported external canonical handoff action');
+  }
+  if (value.canonical_processing_authority !== 'existing_canonical_domain_authority') {
+    invalid('canonical handoff must remain under existing canonical domain authority');
+  }
+  if (value.authorization_authority !== 'existing_server_side_auth_scope') {
+    invalid('canonical handoff authorization must remain under existing server-side auth scope');
+  }
+  if (value.evidence_authority !== 'existing_logistics_evidence_and_proof_boundaries') {
+    invalid('canonical handoff evidence must remain under existing Logistics evidence/proof boundaries');
+  }
+  if (value.tracking_authority !== 'existing_shipment_tracking_boundary') {
+    invalid('canonical handoff tracking must remain under existing shipment tracking boundary');
+  }
+  if (value.fulfillment_authority !== 'existing_core_fulfillment') {
+    invalid('canonical handoff fulfillment must remain under existing Core fulfillment');
+  }
+  if (value.financial_completion_authority !== 'existing_payment_and_settlement_authority') {
+    invalid('canonical handoff must not become financial completion authority');
+  }
+  if (value.direct_domain_mutation === true || value.external_execution_authority === true) {
+    invalid('external canonical handoff must not execute or directly mutate canonical domain state');
+  }
+  for (const field of ['provider_selection_authority', 'routing_authority', 'assignment_authority']) {
+    if (value[field] === true || value[field] === 'external_adapter') {
+      invalid(`canonical handoff boundary violation: ${field}`);
+    }
+  }
+  if (value.persistence !== 'existing_canonical_domain_state_only') {
+    invalid('canonical handoff must use existing canonical domain persistence');
+  }
+  if (value.duplicate_handoff_store === true) {
+    invalid('canonical handoff must not create a duplicate handoff store');
+  }
+  for (const field of [
+    'organization_id',
+    'integration_ref',
+    'adapter_ref',
+    'correlation_ref',
+    'idempotency_key',
+    'message_ref',
+    'canonical_target',
+    'transition_ref',
+    'authorization_scope',
+  ]) {
+    requireString(value[field], field);
+  }
+  return true;
+}
+
+export function buildExternalCanonicalHandoffDisposition({ handoff } = {}) {
+  assertExternalCanonicalHandoffBoundary(handoff);
+
+  return Object.freeze({
+    action: handoff.action,
+    canonical_processing_allowed: handoff.action === 'CANONICAL_PROCESSING_ELIGIBLE',
+    canonical_transition_allowed: false,
+    mutation_executor: 'existing_canonical_domain_authority',
+    authorization_executor: 'existing_server_side_auth_scope',
+    external_adapter_execution: false,
+    financial_completion_authority: 'existing_payment_and_settlement_authority',
+  });
+}
+
 export function normalizeExternalStatusEvidence({
   integration,
   operation,
