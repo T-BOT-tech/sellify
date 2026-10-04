@@ -779,7 +779,9 @@ const adversarialActivity = await create('l11.15-create-adversarial','2026-10-16
 
 await assert.rejects(() => transitionLogisticsSchedulingActivity(chatId, adversarialActivity.id, 'COMPLETED', actor, { idempotency_key: 'l11.15-invalid-transition', expectedVersion: 1 }), error => error?.code === 'INVALID_SCHEDULING_TRANSITION');
 let adversarialRow = db.prepare('SELECT status, version, last_command_key FROM logistics_scheduling_activities WHERE id = ?').get(adversarialActivity.id);
-assert.deepEqual(adversarialRow, { status: 'REQUESTED', version: 1, last_command_key: null });
+assert.equal(adversarialRow.status, 'REQUESTED');
+assert.equal(Number(adversarialRow.version), 1);
+assert.equal(adversarialRow.last_command_key, null);
 
 await assert.rejects(() => transitionLogisticsSchedulingActivity(chatId, adversarialActivity.id, 'CANCELLED', actor, { idempotency_key: 'l11.15-stale', expectedVersion: 99 }), error => error?.code === 'SCHEDULING_VERSION_CONFLICT');
 adversarialRow = db.prepare('SELECT status, version, last_command_key FROM logistics_scheduling_activities WHERE id = ?').get(adversarialActivity.id);
@@ -790,7 +792,9 @@ const idempotencyCancelled = await transitionLogisticsSchedulingActivity(chatId,
 assert.equal(idempotencyCancelled.status, 'CANCELLED');
 await assert.rejects(() => transitionLogisticsSchedulingActivity(chatId, idempotencyActivity.id, 'EXPIRED', actor, { idempotency_key: 'l11.15-reused-key', expectedVersion: 2 }), error => error?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT');
 const idempotencyRow = db.prepare('SELECT status, version, last_command_key FROM logistics_scheduling_activities WHERE id = ?').get(idempotencyActivity.id);
-assert.deepEqual(idempotencyRow, { status: 'CANCELLED', version: 2, last_command_key: 'l11.15-reused-key' });
+assert.equal(idempotencyRow.status, 'CANCELLED');
+assert.equal(Number(idempotencyRow.version), 2);
+assert.equal(idempotencyRow.last_command_key, 'l11.15-reused-key');
 
 const unauthorizedActor = { userId: 'l11.15-unauthorized-user', deviceId: null, role: 'viewer', roles: ['viewer'], organizationId };
 db.prepare('INSERT INTO users (id,display_name,created_at,last_seen_at) VALUES (?,?,?,?)').run(unauthorizedActor.userId,'L11.15 Unauthorized Actor',new Date().toISOString(),new Date().toISOString());
