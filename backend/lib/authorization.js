@@ -136,18 +136,26 @@ const ROLE_PERMISSIONS = Object.freeze({
     'fulfillment:view', 'fulfillment:update', 'logistics:deliveries:view',
     'logistics:deliveries:assign', 'logistics:deliveries:reassign',
     'logistics:deliveries:update_assigned', 'locations:view', 'audit:view',
+    'logistics:scheduling:view', 'logistics:scheduling:request',
+    'logistics:scheduling:manage', 'logistics:scheduling:confirm',
+    'logistics:scheduling:cancel',
   ]),
   logistics_dispatcher: new Set([
     'fulfillment:view', 'fulfillment:update', 'logistics:deliveries:view',
     'logistics:deliveries:assign', 'logistics:deliveries:reassign',
     'locations:view',
+    'logistics:scheduling:view', 'logistics:scheduling:request',
+    'logistics:scheduling:manage', 'logistics:scheduling:confirm',
+    'logistics:scheduling:cancel',
   ]),
   logistics_courier: new Set([
     'fulfillment:view', 'logistics:deliveries:view',
     'logistics:deliveries:update_assigned', 'locations:view',
+    'logistics:scheduling:view',
   ]),
   logistics_viewer: new Set([
     'fulfillment:view', 'logistics:deliveries:view', 'locations:view',
+    'logistics:scheduling:view',
   ]),
   supplier_network_staff: new Set([
     'supplier-network:view', 'supplier-network:manage',
