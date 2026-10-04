@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  logistics_l12:
+  logistics_l13:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -24,8 +24,8 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - name: Install root dependencies
         run: npm install --ignore-scripts
-      - name: Run L12 logistics evidence profile regression
-        run: npm run test:logistics-l12
+      - name: Run L13 multi-leg movement boundary regression
+        run: npm run test:logistics-l13
 
   baseline:
     runs-on: ubuntu-latest
