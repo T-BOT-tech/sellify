@@ -11,6 +11,7 @@ import {
   deriveDepotThroughputSignal,
   deriveCapacityShortageSignal,
   deriveServiceAreaGapSignal,
+  deriveRecurringDemandSignal,
 } from '../app/src/verticals/logistics/network-corridor-intelligence-contract.js';
 
 const observation = {
@@ -178,6 +179,45 @@ const noServiceGap = deriveServiceAreaGapSignal({
   observations: [{ ...observation, service_area_gap_count: 0 }],
 });
 assert.equal(noServiceGap.coverage_signal, 'NO_SERVICE_AREA_GAP_OBSERVED');
+
+const recurringSignal = deriveRecurringDemandSignal({
+  observations: [
+    { ...observation, recurring_demand_count: 3, observation_ref: 'OBS-R1' },
+    { ...observation, recurring_demand_count: 2, demand_count: 8, fulfilled_count: 6, observation_ref: 'OBS-R2' },
+  ],
+});
+assert.equal(recurringSignal.organization_id, 'org-1');
+assert.equal(recurringSignal.corridor_ref, 'ADDIS-DEPOT-01');
+assert.equal(recurringSignal.service_profile, 'REGIONAL_FREIGHT');
+assert.equal(recurringSignal.observation_count, 2);
+assert.equal(recurringSignal.demand, 28);
+assert.equal(recurringSignal.fulfilled_demand, 21);
+assert.equal(recurringSignal.unmet_demand, 7);
+assert.equal(recurringSignal.recurring_demand, 5);
+assert.equal(recurringSignal.recurring_demand_signal, 'RECURRING_DEMAND_OBSERVED');
+assert.equal(recurringSignal.authority, 'logistics_derived_intelligence');
+assert.equal(recurringSignal.source_authority, 'existing_operational_domain_data');
+assert.equal(recurringSignal.persistence, 'none');
+assert.equal(recurringSignal.transaction, false);
+assert.equal(recurringSignal.scheduling_authority, 'existing_l11_scheduling');
+assert.equal(recurringSignal.reservation_authority, false);
+assert.equal(recurringSignal.order_creation_authority, false);
+assert.equal(recurringSignal.dispatch_authority, false);
+
+const noRecurring = deriveRecurringDemandSignal({
+  observations: [{ ...observation, recurring_demand_count: 0 }],
+});
+assert.equal(noRecurring.recurring_demand_signal, 'NO_RECURRING_DEMAND_OBSERVED');
+
+assert.throws(() => deriveRecurringDemandSignal({
+  observations: [observation, { ...observation, organization_id: 'org-2', observation_ref: 'OBS-R3' }],
+}), /organization scope conflict/i);
+assert.throws(() => deriveRecurringDemandSignal({
+  observations: [observation, { ...observation, corridor_ref: 'OTHER-CORRIDOR', observation_ref: 'OBS-R4' }],
+}), /corridor scope conflict/i);
+assert.throws(() => deriveRecurringDemandSignal({
+  observations: [observation, { ...observation, service_profile: 'B2C_DELIVERY', observation_ref: 'OBS-R5' }],
+}), /service profile scope conflict/i);
 
 assert.throws(() => deriveServiceAreaGapSignal({
   observations: [observation, { ...observation, organization_id: 'org-2', observation_ref: 'OBS-G1' }],
