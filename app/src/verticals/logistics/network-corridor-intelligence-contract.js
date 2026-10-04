@@ -369,6 +369,57 @@ export function deriveCapacityShortageSignal({ observations } = {}) {
 
 
 
+
+export function deriveProviderCapacityVisibilitySignal({ observations } = {}) {
+  if (!Array.isArray(observations) || observations.length === 0) {
+    invalid('observations must be a non-empty array');
+  }
+
+  const normalized = observations.map(normalizeNetworkIntelligenceObservation);
+  const first = normalized[0];
+
+  for (const item of normalized.slice(1)) {
+    if (item.organization_id !== first.organization_id) {
+      invalid('organization scope conflict');
+    }
+    if (item.corridor_ref !== first.corridor_ref) {
+      invalid('corridor scope conflict');
+    }
+    if (item.service_profile !== first.service_profile) {
+      invalid('service profile scope conflict');
+    }
+  }
+
+  const observedCapacity = normalized.reduce(
+    (sum, item) => sum + item.capacity_count,
+    0,
+  );
+  const demand = normalized.reduce((sum, item) => sum + item.demand_count, 0);
+
+  return Object.freeze({
+    contract_version: first.contract_version,
+    organization_id: first.organization_id,
+    corridor_ref: first.corridor_ref,
+    service_profile: first.service_profile,
+    observation_count: normalized.length,
+    observed_capacity: observedCapacity,
+    observed_demand: demand,
+    capacity_gap: Math.max(demand - observedCapacity, 0),
+    visibility_signal: observedCapacity > 0
+      ? 'CAPACITY_VISIBLE'
+      : 'NO_CAPACITY_OBSERVED',
+    authority: 'logistics_derived_intelligence',
+    source_authority: 'existing_operational_domain_data',
+    capacity_authority: 'existing_capacity_authority',
+    provider_registry_authority: false,
+    provider_selection_authority: false,
+    reservation_authority: false,
+    dispatch_authority: false,
+    persistence: 'none',
+    transaction: false,
+  });
+}
+
 export function deriveRecurringDemandSignal({ observations } = {}) {
   if (!Array.isArray(observations) || observations.length === 0) {
     invalid('observations must be a non-empty array');
