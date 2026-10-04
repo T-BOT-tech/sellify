@@ -252,6 +252,30 @@ export function hasAuthorization(actor, organization, location, resource, action
   return authorize(actor, organization, location, resource, action) === AUTHZ.ALLOW;
 }
 
+export function logisticsSchedulingAuthorizationContract() {
+  return Object.freeze({
+    pack: 'logistics',
+    capability: 'logistics-scheduling',
+    authority: 'backend/lib/authorization.js',
+    permissions: Object.freeze([
+      'logistics:scheduling:view',
+      'logistics:scheduling:request',
+      'logistics:scheduling:manage',
+      'logistics:scheduling:confirm',
+      'logistics:scheduling:cancel',
+    ]),
+    roles: Object.freeze({
+      logistics_manager: Object.freeze(['view', 'request', 'manage', 'confirm', 'cancel']),
+      logistics_dispatcher: Object.freeze(['view', 'request', 'manage', 'confirm', 'cancel']),
+      logistics_courier: Object.freeze(['view']),
+      logistics_viewer: Object.freeze(['view']),
+    }),
+    enforcement: 'authorize(actor, organization, location, resource, action)',
+    preparation_is_not_execution: true,
+    feasibility_is_not_authorization: true,
+  });
+}
+
 export function getRolePermissions(role) {
   const permissions = ROLE_PERMISSIONS[cleanRole(role)];
   return permissions ? [...permissions] : [];
