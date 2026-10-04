@@ -294,6 +294,150 @@ assert.equal(
   'DYNAMIC_CAPACITY_ORGANIZATION_SCOPE_REQUIRED',
 );
 
+// L19.5 — Cross-profile adversarial coverage.
+// Each profile remains independently available outside its optional preference
+// window; overlapping preferences never become reservations or exclusivity.
+const allProfilesRequest = {
+  organization_id: 'org-cross-profile',
+  capacity_ref: 'CAP-24-7',
+  eligible_service_profiles: [
+    'REGIONAL_FREIGHT',
+    'B2B_DISTRIBUTION',
+    'B2C_DELIVERY',
+    'P2P_DELIVERY',
+  ],
+  allocations: [
+    {
+      service_profile: 'REGIONAL_FREIGHT',
+      start: '2026-10-04T06:00:00Z',
+      end: '2026-10-04T12:00:00Z',
+    },
+    {
+      service_profile: 'B2B_DISTRIBUTION',
+      start: '2026-10-04T10:00:00Z',
+      end: '2026-10-04T16:00:00Z',
+    },
+    {
+      service_profile: 'B2C_DELIVERY',
+      start: '2026-10-04T12:00:00Z',
+      end: '2026-10-04T20:00:00Z',
+    },
+    {
+      service_profile: 'P2P_DELIVERY',
+      start: '2026-10-04T18:00:00Z',
+      end: '2026-10-05T00:00:00Z',
+    },
+  ],
+};
+
+for (const profile of [
+  'REGIONAL_FREIGHT',
+  'B2B_DISTRIBUTION',
+  'B2C_DELIVERY',
+  'P2P_DELIVERY',
+]) {
+  const preferred = evaluateDynamicCapacityUtilization({
+    request: allProfilesRequest,
+    requestedProfile: profile,
+    requestedStart: '2026-10-04T12:30:00Z',
+    requestedEnd: '2026-10-04T13:30:00Z',
+  });
+
+  assert.equal(preferred.evaluation, 'PREFERRED_WINDOW');
+  assert.equal(preferred.reservation, false);
+
+  const outsideWindow = evaluateDynamicCapacityUtilization({
+    request: allProfilesRequest,
+    requestedProfile: profile,
+    requestedStart: '2026-10-05T02:00:00Z',
+    requestedEnd: '2026-10-05T03:00:00Z',
+  });
+
+  assert.equal(outsideWindow.evaluation, 'AVAILABLE_BASELINE');
+  assert.equal(outsideWindow.reservation, false);
+}
+
+const crossProfilePool = composeDynamicCapacityPool({
+  requests: [
+    {
+      ...allProfilesRequest,
+      capacity_ref: 'CAP-24-7',
+    },
+    {
+      organization_id: 'org-cross-profile',
+      capacity_ref: 'CAP-B2C',
+      eligible_service_profiles: ['B2C_DELIVERY'],
+      allocations: [{
+        service_profile: 'B2C_DELIVERY',
+        start: '2026-10-04T12:00:00Z',
+        end: '2026-10-04T14:00:00Z',
+      }],
+    },
+    {
+      organization_id: 'org-cross-profile',
+      capacity_ref: 'CAP-P2P',
+      eligible_service_profiles: ['P2P_DELIVERY'],
+    },
+  ],
+  requestedProfile: 'B2C_DELIVERY',
+  requestedStart: '2026-10-04T12:30:00Z',
+  requestedEnd: '2026-10-04T13:30:00Z',
+});
+
+assert.equal(crossProfilePool.evaluation, 'POOL_ELIGIBLE');
+assert.equal(crossProfilePool.candidates.length, 2);
+assert.equal(crossProfilePool.candidates[0].preference, 'PREFERRED');
+assert.equal(crossProfilePool.candidates[0].capacity_ref, 'CAP-24-7');
+assert.equal(crossProfilePool.candidates[1].preference, 'PREFERRED');
+assert.equal(crossProfilePool.candidates[1].capacity_ref, 'CAP-B2C');
+assert.equal(crossProfilePool.reservation, false);
+assert.equal(crossProfilePool.persistence, 'none');
+
+assert.throws(
+  () => buildDynamicCapacitySchedulingInput({
+    pool: crossProfilePool,
+    capacityRef: 'CAP-P2P',
+    requestedProfile: 'B2C_DELIVERY',
+    requestedStart: '2026-10-04T12:30:00Z',
+    requestedEnd: '2026-10-04T13:30:00Z',
+  }),
+  /not an eligible member/i,
+);
+
+const noProfilePool = composeDynamicCapacityPool({
+  requests: [{
+    organization_id: 'org-cross-profile',
+    capacity_ref: 'CAP-EMPTY',
+    eligible_service_profiles: ['B2C_DELIVERY'],
+  }],
+  requestedProfile: 'P2P_DELIVERY',
+  requestedStart: '2026-10-04T12:30:00Z',
+  requestedEnd: '2026-10-04T13:30:00Z',
+});
+
+assert.equal(noProfilePool.evaluation, 'INELIGIBLE');
+assert.equal(noProfilePool.candidates.length, 0);
+
+for (const field of [
+  'createsCapacityAuthority',
+  'createsCapacityLedger',
+  'createsReservationAuthority',
+  'createsCourierRegistry',
+  'createsProviderRegistry',
+  'createsDispatchAuthority',
+  'createsRoutingAuthority',
+  'createsGpsAuthority',
+  'createsSchedulingAuthority',
+  'mutatesAssignment',
+]) {
+  const boundary = assertDynamicCapacityUtilizationBoundary({ [field]: true });
+  assert.equal(boundary.valid, false, field);
+}
+
+console.log(
+  'L19.5 Cross-Profile Adversarial Dynamic Capacity Utilization Regression: PASS',
+);
+
 console.log(
   'L19.1 Dynamic Capacity Utilization optional 24/7 baseline + cross-service preference boundary regression: PASS',
 );
