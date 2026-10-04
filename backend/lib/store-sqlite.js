@@ -2718,6 +2718,56 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(31, nowIso());
   }}
 
+  // L11.3 — Logistics scheduling persistence foundation.
+  // This stores temporal coordination state only. Existing Order, Fulfillment,
+  // Movement, Location, Capacity, Payment, Inventory, Provider, Route, GPS,
+  // and Audit authorities remain canonical outside this table.
+  if (!applied.includes(58)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS logistics_scheduling_activities (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        location_id TEXT REFERENCES locations(id) ON DELETE SET NULL,
+        activity_type TEXT NOT NULL CHECK (activity_type IN (
+          'PICKUP','DELIVERY','LOADING','UNLOADING','DEPARTURE','ARRIVAL',
+          'CHECKPOINT','TRANSFER','HANDOFF','HUB_ARRIVAL','HUB_DEPARTURE'
+        )),
+        mode TEXT NOT NULL CHECK (mode IN ('ON_DEMAND','SCHEDULED','WINDOWED','RECURRING')),
+        status TEXT NOT NULL DEFAULT 'REQUESTED' CHECK (status IN (
+          'REQUESTED','SCHEDULED','CONFIRMED','IN_PROGRESS','COMPLETED',
+          'CANCELLED','FAILED','MISSED','EXPIRED'
+        )),
+        related_order_id TEXT,
+        related_fulfillment_id TEXT REFERENCES fulfillments(id) ON DELETE SET NULL,
+        related_movement_id TEXT,
+        requested_start TEXT,
+        requested_end TEXT,
+        scheduled_start TEXT,
+        scheduled_end TEXT,
+        timezone TEXT,
+        recurrence_json TEXT,
+        confirmed_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        confirmed_at TEXT,
+        created_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        updated_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        idempotency_key TEXT NOT NULL,
+        last_command_key TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+        UNIQUE(organization_id, idempotency_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_logistics_scheduling_org_status
+        ON logistics_scheduling_activities(organization_id,status,scheduled_start,updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_logistics_scheduling_org_location
+        ON logistics_scheduling_activities(organization_id,location_id,scheduled_start,updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_logistics_scheduling_order
+        ON logistics_scheduling_activities(organization_id,related_order_id,updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_logistics_scheduling_fulfillment
+        ON logistics_scheduling_activities(organization_id,related_fulfillment_id,updated_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(58, nowIso());
+  }}
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({
   NOT_INSTALLED: new Set(['INSTALLED']),
