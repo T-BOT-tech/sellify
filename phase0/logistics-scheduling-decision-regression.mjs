@@ -51,6 +51,11 @@ const {
   assertLogisticsSchedulingLifecycleInvariant,
 } = await import('../app/src/verticals/logistics/scheduling-lifecycle-invariant-contract.js');
 
+const {
+  logisticsSchedulingAdversarialContract,
+  assertLogisticsSchedulingAdversarialInvariant,
+} = await import('../app/src/verticals/logistics-scheduling-adversarial-contract.js');
+
 
 const db = getDatabaseForTests();
 const chatId = 'l11.8-regression-chat';
@@ -343,6 +348,22 @@ assert.deepEqual(
   }),
   { valid: false, reason: 'DOWNSTREAM_MUTATION_FORBIDDEN:payment' },
 );
+
+const adversarialContract = logisticsSchedulingAdversarialContract();
+assert.equal(adversarialContract.invalid_transitions_block, true);
+assert.equal(adversarialContract.cross_organization_access_block, true);
+assert.equal(adversarialContract.stale_version_block, true);
+assert.equal(adversarialContract.idempotency_key_reuse_conflict, true);
+assert.equal(adversarialContract.authorization_boundary_enforced, true);
+assert.equal(adversarialContract.failed_mutations_roll_back, true);
+assert.equal(adversarialContract.terminal_states_are_final, true);
+assert.equal(adversarialContract.scheduling_does_not_execute_operations, true);
+for (const scenario of ['INVALID_TRANSITION','CROSS_ORGANIZATION','STALE_VERSION','IDEMPOTENCY_REUSE','UNAUTHORIZED','REFERENCE_SCOPE']) {
+  assert.deepEqual(
+    assertLogisticsSchedulingAdversarialInvariant({ scenario, blocked: true, mutationRolledBack: true }),
+    { valid: true, reason: 'BLOCKED_AND_ROLLED_BACK' },
+  );
+}
 
 for (const outcome of ['CONFLICT', 'UNKNOWN']) {
   const decision = decideLogisticsScheduling({
@@ -753,4 +774,40 @@ await assert.rejects(
   error => error?.code === 'INVALID_SCHEDULING_TRANSITION',
 );
 
-console.log('L11.8/L11.9/L11.10/L11.11/L11.12/L11.13 Logistics Scheduling Decision + Confirmation + Start + Completion + Failure + Terminal Boundary Regression: PASS');
+// L11.15 adversarial cases.
+const adversarialActivity = await create('l11.15-create-adversarial','2026-10-16T09:00:00Z','2026-10-16T10:00:00Z','movement-l11-15-adversarial');
+
+await assert.rejects(() => transitionLogisticsSchedulingActivity(chatId, adversarialActivity.id, 'COMPLETED', actor, { idempotency_key: 'l11.15-invalid-transition', expectedVersion: 1 }), error => error?.code === 'INVALID_SCHEDULING_TRANSITION');
+let adversarialRow = db.prepare('SELECT status, version, last_command_key FROM logistics_scheduling_activities WHERE id = ?').get(adversarialActivity.id);
+assert.deepEqual(adversarialRow, { status: 'REQUESTED', version: 1, last_command_key: null });
+
+await assert.rejects(() => transitionLogisticsSchedulingActivity(chatId, adversarialActivity.id, 'CANCELLED', actor, { idempotency_key: 'l11.15-stale', expectedVersion: 99 }), error => error?.code === 'SCHEDULING_VERSION_CONFLICT');
+adversarialRow = db.prepare('SELECT status, version, last_command_key FROM logistics_scheduling_activities WHERE id = ?').get(adversarialActivity.id);
+assert.deepEqual(adversarialRow, { status: 'REQUESTED', version: 1, last_command_key: null });
+
+const idempotencyActivity = await create('l11.15-create-idempotency','2026-10-17T09:00:00Z','2026-10-17T10:00:00Z','movement-l11-15-idempotency');
+const idempotencyCancelled = await transitionLogisticsSchedulingActivity(chatId, idempotencyActivity.id, 'CANCELLED', actor, { idempotency_key: 'l11.15-reused-key', expectedVersion: 1 });
+assert.equal(idempotencyCancelled.status, 'CANCELLED');
+await assert.rejects(() => transitionLogisticsSchedulingActivity(chatId, idempotencyActivity.id, 'EXPIRED', actor, { idempotency_key: 'l11.15-reused-key', expectedVersion: 2 }), error => error?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT');
+const idempotencyRow = db.prepare('SELECT status, version, last_command_key FROM logistics_scheduling_activities WHERE id = ?').get(idempotencyActivity.id);
+assert.deepEqual(idempotencyRow, { status: 'CANCELLED', version: 2, last_command_key: 'l11.15-reused-key' });
+
+const unauthorizedActor = { userId: 'l11.15-unauthorized-user', deviceId: null, role: 'viewer', roles: ['viewer'], organizationId };
+db.prepare('INSERT INTO users (id,display_name,created_at,last_seen_at) VALUES (?,?,?,?)').run(unauthorizedActor.userId,'L11.15 Unauthorized Actor',new Date().toISOString(),new Date().toISOString());
+await assert.rejects(() => transitionLogisticsSchedulingActivity(chatId, adversarialActivity.id, 'CANCELLED', unauthorizedActor, { idempotency_key: 'l11.15-unauthorized', expectedVersion: 1 }), error => error?.code === 'SCHEDULING_AUTHORIZATION_DENIED');
+adversarialRow = db.prepare('SELECT status, version, last_command_key FROM logistics_scheduling_activities WHERE id = ?').get(adversarialActivity.id);
+assert.deepEqual(adversarialRow, { status: 'REQUESTED', version: 1, last_command_key: null });
+
+const foreignOrgId='l11.15-foreign-org', foreignChatId='l11.15-foreign-chat';
+db.prepare('INSERT INTO organizations (id,name,country,currency,timezone,created_at) VALUES (?,?,?,?,?,?)').run(foreignOrgId,'L11.15 Foreign Org','ET','ETB','Africa/Addis_Ababa',new Date().toISOString());
+db.prepare('INSERT INTO tenants (chat_id,tenant_id,api_key,created_at,seller_name,organization_id) VALUES (?,?,?,?,?,?)').run(foreignChatId,'l11.15-foreign-tenant','l11.15-foreign-key',new Date().toISOString(),'Foreign',foreignOrgId);
+db.prepare('UPDATE tenants SET organization_id = ? WHERE chat_id = ?').run(foreignOrgId, foreignChatId);
+await assert.rejects(() => transitionLogisticsSchedulingActivity(foreignChatId, adversarialActivity.id, 'CANCELLED', actor, { idempotency_key: 'l11.15-cross-org', expectedVersion: 1 }), error => error?.code === 'SCHEDULING_ACTIVITY_NOT_FOUND');
+adversarialRow = db.prepare('SELECT status, version, last_command_key FROM logistics_scheduling_activities WHERE id = ?').get(adversarialActivity.id);
+assert.deepEqual(adversarialRow, { status: 'REQUESTED', version: 1, last_command_key: null });
+
+const foreignFulfillmentId='l11.15-foreign-fulfillment';
+db.prepare('INSERT INTO fulfillments (id,organization_id,server_order_id,fulfillment_type,status,created_at) VALUES (?,?,?,?,?,?)').run(foreignFulfillmentId,foreignOrgId,'l11.15-foreign-order','DELIVERY','PENDING',new Date().toISOString());
+await assert.rejects(() => createLogisticsSchedulingActivity(chatId, { id:'l11.15-cross-org-reference', location_id:locationId, activity_type:'DELIVERY', mode:'SCHEDULED', requested_start:'2026-10-18T09:00:00Z', requested_end:'2026-10-18T10:00:00Z', related_fulfillment:{id:foreignFulfillmentId}, idempotency_key:'l11.15-cross-org-reference' }, actor), error => error?.code === 'FULFILLMENT_REFERENCE_INVALID');
+
+console.log('L11.8/L11.9/L11.10/L11.11/L11.12/L11.13/L11.14/L11.15 Logistics Scheduling Decision + Confirmation + Start + Completion + Failure + Terminal + Adversarial Boundary Regression: PASS');
