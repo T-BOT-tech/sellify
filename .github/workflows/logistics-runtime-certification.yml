@@ -19,7 +19,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: npm
-      - run: npm ci
+      - run: npm install --no-package-lock
       - run: npm run test:logistics-master-exit
       - run: npm run test:logistics-l8-l21-certification
