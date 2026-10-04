@@ -7776,6 +7776,18 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
       return { ...logisticsSchedulingRow(row), idempotent: true };
     }
 
+    const expectedVersion = input.expectedVersion == null ? null : Number(input.expectedVersion);
+    if (expectedVersion != null && (!Number.isInteger(expectedVersion) || expectedVersion < 1)) {
+      throw Object.assign(new Error('expectedVersion must be a positive integer'), {
+        statusCode: 400, code: 'INVALID_SCHEDULING_VERSION',
+      });
+    }
+    if (expectedVersion != null && Number(row.version) !== expectedVersion) {
+      throw Object.assign(new Error('Scheduling activity version conflict'), {
+        statusCode: 409, code: 'SCHEDULING_VERSION_CONFLICT',
+      });
+    }
+
     if (String(row.status) === target) {
       db.exec('COMMIT');
       return { ...logisticsSchedulingRow(row), idempotent: true };
@@ -7843,18 +7855,6 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
     if (target === 'CONFIRMED' && !row.scheduled_start) {
       throw Object.assign(new Error('Confirmation requires a scheduled time window'), {
         statusCode: 409, code: 'SCHEDULING_NOT_SCHEDULED',
-      });
-    }
-
-    const expectedVersion = input.expectedVersion == null ? null : Number(input.expectedVersion);
-    if (expectedVersion != null && (!Number.isInteger(expectedVersion) || expectedVersion < 1)) {
-      throw Object.assign(new Error('expectedVersion must be a positive integer'), {
-        statusCode: 400, code: 'INVALID_SCHEDULING_VERSION',
-      });
-    }
-    if (expectedVersion != null && Number(row.version) !== expectedVersion) {
-      throw Object.assign(new Error('Scheduling activity version conflict'), {
-        statusCode: 409, code: 'SCHEDULING_VERSION_CONFLICT',
       });
     }
 
