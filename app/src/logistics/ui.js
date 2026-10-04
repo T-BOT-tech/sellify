@@ -100,7 +100,47 @@ function renderDeliveryWorkloadSummary(assignments) {
 let logisticsDispatchFilters = { status: '', courierUserId: '' };
 
 function currentStaffRole() {
-  return config.currentStaffRole || config.authRole || 'staff';
+  const contextual = Array.isArray(config.contextualRoles) ? config.contextualRoles : [];
+  if (contextual.some(r => r && r.role === 'logistics_courier')) return 'logistics_courier';
+  if (contextual.some(r => r && r.role === 'logistics_dispatcher')) return 'logistics_dispatcher';
+  if (contextual.some(r => r && r.role === 'logistics_manager')) return 'logistics_manager';
+  return config.currentStaffRole || config.authRole || config.tenantRole || 'staff';
+}
+
+function logisticsWorkspaceRole() {
+  return String(currentStaff?.role || currentStaffRole()).toLowerCase();
+}
+
+function currentCourierUserId() {
+  return String(config.authUser?.id || config.userId || '').trim();
+}
+
+function renderWorkspaceModeHeader(role, assignments) {
+  const active = (Array.isArray(assignments) ? assignments : [])
+    .filter(a => !['CANCELLED', 'FAILED', 'REASSIGNED', 'DELIVERED'].includes(String(a.status || '').toUpperCase()));
+  const delivered = (Array.isArray(assignments) ? assignments : [])
+    .filter(a => String(a.status || '').toUpperCase() === 'DELIVERED').length;
+  const label = role === 'logistics_courier'
+    ? 'My deliveries'
+    : role === 'logistics_viewer'
+      ? 'Delivery tracking'
+      : 'Logistics operations';
+  const subtitle = role === 'logistics_courier'
+    ? 'Complete each step from assignment to proof. The server remains authoritative.'
+    : role === 'logistics_viewer'
+      ? 'Operational visibility without dispatch or execution controls.'
+      : 'Dispatch, assignment, tracking, exceptions and workload in one workspace.';
+  return `
+    <section class="logistics-workspace-head" aria-label="Logistics workspace">
+      <div>
+        <h3 style="margin:0;">${escapeHtml(label)}</h3>
+        <div class="logistics-meta">${escapeHtml(subtitle)}</div>
+      </div>
+      <div class="logistics-workspace-stats">
+        <span><strong>${active.length}</strong> active</span>
+        <span><strong>${delivered}</strong> delivered</span>
+      </div>
+    </section>`;
 }
 
 function renderOperationalWorkspaceSummary(workspace, views) {
@@ -148,8 +188,21 @@ export function renderLogistics() {
   const list = document.getElementById('logisticsList');
   if (!list) return;
   const canonicalAssignments = Array.isArray(deliveryAssignments) ? deliveryAssignments : [];
-  const pending = orders.filter(o => o.fulfillment_type && !isFulfillmentFinal(o.fulfillment_status));
-  const done = orders.filter(o => o.fulfillment_type && isFulfillmentFinal(o.fulfillment_status)).slice(0, 20);
+  const workspaceRole = logisticsWorkspaceRole();
+  const courierId = currentCourierUserId();
+  const courierMode = workspaceRole === 'logistics_courier';
+  const pending = orders.filter(o => {
+    if (!o.fulfillment_type || isFulfillmentFinal(o.fulfillment_status)) return false;
+    if (!courierMode || o.fulfillment_type !== 'delivery') return true;
+    const assignment = canonicalDeliveryAssignment(o);
+    return !!assignment && String(assignment.courier_user_id || '') === courierId;
+  });
+  const done = orders.filter(o => {
+    if (!o.fulfillment_type || !isFulfillmentFinal(o.fulfillment_status)) return false;
+    if (!courierMode || o.fulfillment_type !== 'delivery') return true;
+    const assignment = canonicalDeliveryAssignment(o);
+    return !!assignment && String(assignment.courier_user_id || '') === courierId;
+  }).slice(0, 20);
 
   if (pending.length === 0 && done.length === 0) {
     list.innerHTML = `<div class="empty">${t('whNoLogisticsOrders')}</div>`;
@@ -217,13 +270,17 @@ export function renderLogistics() {
       <button type="button" class="btn-secondary" id="logistics-filter-apply">Filter</button>
       <button type="button" class="btn-secondary" id="logistics-filter-clear">Clear</button>
     </div>`;
-  const workspaceRole = String(currentStaff?.role || currentStaffRole()).toLowerCase();
   const workspace = buildLogisticsOperationalWorkspaceProjection({
-    orders,
-    assignments: canonicalAssignments,
+    orders: courierMode ? pending.concat(done) : orders,
+    assignments: visibleAssignments,
   });
   const composition = getLogisticsWorkspaceComposition(workspaceRole);
-  let html = filterBar + renderDeliveryWorkloadSummary(canonicalAssignments);
+  const visibleAssignments = courierMode
+    ? canonicalAssignments.filter(a => String(a.courier_user_id || '') === courierId)
+    : canonicalAssignments;
+  let html = renderWorkspaceModeHeader(workspaceRole, visibleAssignments)
+    + (courierMode ? '' : filterBar)
+    + renderDeliveryWorkloadSummary(visibleAssignments);
   if (composition.views.some(view => view.id === 'tracking')) {
     html += renderOperationalWorkspaceSummary(workspace, composition.views.map(view => view.id));
   }
