@@ -392,7 +392,8 @@
     "test:logistics-l21.4": "node phase0/logistics-external-network-expansion-regression.mjs",
     "test:logistics-l21.5": "node phase0/logistics-external-network-expansion-regression.mjs",
     "test:logistics-l21.6": "node phase0/logistics-external-network-expansion-regression.mjs",
-    "test:logistics-l21.7": "node phase0/logistics-external-network-expansion-regression.mjs"
+    "test:logistics-l21.7": "node phase0/logistics-external-network-expansion-regression.mjs",
+    "test:logistics-l21.8": "node phase0/logistics-external-network-expansion-regression.mjs"
   },
   "engines": {
     "node": ">=24"
