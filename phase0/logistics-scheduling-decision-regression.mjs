@@ -301,33 +301,6 @@ assert.equal(startedReplay.idempotent, true);
 assert.equal(startedReplay.status, 'IN_PROGRESS');
 assert.equal(startedReplay.version, 4);
 
-const completed = await transitionLogisticsSchedulingActivity(
-  chatId,
-  first.id,
-  'COMPLETED',
-  actor,
-  {
-    idempotency_key: 'l11.11-complete-1',
-    expectedVersion: 4,
-  },
-);
-assert.equal(completed.status, 'COMPLETED');
-assert.equal(completed.version, 5);
-
-const completedReplay = await transitionLogisticsSchedulingActivity(
-  chatId,
-  first.id,
-  'COMPLETED',
-  actor,
-  {
-    idempotency_key: 'l11.11-complete-1',
-    expectedVersion: 4,
-  },
-);
-assert.equal(completedReplay.idempotent, true);
-assert.equal(completedReplay.status, 'COMPLETED');
-assert.equal(completedReplay.version, 5);
-
 await assert.rejects(
   () => transitionLogisticsSchedulingActivity(
     chatId,
@@ -407,5 +380,32 @@ const unknownRow = db.prepare(
 assert.equal(unknownRow.status, 'REQUESTED');
 assert.equal(Number(unknownRow.version), 1);
 assert.equal(unknownRow.last_command_key, null);
+
+const completed = await transitionLogisticsSchedulingActivity(
+  chatId,
+  first.id,
+  'COMPLETED',
+  actor,
+  {
+    idempotency_key: 'l11.11-complete-1',
+    expectedVersion: 4,
+  },
+);
+assert.equal(completed.status, 'COMPLETED');
+assert.equal(completed.version, 5);
+
+const completedReplay = await transitionLogisticsSchedulingActivity(
+  chatId,
+  first.id,
+  'COMPLETED',
+  actor,
+  {
+    idempotency_key: 'l11.11-complete-1',
+    expectedVersion: 4,
+  },
+);
+assert.equal(completedReplay.idempotent, true);
+assert.equal(completedReplay.status, 'COMPLETED');
+assert.equal(completedReplay.version, 5);
 
 console.log('L11.8/L11.9/L11.10/L11.11 Logistics Scheduling Decision + Confirmation + Start + Completion Boundary Regression: PASS');
