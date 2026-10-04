@@ -149,6 +149,8 @@ jobs:
         run: npm run test:pf-1-payment-frontend-integration
       - name: PF-1 payment frontend projection regression
         run: npm run test:pf-1-payment-frontend-projection
+      - name: L11.8 logistics scheduling decision boundary regression
+        run: npm run test:logistics-l11.8
       - name: GAP-2 logistics authorization foundation regression
         run: npm run test:gap-2-logistics-authz
       - name: GAP-2 delivery assignment authority regression
