@@ -108,6 +108,105 @@ export function assertExternalAdapterTrustBoundary(value = {}) {
   return true;
 }
 
+
+const EXTERNAL_INTEGRATION_STATES = Object.freeze([
+  'CONFIGURED',
+  'ENABLED',
+  'SUSPENDED',
+  'DISABLED',
+  'RETIRED',
+]);
+
+export function normalizeExternalIntegrationLifecycle({
+  integration,
+  state,
+  organization_id,
+  integration_ref,
+  adapter_ref,
+} = {}) {
+  const normalized = validateExternalNetworkIntegration(integration);
+  const organizationId = requireString(organization_id ?? normalized.organization_id, 'organization_id');
+  const integrationRef = requireString(integration_ref ?? normalized.integration_ref, 'integration_ref');
+  const adapterRef = requireString(adapter_ref ?? normalized.adapter_ref, 'adapter_ref');
+  const lifecycleState = requireString(state, 'state').toUpperCase();
+
+  if (!EXTERNAL_INTEGRATION_STATES.includes(lifecycleState)) {
+    invalid('unsupported external integration lifecycle state');
+  }
+  if (normalized.organization_id !== organizationId) {
+    invalid('external integration lifecycle organization scope mismatch');
+  }
+  if (normalized.integration_ref !== integrationRef) {
+    invalid('external integration lifecycle integration scope mismatch');
+  }
+  if (normalized.adapter_ref !== adapterRef) {
+    invalid('external integration lifecycle adapter identity mismatch');
+  }
+
+  return Object.freeze({
+    contract_version: normalized.contract_version,
+    organization_id: organizationId,
+    integration_ref: integrationRef,
+    adapter_ref: adapterRef,
+    external_network_ref: normalized.external_network_ref,
+    service_profile: normalized.service_profile,
+    lifecycle_state: lifecycleState,
+    lifecycle_authority: 'existing_integration_configuration_authority',
+    authorization_authority: 'existing_server_side_auth_scope',
+    execution_authority: false,
+    provider_registry_authority: false,
+    persistence: 'existing_integration_or_canonical_domain_state_only',
+  });
+}
+
+export function assertExternalIntegrationLifecycleBoundary(value = {}) {
+  if (value.lifecycle_authority !== 'existing_integration_configuration_authority') {
+    invalid('external integration lifecycle must remain under existing integration configuration authority');
+  }
+  if (value.authorization_authority !== 'existing_server_side_auth_scope') {
+    invalid('integration lifecycle authorization must remain under existing server-side auth scope');
+  }
+  if (value.execution_authority === true) {
+    invalid('integration lifecycle must not become provider execution authority');
+  }
+  if (value.provider_registry_authority === true || value.provider_registry_authority === 'external_adapter') {
+    invalid('integration lifecycle must not create provider registry authority');
+  }
+  if (value.persistence !== 'existing_integration_or_canonical_domain_state_only') {
+    invalid('integration lifecycle must use existing integration/core persistence');
+  }
+  requireString(value.organization_id, 'organization_id');
+  requireString(value.integration_ref, 'integration_ref');
+  requireString(value.adapter_ref, 'adapter_ref');
+  requireString(value.lifecycle_state, 'lifecycle_state');
+  if (!EXTERNAL_INTEGRATION_STATES.includes(value.lifecycle_state.toUpperCase())) {
+    invalid('unsupported external integration lifecycle state');
+  }
+  return true;
+}
+
+export function assertExternalIntegrationLifecycleTransition({
+  from_state,
+  to_state,
+} = {}) {
+  const from = requireString(from_state, 'from_state').toUpperCase();
+  const to = requireString(to_state, 'to_state').toUpperCase();
+  const transitions = {
+    CONFIGURED: ['ENABLED', 'DISABLED', 'RETIRED'],
+    ENABLED: ['SUSPENDED', 'DISABLED', 'RETIRED'],
+    SUSPENDED: ['ENABLED', 'DISABLED', 'RETIRED'],
+    DISABLED: ['CONFIGURED', 'RETIRED'],
+    RETIRED: [],
+  };
+  if (!EXTERNAL_INTEGRATION_STATES.includes(from) || !EXTERNAL_INTEGRATION_STATES.includes(to)) {
+    invalid('unsupported external integration lifecycle state');
+  }
+  if (!transitions[from].includes(to)) {
+    invalid('invalid external integration lifecycle transition');
+  }
+  return true;
+}
+
 export function normalizeExternalNetworkIntegration(input = {}) {
   const organizationId = requireString(input.organization_id, 'organization_id');
   const integrationRef = requireString(input.integration_ref, 'integration_ref');
