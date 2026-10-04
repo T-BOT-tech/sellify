@@ -215,6 +215,46 @@ assert.throws(
 assert.throws(
   () => normalizeDynamicCapacityUtilizationRequest({
     ...base,
+    allocations: [
+      {
+        service_profile: 'B2C_DELIVERY',
+        start: '2026-10-04T12:00:00Z',
+        end: '2026-10-04T13:00:00Z',
+        mode: 'PREFERRED',
+      },
+      {
+        service_profile: 'B2C_DELIVERY',
+        start: '2026-10-04T12:00:00Z',
+        end: '2026-10-04T13:00:00Z',
+        mode: 'PREFERRED',
+      },
+    ],
+  }),
+  /conflicting utilization policy/i,
+);
+
+assert.throws(
+  () => applyDynamicCapacitySchedulingDecision({
+    schedulingInput: {
+      ...schedulingInput,
+      decision_authority: 'l19_dynamic_utilization',
+    },
+    evaluation: { evaluation: 'FEASIBLE', feasible: true },
+  }),
+  /existing L11 scheduling/i,
+);
+
+assert.throws(
+  () => applyDynamicCapacitySchedulingDecision({
+    schedulingInput,
+    evaluation: { evaluation: 'FEASIBLE', feasible: false },
+  }),
+  /FEASIBLE, CONFLICT, or UNKNOWN/i,
+);
+
+assert.throws(
+  () => normalizeDynamicCapacityUtilizationRequest({
+    ...base,
     eligible_service_profiles: ['B2C_DELIVERY'],
     allocations: [{
       service_profile: 'P2P_DELIVERY',
