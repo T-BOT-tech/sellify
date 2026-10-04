@@ -1091,3 +1091,86 @@ export function buildExternalNetworkEnvelope({
     assignment_authority: false,
   });
 }
+
+
+export function externalNetworkExpansionClosureGate({
+  integration,
+  capabilities,
+  lifecycle,
+  inbound,
+  reconciliation,
+  handoff,
+} = {}) {
+  if (!integration || integration.canonical_contract !== 'logistics_external_network') {
+    invalid('external network closure requires canonical logistics external network integration');
+  }
+  if (!capabilities || capabilities.capability_authority !== 'external_adapter_declaration') {
+    invalid('external network closure requires declarative adapter capabilities');
+  }
+  if (!lifecycle || lifecycle.lifecycle_authority !== 'existing_integration_configuration_authority') {
+    invalid('external network closure requires existing integration lifecycle authority');
+  }
+  if (!inbound || inbound.canonical_mutation_authority !== 'existing_canonical_domain_authority') {
+    invalid('external network closure requires canonical inbound mutation delegation');
+  }
+  if (!reconciliation || reconciliation.evidence_authority !== 'existing_logistics_evidence_and_proof_boundaries') {
+    invalid('external network closure requires existing evidence reconciliation authority');
+  }
+  if (!handoff || handoff.canonical_processing_authority !== 'existing_canonical_domain_authority') {
+    invalid('external network closure requires canonical handoff authority');
+  }
+
+  const forbidden = [
+    ['provider_registry_authority', 'provider registry authority'],
+    ['provider_selection_authority', 'provider selection authority'],
+    ['routing_authority', 'routing authority'],
+    ['assignment_authority', 'assignment authority'],
+    ['dispatch_authority', 'dispatch authority'],
+    ['shipment_authority', 'shipment authority'],
+    ['fulfillment_authority', 'fulfillment authority'],
+    ['inventory_authority', 'inventory authority'],
+    ['payment_authority', 'payment authority'],
+    ['settlement_authority', 'settlement authority'],
+    ['identity_authority', 'identity authority'],
+    ['event_store_authority', 'event store authority'],
+    ['external_execution_authority', 'external execution authority'],
+    ['direct_domain_mutation', 'direct canonical mutation'],
+  ];
+
+  for (const snapshot of [capabilities, lifecycle, inbound, reconciliation, handoff]) {
+    for (const [field, label] of forbidden) {
+      if (snapshot[field] === true || snapshot[field] === 'external_adapter') {
+        invalid(`external network closure violation: ${label}`);
+      }
+    }
+  }
+
+  if (capabilities.persistence !== 'existing_integration_or_canonical_domain_state_only') {
+    invalid('external network closure requires existing integration/core persistence');
+  }
+  if (lifecycle.persistence !== 'existing_integration_or_canonical_domain_state_only') {
+    invalid('external network closure requires existing lifecycle persistence');
+  }
+  if (inbound.persistence !== 'existing_integration_or_canonical_domain_state_only') {
+    invalid('external network closure requires existing inbound persistence');
+  }
+  if (reconciliation.persistence !== 'existing_evidence_and_core_state_only') {
+    invalid('external network closure requires existing evidence/core persistence');
+  }
+  if (handoff.persistence !== 'existing_canonical_domain_state_only') {
+    invalid('external network closure requires existing canonical-domain persistence');
+  }
+
+  return Object.freeze({
+    closed: true,
+    contract_version: integration.contract_version,
+    organization_id: integration.organization_id,
+    integration_ref: integration.integration_ref,
+    adapter_ref: integration.adapter_ref,
+    external_network_ref: integration.external_network_ref,
+    service_profile: integration.service_profile,
+    provider_neutral: true,
+    canonical_mutation_delegated: true,
+    persistence: 'existing_integration_or_canonical_domain_state_only',
+  });
+}
