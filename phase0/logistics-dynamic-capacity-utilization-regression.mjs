@@ -5,7 +5,7 @@
 // - B2B, B2C, and P2P remain independently eligible;
 // - optional time windows influence preference only;
 // - duplicate allocations are rejected;
-// - cross-tenant and unauthorized duplicate authorities are rejected;
+// - organization scope and unauthorized duplicate authorities are rejected;
 // - L19 does not reserve capacity or replace L11 scheduling.
 
 import assert from 'node:assert/strict';
@@ -64,6 +64,29 @@ const pooled = {
 
 const pooledNormalized = normalizeDynamicCapacityUtilizationRequest(pooled);
 assert.equal(pooledNormalized.allocations.length, 3);
+
+const overlappingPreferences = {
+  ...base,
+  allocations: [
+    {
+      service_profile: 'B2B_DISTRIBUTION',
+      start: '2026-10-04T06:00:00Z',
+      end: '2026-10-04T12:00:00Z',
+    },
+    {
+      service_profile: 'B2C_DELIVERY',
+      start: '2026-10-04T10:00:00Z',
+      end: '2026-10-04T14:00:00Z',
+    },
+  ],
+};
+assert.equal(
+  normalizeDynamicCapacityUtilizationRequest(overlappingPreferences).allocations.length,
+  2,
+);
+
+// Overlapping PREFERRED windows are allowed because they are preferences,
+// not exclusive reservations or a capacity ledger.
 
 for (const [profile, start, end] of [
   ['B2B_DISTRIBUTION', '2026-10-04T06:00:00Z', '2026-10-04T07:00:00Z'],
