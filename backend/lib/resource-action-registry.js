@@ -64,6 +64,11 @@ const DEFINITIONS = [
   ['logistics', 'return', 'manage', null],
   ['logistics', 'courier', 'view', null],
   ['logistics', 'courier', 'manage', null],
+  ['logistics', 'scheduling', 'view', 'logistics:scheduling:view'],
+  ['logistics', 'scheduling', 'request', 'logistics:scheduling:request'],
+  ['logistics', 'scheduling', 'manage', 'logistics:scheduling:manage'],
+  ['logistics', 'scheduling', 'confirm', 'logistics:scheduling:confirm'],
+  ['logistics', 'scheduling', 'cancel', 'logistics:scheduling:cancel'],
 ];
 
 const RESOURCE_ACTIONS = new Map();
