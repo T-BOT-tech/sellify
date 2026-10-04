@@ -105,6 +105,107 @@ export function normalizeExternalAdapterCapabilities(input = {}) {
   });
 }
 
+
+export function buildExternalAdapterRequest({
+  integration,
+  operation,
+  payload,
+  idempotency_key,
+  correlation_ref,
+} = {}) {
+  const capabilities = validateExternalAdapterCapabilities(integration);
+  requireString(operation, 'operation');
+  requireString(idempotency_key, 'idempotency_key');
+  const correlationRef = requireString(correlation_ref, 'correlation_ref');
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    invalid('payload must be an object');
+  }
+
+  const operationCapability = {
+    DELIVERY_REQUEST: 'DELIVERY_REQUEST',
+    DELIVERY_CANCEL: 'DELIVERY_CANCEL',
+    TRACKING_STATUS: 'TRACKING_STATUS',
+    DELIVERY_PROOF: 'DELIVERY_PROOF',
+    CAPACITY_INQUIRY: 'CAPACITY_INQUIRY',
+    STATUS_SYNCHRONIZATION: 'STATUS_SYNCHRONIZATION',
+  }[operation];
+
+  if (!operationCapability) {
+    invalid('unsupported adapter operation');
+  }
+
+  if (!capabilities.capabilities.includes(operationCapability)) {
+    invalid('adapter capability not advertised for operation');
+  }
+
+  return Object.freeze({
+    contract_version: capabilities.contract_version,
+    integration_ref: capabilities.integration_ref,
+    adapter_ref: capabilities.adapter_ref,
+    external_network_ref: capabilities.external_network_ref,
+    service_profile: capabilities.service_profile,
+    direction: capabilities.direction,
+    operation,
+    correlation_ref: correlationRef,
+    idempotency_key,
+    payload: Object.freeze({ ...payload }),
+    authority: 'external_adapter_boundary',
+    canonical_mutation_authority: 'existing_canonical_domain_authority',
+    direct_domain_mutation: false,
+  });
+}
+
+export function normalizeExternalAdapterResponse({
+  integration,
+  operation,
+  correlation_ref,
+  response,
+} = {}) {
+  const capabilities = validateExternalAdapterCapabilities(integration);
+  requireString(operation, 'operation');
+  const correlationRef = requireString(correlation_ref, 'correlation_ref');
+
+  if (!response || typeof response !== 'object' || Array.isArray(response)) {
+    invalid('response must be an object');
+  }
+
+  const status = requireString(response.status, 'response.status').toUpperCase();
+  const allowedStatuses = ['ACCEPTED', 'REJECTED', 'PENDING', 'COMPLETED', 'FAILED'];
+
+  if (!allowedStatuses.includes(status)) {
+    invalid('unsupported adapter response status');
+  }
+
+  const externalRef = response.external_ref == null
+    ? null
+    : requireString(response.external_ref, 'response.external_ref');
+
+  return Object.freeze({
+    contract_version: capabilities.contract_version,
+    integration_ref: capabilities.integration_ref,
+    adapter_ref: capabilities.adapter_ref,
+    external_network_ref: capabilities.external_network_ref,
+    service_profile: capabilities.service_profile,
+    operation,
+    correlation_ref: correlationRef,
+    status,
+    external_ref: externalRef,
+    observed_at: response.observed_at ?? null,
+    evidence_ref: response.evidence_ref ?? null,
+    authority: 'external_adapter_observation',
+    canonical_mutation_authority: 'existing_canonical_domain_authority',
+    direct_domain_mutation: false,
+    provider_selection_authority: false,
+    routing_authority: false,
+    assignment_authority: false,
+    shipment_authority: false,
+    fulfillment_authority: false,
+    payment_authority: false,
+    inventory_authority: false,
+  });
+}
+
 export function validateExternalAdapterCapabilities(input = {}) {
   const normalized = normalizeExternalAdapterCapabilities(input);
 
