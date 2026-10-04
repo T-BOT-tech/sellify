@@ -31,6 +31,11 @@ const {
   logisticsSchedulingStartContract,
 } = await import('../app/src/verticals/logistics/scheduling-start-contract.js');
 
+const {
+  decideLogisticsSchedulingCompletion,
+  logisticsSchedulingCompletionContract,
+} = await import('../app/src/verticals/logistics/scheduling-completion-contract.js');
+
 
 const db = getDatabaseForTests();
 const chatId = 'l11.8-regression-chat';
@@ -156,6 +161,25 @@ assert.equal(
   'START',
 );
 
+const completionContract = logisticsSchedulingCompletionContract();
+assert.equal(completionContract.in_progress_allows_completion, true);
+assert.equal(completionContract.not_in_progress_allows_completion, false);
+assert.equal(completionContract.completion_is_execution, false);
+assert.equal(completionContract.completion_is_fulfillment_completion, false);
+assert.equal(completionContract.completion_is_delivery_completion, false);
+assert.equal(completionContract.mutates_fulfillment, false);
+assert.equal(completionContract.mutates_payment, false);
+assert.equal(completionContract.mutates_inventory, false);
+assert.equal(completionContract.records_delivery_proof, false);
+assert.equal(
+  decideLogisticsSchedulingCompletion({ status: 'CONFIRMED' }).decision,
+  'BLOCK',
+);
+assert.equal(
+  decideLogisticsSchedulingCompletion({ status: 'IN_PROGRESS' }).decision,
+  'COMPLETE',
+);
+
 for (const outcome of ['CONFLICT', 'UNKNOWN']) {
   const decision = decideLogisticsScheduling({
     evaluation: { evaluation: outcome, feasible: false },
@@ -277,6 +301,33 @@ assert.equal(startedReplay.idempotent, true);
 assert.equal(startedReplay.status, 'IN_PROGRESS');
 assert.equal(startedReplay.version, 4);
 
+const completed = await transitionLogisticsSchedulingActivity(
+  chatId,
+  first.id,
+  'COMPLETED',
+  actor,
+  {
+    idempotency_key: 'l11.11-complete-1',
+    expectedVersion: 4,
+  },
+);
+assert.equal(completed.status, 'COMPLETED');
+assert.equal(completed.version, 5);
+
+const completedReplay = await transitionLogisticsSchedulingActivity(
+  chatId,
+  first.id,
+  'COMPLETED',
+  actor,
+  {
+    idempotency_key: 'l11.11-complete-1',
+    expectedVersion: 4,
+  },
+);
+assert.equal(completedReplay.idempotent, true);
+assert.equal(completedReplay.status, 'COMPLETED');
+assert.equal(completedReplay.version, 5);
+
 await assert.rejects(
   () => transitionLogisticsSchedulingActivity(
     chatId,
@@ -357,4 +408,4 @@ assert.equal(unknownRow.status, 'REQUESTED');
 assert.equal(Number(unknownRow.version), 1);
 assert.equal(unknownRow.last_command_key, null);
 
-console.log('L11.8/L11.9/L11.10 Logistics Scheduling Decision + Confirmation + Start Boundary Regression: PASS');
+console.log('L11.8/L11.9/L11.10/L11.11 Logistics Scheduling Decision + Confirmation + Start + Completion Boundary Regression: PASS');
