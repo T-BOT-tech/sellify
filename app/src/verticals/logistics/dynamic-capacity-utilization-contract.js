@@ -352,6 +352,94 @@ export function composeDynamicCapacityPool({
   });
 }
 
+
+export function buildDynamicCapacitySchedulingInput({
+  pool,
+  capacityRef,
+  requestedProfile,
+  requestedStart,
+  requestedEnd,
+  schedulingContext = {},
+} = {}) {
+  if (!pool || typeof pool !== 'object' || Array.isArray(pool)) {
+    invalid('pool must be an object');
+  }
+
+  const normalizedCapacityRef = text(capacityRef, 'capacity_ref');
+  const profile = normalizeProfile(requestedProfile, 'requested_profile');
+  const start = timestamp(requestedStart, 'requested_start');
+  const end = timestamp(requestedEnd, 'requested_end');
+
+  if (end.ms <= start.ms) {
+    invalid('requested_end must be after requested_start');
+  }
+
+  const candidate = (pool.candidates ?? []).find(
+    item => item.capacity_ref === normalizedCapacityRef &&
+      item.service_profile === profile,
+  );
+
+  if (!candidate) {
+    invalid('capacity_ref is not an eligible member of the L19 pool');
+  }
+
+  return Object.freeze({
+    capacity_ref: normalizedCapacityRef,
+    service_profile: profile,
+    requested_start: start.value,
+    requested_end: end.value,
+    utilization_preference: candidate.preference,
+    utilization_evaluation: candidate.evaluation,
+    scheduling_context: Object.freeze({ ...schedulingContext }),
+    decision_authority: 'existing_l11_scheduling',
+    execution_authority: 'existing_logistics_assignment',
+    reservation: false,
+    authorization: false,
+    assignment: false,
+    persistence: 'none',
+  });
+}
+
+export function applyDynamicCapacitySchedulingDecision({
+  schedulingInput,
+  evaluation,
+} = {}) {
+  if (!schedulingInput || typeof schedulingInput !== 'object' || Array.isArray(schedulingInput)) {
+    invalid('schedulingInput must be an object');
+  }
+
+  if (schedulingInput.decision_authority !== 'existing_l11_scheduling') {
+    invalid('L19 scheduling input must target existing L11 scheduling');
+  }
+
+  if (!evaluation || typeof evaluation !== 'object' || Array.isArray(evaluation)) {
+    invalid('evaluation must be an object');
+  }
+
+  const outcome = String(
+    evaluation.evaluation ?? evaluation.outcome ?? '',
+  ).trim().toUpperCase();
+
+  if (!['FEASIBLE', 'CONFLICT', 'UNKNOWN'].includes(outcome)) {
+    invalid('L11 evaluation must be FEASIBLE, CONFLICT, or UNKNOWN');
+  }
+
+  return Object.freeze({
+    capacity_ref: schedulingInput.capacity_ref,
+    service_profile: schedulingInput.service_profile,
+    utilization_preference: schedulingInput.utilization_preference,
+    utilization_evaluation: schedulingInput.utilization_evaluation,
+    scheduling_evaluation: outcome,
+    scheduling_decision: outcome === 'FEASIBLE' ? 'SCHEDULE' : 'BLOCK',
+    decision_authority: 'existing_l11_scheduling',
+    authorized: false,
+    execution: false,
+    reservation: false,
+    assignment: false,
+    persistence: 'none',
+  });
+}
+
 export function assertDynamicCapacityUtilizationBoundary({
   organizationScoped = true,
   createsCapacityAuthority = false,
