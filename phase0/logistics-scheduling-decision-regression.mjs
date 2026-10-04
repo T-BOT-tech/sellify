@@ -56,6 +56,11 @@ const {
   assertLogisticsSchedulingAdversarialInvariant,
 } = await import('../app/src/verticals/logistics/scheduling-adversarial-contract.js');
 
+const {
+  logisticsSchedulingClosureContract,
+  assertLogisticsSchedulingClosure,
+} = await import('../app/src/verticals/logistics/scheduling-closure-contract.js');
+
 
 const db = getDatabaseForTests();
 const chatId = 'l11.8-regression-chat';
@@ -364,6 +369,56 @@ for (const scenario of ['INVALID_TRANSITION','CROSS_ORGANIZATION','STALE_VERSION
     { valid: true, reason: 'BLOCKED_AND_ROLLED_BACK' },
   );
 }
+
+const closureContract = logisticsSchedulingClosureContract();
+assert.deepEqual(closureContract.lifecycle, [
+  'REQUESTED', 'SCHEDULED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED',
+  'CANCELLED', 'FAILED', 'MISSED', 'EXPIRED',
+]);
+assert.deepEqual(closureContract.terminal_states, [
+  'COMPLETED', 'CANCELLED', 'FAILED', 'MISSED', 'EXPIRED',
+]);
+assert.equal(closureContract.complete_lifecycle_covered, true);
+assert.equal(closureContract.transactional_mutation_boundary, true);
+assert.equal(closureContract.organization_scope_required, true);
+assert.equal(closureContract.authorization_required, true);
+assert.equal(closureContract.idempotency_required, true);
+assert.equal(closureContract.optimistic_concurrency_required, true);
+assert.equal(closureContract.audit_required, true);
+assert.equal(closureContract.terminal_states_final, true);
+assert.equal(closureContract.feasibility_is_authorization, false);
+assert.equal(closureContract.scheduling_is_operational_execution, false);
+assert.equal(closureContract.fulfillment_authority_duplicated, false);
+assert.equal(closureContract.delivery_authority_duplicated, false);
+assert.equal(closureContract.inventory_authority_duplicated, false);
+assert.equal(closureContract.payment_authority_duplicated, false);
+assert.equal(closureContract.settlement_authority_duplicated, false);
+assert.equal(closureContract.provider_authority_duplicated, false);
+assert.equal(closureContract.dispatch_authority_duplicated, false);
+assert.equal(closureContract.baseline_ci_exception_documented, true);
+assert.deepEqual(
+  assertLogisticsSchedulingClosure({
+    lifecycleCovered: true,
+    targetedRuntimePass: true,
+  }),
+  { valid: true, reason: 'L11_CLOSURE_CERTIFIED' },
+);
+assert.equal(
+  assertLogisticsSchedulingClosure({ lifecycleCovered: false, targetedRuntimePass: true }).valid,
+  false,
+);
+assert.equal(
+  assertLogisticsSchedulingClosure({ lifecycleCovered: true, targetedRuntimePass: false }).valid,
+  false,
+);
+assert.equal(
+  assertLogisticsSchedulingClosure({
+    lifecycleCovered: true,
+    targetedRuntimePass: true,
+    terminalReopened: true,
+  }).reason,
+  'TERMINAL_STATE_REOPENED',
+);
 
 for (const outcome of ['CONFLICT', 'UNKNOWN']) {
   const decision = decideLogisticsScheduling({
@@ -819,4 +874,4 @@ assert.equal(adversarialRow.last_command_key, null);
 const foreignFulfillmentId='l11.15-foreign-fulfillment';
 await assert.rejects(() => createLogisticsSchedulingActivity(chatId, { id:'l11.15-cross-org-reference', location_id:locationId, activity_type:'DELIVERY', mode:'SCHEDULED', requested_start:'2026-10-18T09:00:00Z', requested_end:'2026-10-18T10:00:00Z', related_fulfillment:{id:foreignFulfillmentId}, idempotency_key:'l11.15-cross-org-reference' }, actor), error => error?.code === 'FULFILLMENT_REFERENCE_INVALID');
 
-console.log('L11.8/L11.9/L11.10/L11.11/L11.12/L11.13/L11.14/L11.15 Logistics Scheduling Decision + Confirmation + Start + Completion + Failure + Terminal + Adversarial Boundary Regression: PASS');
+console.log('L11.8/L11.9/L11.10/L11.11/L11.12/L11.13/L11.14/L11.15/L11.16 Logistics Scheduling Decision + Confirmation + Start + Completion + Failure + Terminal + Adversarial Boundary + Closure Regression: PASS');
