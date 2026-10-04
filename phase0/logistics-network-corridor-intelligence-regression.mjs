@@ -14,6 +14,7 @@ import {
   deriveRecurringDemandSignal,
   deriveProviderCapacityVisibilitySignal,
   composeNetworkIntelligenceSnapshot,
+  networkCorridorIntelligenceClosureGate,
 } from '../app/src/verticals/logistics/network-corridor-intelligence-contract.js';
 
 const observation = {
@@ -269,6 +270,82 @@ assert.equal(networkSnapshot.capacity_shortage, shortageSignal);
 assert.equal(networkSnapshot.service_area_gap, serviceAreaSignal);
 assert.equal(networkSnapshot.recurring_demand, recurringSignal);
 assert.equal(networkSnapshot.provider_capacity_visibility, providerCapacitySignal);
+
+const closure = networkCorridorIntelligenceClosureGate(networkSnapshot);
+assert.equal(closure.closed, true);
+assert.equal(closure.authority, 'logistics_derived_intelligence');
+assert.equal(closure.persistence, 'none');
+assert.equal(closure.transaction, false);
+
+assert.throws(() => networkCorridorIntelligenceClosureGate({
+  ...networkSnapshot,
+  transaction: true,
+}), /transaction/i);
+
+assert.throws(() => networkCorridorIntelligenceClosureGate({
+  ...networkSnapshot,
+  routing_authority: true,
+}), /routing_authority/i);
+
+assert.throws(() => networkCorridorIntelligenceClosureGate({
+  ...networkSnapshot,
+  provider_selection_authority: true,
+}), /provider_selection_authority/i);
+
+assert.throws(() => networkCorridorIntelligenceClosureGate({
+  ...networkSnapshot,
+  reservation_authority: true,
+}), /reservation_authority/i);
+
+assert.throws(() => networkCorridorIntelligenceClosureGate({
+  ...networkSnapshot,
+  assignment_authority: true,
+}), /assignment_authority/i);
+
+assert.throws(() => networkCorridorIntelligenceClosureGate({
+  ...networkSnapshot,
+  dispatch_authority: true,
+}), /dispatch_authority/i);
+
+assert.throws(() => networkCorridorIntelligenceClosureGate({
+  ...networkSnapshot,
+  provider_registry_authority: true,
+}), /provider_registry_authority/i);
+
+assert.throws(() => networkCorridorIntelligenceClosureGate({
+  ...networkSnapshot,
+  capacity_ledger: true,
+}), /capacity_ledger/i);
+
+assert.throws(() => networkCorridorIntelligenceClosureGate({
+  ...networkSnapshot,
+  shipment_authority: true,
+}), /shipment_authority/i);
+
+assert.throws(() => networkCorridorIntelligenceClosureGate({
+  ...networkSnapshot,
+  fulfillment_authority: true,
+}), /fulfillment_authority/i);
+
+assert.throws(() => networkCorridorIntelligenceClosureGate({
+  ...networkSnapshot,
+  payment_authority: true,
+}), /payment_authority/i);
+
+assert.throws(() => networkCorridorIntelligenceClosureGate({
+  ...networkSnapshot,
+  inventory_authority: true,
+}), /inventory_authority/i);
+
+assert.throws(() => networkCorridorIntelligenceClosureGate({
+  ...networkSnapshot,
+  event_store_authority: true,
+}), /event_store_authority/i);
+
+assert.throws(() => networkCorridorIntelligenceClosureGate({
+  ...networkSnapshot,
+  gps_authority: true,
+}), /gps_authority/i);
 
 assert.throws(() => composeNetworkIntelligenceSnapshot({
   demandSignal,
