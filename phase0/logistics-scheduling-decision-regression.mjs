@@ -46,6 +46,11 @@ const {
   logisticsSchedulingTerminalContract,
 } = await import('../app/src/verticals/logistics/scheduling-terminal-contract.js');
 
+const {
+  logisticsSchedulingLifecycleInvariantContract,
+  assertLogisticsSchedulingLifecycleInvariant,
+} = await import('../app/src/verticals/logistics/scheduling-lifecycle-invariant-contract.js');
+
 
 const db = getDatabaseForTests();
 const chatId = 'l11.8-regression-chat';
@@ -272,6 +277,71 @@ assert.equal(
     target: 'CANCELLED',
   }).decision,
   'BLOCK',
+);
+
+const lifecycleContract = logisticsSchedulingLifecycleInvariantContract();
+assert.equal(lifecycleContract.organization_scoped, true);
+assert.equal(lifecycleContract.authorization_required, true);
+assert.equal(lifecycleContract.idempotency_key_required, true);
+assert.equal(lifecycleContract.optimistic_version_supported, true);
+assert.equal(lifecycleContract.state_transition_must_be_validated, true);
+assert.equal(lifecycleContract.audit_event_required_for_committed_transition, true);
+assert.equal(lifecycleContract.audit_event_is_transactional, true);
+assert.equal(lifecycleContract.downstream_fulfillment_mutation, false);
+assert.equal(lifecycleContract.downstream_delivery_mutation, false);
+assert.equal(lifecycleContract.inventory_mutation, false);
+assert.equal(lifecycleContract.payment_mutation, false);
+assert.equal(lifecycleContract.settlement_mutation, false);
+assert.equal(lifecycleContract.provider_selection, false);
+assert.equal(lifecycleContract.dispatch_execution, false);
+assert.equal(lifecycleContract.scheduling_is_operational_authority, false);
+
+assert.deepEqual(
+  assertLogisticsSchedulingLifecycleInvariant({
+    organizationId,
+    rowOrganizationId: organizationId,
+    stateChanged: true,
+    auditWritten: true,
+  }),
+  { valid: true, reason: 'VALID' },
+);
+assert.deepEqual(
+  assertLogisticsSchedulingLifecycleInvariant({
+    organizationId,
+    rowOrganizationId: organizationId,
+    stateChanged: true,
+    auditWritten: false,
+  }),
+  { valid: false, reason: 'AUDIT_REQUIRED_FOR_STATE_CHANGE' },
+);
+assert.deepEqual(
+  assertLogisticsSchedulingLifecycleInvariant({
+    organizationId,
+    rowOrganizationId: 'different-org',
+    stateChanged: true,
+    auditWritten: true,
+  }),
+  { valid: false, reason: 'ORGANIZATION_SCOPE_VIOLATION' },
+);
+assert.deepEqual(
+  assertLogisticsSchedulingLifecycleInvariant({
+    organizationId,
+    rowOrganizationId: organizationId,
+    stateChanged: false,
+    auditWritten: false,
+    idempotent: true,
+  }),
+  { valid: true, reason: 'IDEMPOTENT_REPLAY' },
+);
+assert.deepEqual(
+  assertLogisticsSchedulingLifecycleInvariant({
+    organizationId,
+    rowOrganizationId: organizationId,
+    stateChanged: true,
+    auditWritten: true,
+    downstreamMutations: { payment: true },
+  }),
+  { valid: false, reason: 'DOWNSTREAM_MUTATION_FORBIDDEN:payment' },
 );
 
 for (const outcome of ['CONFLICT', 'UNKNOWN']) {
@@ -598,6 +668,20 @@ const cancelledResult = await transitionLogisticsSchedulingActivity(
 );
 assert.equal(cancelledResult.status, 'CANCELLED');
 assert.equal(cancelledResult.version, 2);
+
+const cancelledReplay = await transitionLogisticsSchedulingActivity(
+  chatId,
+  cancelled.id,
+  'CANCELLED',
+  actor,
+  {
+    idempotency_key: 'l11.13-cancel-1',
+    expectedVersion: 2,
+    reason: 'request withdrawn',
+  },
+);
+assert.equal(cancelledReplay.idempotent, true);
+assert.equal(cancelledReplay.version, 2);
 
 const missed = await create(
   'l11.13-create-missed',
