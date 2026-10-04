@@ -26,6 +26,7 @@ import { assertUntrustedPaymentEvidenceShape, normalizePaymentEvidenceSource } f
 import { normalizeLogisticsSchedulingRequest } from '../../app/src/verticals/logistics/scheduling-contract.js';
 import { evaluateLogisticsSchedulingFeasibility } from '../../app/src/verticals/logistics/scheduling-feasibility-contract.js';
 import { decideLogisticsScheduling } from '../../app/src/verticals/logistics/scheduling-decision-contract.js';
+import { decideLogisticsSchedulingConfirmation } from '../../app/src/verticals/logistics/scheduling-confirmation-contract.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -7852,10 +7853,20 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
       }
     }
 
-    if (target === 'CONFIRMED' && !row.scheduled_start) {
-      throw Object.assign(new Error('Confirmation requires a scheduled time window'), {
-        statusCode: 409, code: 'SCHEDULING_NOT_SCHEDULED',
+    if (target === 'CONFIRMED') {
+      const confirmation = decideLogisticsSchedulingConfirmation({
+        status: row.status,
+        scheduledStart: row.scheduled_start,
+        scheduledEnd: row.scheduled_end,
       });
+      if (confirmation.decision !== 'CONFIRM') {
+        throw Object.assign(new Error(`Scheduling confirmation blocked: ${confirmation.reason}`), {
+          statusCode: 409,
+          code: confirmation.reason === 'NOT_SCHEDULED'
+            ? 'SCHEDULING_NOT_SCHEDULED'
+            : 'SCHEDULING_CONFIRMATION_INVALID',
+        });
+      }
     }
 
     const now = nowIso();
