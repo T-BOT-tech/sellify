@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  logistics_l17:
+  logistics_l18:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -24,8 +24,8 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - name: Install root dependencies
         run: npm install --ignore-scripts
-      - name: Run L17 B2C Delivery product boundary regression
-        run: npm run test:logistics-l17
+      - name: Run L18 P2P Delivery product boundary regression
+        run: npm run test:logistics-l18
 
   baseline:
     runs-on: ubuntu-latest
