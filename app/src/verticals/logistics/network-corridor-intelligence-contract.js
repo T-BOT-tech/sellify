@@ -308,6 +308,65 @@ export function deriveDepotThroughputSignal({ observations } = {}) {
   });
 }
 
+
+export function deriveCapacityShortageSignal({ observations } = {}) {
+  if (!Array.isArray(observations) || observations.length === 0) {
+    invalid('observations must be a non-empty array');
+  }
+
+  const normalized = observations.map(normalizeNetworkIntelligenceObservation);
+  const first = normalized[0];
+
+  for (const item of normalized.slice(1)) {
+    if (item.organization_id !== first.organization_id) {
+      invalid('organization scope conflict');
+    }
+    if (item.corridor_ref !== first.corridor_ref) {
+      invalid('corridor scope conflict');
+    }
+    if (item.service_profile !== first.service_profile) {
+      invalid('service profile scope conflict');
+    }
+  }
+
+  const demand = normalized.reduce((sum, item) => sum + item.demand_count, 0);
+  const fulfilled = normalized.reduce((sum, item) => sum + item.fulfilled_count, 0);
+  const observedShortage = normalized.reduce(
+    (sum, item) => sum + item.shortage_count,
+    0,
+  );
+  const availableCapacity = normalized.reduce(
+    (sum, item) => sum + item.capacity_count,
+    0,
+  );
+  const unmetDemand = demand - fulfilled;
+
+  return Object.freeze({
+    contract_version: first.contract_version,
+    organization_id: first.organization_id,
+    corridor_ref: first.corridor_ref,
+    service_profile: first.service_profile,
+    observation_count: normalized.length,
+    demand,
+    fulfilled_demand: fulfilled,
+    unmet_demand: unmetDemand,
+    observed_shortage: observedShortage,
+    available_capacity: availableCapacity,
+    shortage_signal: observedShortage > 0 || unmetDemand > 0
+      ? 'SHORTAGE_OBSERVED'
+      : 'NO_SHORTAGE_OBSERVED',
+    authority: 'logistics_derived_intelligence',
+    capacity_authority: 'existing_capacity_authority',
+    reservation_authority: false,
+    capacity_ledger: false,
+    persistence: 'none',
+    routing: false,
+    provider_selection: false,
+    assignment: false,
+    transaction: false,
+  });
+}
+
 export function deriveNetworkCorridorIntelligence({ observation } = {}) {
   const normalized = normalizeNetworkIntelligenceObservation(observation);
 
