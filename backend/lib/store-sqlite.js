@@ -1,4 +1,5 @@
 // SQLite-backed Sellify store.
+import { AUTHZ, authorize } from './authorization.js';
 import { normalizeTelegramCredentialRef, verifyTelegramBotCredential } from '../../app/src/platform/telegram-bot-credential-contract.js';
 //
 // Phase 5 replaces the old per-file JSON read/modify/write model with one
@@ -7178,6 +7179,7 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
   const type = normalizeCoreFulfillmentType(order.fulfillment_type || 'delivery');
   if (type !== 'delivery') throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
   const actorUserId = actor?.userId ? String(actor.userId) : null;
+  assertLogisticsSchedulingAuthorization(actor, organizationId, request.location_id, 'logistics:scheduling:request');
   let selectedCourierUserId = String(courierUserId || '').trim();
   const key = String(input.assignmentKey || input.assignment_key || `courier:auto:${serverOrderId}`).trim();
   let fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), organizationId);
@@ -7462,6 +7464,28 @@ function schedulingRequestHash(request) {
   return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }
 
+function assertLogisticsSchedulingAuthorization(actor, organizationId, locationId, action) {
+  const location = locationId
+    ? db.prepare('SELECT id, organization_id FROM locations WHERE id = ? AND organization_id = ?')
+      .get(String(locationId), String(organizationId))
+    : null;
+  const decision = authorize(
+    actor,
+    { id: String(organizationId) },
+    location,
+    'scheduling',
+    action,
+  );
+  if (decision !== AUTHZ.ALLOW) {
+    throw Object.assign(new Error('Logistics scheduling authorization denied'), {
+      statusCode: 403,
+      code: 'SCHEDULING_AUTHORIZATION_DENIED',
+      authorization: decision,
+      action,
+    });
+  }
+}
+
 function assertSchedulingLocation(organizationId, locationId) {
   if (!locationId) return;
   const location = db.prepare(
@@ -7655,6 +7679,12 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
 
   const organizationId = String(tenant.organization_id);
   const target = String(nextStatus || '').trim().toUpperCase();
+  const schedulingAction = target === 'CONFIRMED'
+    ? 'logistics:scheduling:confirm'
+    : target === 'CANCELLED'
+      ? 'logistics:scheduling:cancel'
+      : 'logistics:scheduling:manage';
+
   const commandKey = String(input.idempotencyKey ?? input.idempotency_key ?? '').trim();
   if (!commandKey) {
     throw Object.assign(new Error('Idempotency key is required'), {
@@ -7677,6 +7707,8 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
         statusCode: 404, code: 'SCHEDULING_ACTIVITY_NOT_FOUND',
       });
     }
+
+    assertLogisticsSchedulingAuthorization(actor, organizationId, row.location_id, schedulingAction);
 
     if (String(row.last_command_key || '') === commandKey) {
       const compatible = String(row.status) === target;
