@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import {
   normalizeExternalNetworkIntegration,
   normalizeExternalIntegrationLifecycle,
+  normalizeExternalInboundMessage,
+  assertExternalInboundBoundary,
+  buildExternalInboundDisposition,
   assertExternalIntegrationLifecycleBoundary,
   assertExternalIntegrationLifecycleTransition,
   validateExternalAdapterTrust,
@@ -32,6 +35,80 @@ const integration = {
 };
 
 const normalized = normalizeExternalNetworkIntegration(integration);
+const inbound = normalizeExternalInboundMessage({
+  integration: {
+    ...integration,
+    capabilities: ['TRACKING_STATUS', 'DELIVERY_PROOF'],
+  },
+  operation: 'DELIVERY_STATUS',
+  organization_id: 'org-1',
+  integration_ref: 'INT-001',
+  adapter_ref: 'ADAPTER-CARRIER-01',
+  correlation_ref: 'CORR-IN-01',
+  idempotency_key: 'IDEMP-IN-01',
+  message_ref: 'MSG-IN-01',
+  payload: { external_ref: 'EXT-DEL-01', status: 'COMPLETED' },
+});
+assert.equal(inbound.authority, 'external_adapter_observation');
+assert.equal(inbound.canonical_mutation_authority, 'existing_canonical_domain_authority');
+assert.equal(inbound.direct_domain_mutation, false);
+assert.equal(inbound.duplicate_callback_store, false);
+assert.equal(inbound.duplicate_event_store, false);
+assert.equal(assertExternalInboundBoundary(inbound), true);
+
+const acceptedInbound = buildExternalInboundDisposition({ message: inbound, previously_seen: false });
+assert.equal(acceptedInbound.disposition, 'ACCEPT_FOR_CANONICAL_PROCESSING');
+assert.equal(acceptedInbound.direct_domain_mutation, false);
+
+const duplicateInbound = buildExternalInboundDisposition({ message: inbound, previously_seen: true });
+assert.equal(duplicateInbound.disposition, 'DUPLICATE_IGNORED');
+assert.equal(duplicateInbound.idempotency_key, 'IDEMP-IN-01');
+
+assert.throws(() => normalizeExternalInboundMessage({
+  integration,
+  operation: 'UNSUPPORTED_OPERATION',
+  organization_id: 'org-1',
+  integration_ref: 'INT-001',
+  adapter_ref: 'ADAPTER-CARRIER-01',
+  correlation_ref: 'CORR-IN-02',
+  idempotency_key: 'IDEMP-IN-02',
+  message_ref: 'MSG-IN-02',
+  payload: {},
+}), /unsupported external inbound operation/i);
+
+assert.throws(() => normalizeExternalInboundMessage({
+  integration,
+  operation: 'DELIVERY_STATUS',
+  organization_id: 'org-other',
+  integration_ref: 'INT-001',
+  adapter_ref: 'ADAPTER-CARRIER-01',
+  correlation_ref: 'CORR-IN-03',
+  idempotency_key: 'IDEMP-IN-03',
+  message_ref: 'MSG-IN-03',
+  payload: {},
+}), /organization scope mismatch/i);
+
+assert.throws(() => assertExternalInboundBoundary({
+  ...inbound,
+  direct_domain_mutation: true,
+}), /must not directly mutate/i);
+
+assert.throws(() => assertExternalInboundBoundary({
+  ...inbound,
+  event_store_authority: 'external_adapter',
+}), /event_store_authority/i);
+
+assert.throws(() => assertExternalInboundBoundary({
+  ...inbound,
+  persistence: 'external_callback_store',
+}), /callback persistence authority/i);
+
+assert.throws(() => buildExternalInboundDisposition({
+  message: { ...inbound, idempotency_key: '' },
+  previously_seen: false,
+}), /idempotency_key/i);
+
+
 for (const state of ['CONFIGURED', 'ENABLED', 'SUSPENDED', 'DISABLED', 'RETIRED']) {
   const lifecycle = normalizeExternalIntegrationLifecycle({
     integration,
@@ -596,6 +673,6 @@ assert.throws(() => assertExternalIntegrationLifecycleBoundary({
   provider_registry_authority: true,
 }), /provider registry authority/i);
 
-console.log('L21.7 External Integration Lifecycle Boundary Regression: PASS');
+console.log('L21.8 External Inbound Callback Boundary Regression: PASS');
 
 
