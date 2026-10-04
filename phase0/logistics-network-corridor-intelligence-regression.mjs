@@ -12,6 +12,7 @@ import {
   deriveCapacityShortageSignal,
   deriveServiceAreaGapSignal,
   deriveRecurringDemandSignal,
+  deriveProviderCapacityVisibilitySignal,
 } from '../app/src/verticals/logistics/network-corridor-intelligence-contract.js';
 
 const observation = {
@@ -208,6 +209,45 @@ const noRecurring = deriveRecurringDemandSignal({
   observations: [{ ...observation, recurring_demand_count: 0 }],
 });
 assert.equal(noRecurring.recurring_demand_signal, 'NO_RECURRING_DEMAND_OBSERVED');
+
+const providerCapacitySignal = deriveProviderCapacityVisibilitySignal({
+  observations: [
+    { ...observation, capacity_count: 4, demand_count: 10, observation_ref: 'OBS-PC1' },
+    { ...observation, capacity_count: 3, demand_count: 8, observation_ref: 'OBS-PC2' },
+  ],
+});
+assert.equal(providerCapacitySignal.organization_id, 'org-1');
+assert.equal(providerCapacitySignal.corridor_ref, 'ADDIS-DEPOT-01');
+assert.equal(providerCapacitySignal.service_profile, 'REGIONAL_FREIGHT');
+assert.equal(providerCapacitySignal.observation_count, 2);
+assert.equal(providerCapacitySignal.observed_capacity, 7);
+assert.equal(providerCapacitySignal.observed_demand, 18);
+assert.equal(providerCapacitySignal.capacity_gap, 11);
+assert.equal(providerCapacitySignal.visibility_signal, 'CAPACITY_VISIBLE');
+assert.equal(providerCapacitySignal.authority, 'logistics_derived_intelligence');
+assert.equal(providerCapacitySignal.source_authority, 'existing_operational_domain_data');
+assert.equal(providerCapacitySignal.capacity_authority, 'existing_capacity_authority');
+assert.equal(providerCapacitySignal.provider_registry_authority, false);
+assert.equal(providerCapacitySignal.provider_selection_authority, false);
+assert.equal(providerCapacitySignal.reservation_authority, false);
+assert.equal(providerCapacitySignal.dispatch_authority, false);
+assert.equal(providerCapacitySignal.persistence, 'none');
+assert.equal(providerCapacitySignal.transaction, false);
+
+const noCapacity = deriveProviderCapacityVisibilitySignal({
+  observations: [{ ...observation, capacity_count: 0 }],
+});
+assert.equal(noCapacity.visibility_signal, 'NO_CAPACITY_OBSERVED');
+
+assert.throws(() => deriveProviderCapacityVisibilitySignal({
+  observations: [observation, { ...observation, organization_id: 'org-2', observation_ref: 'OBS-PC3' }],
+}), /organization scope conflict/i);
+assert.throws(() => deriveProviderCapacityVisibilitySignal({
+  observations: [observation, { ...observation, corridor_ref: 'OTHER-CORRIDOR', observation_ref: 'OBS-PC4' }],
+}), /corridor scope conflict/i);
+assert.throws(() => deriveProviderCapacityVisibilitySignal({
+  observations: [observation, { ...observation, service_profile: 'B2C_DELIVERY', observation_ref: 'OBS-PC5' }],
+}), /service profile scope conflict/i);
 
 assert.throws(() => deriveRecurringDemandSignal({
   observations: [observation, { ...observation, organization_id: 'org-2', observation_ref: 'OBS-R3' }],
