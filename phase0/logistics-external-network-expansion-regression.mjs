@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 
 import {
   normalizeExternalNetworkIntegration,
+  validateExternalAdapterTrust,
+  assertExternalAdapterTrustBoundary,
   validateExternalNetworkIntegration,
   assertExternalNetworkBoundary,
   buildExternalNetworkEnvelope,
@@ -27,6 +29,51 @@ const integration = {
 };
 
 const normalized = normalizeExternalNetworkIntegration(integration);
+const trustedAdapter = validateExternalAdapterTrust({
+  integration,
+  organization_id: 'org-1',
+  integration_ref: 'INT-001',
+  adapter_ref: 'ADAPTER-CARRIER-01',
+  correlation_ref: 'CORR-TRUST-01',
+  capabilities: ['TRACKING_STATUS', 'DELIVERY_PROOF'],
+});
+assert.equal(trustedAdapter.trusted, true);
+assert.equal(trustedAdapter.organization_id, 'org-1');
+assert.equal(trustedAdapter.integration_ref, 'INT-001');
+assert.equal(trustedAdapter.adapter_ref, 'ADAPTER-CARRIER-01');
+assert.equal(trustedAdapter.authorization_authority, 'existing_server_side_auth_scope');
+assert.equal(trustedAdapter.provider_identity_authority, 'existing_integration_state');
+assert.equal(trustedAdapter.direct_domain_mutation, false);
+assert.equal(assertExternalAdapterTrustBoundary(trustedAdapter), true);
+
+assert.throws(() => validateExternalAdapterTrust({
+  integration,
+  organization_id: 'org-OTHER',
+  integration_ref: 'INT-001',
+  adapter_ref: 'ADAPTER-CARRIER-01',
+  correlation_ref: 'CORR-TRUST-02',
+  capabilities: ['TRACKING_STATUS'],
+}), /organization scope mismatch/i);
+
+assert.throws(() => validateExternalAdapterTrust({
+  integration,
+  organization_id: 'org-1',
+  integration_ref: 'INT-OTHER',
+  adapter_ref: 'ADAPTER-CARRIER-01',
+  correlation_ref: 'CORR-TRUST-03',
+  capabilities: ['TRACKING_STATUS'],
+}), /integration scope mismatch/i);
+
+assert.throws(() => validateExternalAdapterTrust({
+  integration,
+  organization_id: 'org-1',
+  integration_ref: 'INT-001',
+  adapter_ref: 'ADAPTER-SPOOFED',
+  correlation_ref: 'CORR-TRUST-04',
+  capabilities: ['TRACKING_STATUS'],
+}), /adapter identity mismatch/i);
+
+
 assert.equal(normalized.contract_version, '1.0');
 assert.equal(normalized.organization_id, 'org-1');
 assert.equal(normalized.integration_ref, 'INT-001');
@@ -439,6 +486,26 @@ assert.throws(() => assertExternalRetryBoundary({
   persistence: 'external_retry_store',
 }), /existing integration\/core state/i);
 
-console.log('L21.5 External Adapter Failure / Retry / Idempotency Regression: PASS');
+assert.throws(() => assertExternalAdapterTrustBoundary({
+  ...trustedAdapter,
+  authorization_authority: 'external_adapter',
+}), /server-side auth scope/i);
+
+assert.throws(() => assertExternalAdapterTrustBoundary({
+  ...trustedAdapter,
+  provider_identity_authority: 'external_adapter',
+}), /existing integration state/i);
+
+assert.throws(() => assertExternalAdapterTrustBoundary({
+  ...trustedAdapter,
+  direct_domain_mutation: true,
+}), /must not directly mutate/i);
+
+assert.throws(() => assertExternalAdapterTrustBoundary({
+  ...trustedAdapter,
+  persistence: 'external_adapter_registry',
+}), /separate persistence authority/i);
+
+console.log('L21.6 External Adapter Security / Trust Boundary Regression: PASS');
 
 
