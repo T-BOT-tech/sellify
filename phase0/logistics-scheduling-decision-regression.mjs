@@ -785,7 +785,9 @@ assert.equal(adversarialRow.last_command_key, null);
 
 await assert.rejects(() => transitionLogisticsSchedulingActivity(chatId, adversarialActivity.id, 'CANCELLED', actor, { idempotency_key: 'l11.15-stale', expectedVersion: 99 }), error => error?.code === 'SCHEDULING_VERSION_CONFLICT');
 adversarialRow = db.prepare('SELECT status, version, last_command_key FROM logistics_scheduling_activities WHERE id = ?').get(adversarialActivity.id);
-assert.deepEqual(adversarialRow, { status: 'REQUESTED', version: 1, last_command_key: null });
+assert.equal(adversarialRow.status, 'REQUESTED');
+assert.equal(Number(adversarialRow.version), 1);
+assert.equal(adversarialRow.last_command_key, null);
 
 const idempotencyActivity = await create('l11.15-create-idempotency','2026-10-17T09:00:00Z','2026-10-17T10:00:00Z','movement-l11-15-idempotency');
 const idempotencyCancelled = await transitionLogisticsSchedulingActivity(chatId, idempotencyActivity.id, 'CANCELLED', actor, { idempotency_key: 'l11.15-reused-key', expectedVersion: 1 });
