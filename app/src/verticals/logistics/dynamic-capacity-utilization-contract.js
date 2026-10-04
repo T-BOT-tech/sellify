@@ -266,6 +266,92 @@ export function evaluateDynamicCapacityUtilization({
   });
 }
 
+
+export function composeDynamicCapacityPool({
+  requests = [],
+  requestedProfile,
+  requestedStart,
+  requestedEnd,
+} = {}) {
+  if (!Array.isArray(requests) || requests.length === 0) {
+    invalid('requests must be a non-empty array');
+  }
+
+  const profile = normalizeProfile(requestedProfile, 'requested_profile');
+  const start = timestamp(requestedStart, 'requested_start');
+  const end = timestamp(requestedEnd, 'requested_end');
+
+  if (end.ms <= start.ms) {
+    invalid('requested_end must be after requested_start');
+  }
+
+  const normalized = requests.map((request, index) => {
+    try {
+      return normalizeDynamicCapacityUtilizationRequest(request);
+    } catch (error) {
+      error.message = `requests[${index}]: ${error.message}`;
+      throw error;
+    }
+  });
+
+  const organizationIds = new Set(normalized.map(item => item.organization_id));
+  if (organizationIds.size !== 1) {
+    return Object.freeze({
+      evaluation: 'INELIGIBLE',
+      reason: 'POOL_ORGANIZATION_SCOPE_CONFLICT',
+      service_profile: profile,
+      candidates: Object.freeze([]),
+      reservation: false,
+      persistence: 'none',
+    });
+  }
+
+  const candidates = [];
+  for (const capacity of normalized) {
+    if (!capacity.eligible_service_profiles.includes(profile)) continue;
+
+    const matchingAllocations = capacity.allocations.filter((allocation) => {
+      if (allocation.service_profile !== profile) return false;
+      return Date.parse(allocation.start) < end.ms &&
+        start.ms < Date.parse(allocation.end);
+    });
+
+    candidates.push(Object.freeze({
+      organization_id: capacity.organization_id,
+      capacity_ref: capacity.capacity_ref,
+      service_profile: profile,
+      evaluation: matchingAllocations.length
+        ? 'PREFERRED_WINDOW'
+        : 'AVAILABLE_BASELINE',
+      preference: matchingAllocations.length ? 'PREFERRED' : 'BASELINE',
+      matching_allocations: Object.freeze(matchingAllocations),
+      capacity_authority: capacity.capacity_authority,
+      scheduling_authority: capacity.scheduling_authority,
+      reservation: false,
+      persistence: 'none',
+    }));
+  }
+
+  candidates.sort((left, right) => {
+    if (left.preference !== right.preference) {
+      return left.preference === 'PREFERRED' ? -1 : 1;
+    }
+    return left.capacity_ref.localeCompare(right.capacity_ref);
+  });
+
+  return Object.freeze({
+    evaluation: candidates.length ? 'POOL_ELIGIBLE' : 'INELIGIBLE',
+    reason: candidates.length
+      ? 'OPTIONAL_UTILIZATION_POOL_COMPOSED'
+      : 'NO_ELIGIBLE_CAPACITY_PROFILE',
+    service_profile: profile,
+    candidates: Object.freeze(candidates),
+    reservation: false,
+    persistence: 'none',
+    selection_authority: 'existing_capacity_matching_or_scheduling_authority',
+  });
+}
+
 export function assertDynamicCapacityUtilizationBoundary({
   organizationScoped = true,
   createsCapacityAuthority = false,
