@@ -22,6 +22,7 @@ import { requirePaymentChannel } from './payments/channel-registry.js';
 import { decideEventReplay } from './event-replay.js';
 import { assertPackLifecyclePrecondition, getPackLifecycleManifest } from './pack-lifecycle-readiness.js';
 import { assertUntrustedPaymentEvidenceShape, normalizePaymentEvidenceSource } from './payments/payment-evidence-authority.js';
+import { normalizeLogisticsSchedulingRequest } from '../../app/src/verticals/logistics/scheduling-contract.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -7393,6 +7394,398 @@ export async function assertCourierOwnsDelivery(chatId, serverOrderId, actor) {
     throw Object.assign(new Error('Courier assignment is no longer active'), { statusCode: 403, code: 'COURIER_ASSIGNMENT_INACTIVE' });
   }
   return assignment;
+}
+
+
+// L11.4 — transactional Logistics scheduling service.
+// Scheduling owns temporal coordination only. Authorization remains the
+// canonical backend/lib/authorization.js boundary at the API/capability layer;
+// this service never invents scheduling permissions or a second authorization policy.
+const LOGISTICS_SCHEDULING_TRANSITIONS = Object.freeze({
+  REQUESTED: new Set(['SCHEDULED', 'CANCELLED', 'EXPIRED']),
+  SCHEDULED: new Set(['CONFIRMED', 'CANCELLED', 'MISSED', 'EXPIRED']),
+  CONFIRMED: new Set(['IN_PROGRESS', 'CANCELLED', 'MISSED', 'FAILED']),
+  IN_PROGRESS: new Set(['COMPLETED', 'FAILED']),
+  COMPLETED: new Set([]),
+  CANCELLED: new Set([]),
+  FAILED: new Set([]),
+  MISSED: new Set([]),
+  EXPIRED: new Set([]),
+});
+
+function logisticsSchedulingRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    locationId: row.location_id,
+    activityType: row.activity_type,
+    mode: row.mode,
+    status: row.status,
+    relatedOrderId: row.related_order_id,
+    relatedFulfillmentId: row.related_fulfillment_id,
+    relatedMovementId: row.related_movement_id,
+    requestedStart: row.requested_start,
+    requestedEnd: row.requested_end,
+    scheduledStart: row.scheduled_start,
+    scheduledEnd: row.scheduled_end,
+    timezone: row.timezone,
+    recurrence: parseJSON(row.recurrence_json, null),
+    confirmedByUserId: row.confirmed_by_user_id,
+    confirmedAt: row.confirmed_at,
+    createdByUserId: row.created_by_user_id,
+    updatedByUserId: row.updated_by_user_id,
+    idempotencyKey: row.idempotency_key,
+    lastCommandKey: row.last_command_key,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    version: Number(row.version || 1),
+  };
+}
+
+function schedulingRequestHash(request) {
+  const canonical = {
+    organization_id: request.organization_id,
+    location_id: request.location_id,
+    activity_type: request.activity_type,
+    mode: request.mode,
+    requested_start: request.requested_start,
+    requested_end: request.requested_end,
+    scheduled_start: request.scheduled_start,
+    scheduled_end: request.scheduled_end,
+    timezone: request.timezone,
+    recurrence: request.recurrence,
+    related_order: request.related.order,
+    related_fulfillment: request.related.fulfillment,
+    related_movement: request.related.movement,
+  };
+  return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
+}
+
+function assertSchedulingLocation(organizationId, locationId) {
+  if (!locationId) return;
+  const location = db.prepare(
+    'SELECT id, organization_id FROM locations WHERE id = ? AND organization_id = ?'
+  ).get(String(locationId), String(organizationId));
+  if (!location) {
+    throw Object.assign(new Error('Location does not belong to this organization'), {
+      statusCode: 403, code: 'LOCATION_SCOPE_DENIED',
+    });
+  }
+}
+
+function assertSchedulingFulfillment(organizationId, fulfillmentId) {
+  if (!fulfillmentId) return;
+  const fulfillment = db.prepare(
+    'SELECT id, organization_id FROM fulfillments WHERE id = ? AND organization_id = ?'
+  ).get(String(fulfillmentId), String(organizationId));
+  if (!fulfillment) {
+    throw Object.assign(new Error('Referenced fulfillment does not belong to this organization'), {
+      statusCode: 409, code: 'FULFILLMENT_REFERENCE_INVALID',
+    });
+  }
+}
+
+export async function createLogisticsSchedulingActivity(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organization_id) {
+    throw Object.assign(new Error('Scheduling organization is required'), {
+      statusCode: 409, code: 'ORGANIZATION_REQUIRED',
+    });
+  }
+
+  const organizationId = String(tenant.organization_id);
+  const request = normalizeLogisticsSchedulingRequest({
+    ...input,
+    organization_id: organizationId,
+    status: 'REQUESTED',
+  });
+  const idempotencyKey = String(input.idempotencyKey ?? input.idempotency_key ?? '').trim();
+  if (!idempotencyKey) {
+    throw Object.assign(new Error('Idempotency key is required'), {
+      statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED',
+    });
+  }
+  if (request.organization_id !== organizationId) {
+    throw Object.assign(new Error('Scheduling organization mismatch'), {
+      statusCode: 403, code: 'ORGANIZATION_MISMATCH',
+    });
+  }
+
+  const actorUserId = actor?.userId ? String(actor.userId) : null;
+  const requestHash = schedulingRequestHash(request);
+  assertSchedulingLocation(organizationId, request.location_id);
+  assertSchedulingFulfillment(organizationId, request.related.fulfillment?.id);
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const existing = db.prepare(
+      'SELECT * FROM logistics_scheduling_activities WHERE organization_id = ? AND idempotency_key = ?'
+    ).get(organizationId, idempotencyKey);
+
+    if (existing) {
+      const existingRequest = {
+        organization_id: existing.organization_id,
+        location_id: existing.location_id,
+        activity_type: existing.activity_type,
+        mode: existing.mode,
+        requested_start: existing.requested_start,
+        requested_end: existing.requested_end,
+        scheduled_start: existing.scheduled_start,
+        scheduled_end: existing.scheduled_end,
+        timezone: existing.timezone,
+        recurrence: parseJSON(existing.recurrence_json, null),
+        related: {
+          order: existing.related_order_id ? { id: existing.related_order_id } : null,
+          fulfillment: existing.related_fulfillment_id ? { id: existing.related_fulfillment_id } : null,
+          movement: existing.related_movement_id ? { id: existing.related_movement_id } : null,
+        },
+      };
+      if (schedulingRequestHash(existingRequest) !== requestHash) {
+        throw Object.assign(new Error('Idempotency key was already used with a different scheduling request'), {
+          statusCode: 409, code: 'IDEMPOTENCY_CONFLICT',
+        });
+      }
+      db.exec('COMMIT');
+      return { ...logisticsSchedulingRow(existing), idempotent: true };
+    }
+
+    const now = nowIso();
+    const id = String(input.id || crypto.randomUUID());
+    db.prepare(`
+      INSERT INTO logistics_scheduling_activities
+        (id, organization_id, location_id, activity_type, mode, status,
+         related_order_id, related_fulfillment_id, related_movement_id,
+         requested_start, requested_end, scheduled_start, scheduled_end,
+         timezone, recurrence_json, confirmed_by_user_id, confirmed_at,
+         created_by_user_id, updated_by_user_id, idempotency_key,
+         last_command_key, created_at, updated_at, version)
+      VALUES (?, ?, ?, ?, ?, 'REQUESTED', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, NULL, ?, ?, 1)
+    `).run(
+      id, organizationId, request.location_id, request.activity_type, request.mode,
+      request.related.order?.id || null,
+      request.related.fulfillment?.id || null,
+      request.related.movement?.id || null,
+      request.requested_start, request.requested_end,
+      request.scheduled_start, request.scheduled_end,
+      request.timezone, request.recurrence ? json(request.recurrence) : null,
+      actorUserId, actorUserId, idempotencyKey, now, now,
+    );
+
+    const row = db.prepare(
+      'SELECT * FROM logistics_scheduling_activities WHERE id = ? AND organization_id = ?'
+    ).get(id, organizationId);
+
+    audit(String(chatId), 'logistics.scheduling.requested', 'logistics_scheduling_activity', id, {
+      activityType: row.activity_type,
+      mode: row.mode,
+      commandKey: idempotencyKey,
+      relatedOrderId: row.related_order_id,
+      relatedFulfillmentId: row.related_fulfillment_id,
+      relatedMovementId: row.related_movement_id,
+    }, {
+      organizationId,
+      locationId: row.location_id,
+      actorId: actorUserId,
+      deviceId: actor?.deviceId || null,
+    });
+
+    db.exec('COMMIT');
+    return { ...logisticsSchedulingRow(row), idempotent: false };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
+export async function getLogisticsSchedulingActivity(chatId, activityId) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organization_id) return null;
+  const row = db.prepare(
+    'SELECT * FROM logistics_scheduling_activities WHERE id = ? AND organization_id = ?'
+  ).get(String(activityId), String(tenant.organization_id));
+  return logisticsSchedulingRow(row);
+}
+
+export async function listLogisticsSchedulingActivities(chatId, filters = {}) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organization_id) return [];
+  const organizationId = String(tenant.organization_id);
+  const clauses = ['organization_id = ?'];
+  const params = [organizationId];
+
+  const locationId = String(filters.locationId ?? filters.location_id ?? '').trim();
+  const status = String(filters.status || '').trim().toUpperCase();
+  const activityType = String(filters.activityType ?? filters.activity_type ?? '').trim().toUpperCase();
+
+  if (locationId) {
+    assertSchedulingLocation(organizationId, locationId);
+    clauses.push('location_id = ?');
+    params.push(locationId);
+  }
+  if (status) {
+    clauses.push('status = ?');
+    params.push(status);
+  }
+  if (activityType) {
+    clauses.push('activity_type = ?');
+    params.push(activityType);
+  }
+
+  return db.prepare(`
+    SELECT *
+    FROM logistics_scheduling_activities
+    WHERE ${clauses.join(' AND ')}
+    ORDER BY COALESCE(scheduled_start, requested_start, created_at) ASC, created_at ASC
+    LIMIT 200
+  `).all(...params).map(logisticsSchedulingRow);
+}
+
+export async function transitionLogisticsSchedulingActivity(chatId, activityId, nextStatus, actor = null, input = {}) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organization_id) {
+    throw Object.assign(new Error('Scheduling organization is required'), {
+      statusCode: 409, code: 'ORGANIZATION_REQUIRED',
+    });
+  }
+
+  const organizationId = String(tenant.organization_id);
+  const target = String(nextStatus || '').trim().toUpperCase();
+  const commandKey = String(input.idempotencyKey ?? input.idempotency_key ?? '').trim();
+  if (!commandKey) {
+    throw Object.assign(new Error('Idempotency key is required'), {
+      statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED',
+    });
+  }
+  if (!Object.prototype.hasOwnProperty.call(LOGISTICS_SCHEDULING_TRANSITIONS, target)) {
+    throw Object.assign(new Error('Invalid scheduling lifecycle state'), {
+      statusCode: 400, code: 'INVALID_SCHEDULING_STATUS',
+    });
+  }
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const row = db.prepare(
+      'SELECT * FROM logistics_scheduling_activities WHERE id = ? AND organization_id = ?'
+    ).get(String(activityId), organizationId);
+    if (!row) {
+      throw Object.assign(new Error('Scheduling activity not found'), {
+        statusCode: 404, code: 'SCHEDULING_ACTIVITY_NOT_FOUND',
+      });
+    }
+
+    if (String(row.last_command_key || '') === commandKey) {
+      const compatible = String(row.status) === target;
+      if (!compatible) {
+        throw Object.assign(new Error('Idempotency key was already used for a different scheduling command'), {
+          statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT',
+        });
+      }
+      db.exec('COMMIT');
+      return { ...logisticsSchedulingRow(row), idempotent: true };
+    }
+
+    if (String(row.status) === target) {
+      db.exec('COMMIT');
+      return { ...logisticsSchedulingRow(row), idempotent: true };
+    }
+
+    const current = String(row.status);
+    if (!LOGISTICS_SCHEDULING_TRANSITIONS[current]?.has(target)) {
+      throw Object.assign(new Error(`Cannot move scheduling activity from ${current} to ${target}`), {
+        statusCode: 409, code: 'INVALID_SCHEDULING_TRANSITION',
+      });
+    }
+
+    if (target === 'SCHEDULED') {
+      const scheduledStart = input.scheduledStart ?? input.scheduled_start ?? row.scheduled_start;
+      const scheduledEnd = input.scheduledEnd ?? input.scheduled_end ?? row.scheduled_end;
+      if (!scheduledStart || !scheduledEnd) {
+        throw Object.assign(new Error('Scheduled lifecycle requires a scheduled time window'), {
+          statusCode: 400, code: 'SCHEDULED_WINDOW_REQUIRED',
+        });
+      }
+      if (Date.parse(String(scheduledEnd)) < Date.parse(String(scheduledStart))) {
+        throw Object.assign(new Error('scheduled_end must not precede scheduled_start'), {
+          statusCode: 400, code: 'INVALID_SCHEDULED_WINDOW',
+        });
+      }
+    }
+
+    if (target === 'CONFIRMED' && !row.scheduled_start) {
+      throw Object.assign(new Error('Confirmation requires a scheduled time window'), {
+        statusCode: 409, code: 'SCHEDULING_NOT_SCHEDULED',
+      });
+    }
+
+    const expectedVersion = input.expectedVersion == null ? null : Number(input.expectedVersion);
+    if (expectedVersion != null && (!Number.isInteger(expectedVersion) || expectedVersion < 1)) {
+      throw Object.assign(new Error('expectedVersion must be a positive integer'), {
+        statusCode: 400, code: 'INVALID_SCHEDULING_VERSION',
+      });
+    }
+    if (expectedVersion != null && Number(row.version) !== expectedVersion) {
+      throw Object.assign(new Error('Scheduling activity version conflict'), {
+        statusCode: 409, code: 'SCHEDULING_VERSION_CONFLICT',
+      });
+    }
+
+    const now = nowIso();
+    const sets = ['status = ?', 'last_command_key = ?', 'updated_by_user_id = ?', 'updated_at = ?', 'version = version + 1'];
+    const params = [target, commandKey, actor?.userId || null, now];
+
+    if (target === 'SCHEDULED') {
+      const scheduledStart = input.scheduledStart ?? input.scheduled_start ?? row.scheduled_start;
+      const scheduledEnd = input.scheduledEnd ?? input.scheduled_end ?? row.scheduled_end;
+      sets.push('scheduled_start = ?', 'scheduled_end = ?');
+      params.push(String(scheduledStart), String(scheduledEnd));
+    }
+
+    if (target === 'CONFIRMED') {
+      sets.push('confirmed_by_user_id = ?', 'confirmed_at = ?');
+      params.push(actor?.userId || null, now);
+    }
+
+    params.push(String(activityId), organizationId);
+    if (expectedVersion != null) params.push(expectedVersion);
+
+    const result = db.prepare(`
+      UPDATE logistics_scheduling_activities
+      SET ${sets.join(', ')}
+      WHERE id = ? AND organization_id = ?${expectedVersion == null ? '' : ' AND version = ?'}
+    `).run(...params);
+
+    if (Number(result.changes || 0) !== 1) {
+      throw Object.assign(new Error('Scheduling activity version conflict'), {
+        statusCode: 409, code: 'SCHEDULING_VERSION_CONFLICT',
+      });
+    }
+
+    const updated = db.prepare(
+      'SELECT * FROM logistics_scheduling_activities WHERE id = ? AND organization_id = ?'
+    ).get(String(activityId), organizationId);
+
+    audit(String(chatId), `logistics.scheduling.${target.toLowerCase()}`, 'logistics_scheduling_activity', String(activityId), {
+      fromState: current,
+      toState: target,
+      commandKey,
+    }, {
+      organizationId,
+      locationId: updated.location_id,
+      actorId: actor?.userId || null,
+      deviceId: actor?.deviceId || null,
+    });
+
+    db.exec('COMMIT');
+    return { ...logisticsSchedulingRow(updated), idempotent: false };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
 }
 
 export async function transitionDeliveryAssignment(chatId, serverOrderId, action, actor = null, input = {}) {
