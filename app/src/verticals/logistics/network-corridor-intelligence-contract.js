@@ -370,6 +370,68 @@ export function deriveCapacityShortageSignal({ observations } = {}) {
 
 
 
+
+export function composeNetworkIntelligenceSnapshot({
+  demandSignal,
+  backhaulSignal,
+  depotThroughputSignal,
+  capacityShortageSignal,
+  serviceAreaGapSignal,
+  recurringDemandSignal,
+  providerCapacityVisibilitySignal,
+} = {}) {
+  const signals = [
+    demandSignal,
+    backhaulSignal,
+    depotThroughputSignal,
+    capacityShortageSignal,
+    serviceAreaGapSignal,
+    recurringDemandSignal,
+    providerCapacityVisibilitySignal,
+  ];
+
+  if (signals.some((signal) => !signal || typeof signal !== 'object')) {
+    invalid('all L20 intelligence signals are required');
+  }
+
+  const first = signals[0];
+  for (const signal of signals.slice(1)) {
+    if (signal.organization_id !== first.organization_id) {
+      invalid('organization scope conflict');
+    }
+    if (signal.corridor_ref !== first.corridor_ref) {
+      invalid('corridor scope conflict');
+    }
+    if (signal.service_profile !== first.service_profile) {
+      invalid('service profile scope conflict');
+    }
+  }
+
+  return Object.freeze({
+    contract_version: first.contract_version,
+    organization_id: first.organization_id,
+    corridor_ref: first.corridor_ref,
+    service_profile: first.service_profile,
+    demand: Object.freeze(demandSignal),
+    backhaul: Object.freeze(backhaulSignal),
+    depot_throughput: Object.freeze(depotThroughputSignal),
+    capacity_shortage: Object.freeze(capacityShortageSignal),
+    service_area_gap: Object.freeze(serviceAreaGapSignal),
+    recurring_demand: Object.freeze(recurringDemandSignal),
+    provider_capacity_visibility: Object.freeze(providerCapacityVisibilitySignal),
+    authority: 'logistics_derived_intelligence',
+    source_authority: 'existing_operational_domain_data',
+    persistence: 'none',
+    transaction: false,
+    routing_authority: false,
+    provider_selection_authority: false,
+    scheduling_authority: 'existing_l11_scheduling',
+    reservation_authority: false,
+    assignment_authority: false,
+    dispatch_authority: false,
+  });
+}
+
 export function deriveProviderCapacityVisibilitySignal({ observations } = {}) {
   if (!Array.isArray(observations) || observations.length === 0) {
     invalid('observations must be a non-empty array');
