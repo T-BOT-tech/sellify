@@ -7515,7 +7515,7 @@ function assertSchedulingFulfillment(organizationId, fulfillmentId) {
 export async function createLogisticsSchedulingActivity(chatId, input = {}, actor = null) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
-  if (!tenant?.organization_id) {
+  if (!tenant?.organizationId) {
     throw Object.assign(new Error('Scheduling organization is required'), {
       statusCode: 409, code: 'ORGANIZATION_REQUIRED',
     });
@@ -7628,7 +7628,7 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
 export async function getLogisticsSchedulingActivity(chatId, activityId) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
-  if (!tenant?.organization_id) return null;
+  if (!tenant?.organizationId) return null;
   const row = db.prepare(
     'SELECT * FROM logistics_scheduling_activities WHERE id = ? AND organization_id = ?'
   ).get(String(activityId), String(tenant.organizationId));
@@ -7638,7 +7638,7 @@ export async function getLogisticsSchedulingActivity(chatId, activityId) {
 export async function listLogisticsSchedulingActivities(chatId, filters = {}) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
-  if (!tenant?.organization_id) return [];
+  if (!tenant?.organizationId) return [];
   const organizationId = String(tenant.organizationId);
   const clauses = ['organization_id = ?'];
   const params = [organizationId];
@@ -7673,7 +7673,7 @@ export async function listLogisticsSchedulingActivities(chatId, filters = {}) {
 export async function evaluateLogisticsSchedulingActivity(chatId, activityId, actor = null, options = {}) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
-  if (!tenant?.organization_id) {
+  if (!tenant?.organizationId) {
     throw Object.assign(new Error('Scheduling organization is required'), {
       statusCode: 409, code: 'ORGANIZATION_REQUIRED',
     });
@@ -7726,7 +7726,7 @@ export async function evaluateLogisticsSchedulingActivity(chatId, activityId, ac
 export async function transitionLogisticsSchedulingActivity(chatId, activityId, nextStatus, actor = null, input = {}) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
-  if (!tenant?.organization_id) {
+  if (!tenant?.organizationId) {
     throw Object.assign(new Error('Scheduling organization is required'), {
       statusCode: 409, code: 'ORGANIZATION_REQUIRED',
     });
