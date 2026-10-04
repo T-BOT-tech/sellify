@@ -41,6 +41,11 @@ const {
   logisticsSchedulingFailureContract,
 } = await import('../app/src/verticals/logistics/scheduling-failure-contract.js');
 
+const {
+  decideLogisticsSchedulingTerminal,
+  logisticsSchedulingTerminalContract,
+} = await import('../app/src/verticals/logistics/scheduling-terminal-contract.js');
+
 
 const db = getDatabaseForTests();
 const chatId = 'l11.8-regression-chat';
@@ -219,6 +224,54 @@ assert.equal(
     reason: 'route exception',
   }).decision,
   'FAIL',
+);
+
+const terminalContract = logisticsSchedulingTerminalContract();
+assert.deepEqual(terminalContract.cancelled_from, ['REQUESTED', 'SCHEDULED', 'CONFIRMED']);
+assert.deepEqual(terminalContract.missed_from, ['SCHEDULED', 'CONFIRMED']);
+assert.deepEqual(terminalContract.expired_from, ['REQUESTED', 'SCHEDULED']);
+assert.equal(terminalContract.terminal_states_are_final, true);
+assert.equal(terminalContract.mutates_fulfillment, false);
+assert.equal(terminalContract.mutates_delivery, false);
+assert.equal(terminalContract.mutates_payment, false);
+assert.equal(terminalContract.mutates_inventory, false);
+assert.equal(terminalContract.selects_provider, false);
+assert.equal(terminalContract.dispatches, false);
+assert.equal(terminalContract.asserts_operational_failure, false);
+assert.equal(
+  decideLogisticsSchedulingTerminal({
+    status: 'REQUESTED',
+    target: 'CANCELLED',
+  }).decision,
+  'TERMINATE',
+);
+assert.equal(
+  decideLogisticsSchedulingTerminal({
+    status: 'SCHEDULED',
+    target: 'MISSED',
+  }).decision,
+  'TERMINATE',
+);
+assert.equal(
+  decideLogisticsSchedulingTerminal({
+    status: 'REQUESTED',
+    target: 'EXPIRED',
+  }).decision,
+  'TERMINATE',
+);
+assert.equal(
+  decideLogisticsSchedulingTerminal({
+    status: 'IN_PROGRESS',
+    target: 'MISSED',
+  }).decision,
+  'BLOCK',
+);
+assert.equal(
+  decideLogisticsSchedulingTerminal({
+    status: 'COMPLETED',
+    target: 'CANCELLED',
+  }).decision,
+  'BLOCK',
 );
 
 for (const outcome of ['CONFLICT', 'UNKNOWN']) {
@@ -526,4 +579,94 @@ assert.equal(failedReplay.idempotent, true);
 assert.equal(failedReplay.status, 'FAILED');
 assert.equal(failedReplay.version, 4);
 
-console.log('L11.8/L11.9/L11.10/L11.11/L11.12 Logistics Scheduling Decision + Confirmation + Start + Completion + Failure Boundary Regression: PASS');
+const cancelled = await create(
+  'l11.13-create-cancelled',
+  '2026-10-13T09:00:00Z',
+  '2026-10-13T10:00:00Z',
+  'movement-l11-13-cancelled',
+);
+const cancelledResult = await transitionLogisticsSchedulingActivity(
+  chatId,
+  cancelled.id,
+  'CANCELLED',
+  actor,
+  {
+    idempotency_key: 'l11.13-cancel-1',
+    expectedVersion: 1,
+    reason: 'request withdrawn',
+  },
+);
+assert.equal(cancelledResult.status, 'CANCELLED');
+assert.equal(cancelledResult.version, 2);
+
+const missed = await create(
+  'l11.13-create-missed',
+  '2026-10-14T09:00:00Z',
+  '2026-10-14T10:00:00Z',
+  'movement-l11-13-missed',
+);
+const missedScheduled = await transitionLogisticsSchedulingActivity(
+  chatId,
+  missed.id,
+  'SCHEDULED',
+  actor,
+  {
+    idempotency_key: 'l11.13-missed-schedule',
+    expectedVersion: 1,
+    externalEvaluation: {
+      outcome: 'FEASIBLE',
+      authority: 'existing-capacity-authority',
+      reference_id: 'l11.13-capacity-1',
+    },
+  },
+);
+assert.equal(missedScheduled.status, 'SCHEDULED');
+const missedResult = await transitionLogisticsSchedulingActivity(
+  chatId,
+  missed.id,
+  'MISSED',
+  actor,
+  {
+    idempotency_key: 'l11.13-missed-1',
+    expectedVersion: 2,
+    reason: 'scheduled window missed',
+  },
+);
+assert.equal(missedResult.status, 'MISSED');
+assert.equal(missedResult.version, 3);
+
+const expired = await create(
+  'l11.13-create-expired',
+  '2026-10-15T09:00:00Z',
+  '2026-10-15T10:00:00Z',
+  'movement-l11-13-expired',
+);
+const expiredResult = await transitionLogisticsSchedulingActivity(
+  chatId,
+  expired.id,
+  'EXPIRED',
+  actor,
+  {
+    idempotency_key: 'l11.13-expired-1',
+    expectedVersion: 1,
+    reason: 'request window expired',
+  },
+);
+assert.equal(expiredResult.status, 'EXPIRED');
+assert.equal(expiredResult.version, 2);
+
+await assert.rejects(
+  () => transitionLogisticsSchedulingActivity(
+    chatId,
+    cancelled.id,
+    'CANCELLED',
+    actor,
+    {
+      idempotency_key: 'l11.13-cancel-after-terminal',
+      expectedVersion: 2,
+    },
+  ),
+  error => error?.code === 'INVALID_SCHEDULING_TRANSITION',
+);
+
+console.log('L11.8/L11.9/L11.10/L11.11/L11.12/L11.13 Logistics Scheduling Decision + Confirmation + Start + Completion + Failure + Terminal Boundary Regression: PASS');
