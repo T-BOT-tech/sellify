@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import {
   normalizeDynamicCapacityUtilizationRequest,
   evaluateDynamicCapacityUtilization,
+  composeDynamicCapacityPool,
   assertDynamicCapacityUtilizationBoundary,
 } from '../app/src/verticals/logistics/dynamic-capacity-utilization-contract.js';
 
@@ -103,6 +104,48 @@ for (const [profile, start, end] of [
   assert.equal(result.reservation, false);
 }
 
+const pool = composeDynamicCapacityPool({
+  requests: [
+    {
+      ...base,
+      capacity_ref: 'COURIER-42',
+      allocations: [{
+        service_profile: 'B2C_DELIVERY',
+        start: '2026-10-04T11:00:00Z',
+        end: '2026-10-04T17:00:00Z',
+      }],
+    },
+    {
+      ...base,
+      capacity_ref: 'COURIER-43',
+    },
+  ],
+  requestedProfile: 'B2C_DELIVERY',
+  requestedStart: '2026-10-04T12:00:00Z',
+  requestedEnd: '2026-10-04T13:00:00Z',
+});
+
+assert.equal(pool.evaluation, 'POOL_ELIGIBLE');
+assert.equal(pool.candidates.length, 2);
+assert.equal(pool.candidates[0].capacity_ref, 'COURIER-42');
+assert.equal(pool.candidates[0].preference, 'PREFERRED');
+assert.equal(pool.candidates[1].preference, 'BASELINE');
+assert.equal(pool.reservation, false);
+assert.equal(pool.persistence, 'none');
+
+const mixedTenantPool = composeDynamicCapacityPool({
+  requests: [
+    { ...base, organization_id: 'org-1', capacity_ref: 'COURIER-42' },
+    { ...base, organization_id: 'org-2', capacity_ref: 'COURIER-99' },
+  ],
+  requestedProfile: 'B2C_DELIVERY',
+  requestedStart: '2026-10-04T12:00:00Z',
+  requestedEnd: '2026-10-04T13:00:00Z',
+});
+
+assert.equal(mixedTenantPool.evaluation, 'INELIGIBLE');
+assert.equal(mixedTenantPool.reason, 'POOL_ORGANIZATION_SCOPE_CONFLICT');
+assert.equal(mixedTenantPool.candidates.length, 0);
 assert.equal(
   evaluateDynamicCapacityUtilization({
     request: pooled,
