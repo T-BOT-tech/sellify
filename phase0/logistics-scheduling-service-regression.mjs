@@ -40,7 +40,7 @@ db.prepare(
   'INSERT INTO users (id,display_name,created_at,last_seen_at) VALUES (?,?,?,?)'
 ).run(userId, 'L11.4 Actor', new Date().toISOString(), new Date().toISOString());
 
-const actor = { userId, deviceId: null };
+const actor = { userId, deviceId: null, role: 'logistics_manager', roles: ['logistics_manager'], organizationId };
 const base = {
   location_id: locationId,
   activity_type: 'PICKUP',
@@ -50,6 +50,12 @@ const base = {
   related_movement: { id: 'movement-l11-4-1', authority: 'logistics' },
   idempotency_key: 'l11.4-create-1',
 };
+
+const deniedActor = { userId: 'l11.4-viewer', deviceId: null, role: 'viewer', roles: ['viewer'], organizationId };
+await assert.rejects(
+  () => createLogisticsSchedulingActivity(chatId, { ...base, idempotency_key: 'l11.5-denied' }, deniedActor),
+  error => error?.code === 'SCHEDULING_AUTHORIZATION_DENIED'
+);
 
 const created = await createLogisticsSchedulingActivity(chatId, base, actor);
 assert.equal(created.status, 'REQUESTED');
