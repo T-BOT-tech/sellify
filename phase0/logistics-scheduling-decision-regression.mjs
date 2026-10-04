@@ -817,7 +817,7 @@ assert.equal(Number(adversarialRow.version), 1);
 assert.equal(adversarialRow.last_command_key, null);
 
 const foreignFulfillmentId='l11.15-foreign-fulfillment';
-db.prepare('INSERT INTO fulfillments (id,organization_id,server_order_id,fulfillment_type,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?)').run(foreignFulfillmentId,foreignOrgId,'l11.15-foreign-order','DELIVERY','PENDING',new Date().toISOString(),new Date().toISOString());
+db.prepare('INSERT INTO fulfillments (id,organization_id,server_order_id,fulfillment_type,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?)').run(foreignFulfillmentId,foreignOrgId,'l11.15-foreign-order','delivery','pending',new Date().toISOString(),new Date().toISOString());
 await assert.rejects(() => createLogisticsSchedulingActivity(chatId, { id:'l11.15-cross-org-reference', location_id:locationId, activity_type:'DELIVERY', mode:'SCHEDULED', requested_start:'2026-10-18T09:00:00Z', requested_end:'2026-10-18T10:00:00Z', related_fulfillment:{id:foreignFulfillmentId}, idempotency_key:'l11.15-cross-org-reference' }, actor), error => error?.code === 'FULFILLMENT_REFERENCE_INVALID');
 
 console.log('L11.8/L11.9/L11.10/L11.11/L11.12/L11.13/L11.14/L11.15 Logistics Scheduling Decision + Confirmation + Start + Completion + Failure + Terminal + Adversarial Boundary Regression: PASS');
