@@ -35,6 +35,14 @@ db.prepare(
   'INSERT INTO tenants (chat_id,tenant_id,api_key,created_at,seller_name,organization_id) VALUES (?,?,?,?,?,?)'
 ).run(chatId, 'l11.8-tenant', 'l11.8-api-key', new Date().toISOString(), 'Regression', organizationId);
 
+// Keep the fixture explicitly organization-scoped even if legacy tenant normalization
+// changes during database bootstrap.
+db.prepare('UPDATE tenants SET organization_id = ? WHERE chat_id = ?').run(organizationId, chatId);
+assert.equal(
+  db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(chatId).organization_id,
+  organizationId,
+);
+
 db.prepare(
   'INSERT INTO locations (id,organization_id,code,name,type,status,created_at) VALUES (?,?,?,?,?,?,?)'
 ).run(locationId, organizationId, 'L11.8', 'L11.8 Location', 'STORE', 'active', new Date().toISOString());
