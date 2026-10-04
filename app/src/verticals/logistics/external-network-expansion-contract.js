@@ -483,6 +483,133 @@ export function assertExternalRetryBoundary(value = {}) {
   return true;
 }
 
+
+const EXTERNAL_INBOUND_OPERATIONS = Object.freeze([
+  'DELIVERY_STATUS',
+  'DELIVERY_PROOF',
+  'CAPACITY_UPDATE',
+  'STATUS_SYNCHRONIZATION',
+]);
+
+export function normalizeExternalInboundMessage({
+  integration,
+  operation,
+  organization_id,
+  integration_ref,
+  adapter_ref,
+  correlation_ref,
+  idempotency_key,
+  message_ref,
+  payload,
+} = {}) {
+  const trusted = validateExternalAdapterTrust({
+    integration,
+    organization_id,
+    integration_ref,
+    adapter_ref,
+    correlation_ref,
+    capabilities: integration?.capabilities,
+  });
+  assertExternalAdapterTrustBoundary(trusted);
+
+  const normalizedOperation = requireString(operation, 'operation').toUpperCase();
+  if (!EXTERNAL_INBOUND_OPERATIONS.includes(normalizedOperation)) {
+    invalid('unsupported external inbound operation');
+  }
+
+  const idempotencyKey = requireString(idempotency_key, 'idempotency_key');
+  const messageRef = requireString(message_ref, 'message_ref');
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    invalid('payload must be an object');
+  }
+
+  return Object.freeze({
+    contract_version: '1.0',
+    organization_id: trusted.organization_id,
+    integration_ref: trusted.integration_ref,
+    adapter_ref: trusted.adapter_ref,
+    external_network_ref: integration.external_network_ref,
+    service_profile: integration.service_profile,
+    operation: normalizedOperation,
+    correlation_ref: trusted.correlation_ref,
+    idempotency_key: idempotencyKey,
+    message_ref: messageRef,
+    payload: Object.freeze({ ...payload }),
+    authority: 'external_adapter_observation',
+    canonical_mutation_authority: 'existing_canonical_domain_authority',
+    direct_domain_mutation: false,
+    replay_protection_authority: 'existing_integration_or_canonical_domain_idempotency',
+    persistence: 'existing_integration_or_canonical_domain_state_only',
+    duplicate_callback_store: false,
+    duplicate_event_store: false,
+  });
+}
+
+export function assertExternalInboundBoundary(value = {}) {
+  for (const field of [
+    'provider_selection_authority',
+    'routing_authority',
+    'assignment_authority',
+    'dispatch_authority',
+    'shipment_authority',
+    'fulfillment_authority',
+    'inventory_authority',
+    'payment_authority',
+    'settlement_authority',
+    'identity_authority',
+    'event_store_authority',
+  ]) {
+    if (value[field] === true || value[field] === 'external_adapter') {
+      invalid(`external inbound boundary violation: ${field}`);
+    }
+  }
+  if (value.direct_domain_mutation === true) {
+    invalid('external inbound messages must not directly mutate canonical domain state');
+  }
+  if (value.canonical_mutation_authority !== 'existing_canonical_domain_authority') {
+    invalid('inbound canonical mutation authority must remain existing canonical domain authority');
+  }
+  if (value.replay_protection_authority !== 'existing_integration_or_canonical_domain_idempotency') {
+    invalid('inbound replay protection must remain existing integration/canonical idempotency');
+  }
+  if (value.persistence !== 'existing_integration_or_canonical_domain_state_only') {
+    invalid('inbound messages must not create a callback persistence authority');
+  }
+  if (value.duplicate_callback_store === true || value.duplicate_event_store === true) {
+    invalid('inbound boundary must not create duplicate callback/event stores');
+  }
+  for (const field of [
+    'organization_id',
+    'integration_ref',
+    'adapter_ref',
+    'correlation_ref',
+    'idempotency_key',
+    'message_ref',
+  ]) requireString(value[field], field);
+  return true;
+}
+
+export function buildExternalInboundDisposition({
+  message,
+  previously_seen = false,
+} = {}) {
+  assertExternalInboundBoundary(message);
+  if (typeof previously_seen !== 'boolean') {
+    invalid('previously_seen must be boolean');
+  }
+
+  return Object.freeze({
+    message_ref: message.message_ref,
+    idempotency_key: message.idempotency_key,
+    correlation_ref: message.correlation_ref,
+    disposition: previously_seen ? 'DUPLICATE_IGNORED' : 'ACCEPT_FOR_CANONICAL_PROCESSING',
+    canonical_mutation_authority: 'existing_canonical_domain_authority',
+    direct_domain_mutation: false,
+    persistence: 'existing_integration_or_canonical_domain_state_only',
+  });
+}
+
 export function normalizeExternalStatusEvidence({
   integration,
   operation,
