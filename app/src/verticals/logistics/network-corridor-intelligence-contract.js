@@ -367,6 +367,58 @@ export function deriveCapacityShortageSignal({ observations } = {}) {
   });
 }
 
+
+export function deriveServiceAreaGapSignal({ observations } = {}) {
+  if (!Array.isArray(observations) || observations.length === 0) {
+    invalid('observations must be a non-empty array');
+  }
+
+  const normalized = observations.map(normalizeNetworkIntelligenceObservation);
+  const first = normalized[0];
+
+  for (const item of normalized.slice(1)) {
+    if (item.organization_id !== first.organization_id) {
+      invalid('organization scope conflict');
+    }
+    if (item.corridor_ref !== first.corridor_ref) {
+      invalid('corridor scope conflict');
+    }
+    if (item.service_profile !== first.service_profile) {
+      invalid('service profile scope conflict');
+    }
+  }
+
+  const demand = normalized.reduce((sum, item) => sum + item.demand_count, 0);
+  const fulfilled = normalized.reduce((sum, item) => sum + item.fulfilled_count, 0);
+  const observedGap = normalized.reduce(
+    (sum, item) => sum + item.service_area_gap_count,
+    0,
+  );
+
+  return Object.freeze({
+    contract_version: first.contract_version,
+    organization_id: first.organization_id,
+    corridor_ref: first.corridor_ref,
+    service_profile: first.service_profile,
+    observation_count: normalized.length,
+    demand,
+    fulfilled_demand: fulfilled,
+    unmet_demand: demand - fulfilled,
+    observed_service_area_gap: observedGap,
+    coverage_signal: observedGap > 0
+      ? 'SERVICE_AREA_GAP_OBSERVED'
+      : 'NO_SERVICE_AREA_GAP_OBSERVED',
+    authority: 'logistics_derived_intelligence',
+    location_authority: 'existing_locations',
+    gps_authority: false,
+    routing_authority: false,
+    provider_selection_authority: false,
+    dispatch_authority: false,
+    persistence: 'none',
+    transaction: false,
+  });
+}
+
 export function deriveNetworkCorridorIntelligence({ observation } = {}) {
   const normalized = normalizeNetworkIntelligenceObservation(observation);
 
