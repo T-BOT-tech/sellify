@@ -30,6 +30,7 @@ import { decideLogisticsSchedulingConfirmation } from '../../app/src/verticals/l
 import { decideLogisticsSchedulingStart } from '../../app/src/verticals/logistics/scheduling-start-contract.js';
 import { decideLogisticsSchedulingCompletion } from '../../app/src/verticals/logistics/scheduling-completion-contract.js';
 import { decideLogisticsSchedulingFailure } from '../../app/src/verticals/logistics/scheduling-failure-contract.js';
+import { decideLogisticsSchedulingTerminal } from '../../app/src/verticals/logistics/scheduling-terminal-contract.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -7920,6 +7921,26 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
       }
     }
 
+    let schedulingTerminalReason = null;
+    if (['CANCELLED', 'MISSED', 'EXPIRED'].includes(target)) {
+      schedulingTerminalReason = String(
+        input.reason ?? input.failureReason ?? input.failure_reason ?? ''
+      ).trim();
+      const terminal = decideLogisticsSchedulingTerminal({
+        status: row.status,
+        target,
+        reason: schedulingTerminalReason,
+      });
+      if (terminal.decision !== 'TERMINATE') {
+        throw Object.assign(new Error(`Scheduling terminal transition blocked: ${terminal.reason}`), {
+          statusCode: 409,
+          code: terminal.reason === 'INVALID_TERMINAL_TRANSITION'
+            ? 'INVALID_SCHEDULING_TERMINAL_TRANSITION'
+            : 'UNSUPPORTED_SCHEDULING_TERMINAL_STATE',
+        });
+      }
+    }
+
     const now = nowIso();
     const sets = ['status = ?', 'last_command_key = ?', 'updated_by_user_id = ?', 'updated_at = ?', 'version = version + 1'];
     const params = [target, commandKey, actor?.userId || null, now];
@@ -7960,6 +7981,9 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
       toState: target,
       commandKey,
       ...(target === 'FAILED' ? { failureReason: schedulingFailureReason } : {}),
+      ...(['CANCELLED', 'MISSED', 'EXPIRED'].includes(target)
+        ? { terminalReason: schedulingTerminalReason || null }
+        : {}),
     }, {
       organizationId,
       locationId: updated.location_id,
