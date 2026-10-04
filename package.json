@@ -401,7 +401,8 @@
     "test:logistics-l9": "node phase0/logistics-capacity-profile-regression.mjs",
     "test:logistics-l8-l10": "node phase0/logistics-l8-l10-demand-capacity-matching-regression.mjs",
     "test:logistics-l8-l21": "node phase0/logistics-l8-l21-cumulative-exit-gate.mjs",
-    "test:logistics-l8-l21-certification": "node phase0/logistics-l8-l21-final-certification.mjs"
+    "test:logistics-l8-l21-certification": "node phase0/logistics-l8-l21-final-certification.mjs",
+    "test:logistics-master-exit": "node phase0/logistics-master-specification-exit-audit.mjs"
   },
   "engines": {
     "node": ">=24"
