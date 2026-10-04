@@ -2771,7 +2771,7 @@ function runMigrations() {
         ON logistics_scheduling_activities(organization_id,related_fulfillment_id,updated_at DESC);
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(58, nowIso());
-  }
+  }}
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({
   NOT_INSTALLED: new Set(['INSTALLED']),
