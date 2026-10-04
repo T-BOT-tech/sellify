@@ -207,6 +207,108 @@ export function normalizeExternalAdapterResponse({
 }
 
 
+
+const EXTERNAL_OUTCOME_CLASSES = Object.freeze([
+  'SUCCESS',
+  'REJECTED',
+  'PENDING',
+  'FAILED_RETRYABLE',
+  'FAILED_FINAL',
+  'AMBIGUOUS',
+]);
+
+export function classifyExternalAdapterOutcome({ status, transport_error = false, timeout = false, response_received = true } = {}) {
+  const normalizedStatus = requireString(status, 'status').toUpperCase();
+
+  if (timeout || transport_error || !response_received) {
+    return Object.freeze({
+      outcome_class: 'AMBIGUOUS',
+      retryable: true,
+      canonical_state_mutation: false,
+      resolution_required: true,
+    });
+  }
+
+  if (normalizedStatus === 'ACCEPTED' || normalizedStatus === 'COMPLETED') {
+    return Object.freeze({
+      outcome_class: 'SUCCESS',
+      retryable: false,
+      canonical_state_mutation: false,
+      resolution_required: false,
+    });
+  }
+
+  if (normalizedStatus === 'REJECTED') {
+    return Object.freeze({
+      outcome_class: 'REJECTED',
+      retryable: false,
+      canonical_state_mutation: false,
+      resolution_required: false,
+    });
+  }
+
+  if (normalizedStatus === 'PENDING') {
+    return Object.freeze({
+      outcome_class: 'PENDING',
+      retryable: true,
+      canonical_state_mutation: false,
+      resolution_required: true,
+    });
+  }
+
+  return Object.freeze({
+    outcome_class: 'FAILED_RETRYABLE',
+    retryable: true,
+    canonical_state_mutation: false,
+    resolution_required: true,
+  });
+}
+
+export function buildExternalRetryDecision({
+  idempotency_key,
+  attempt = 1,
+  outcome,
+  max_attempts = 3,
+} = {}) {
+  requireString(idempotency_key, 'idempotency_key');
+  if (!Number.isInteger(attempt) || attempt < 1) invalid('attempt must be a positive integer');
+  if (!Number.isInteger(max_attempts) || max_attempts < 1) invalid('max_attempts must be a positive integer');
+  if (!outcome || typeof outcome !== 'object') invalid('outcome is required');
+  if (!EXTERNAL_OUTCOME_CLASSES.includes(outcome.outcome_class)) invalid('unsupported external outcome class');
+
+  const retryable = outcome.retryable === true;
+  const retry = retryable && attempt < max_attempts;
+
+  return Object.freeze({
+    idempotency_key,
+    attempt,
+    max_attempts,
+    outcome_class: outcome.outcome_class,
+    retry,
+    terminal: !retry,
+    resolution_required: outcome.resolution_required === true,
+    canonical_state_mutation: false,
+    persistence: 'existing_integration_or_canonical_domain_state_only',
+    event_store_authority: false,
+  });
+}
+
+export function assertExternalRetryBoundary(value = {}) {
+  if (value.canonical_state_mutation === true) {
+    invalid('adapter retry handling must not mutate canonical state');
+  }
+  if (value.event_store_authority === true || value.event_store_authority === 'external_adapter') {
+    invalid('adapter retry handling must not create an event-store authority');
+  }
+  if (value.persistence !== 'existing_integration_or_canonical_domain_state_only') {
+    invalid('adapter retry persistence must remain within existing integration/core state');
+  }
+  if (typeof value.idempotency_key !== 'string' || !value.idempotency_key.trim()) {
+    invalid('retry decision requires idempotency_key');
+  }
+  return true;
+}
+
 export function normalizeExternalStatusEvidence({
   integration,
   operation,
