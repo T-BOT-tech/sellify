@@ -297,25 +297,4 @@ assert.throws(() => buildExternalNetworkEnvelope({
   payload: {},
 }), /idempotency_key is required/i);
 
-console.log('L21.1 External Network Expansion Canonical Boundary Regression: PASS');
-
-  integration,
-  operation: 'CREATE_DELIVERY_REQUEST',
-  payload: {},
-}), /idempotency_key is required/i);
-
-console.log('L21.1 External Network Expansion Canonical Boundary Regression: PASS');
-
-  integration,
-  operation: 'CREATE_DELIVERY_REQUEST',
-  payload: {},
-}), /idempotency_key is required/i);
-
-console.log('L21.1 External Network Expansion Canonical Boundary Regression: PASS');
-
-  integration,
-  operation: 'CREATE_DELIVERY_REQUEST',
-  payload: {},
-}), /idempotency_key is required/i);
-
-console.log('L21.1 External Network Expansion Canonical Boundary Regression: PASS');
+console.log('L21.3 External Adapter Request/Response Boundary Regression: PASS');
