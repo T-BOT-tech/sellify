@@ -6,6 +6,7 @@ import {
   deriveNetworkCorridorIntelligence,
   assertNetworkCorridorIntelligenceBoundary,
   logisticsNetworkCorridorIntelligenceContract,
+  deriveCorridorDemandSignal,
 } from '../app/src/verticals/logistics/network-corridor-intelligence-contract.js';
 
 const observation = {
@@ -48,6 +49,37 @@ assert.equal(derived.routing, false);
 assert.equal(derived.provider_selection, false);
 assert.equal(derived.assignment, false);
 assert.equal(derived.transaction, false);
+
+const demandSignal = deriveCorridorDemandSignal({
+  observations: [
+    observation,
+    { ...observation, observation_ref: 'OBS-002', demand_count: 10, fulfilled_count: 4, recurring_demand_count: 6 },
+  ],
+});
+assert.equal(demandSignal.organization_id, 'org-1');
+assert.equal(demandSignal.corridor_ref, 'ADDIS-DEPOT-01');
+assert.equal(demandSignal.service_profile, 'REGIONAL_FREIGHT');
+assert.equal(demandSignal.observation_count, 2);
+assert.equal(demandSignal.total_demand, 30);
+assert.equal(demandSignal.total_fulfilled, 19);
+assert.equal(demandSignal.unmet_demand, 11);
+assert.equal(demandSignal.fulfillment_rate, 19 / 30);
+assert.equal(demandSignal.recurring_demand, 13);
+assert.equal(demandSignal.authority, 'logistics_derived_intelligence');
+assert.equal(demandSignal.persistence, 'none');
+assert.equal(demandSignal.routing, false);
+assert.equal(demandSignal.provider_selection, false);
+assert.equal(demandSignal.assignment, false);
+
+assert.throws(() => deriveCorridorDemandSignal({
+  observations: [observation, { ...observation, organization_id: 'org-2', observation_ref: 'OBS-X' }],
+}), /organization scope conflict/i);
+assert.throws(() => deriveCorridorDemandSignal({
+  observations: [observation, { ...observation, corridor_ref: 'OTHER-CORRIDOR', observation_ref: 'OBS-Y' }],
+}), /corridor scope conflict/i);
+assert.throws(() => deriveCorridorDemandSignal({
+  observations: [observation, { ...observation, service_profile: 'B2C_DELIVERY', observation_ref: 'OBS-Z' }],
+}), /service profile scope conflict/i);
 
 for (const profile of [
   'REGIONAL_FREIGHT',
