@@ -54,7 +54,7 @@ const {
 const {
   logisticsSchedulingAdversarialContract,
   assertLogisticsSchedulingAdversarialInvariant,
-} = await import('../app/src/verticals/logistics-scheduling-adversarial-contract.js');
+} = await import('../app/src/verticals/logistics/scheduling-adversarial-contract.js');
 
 
 const db = getDatabaseForTests();
