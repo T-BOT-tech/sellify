@@ -10,6 +10,8 @@ import {
   assertExternalAdapterCapabilityBoundary,
   buildExternalAdapterRequest,
   normalizeExternalAdapterResponse,
+  normalizeExternalStatusEvidence,
+  assertExternalStatusEvidenceBoundary,
 } from '../app/src/verticals/logistics/external-network-expansion-contract.js';
 
 const integration = {
@@ -297,4 +299,69 @@ assert.throws(() => buildExternalNetworkEnvelope({
   payload: {},
 }), /idempotency_key is required/i);
 
-console.log('L21.3 External Adapter Request/Response Boundary Regression: PASS');
+
+const statusEvidence = normalizeExternalStatusEvidence({
+  integration: {
+    ...integration,
+    capabilities: ['TRACKING_STATUS'],
+  },
+  operation: 'TRACKING_STATUS',
+  correlation_ref: 'CORR-TRACK-01',
+  service_profile: 'REGIONAL_FREIGHT',
+  response: {
+    status: 'completed',
+    external_ref: 'EXT-SHIP-01',
+    observed_at: '2026-10-04T11:00:00Z',
+    evidence: [
+      {
+        kind: 'checkpoint',
+        ref: 'CHECKPOINT-01',
+        captured_at: '2026-10-04T10:59:00Z',
+        actor_ref: 'carrier-user-01',
+      },
+    ],
+  },
+});
+assert.equal(statusEvidence.status, 'COMPLETED');
+assert.equal(statusEvidence.external_ref, 'EXT-SHIP-01');
+assert.equal(statusEvidence.evidence[0].kind, 'checkpoint');
+assert.equal(statusEvidence.evidence[0].ref, 'CHECKPOINT-01');
+assert.equal(statusEvidence.evidence_authority, 'existing_logistics_evidence_and_proof_boundaries');
+assert.equal(statusEvidence.tracking_authority, 'existing_shipment_tracking_boundary');
+assert.equal(statusEvidence.persistence, 'existing_evidence_and_core_state_only');
+assert.equal(statusEvidence.duplicate_evidence_store, false);
+assert.equal(statusEvidence.duplicate_tracking_store, false);
+assert.equal(statusEvidence.duplicate_event_store, false);
+assert.equal(assertExternalStatusEvidenceBoundary(statusEvidence), true);
+
+assert.throws(() => normalizeExternalStatusEvidence({
+  integration: {
+    ...integration,
+    capabilities: ['TRACKING_STATUS'],
+  },
+  operation: 'TRACKING_STATUS',
+  correlation_ref: 'CORR-TRACK-02',
+  service_profile: 'B2C_DELIVERY',
+  response: {
+    status: 'completed',
+    evidence: [],
+  },
+}), /service_profile does not match integration/i);
+
+assert.throws(() => assertExternalStatusEvidenceBoundary({
+  ...statusEvidence,
+  direct_domain_mutation: true,
+}), /must not directly mutate/i);
+
+assert.throws(() => assertExternalStatusEvidenceBoundary({
+  ...statusEvidence,
+  shipment_authority: 'external_adapter',
+}), /shipment_authority/i);
+
+assert.throws(() => assertExternalStatusEvidenceBoundary({
+  ...statusEvidence,
+  evidence_authority: 'external_adapter',
+}), /existing Logistics evidence/i);
+
+console.log('L21.4 External Status / Evidence Normalization Boundary Regression: PASS');
+
