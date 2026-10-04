@@ -28,6 +28,7 @@ import { evaluateLogisticsSchedulingFeasibility } from '../../app/src/verticals/
 import { decideLogisticsScheduling } from '../../app/src/verticals/logistics/scheduling-decision-contract.js';
 import { decideLogisticsSchedulingConfirmation } from '../../app/src/verticals/logistics/scheduling-confirmation-contract.js';
 import { decideLogisticsSchedulingStart } from '../../app/src/verticals/logistics/scheduling-start-contract.js';
+import { decideLogisticsSchedulingCompletion } from '../../app/src/verticals/logistics/scheduling-completion-contract.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -7883,6 +7884,18 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
           code: startDecision.reason === 'NOT_CONFIRMED'
             ? 'SCHEDULING_NOT_CONFIRMED'
             : 'SCHEDULING_START_INVALID',
+        });
+      }
+    }
+
+    if (target === 'COMPLETED') {
+      const completion = decideLogisticsSchedulingCompletion({
+        status: row.status,
+      });
+      if (completion.decision !== 'COMPLETE') {
+        throw Object.assign(new Error(`Scheduling completion blocked: ${completion.reason}`), {
+          statusCode: 409,
+          code: 'SCHEDULING_NOT_IN_PROGRESS',
         });
       }
     }
