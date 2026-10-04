@@ -1,0 +1,163 @@
+/**
+ * L21 — External Network Expansion
+ *
+ * Canonical boundary for external logistics networks.
+ *
+ * This contract deliberately does not implement a provider adapter. The live
+ * repository currently has no concrete logistics provider/adapter authority
+ * to extend. It defines the stable boundary that a future adapter must obey.
+ */
+
+const SERVICE_PROFILES = Object.freeze([
+  'REGIONAL_FREIGHT',
+  'B2B_DISTRIBUTION',
+  'B2C_DELIVERY',
+  'P2P_DELIVERY',
+]);
+
+const DIRECTIONS = Object.freeze([
+  'SELLIFY_TO_EXTERNAL',
+  'EXTERNAL_TO_SELLIFY',
+  'BIDIRECTIONAL',
+  'READ_ONLY',
+]);
+
+function invalid(message) {
+  throw new Error(message);
+}
+
+function requireString(value, field) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    invalid(`${field} is required`);
+  }
+  return value.trim();
+}
+
+export function normalizeExternalNetworkIntegration(input = {}) {
+  const organizationId = requireString(input.organization_id, 'organization_id');
+  const integrationRef = requireString(input.integration_ref, 'integration_ref');
+  const adapterRef = requireString(input.adapter_ref, 'adapter_ref');
+  const externalNetworkRef = requireString(input.external_network_ref, 'external_network_ref');
+  const serviceProfile = requireString(input.service_profile, 'service_profile').toUpperCase();
+  const direction = requireString(input.direction, 'direction').toUpperCase();
+
+  if (!SERVICE_PROFILES.includes(serviceProfile)) {
+    invalid('unsupported service_profile');
+  }
+
+  if (!DIRECTIONS.includes(direction)) {
+    invalid('unsupported integration direction');
+  }
+
+  return Object.freeze({
+    contract_version: '1.0',
+    organization_id: organizationId,
+    integration_ref: integrationRef,
+    adapter_ref: adapterRef,
+    external_network_ref: externalNetworkRef,
+    service_profile: serviceProfile,
+    direction,
+    canonical_contract: 'logistics_external_network',
+  });
+}
+
+export function validateExternalNetworkIntegration(input = {}) {
+  const normalized = normalizeExternalNetworkIntegration(input);
+
+  return Object.freeze({
+    valid: true,
+    ...normalized,
+    boundary: Object.freeze({
+      canonical_contract: 'existing_logistics_contract',
+      adapter_authority: 'external_adapter',
+      provider_business_logic: 'adapter_only',
+      logistics_core_provider_neutral: true,
+      provider_registry_authority: false,
+      selection_authority: false,
+      assignment_authority: false,
+      routing_authority: false,
+      gps_authority: false,
+      shipment_authority: false,
+      fulfillment_authority: false,
+      inventory_authority: false,
+      payment_authority: false,
+      settlement_authority: false,
+      identity_authority: false,
+      event_store_authority: false,
+      persistence: 'existing_integration_or_canonical_domain_state_only',
+    }),
+  });
+}
+
+export function assertExternalNetworkBoundary(boundary = {}) {
+  const forbidden = [
+    'provider_registry_authority',
+    'selection_authority',
+    'assignment_authority',
+    'routing_authority',
+    'gps_authority',
+    'shipment_authority',
+    'fulfillment_authority',
+    'inventory_authority',
+    'payment_authority',
+    'settlement_authority',
+    'identity_authority',
+    'event_store_authority',
+  ];
+
+  for (const field of forbidden) {
+    if (boundary[field] === true || boundary[field] === 'logistics') {
+      invalid(`external network boundary violation: ${field}`);
+    }
+  }
+
+  if (boundary.logistics_core_provider_neutral !== true) {
+    invalid('external network boundary requires provider-neutral Logistics core');
+  }
+
+  if (boundary.provider_business_logic !== 'adapter_only') {
+    invalid('provider business logic must remain adapter-only');
+  }
+
+  if (boundary.adapter_authority !== 'external_adapter') {
+    invalid('adapter authority must remain external_adapter');
+  }
+
+  return true;
+}
+
+export function buildExternalNetworkEnvelope({
+  integration,
+  operation,
+  payload,
+  idempotency_key,
+} = {}) {
+  const validated = validateExternalNetworkIntegration(integration);
+  requireString(operation, 'operation');
+  requireString(idempotency_key, 'idempotency_key');
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    invalid('payload must be an object');
+  }
+
+  assertExternalNetworkBoundary(validated.boundary);
+
+  return Object.freeze({
+    contract_version: validated.contract_version,
+    integration_ref: validated.integration_ref,
+    adapter_ref: validated.adapter_ref,
+    external_network_ref: validated.external_network_ref,
+    service_profile: validated.service_profile,
+    direction: validated.direction,
+    operation,
+    idempotency_key,
+    payload: Object.freeze({ ...payload }),
+    canonical_contract: validated.canonical_contract,
+    authority: 'external_adapter_boundary',
+    persistence: 'existing_integration_or_canonical_domain_state_only',
+    transaction_authority: 'existing_canonical_domain_authority',
+    provider_selection_authority: false,
+    routing_authority: false,
+    assignment_authority: false,
+  });
+}
