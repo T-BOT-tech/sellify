@@ -2434,7 +2434,7 @@ function runMigrations() {
   // A provider transaction may authorize at most one Payment within an
   // organization/provider scope. NULLs remain allowed for legacy evidence,
   // but any populated transaction identity is unique at the database layer.
-  if (!applied.includes(55)) {
+  if (!applied.includes(59)) {
     db.exec(`
       CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_verifications_provider_transaction
         ON payment_verifications(organization_id, provider_id, observed_transaction_id)
@@ -2442,7 +2442,7 @@ function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_payment_verifications_provider_transaction
         ON payment_verifications(organization_id, provider_id, observed_transaction_id, created_at DESC);
     `);
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(55, nowIso());
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(59, nowIso());
   }
 
   // GAP-1.15 — canonical settlement and fee model.
