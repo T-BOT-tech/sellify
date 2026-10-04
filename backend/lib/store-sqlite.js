@@ -25,6 +25,7 @@ import { assertPackLifecyclePrecondition, getPackLifecycleManifest } from './pac
 import { assertUntrustedPaymentEvidenceShape, normalizePaymentEvidenceSource } from './payments/payment-evidence-authority.js';
 import { normalizeLogisticsSchedulingRequest } from '../../app/src/verticals/logistics/scheduling-contract.js';
 import { evaluateLogisticsSchedulingFeasibility } from '../../app/src/verticals/logistics/scheduling-feasibility-contract.js';
+import { decideLogisticsScheduling } from '../../app/src/verticals/logistics/scheduling-decision-contract.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -7801,6 +7802,45 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
         throw Object.assign(new Error('scheduled_end must not precede scheduled_start'), {
           statusCode: 400, code: 'INVALID_SCHEDULED_WINDOW',
         });
+      }
+
+      const existingActivities = db.prepare(
+        "SELECT * FROM logistics_scheduling_activities WHERE organization_id = ? AND id <> ? AND status IN ('SCHEDULED', 'CONFIRMED', 'IN_PROGRESS')"
+      ).all(organizationId, String(activityId));
+
+      const feasibility = evaluateLogisticsSchedulingFeasibility({
+        request: {
+          organization_id: row.organization_id,
+          location_id: row.location_id,
+          activity_type: row.activity_type,
+          mode: row.mode,
+          requested_start: row.requested_start,
+          requested_end: row.requested_end,
+          scheduled_start: scheduledStart,
+          scheduled_end: scheduledEnd,
+          timezone: row.timezone,
+          recurrence: parseJSON(row.recurrence_json, null),
+          related: {
+            order: row.related_order_id ? { id: row.related_order_id } : null,
+            fulfillment: row.related_fulfillment_id ? { id: row.related_fulfillment_id } : null,
+            movement: row.related_movement_id ? { id: row.related_movement_id } : null,
+          },
+        },
+        existingActivities: existingActivities.map(logisticsSchedulingRow),
+        externalEvaluation: input.externalEvaluation ?? input.external_evaluation ?? null,
+      });
+
+      const decision = decideLogisticsScheduling({ evaluation: feasibility });
+      if (decision.decision !== 'SCHEDULE') {
+        throw Object.assign(
+          new Error(`Scheduling transition blocked: ${decision.reason}`),
+          {
+            statusCode: 409,
+            code: decision.reason === 'CONFLICT'
+              ? 'SCHEDULING_FEASIBILITY_CONFLICT'
+              : 'SCHEDULING_FEASIBILITY_UNKNOWN',
+          },
+        );
       }
     }
 
