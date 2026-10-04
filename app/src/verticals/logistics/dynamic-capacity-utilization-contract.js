@@ -495,6 +495,44 @@ export function assertDynamicCapacityUtilizationBoundary({
   });
 }
 
+
+export function dynamicCapacityUtilizationClosureGate() {
+  const contract = dynamicCapacityUtilizationContract();
+  const requiredProfiles = new Set(DYNAMIC_CAPACITY_PROFILES);
+
+  const valid =
+    contract.version === LOGISTICS_DYNAMIC_CAPACITY_UTILIZATION_CONTRACT_VERSION &&
+    contract.base_availability.startsWith('24/7') &&
+    contract.default_allocation_mode === 'PREFERRED' &&
+    contract.capacity_authority === 'existing_capacity_authority' &&
+    contract.scheduling_authority === 'existing_l11_scheduling' &&
+    contract.assignment_authority === 'existing_logistics_assignment' &&
+    contract.persistence === 'none' &&
+    contract.reservation_authority === 'none' &&
+    contract.capacity_ledger === false &&
+    contract.duplicate_scheduler === false &&
+    contract.dispatch_authority === false &&
+    contract.routing_authority === false &&
+    contract.gps_authority === false &&
+    contract.profiles.length === requiredProfiles.size &&
+    contract.profiles.every(profile => requiredProfiles.has(profile));
+
+  return Object.freeze({
+    valid,
+    reason: valid
+      ? 'DYNAMIC_CAPACITY_UTILIZATION_CLOSURE_VALIDATED'
+      : 'DYNAMIC_CAPACITY_UTILIZATION_CLOSURE_INVALID',
+    version: contract.version,
+    profiles: contract.profiles,
+    base_availability: contract.base_availability,
+    allocation_mode: contract.default_allocation_mode,
+    scheduling_authority: contract.scheduling_authority,
+    assignment_authority: contract.assignment_authority,
+    persistence: contract.persistence,
+    reservation_authority: contract.reservation_authority,
+  });
+}
+
 export function dynamicCapacityUtilizationContract() {
   return Object.freeze({
     version: LOGISTICS_DYNAMIC_CAPACITY_UTILIZATION_CONTRACT_VERSION,
