@@ -25,7 +25,7 @@ jobs:
       - name: Install root dependencies
         run: npm install --ignore-scripts
       - name: Run L11.8 scheduling decision regression
-        run: npm run test:logistics-l11.8-l11.9
+        run: npm run test:logistics-l11.10
 
   baseline:
     runs-on: ubuntu-latest
