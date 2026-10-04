@@ -375,7 +375,8 @@
     "test:logistics-l16": "node phase0/logistics-b2b-distribution-regression.mjs",
     "test:logistics-l17": "node phase0/logistics-b2c-delivery-regression.mjs",
     "test:logistics-l18": "node phase0/logistics-p2p-delivery-regression.mjs",
-    "test:logistics-l19": "node phase0/logistics-dynamic-capacity-utilization-regression.mjs"
+    "test:logistics-l19": "node phase0/logistics-dynamic-capacity-utilization-regression.mjs",
+    "test:logistics-l20.1": "node phase0/logistics-network-corridor-intelligence-regression.mjs"
   },
   "engines": {
     "node": ">=24"
