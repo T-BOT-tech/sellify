@@ -380,7 +380,8 @@
     "test:logistics-l20.2": "node phase0/logistics-network-corridor-intelligence-regression.mjs",
     "test:logistics-l20.3": "node phase0/logistics-network-corridor-intelligence-regression.mjs",
     "test:logistics-l20.4": "node phase0/logistics-network-corridor-intelligence-regression.mjs",
-    "test:logistics-l20.5": "node phase0/logistics-network-corridor-intelligence-regression.mjs"
+    "test:logistics-l20.5": "node phase0/logistics-network-corridor-intelligence-regression.mjs",
+    "test:logistics-l20.6": "node phase0/logistics-network-corridor-intelligence-regression.mjs"
   },
   "engines": {
     "node": ">=24"
