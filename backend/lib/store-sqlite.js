@@ -2720,7 +2720,7 @@ function runMigrations() {
         ON supplier_network_capabilities(code,status,visibility,organization_id);
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(31, nowIso());
-  }}
+  }
 
   // L11.3 — Logistics scheduling persistence foundation.
   // This stores temporal coordination state only. Existing Order, Fulfillment,
