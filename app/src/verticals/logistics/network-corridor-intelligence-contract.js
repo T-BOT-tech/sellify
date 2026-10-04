@@ -368,6 +368,58 @@ export function deriveCapacityShortageSignal({ observations } = {}) {
 }
 
 
+
+export function deriveRecurringDemandSignal({ observations } = {}) {
+  if (!Array.isArray(observations) || observations.length === 0) {
+    invalid('observations must be a non-empty array');
+  }
+
+  const normalized = observations.map(normalizeNetworkIntelligenceObservation);
+  const first = normalized[0];
+
+  for (const item of normalized.slice(1)) {
+    if (item.organization_id !== first.organization_id) {
+      invalid('organization scope conflict');
+    }
+    if (item.corridor_ref !== first.corridor_ref) {
+      invalid('corridor scope conflict');
+    }
+    if (item.service_profile !== first.service_profile) {
+      invalid('service profile scope conflict');
+    }
+  }
+
+  const recurring = normalized.reduce(
+    (sum, item) => sum + item.recurring_demand_count,
+    0,
+  );
+  const demand = normalized.reduce((sum, item) => sum + item.demand_count, 0);
+  const fulfilled = normalized.reduce((sum, item) => sum + item.fulfilled_count, 0);
+
+  return Object.freeze({
+    contract_version: first.contract_version,
+    organization_id: first.organization_id,
+    corridor_ref: first.corridor_ref,
+    service_profile: first.service_profile,
+    observation_count: normalized.length,
+    demand,
+    fulfilled_demand: fulfilled,
+    unmet_demand: demand - fulfilled,
+    recurring_demand: recurring,
+    recurring_demand_signal: recurring > 0
+      ? 'RECURRING_DEMAND_OBSERVED'
+      : 'NO_RECURRING_DEMAND_OBSERVED',
+    authority: 'logistics_derived_intelligence',
+    source_authority: 'existing_operational_domain_data',
+    persistence: 'none',
+    transaction: false,
+    scheduling_authority: 'existing_l11_scheduling',
+    reservation_authority: false,
+    order_creation_authority: false,
+    dispatch_authority: false,
+  });
+}
+
 export function deriveServiceAreaGapSignal({ observations } = {}) {
   if (!Array.isArray(observations) || observations.length === 0) {
     invalid('observations must be a non-empty array');
