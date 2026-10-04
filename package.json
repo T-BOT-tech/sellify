@@ -378,7 +378,8 @@
     "test:logistics-l19": "node phase0/logistics-dynamic-capacity-utilization-regression.mjs",
     "test:logistics-l20.1": "node phase0/logistics-network-corridor-intelligence-regression.mjs",
     "test:logistics-l20.2": "node phase0/logistics-network-corridor-intelligence-regression.mjs",
-    "test:logistics-l20.3": "node phase0/logistics-network-corridor-intelligence-regression.mjs"
+    "test:logistics-l20.3": "node phase0/logistics-network-corridor-intelligence-regression.mjs",
+    "test:logistics-l20.4": "node phase0/logistics-network-corridor-intelligence-regression.mjs"
   },
   "engines": {
     "node": ">=24"
