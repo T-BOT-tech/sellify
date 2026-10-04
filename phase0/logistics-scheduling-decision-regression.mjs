@@ -14,6 +14,7 @@ const {
   getDatabaseForTests,
   createLogisticsSchedulingActivity,
   transitionLogisticsSchedulingActivity,
+  getTenant,
 } = await import('../backend/lib/store-sqlite.js');
 
 const {
@@ -42,6 +43,10 @@ assert.equal(
   db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(chatId).organization_id,
   organizationId,
 );
+
+const fixtureTenant = await getTenant(chatId);
+assert.ok(fixtureTenant, 'L11.8 fixture tenant must exist');
+assert.equal(fixtureTenant.organizationId, organizationId);
 
 db.prepare(
   'INSERT INTO locations (id,organization_id,code,name,type,status,created_at) VALUES (?,?,?,?,?,?,?)'
