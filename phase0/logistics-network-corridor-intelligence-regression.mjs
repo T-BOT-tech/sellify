@@ -10,6 +10,7 @@ import {
   deriveBackhaulOpportunitySignal,
   deriveDepotThroughputSignal,
   deriveCapacityShortageSignal,
+  deriveServiceAreaGapSignal,
 } from '../app/src/verticals/logistics/network-corridor-intelligence-contract.js';
 
 const observation = {
@@ -148,6 +149,45 @@ assert.equal(shortageSignal.routing, false);
 assert.equal(shortageSignal.provider_selection, false);
 assert.equal(shortageSignal.assignment, false);
 assert.equal(shortageSignal.transaction, false);
+
+const serviceAreaSignal = deriveServiceAreaGapSignal({
+  observations: [
+    observation,
+    { ...observation, observation_ref: 'OBS-006', service_area_gap_count: 4, demand_count: 9, fulfilled_count: 5 },
+  ],
+});
+assert.equal(serviceAreaSignal.organization_id, 'org-1');
+assert.equal(serviceAreaSignal.corridor_ref, 'ADDIS-DEPOT-01');
+assert.equal(serviceAreaSignal.service_profile, 'REGIONAL_FREIGHT');
+assert.equal(serviceAreaSignal.observation_count, 2);
+assert.equal(serviceAreaSignal.demand, 29);
+assert.equal(serviceAreaSignal.fulfilled_demand, 20);
+assert.equal(serviceAreaSignal.unmet_demand, 9);
+assert.equal(serviceAreaSignal.observed_service_area_gap, 6);
+assert.equal(serviceAreaSignal.coverage_signal, 'SERVICE_AREA_GAP_OBSERVED');
+assert.equal(serviceAreaSignal.authority, 'logistics_derived_intelligence');
+assert.equal(serviceAreaSignal.location_authority, 'existing_locations');
+assert.equal(serviceAreaSignal.gps_authority, false);
+assert.equal(serviceAreaSignal.routing_authority, false);
+assert.equal(serviceAreaSignal.provider_selection_authority, false);
+assert.equal(serviceAreaSignal.dispatch_authority, false);
+assert.equal(serviceAreaSignal.persistence, 'none');
+assert.equal(serviceAreaSignal.transaction, false);
+
+const noServiceGap = deriveServiceAreaGapSignal({
+  observations: [{ ...observation, service_area_gap_count: 0 }],
+});
+assert.equal(noServiceGap.coverage_signal, 'NO_SERVICE_AREA_GAP_OBSERVED');
+
+assert.throws(() => deriveServiceAreaGapSignal({
+  observations: [observation, { ...observation, organization_id: 'org-2', observation_ref: 'OBS-G1' }],
+}), /organization scope conflict/i);
+assert.throws(() => deriveServiceAreaGapSignal({
+  observations: [observation, { ...observation, corridor_ref: 'OTHER-CORRIDOR', observation_ref: 'OBS-G2' }],
+}), /corridor scope conflict/i);
+assert.throws(() => deriveServiceAreaGapSignal({
+  observations: [observation, { ...observation, service_profile: 'B2C_DELIVERY', observation_ref: 'OBS-G3' }],
+}), /service profile scope conflict/i);
 
 const noShortage = deriveCapacityShortageSignal({
   observations: [{ ...observation, demand_count: 5, fulfilled_count: 5, shortage_count: 0 }],
