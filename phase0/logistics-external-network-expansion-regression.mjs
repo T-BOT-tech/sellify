@@ -8,6 +8,8 @@ import {
   normalizeExternalAdapterCapabilities,
   validateExternalAdapterCapabilities,
   assertExternalAdapterCapabilityBoundary,
+  buildExternalAdapterRequest,
+  normalizeExternalAdapterResponse,
 } from '../app/src/verticals/logistics/external-network-expansion-contract.js';
 
 const integration = {
@@ -213,7 +215,97 @@ assert.throws(() => assertExternalAdapterCapabilityBoundary({
   capability_authority: 'external_adapter',
 }), /declarative/i);
 
+const request = buildExternalAdapterRequest({
+  integration: {
+    ...integration,
+    capabilities: ['DELIVERY_REQUEST', 'TRACKING_STATUS'],
+  },
+  operation: 'DELIVERY_REQUEST',
+  correlation_ref: 'CORR-001',
+  idempotency_key: 'idem-req-001',
+  payload: { destination_ref: 'LOC-01' },
+});
+assert.equal(request.operation, 'DELIVERY_REQUEST');
+assert.equal(request.correlation_ref, 'CORR-001');
+assert.equal(request.idempotency_key, 'idem-req-001');
+assert.equal(request.authority, 'external_adapter_boundary');
+assert.equal(request.canonical_mutation_authority, 'existing_canonical_domain_authority');
+assert.equal(request.direct_domain_mutation, false);
+
+assert.throws(() => buildExternalAdapterRequest({
+  integration: {
+    ...integration,
+    capabilities: ['TRACKING_STATUS'],
+  },
+  operation: 'DELIVERY_REQUEST',
+  correlation_ref: 'CORR-002',
+  idempotency_key: 'idem-req-002',
+  payload: {},
+}), /capability not advertised/i);
+
+const normalizedResponse = normalizeExternalAdapterResponse({
+  integration: {
+    ...integration,
+    capabilities: ['DELIVERY_REQUEST'],
+  },
+  operation: 'DELIVERY_REQUEST',
+  correlation_ref: 'CORR-001',
+  response: {
+    status: 'accepted',
+    external_ref: 'EXT-REQ-01',
+    observed_at: '2026-10-04T10:00:00Z',
+    evidence_ref: 'EVID-01',
+  },
+});
+assert.equal(normalizedResponse.status, 'ACCEPTED');
+assert.equal(normalizedResponse.external_ref, 'EXT-REQ-01');
+assert.equal(normalizedResponse.correlation_ref, 'CORR-001');
+assert.equal(normalizedResponse.authority, 'external_adapter_observation');
+assert.equal(normalizedResponse.canonical_mutation_authority, 'existing_canonical_domain_authority');
+assert.equal(normalizedResponse.direct_domain_mutation, false);
+assert.equal(normalizedResponse.provider_selection_authority, false);
+assert.equal(normalizedResponse.routing_authority, false);
+assert.equal(normalizedResponse.assignment_authority, false);
+assert.equal(normalizedResponse.shipment_authority, false);
+assert.equal(normalizedResponse.fulfillment_authority, false);
+assert.equal(normalizedResponse.payment_authority, false);
+assert.equal(normalizedResponse.inventory_authority, false);
+
+assert.throws(() => normalizeExternalAdapterResponse({
+  integration: {
+    ...integration,
+    capabilities: ['DELIVERY_REQUEST'],
+  },
+  operation: 'DELIVERY_REQUEST',
+  correlation_ref: 'CORR-003',
+  response: { status: 'UNKNOWN' },
+}), /unsupported adapter response status/i);
+
+assert.throws(() => buildExternalAdapterRequest({
+  integration: {
+    ...integration,
+    capabilities: ['DELIVERY_REQUEST'],
+  },
+  operation: 'DELIVERY_REQUEST',
+  correlation_ref: 'CORR-004',
+  payload: {},
+}), /idempotency_key is required/i);
+
 assert.throws(() => buildExternalNetworkEnvelope({
+  integration,
+  operation: 'CREATE_DELIVERY_REQUEST',
+  payload: {},
+}), /idempotency_key is required/i);
+
+console.log('L21.1 External Network Expansion Canonical Boundary Regression: PASS');
+
+  integration,
+  operation: 'CREATE_DELIVERY_REQUEST',
+  payload: {},
+}), /idempotency_key is required/i);
+
+console.log('L21.1 External Network Expansion Canonical Boundary Regression: PASS');
+
   integration,
   operation: 'CREATE_DELIVERY_REQUEST',
   payload: {},
