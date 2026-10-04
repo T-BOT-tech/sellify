@@ -36,6 +36,11 @@ const {
   logisticsSchedulingCompletionContract,
 } = await import('../app/src/verticals/logistics/scheduling-completion-contract.js');
 
+const {
+  decideLogisticsSchedulingFailure,
+  logisticsSchedulingFailureContract,
+} = await import('../app/src/verticals/logistics/scheduling-failure-contract.js');
+
 
 const db = getDatabaseForTests();
 const chatId = 'l11.8-regression-chat';
@@ -178,6 +183,42 @@ assert.equal(
 assert.equal(
   decideLogisticsSchedulingCompletion({ status: 'IN_PROGRESS' }).decision,
   'COMPLETE',
+);
+
+const failureContract = logisticsSchedulingFailureContract();
+assert.equal(failureContract.confirmed_allows_failure, true);
+assert.equal(failureContract.in_progress_allows_failure, true);
+assert.equal(failureContract.inactive_allows_failure, false);
+assert.equal(failureContract.failure_reason_required, true);
+assert.equal(failureContract.failure_is_execution, false);
+assert.equal(failureContract.failure_is_fulfillment_failure, false);
+assert.equal(failureContract.failure_is_delivery_failure, false);
+assert.equal(failureContract.mutates_fulfillment, false);
+assert.equal(failureContract.mutates_payment, false);
+assert.equal(failureContract.mutates_inventory, false);
+assert.equal(failureContract.selects_provider, false);
+assert.equal(failureContract.dispatches, false);
+assert.equal(
+  decideLogisticsSchedulingFailure({ status: 'SCHEDULED', reason: 'weather' }).decision,
+  'BLOCK',
+);
+assert.equal(
+  decideLogisticsSchedulingFailure({ status: 'CONFIRMED' }).decision,
+  'BLOCK',
+);
+assert.equal(
+  decideLogisticsSchedulingFailure({
+    status: 'CONFIRMED',
+    reason: 'provider unavailable',
+  }).decision,
+  'FAIL',
+);
+assert.equal(
+  decideLogisticsSchedulingFailure({
+    status: 'IN_PROGRESS',
+    reason: 'route exception',
+  }).decision,
+  'FAIL',
 );
 
 for (const outcome of ['CONFLICT', 'UNKNOWN']) {
@@ -408,4 +449,81 @@ assert.equal(completedReplay.idempotent, true);
 assert.equal(completedReplay.status, 'COMPLETED');
 assert.equal(completedReplay.version, 5);
 
-console.log('L11.8/L11.9/L11.10/L11.11 Logistics Scheduling Decision + Confirmation + Start + Completion Boundary Regression: PASS');
+const failed = await create(
+  'l11.12-create-failure',
+  '2026-10-12T09:00:00Z',
+  '2026-10-12T10:00:00Z',
+  'movement-l11-12-failure',
+);
+const failedScheduled = await transitionLogisticsSchedulingActivity(
+  chatId,
+  failed.id,
+  'SCHEDULED',
+  actor,
+  {
+    idempotency_key: 'l11.12-schedule-failure',
+    expectedVersion: 1,
+    externalEvaluation: {
+      outcome: 'FEASIBLE',
+      authority: 'existing-capacity-authority',
+      reference_id: 'l11.12-capacity-1',
+    },
+  },
+);
+assert.equal(failedScheduled.status, 'SCHEDULED');
+const failedConfirmed = await transitionLogisticsSchedulingActivity(
+  chatId,
+  failed.id,
+  'CONFIRMED',
+  actor,
+  {
+    idempotency_key: 'l11.12-confirm-failure',
+    expectedVersion: 2,
+  },
+);
+assert.equal(failedConfirmed.status, 'CONFIRMED');
+
+await assert.rejects(
+  () => transitionLogisticsSchedulingActivity(
+    chatId,
+    failed.id,
+    'FAILED',
+    actor,
+    {
+      idempotency_key: 'l11.12-failure-no-reason',
+      expectedVersion: 3,
+    },
+  ),
+  error => error?.code === 'SCHEDULING_FAILURE_REASON_REQUIRED',
+);
+
+const failedResult = await transitionLogisticsSchedulingActivity(
+  chatId,
+  failed.id,
+  'FAILED',
+  actor,
+  {
+    idempotency_key: 'l11.12-failure-1',
+    expectedVersion: 3,
+    failure_reason: 'provider unavailable',
+  },
+);
+assert.equal(failedResult.status, 'FAILED');
+assert.equal(failedResult.version, 4);
+
+const failedReplay = await transitionLogisticsSchedulingActivity(
+  chatId,
+  failed.id,
+  'FAILED',
+  actor,
+  {
+    idempotency_key: 'l11.12-failure-1',
+    expectedVersion: 3,
+    failure_reason: 'provider unavailable',
+  },
+);
+assert.equal(failedReplay.idempotent, true);
+assert.equal(failedReplay.status, 'FAILED');
+assert.equal(failedReplay.version, 4);
+
+console.log('L11.8/L11.9/L11.10/L11.11/L11.12 Logistics Scheduling Decision + Confirmation + Start + Completion + Failure Boundary Regression: PASS');
