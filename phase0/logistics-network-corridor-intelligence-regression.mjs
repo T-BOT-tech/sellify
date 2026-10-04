@@ -9,6 +9,7 @@ import {
   deriveCorridorDemandSignal,
   deriveBackhaulOpportunitySignal,
   deriveDepotThroughputSignal,
+  deriveCapacityShortageSignal,
 } from '../app/src/verticals/logistics/network-corridor-intelligence-contract.js';
 
 const observation = {
@@ -121,6 +122,48 @@ assert.equal(depotSignal.routing, false);
 assert.equal(depotSignal.provider_selection, false);
 assert.equal(depotSignal.assignment, false);
 assert.equal(depotSignal.transaction, false);
+
+const shortageSignal = deriveCapacityShortageSignal({
+  observations: [
+    observation,
+    { ...observation, observation_ref: 'OBS-005', demand_count: 12, fulfilled_count: 5, shortage_count: 3, capacity_count: 2 },
+  ],
+});
+assert.equal(shortageSignal.organization_id, 'org-1');
+assert.equal(shortageSignal.corridor_ref, 'ADDIS-DEPOT-01');
+assert.equal(shortageSignal.service_profile, 'REGIONAL_FREIGHT');
+assert.equal(shortageSignal.observation_count, 2);
+assert.equal(shortageSignal.demand, 32);
+assert.equal(shortageSignal.fulfilled_demand, 20);
+assert.equal(shortageSignal.unmet_demand, 12);
+assert.equal(shortageSignal.observed_shortage, 7);
+assert.equal(shortageSignal.available_capacity, 10);
+assert.equal(shortageSignal.shortage_signal, 'SHORTAGE_OBSERVED');
+assert.equal(shortageSignal.authority, 'logistics_derived_intelligence');
+assert.equal(shortageSignal.capacity_authority, 'existing_capacity_authority');
+assert.equal(shortageSignal.reservation_authority, false);
+assert.equal(shortageSignal.capacity_ledger, false);
+assert.equal(shortageSignal.persistence, 'none');
+assert.equal(shortageSignal.routing, false);
+assert.equal(shortageSignal.provider_selection, false);
+assert.equal(shortageSignal.assignment, false);
+assert.equal(shortageSignal.transaction, false);
+
+const noShortage = deriveCapacityShortageSignal({
+  observations: [{ ...observation, demand_count: 5, fulfilled_count: 5, shortage_count: 0 }],
+});
+assert.equal(noShortage.shortage_signal, 'NO_SHORTAGE_OBSERVED');
+assert.equal(noShortage.unmet_demand, 0);
+
+assert.throws(() => deriveCapacityShortageSignal({
+  observations: [observation, { ...observation, organization_id: 'org-2', observation_ref: 'OBS-S1' }],
+}), /organization scope conflict/i);
+assert.throws(() => deriveCapacityShortageSignal({
+  observations: [observation, { ...observation, corridor_ref: 'OTHER-CORRIDOR', observation_ref: 'OBS-S2' }],
+}), /corridor scope conflict/i);
+assert.throws(() => deriveCapacityShortageSignal({
+  observations: [observation, { ...observation, service_profile: 'B2C_DELIVERY', observation_ref: 'OBS-S3' }],
+}), /service profile scope conflict/i);
 
 const constrainedDepot = deriveDepotThroughputSignal({
   observations: [{
