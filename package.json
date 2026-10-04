@@ -356,7 +356,8 @@
     "test:logistics-l11.1": "node phase0/logistics-scheduling-contract-regression.mjs",
     "test:logistics-l11.3": "node phase0/logistics-scheduling-persistence-regression.mjs",
     "test:logistics-l11.4": "node phase0/logistics-scheduling-service-regression.mjs",
-    "test:logistics-l11.5": "node phase0/logistics-scheduling-authorization-regression.mjs"
+    "test:logistics-l11.5": "node phase0/logistics-scheduling-authorization-regression.mjs",
+    "test:logistics-l11.6": "node phase0/logistics-scheduling-feasibility-regression.mjs"
   },
   "engines": {
     "node": ">=24"
