@@ -79,4 +79,45 @@ assert.match(routingBlock, /organizationId: tenant\.organizationId/);
 assert.match(routingBlock, /requireAuthorization\(session, tenant, 'payments', 'payments:view'/);
 assert.match(routingBlock, /paymentCore\.resolveRouting/);
 
+
+// Replay semantics: frontend payment mutations must require an idempotency key,
+// and the core must use it for refund/settlement/lifecycle mutations rather than
+// treating retries as independent financial commands.
+const refundStart = server.indexOf('async function handlePaymentRefund');
+assert.notEqual(refundStart, -1);
+const refundBlock = server.slice(refundStart, refundStart + 1500);
+assert.match(refundBlock, /paymentCore\.refund/);
+assert.match(refundBlock, /organizationId: tenant\.organizationId/);
+
+const settlementStart = server.indexOf('async function handlePaymentSettlement');
+assert.notEqual(settlementStart, -1);
+const settlementBlock = server.slice(settlementStart, settlementStart + 1700);
+assert.match(settlementBlock, /paymentCore\.createSettlement/);
+assert.match(settlementBlock, /organizationId: tenant\.organizationId/);
+
+const core = fs.readFileSync('backend/lib/payments/payment-core.js', 'utf8');
+const refundCoreStart = core.indexOf('async refund(command = {})');
+assert.notEqual(refundCoreStart, -1);
+const refundCoreBlock = core.slice(refundCoreStart, refundCoreStart + 1500);
+assert.match(refundCoreBlock, /idempotencyKey/);
+assert.match(refundCoreBlock, /getPaymentRefundByIdempotencyKey/);
+assert.match(refundCoreBlock, /createPaymentRefundRequest/);
+
+const settlementCoreStart = core.indexOf('async createSettlement(command = {})');
+assert.notEqual(settlementCoreStart, -1);
+const settlementCoreBlock = core.slice(settlementCoreStart, settlementCoreStart + 1200);
+assert.match(settlementCoreBlock, /idempotencyKey/);
+assert.match(settlementCoreBlock, /getPaymentSettlementByIdempotencyKey/);
+
+const lifecycleCoreStart = core.indexOf('async transitionLifecycle(command = {})');
+assert.notEqual(lifecycleCoreStart, -1);
+const lifecycleCoreBlock = core.slice(lifecycleCoreStart, lifecycleCoreStart + 2800);
+assert.match(lifecycleCoreBlock, /idempotencyKey/);
+assert.match(lifecycleCoreBlock, /commitPaymentDecision/);
+
+// A frontend retry cannot ask the API to directly set a financial state.
+assert.doesNotMatch(client, /targetState:\s*['"]VERIFIED['"]/);
+assert.doesNotMatch(client, /state:\s*['"]VERIFIED['"]/);
+assert.doesNotMatch(client, /ledgerEntry|ledger_entry|payment_ledger_entries/);
+
 console.log('PASS PF-2 payment frontend adversarial boundary regression');
