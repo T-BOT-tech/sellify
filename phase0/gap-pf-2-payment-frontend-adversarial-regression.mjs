@@ -206,6 +206,22 @@ assert.match(projection, /sequence === paymentStatusSequences\.get\(id\)/);
 
 
 
+// Reservation-release certification: terminal/released states must not
+// continue consuming an order's outstanding payment capacity.
+const reservationStates = createPaymentBlock.match(/state IN \\('UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','PARTIAL'\\)/)?.[0] || '';
+assert.match(reservationStates, /UNPAID/);
+assert.match(reservationStates, /PARTIAL/);
+assert.doesNotMatch(reservationStates, /FAILED/);
+assert.doesNotMatch(reservationStates, /EXPIRED/);
+assert.doesNotMatch(reservationStates, /CANCELLED/);
+assert.doesNotMatch(reservationStates, /REJECTED/);
+assert.doesNotMatch(reservationStates, /REFUNDED/);
+
+const refundBlock = storeSource.slice(storeSource.indexOf('export async function finalizePaymentRefund'), storeSource.indexOf('export async function getPayment(chatId'));
+assert.match(refundBlock, /state = \\?, updated_at = \\?/);
+assert.match(refundBlock, /'REFUNDED'/);
+assert.match(refundBlock, /fullRefund/);
+
 // Order payment reservation certification: payment creation must reserve
 // the outstanding order balance atomically, preventing concurrent overpayment
 // while allowing legitimate split payments.
