@@ -26,9 +26,9 @@ export async function listPayments(input = {}) {
 export async function getOrderPaymentSummary(orderId) {
   const id = String(orderId || '').trim();
   if (!id) throw Object.assign(new Error('orderId is required'), { code: 'ORDER_REQUIRED', status: 400 });
-  return request(
-    buildPaymentPath(config.chatId, '/../../orders/' + encodeURIComponent(id) + '/payments/summary'),
-  );
+  const tenant = encodeURIComponent(String(config.chatId || '').trim());
+  if (!tenant) throw new TypeError('Tenant chatId is required');
+  return request('/tenants/' + tenant + '/orders/' + encodeURIComponent(id) + '/payments/summary');
 }
 
 export async function getPayment(paymentId) {
