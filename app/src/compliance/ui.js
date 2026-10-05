@@ -7,6 +7,7 @@ const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bea
 
 let complianceRequestLoadSequence = 0;
 let auditLoadSequence = 0;
+let retentionLoadSequence = 0;
 
 async function request(path, options = {}) {
   const res = await fetch(base() + path, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
@@ -102,10 +103,12 @@ export async function renderCompliancePanel() {
 async function loadRetentionPolicy() {
   const input = document.getElementById('complianceRetentionDays');
   if (!input || !allowed()) return;
+  const loadSequence = ++retentionLoadSequence;
   const requestChatId = config.chatId;
   const requestSessionToken = config.sessionToken;
   try {
     const data = await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/retention`);
+    if (loadSequence !== retentionLoadSequence) return;
     if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
     const retentionDays = Number(data?.policy?.retentionDays);
     if (!Number.isInteger(retentionDays) || retentionDays < 30 || retentionDays > 3650) {
@@ -130,6 +133,7 @@ async function saveRetentionPolicy() {
     throw new Error('Retention must be a whole number from 30 to 3650 days.');
   }
   const retentionDays = parsed;
+  retentionLoadSequence += 1;
   const requestChatId = config.chatId;
   const requestSessionToken = config.sessionToken;
   try {
