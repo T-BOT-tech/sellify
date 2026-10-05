@@ -1125,7 +1125,7 @@ function runMigrations() {
         organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
         amount_minor INTEGER NOT NULL CHECK (amount_minor >= 0),
         currency TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'UNPAID' CHECK (status IN ('UNPAID','PARTIAL','ALLOCATED','REFUNDED')),
+        status TEXT NOT NULL DEFAULT 'UNPAID' CHECK (status IN ('UNPAID','PARTIAL','ALLOCATED','REFUNDED','REVERSED')),
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         UNIQUE(seller_order_id, payment_id)
@@ -1999,7 +1999,33 @@ function runMigrations() {
   // channel configuration and a reference to an external secret, never a raw
   // Telegram bot token. Commerce, inventory, payment, fulfillment and events
   // remain authoritative in their existing domains.
-  if (!applied.includes(39)) {
+    if (!applied.includes(40)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS marketplace_payment_allocations_v40 (
+        id TEXT PRIMARY KEY,
+        marketplace_order_id TEXT NOT NULL REFERENCES marketplace_orders(id) ON DELETE CASCADE,
+        seller_order_id TEXT NOT NULL REFERENCES marketplace_seller_orders(id) ON DELETE CASCADE,
+        payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+        amount_minor INTEGER NOT NULL CHECK (amount_minor >= 0),
+        currency TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'UNPAID' CHECK (status IN ('UNPAID','PARTIAL','ALLOCATED','REFUNDED','REVERSED')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(seller_order_id, payment_id)
+      );
+      INSERT INTO marketplace_payment_allocations_v40
+        SELECT id, marketplace_order_id, seller_order_id, payment_id, organization_id, amount_minor, currency, status, created_at, updated_at
+        FROM marketplace_payment_allocations;
+      DROP TABLE marketplace_payment_allocations;
+      ALTER TABLE marketplace_payment_allocations_v40 RENAME TO marketplace_payment_allocations;
+      CREATE INDEX IF NOT EXISTS idx_marketplace_payment_allocations_order
+        ON marketplace_payment_allocations(marketplace_order_id, status);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(40, nowIso());
+  }
+
+if (!applied.includes(39)) {
     db.exec(`
       CREATE TABLE IF NOT EXISTS telegram_storefront_configs (
         organization_id TEXT PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
@@ -6317,6 +6343,9 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
     if (marketplaceAllocation) {
       if (target === 'REFUNDED') {
         db.prepare("UPDATE marketplace_payment_allocations SET status = 'REFUNDED', updated_at = ? WHERE id = ?").run(now, marketplaceAllocation.id);
+        db.prepare("UPDATE marketplace_settlements SET status = 'REVERSED' WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')").run(marketplaceAllocation.canonical_seller_order_id);
+      } else if (target === 'REVERSED') {
+        db.prepare("UPDATE marketplace_payment_allocations SET status = 'REVERSED', updated_at = ? WHERE id = ?").run(now, marketplaceAllocation.id);
         db.prepare("UPDATE marketplace_settlements SET status = 'REVERSED' WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')").run(marketplaceAllocation.canonical_seller_order_id);
       } else if (['VERIFIED','RECONCILED'].includes(target) && Number(row.amount_minor) === Number(marketplaceAllocation.amount_minor)) {
         db.prepare("UPDATE marketplace_payment_allocations SET status = 'ALLOCATED', updated_at = ? WHERE id = ?").run(now, marketplaceAllocation.id);
