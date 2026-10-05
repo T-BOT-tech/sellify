@@ -9,6 +9,7 @@ const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const store = read('backend/lib/store-sqlite.js');
 const server = read('backend/server.js');
 const frontend = read('app/src/authorization/membership-admin.js');
+const authorization = read('backend/lib/authorization.js');
 const permissions = read('app/src/auth/permissions.js');
 
 assert.match(store, /export async function changeMembershipRole\(/);
@@ -26,6 +27,8 @@ assert.match(store, /existing\?\.status === 'active'/);
 assert.match(store, /changed: false/);
 assert.match(store, /ON CONFLICT\(membership_id, role_id, scope_type, scope_id\)/);
 assert.match(store, /changed: true/);
+assert.match(store, /contextual_roles_json/);
+assert.match(store, /contextualRoles: parseJSON/);
 
 assert.match(store, /export async function revokeMembershipContextualRole\(/);
 assert.match(store, /membership\.contextual_role\.revoked/);
@@ -38,6 +41,10 @@ assert.ok(server.includes("/auth/membership-contextual-role/revoke"), 'contextua
 assert.match(server, /membership:role:manage/);
 assert.doesNotMatch(server, /handleListTenantMemberships[\\s\\S]{0,500}logistics:deliveries:view/);
 
+assert.match(authorization, /Contextual roles are scoped authorities/);
+assert.match(authorization, /scopeType === 'LOCATION'/);
+assert.match(authorization, /requestedLocationId/);
+assert.match(authorization, /return false/);
 assert.match(permissions, /membership:role:manage/);
 assert.match(frontend, /membership:role:manage/);
 assert.match(frontend, /MANAGER_ASSIGNABLE_ROLES/);
