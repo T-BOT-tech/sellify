@@ -1,13 +1,19 @@
 import { listPayments, resolvePaymentRouting, createPayment, queryPaymentStatus, paymentCommandKey } from './client.js';
 import { setPayments, getPayments, setPaymentError, upsertPayment } from './state.js';
 
+let projectionRefreshSequence = 0;
+const paymentStatusSequences = new Map();
+
 export async function refreshPaymentProjection() {
+  const sequence = ++projectionRefreshSequence;
   try {
     const payments = await listPayments({ limit: 500 });
+    if (sequence !== projectionRefreshSequence) return getPayments();
     setPayments(payments);
     setPaymentError(null);
     return payments;
   } catch (error) {
+    if (sequence !== projectionRefreshSequence) return getPayments();
     setPaymentError(error);
     return getPayments();
   }
@@ -82,8 +88,12 @@ export async function refreshCanonicalPaymentStatus(paymentId, body = {}, { idem
   const id = String(paymentId || '').trim();
   if (!id) throw Object.assign(new Error('paymentId is required'), { code: 'PAYMENT_REQUIRED', status: 400 });
   const queryKey = String(idempotencyKey || '').trim() || paymentCommandKey('status', `${id}:${Date.now()}`);
+  const sequence = (paymentStatusSequences.get(id) || 0) + 1;
+  paymentStatusSequences.set(id, sequence);
   const data = await queryPaymentStatus(id, body, { idempotencyKey: queryKey });
   const payment = data?.payment || data;
-  if (payment && typeof payment === 'object' && (payment.id || payment.paymentId || payment.payment_id)) upsertPayment(payment);
+  if (sequence === paymentStatusSequences.get(id) &&
+      payment && typeof payment === 'object' &&
+      (payment.id || payment.paymentId || payment.payment_id)) upsertPayment(payment);
   return payment;
 }
