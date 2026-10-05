@@ -95,6 +95,20 @@ const settlementBlock = server.slice(settlementStart, settlementStart + 1700);
 assert.match(settlementBlock, /paymentCore\.createSettlement/);
 assert.match(settlementBlock, /organizationId: tenant\.organizationId/);
 
+
+const paymentStates = contract.match(/PAYMENT_STATES[^;]+/s)?.[0] || '';
+assert.match(paymentStates, /FAILED/);
+assert.match(paymentStates, /CANCELLED/);
+assert.match(paymentStates, /REVERSED/);
+assert.match(paymentStates, /EXPIRED/);
+assert.match(paymentStates, /RECONCILED/);
+assert.match(projection, /refreshCanonicalPaymentStatus/);
+assert.match(projection, /upsertPayment\(payment\)/);
+
+// Provider UNKNOWN is a status result, not permission to locally mutate financial state.
+assert.doesNotMatch(projection, /state\s*=\s*['"]UNKNOWN['"]/);
+assert.doesNotMatch(projection, /state\s*=\s*['"]VERIFIED['"]/);
+
 const core = fs.readFileSync('backend/lib/payments/payment-core.js', 'utf8');
 const refundCoreStart = core.indexOf('async refund(command = {})');
 assert.notEqual(refundCoreStart, -1);
