@@ -1,5 +1,5 @@
 // Canonical frontend payment contract. UI state is a projection of Payment Core.
-export const PAYMENT_STATES = Object.freeze(['UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','REJECTED','DUPLICATE','MISMATCH','EXPIRED','PARTIAL','REFUNDED']);
+export const PAYMENT_STATES = Object.freeze(['UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','REJECTED','DUPLICATE','MISMATCH','EXPIRED','PARTIAL','REFUNDED','FAILED','CANCELLED','REVERSED']);
 export const PAYMENT_ERROR_STATUSES = Object.freeze([400,401,403,404,409,422,500,502,503,504]);
 
 export function normalizePaymentListQuery(input = {}) {
