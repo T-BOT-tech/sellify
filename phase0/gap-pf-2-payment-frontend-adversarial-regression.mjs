@@ -206,6 +206,16 @@ assert.match(projection, /sequence === paymentStatusSequences\.get\(id\)/);
 
 
 
+// Order payment reservation certification: payment creation must reserve
+// the outstanding order balance atomically, preventing concurrent overpayment
+// while allowing legitimate split payments.
+const createPaymentStart = storeSource.indexOf('export async function createPaymentWithIntent');
+const createPaymentBlock = storeSource.slice(createPaymentStart, createPaymentStart + 12000);
+assert.match(createPaymentBlock, /BEGIN IMMEDIATE/);
+assert.match(createPaymentBlock, /state IN \('UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','PARTIAL'\)/);
+assert.match(createPaymentBlock, /reservedMinor \+ amountMinor > orderTotalMinor/);
+assert.match(createPaymentBlock, /PAYMENT_AMOUNT_EXCEEDS_ORDER_OUTSTANDING/);
+
 // Order-level aggregation certification: multiple independent verified
 // payments can satisfy one order, while unverified/partial movements do not.
 assert.match(storeSource, /getOrderPaymentSummary/);
