@@ -1,8 +1,9 @@
 // FUX-55 — canonical seller storefront channel + Telegram seller configuration UI.
 import { config } from '../state.js';
 import { hasPermission } from '../auth/permissions.js';
+import { TELEGRAM_STOREFRONT_CAPABILITIES } from '../telegram-storefront-contract.js';
 
-const CAPABILITIES = ['browse','search','product','cart','checkout','order_status'];
+const CAPABILITIES = TELEGRAM_STOREFRONT_CAPABILITIES;
 function baseUrl() { return (config.syncUrl || window.location.origin).replace(/\/$/, ''); }
 function authHeaders() { return { 'Content-Type': 'application/json', Authorization: `Bearer ${config.sessionToken}` }; }
 function canManage() {
