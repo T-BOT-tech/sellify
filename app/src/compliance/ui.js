@@ -145,13 +145,21 @@ async function loadComplianceRequests() {
     status.textContent = 'Compliance data loaded.';
     list.querySelectorAll('[data-compliance-status]').forEach(button => {
       button.onclick = async () => {
+        if (button.disabled || !allowed()) return;
+        const requestId = button.dataset.requestId;
+        const nextStatus = button.dataset.complianceStatus;
+        const buttons = list.querySelectorAll(`[data-request-id="${CSS.escape(requestId)}"]`);
+        buttons.forEach(control => { control.disabled = true; });
         try {
           await request(`/tenants/${encodeURIComponent(config.chatId)}/compliance/requests`, {
             method: 'PATCH',
-            body: JSON.stringify({ requestId: button.dataset.requestId, status: button.dataset.complianceStatus, resolutionNote: 'Reviewed in Sellify Settings' }),
+            body: JSON.stringify({ requestId, status: nextStatus, resolutionNote: 'Reviewed in Sellify Settings' }),
           });
           await loadComplianceRequests();
-        } catch (error) { showComplianceError(error); }
+        } catch (error) {
+          buttons.forEach(control => { control.disabled = false; });
+          showComplianceError(error);
+        }
       };
     });
   } catch (error) {
