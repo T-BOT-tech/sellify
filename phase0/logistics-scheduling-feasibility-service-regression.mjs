@@ -127,4 +127,41 @@ const after = db.prepare(
 ).get(second.id);
 assert.deepEqual(after, before);
 
+
+const {
+  decideLogisticsScheduling,
+  logisticsSchedulingDecisionContract,
+} = await import('../app/src/verticals/logistics/scheduling-decision-contract.js');
+
+const schedulingDecision = decideLogisticsScheduling({
+  evaluation: { evaluation: 'FEASIBLE', feasible: true },
+});
+assert.equal(schedulingDecision.decision, 'SCHEDULE');
+assert.equal(schedulingDecision.authorized, false);
+assert.equal(schedulingDecision.execution, false);
+
+const blockedConflict = decideLogisticsScheduling({
+  evaluation: { evaluation: 'CONFLICT', feasible: false },
+});
+assert.equal(blockedConflict.decision, 'BLOCK');
+
+const blockedUnknown = decideLogisticsScheduling({
+  evaluation: { evaluation: 'UNKNOWN', feasible: false },
+});
+assert.equal(blockedUnknown.decision, 'BLOCK');
+
+assert.throws(
+  () => decideLogisticsScheduling({
+    evaluation: { evaluation: 'FEASIBLE', feasible: false },
+  }),
+  error => error?.code === 'LOGISTICS_SCHEDULING_DECISION_INVALID',
+);
+
+const decisionContract = logisticsSchedulingDecisionContract();
+assert.equal(decisionContract.feasible_allows_scheduling, true);
+assert.equal(decisionContract.conflict_allows_scheduling, false);
+assert.equal(decisionContract.unknown_allows_scheduling, false);
+assert.equal(decisionContract.feasibility_is_authorization, false);
+assert.equal(decisionContract.scheduling_is_execution, false);
+
 console.log('L11.7 Logistics Scheduling Feasibility Integration Regression: PASS');
