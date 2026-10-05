@@ -2939,10 +2939,22 @@ export async function upsertTelegramStorefrontConfig(chatId, input = {}, actor =
   const org = tenant.organizationId;
   const actorId = actor?.userId || null;
   const current = getTelegramStorefrontConfig(chatId);
-  const status = String(input.status ?? current?.status ?? 'DRAFT').toUpperCase();
+  let status = String(input.status ?? current?.status ?? 'DRAFT').toUpperCase();
   const allowed = new Set(['DRAFT','CONFIGURED','VERIFIED','PUBLISHED','PAUSED','UNPUBLISHED']);
   if (!allowed.has(status)) throw Object.assign(new Error('Invalid Telegram storefront status'), { statusCode: 400, code: 'INVALID_TELEGRAM_STOREFRONT_STATUS' });
   if (Object.hasOwn(input, 'credentialRef')) normalizeTelegramCredentialRef(input.credentialRef);
+
+  // Any identity-bearing configuration change invalidates prior verification.
+  // Otherwise a seller could replace the credential/bot identity while retaining
+  // VERIFIED/PUBLISHED and reach the publishing boundary without re-verifying.
+  const identityChanged = !!current && (
+    (Object.hasOwn(input, 'credentialRef') && String(input.credentialRef ?? '') !== String(current.credentialRef ?? '')) ||
+    (Object.hasOwn(input, 'botId') && String(input.botId ?? '') !== String(current.botId ?? '')) ||
+    (Object.hasOwn(input, 'botUsername') && String(input.botUsername ?? '') !== String(current.botUsername ?? ''))
+  );
+  if (identityChanged && ['VERIFIED','PUBLISHED','PAUSED'].includes(current.status)) {
+    status = 'CONFIGURED';
+  }
   if (['VERIFIED','PUBLISHED'].includes(status) && !current?.status?.match(/^(VERIFIED|PUBLISHED)$/)) {
     throw Object.assign(new Error('Use the Telegram storefront verification boundary before VERIFIED or PUBLISHED'), { statusCode: 409, code: 'TELEGRAM_VERIFICATION_REQUIRED' });
   }
