@@ -167,6 +167,7 @@ export async function switchActiveTenant() {
       headers: authHeaders(),
       body: JSON.stringify({ chatId, deviceName: 'Sellify device' }),
     });
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('sellify:tenant-changing'));
     persistAuth(data, data.membership);
     window.location.reload();
   } catch (error) {
