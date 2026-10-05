@@ -145,19 +145,26 @@ async function createComplianceRequest() {
   if (!allowed()) throw new Error('Compliance management permission required.');
   const customerId = window.prompt('Customer ID for the deletion request:')?.trim();
   if (!customerId) return;
+  const trigger = document.getElementById('complianceNewRequest');
+  if (trigger?.disabled) return;
+  if (trigger) trigger.disabled = true;
   const requestChatId = config.chatId;
   const requestSessionToken = config.sessionToken;
-  await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/requests`, {
-    method: 'POST',
-    body: JSON.stringify({
-      requestType: 'DELETION',
-      subjectType: 'customer',
-      subjectId: customerId,
-      reason: 'Customer privacy request',
-    }),
-  });
-  if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
-  await loadComplianceRequests();
+  try {
+    await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/requests`, {
+      method: 'POST',
+      body: JSON.stringify({
+        requestType: 'DELETION',
+        subjectType: 'customer',
+        subjectId: customerId,
+        reason: 'Customer privacy request',
+      }),
+    });
+    if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
+    await loadComplianceRequests();
+  } finally {
+    if (config.chatId === requestChatId && config.sessionToken === requestSessionToken && trigger) trigger.disabled = false;
+  }
 }
 
 async function loadComplianceRequests() {
@@ -213,13 +220,17 @@ async function loadComplianceRequests() {
 
 async function exportCompliance(subjectType, subjectId = null) {
   if (!allowed()) throw new Error('Compliance management permission required.');
+  const trigger = document.getElementById('complianceExport');
+  if (trigger?.disabled) return;
   const requestChatId = config.chatId;
   const requestSessionToken = config.sessionToken;
+  if (trigger) trigger.disabled = true;
   const path = subjectId
     ? `/tenants/${encodeURIComponent(requestChatId)}/compliance/export/${encodeURIComponent(subjectType)}/${encodeURIComponent(subjectId)}`
     : `/tenants/${encodeURIComponent(requestChatId)}/compliance/export/${encodeURIComponent(subjectType)}`;
-  const data = await request(path);
-  if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
+  try {
+    const data = await request(path);
+    if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -229,7 +240,10 @@ async function exportCompliance(subjectType, subjectId = null) {
   URL.revokeObjectURL(url);
   const status = document.getElementById('complianceExportStatus');
   if (status) status.textContent = 'Compliance export generated and audited.';
-  if (auditAllowed()) loadAuditEvents().catch(() => {});
+    if (auditAllowed()) loadAuditEvents().catch(() => {});
+  } finally {
+    if (config.chatId === requestChatId && config.sessionToken === requestSessionToken && trigger) trigger.disabled = false;
+  }
 }
 
 function showComplianceError(error) {
