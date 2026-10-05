@@ -23,6 +23,14 @@ export async function listPayments(input = {}) {
   const data = await request(buildPaymentPath(config.chatId, '?' + params));
   return Array.isArray(data.payments) ? data.payments : [];
 }
+export async function getOrderPaymentSummary(orderId) {
+  const id = String(orderId || '').trim();
+  if (!id) throw Object.assign(new Error('orderId is required'), { code: 'ORDER_REQUIRED', status: 400 });
+  return request(
+    buildPaymentPath(config.chatId, '/../../orders/' + encodeURIComponent(id) + '/payments/summary'),
+  );
+}
+
 export async function getPayment(paymentId) {
   const data = await request(buildPaymentPath(config.chatId, '/' + encodeURIComponent(paymentId)));
   return normalizePaymentResponse(data);
