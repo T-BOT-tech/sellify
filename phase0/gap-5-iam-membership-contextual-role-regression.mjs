@@ -30,7 +30,7 @@ assert.match(store, /revoked_at/);
 
 assert.match(server, /membership-role/);
 assert.match(server, /membership-contextual-role/);
-assert.match(server, /membership-contextual-role\\/revoke/);
+assert.ok(server.includes("/auth/membership-contextual-role/revoke"), 'contextual role revoke route missing');
 assert.match(server, /membership:role:manage/);
 assert.doesNotMatch(server, /handleListTenantMemberships[\\s\\S]{0,500}logistics:deliveries:view/);
 
