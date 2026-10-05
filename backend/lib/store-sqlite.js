@@ -2916,7 +2916,28 @@ export function getPackLifecycle(organizationId, packId) {
   };
 }
 
-export function getTelegramStorefrontConfig(chatId) {
+export const TELEGRAM_STOREFRONT_TRANSITIONS = Object.freeze({
+  DRAFT: new Set(['DRAFT', 'CONFIGURED']),
+  CONFIGURED: new Set(['CONFIGURED', 'DRAFT', 'VERIFIED']),
+  VERIFIED: new Set(['VERIFIED', 'CONFIGURED', 'PUBLISHED']),
+  PUBLISHED: new Set(['PUBLISHED', 'PAUSED', 'UNPUBLISHED', 'CONFIGURED']),
+  PAUSED: new Set(['PAUSED', 'PUBLISHED', 'UNPUBLISHED', 'CONFIGURED']),
+  UNPUBLISHED: new Set(['UNPUBLISHED', 'CONFIGURED']),
+});
+
+function assertTelegramStorefrontTransition(currentStatus, nextStatus) {
+  const current = String(currentStatus || 'DRAFT').toUpperCase();
+  const next = String(nextStatus || 'DRAFT').toUpperCase();
+  if (current === next) return;
+  if (!TELEGRAM_STOREFRONT_TRANSITIONS[current]?.has(next)) {
+    throw Object.assign(
+      new Error(`Invalid Telegram storefront transition: ${current} -> ${next}`),
+      { statusCode: 409, code: 'INVALID_TELEGRAM_STOREFRONT_TRANSITION' }
+    );
+  }
+}
+
+function getTelegramStorefrontConfig(chatId) {
   ensureDatabase();
   const org = db.prepare('SELECT organization_id FROM tenants WHERE chat_id=?').get(String(chatId));
   if (!org?.organization_id) return null;
@@ -2955,6 +2976,7 @@ export async function upsertTelegramStorefrontConfig(chatId, input = {}, actor =
   if (identityChanged && ['VERIFIED','PUBLISHED','PAUSED'].includes(current.status)) {
     status = 'CONFIGURED';
   }
+  assertTelegramStorefrontTransition(current?.status || 'DRAFT', status);
   if (['VERIFIED','PUBLISHED'].includes(status) && !current?.status?.match(/^(VERIFIED|PUBLISHED)$/)) {
     throw Object.assign(new Error('Use the Telegram storefront verification boundary before VERIFIED or PUBLISHED'), { statusCode: 409, code: 'TELEGRAM_VERIFICATION_REQUIRED' });
   }
