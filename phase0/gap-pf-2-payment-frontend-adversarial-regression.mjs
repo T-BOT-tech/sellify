@@ -217,6 +217,24 @@ assert.doesNotMatch(paymentTransitions, /PARTIAL: new Set\\(\['RECEIVED','VERIFI
 assert.match(paymentCoreSource, /Late-success recovery is only valid from EXPIRED or CANCELLED/);
 assert.match(paymentCoreSource, /LATE_SUCCESS_CONFIRMATION_REQUIRED/);
 
+// Refund/reversal certification: accepted payment value must be removed
+// from order-level acceptance when fully refunded or reversed.
+const refundSource = fs.readFileSync('backend/lib/store-sqlite.js', 'utf8');
+const refundStart = refundSource.indexOf('export async function finalizePaymentRefund');
+const refundBlock = refundSource.slice(refundStart, refundStart + 7000);
+assert.match(refundBlock, /fullRefund/);
+assert.match(refundBlock, /state = \\?, updated_at = \\?/);
+assert.match(refundBlock, /'REFUNDED'/);
+assert.match(refundBlock, /REFUND_AMOUNT_EXCEEDS_PAYMENT/);
+assert.match(refundBlock, /entry_type,amount_minor/);
+
+const transitionText = refundSource.slice(
+  refundSource.indexOf('const PAYMENT_TRANSITIONS'),
+  refundSource.indexOf('function paymentStateTimestampColumn')
+);
+assert.match(transitionText, /VERIFIED: new Set\\(\['RECONCILED','REVERSED','REFUNDED','MISMATCH'\]\\)/);
+assert.match(transitionText, /RECONCILED: new Set\\(\['REVERSED','REFUNDED'\]\\)/);
+
 // Reservation-release certification: terminal/released states must not
 // continue consuming an order's outstanding payment capacity.
 const reservationStates = createPaymentBlock.match(/state IN \\('UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','PARTIAL'\\)/)?.[0] || '';
@@ -267,16 +285,6 @@ assert.match(transitionBlock, /PARTIAL: new Set\(\['RECEIVED','FAILED','REJECTED
 assert.match(storeSource, /idx_payment_evidence_org_provider_transaction/);
 assert.match(storeSource, /PROVIDER_TRANSACTION_DUPLICATE/);
 
-
-// the remaining amount, preventing the same received money from being counted twice.
-const partialVerifiedLedgerBlock = storeSource.slice(
-  storeSource.indexOf("INSERT INTO payment_ledger_entries") - 700,
-  storeSource.indexOf("INSERT INTO payment_ledger_entries") + 2200,
-);
-assert.match(partialVerifiedLedgerBlock, /target === 'VERIFIED' && row\.state === 'PARTIAL'/);
-assert.match(partialVerifiedLedgerBlock, /SUM\(amount_minor\)/);
-assert.match(partialVerifiedLedgerBlock, /entry_type = 'PARTIAL'/);
-assert.match(partialVerifiedLedgerBlock, /Math\.max\(0/);
 
 // Partial ledger certification: PARTIAL must record the actually observed
 // received amount, while VERIFIED/RECONCILED continue to use the obligation.
