@@ -39,9 +39,12 @@ async function loadAuditEvents() {
   if (!status || !list || !auditAllowed()) return;
   status.textContent = 'Loading audit history…';
   list.innerHTML = '<div class="hint">Loading…</div>';
+  const requestChatId = config.chatId;
+  const requestSessionToken = config.sessionToken;
   try {
     const query = auditQuery();
-    const data = await request(`/tenants/${encodeURIComponent(config.chatId)}/audit?${query}`);
+    const data = await request(`/tenants/${encodeURIComponent(requestChatId)}/audit?${query}`);
+    if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
     const rows = Array.isArray(data?.events) ? data.events : [];
     list.innerHTML = rows.length ? rows.map(row => {
       const metadata = row.metadata && typeof row.metadata === 'object'
@@ -133,8 +136,11 @@ async function loadComplianceRequests() {
   const list = document.getElementById('complianceRequests');
   if (!status || !list || !allowed()) return;
   status.textContent = 'Loading compliance requests…';
+  const requestChatId = config.chatId;
+  const requestSessionToken = config.sessionToken;
   try {
-    const data = await request(`/tenants/${encodeURIComponent(config.chatId)}/compliance/requests?limit=100`);
+    const data = await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/requests?limit=100`);
+    if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
     const rows = data.requests || [];
     list.innerHTML = rows.length ? rows.map(row => `<div style="padding:10px 0;border-bottom:1px solid var(--line);">
       <div style="font-weight:600;">${escapeHtml(row.requestType || 'REQUEST')} · ${escapeHtml(row.status || '')}</div>
