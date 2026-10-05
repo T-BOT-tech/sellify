@@ -111,7 +111,7 @@ assert.doesNotMatch(projection, /state\s*=\s*['"]VERIFIED['"]/);
 
 
 const retryStatuses = contract.match(/retryable:\s*\[[^\]]+\]/)?.[0] || '';
-assert.match(retryStatuses, /409/);
+assert.doesNotMatch(retryStatuses, /409/);
 assert.match(retryStatuses, /500/);
 assert.match(retryStatuses, /502/);
 assert.match(retryStatuses, /503/);
