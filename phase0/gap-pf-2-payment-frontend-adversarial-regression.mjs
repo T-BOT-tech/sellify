@@ -206,6 +206,17 @@ assert.match(projection, /sequence === paymentStatusSequences\.get\(id\)/);
 
 
 
+// Partial lifecycle certification: a PARTIAL payment may recover to RECEIVED
+// for the same payment flow, but cannot be revived from terminal states and
+// cannot be promoted directly to VERIFIED.
+const paymentTransitions = storeSource.slice(storeSource.indexOf('const PAYMENT_TRANSITIONS'), storeSource.indexOf('function paymentStateTimestampColumn'));
+assert.match(paymentTransitions, /EXPIRED: new Set\\(\['RECEIVED'\]\\)/);
+assert.match(paymentTransitions, /CANCELLED: new Set\\(\['RECEIVED'\]\\)/);
+assert.match(paymentTransitions, /PARTIAL: new Set\\(\['RECEIVED','FAILED','REJECTED'\]\\)/);
+assert.doesNotMatch(paymentTransitions, /PARTIAL: new Set\\(\['RECEIVED','VERIFIED'/);
+assert.match(paymentCoreSource, /Late-success recovery is only valid from EXPIRED or CANCELLED/);
+assert.match(paymentCoreSource, /LATE_SUCCESS_CONFIRMATION_REQUIRED/);
+
 // Reservation-release certification: terminal/released states must not
 // continue consuming an order's outstanding payment capacity.
 const reservationStates = createPaymentBlock.match(/state IN \\('UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','PARTIAL'\\)/)?.[0] || '';
