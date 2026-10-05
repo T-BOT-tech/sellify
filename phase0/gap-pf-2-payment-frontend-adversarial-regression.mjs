@@ -109,6 +109,30 @@ assert.match(projection, /upsertPayment\(payment\)/);
 assert.doesNotMatch(projection, /state\s*=\s*['"]UNKNOWN['"]/);
 assert.doesNotMatch(projection, /state\s*=\s*['"]VERIFIED['"]/);
 
+
+const retryStatuses = contract.match(/retryable:\s*\[[^\]]+\]/)?.[0] || '';
+assert.match(retryStatuses, /409/);
+assert.match(retryStatuses, /500/);
+assert.match(retryStatuses, /502/);
+assert.match(retryStatuses, /503/);
+assert.match(retryStatuses, /504/);
+assert.doesNotMatch(retryStatuses, /400/);
+assert.doesNotMatch(retryStatuses, /401/);
+assert.doesNotMatch(retryStatuses, /403/);
+assert.doesNotMatch(retryStatuses, /404/);
+assert.doesNotMatch(retryStatuses, /422/);
+
+assert.match(client, /requiredIdempotencyKey/);
+assert.match(client, /createPayment[\s\S]*Idempotency-Key/);
+assert.match(client, /transitionPaymentLifecycle[\s\S]*Idempotency-Key/);
+assert.match(client, /queryPaymentStatus[\s\S]*Idempotency-Key/);
+
+// Retrying a financial mutation must preserve the caller-supplied key; the
+// client must not silently generate a fresh key inside the mutation wrapper.
+const mutationKeyBlock = client.slice(client.indexOf('export async function createPayment'), client.indexOf('export async function transitionPaymentLifecycle'));
+assert.doesNotMatch(mutationKeyBlock, /Date\.now\(\)/);
+assert.doesNotMatch(mutationKeyBlock, /crypto\.randomUUID/);
+
 const core = fs.readFileSync('backend/lib/payments/payment-core.js', 'utf8');
 const refundCoreStart = core.indexOf('async refund(command = {})');
 assert.notEqual(refundCoreStart, -1);
