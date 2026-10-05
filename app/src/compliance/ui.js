@@ -83,9 +83,14 @@ export async function renderCompliancePanel() {
   document.getElementById('complianceNewRequest').onclick = () => createComplianceRequest().catch(showComplianceError);
   document.getElementById('complianceExport').onclick = () => exportCompliance('organization').catch(showComplianceError);
   document.getElementById('complianceRetentionSave').onclick = () => saveRetentionPolicy().catch(showComplianceError);
-  await loadComplianceRequests();
-  await loadRetentionPolicy();
-  if (auditAllowed()) await loadAuditEvents();
+  const panelChatId = config.chatId;
+  const panelSessionToken = config.sessionToken;
+  await Promise.all([
+    loadComplianceRequests(),
+    loadRetentionPolicy(),
+    auditAllowed() ? loadAuditEvents() : Promise.resolve(),
+  ]);
+  if (config.chatId !== panelChatId || config.sessionToken !== panelSessionToken) return;
 }
 
 async function loadRetentionPolicy() {
