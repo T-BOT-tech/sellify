@@ -277,6 +277,21 @@ assert.match(refundBlock, /state = \\?, updated_at = \\?/);
 assert.match(refundBlock, /'REFUNDED'/);
 assert.match(refundBlock, /fullRefund/);
 
+// Overpayment matrix certification:
+// 10,000 order: a single 10,000 payment is valid; 7,000 + 3,000 is valid;
+// a second 7,000 request after 7,000 reserved must be rejected, and the
+// BEGIN IMMEDIATE transaction boundary prevents concurrent capacity races.
+assert.match(createPaymentBlock, /reservedMinor \+ amountMinor > orderTotalMinor/);
+assert.match(createPaymentBlock, /outstandingMinor: Math\.max\(0, orderTotalMinor - reservedMinor\)/);
+assert.match(createPaymentBlock, /BEGIN IMMEDIATE/);
+assert.match(createPaymentBlock, /COMMIT/);
+assert.match(createPaymentBlock, /ROLLBACK/);
+
+// Payment/order currency is canonicalized before reservation so capacity is
+// never calculated across mixed currencies.
+assert.match(createPaymentBlock, /normaliseCurrency\(order\.currency, currency\) !== currency/);
+assert.match(createPaymentBlock, /CURRENCY_MISMATCH/);
+
 // Order payment reservation certification: payment creation must reserve
 // the outstanding order balance atomically, preventing concurrent overpayment
 // while allowing legitimate split payments.
