@@ -46,4 +46,37 @@ for (const status of [400,401,403,404,409,422,500,502,503,504]) {
   assert.match(contract, new RegExp(String(status)));
 }
 
+
+// Every payment lifecycle mutation is authenticated and permission-bound.
+// The route must not allow a session from tenant A to operate on tenant B
+// merely by changing the path chatId/paymentId.
+const lifecycleStart = server.indexOf('async function handlePaymentLifecycle');
+assert.notEqual(lifecycleStart, -1);
+const lifecycleBlock = server.slice(lifecycleStart, lifecycleStart + 2200);
+assert.match(lifecycleBlock, /requireSession\(req, tenant\.chatId\)/);
+assert.match(lifecycleBlock, /paymentCore\.transitionLifecycle/);
+assert.match(lifecycleBlock, /organizationId: tenant\.organizationId/);
+
+// Status and routing reads are both authenticated; status additionally requires
+// the permission needed to invoke provider-side verification.
+const statusStart = server.indexOf('async function handlePaymentStatusQuery');
+assert.notEqual(statusStart, -1);
+const statusBlock = server.slice(statusStart, statusStart + 2200);
+assert.match(statusBlock, /requireSession\(req, tenant\.chatId\)/);
+assert.match(statusBlock, /requireAuthorization\(session, tenant, 'payments', 'payments:accept'/);
+
+// Frontend-controlled payment IDs are path-bound and tenant-scoped by the server;
+// there must be no alternate organization/tenant selector accepted for these calls.
+assert.doesNotMatch(statusBlock, /organizationId:\s*body\.organizationId/);
+assert.doesNotMatch(lifecycleBlock, /organizationId:\s*body\.organizationId/);
+
+// Provider/account routing remains server-selected; a client may request a preferred
+// account, but it cannot turn routing into a financial state mutation.
+const routingStart = server.indexOf('async function handlePaymentRoutingResolve');
+assert.notEqual(routingStart, -1);
+const routingBlock = server.slice(routingStart, routingStart + 1800);
+assert.match(routingBlock, /organizationId: tenant\.organizationId/);
+assert.match(routingBlock, /requireAuthorization\(session, tenant, 'payments', 'payments:view'/);
+assert.match(routingBlock, /paymentCore\.resolveRouting/);
+
 console.log('PASS PF-2 payment frontend adversarial boundary regression');
