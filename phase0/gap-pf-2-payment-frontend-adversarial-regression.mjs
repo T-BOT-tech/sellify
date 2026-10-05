@@ -203,4 +203,22 @@ assert.match(projection, /projectionRefreshSequence/);
 assert.match(projection, /paymentStatusSequences/);
 assert.match(projection, /sequence === paymentStatusSequences\.get\(id\)/);
 
+
+
+// Terminal replay certification: once the canonical payment has advanced,
+// an old provider observation must not resurrect or regress it.
+const storeText = fs.readFileSync('backend/lib/store-sqlite.js', 'utf8');
+const commitStart = storeText.indexOf('export async function commitPaymentDecision');
+assert.notEqual(commitStart, -1);
+const commitBlock = storeText.slice(commitStart, commitStart + 15000);
+assert.match(commitBlock, /BEGIN IMMEDIATE/);
+assert.match(commitBlock, /expectedState/);
+assert.match(commitBlock, /PAYMENT_STATE_CONFLICT/);
+assert.match(commitBlock, /INVALID_PAYMENT_TRANSITION/);
+assert.match(commitBlock, /PAYMENT_TRANSITIONS\[row\.state\]/);
+assert.match(commitBlock, /provider_transaction_id/);
+assert.match(commitBlock, /PROVIDER_TRANSACTION_DUPLICATE/);
+assert.match(commitBlock, /assertVerificationFreshness/);
+assert.match(commitBlock, /VERIFICATION_CONTEXT_MISMATCH/);
+
 console.log('PASS PF-2 payment frontend adversarial boundary regression');
