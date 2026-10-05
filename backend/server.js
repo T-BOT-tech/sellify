@@ -1900,6 +1900,7 @@ async function handlePaymentRoutingResolve(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
   const session = await requireSession(req, tenant.chatId);
+  await requireAuthorization(session, tenant, 'payments', 'payments:view', { deniedMessage: 'Payment view permission required' });
   const body = await readBody(req);
   return sendJSON(res, 200, await paymentCore.resolveRouting({
     ...body, chatId, organizationId: tenant.organizationId, actor: session,
