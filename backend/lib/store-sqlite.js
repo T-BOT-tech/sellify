@@ -5745,6 +5745,28 @@ export async function createPaymentWithIntent(chatId, input = {}, actor = null) 
         return response?.paymentId ? { payment: paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(response.paymentId, organizationId)), intent: paymentIntentFromRow(db.prepare('SELECT * FROM payment_intents WHERE id = ? AND organization_id = ?').get(response.intentId, organizationId)), idempotent: true } : { payment: null, intent: null, idempotent: true };
       }
     }
+    if (orderId) {
+      const reserved = db.prepare(`
+        SELECT COALESCE(SUM(amount_minor), 0) AS amount_minor
+        FROM payments
+        WHERE organization_id = ? AND order_id = ?
+          AND state IN ('UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','PARTIAL')
+      `).get(organizationId, String(orderId));
+      const reservedMinor = Number(reserved?.amount_minor || 0);
+      const orderTotalMinor = Number(
+        db.prepare('SELECT total_minor FROM orders WHERE chat_id = ? AND server_order_id = ?')
+          .get(String(chatId), String(orderId))?.total_minor
+      );
+      if (reservedMinor + amountMinor > orderTotalMinor) {
+        throw Object.assign(new Error('Payment amount exceeds the order outstanding balance'), {
+          statusCode: 409,
+          code: 'PAYMENT_AMOUNT_EXCEEDS_ORDER_OUTSTANDING',
+          reservedMinor,
+          requestedMinor: amountMinor,
+          outstandingMinor: Math.max(0, orderTotalMinor - reservedMinor),
+        });
+      }
+    }
     db.prepare("INSERT INTO payment_intents (id, organization_id, location_id, order_id, payment_account_id, provider_id, amount_minor, currency, status, expires_at, metadata_json, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)").run(
       intentId, organizationId, locationId, orderId ? String(orderId) : null, String(accountId), providerId, amountMinor, currency,
       input.expiresAt || input.expires_at || null, json(input.metadata || {}), actor?.userId || null, now, now
