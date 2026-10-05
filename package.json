@@ -403,7 +403,8 @@
     "test:logistics-l8-l10": "node phase0/logistics-l8-l10-demand-capacity-matching-regression.mjs",
     "test:logistics-l8-l21": "node phase0/logistics-l8-l21-cumulative-exit-gate.mjs",
     "test:logistics-l8-l21-certification": "node phase0/logistics-l8-l21-final-certification.mjs",
-    "test:logistics-master-exit": "node phase0/logistics-master-specification-exit-audit.mjs"
+    "test:logistics-master-exit": "node phase0/logistics-master-specification-exit-audit.mjs",
+    "test:gap-5-iam": "node phase0/gap-5-iam-membership-contextual-role-regression.mjs"
   },
   "engines": {
     "node": ">=24"
