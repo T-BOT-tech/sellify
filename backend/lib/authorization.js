@@ -208,13 +208,37 @@ export function requiredPackForRole(role) {
 export function authorize(actor, organization, location, resource, action) {
   if (!actor || !actor.userId) return AUTHZ.DENY;
 
-  const actorRoles = Array.from(new Set([
-    ...(Array.isArray(actor.roles) ? actor.roles : []),
-    actor.role,
-  ].map(cleanRole).filter(Boolean)));
   const role = cleanRole(actor.role);
   const permission = cleanAction(action);
-  if (!actorRoles.length || !permission || !resource) return AUTHZ.DENY;
+  if (!role || !permission || !resource) return AUTHZ.DENY;
+
+  // Contextual roles are scoped authorities, not tenant-wide role strings.
+  // Only organization-scoped assignments are effective without an explicit
+  // location/resource scope. Location assignments require the requested
+  // location to match the assignment. Resource-scoped assignments remain
+  // non-executable until a canonical resource-context contract is supplied.
+  const contextualRoles = Array.isArray(actor.contextualRoles) ? actor.contextualRoles : [];
+  const effectiveContextualRoles = contextualRoles
+    .map(item => ({
+      role: cleanRole(item?.role),
+      scopeType: String(item?.scopeType || 'ORGANIZATION').trim().toUpperCase(),
+      scopeId: item?.scopeId == null ? null : String(item.scopeId),
+    }))
+    .filter(item => {
+      if (!item.role) return false;
+      if (item.scopeType === 'ORGANIZATION') return true;
+      if (item.scopeType === 'LOCATION') {
+        const requestedLocationId = location && typeof location === 'object'
+          ? location.id ?? location.locationId
+          : location;
+        return requestedLocationId != null && String(requestedLocationId) === item.scopeId;
+      }
+      return false;
+    })
+    .map(item => item.role);
+
+  const actorRoles = Array.from(new Set([role, ...effectiveContextualRoles]));
+  if (!actorRoles.length) return AUTHZ.DENY;
 
   // A tenant-scoped session is never allowed to operate on another
   // organization. This is intentionally checked even though legacy chat_id
