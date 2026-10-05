@@ -50,3 +50,11 @@ export function isPaymentLoading() { return loading; }
 export function setPaymentError(value) { error = value || null; }
 export function getPaymentError() { return error; }
 export function clearPaymentState() { payments = []; selectedPaymentId = null; loading = false; error = null; }
+
+
+// Tenant changes are a hard projection boundary. Clear immediately before
+// the auth context is replaced so stale payment records cannot render during
+// tenant teardown/reload.
+if (typeof window !== 'undefined') {
+  window.addEventListener('sellify:tenant-changing', clearPaymentState);
+}
