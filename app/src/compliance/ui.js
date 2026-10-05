@@ -6,6 +6,7 @@ const base = () => (config.syncUrl || window.location.origin).replace(/\/$/, '')
 const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${config.sessionToken || ''}` });
 
 let complianceRequestLoadSequence = 0;
+let auditLoadSequence = 0;
 
 async function request(path, options = {}) {
   const res = await fetch(base() + path, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
@@ -41,11 +42,13 @@ async function loadAuditEvents() {
   if (!status || !list || !auditAllowed()) return;
   status.textContent = 'Loading audit history…';
   list.innerHTML = '<div class="hint">Loading…</div>';
+  const loadSequence = ++auditLoadSequence;
   const requestChatId = config.chatId;
   const requestSessionToken = config.sessionToken;
   try {
     const query = auditQuery();
     const data = await request(`/tenants/${encodeURIComponent(requestChatId)}/audit?${query}`);
+    if (loadSequence !== auditLoadSequence) return;
     if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
     const rows = Array.isArray(data?.events) ? data.events : [];
     list.innerHTML = rows.length ? rows.map(row => {
@@ -62,6 +65,7 @@ async function loadAuditEvents() {
     }).join('') : '<div class="hint">No audit events match these filters.</div>';
     status.textContent = `Audit history loaded · ${rows.length} event${rows.length === 1 ? '' : 's'}.`;
   } catch (error) {
+    if (loadSequence !== auditLoadSequence) return;
     list.innerHTML = '';
     showAuditError(error);
   }
