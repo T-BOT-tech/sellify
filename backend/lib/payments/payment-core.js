@@ -87,6 +87,18 @@ export class PaymentCore {
     return result;
   }
 
+  async getOrderPaymentSummary(command = {}) {
+    this.#authorize(command, 'payments:view');
+    const chatId = String(command.chatId || '').trim();
+    const orderId = String(command.orderId || command.order_id || '').trim();
+    if (!chatId || !orderId) {
+      throw Object.assign(new Error('chatId and orderId are required'), {
+        statusCode: 400, code: 'ORDER_PAYMENT_SUMMARY_CONTEXT_REQUIRED',
+      });
+    }
+    return this.store.getOrderPaymentSummary(chatId, orderId);
+  }
+
   async createSettlement(command = {}) {
     this.#authorize(command, 'payments:settlement:allocate');
     const chatId = String(command.chatId || '').trim();
