@@ -253,6 +253,14 @@ const transitionText = refundSource.slice(
 assert.match(transitionText, /VERIFIED: new Set\\(\['RECONCILED','REVERSED','REFUNDED','MISMATCH'\]\\)/);
 assert.match(transitionText, /RECONCILED: new Set\\(\['REVERSED','REFUNDED'\]\\)/);
 
+// Reversal certification: a reversed payment must stop contributing to
+// accepted order value and must reverse marketplace allocation/settlement.
+assert.match(refundSource, /target === 'REVERSED'/);
+assert.match(refundSource, /status = 'REVERSED'/);
+assert.match(refundSource, /marketplace_payment_allocations/);
+assert.match(refundSource, /marketplace_settlements/);
+assert.match(refundSource, /status IN \\('PENDING','READY','HELD'\\)/);
+
 // Reservation-release certification: terminal/released states must not
 // continue consuming an order's outstanding payment capacity.
 const reservationStates = createPaymentBlock.match(/state IN \\('UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','PARTIAL'\\)/)?.[0] || '';
