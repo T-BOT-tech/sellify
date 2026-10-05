@@ -179,6 +179,7 @@
     "test:pf-1-payment-frontend-contract": "node phase0/gap-pf-1-payment-frontend-contract-regression.mjs",
     "test:pf-1-payment-frontend-integration": "node phase0/gap-pf-1-payment-frontend-integration-regression.mjs",
     "test:pf-1-payment-frontend-projection": "node phase0/gap-pf-1-payment-frontend-projection-regression.mjs",
+    "test:pf-2-payment-frontend-adversarial": "node phase0/gap-pf-2-payment-frontend-adversarial-regression.mjs",
     "test:phase17.10": "node phase0/phase17.10-cumulative-exit-gate.mjs",
     "phase18.1:supplier-network-profile-test": "node phase0/phase18.1-supplier-network-profile-regression.mjs",
     "phase18.2:supplier-network-capability-test": "node phase0/phase18.2-supplier-network-capability-regression.mjs",
