@@ -19,6 +19,15 @@ export async function refreshPaymentProjection() {
   }
 }
 
+function notifyCanonicalPaymentUpdated(payment) {
+  if (typeof window === 'undefined') return;
+  const orderId = String(payment?.orderId || payment?.order_id || '').trim();
+  if (!orderId) return;
+  window.dispatchEvent(new CustomEvent('sellify:payment-canonical-updated', {
+    detail: Object.freeze({ orderId }),
+  }));
+}
+
 export async function ensurePaymentForSyncedOrder(order, { statusQueryKey = null } = {}) {
   const serverOrderId = String(order?.server_order_id || order?.serverOrderId || '').trim();
   if (!serverOrderId) return { status: 'SKIPPED', reason: 'ORDER_NOT_SYNCED' };
@@ -70,6 +79,7 @@ export async function ensurePaymentForSyncedOrder(order, { statusQueryKey = null
     `${payment.id}:${Date.now()}`,
   );
   const refreshed = await refreshCanonicalPaymentStatus(payment.id, {}, { idempotencyKey: queryKey });
+  notifyCanonicalPaymentUpdated(refreshed || payment);
   return {
     status: creationStatus,
     payment: refreshed || payment,
