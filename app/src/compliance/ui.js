@@ -53,157 +53,15 @@ async function loadAuditEvents() {
     if (loadSequence !== auditLoadSequence) return;
     if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
     const rows = Array.isArray(data?.events) ? data.events : [];
-    list.innerHTML = rows.length ? rows.map(row => {
-      const metadata = row.metadata && typeof row.metadata === 'object'
-        ? JSON.stringify(row.metadata, null, 2) : '{}';
-      const summary = `${row.action || 'event'} · ${row.result || 'success'} · ${row.createdAt || ''}`;
-      return `<details style="padding:8px 0;border-bottom:1px solid var(--line);">
-        <summary style="cursor:pointer;">${escapeHtml(summary)}</summary>
-        <div class="hint" style="margin-top:6px;">Actor: ${escapeHtml(row.actorId || '—')} · Device: ${escapeHtml(row.deviceId || '—')} · Location: ${escapeHtml(row.locationId || '—')}</div>
-        <div class="hint">Entity: ${escapeHtml(row.entityType || '—')} · ${escapeHtml(row.entityId || '—')}</div>
-        ${row.reason ? `<div class="hint">Reason: ${escapeHtml(row.reason)}</div>` : ''}
-        <pre style="white-space:pre-wrap;word-break:break-word;margin:6px 0 0;">${escapeHtml(metadata)}</pre>
-      </details>`;
-    }).join('') : '<div class="hint">No audit events match these filters.</div>';
-    status.textContent = `Audit history loaded · ${rows.length} event${rows.length === 1 ? '' : 's'}.`;
-  } catch (error) {
-    if (loadSequence !== auditLoadSequence) return;
-    list.innerHTML = '';
-    showAuditError(error);
-  }
-}
-
-function showAuditError(error) {
-  const status = document.getElementById('auditStatus');
-  if (status) status.textContent = error?.message || 'Audit history could not be loaded.';
-}
-
-export async function renderCompliancePanel() {
-  const panel = document.getElementById('compliancePanel');
-  if (!panel) return;
-  if (!allowed()) {
-    panel.innerHTML = '';
-    return;
-  }
-  panel.innerHTML = '<div class="settings-section-label">Compliance & audit</div><div class="hint">Privacy requests, retention policy, and audited data exports are handled by the canonical backend. Audit history is read-only and tenant-scoped.</div><div id="complianceStatus" class="hint">Loading…</div><div id="complianceRequestsStatus" class="hint"></div><div id="complianceRequests"></div><div style="display:flex;gap:8px;align-items:center;margin-top:10px;"><label>Audit retention days <input id="complianceRetentionDays" type="number" min="30" max="3650" step="1" style="width:110px;"></label><button type="button" class="btn-secondary" id="complianceRetentionSave">Save retention</button><span id="complianceRetentionStatus" class="hint"></span></div><div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;"><button type="button" class="btn-secondary" id="complianceNewRequest">New customer deletion request</button><button type="button" class="btn-secondary" id="complianceRefresh">Refresh</button><button type="button" class="btn-secondary" id="complianceExport">Export organization data</button><span id="complianceExportStatus" class="hint"></span></div><div style="margin-top:16px;"><div style="font-weight:600;">Audit history</div><div class="hint">Filter canonical audit events by action, actor, or entity type. Opening this history is itself audited by the backend.</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"><input id="auditAction" placeholder="Action" style="flex:1;min-width:120px;"><input id="auditActorId" placeholder="Actor ID" style="flex:1;min-width:120px;"><input id="auditEntityType" placeholder="Entity type" style="flex:1;min-width:120px;"><input id="auditLimit" type="number" min="1" max="500" value="100" style="width:80px;"><button type="button" class="btn-secondary" id="auditRefresh">Refresh audit</button></div><div id="auditStatus" class="hint" style="margin-top:6px;"></div><div id="auditEvents" style="margin-top:4px;"></div></div>';
-  document.getElementById('complianceRefresh').onclick = () => loadComplianceRequests();
-  document.getElementById('auditRefresh').onclick = () => loadAuditEvents();
-  document.getElementById('complianceNewRequest').onclick = () => createComplianceRequest().catch(showComplianceError);
-  document.getElementById('complianceExport').onclick = () => exportCompliance('organization').catch(showComplianceError);
-  document.getElementById('complianceRetentionSave').onclick = () => saveRetentionPolicy().catch(showComplianceError);
-  const panelChatId = config.chatId;
-  const panelSessionToken = config.sessionToken;
-  await Promise.all([
-    loadComplianceRequests(),
-    loadRetentionPolicy(),
-    auditAllowed() ? loadAuditEvents() : Promise.resolve(),
-  ]);
-  if (config.chatId !== panelChatId || config.sessionToken !== panelSessionToken) return;
-}
-
-async function loadRetentionPolicy() {
-  const input = document.getElementById('complianceRetentionDays');
-  if (!input || !allowed()) return;
-  const loadSequence = ++retentionLoadSequence;
-  const requestChatId = config.chatId;
-  const requestSessionToken = config.sessionToken;
-  try {
-    const data = await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/retention`);
-    if (loadSequence !== retentionLoadSequence) return;
-    if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
-    const retentionDays = Number(data?.policy?.retentionDays);
-    if (!Number.isInteger(retentionDays) || retentionDays < 30 || retentionDays > 3650) {
-      throw new Error('Backend returned an invalid audit retention policy.');
-    }
-    input.value = retentionDays;
-    const retentionStatus = document.getElementById('complianceRetentionStatus');
-    if (retentionStatus) retentionStatus.textContent = 'Current policy loaded.';
-  } catch (error) {
-    if (config.chatId === requestChatId && config.sessionToken === requestSessionToken) {
-      const retentionStatus = document.getElementById('complianceRetentionStatus');
-      if (retentionStatus) retentionStatus.textContent = error?.message || 'Retention policy could not be loaded.';
-    }
-  }
-}
-
-async function saveRetentionPolicy() {
-  const input = document.getElementById('complianceRetentionDays');
-  if (!input || !allowed()) return;
-  const parsed = Number(input.value);
-  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 30 || parsed > 3650) {
-    throw new Error('Retention must be a whole number from 30 to 3650 days.');
-  }
-  const retentionDays = parsed;
-  retentionLoadSequence += 1;
-  const saveSequence = ++retentionSaveSequence;
-  const requestChatId = config.chatId;
-  const requestSessionToken = config.sessionToken;
-  try {
-    await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/retention`, {
-      method: 'PATCH',
-      body: JSON.stringify({ retentionDays }),
-    });
-    if (saveSequence !== retentionSaveSequence) return;
-    if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
-    input.value = retentionDays;
-    const status = document.getElementById('complianceRetentionStatus');
-    if (status) status.textContent = 'Audit retention policy saved.';
-  } catch (error) {
-    if (saveSequence === retentionSaveSequence
-      && config.chatId === requestChatId
-      && config.sessionToken === requestSessionToken) {
-      input.value = '';
-    }
-    throw error;
-  }
-}
-
-async function createComplianceRequest() {
-  if (!allowed()) throw new Error('Compliance management permission required.');
-  const customerId = window.prompt('Customer ID for the deletion request:')?.trim();
-  if (!customerId) return;
-  const trigger = document.getElementById('complianceNewRequest');
-  if (trigger?.disabled) return;
-  if (trigger) trigger.disabled = true;
-  const requestChatId = config.chatId;
-  const requestSessionToken = config.sessionToken;
-  try {
-    await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/requests`, {
-      method: 'POST',
-      body: JSON.stringify({
-        requestType: 'DELETION',
-        subjectType: 'customer',
-        subjectId: customerId,
-        reason: 'Customer privacy request',
-      }),
-    });
-    if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
-    await loadComplianceRequests();
-  } finally {
-    if (config.chatId === requestChatId && config.sessionToken === requestSessionToken && trigger) trigger.disabled = false;
-  }
-}
-
-async function loadComplianceRequests() {
-  const status = document.getElementById('complianceRequestsStatus');
-  const list = document.getElementById('complianceRequests');
-  const loadSequence = ++complianceRequestLoadSequence;
-  if (!status || !list || !allowed()) return;
-  status.textContent = 'Loading compliance requests…';
-  const requestChatId = config.chatId;
-  const requestSessionToken = config.sessionToken;
-  try {
-    const data = await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/requests?limit=100`);
-    if (loadSequence !== complianceRequestLoadSequence) return;
-    if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
-    const rows = Array.isArray(data?.requests) ? data.requests : [];
     list.innerHTML = rows.length ? rows.map(row => `<div style="padding:10px 0;border-bottom:1px solid var(--line);">
       <div style="font-weight:600;">${escapeHtml(row.requestType || 'REQUEST')} · ${escapeHtml(row.status || '')}</div>
       <div class="hint">${escapeHtml(row.subjectType || '')} · ${escapeHtml(row.subjectId || '')}</div>
-      ${row.reason ? `<div class="hint">${escapeHtml(row.reason)}</div>` : ''}
-      ${row.status === 'pending' ? `<div style="display:flex;gap:6px;margin-top:6px;"><button type="button" class="btn-secondary" data-compliance-status="approved" data-request-id="${escapeHtml(row.id)}">Approve</button><button type="button" class="btn-secondary" data-compliance-status="rejected" data-request-id="${escapeHtml(row.id)}">Reject</button></div>` : ''}
-    </div>`).join('') : '<div class="hint">No compliance requests.</div>';
-    status.textContent = 'Compliance requests loaded.';
+      ${row.reason ? `<div class="hint">Reason: ${escapeHtml(row.reason)}</div>` : ''}
+      ${row.resolutionNote ? `<div class="hint">Resolution: ${escapeHtml(row.resolutionNote)}</div>` : ''}
+      <div class="hint">Created: ${escapeHtml(row.createdAt || '—')} · Updated: ${escapeHtml(row.updatedAt || '—')}</div>
+      ${row.status === 'pending' ? `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;"><button type="button" class="btn-secondary" data-compliance-status="approved" data-request-id="${escapeHtml(row.id)}">Approve</button><button type="button" class="btn-secondary" data-compliance-status="rejected" data-request-id="${escapeHtml(row.id)}">Reject</button><button type="button" class="btn-secondary" data-compliance-status="cancelled" data-request-id="${escapeHtml(row.id)}">Cancel</button></div>` : ''}
+      ${row.status === 'approved' ? `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;"><button type="button" class="btn-secondary" data-compliance-status="completed" data-request-id="${escapeHtml(row.id)}">Mark completed</button><button type="button" class="btn-secondary" data-compliance-status="cancelled" data-request-id="${escapeHtml(row.id)}">Cancel</button></div>` : ''}
+    </div>`).join('') : '<div class="hint">No compliance requests.</div>';    status.textContent = 'Compliance requests loaded.';
     list.querySelectorAll('[data-compliance-status]').forEach(button => {
       button.onclick = async () => {
         if (button.disabled || !allowed()) return;
@@ -216,7 +74,7 @@ async function loadComplianceRequests() {
         try {
           await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/requests`, {
             method: 'PATCH',
-            body: JSON.stringify({ requestId, status: nextStatus, resolutionNote: 'Reviewed in Sellify Settings' }),
+            body: JSON.stringify({ requestId, status: nextStatus, resolutionNote: `Updated to ${nextStatus} in Sellify Settings` }),
           });
           if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
           await loadComplianceRequests();
