@@ -24,14 +24,14 @@ assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM sqlite_master WHERE type='tab
 
 // Verification must be invalidated when an identity-bearing field changes.
 db.prepare("UPDATE telegram_storefront_configs SET status='VERIFIED' WHERE organization_id=?").run(row.organization_id);
-const changed = await upsertTelegramStorefrontConfig(row.chatId, {
+const changed = await upsertTelegramStorefrontConfig(row.chat_id, {
   credentialRef: 'secret://telegram/tg1-replacement'
 }, actor);
 assert.equal(changed.status, 'CONFIGURED');
 assert.equal(changed.credentialRef, 'secret://telegram/tg1-replacement');
 
 db.prepare("UPDATE telegram_storefront_configs SET status='PUBLISHED' WHERE organization_id=?").run(row.organization_id);
-const botChanged = await upsertTelegramStorefrontConfig(row.chatId, {
+const botChanged = await upsertTelegramStorefrontConfig(row.chat_id, {
   botUsername: 'tg1_replacement_bot'
 }, actor);
 assert.equal(botChanged.status, 'CONFIGURED');
