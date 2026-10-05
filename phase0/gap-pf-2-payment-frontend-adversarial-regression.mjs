@@ -159,6 +159,34 @@ assert.doesNotMatch(client, /state:\s*['"]VERIFIED['"]/);
 assert.doesNotMatch(client, /ledgerEntry|ledger_entry|payment_ledger_entries/);
 
 
+// Provider timeout/retry certification: a transport failure must not fabricate
+// evidence or a financial state transition; retrying the same successful
+// provider observation must address the same evidence fingerprint.
+const queryStatusStart = core.indexOf('async queryStatus(command = {})');
+assert.notEqual(queryStatusStart, -1);
+const queryStatusBlock = core.slice(queryStatusStart, queryStatusStart + 8500);
+assert.match(queryStatusBlock, /try\s*\{[\s\S]*provider\.getStatus/);
+assert.match(queryStatusBlock, /catch \(error\)/);
+assert.match(queryStatusBlock, /throw error/);
+assert.match(queryStatusBlock, /fingerprintStatusQuery\(paymentId, payment\.providerId, verification\)/);
+const fingerprintStart = core.indexOf('function fingerprintStatusQuery');
+assert.notEqual(fingerprintStart, -1);
+const fingerprintBlock = core.slice(fingerprintStart, fingerprintStart + 1000);
+for (const stableField of ['providerId', 'paymentId', 'observedTransactionId', 'result', 'observedAmountMinor', 'observedReference']) {
+  assert.match(fingerprintBlock, new RegExp(stableField));
+}
+assert.doesNotMatch(fingerprintBlock, /Date\.now|randomUUID|receivedAt/);
+
+// Evidence persistence is organization-scoped and duplicate-safe. A replay
+// returns the existing evidence rather than inserting a second record.
+const evidenceStart = core.indexOf('async function insertPaymentEvidence');
+assert.equal(evidenceStart, -1, 'PaymentCore must delegate evidence persistence to the store');
+const storeEvidenceStart = server.indexOf('insertPaymentEvidence');
+assert.notEqual(storeEvidenceStart, -1);
+assert.match(fs.readFileSync('backend/lib/store-sqlite.js', 'utf8'), /organization_id = \? AND provider_id = \? AND fingerprint = \?/);
+assert.match(fs.readFileSync('backend/lib/store-sqlite.js', 'utf8'), /duplicate: true/);
+
+
 // Concurrency certification: an older canonical response must never overwrite a
 // newer payment projection, and an older full-list response must not erase a
 // newer locally observed payment.
