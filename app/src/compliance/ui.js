@@ -65,12 +65,19 @@ async function loadAuditEvents() {
     list.querySelectorAll('[data-compliance-status]').forEach(button => {
       button.onclick = async () => {
         if (button.disabled || !allowed()) return;
-        const requestId = button.dataset.requestId;
-        const nextStatus = button.dataset.complianceStatus;
+        const requestId = button.dataset.requestId?.trim();
+        const nextStatus = button.dataset.complianceStatus?.trim().toLowerCase();
+        if (!requestId || !['approved', 'rejected', 'cancelled', 'completed'].includes(nextStatus)) {
+          return;
+        }
         const requestChatId = config.chatId;
         const requestSessionToken = config.sessionToken;
         const buttons = list.querySelectorAll(`[data-request-id="${CSS.escape(requestId)}"]`);
         buttons.forEach(control => { control.disabled = true; });
+        const requestStatus = document.createElement('span');
+        requestStatus.className = 'hint';
+        requestStatus.textContent = 'Updating…';
+        buttons[buttons.length - 1]?.parentElement?.appendChild(requestStatus);
         try {
           await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/requests`, {
             method: 'PATCH',
@@ -81,7 +88,7 @@ async function loadAuditEvents() {
         } catch (error) {
           if (config.chatId === requestChatId && config.sessionToken === requestSessionToken) {
             buttons.forEach(control => { control.disabled = false; });
-            showComplianceError(error);
+            requestStatus.textContent = error?.message || 'Request update failed.';
           }
         }
       };
