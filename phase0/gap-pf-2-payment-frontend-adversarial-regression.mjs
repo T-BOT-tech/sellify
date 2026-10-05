@@ -206,6 +206,16 @@ assert.match(projection, /sequence === paymentStatusSequences\.get\(id\)/);
 
 
 
+// Partial ledger certification: PARTIAL must record the actually observed
+// received amount, while VERIFIED/RECONCILED continue to use the obligation.
+const storeSource = fs.readFileSync('backend/lib/store-sqlite.js', 'utf8');
+const ledgerInsertStart = storeSource.indexOf("INSERT INTO payment_ledger_entries");
+assert.notEqual(ledgerInsertStart, -1);
+const ledgerInsertBlock = storeSource.slice(ledgerInsertStart - 600, ledgerInsertStart + 1800);
+assert.match(ledgerInsertBlock, /target === 'PARTIAL'/);
+assert.match(ledgerInsertBlock, /observedAmountMinor/);
+assert.match(ledgerInsertBlock, /row\.amount_minor/);
+
 // Partial-payment certification: a provider amount below the obligation must
 // produce PARTIAL, while an exact amount can reach VERIFIED only with all invariants.
 const { PaymentDecisionEngine } = await import('../backend/lib/payments/decision-engine.js');
