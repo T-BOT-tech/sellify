@@ -5,6 +5,8 @@ import { escapeHtml } from '../utils/index.js';
 const base = () => (config.syncUrl || window.location.origin).replace(/\/$/, '');
 const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${config.sessionToken || ''}` });
 
+let complianceRequestLoadSequence = 0;
+
 async function request(path, options = {}) {
   const res = await fetch(base() + path, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
   const data = await res.json().catch(() => ({}));
@@ -77,7 +79,7 @@ export async function renderCompliancePanel() {
     panel.innerHTML = '';
     return;
   }
-  panel.innerHTML = '<div class="settings-section-label">Compliance & audit</div><div class="hint">Privacy requests, retention policy, and audited data exports are handled by the canonical backend. Audit history is read-only and tenant-scoped.</div><div id="complianceStatus" class="hint">Loading…</div><div id="complianceRequests"></div><div style="display:flex;gap:8px;align-items:center;margin-top:10px;"><label>Audit retention days <input id="complianceRetentionDays" type="number" min="30" max="3650" step="1" style="width:110px;"></label><button type="button" class="btn-secondary" id="complianceRetentionSave">Save retention</button><span id="complianceRetentionStatus" class="hint"></span></div><div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;"><button type="button" class="btn-secondary" id="complianceNewRequest">New customer deletion request</button><button type="button" class="btn-secondary" id="complianceRefresh">Refresh</button><button type="button" class="btn-secondary" id="complianceExport">Export organization data</button><span id="complianceExportStatus" class="hint"></span></div><div style="margin-top:16px;"><div style="font-weight:600;">Audit history</div><div class="hint">Filter canonical audit events by action, actor, or entity type. Opening this history is itself audited by the backend.</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"><input id="auditAction" placeholder="Action" style="flex:1;min-width:120px;"><input id="auditActorId" placeholder="Actor ID" style="flex:1;min-width:120px;"><input id="auditEntityType" placeholder="Entity type" style="flex:1;min-width:120px;"><input id="auditLimit" type="number" min="1" max="500" value="100" style="width:80px;"><button type="button" class="btn-secondary" id="auditRefresh">Refresh audit</button></div><div id="auditStatus" class="hint" style="margin-top:6px;"></div><div id="auditEvents" style="margin-top:4px;"></div></div>';
+  panel.innerHTML = '<div class="settings-section-label">Compliance & audit</div><div class="hint">Privacy requests, retention policy, and audited data exports are handled by the canonical backend. Audit history is read-only and tenant-scoped.</div><div id="complianceStatus" class="hint">Loading…</div><div id="complianceRequestsStatus" class="hint"></div><div id="complianceRequests"></div><div style="display:flex;gap:8px;align-items:center;margin-top:10px;"><label>Audit retention days <input id="complianceRetentionDays" type="number" min="30" max="3650" step="1" style="width:110px;"></label><button type="button" class="btn-secondary" id="complianceRetentionSave">Save retention</button><span id="complianceRetentionStatus" class="hint"></span></div><div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;"><button type="button" class="btn-secondary" id="complianceNewRequest">New customer deletion request</button><button type="button" class="btn-secondary" id="complianceRefresh">Refresh</button><button type="button" class="btn-secondary" id="complianceExport">Export organization data</button><span id="complianceExportStatus" class="hint"></span></div><div style="margin-top:16px;"><div style="font-weight:600;">Audit history</div><div class="hint">Filter canonical audit events by action, actor, or entity type. Opening this history is itself audited by the backend.</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"><input id="auditAction" placeholder="Action" style="flex:1;min-width:120px;"><input id="auditActorId" placeholder="Actor ID" style="flex:1;min-width:120px;"><input id="auditEntityType" placeholder="Entity type" style="flex:1;min-width:120px;"><input id="auditLimit" type="number" min="1" max="500" value="100" style="width:80px;"><button type="button" class="btn-secondary" id="auditRefresh">Refresh audit</button></div><div id="auditStatus" class="hint" style="margin-top:6px;"></div><div id="auditEvents" style="margin-top:4px;"></div></div>';
   document.getElementById('complianceRefresh').onclick = () => loadComplianceRequests();
   document.getElementById('auditRefresh').onclick = () => loadAuditEvents();
   document.getElementById('complianceNewRequest').onclick = () => createComplianceRequest().catch(showComplianceError);
@@ -168,23 +170,25 @@ async function createComplianceRequest() {
 }
 
 async function loadComplianceRequests() {
-  const status = document.getElementById('complianceStatus');
+  const status = document.getElementById('complianceRequestsStatus');
   const list = document.getElementById('complianceRequests');
+  const loadSequence = ++complianceRequestLoadSequence;
   if (!status || !list || !allowed()) return;
   status.textContent = 'Loading compliance requests…';
   const requestChatId = config.chatId;
   const requestSessionToken = config.sessionToken;
   try {
     const data = await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/requests?limit=100`);
+    if (loadSequence !== complianceRequestLoadSequence) return;
     if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
-    const rows = data.requests || [];
+    const rows = Array.isArray(data?.requests) ? data.requests : [];
     list.innerHTML = rows.length ? rows.map(row => `<div style="padding:10px 0;border-bottom:1px solid var(--line);">
       <div style="font-weight:600;">${escapeHtml(row.requestType || 'REQUEST')} · ${escapeHtml(row.status || '')}</div>
       <div class="hint">${escapeHtml(row.subjectType || '')} · ${escapeHtml(row.subjectId || '')}</div>
       ${row.reason ? `<div class="hint">${escapeHtml(row.reason)}</div>` : ''}
       ${row.status === 'pending' ? `<div style="display:flex;gap:6px;margin-top:6px;"><button type="button" class="btn-secondary" data-compliance-status="approved" data-request-id="${escapeHtml(row.id)}">Approve</button><button type="button" class="btn-secondary" data-compliance-status="rejected" data-request-id="${escapeHtml(row.id)}">Reject</button></div>` : ''}
     </div>`).join('') : '<div class="hint">No compliance requests.</div>';
-    status.textContent = 'Compliance data loaded.';
+    status.textContent = 'Compliance requests loaded.';
     list.querySelectorAll('[data-compliance-status]').forEach(button => {
       button.onclick = async () => {
         if (button.disabled || !allowed()) return;
@@ -213,8 +217,9 @@ async function loadComplianceRequests() {
     // Never leave previously loaded compliance decisions visible after a
     // failed refresh; the backend is the authority and stale approvals are
     // unsafe to present as current state.
+    if (loadSequence !== complianceRequestLoadSequence) return;
     list.innerHTML = '';
-    showComplianceError(error);
+    status.textContent = error?.message || 'Compliance requests could not be loaded.';
   }
 }
 
