@@ -306,8 +306,14 @@ export function finalizeOrderDelete(id) {
 }
 
 
-// The order-payment summary cache is tenant-scoped. Clear it before a tenant
-// switch so no prior tenant's financial projection survives context change.
+// Canonical payment/status updates invalidate the corresponding order summary
+// immediately. This prevents a successful sync/provider refresh from leaving an
+// older PAID/PARTIAL/UNPAID projection visible until the normal TTL expires.
 if (typeof window !== 'undefined') {
+  window.addEventListener('sellify:payment-canonical-updated', event => {
+    invalidateOrderPaymentSummaryCache(event?.detail?.orderId);
+  });
+  // The order-payment summary cache is tenant-scoped. Clear it before a tenant
+  // switch so no prior tenant's financial projection survives context change.
   window.addEventListener('sellify:tenant-changing', invalidateAllOrderPaymentSummaryCache);
 }
