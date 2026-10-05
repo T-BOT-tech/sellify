@@ -25,12 +25,13 @@ export function setPayments(next) {
   if (!Array.isArray(next)) return payments;
   const incomingById = new Map(next.filter(payment => payment?.id).map(payment => [String(payment.id), { ...payment }]));
   const existingById = new Map(payments.filter(payment => payment?.id).map(payment => [String(payment.id), payment]));
+  // A successful canonical list response is a tenant-scoped snapshot. Never
+  // retain records missing from that snapshot: doing so can leak stale
+  // payments across tenant switches or resurrect payments removed/archived
+  // from the canonical projection.
   payments = Array.from(incomingById.entries()).map(([id, incoming]) =>
     preferIncomingPayment(existingById.get(id), incoming) ? incoming : existingById.get(id),
   );
-  for (const existing of existingById.values()) {
-    if (!incomingById.has(String(existing?.id))) payments.push(existing);
-  }
   return payments;
 }
 
