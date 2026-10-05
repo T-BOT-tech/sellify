@@ -112,7 +112,7 @@ import {
   listCustomers, getCustomer, upsertCustomer, updateCustomer,
   listInventoryMovements, getInventoryBalances, appendInventoryMovement,
   createPairingChallenge, consumePairingChallenge,
-  createInvite, listInvites, revokeInvite, consumeInvite, changeMembershipRole, assignMembershipContextualRole,
+  createInvite, listInvites, revokeInvite, consumeInvite, changeMembershipRole, assignMembershipContextualRole, revokeMembershipContextualRole,
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
   createComplianceRequest, getComplianceRequest, listComplianceRequests, resolveComplianceRequest, buildComplianceExport,
@@ -796,6 +796,22 @@ async function handleAssignMembershipContextualRole(req, res) {
     scopeId: body.scopeId ?? null,
   });
   sendJSON(res, 201, { membershipRole: result }, req);
+}
+
+async function handleRevokeMembershipContextualRole(req, res) {
+  const body = await readBody(req);
+  const session = await requireSession(req);
+  const decision = authorize(session, session.organizationId, null, 'membership', 'membership:role:manage');
+  if (decision !== AUTHZ.ALLOW) throw Object.assign(new Error('Membership role management permission required'), { statusCode: 403 });
+  const result = await revokeMembershipContextualRole({
+    actorUserId: session.userId,
+    chatId: session.chatId,
+    membershipId: String(body.membershipId || '').trim(),
+    role: String(body.role || '').trim().toLowerCase(),
+    scopeType: body.scopeType || 'ORGANIZATION',
+    scopeId: body.scopeId ?? null,
+  });
+  sendJSON(res, 200, { membershipRole: result }, req);
 }
 
 async function handleListInvites(req, res, chatId) {
@@ -2757,6 +2773,7 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/packs\/([^/]+)\/lifecycle$/, handler: (req, res, m) => handlePackLifecycle(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/auth\/membership-role$/, handler: handleChangeMembershipRole },
   { method: 'POST', pattern: /^\/auth\/membership-contextual-role$/, handler: handleAssignMembershipContextualRole },
+  { method: 'POST', pattern: /^\/auth\/membership-contextual-role\/revoke$/, handler: handleRevokeMembershipContextualRole },
   { method: 'POST', pattern: /^\/auth\/invites$/, handler: handleCreateInvite },
   { method: 'POST', pattern: /^\/auth\/invites\/revoke$/, handler: handleRevokeInvite },
   { method: 'POST', pattern: /^\/auth\/accept-invite$/, handler: handleAcceptInvite },
