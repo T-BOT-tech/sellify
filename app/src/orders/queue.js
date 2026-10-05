@@ -75,7 +75,13 @@ function refreshOrderPaymentSummary(orderId) {
       renderQueue();
       return summary;
     })
-    .catch(() => null)
+    .catch(() => {
+      // The canonical result is unavailable. Keep the cache empty and repaint
+      // immediately so an older PAID/PARTIAL/UNPAID DOM projection cannot
+      // remain visible after a failed refresh.
+      renderQueue();
+      return null;
+    })
     .finally(() => orderPaymentSummaryInFlight.delete(key));
   orderPaymentSummaryInFlight.set(key, promise);
 }
