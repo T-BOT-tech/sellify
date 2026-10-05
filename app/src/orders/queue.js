@@ -51,10 +51,24 @@ function getCachedOrderPaymentSummary(orderId) {
   return cached.summary;
 }
 
+export function invalidateOrderPaymentSummaryCache(orderId) {
+  const id = String(orderId || '').trim();
+  if (!id) return;
+  orderPaymentSummaryCache.delete(orderPaymentSummaryKey(id));
+}
+
+export function invalidateAllOrderPaymentSummaryCache() {
+  orderPaymentSummaryCache.clear();
+}
+
 function refreshOrderPaymentSummary(orderId) {
   const id = String(orderId || '').trim();
   if (!id || !config.chatId || orderPaymentSummaryInFlight.has(orderPaymentSummaryKey(id))) return;
   const key = orderPaymentSummaryKey(id);
+  // Never retain an expired/stale financial projection while a canonical
+  // refresh is in flight. Failure must render as unavailable/checking rather
+  // than silently presenting an old PAID/PARTIAL/UNPAID decision.
+  invalidateOrderPaymentSummaryCache(id);
   const promise = refreshCanonicalOrderPaymentSummary(id)
     .then(summary => {
       orderPaymentSummaryCache.set(key, { summary, receivedAt: Date.now() });
