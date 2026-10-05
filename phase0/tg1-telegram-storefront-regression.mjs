@@ -21,4 +21,19 @@ assert.equal(created.credentialRef, 'secret://telegram/tg1-demo');
 assert.equal(created.enabledCapabilities.includes('checkout'), true);
 assert.equal(db.prepare('SELECT COUNT(*) AS n FROM telegram_storefront_configs WHERE organization_id=?').get(row.organization_id).n, 1);
 assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name LIKE 'telegram%'`).get().n, 1);
+
+// Verification must be invalidated when an identity-bearing field changes.
+db.prepare("UPDATE telegram_storefront_configs SET status='VERIFIED' WHERE organization_id=?").run(row.organization_id);
+const changed = await upsertTelegramStorefrontConfig(row.chatId, {
+  credentialRef: 'secret://telegram/tg1-replacement'
+}, actor);
+assert.equal(changed.status, 'CONFIGURED');
+assert.equal(changed.credentialRef, 'secret://telegram/tg1-replacement');
+
+db.prepare("UPDATE telegram_storefront_configs SET status='PUBLISHED' WHERE organization_id=?").run(row.organization_id);
+const botChanged = await upsertTelegramStorefrontConfig(row.chatId, {
+  botUsername: 'tg1_replacement_bot'
+}, actor);
+assert.equal(botChanged.status, 'CONFIGURED');
+
 console.log('TG-1 Telegram seller-owned storefront regression: PASS');
