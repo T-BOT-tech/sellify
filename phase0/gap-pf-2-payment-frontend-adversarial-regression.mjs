@@ -277,6 +277,20 @@ assert.match(refundBlock, /state = \\?, updated_at = \\?/);
 assert.match(refundBlock, /'REFUNDED'/);
 assert.match(refundBlock, /fullRefund/);
 
+// Frontend canonical snapshot certification:
+// a successful tenant-scoped payment list replaces the projection snapshot;
+// records absent from the canonical response must not survive locally.
+const stateSource = fs.readFileSync('app/src/payments/state.js', 'utf8');
+assert.match(stateSource, /A successful canonical list response is a tenant-scoped snapshot/);
+assert.doesNotMatch(stateSource, /for \(const existing of existingById\.values\(\)\)/);
+
+// Order payment lookup must remain backed by the current canonical projection
+// rather than a persisted local financial ledger.
+assert.match(projection, /getPayments\(\)\.find/);
+assert.match(projection, /listPayments\(\{ orderId: serverOrderId, limit: 10 \}\)/);
+assert.match(stateSource, /In-memory frontend projection only/);
+assert.doesNotMatch(stateSource, /localStorage|saveJSON|STORAGE_KEYS/);
+
 // Overpayment matrix certification:
 // 10,000 order: a single 10,000 payment is valid; 7,000 + 3,000 is valid;
 // a second 7,000 request after 7,000 reserved must be rejected, and the
