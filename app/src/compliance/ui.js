@@ -16,6 +16,57 @@ function allowed() {
   return Boolean(config.chatId && config.sessionToken && hasPermission(currentStaff?.role || config.tenantRole || 'owner', 'compliance:manage'));
 }
 
+function auditAllowed() {
+  return Boolean(config.chatId && config.sessionToken && hasPermission(currentStaff?.role || config.tenantRole || 'owner', 'audit:view'));
+}
+
+function auditQuery() {
+  const params = new URLSearchParams();
+  const action = document.getElementById('auditAction')?.value?.trim();
+  const actorId = document.getElementById('auditActorId')?.value?.trim();
+  const entityType = document.getElementById('auditEntityType')?.value?.trim();
+  const limit = document.getElementById('auditLimit')?.value?.trim() || '100';
+  if (action) params.set('action', action);
+  if (actorId) params.set('actor_id', actorId);
+  if (entityType) params.set('entity_type', entityType);
+  params.set('limit', String(Math.max(1, Math.min(500, Number(limit) || 100))));
+  return params.toString();
+}
+
+async function loadAuditEvents() {
+  const status = document.getElementById('auditStatus');
+  const list = document.getElementById('auditEvents');
+  if (!status || !list || !auditAllowed()) return;
+  status.textContent = 'Loading audit history…';
+  list.innerHTML = '<div class="hint">Loading…</div>';
+  try {
+    const query = auditQuery();
+    const data = await request(`/tenants/${encodeURIComponent(config.chatId)}/audit?${query}`);
+    const rows = Array.isArray(data?.events) ? data.events : [];
+    list.innerHTML = rows.length ? rows.map(row => {
+      const metadata = row.metadata && typeof row.metadata === 'object'
+        ? JSON.stringify(row.metadata, null, 2) : '{}';
+      const summary = `${row.action || 'event'} · ${row.result || 'success'} · ${row.createdAt || ''}`;
+      return `<details style="padding:8px 0;border-bottom:1px solid var(--line);">
+        <summary style="cursor:pointer;">${escapeHtml(summary)}</summary>
+        <div class="hint" style="margin-top:6px;">Actor: ${escapeHtml(row.actorId || '—')} · Device: ${escapeHtml(row.deviceId || '—')} · Location: ${escapeHtml(row.locationId || '—')}</div>
+        <div class="hint">Entity: ${escapeHtml(row.entityType || '—')} · ${escapeHtml(row.entityId || '—')}</div>
+        ${row.reason ? `<div class="hint">Reason: ${escapeHtml(row.reason)}</div>` : ''}
+        <pre style="white-space:pre-wrap;word-break:break-word;margin:6px 0 0;">${escapeHtml(metadata)}</pre>
+      </details>`;
+    }).join('') : '<div class="hint">No audit events match these filters.</div>';
+    status.textContent = `Audit history loaded · ${rows.length} event${rows.length === 1 ? '' : 's'}.`;
+  } catch (error) {
+    list.innerHTML = '';
+    showAuditError(error);
+  }
+}
+
+function showAuditError(error) {
+  const status = document.getElementById('auditStatus');
+  if (status) status.textContent = error?.message || 'Audit history could not be loaded.';
+}
+
 export async function renderCompliancePanel() {
   const panel = document.getElementById('compliancePanel');
   if (!panel) return;
@@ -23,13 +74,15 @@ export async function renderCompliancePanel() {
     panel.innerHTML = '';
     return;
   }
-  panel.innerHTML = '<div class="settings-section-label">Compliance</div><div class="hint">Privacy requests, retention policy, and audited data exports are handled by the canonical backend.</div><div id="complianceStatus" class="hint">Loading…</div><div id="complianceRequests"></div><div style="display:flex;gap:8px;align-items:center;margin-top:10px;"><label>Audit retention days <input id="complianceRetentionDays" type="number" min="1" max="3650" style="width:110px;"></label><button type="button" class="btn-secondary" id="complianceRetentionSave">Save retention</button></div><div style="display:flex;gap:8px;margin-top:8px;"><button type="button" class="btn-secondary" id="complianceNewRequest">New customer deletion request</button><button type="button" class="btn-secondary" id="complianceRefresh">Refresh</button><button type="button" class="btn-secondary" id="complianceExport">Export organization data</button></div>';
+  panel.innerHTML = '<div class="settings-section-label">Compliance & audit</div><div class="hint">Privacy requests, retention policy, and audited data exports are handled by the canonical backend. Audit history is read-only and tenant-scoped.</div><div id="complianceStatus" class="hint">Loading…</div><div id="complianceRequests"></div><div style="display:flex;gap:8px;align-items:center;margin-top:10px;"><label>Audit retention days <input id="complianceRetentionDays" type="number" min="1" max="3650" style="width:110px;"></label><button type="button" class="btn-secondary" id="complianceRetentionSave">Save retention</button></div><div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;"><button type="button" class="btn-secondary" id="complianceNewRequest">New customer deletion request</button><button type="button" class="btn-secondary" id="complianceRefresh">Refresh</button><button type="button" class="btn-secondary" id="complianceExport">Export organization data</button></div><div style="margin-top:16px;"><div style="font-weight:600;">Audit history</div><div class="hint">Filter canonical audit events by action, actor, or entity type. Opening this history is itself audited by the backend.</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"><input id="auditAction" placeholder="Action" style="flex:1;min-width:120px;"><input id="auditActorId" placeholder="Actor ID" style="flex:1;min-width:120px;"><input id="auditEntityType" placeholder="Entity type" style="flex:1;min-width:120px;"><input id="auditLimit" type="number" min="1" max="500" value="100" style="width:80px;"><button type="button" class="btn-secondary" id="auditRefresh">Refresh audit</button></div><div id="auditStatus" class="hint" style="margin-top:6px;"></div><div id="auditEvents" style="margin-top:4px;"></div></div>';
   document.getElementById('complianceRefresh').onclick = () => loadComplianceRequests();
+  document.getElementById('auditRefresh').onclick = () => loadAuditEvents();
   document.getElementById('complianceNewRequest').onclick = () => createComplianceRequest().catch(showComplianceError);
   document.getElementById('complianceExport').onclick = () => exportCompliance('organization').catch(showComplianceError);
   document.getElementById('complianceRetentionSave').onclick = () => saveRetentionPolicy().catch(showComplianceError);
   await loadComplianceRequests();
   await loadRetentionPolicy();
+  if (auditAllowed()) await loadAuditEvents();
 }
 
 async function loadRetentionPolicy() {
@@ -113,6 +166,7 @@ async function exportCompliance(subjectType, subjectId = null) {
   URL.revokeObjectURL(url);
   const status = document.getElementById('complianceStatus');
   if (status) status.textContent = 'Compliance export generated and audited.';
+  if (auditAllowed()) loadAuditEvents().catch(() => {});
 }
 
 function showComplianceError(error) {
