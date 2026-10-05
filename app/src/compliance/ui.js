@@ -8,6 +8,7 @@ const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bea
 let complianceRequestLoadSequence = 0;
 let auditLoadSequence = 0;
 let retentionLoadSequence = 0;
+let retentionSaveSequence = 0;
 
 async function request(path, options = {}) {
   const res = await fetch(base() + path, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
@@ -134,6 +135,7 @@ async function saveRetentionPolicy() {
   }
   const retentionDays = parsed;
   retentionLoadSequence += 1;
+  const saveSequence = ++retentionSaveSequence;
   const requestChatId = config.chatId;
   const requestSessionToken = config.sessionToken;
   try {
@@ -141,12 +143,17 @@ async function saveRetentionPolicy() {
       method: 'PATCH',
       body: JSON.stringify({ retentionDays }),
     });
+    if (saveSequence !== retentionSaveSequence) return;
     if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
     input.value = retentionDays;
     const status = document.getElementById('complianceRetentionStatus');
     if (status) status.textContent = 'Audit retention policy saved.';
   } catch (error) {
-    input.value = '';
+    if (saveSequence === retentionSaveSequence
+      && config.chatId === requestChatId
+      && config.sessionToken === requestSessionToken) {
+      input.value = '';
+    }
     throw error;
   }
 }
