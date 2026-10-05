@@ -777,6 +777,11 @@ async function handleChangeMembershipRole(req, res) {
   const membershipId = String(body.membershipId || '').trim();
   const role = String(body.role || '').trim().toLowerCase();
   if (!membershipId || !role) throw Object.assign(new Error('membershipId and role are required'), { statusCode: 400 });
+  const tenant = await getTenant(session.chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404 });
+  await requireAuthorization(session, tenant, 'membership', 'membership:role:manage', {
+    deniedMessage: 'Membership role management permission required',
+  });
   const result = await changeMembershipRole({ actorUserId: session.userId, chatId: session.chatId, membershipId, role });
   sendJSON(res, 200, { membership: result }, req);
 }
