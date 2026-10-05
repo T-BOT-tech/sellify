@@ -1774,7 +1774,7 @@ async function handleAuthorizationIamCertification(req, res, chatId) {
     authority: 'backend/lib/authorization.js',
     persistence: 'existing canonical stores only',
     evaluator: 'backend/lib/authorization.js authorize()',
-    membershipRoleChangeGap: 'Open trace item: the current source has membership creation/invite role-upgrade audit paths, but no clearly established generic membership role-change endpoint/store was evidenced. P1-02 must not be treated as fully certified until that authority is explicitly established.',
+    membershipRoleChangeGap: 'CERTIFIED: generic membership role changes use POST /auth/membership-role, canonical membership:role:manage authorization, tenant-scoped store enforcement, role-boundary protections, last-owner protection, and membership.role_changed audit events.',
     policyDefinedPacks: [...policyDefinedPacks],
     uiIsNotAuthorization: true,
   }, req);
