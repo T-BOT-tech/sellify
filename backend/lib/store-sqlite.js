@@ -6276,11 +6276,7 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       crypto.randomUUID(), paymentId, organizationId, String(decision.entryType || target),
       target === 'PARTIAL'
         ? Number(decision.amountMinor ?? decision.amount_minor ?? input.verification?.observedAmountMinor ?? input.verification?.observed_amount_minor ?? row.amount_minor)
-        : target === 'VERIFIED' && row.state === 'PARTIAL'
-          ? Math.max(0, Number(row.amount_minor) - Number(db.prepare(
-              "SELECT COALESCE(SUM(amount_minor), 0) AS amount FROM payment_ledger_entries WHERE payment_id = ? AND organization_id = ? AND entry_type = 'PARTIAL'"
-            ).get(paymentId, organizationId)?.amount || 0))
-          : Number(row.amount_minor),
+        : Number(row.amount_minor),
       normaliseCurrency(row.currency, 'ETB'),
       row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now
     );
@@ -6331,7 +6327,7 @@ const PAYMENT_TRANSITIONS = Object.freeze({
   RECONCILED: new Set(['REVERSED','REFUNDED']),
   REJECTED: new Set(), FAILED: new Set(), DUPLICATE: new Set(), MISMATCH: new Set(['RECEIVED','VERIFIED','REJECTED']),
   EXPIRED: new Set(['RECEIVED']), CANCELLED: new Set(['RECEIVED']),
-  PARTIAL: new Set(['RECEIVED','VERIFIED','FAILED','REJECTED']), REVERSED: new Set(), REFUNDED: new Set(),
+  PARTIAL: new Set(['RECEIVED','FAILED','REJECTED']), REVERSED: new Set(), REFUNDED: new Set(),
 });
 
 function paymentStateTimestampColumn(state) {
