@@ -245,6 +245,25 @@ async function exportCompliance(subjectType, subjectId = null) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
       throw new Error('Compliance export returned an invalid response.');
     }
+    const exportVersion = Number(data.exportVersion);
+    const subject = data.subject;
+    if (!Number.isInteger(exportVersion) || exportVersion < 1 ||
+        !subject || typeof subject !== 'object' || Array.isArray(subject) ||
+        String(subject.type || '').toLowerCase() !== normalizedSubjectType ||
+        String(subject.id || '').trim() !== (normalizedSubjectId || String(config.chatId || '').trim())) {
+      throw new Error('Compliance export returned an invalid subject envelope.');
+    }
+    if (normalizedSubjectType === 'organization') {
+      if (!data.organization || typeof data.organization !== 'object' || Array.isArray(data.organization) ||
+          !Array.isArray(data.locations) || !Array.isArray(data.customers) ||
+          !Array.isArray(data.orders) || !Array.isArray(data.auditEvents) ||
+          !Array.isArray(data.complianceRequests)) {
+        throw new Error('Compliance organization export is incomplete.');
+      }
+    } else if (!data.customer || typeof data.customer !== 'object' || Array.isArray(data.customer) ||
+               !Array.isArray(data.orders) || !Array.isArray(data.auditEvents)) {
+      throw new Error('Compliance customer export is incomplete.');
+    }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     try {
