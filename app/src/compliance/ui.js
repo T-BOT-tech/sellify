@@ -91,10 +91,19 @@ export async function renderCompliancePanel() {
 async function loadRetentionPolicy() {
   const input = document.getElementById('complianceRetentionDays');
   if (!input || !allowed()) return;
+  const requestChatId = config.chatId;
+  const requestSessionToken = config.sessionToken;
   try {
-    const data = await request(`/tenants/${encodeURIComponent(config.chatId)}/compliance/retention`);
-    input.value = Number(data?.policy?.retentionDays || 365);
-  } catch (error) { showComplianceError(error); }
+    const data = await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/retention`);
+    if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
+    const retentionDays = Number(data?.policy?.retentionDays);
+    if (!Number.isInteger(retentionDays) || retentionDays < 30 || retentionDays > 3650) {
+      throw new Error('Backend returned an invalid audit retention policy.');
+    }
+    input.value = retentionDays;
+  } catch (error) {
+    if (config.chatId === requestChatId && config.sessionToken === requestSessionToken) showComplianceError(error);
+  }
 }
 
 async function saveRetentionPolicy() {
