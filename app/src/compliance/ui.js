@@ -149,7 +149,13 @@ async function loadComplianceRequests() {
         } catch (error) { showComplianceError(error); }
       };
     });
-  } catch (error) { showComplianceError(error); }
+  } catch (error) {
+    // Never leave previously loaded compliance decisions visible after a
+    // failed refresh; the backend is the authority and stale approvals are
+    // unsafe to present as current state.
+    list.innerHTML = '';
+    showComplianceError(error);
+  }
 }
 
 async function exportCompliance(subjectType, subjectId = null) {
