@@ -105,24 +105,38 @@ async function loadAuditEvents() {
 
 async function exportCompliance(subjectType, subjectId = null) {
   if (!allowed()) throw new Error('Compliance management permission required.');
+  const normalizedSubjectType = String(subjectType || '').trim().toLowerCase();
+  if (!['organization', 'customer'].includes(normalizedSubjectType)) {
+    throw new Error('Unsupported compliance export subject.');
+  }
+  const normalizedSubjectId = subjectId == null ? null : String(subjectId).trim();
+  if (normalizedSubjectType === 'customer' && !normalizedSubjectId) {
+    throw new Error('Customer export requires a customer ID.');
+  }
   const trigger = document.getElementById('complianceExport');
   if (trigger?.disabled) return;
   const requestChatId = config.chatId;
   const requestSessionToken = config.sessionToken;
   if (trigger) trigger.disabled = true;
-  const path = subjectId
-    ? `/tenants/${encodeURIComponent(requestChatId)}/compliance/export/${encodeURIComponent(subjectType)}/${encodeURIComponent(subjectId)}`
-    : `/tenants/${encodeURIComponent(requestChatId)}/compliance/export/${encodeURIComponent(subjectType)}`;
+  const path = normalizedSubjectId
+    ? `/tenants/${encodeURIComponent(requestChatId)}/compliance/export/${encodeURIComponent(normalizedSubjectType)}/${encodeURIComponent(normalizedSubjectId)}`
+    : `/tenants/${encodeURIComponent(requestChatId)}/compliance/export/${encodeURIComponent(normalizedSubjectType)}`;
   try {
     const data = await request(path);
     if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `sellify-compliance-${subjectType}-${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error('Compliance export returned an invalid response.');
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    try {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sellify-compliance-${normalizedSubjectType}-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+    } finally {
+      URL.revokeObjectURL(url);
+    }
   const status = document.getElementById('complianceExportStatus');
   if (status) status.textContent = 'Compliance export generated and audited.';
     if (auditAllowed()) loadAuditEvents().catch(() => {});
