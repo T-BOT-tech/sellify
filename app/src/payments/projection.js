@@ -1,4 +1,4 @@
-import { listPayments, resolvePaymentRouting, createPayment, queryPaymentStatus, paymentCommandKey } from './client.js';
+import { listPayments, resolvePaymentRouting, createPayment, queryPaymentStatus, getOrderPaymentSummary, paymentCommandKey } from './client.js';
 import { setPayments, getPayments, setPaymentError, upsertPayment } from './state.js';
 
 let projectionRefreshSequence = 0;
@@ -75,6 +75,15 @@ export async function ensurePaymentForSyncedOrder(order, { statusQueryKey = null
     payment: refreshed || payment,
     statusQueried: true,
   };
+}
+
+export async function refreshCanonicalOrderPaymentSummary(orderId) {
+  const id = String(orderId || '').trim();
+  if (!id) throw Object.assign(new Error('orderId is required'), { code: 'ORDER_REQUIRED', status: 400 });
+  // Order-level financial status must come from Payment Core aggregation,
+  // including successful refunds and reversal semantics. Never derive PAID
+  // or outstanding amounts by summing the frontend payment array.
+  return getOrderPaymentSummary(id);
 }
 
 export function getPaymentForOrder(orderId) {
