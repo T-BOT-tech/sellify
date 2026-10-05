@@ -18,7 +18,7 @@ async function request(path, options = {}) {
 export async function renderMembershipAdministration(containerId = 'membershipAdministrationPanel') {
   const el = document.getElementById(containerId); if (!el) return;
   if (!config.sessionToken || !config.chatId) { el.innerHTML = '<div class="hint">UNKNOWN — no authenticated membership context.</div>'; return; }
-  if (!hasPermission(currentStaff.role, 'settings:configure')) { el.innerHTML = '<div class="hint">PERMISSION_DENIED — membership administration is not available to this role.</div>'; return; }
+  if (!hasPermission(currentStaff?.role || config.tenantRole || 'owner', 'membership:role:manage')) { el.innerHTML = '<div class="hint">PERMISSION_DENIED — membership administration is not available to this role.</div>'; return; }
   el.innerHTML = '<div class="settings-section-label">Membership administration</div><div class="hint">Loading canonical memberships…</div>';
   try {
     const data = await request(`/tenants/${encodeURIComponent(config.chatId)}/memberships`);
