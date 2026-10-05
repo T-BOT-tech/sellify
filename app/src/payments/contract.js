@@ -15,7 +15,7 @@ export function normalizePaymentResponse(data) {
 }
 export function normalizePaymentError(status, data = {}) {
   const numericStatus = Number(status);
-  return Object.freeze({ status: numericStatus, code: String(data?.error?.code || data?.code || ('HTTP_' + numericStatus)), message: String(data?.error?.message || data?.message || ('Payment request failed (' + numericStatus + ')')), retryable: [409,500,502,503,504].includes(numericStatus) });
+  return Object.freeze({ status: numericStatus, code: String(data?.error?.code || data?.code || ('HTTP_' + numericStatus)), message: String(data?.error?.message || data?.message || ('Payment request failed (' + numericStatus + ')')), retryable: [500,502,503,504].includes(numericStatus) });
 }
 export function buildPaymentPath(chatId, suffix = '') {
   const tenant = encodeURIComponent(String(chatId || '').trim());
