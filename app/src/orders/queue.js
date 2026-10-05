@@ -30,7 +30,41 @@ import { isVolumeDiscountEnabled, getVolumeDiscountForQty } from '../b2b/pricing
 import { t } from '../ui/i18n.js';
 import { patchList, renderStatus } from '../ui/render.js';
 import { showUndoToast } from '../ui/toast.js';
-import { getPaymentForOrder } from '../payments/projection.js';
+import { getPaymentForOrder, refreshCanonicalOrderPaymentSummary } from '../payments/projection.js';
+
+// Order-level financial truth is fetched from Payment Core, not reconstructed
+// from the local payment projection. Keep a short-lived UI cache so rendering
+// the queue does not issue a network request for every paint.
+const orderPaymentSummaryCache = new Map();
+const orderPaymentSummaryInFlight = new Map();
+const ORDER_PAYMENT_SUMMARY_TTL_MS = 10000;
+
+function orderPaymentSummaryKey(orderId) {
+  return `${String(config.chatId || '').trim()}:${String(orderId || '').trim()}`;
+}
+
+function getCachedOrderPaymentSummary(orderId) {
+  const key = orderPaymentSummaryKey(orderId);
+  const cached = orderPaymentSummaryCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.receivedAt > ORDER_PAYMENT_SUMMARY_TTL_MS) return null;
+  return cached.summary;
+}
+
+function refreshOrderPaymentSummary(orderId) {
+  const id = String(orderId || '').trim();
+  if (!id || !config.chatId || orderPaymentSummaryInFlight.has(orderPaymentSummaryKey(id))) return;
+  const key = orderPaymentSummaryKey(id);
+  const promise = refreshCanonicalOrderPaymentSummary(id)
+    .then(summary => {
+      orderPaymentSummaryCache.set(key, { summary, receivedAt: Date.now() });
+      renderQueue();
+      return summary;
+    })
+    .catch(() => null)
+    .finally(() => orderPaymentSummaryInFlight.delete(key));
+  orderPaymentSummaryInFlight.set(key, promise);
+}
 
 export function renderDailySummary() {
   const container = document.getElementById('dailySummaryContainer');
@@ -102,8 +136,13 @@ export function ticketInnerHtml(o) {
   const cashLine = (o.cash_tendered !== null && o.cash_tendered !== undefined)
     ? `<div class="ticket-customer">${t('cashTendered')}: ${CS()}${formatMoney(o.cash_tendered)} · ${t('changeDue')}: ${CS()}${formatMoney(o.change_due || 0)}</div>` : '';
   const payment = o.server_order_id ? getPaymentForOrder(o.server_order_id) : null;
+  const orderPaymentSummary = o.server_order_id ? getCachedOrderPaymentSummary(o.server_order_id) : null;
+  if (o.server_order_id && !orderPaymentSummary) refreshOrderPaymentSummary(o.server_order_id);
   const paymentStateLine = payment?.state
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Payment Core: ${escapeHtml(String(payment.state).replaceAll('_', ' '))}</div>` : '';
+  const orderPaymentLine = orderPaymentSummary
+    ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: ${escapeHtml(String(orderPaymentSummary.status || 'UNPAID'))} · ${CS()}${formatMoney(orderPaymentSummary.verifiedMinor || 0)} paid · ${CS()}${formatMoney(orderPaymentSummary.outstandingMinor || 0)} outstanding</div>`
+    : (o.server_order_id ? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: checking…</div>' : '');
   const payMethodLine = o.payment_method_name
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> ${escapeHtml(o.payment_method_name)}${o.payment_proof ? ' · <svg class="icon icon-sm"><use href="#i-paperclip"/></svg> proof attached' : ''}</div>` : '';
   const staffLine = o.created_by_role
@@ -137,6 +176,7 @@ export function ticketInnerHtml(o) {
     <div class="ticket-items">${itemsHtml}</div>
     <div class="ticket-total"><span>${t('total')}</span><span>${CS()}${formatMoney(o.total)}</span></div>
     ${payMethodLine}
+    ${orderPaymentLine}
     ${paymentStateLine}
     ${cashLine}
     ${customerLine}
