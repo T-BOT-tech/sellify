@@ -100,12 +100,19 @@ async function loadRetentionPolicy() {
 async function saveRetentionPolicy() {
   const input = document.getElementById('complianceRetentionDays');
   if (!input || !allowed()) return;
-  const retentionDays = Math.max(30, Math.min(3650, Math.floor(Number(input.value || 365))));
+  const parsed = Number(input.value);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 30 || parsed > 3650) {
+    throw new Error('Retention must be a whole number from 30 to 3650 days.');
+  }
+  const retentionDays = parsed;
+  const requestChatId = config.chatId;
+  const requestSessionToken = config.sessionToken;
   try {
-    await request(`/tenants/${encodeURIComponent(config.chatId)}/compliance/retention`, {
+    await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/retention`, {
       method: 'PATCH',
       body: JSON.stringify({ retentionDays }),
     });
+    if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
     input.value = retentionDays;
     const status = document.getElementById('complianceStatus');
     if (status) status.textContent = 'Audit retention policy saved.';
