@@ -205,6 +205,54 @@ assert.match(projection, /sequence === paymentStatusSequences\.get\(id\)/);
 
 
 
+
+// Partial-payment certification: a provider amount below the obligation must
+// produce PARTIAL, while an exact amount can reach VERIFIED only with all invariants.
+const { PaymentDecisionEngine } = await import('../backend/lib/payments/decision-engine.js');
+const decisionEngine = new PaymentDecisionEngine();
+const partialDecision = decisionEngine.decide({
+  payment: { id: 'partial-1', amountMinor: 10000 },
+  verification: {
+    result: 'MATCH',
+    observedAmountMinor: 5000,
+    reasonCodes: [],
+  },
+  invariants: {
+    passed: false,
+    reasonCodes: ['AMOUNT_MISMATCH'],
+  },
+});
+assert.equal(partialDecision.targetState, 'PARTIAL');
+assert.equal(partialDecision.decision, 'MARK_PARTIAL');
+assert.match(partialDecision.reasonCodes.join(','), /PARTIAL_PAYMENT/);
+
+const exactMismatch = decisionEngine.decide({
+  payment: { id: 'partial-2', amountMinor: 10000 },
+  verification: {
+    result: 'MATCH',
+    observedAmountMinor: 12000,
+    reasonCodes: [],
+  },
+  invariants: {
+    passed: false,
+    reasonCodes: ['AMOUNT_MISMATCH'],
+  },
+});
+assert.equal(exactMismatch.targetState, 'MISMATCH');
+assert.equal(exactMismatch.decision, 'MARK_MISMATCH');
+
+const exactVerified = decisionEngine.decide({
+  payment: { id: 'partial-3', amountMinor: 10000 },
+  verification: {
+    result: 'MATCH',
+    observedAmountMinor: 10000,
+    reasonCodes: [],
+  },
+  invariants: { passed: true, reasonCodes: [] },
+});
+assert.equal(exactVerified.targetState, 'VERIFIED');
+assert.equal(exactVerified.decision, 'ACCEPT');
+
 // Terminal replay certification: once the canonical payment has advanced,
 // an old provider observation must not resurrect or regress it.
 const storeText = fs.readFileSync('backend/lib/store-sqlite.js', 'utf8');
