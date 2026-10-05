@@ -291,6 +291,14 @@ assert.match(projection, /listPayments\(\{ orderId: serverOrderId, limit: 10 \}\
 assert.match(stateSource, /In-memory frontend projection only/);
 assert.doesNotMatch(stateSource, /localStorage|saveJSON|STORAGE_KEYS/);
 
+// Concurrent status projection certification:
+// once a newer status query wins, an older response must not be returned to
+// callers where it could render a stale financial state.
+assert.match(projection, /const isLatest = sequence === paymentStatusSequences\.get\(id\)/);
+assert.match(projection, /if \(isLatest[\\s\\S]*return upsertPayment\(payment\)/);
+assert.match(projection, /A superseded status response must never escape to its caller/);
+assert.match(projection, /getPayments\(\)\.find\(item => String\(item\?\.id\) === id\)/);
+
 // Overpayment matrix certification:
 // 10,000 order: a single 10,000 payment is valid; 7,000 + 3,000 is valid;
 // a second 7,000 request after 7,000 reserved must be rejected, and the
