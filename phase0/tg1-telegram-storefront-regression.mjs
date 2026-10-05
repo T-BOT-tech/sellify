@@ -36,4 +36,28 @@ const botChanged = await upsertTelegramStorefrontConfig(row.chat_id, {
 }, actor);
 assert.equal(botChanged.status, 'CONFIGURED');
 
+// Lifecycle transitions are server-authoritative. The UI exposes PAUSED -> PUBLISHED,
+// so that transition must remain valid, while bypassing verification must be rejected.
+db.prepare("UPDATE telegram_storefront_configs SET status='PAUSED' WHERE organization_id=?").run(row.organization_id);
+const republished = await upsertTelegramStorefrontConfig(row.chat_id, { status: 'PUBLISHED' }, actor);
+assert.equal(republished.status, 'PUBLISHED');
+
+db.prepare("UPDATE telegram_storefront_configs SET status='CONFIGURED' WHERE organization_id=?").run(row.organization_id);
+await assert.rejects(
+  () => upsertTelegramStorefrontConfig(row.chat_id, { status: 'PUBLISHED' }, actor),
+  error => error?.code === 'TELEGRAM_VERIFICATION_REQUIRED'
+);
+
+db.prepare("UPDATE telegram_storefront_configs SET status='DRAFT' WHERE organization_id=?").run(row.organization_id);
+await assert.rejects(
+  () => upsertTelegramStorefrontConfig(row.chat_id, { status: 'PAUSED' }, actor),
+  error => error?.code === 'INVALID_TELEGRAM_STOREFRONT_TRANSITION'
+);
+
+db.prepare("UPDATE telegram_storefront_configs SET status='UNPUBLISHED' WHERE organization_id=?").run(row.organization_id);
+await assert.rejects(
+  () => upsertTelegramStorefrontConfig(row.chat_id, { status: 'PUBLISHED' }, actor),
+  error => error?.code === 'INVALID_TELEGRAM_STOREFRONT_TRANSITION'
+);
+
 console.log('TG-1 Telegram seller-owned storefront regression: PASS');
