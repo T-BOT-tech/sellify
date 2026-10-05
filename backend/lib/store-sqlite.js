@@ -9207,12 +9207,32 @@ export async function assignMembershipContextualRole({
     .get(String(membershipId), String(chatId));
   if (!target) throw Object.assign(new Error('Membership not found'), { statusCode: 404 });
 
-  const id = crypto.randomUUID();
+  const existing = db.prepare(`
+    SELECT *
+      FROM membership_roles
+     WHERE membership_id = ?
+       AND role_id = ?
+       AND scope_type = ?
+       AND ((scope_id IS NULL AND ? IS NULL) OR scope_id = ?)
+     LIMIT 1
+  `).get(target.id, normalizedRole, normalizedScopeType, normalizedScopeId, normalizedScopeId);
+
+  if (existing?.status === 'active') {
+    return {
+      id: existing.id, membershipId: target.id, userId: target.user_id, chatId: String(chatId),
+      role: normalizedRole, status: 'active', scopeType: normalizedScopeType, scopeId: normalizedScopeId,
+      changed: false,
+    };
+  }
+
+  const id = existing?.id || crypto.randomUUID();
   const createdAt = nowIso();
   db.prepare(`
-    INSERT OR IGNORE INTO membership_roles
-      (id, membership_id, role_id, status, scope_type, scope_id, source, created_at)
-    VALUES (?, ?, ?, 'active', ?, ?, 'PACK_ROLE_ASSIGNMENT', ?)
+    INSERT INTO membership_roles
+      (id, membership_id, role_id, status, scope_type, scope_id, source, created_at, revoked_at)
+    VALUES (?, ?, ?, 'active', ?, ?, 'PACK_ROLE_ASSIGNMENT', ?, NULL)
+    ON CONFLICT(membership_id, role_id, scope_type, scope_id)
+    DO UPDATE SET status = 'active', source = 'PACK_ROLE_ASSIGNMENT', revoked_at = NULL
   `).run(id, target.id, normalizedRole, normalizedScopeType, normalizedScopeId, createdAt);
 
   audit(String(chatId), 'membership.contextual_role.assigned', 'membership_role', id, {
@@ -9223,6 +9243,7 @@ export async function assignMembershipContextualRole({
   return {
     id, membershipId: target.id, userId: target.user_id, chatId: String(chatId),
     role: normalizedRole, status: 'active', scopeType: normalizedScopeType, scopeId: normalizedScopeId,
+    changed: true,
   };
 }
 
