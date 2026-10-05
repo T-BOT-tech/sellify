@@ -9226,6 +9226,67 @@ export async function assignMembershipContextualRole({
   };
 }
 
+export async function revokeMembershipContextualRole({ actorUserId, chatId, membershipId, role, scopeType = 'ORGANIZATION', scopeId = null }) {
+  ensureDatabase();
+  const normalizedRole = String(role || '').trim().toLowerCase();
+  const normalizedScopeType = String(scopeType || 'ORGANIZATION').trim().toUpperCase();
+  const normalizedScopeId = scopeId == null || String(scopeId).trim() === '' ? null : String(scopeId).trim();
+  if (!membershipId || !normalizedRole) throw Object.assign(new Error('membershipId and role are required'), { statusCode: 400 });
+  if (!['ORGANIZATION', 'LOCATION', 'RESOURCE'].includes(normalizedScopeType)) {
+    throw Object.assign(new Error('Unsupported role scope type'), { statusCode: 400 });
+  }
+  if (normalizedScopeType !== 'ORGANIZATION' && !normalizedScopeId) {
+    throw Object.assign(new Error('scopeId is required for non-organization role scope'), { statusCode: 400 });
+  }
+
+  const actor = db.prepare(`SELECT * FROM memberships WHERE user_id = ? AND chat_id = ? AND status = 'active'`)
+    .get(String(actorUserId), String(chatId));
+  if (!actor || !['owner', 'manager'].includes(actor.role)) {
+    throw Object.assign(new Error('Owner or manager permission required'), { statusCode: 403 });
+  }
+  const target = db.prepare(`SELECT * FROM memberships WHERE id = ? AND chat_id = ? AND status = 'active'`)
+    .get(String(membershipId), String(chatId));
+  if (!target) throw Object.assign(new Error('Membership not found'), { statusCode: 404 });
+
+  const assignment = db.prepare(`
+    SELECT *
+      FROM membership_roles
+     WHERE membership_id = ?
+       AND role_id = ?
+       AND scope_type = ?
+       AND ((scope_id IS NULL AND ? IS NULL) OR scope_id = ?)
+       AND status = 'active'
+     LIMIT 1
+  `).get(target.id, normalizedRole, normalizedScopeType, normalizedScopeId, normalizedScopeId);
+
+  if (!assignment) {
+    return {
+      id: null, membershipId: target.id, userId: target.user_id, chatId: String(chatId),
+      role: normalizedRole, status: 'revoked', scopeType: normalizedScopeType, scopeId: normalizedScopeId,
+      revoked: false,
+    };
+  }
+
+  const revokedAt = nowIso();
+  db.prepare(`
+    UPDATE membership_roles
+       SET status = 'revoked', revoked_at = ?
+     WHERE id = ? AND membership_id = ? AND status = 'active'
+  `).run(revokedAt, assignment.id, target.id);
+
+  audit(String(chatId), 'membership.contextual_role.revoked', 'membership_role', assignment.id, {
+    membershipId: target.id, userId: target.user_id, role: normalizedRole,
+    scopeType: normalizedScopeType, scopeId: normalizedScopeId,
+    changedByUserId: String(actorUserId),
+  });
+
+  return {
+    id: assignment.id, membershipId: target.id, userId: target.user_id, chatId: String(chatId),
+    role: normalizedRole, status: 'revoked', scopeType: normalizedScopeType, scopeId: normalizedScopeId,
+    revoked: true,
+  };
+}
+
 export async function changeMembershipRole({ actorUserId, chatId, membershipId, role }) {
   ensureDatabase();
   const nextRole = String(role || '').trim().toLowerCase();
