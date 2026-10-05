@@ -178,10 +178,14 @@ async function loadComplianceRequests() {
 }
 
 async function exportCompliance(subjectType, subjectId = null) {
+  if (!allowed()) throw new Error('Compliance management permission required.');
+  const requestChatId = config.chatId;
+  const requestSessionToken = config.sessionToken;
   const path = subjectId
-    ? `/tenants/${encodeURIComponent(config.chatId)}/compliance/export/${encodeURIComponent(subjectType)}/${encodeURIComponent(subjectId)}`
-    : `/tenants/${encodeURIComponent(config.chatId)}/compliance/export/${encodeURIComponent(subjectType)}`;
+    ? `/tenants/${encodeURIComponent(requestChatId)}/compliance/export/${encodeURIComponent(subjectType)}/${encodeURIComponent(subjectId)}`
+    : `/tenants/${encodeURIComponent(requestChatId)}/compliance/export/${encodeURIComponent(subjectType)}`;
   const data = await request(path);
+  if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
