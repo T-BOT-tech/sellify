@@ -765,7 +765,6 @@ async function handleListTenantMemberships(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
   const session = await requireSession(req, chatId);
-  const tenant = await getTenant(session.chatId);
   if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404 });
   await requireAuthorization(session, tenant, 'membership', 'membership:role:manage', {
     deniedMessage: 'Membership role management permission required',
