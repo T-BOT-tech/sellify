@@ -765,8 +765,11 @@ async function handleListTenantMemberships(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
   const session = await requireSession(req, chatId);
-  const decision = authorize(session, session.organizationId, null, 'membership', 'membership:role:manage');
-  if (decision !== AUTHZ.ALLOW) throw Object.assign(new Error('Membership role management permission required'), { statusCode: 403 });
+  const tenant = await getTenant(session.chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404 });
+  await requireAuthorization(session, tenant, 'membership', 'membership:role:manage', {
+    deniedMessage: 'Membership role management permission required',
+  });
   const memberships = await listTenantMemberships(chatId);
   sendJSON(res, 200, { memberships }, req);
 }
@@ -789,8 +792,11 @@ async function handleChangeMembershipRole(req, res) {
 async function handleAssignMembershipContextualRole(req, res) {
   const body = await readBody(req);
   const session = await requireSession(req);
-  const decision = authorize(session, session.organizationId, null, 'membership', 'membership:role:manage');
-  if (decision !== AUTHZ.ALLOW) throw Object.assign(new Error('Membership role management permission required'), { statusCode: 403 });
+  const tenant = await getTenant(session.chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404 });
+  await requireAuthorization(session, tenant, 'membership', 'membership:role:manage', {
+    deniedMessage: 'Membership role management permission required',
+  });
   const result = await assignMembershipContextualRole({
     actorUserId: session.userId,
     chatId: session.chatId,
