@@ -98,13 +98,18 @@ async function saveRetentionPolicy() {
   const input = document.getElementById('complianceRetentionDays');
   if (!input || !allowed()) return;
   const retentionDays = Math.max(30, Math.min(3650, Math.floor(Number(input.value || 365))));
-  await request(`/tenants/${encodeURIComponent(config.chatId)}/compliance/retention`, {
-    method: 'PATCH',
-    body: JSON.stringify({ retentionDays }),
-  });
-  input.value = retentionDays;
-  const status = document.getElementById('complianceStatus');
-  if (status) status.textContent = 'Audit retention policy saved.';
+  try {
+    await request(`/tenants/${encodeURIComponent(config.chatId)}/compliance/retention`, {
+      method: 'PATCH',
+      body: JSON.stringify({ retentionDays }),
+    });
+    input.value = retentionDays;
+    const status = document.getElementById('complianceStatus');
+    if (status) status.textContent = 'Audit retention policy saved.';
+  } catch (error) {
+    input.value = '';
+    throw error;
+  }
 }
 
 async function createComplianceRequest() {
