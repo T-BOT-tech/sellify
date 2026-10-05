@@ -117,17 +117,20 @@ async function saveRetentionPolicy() {
 
 async function createComplianceRequest() {
   if (!allowed()) throw new Error('Compliance management permission required.');
-  const customerId = window.prompt('Customer ID for the deletion request:');
+  const customerId = window.prompt('Customer ID for the deletion request:')?.trim();
   if (!customerId) return;
-  await request(`/tenants/${encodeURIComponent(config.chatId)}/compliance/requests`, {
+  const requestChatId = config.chatId;
+  const requestSessionToken = config.sessionToken;
+  await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/requests`, {
     method: 'POST',
     body: JSON.stringify({
       requestType: 'DELETION',
       subjectType: 'customer',
-      subjectId: customerId.trim(),
+      subjectId: customerId,
       reason: 'Customer privacy request',
     }),
   });
+  if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
   await loadComplianceRequests();
 }
 
