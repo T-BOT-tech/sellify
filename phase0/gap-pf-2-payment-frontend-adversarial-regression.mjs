@@ -7,6 +7,7 @@ const contract = fs.readFileSync('app/src/payments/contract.js', 'utf8');
 const state = fs.readFileSync('app/src/payments/state.js', 'utf8');
 const projection = fs.readFileSync('app/src/payments/projection.js', 'utf8');
 const checkout = fs.readFileSync('app/src/orders/checkout.js', 'utf8');
+const orderQueue = fs.readFileSync('app/src/orders/queue.js', 'utf8');
 
 for (const permission of ['payments:view', 'payments:accept', 'payments:manage']) {
   assert.match(server, new RegExp(permission.replace(':', '\\:')));
@@ -276,6 +277,19 @@ const refundBlock = storeSource.slice(storeSource.indexOf('export async function
 assert.match(refundBlock, /state = \\?, updated_at = \\?/);
 assert.match(refundBlock, /'REFUNDED'/);
 assert.match(refundBlock, /fullRefund/);
+
+// Order UI financial-status certification: the queue must consume the
+// canonical order-level Payment Core summary rather than infer PAID/PARTIAL/
+// UNPAID from whichever individual payment happens to be in the local projection.
+assert.match(orderQueue, /refreshCanonicalOrderPaymentSummary/);
+assert.match(orderQueue, /getCachedOrderPaymentSummary/);
+assert.match(orderQueue, /Order payment:/);
+assert.match(orderQueue, /orderPaymentSummary\.status/);
+assert.match(orderQueue, /orderPaymentSummary\.verifiedMinor/);
+assert.match(orderQueue, /orderPaymentSummary\.outstandingMinor/);
+assert.match(orderQueue, /ORDER_PAYMENT_SUMMARY_TTL_MS/);
+assert.match(orderQueue, /orderPaymentSummaryInFlight/);
+assert.doesNotMatch(orderQueue, /payment\?\.state[\\s\\S]*orderPaymentSummary/);
 
 // Frontend canonical snapshot certification:
 // a successful tenant-scoped payment list replaces the projection snapshot;
