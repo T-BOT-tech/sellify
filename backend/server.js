@@ -765,9 +765,8 @@ async function handleListTenantMemberships(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
   const session = await requireSession(req, chatId);
-  await requireAuthorization(session, tenant, 'logistics', 'logistics:deliveries:view', {
-    deniedMessage: 'Logistics staff view permission required',
-  });
+  const decision = authorize(session, session.organizationId, null, 'membership', 'membership:role:manage');
+  if (decision !== AUTHZ.ALLOW) throw Object.assign(new Error('Membership role management permission required'), { statusCode: 403 });
   const memberships = await listTenantMemberships(chatId);
   sendJSON(res, 200, { memberships }, req);
 }
