@@ -5747,7 +5747,18 @@ export async function createPaymentWithIntent(chatId, input = {}, actor = null) 
     }
     if (orderId) {
       const reserved = db.prepare(`
-        SELECT COALESCE(SUM(amount_minor), 0) AS amount_minor
+        SELECT COALESCE(SUM(
+          CASE
+            WHEN state IN ('VERIFIED','RECONCILED')
+              THEN MAX(0, amount_minor - COALESCE((
+                SELECT SUM(r.amount_minor)
+                FROM payment_refunds r
+                WHERE r.payment_id = payments.id AND r.organization_id = payments.organization_id
+                  AND r.status = 'SUCCEEDED'
+              ), 0))
+            ELSE amount_minor
+          END
+        ), 0) AS amount_minor
         FROM payments
         WHERE organization_id = ? AND order_id = ?
           AND state IN ('UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','PARTIAL')
@@ -6940,10 +6951,22 @@ export async function getOrderPaymentSummary(chatId, orderId) {
   if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
 
   const rows = db.prepare(`
-    SELECT state, COALESCE(SUM(amount_minor), 0) AS amount_minor
-    FROM payments
-    WHERE organization_id = ? AND order_id = ?
-    GROUP BY state
+    SELECT p.state,
+           COALESCE(SUM(
+             CASE
+               WHEN p.state IN ('VERIFIED','RECONCILED')
+                 THEN MAX(0, p.amount_minor - COALESCE((
+                   SELECT SUM(r.amount_minor)
+                   FROM payment_refunds r
+                   WHERE r.payment_id = p.id AND r.organization_id = p.organization_id
+                     AND r.status = 'SUCCEEDED'
+                 ), 0))
+               ELSE p.amount_minor
+             END
+           ), 0) AS amount_minor
+    FROM payments p
+    WHERE p.organization_id = ? AND p.order_id = ?
+    GROUP BY p.state
   `).all(organizationId, id);
 
   const byState = Object.fromEntries(rows.map(row => [String(row.state).toUpperCase(), Number(row.amount_minor)]));
