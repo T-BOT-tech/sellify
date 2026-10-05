@@ -22,6 +22,10 @@ assert.match(store, /assertContextualRoleAssignable\(chatId, normalizedRole\)/);
 assert.match(store, /scopeType/);
 assert.match(store, /scopeId/);
 assert.match(store, /membership\.contextual_role\.assigned/);
+assert.match(store, /existing\?\.status === 'active'/);
+assert.match(store, /changed: false/);
+assert.match(store, /ON CONFLICT\(membership_id, role_id, scope_type, scope_id\)/);
+assert.match(store, /changed: true/);
 
 assert.match(store, /export async function revokeMembershipContextualRole\(/);
 assert.match(store, /membership\.contextual_role\.revoked/);
@@ -42,5 +46,6 @@ assert.match(frontend, /cashier.*staff.*viewer/);
 console.log('GAP-5 IAM Membership/Contextual Role Regression: PASS');
 console.log('Generic role mutation protections: PASS');
 console.log('Contextual role assign/revoke lifecycle: PASS');
+console.log('Contextual role idempotency: PASS');
 console.log('Membership listing authorization boundary: PASS');
 console.log('Frontend/backend role contract alignment: PASS');
