@@ -304,3 +304,10 @@ export function finalizeOrderDelete(id) {
   renderStatus();
   renderQueue();
 }
+
+
+// The order-payment summary cache is tenant-scoped. Clear it before a tenant
+// switch so no prior tenant's financial projection survives context change.
+if (typeof window !== 'undefined') {
+  window.addEventListener('sellify:tenant-changing', invalidateAllOrderPaymentSummaryCache);
+}
