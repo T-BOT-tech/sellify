@@ -6273,7 +6273,11 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       .run(target, now, target, now, target, now, target, now, target, now, paymentId, organizationId, ...(expectedState ? [expectedState] : []));
     if (Number(result.changes || 0) !== 1) throw Object.assign(new Error('Payment state changed before commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
     db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), paymentId, organizationId, String(decision.entryType || target), Number(row.amount_minor), normaliseCurrency(row.currency, 'ETB'),
+      crypto.randomUUID(), paymentId, organizationId, String(decision.entryType || target),
+      target === 'PARTIAL'
+        ? Number(decision.amountMinor ?? decision.amount_minor ?? input.verification?.observedAmountMinor ?? input.verification?.observed_amount_minor ?? row.amount_minor)
+        : Number(row.amount_minor),
+      normaliseCurrency(row.currency, 'ETB'),
       row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now
     );
     const marketplaceAllocation = db.prepare("SELECT a.*, so.id AS canonical_seller_order_id FROM marketplace_payment_allocations a JOIN marketplace_seller_orders so ON so.id = a.seller_order_id WHERE a.payment_id = ? AND a.organization_id = ? LIMIT 1").get(paymentId, organizationId);
