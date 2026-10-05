@@ -157,17 +157,22 @@ async function loadComplianceRequests() {
         if (button.disabled || !allowed()) return;
         const requestId = button.dataset.requestId;
         const nextStatus = button.dataset.complianceStatus;
+        const requestChatId = config.chatId;
+        const requestSessionToken = config.sessionToken;
         const buttons = list.querySelectorAll(`[data-request-id="${CSS.escape(requestId)}"]`);
         buttons.forEach(control => { control.disabled = true; });
         try {
-          await request(`/tenants/${encodeURIComponent(config.chatId)}/compliance/requests`, {
+          await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/requests`, {
             method: 'PATCH',
             body: JSON.stringify({ requestId, status: nextStatus, resolutionNote: 'Reviewed in Sellify Settings' }),
           });
+          if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
           await loadComplianceRequests();
         } catch (error) {
-          buttons.forEach(control => { control.disabled = false; });
-          showComplianceError(error);
+          if (config.chatId === requestChatId && config.sessionToken === requestSessionToken) {
+            buttons.forEach(control => { control.disabled = false; });
+            showComplianceError(error);
+          }
         }
       };
     });
