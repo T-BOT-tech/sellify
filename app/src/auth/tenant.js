@@ -111,6 +111,7 @@ export async function selectOnboardingTenant() {
     headers: { Authorization: `Bearer ${config.sessionToken}` },
     body: JSON.stringify({ chatId: select.value, deviceName: 'Telegram Mini App' }),
   });
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('sellify:tenant-changing'));
   persistAuth(data, data.membership);
   closeOnboarding();
   window.location.reload();
