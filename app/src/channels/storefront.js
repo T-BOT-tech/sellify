@@ -70,6 +70,27 @@ export async function publishTelegramStorefrontChannel() {
     if (status) status.textContent = 'Telegram storefront published ✓';
   } catch (error) { if (status) status.textContent = error.message || 'Could not publish Telegram storefront.'; }
 }
+export function renderSellerChannelSummary(channels = []) {
+  const panel = document.getElementById('sellerStorefrontChannelSummary');
+  if (!panel) return;
+  const rows = Array.isArray(channels) ? channels : [];
+  if (!rows.length) {
+    panel.innerHTML = '<div class="hint">No seller channels are currently configured.</div>';
+    return;
+  }
+  panel.innerHTML = rows.map(channel => {
+    const type = esc(channel.displayName || channel.channelType || 'Channel');
+    const status = esc(String(channel.status || 'DRAFT').toUpperCase());
+    const enabled = channel.enabled !== false;
+    const caps = Array.isArray(channel.capabilities) ? channel.capabilities.map(esc).join(', ') : '';
+    return '<div style="padding:10px;border:1px solid var(--line);border-radius:10px;margin-top:8px;">' +
+      '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">' +
+      '<strong>' + type + '</strong><span class="hint">' + status + (enabled ? '' : ' · DISABLED') + '</span></div>' +
+      (caps ? '<div class="hint" style="margin-top:4px;">Capabilities: ' + caps + '</div>' : '') +
+      '</div>';
+  }).join('');
+}
+
 export function renderTelegramStorefront(storefront) {
   const panel = document.getElementById('telegramStorefrontPanel');
   if (!panel) return;
@@ -111,9 +132,10 @@ export async function renderSellerStorefrontChannelsPanel() {
   if (!panel) return;
   if (!canManage()) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
-  panel.innerHTML = '<div class="hint">Loading seller channels…</div>';
+  panel.innerHTML = '<div class="settings-section-label">Seller channels</div><div id="sellerStorefrontChannelSummary"></div><div id="telegramStorefrontPanel" style="margin-top:12px;"></div><div class="hint" style="margin-top:8px;">Loading seller channel configuration…</div>';
   try {
     const data = await loadSellerStorefrontChannels();
+    renderSellerChannelSummary(data?.channels || []);
     renderTelegramStorefront(data?.storefront);
   } catch (error) {
     panel.innerHTML = `<div class="settings-section-label">Seller channels</div><div class="hint">${esc(error.message || 'Could not load seller channels.')}</div>`;
