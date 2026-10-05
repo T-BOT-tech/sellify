@@ -8,6 +8,14 @@ const state = fs.readFileSync('app/src/payments/state.js', 'utf8');
 const projection = fs.readFileSync('app/src/payments/projection.js', 'utf8');
 const checkout = fs.readFileSync('app/src/orders/checkout.js', 'utf8');
 const orderQueue = fs.readFileSync('app/src/orders/queue.js', 'utf8');
+const core = fs.readFileSync('backend/lib/payments/payment-core.js', 'utf8');
+const storeSource = fs.readFileSync('backend/lib/store-sqlite.js', 'utf8');
+
+const paymentCoreSource = core;
+const refundSource = storeSource;
+const createPaymentStart = storeSource.indexOf('export async function createPaymentWithIntent');
+const createPaymentBlock = storeSource.slice(createPaymentStart, createPaymentStart + 12000);
+
 
 for (const permission of ['payments:view', 'payments:accept', 'payments:manage']) {
   assert.match(server, new RegExp(permission.replace(':', '\\:')));
@@ -134,7 +142,7 @@ const mutationKeyBlock = client.slice(client.indexOf('export async function crea
 assert.doesNotMatch(mutationKeyBlock, /Date\.now\(\)/);
 assert.doesNotMatch(mutationKeyBlock, /crypto\.randomUUID/);
 
-const core = fs.readFileSync('backend/lib/payments/payment-core.js', 'utf8');
+
 const refundCoreStart = core.indexOf('async refund(command = {})');
 assert.notEqual(refundCoreStart, -1);
 const refundCoreBlock = core.slice(refundCoreStart, refundCoreStart + 1500);
@@ -330,8 +338,8 @@ assert.match(createPaymentBlock, /CURRENCY_MISMATCH/);
 // Order payment reservation certification: payment creation must reserve
 // the outstanding order balance atomically, preventing concurrent overpayment
 // while allowing legitimate split payments.
-const createPaymentStart = storeSource.indexOf('export async function createPaymentWithIntent');
-const createPaymentBlock = storeSource.slice(createPaymentStart, createPaymentStart + 12000);
+
+
 assert.match(createPaymentBlock, /BEGIN IMMEDIATE/);
 assert.match(createPaymentBlock, /state IN \('UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','PARTIAL'\)/);
 assert.match(createPaymentBlock, /reservedMinor \+ amountMinor > orderTotalMinor/);
@@ -376,7 +384,7 @@ assert.match(storeSource, /PROVIDER_TRANSACTION_DUPLICATE/);
 
 // Partial ledger certification: PARTIAL must record the actually observed
 // received amount, while VERIFIED/RECONCILED continue to use the obligation.
-const storeSource = fs.readFileSync('backend/lib/store-sqlite.js', 'utf8');
+
 const ledgerInsertStart = storeSource.indexOf("INSERT INTO payment_ledger_entries");
 assert.notEqual(ledgerInsertStart, -1);
 const ledgerInsertBlock = storeSource.slice(ledgerInsertStart - 600, ledgerInsertStart + 1800);
