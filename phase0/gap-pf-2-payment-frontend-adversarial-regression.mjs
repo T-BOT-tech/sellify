@@ -206,7 +206,18 @@ assert.match(projection, /sequence === paymentStatusSequences\.get\(id\)/);
 
 
 
-// Partial-to-verified ledger safety: a later full observation records only
+// Partial payment must not be upgraded to VERIFIED using a separate
+// provider transaction. Provider transaction identity is immutable/unique;
+// a later top-up must be represented by a new payment.
+const transitionBlock = storeSource.slice(
+  storeSource.indexOf("PARTIAL: new Set"),
+  storeSource.indexOf("PARTIAL: new Set") + 90,
+);
+assert.match(transitionBlock, /PARTIAL: new Set\(\['RECEIVED','FAILED','REJECTED'\]\)/);
+assert.match(storeSource, /idx_payment_evidence_org_provider_transaction/);
+assert.match(storeSource, /PROVIDER_TRANSACTION_DUPLICATE/);
+
+
 // the remaining amount, preventing the same received money from being counted twice.
 const partialVerifiedLedgerBlock = storeSource.slice(
   storeSource.indexOf("INSERT INTO payment_ledger_entries") - 700,
