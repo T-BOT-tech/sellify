@@ -158,4 +158,21 @@ assert.doesNotMatch(client, /targetState:\s*['"]VERIFIED['"]/);
 assert.doesNotMatch(client, /state:\s*['"]VERIFIED['"]/);
 assert.doesNotMatch(client, /ledgerEntry|ledger_entry|payment_ledger_entries/);
 
+
+// Concurrency certification: an older canonical response must never overwrite a
+// newer payment projection, and an older full-list response must not erase a
+// newer locally observed payment.
+const { clearPaymentState, getPayments, setPayments, upsertPayment } = await import('../app/src/payments/state.js');
+clearPaymentState();
+upsertPayment({ id: 'race-1', state: 'VERIFIED', updatedAt: '2026-10-05T12:00:00.000Z' });
+upsertPayment({ id: 'race-1', state: 'RECEIVED', updatedAt: '2026-10-05T11:59:00.000Z' });
+assert.equal(getPayments().find(payment => payment.id === 'race-1').state, 'VERIFIED');
+setPayments([{ id: 'race-1', state: 'RECEIVED', updatedAt: '2026-10-05T11:58:00.000Z' }]);
+assert.equal(getPayments().find(payment => payment.id === 'race-1').state, 'VERIFIED');
+setPayments([{ id: 'race-1', state: 'RECONCILED', updatedAt: '2026-10-05T12:01:00.000Z' }]);
+assert.equal(getPayments().find(payment => payment.id === 'race-1').state, 'RECONCILED');
+assert.match(projection, /projectionRefreshSequence/);
+assert.match(projection, /paymentStatusSequences/);
+assert.match(projection, /sequence === paymentStatusSequences\.get\(id\)/);
+
 console.log('PASS PF-2 payment frontend adversarial boundary regression');
