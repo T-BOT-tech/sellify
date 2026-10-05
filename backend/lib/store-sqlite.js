@@ -9428,6 +9428,50 @@ export async function authenticateSessionToken(token) {
     SELECT s.*, d.user_id, d.chat_id, d.status AS device_status, m.role, m.status AS membership_status,
            t.organization_id,
            (SELECT l.id FROM locations l WHERE l.organization_id = t.organization_id AND l.code = 'DEFAULT' LIMIT 1) AS default_location_id,
+           (SELECT json_group_array(json_object(
+                    'role', mr.role_id,
+                    'scopeType', mr.scope_type,
+                    'scopeId', mr.scope_id
+                  ))
+              FROM membership_roles mr
+             WHERE mr.membership_id = m.id AND mr.status = 'active'
+               AND (
+                 mr.scope_type = 'ORGANIZATION'
+                 OR (
+                   mr.role_id NOT IN (
+                     'restaurant_waiter', 'restaurant_kitchen_staff',
+                     'warehouse_receiving', 'warehouse_picker_packer', 'warehouse_inventory_staff',
+                     'logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer'
+                   )
+                 )
+                 OR (
+                   mr.role_id IN ('restaurant_waiter', 'restaurant_kitchen_staff')
+                   AND EXISTS (
+                     SELECT 1 FROM pack_lifecycle pl
+                      WHERE pl.organization_id = t.organization_id
+                        AND pl.pack_id = 'restaurant'
+                        AND pl.state = 'ACTIVE'
+                   )
+                 )
+                 OR (
+                   mr.role_id IN ('warehouse_receiving', 'warehouse_picker_packer', 'warehouse_inventory_staff')
+                   AND EXISTS (
+                     SELECT 1 FROM pack_lifecycle pl
+                      WHERE pl.organization_id = t.organization_id
+                        AND pl.pack_id = 'warehouse'
+                        AND pl.state = 'ACTIVE'
+                   )
+                 )
+                 OR (
+                   mr.role_id IN ('logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer')
+                   AND EXISTS (
+                     SELECT 1 FROM pack_lifecycle pl
+                      WHERE pl.organization_id = t.organization_id
+                        AND pl.pack_id = 'logistics'
+                        AND pl.state = 'ACTIVE'
+                   )
+                 )
+               )) AS contextual_roles_json,
            (SELECT group_concat(DISTINCT mr.role_id)
               FROM membership_roles mr
              WHERE mr.membership_id = m.id AND mr.status = 'active'
@@ -9481,7 +9525,8 @@ export async function authenticateSessionToken(token) {
     chatId: row.chat_id,
     deviceId: row.device_id,
     role: row.role,
-    roles: Array.from(new Set(String(row.membership_roles || row.role || '').split(',').map(value => value.trim().toLowerCase()).filter(Boolean))),
+    roles: Array.from(new Set([row.role, ...parseJSON(row.contextual_roles_json || '[]', []).map(item => item.role)].map(value => String(value || '').trim().toLowerCase()).filter(Boolean))),
+    contextualRoles: parseJSON(row.contextual_roles_json || '[]', []),
     organizationId: row.organization_id || null,
     locationId: row.default_location_id || null,
     expiresAt: row.expires_at,
