@@ -206,6 +206,17 @@ assert.match(projection, /sequence === paymentStatusSequences\.get\(id\)/);
 
 
 
+// Partial-to-verified ledger safety: a later full observation records only
+// the remaining amount, preventing the same received money from being counted twice.
+const partialVerifiedLedgerBlock = storeSource.slice(
+  storeSource.indexOf("INSERT INTO payment_ledger_entries") - 700,
+  storeSource.indexOf("INSERT INTO payment_ledger_entries") + 2200,
+);
+assert.match(partialVerifiedLedgerBlock, /target === 'VERIFIED' && row\.state === 'PARTIAL'/);
+assert.match(partialVerifiedLedgerBlock, /SUM\(amount_minor\)/);
+assert.match(partialVerifiedLedgerBlock, /entry_type = 'PARTIAL'/);
+assert.match(partialVerifiedLedgerBlock, /Math\.max\(0/);
+
 // Partial ledger certification: PARTIAL must record the actually observed
 // received amount, while VERIFIED/RECONCILED continue to use the obligation.
 const storeSource = fs.readFileSync('backend/lib/store-sqlite.js', 'utf8');
