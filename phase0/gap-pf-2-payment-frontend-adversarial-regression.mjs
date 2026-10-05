@@ -315,6 +315,18 @@ assert.match(paymentCoreSource, /getOrderPaymentSummary/);
 assert.match(serverSource, /orders\\/\\(\\[\\^\\/\\]\\+\\)\\/payments\\/summary/);
 assert.match(serverSource, /payments', 'payments:view'/);
 
+// Cross-tenant / cross-order isolation certification:
+// payment summaries and payment/refund reads are always constrained by the
+// authenticated tenant organization and the requested canonical order.
+assert.match(storeSource, /FROM payments p[\\s\\n]+WHERE p\.organization_id = \? AND p\.order_id = \?/);
+assert.match(storeSource, /FROM payment_refunds WHERE payment_id = \? AND organization_id = \?/);
+assert.match(storeSource, /SELECT \* FROM payments WHERE id = \? AND organization_id = \?/);
+assert.match(storeSource, /SELECT \* FROM payment_refunds WHERE id = \? AND organization_id = \?/);
+
+// An order ID from another tenant must not be accepted merely because its
+// server_order_id is known; the canonical order lookup is tenant/chat scoped.
+assert.match(storeSource, /FROM orders WHERE chat_id = \? AND server_order_id = \?/);
+
 // Partial payment must not be upgraded to VERIFIED using a separate
 // provider transaction. Provider transaction identity is immutable/unique;
 // a later top-up must be represented by a new payment.
