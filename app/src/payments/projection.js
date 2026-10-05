@@ -92,8 +92,14 @@ export async function refreshCanonicalPaymentStatus(paymentId, body = {}, { idem
   paymentStatusSequences.set(id, sequence);
   const data = await queryPaymentStatus(id, body, { idempotencyKey: queryKey });
   const payment = data?.payment || data;
-  if (sequence === paymentStatusSequences.get(id) &&
+  const isLatest = sequence === paymentStatusSequences.get(id);
+  if (isLatest &&
       payment && typeof payment === 'object' &&
-      (payment.id || payment.paymentId || payment.payment_id)) upsertPayment(payment);
-  return payment;
+      (payment.id || payment.paymentId || payment.payment_id)) {
+    return upsertPayment(payment);
+  }
+  // A superseded status response must never escape to its caller. Returning
+  // that response could make UI code render a stale VERIFIED/PAID projection
+  // immediately after a newer REFUNDED/REVERSED response won the race.
+  return getPayments().find(item => String(item?.id) === id) || null;
 }
