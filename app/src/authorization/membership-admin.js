@@ -5,6 +5,8 @@ import { config, currentStaff } from '../state.js';
 import { hasPermission } from '../auth/permissions.js';
 import { authHeaders } from '../auth/tenant.js';
 
+const ROLE_OPTIONS = Object.freeze(['owner','manager','cashier','staff','buyer','viewer']);
+
 function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 async function request(path, options = {}) {
   const base = String(config.syncUrl || '').replace(/\/$/, '');
@@ -19,11 +21,14 @@ export async function renderMembershipAdministration(containerId = 'membershipAd
   const el = document.getElementById(containerId); if (!el) return;
   if (!config.sessionToken || !config.chatId) { el.innerHTML = '<div class="hint">UNKNOWN — no authenticated membership context.</div>'; return; }
   if (!hasPermission(currentStaff?.role || config.tenantRole || 'owner', 'membership:role:manage')) { el.innerHTML = '<div class="hint">PERMISSION_DENIED — membership administration is not available to this role.</div>'; return; }
+  const requestChatId = config.chatId;
+  const requestSessionToken = config.sessionToken;
   el.innerHTML = '<div class="settings-section-label">Membership administration</div><div class="hint">Loading canonical memberships…</div>';
   try {
-    const data = await request(`/tenants/${encodeURIComponent(config.chatId)}/memberships`);
-    const memberships = data.memberships || [];
-    const roles = ['owner','manager','cashier','staff','buyer','viewer'];
+    const data = await request(`/tenants/${encodeURIComponent(requestChatId)}/memberships`);
+    if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
+    const memberships = Array.isArray(data.memberships) ? data.memberships : [];
+    const roles = ROLE_OPTIONS;
     el.innerHTML = `<div class="settings-section-label">Membership administration</div>
       <div class="hint">Role changes are server-authorized and audited. You cannot change your own role.</div>
       ${memberships.length ? memberships.map(m => `<div style="padding:10px;border:1px solid var(--line);border-radius:8px;margin-top:8px;">
@@ -34,8 +39,21 @@ export async function renderMembershipAdministration(containerId = 'membershipAd
     el.querySelectorAll('[data-save-membership]').forEach(btn => btn.addEventListener('click', async () => {
       const id = btn.getAttribute('data-save-membership'); const select = el.querySelector(`[data-membership-role="${CSS.escape(id)}"]`);
       btn.disabled = true;
-      try { await request('/auth/membership-role', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({ membershipId:id, role:select.value }) }); btn.textContent='Saved'; setTimeout(() => renderMembershipAdministration(containerId), 300); }
-      catch (e) { btn.disabled=false; btn.textContent=e.message || 'Failed'; }
+      const mutationChatId = config.chatId;
+      const mutationSessionToken = config.sessionToken;
+      const nextRole = select?.value;
+      if (!id || !ROLE_OPTIONS.includes(nextRole)) { btn.disabled=false; btn.textContent='Invalid role'; return; }
+      try {
+        await request('/auth/membership-role', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({ membershipId:id, role:nextRole }) });
+        if (config.chatId !== mutationChatId || config.sessionToken !== mutationSessionToken) return;
+        btn.textContent='Saved';
+        setTimeout(() => {
+          if (config.chatId === mutationChatId && config.sessionToken === mutationSessionToken) renderMembershipAdministration(containerId);
+        }, 300);
+      } catch (e) {
+        if (config.chatId !== mutationChatId || config.sessionToken !== mutationSessionToken) return;
+        btn.disabled=false; btn.textContent=e.message || 'Failed';
+      }
     }));
   } catch (e) { el.innerHTML = `<div class="settings-section-label">Membership administration</div><div class="hint">UNKNOWN — ${esc(e.message || 'Could not load memberships.')}</div>`; }
 }
