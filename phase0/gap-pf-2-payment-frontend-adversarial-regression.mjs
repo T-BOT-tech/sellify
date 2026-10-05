@@ -206,6 +206,19 @@ assert.match(projection, /sequence === paymentStatusSequences\.get\(id\)/);
 
 
 
+// Order-level aggregation certification: multiple independent verified
+// payments can satisfy one order, while unverified/partial movements do not.
+assert.match(storeSource, /getOrderPaymentSummary/);
+assert.match(storeSource, /verifiedMinor/);
+assert.match(storeSource, /pendingMinor/);
+assert.match(storeSource, /outstandingMinor/);
+assert.match(storeSource, /state = \\? AND order_id = \\?/);
+assert.match(storeSource, /'UNPAID','CLAIMED','RECEIVED','PARTIAL'/);
+assert.match(storeSource, /'VERIFIED' \\|\\| 'RECONCILED'/);
+assert.match(paymentCoreSource, /getOrderPaymentSummary/);
+assert.match(serverSource, /orders\\/\\(\\[\\^\\/\\]\\+\\)\\/payments\\/summary/);
+assert.match(serverSource, /payments', 'payments:view'/);
+
 // Partial payment must not be upgraded to VERIFIED using a separate
 // provider transaction. Provider transaction identity is immutable/unique;
 // a later top-up must be represented by a new payment.
