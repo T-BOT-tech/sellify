@@ -6906,6 +6906,45 @@ export async function getPayment(chatId, paymentId) {
   return paymentFromRow(db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(String(paymentId), organizationId));
 }
 
+export async function getOrderPaymentSummary(chatId, orderId) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const id = String(orderId || '').trim();
+  if (!id) throw Object.assign(new Error('orderId is required'), { statusCode: 400, code: 'ORDER_REQUIRED' });
+
+  const order = db.prepare(
+    'SELECT server_order_id, total_minor, currency FROM orders WHERE chat_id = ? AND server_order_id = ?'
+  ).get(String(chatId), id);
+  if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+
+  const rows = db.prepare(`
+    SELECT state, COALESCE(SUM(amount_minor), 0) AS amount_minor
+    FROM payments
+    WHERE organization_id = ? AND order_id = ?
+    GROUP BY state
+  `).all(organizationId, id);
+
+  const byState = Object.fromEntries(rows.map(row => [String(row.state).toUpperCase(), Number(row.amount_minor)]));
+  const verifiedMinor = Number(byState.VERIFIED || 0) + Number(byState.RECONCILED || 0);
+  const pendingMinor = Object.entries(byState)
+    .filter(([state]) => ['UNPAID','CLAIMED','RECEIVED','PARTIAL'].includes(state))
+    .reduce((sum, [, amount]) => sum + Number(amount || 0), 0);
+  const totalMinor = Number(order.total_minor);
+  const outstandingMinor = Math.max(0, totalMinor - verifiedMinor);
+
+  return {
+    orderId: id,
+    organizationId,
+    totalMinor,
+    currency: normaliseCurrency(order.currency, 'ETB'),
+    verifiedMinor,
+    pendingMinor,
+    outstandingMinor,
+    status: verifiedMinor >= totalMinor ? 'PAID' : verifiedMinor > 0 ? 'PARTIAL' : 'UNPAID',
+    byState,
+  };
+}
+
 export async function listPayments(chatId, options = {}) {
   ensureDatabase();
   const { organizationId } = await resolvePaymentContext(chatId);
