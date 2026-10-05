@@ -217,6 +217,24 @@ assert.doesNotMatch(paymentTransitions, /PARTIAL: new Set\\(\['RECEIVED','VERIFI
 assert.match(paymentCoreSource, /Late-success recovery is only valid from EXPIRED or CANCELLED/);
 assert.match(paymentCoreSource, /LATE_SUCCESS_CONFIRMATION_REQUIRED/);
 
+// Partial refund must reduce accepted/order capacity without requiring
+// the original payment to become REFUNDED.
+const summaryBlock = refundSource.slice(
+  refundSource.indexOf('export async function getOrderPaymentSummary'),
+  refundSource.indexOf('export async function getPayment(', refundSource.indexOf('export async function getOrderPaymentSummary'))
+);
+assert.match(summaryBlock, /payment_refunds/);
+assert.match(summaryBlock, /status = 'SUCCEEDED'/);
+assert.match(summaryBlock, /MAX\(0, p\.amount_minor/);
+
+const reservationBlock = refundSource.slice(
+  refundSource.indexOf('export async function createPaymentWithIntent'),
+  refundSource.indexOf('export async function getOrderPaymentSummary')
+);
+assert.match(reservationBlock, /payment_refunds/);
+assert.match(reservationBlock, /status = 'SUCCEEDED'/);
+assert.match(reservationBlock, /MAX\(0, amount_minor/);
+
 // Refund/reversal certification: accepted payment value must be removed
 // from order-level acceptance when fully refunded or reversed.
 const refundSource = fs.readFileSync('backend/lib/store-sqlite.js', 'utf8');
