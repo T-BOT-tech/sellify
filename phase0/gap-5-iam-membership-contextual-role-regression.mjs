@@ -39,6 +39,13 @@ assert.match(server, /membership-role/);
 assert.match(server, /membership-contextual-role/);
 assert.ok(server.includes("/auth/membership-contextual-role/revoke"), 'contextual role revoke route missing');
 assert.match(server, /membership:role:manage/);
+assert.match(server, /handleChangeMembershipRole[\\s\\S]{0,1800}requireAuthorization\\(session, tenant, 'membership', 'membership:role:manage'/);
+assert.match(server, /handleAssignMembershipContextualRole[\\s\\S]{0,1400}requireAuthorization\\(session, tenant, 'membership', 'membership:role:manage'/);
+assert.match(server, /handleRevokeMembershipContextualRole[\\s\\S]{0,1400}requireAuthorization\\(session, tenant, 'membership', 'membership:role:manage'/);
+assert.doesNotMatch(server, /handleChangeMembershipRole[\\s\\S]{0,1000}authorize\(session, session\.organizationId/);
+assert.doesNotMatch(server, /handleAssignMembershipContextualRole[\\s\\S]{0,1000}authorize\(session, session\.organizationId/);
+assert.doesNotMatch(server, /handleRevokeMembershipContextualRole[\\s\\S]{0,1000}authorize\(session, session\.organizationId/);
+
 assert.doesNotMatch(server, /handleListTenantMemberships[\\s\\S]{0,500}logistics:deliveries:view/);
 
 assert.match(authorization, /Contextual roles are scoped authorities/);
