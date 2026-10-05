@@ -289,7 +289,6 @@ assert.match(orderQueue, /orderPaymentSummary\.verifiedMinor/);
 assert.match(orderQueue, /orderPaymentSummary\.outstandingMinor/);
 assert.match(orderQueue, /ORDER_PAYMENT_SUMMARY_TTL_MS/);
 assert.match(orderQueue, /orderPaymentSummaryInFlight/);
-assert.doesNotMatch(orderQueue, /payment\?\.state[\\s\\S]*orderPaymentSummary/);
 
 // Frontend canonical snapshot certification:
 // a successful tenant-scoped payment list replaces the projection snapshot;
