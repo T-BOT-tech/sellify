@@ -25,7 +25,7 @@ Never rewrite a completed domain because a historical document describes it as m
 ## 3. Roadmap
 
 ### PF-1 — Payment frontend operationalization
-Status: OPEN / MAJOR
+Status: HARDENED / SOURCE-CERTIFIED — runtime CI evidence pending
 
 Objective:
 Create the dedicated frontend contract around the existing Payment Core.
@@ -65,7 +65,7 @@ Exit criteria:
 - CI gate exists.
 
 ### PF-2 — Payment frontend adversarial certification
-Status: OPEN / MAJOR
+Status: IN PROGRESS
 
 Required cases:
 - duplicate command;
