@@ -6,6 +6,10 @@ import { hasPermission } from '../auth/permissions.js';
 import { authHeaders } from '../auth/tenant.js';
 
 const ROLE_OPTIONS = Object.freeze(['owner','manager','cashier','staff','buyer','viewer']);
+const MANAGER_ASSIGNABLE_ROLES = Object.freeze(['cashier','staff','viewer']);
+function assignableRoles(actorRole) {
+  return String(actorRole || '').toLowerCase() === 'manager' ? MANAGER_ASSIGNABLE_ROLES : ROLE_OPTIONS;
+}
 
 function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 async function request(path, options = {}) {
@@ -28,7 +32,8 @@ export async function renderMembershipAdministration(containerId = 'membershipAd
     const data = await request(`/tenants/${encodeURIComponent(requestChatId)}/memberships`);
     if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
     const memberships = Array.isArray(data.memberships) ? data.memberships : [];
-    const roles = ROLE_OPTIONS;
+    const actorRole = String(currentStaff?.role || config.tenantRole || 'owner').toLowerCase();
+    const roles = assignableRoles(actorRole);
     el.innerHTML = `<div class="settings-section-label">Membership administration</div>
       <div class="hint">Role changes are server-authorized and audited. You cannot change your own role.</div>
       ${memberships.length ? memberships.map(m => `<div style="padding:10px;border:1px solid var(--line);border-radius:8px;margin-top:8px;">
@@ -42,7 +47,7 @@ export async function renderMembershipAdministration(containerId = 'membershipAd
       const mutationChatId = config.chatId;
       const mutationSessionToken = config.sessionToken;
       const nextRole = select?.value;
-      if (!id || !ROLE_OPTIONS.includes(nextRole)) { btn.disabled=false; btn.textContent='Invalid role'; return; }
+      if (!id || !roles.includes(nextRole)) { btn.disabled=false; btn.textContent='Invalid role'; return; }
       try {
         await request('/auth/membership-role', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({ membershipId:id, role:nextRole }) });
         if (config.chatId !== mutationChatId || config.sessionToken !== mutationSessionToken) return;
