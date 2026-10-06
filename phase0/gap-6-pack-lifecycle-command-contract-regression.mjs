@@ -16,6 +16,10 @@ assert.match(server, /PACK_LIFECYCLE_ACTION_REQUIRED/);
 assert.match(server, /UNSUPPORTED_PACK_LIFECYCLE_ACTION/);
 assert.match(server, /PACK_LIFECYCLE_ACTION_STATE_MISMATCH/);
 assert.match(server, /transitionPackLifecycle\(chatId, packId, targetState, session/);
+assert.match(server, /PACK_UPGRADE_COMMAND_REQUIRED/);
+assert.match(server, /PACK_UPGRADE_NOT_AVAILABLE/);
+assert.match(server, /requestedAction !== 'UPGRADE'/);
+assert.match(server, /requestedAction === 'UPGRADE'/);
 
 assert.match(client, /export async function getPackLifecycle/);
 assert.match(client, /export async function getPackLifecycleSnapshot/);
