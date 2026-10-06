@@ -116,7 +116,7 @@ import {
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
   createComplianceRequest, getComplianceRequest, listComplianceRequests, resolveComplianceRequest, buildComplianceExport,
-  listPaymentAccounts, createPaymentAccount, createPayment, getPayment, getPaymentIntent, listPayments, listPaymentLedger, reconcilePayment, recordPaymentReconciliation, listPaymentReconciliations, insertPaymentEvidence, insertPaymentVerification, insertPaymentDecision, commitPaymentDecision, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
+  listPaymentAccounts, createPaymentAccount, createPayment, getPayment, getPaymentIntent, listPayments, listPaymentLedger, reconcilePayment, recordPaymentReconciliation, listPaymentReconciliations, insertPaymentEvidence, insertProviderNotificationEvidence, getPaymentAccountForProviderNotification, resolvePaymentIntentForProviderEvidence, createPaymentConfirmationAttempt, updatePaymentConfirmationAttempt, getPaymentConfirmationAttempt, getPaymentConfirmationAttemptByProviderTransaction, insertPaymentVerification, insertPaymentDecision, commitPaymentDecision, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
   listCustomerPricing, getCustomerPricing, upsertCustomerPricing, updateCustomerPricing,
   listQuotes, getQuote, createQuote, transitionQuote,
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, createPurchaseOrderFromProcurementAward, transitionPurchaseOrder,
@@ -144,7 +144,7 @@ import {
 } from './lib/store-sqlite.js';
 import { AUTHZ, authorize, ROLES, getRolePermissions } from './lib/authorization.js';
 import { assertTenantScope, assertLocationScope } from './lib/tenant-isolation.js';
-import { getPaymentProvider, listPaymentProviders, registerPaymentProvider, certifyPaymentProviderCapabilities, certifyAllPaymentProviders } from './lib/payments/provider-registry.js';
+import { getPaymentProvider, listPaymentProviders, registerPaymentProvider, requirePaymentProvider, certifyPaymentProviderCapabilities, certifyAllPaymentProviders } from './lib/payments/provider-registry.js';
 import { PROVIDER_ADAPTERS } from './lib/payments/provider-adapters.js';
 import { PaymentCore } from './lib/payments/payment-core.js';
 import { derivePackLifecycleReadiness } from './lib/pack-lifecycle-readiness.js';
