@@ -144,7 +144,7 @@ import {
 } from './lib/store-sqlite.js';
 import { AUTHZ, authorize, ROLES, getRolePermissions } from './lib/authorization.js';
 import { assertTenantScope, assertLocationScope } from './lib/tenant-isolation.js';
-import { getPaymentProvider, listPaymentProviders, certifyPaymentProviderCapabilities, certifyAllPaymentProviders } from './lib/payments/provider-registry.js';
+import { getPaymentProvider, listPaymentProviders, registerPaymentProvider, certifyPaymentProviderCapabilities, certifyAllPaymentProviders } from './lib/payments/provider-registry.js';
 import { PROVIDER_ADAPTERS } from './lib/payments/provider-adapters.js';
 import { PaymentCore } from './lib/payments/payment-core.js';
 import { derivePackLifecycleReadiness } from './lib/pack-lifecycle-readiness.js';
@@ -154,6 +154,10 @@ import { listPaymentChannels } from './lib/payments/channel-registry.js';
 import { processEventIsolated } from './lib/event-failure-isolation.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+for (const adapter of Object.values(PROVIDER_ADAPTERS)) {
+  registerPaymentProvider(adapter, { replace: true });
+}
 
 const paymentCore = new PaymentCore({
   store: {
