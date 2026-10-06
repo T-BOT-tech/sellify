@@ -436,6 +436,13 @@ export function applyDynamicCapacitySchedulingDecision({
     invalid('L11 evaluation must be FEASIBLE, CONFLICT, or UNKNOWN');
   }
 
+  if (Object.hasOwn(evaluation, 'feasible')) {
+    const feasible = evaluation.feasible === true;
+    if ((outcome === 'FEASIBLE' && !feasible) || (outcome !== 'FEASIBLE' && feasible)) {
+      invalid('L11 evaluation feasibility flag conflicts with evaluation outcome');
+    }
+  }
+
   return Object.freeze({
     capacity_ref: schedulingInput.capacity_ref,
     service_profile: schedulingInput.service_profile,
