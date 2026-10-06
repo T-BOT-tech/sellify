@@ -29,7 +29,7 @@ export async function ingestProviderNotification({
   }
 
   const authenticated = assertAuthenticatedNotificationContext(
-    await provider.authenticateNotification({ notification: rawNotification })
+    await provider.authenticateNotification(rawNotification)
   );
   if (authenticated.providerId !== requestedProviderId) {
     throw Object.assign(new Error('Authenticated provider does not match notification route'), {
