@@ -33,7 +33,7 @@ const ROLE_PERMISSIONS = Object.freeze({
     'tables:manage', 'tables:status', 'kitchen:manage',
     'b2b:manage', 'b2b:invoice:view', 'b2b:invoice:create', 'b2b:invoice:manage', 'b2b:ar:view', 'b2b:ar:create', 'b2b:ar:manage', 'b2b:ar:allocate', 'b2b:pricing:view', 'b2b:pricing:manage', 'b2b:quotes:view', 'b2b:quotes:manage', 'b2b:po:view', 'b2b:po:create', 'b2b:po:approve', 'b2b:credit:view', 'b2b:credit:create', 'b2b:credit:manage', 'b2b:credit:approve', 'devices:manage',
     'locations:view', 'locations:manage', 'audit:view',
-    'pack:lifecycle:view', 'pack:lifecycle:install', 'pack:lifecycle:activate', 'pack:lifecycle:deactivate', 'pack:lifecycle:upgrade', 'membership:role:manage',
+    'pack:lifecycle:view', 'pack:lifecycle:install', 'pack:lifecycle:activate', 'pack:lifecycle:deactivate', 'pack:lifecycle:upgrade', 'pack:lifecycle:recover', 'membership:role:manage',
     'marketplace_orders:view', 'marketplace_orders:update',
     'customers:view', 'customers:manage',
     'inventory:view', 'compliance:manage',
