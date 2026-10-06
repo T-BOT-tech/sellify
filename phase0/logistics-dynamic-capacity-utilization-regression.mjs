@@ -250,7 +250,7 @@ assert.throws(
     schedulingInput,
     evaluation: { evaluation: 'FEASIBLE', feasible: false },
   }),
-  /FEASIBLE, CONFLICT, or UNKNOWN/i,
+  /feasibility flag conflicts with evaluation outcome/i,
 );
 
 assert.throws(
