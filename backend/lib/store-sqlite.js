@@ -2041,6 +2041,21 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(62, nowIso());
   }
 
+
+  // GAP-1.23 — durable provider notification identity and authentication lineage.
+  if (!applied.includes(63)) {
+    db.exec(`
+      ALTER TABLE payment_evidence ADD COLUMN provider_notification_id TEXT;
+      ALTER TABLE payment_evidence ADD COLUMN authentication_reference TEXT;
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_evidence_notification
+        ON payment_evidence(organization_id,provider_id,payment_account_id,provider_notification_id)
+        WHERE provider_notification_id IS NOT NULL AND trim(provider_notification_id) <> '';
+      CREATE INDEX IF NOT EXISTS idx_payment_evidence_auth_reference
+        ON payment_evidence(organization_id,provider_id,payment_account_id,authentication_reference);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(63, nowIso());
+  }
+
   if (!applied.includes(60)) {
     db.exec(`
       CREATE TABLE IF NOT EXISTS marketplace_payment_allocations_v40 (
