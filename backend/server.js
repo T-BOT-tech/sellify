@@ -189,6 +189,15 @@ const paymentCore = new PaymentCore({
   decisionEngine: new PaymentDecisionEngine(),
 });
 
+const notificationPaymentCore = new PaymentCore({
+  store: {
+    getPaymentAccountForProviderNotification,
+    resolvePaymentIntentForProviderEvidence,
+    insertProviderNotificationEvidence,
+  },
+  providerRegistry: { requirePaymentProvider, getPaymentProvider },
+});
+
 
 // ---------- env-driven config ----------
 
