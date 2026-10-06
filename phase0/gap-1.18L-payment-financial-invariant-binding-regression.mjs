@@ -90,7 +90,7 @@ const transactionMissing = evaluatePaymentInvariants({
   ...base,
   verification: { ...base.verification, observedTransactionId: null },
 });
-assert.ok(transactionMissing.reasonCodes.includes('TRANSACTION_ID_PRESENT'));
+assert.ok(transactionMissing.reasonCodes.includes('TRANSACTION_ID_MISSING'));
 assert.ok(transactionMissing.hardFailures.includes('TRANSACTION_ID_MISSING'));
 
 const transactionUnbound = evaluatePaymentInvariants({
