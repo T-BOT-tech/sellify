@@ -38,7 +38,7 @@ const providers = {
         error.retryable = true;
         throw error;
       }
-      return { status: 'MATCHED', providerReference: query.id };
+      return { status: 'VERIFIED', providerReference: query.id };
     },
   },
 };
