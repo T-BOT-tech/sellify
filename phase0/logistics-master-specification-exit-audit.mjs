@@ -99,7 +99,7 @@ assert.match(matching, /matchDiscoveryCandidates/);
 assert.match(matching, /discovery_matching/);
 
 // L21 must remain provider-neutral at the Logistics core boundary.
-const external = read('app/src/verticals/logistics/external-network-contract.js');
+const external = read('app/src/verticals/logistics/external-network-expansion-contract.js');
 assert.match(external, /provider-neutral|provider neutral/i);
 
 assert.equal(pkg.engines?.node, '>=24');
