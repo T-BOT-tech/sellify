@@ -19,7 +19,7 @@ assert.match(ci, /node-version: \[24\]/);
 for (const script of requiredScripts) assert.ok(ci.includes('npm run ' + script), 'CI missing ' + script);
 
 const migrations = [...store.matchAll(/if \(!applied\.includes\((\d+)\)\)/g)].map(m => Number(m[1]));
-assert.equal(Math.max(...migrations), 57, 'latest migration must remain explicit');
+assert.equal(Math.max(...migrations), 60, 'latest migration must remain explicit');
 assert.match(store, /PRAGMA foreign_keys = ON/);
 assert.match(store, /PRAGMA journal_mode = WAL/);
 assert.match(store, /CREATE TABLE IF NOT EXISTS schema_migrations/);
