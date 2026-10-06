@@ -55,6 +55,7 @@ const result = await batchVerifyProviderPayments({
   ],
 });
 
+console.log('GAP-1.18H DIAGNOSTIC', JSON.stringify(result.results));
 assert.equal(result.results.length, 5);
 assert.deepEqual(result.results.map(item => item.index), [0, 1, 2, 3, 4]);
 assert.equal(result.results[0].status, 'VERIFIED');
