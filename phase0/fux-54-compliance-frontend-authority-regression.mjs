@@ -15,7 +15,7 @@ assert(ui.includes('method: \'POST\''), 'Compliance UI must support creating com
 assert(ui.includes('method: \'PATCH\''), 'Compliance UI must resolve requests through the backend');
 assert(!/localStorage.*compliance/i.test(ui), 'Compliance UI must not persist compliance records locally');
 assert(!/from ['"]\.\/.*audit-boundary|from ['"]\.\.\/audit\/audit-boundary/.test(ui), 'Compliance UI must not create frontend audit records through the audit boundary');
-assert(!/recordAudit\\s*\\(/.test(ui), 'Compliance UI must not persist audit records directly');
+assert(!/recordAudit\s*\(/.test(ui), 'Compliance UI must not persist audit records directly');
 assert(ui.includes('/audit?'), 'Compliance UI must read audit history from the canonical tenant audit endpoint');
 assert(ui.includes('audit:view'), 'Compliance UI must enforce the canonical audit-view permission');
 assert(ui.includes('compliance.exported') === false, 'Compliance UI must not fabricate canonical export audit events locally');
