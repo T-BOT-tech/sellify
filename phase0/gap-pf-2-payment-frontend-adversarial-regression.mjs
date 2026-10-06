@@ -372,11 +372,7 @@ assert.match(storeSource, /FROM orders WHERE chat_id = \? AND server_order_id = 
 // Partial payment must not be upgraded to VERIFIED using a separate
 // provider transaction. Provider transaction identity is immutable/unique;
 // a later top-up must be represented by a new payment.
-const transitionBlock = storeSource.slice(
-  storeSource.indexOf("PARTIAL: new Set"),
-  storeSource.indexOf("PARTIAL: new Set") + 90,
-);
-assert.match(transitionBlock, /PARTIAL: new Set\(\['RECEIVED','FAILED','REJECTED'\]\)/);
+assert.match(transitionText, /PARTIAL: new Set\(\['RECEIVED','FAILED','REJECTED'\]\)/);
 assert.match(storeSource, /idx_payment_evidence_org_provider_transaction/);
 assert.match(storeSource, /PROVIDER_TRANSACTION_DUPLICATE/);
 
