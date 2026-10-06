@@ -829,6 +829,104 @@ export class PaymentCore {
     };
   }
 
+  async recordProviderConfirmationObservation(command = {}) {
+    this.#authorize(command, 'payments:accept');
+    const requestedChatId = String(command.chatId || '').trim();
+    const providerId = String(command.providerId || command.provider_id || '').trim().toLowerCase();
+    const providerTransactionId = String(command.providerTransactionId || command.provider_transaction_id || '').trim();
+    const attemptId = String(command.confirmationAttemptId || command.confirmation_attempt_id || '').trim();
+    if (!requestedChatId || !providerId || (!attemptId && !providerTransactionId)) {
+      throw Object.assign(new Error('chatId, providerId, and confirmationAttemptId or providerTransactionId are required'), {
+        statusCode: 400, code: 'CONFIRMATION_OBSERVATION_CONTEXT_REQUIRED',
+      });
+    }
+
+    let correlationChatId = requestedChatId;
+    let paymentAccount = null;
+    if (!attemptId && providerTransactionId) {
+      const accountReference = String(
+        command.providerAccountReference || command.provider_account_reference ||
+        command.accountIdentifier || command.account_identifier || ''
+      ).trim();
+      if (!accountReference) {
+        throw Object.assign(new Error('providerAccountReference is required for provider transaction correlation'), {
+          statusCode: 400, code: 'PAYMENT_ACCOUNT_REFERENCE_REQUIRED',
+        });
+      }
+      if (typeof this.store.getPaymentAccountForProviderNotification !== 'function') {
+        throw Object.assign(new Error('Canonical payment-account resolver is unavailable'), {
+          statusCode: 503, code: 'PAYMENT_ACCOUNT_RESOLVER_UNAVAILABLE',
+        });
+      }
+      paymentAccount = await this.store.getPaymentAccountForProviderNotification(providerId, accountReference);
+      if (!paymentAccount?.id || !paymentAccount?.chatId) {
+        throw Object.assign(new Error('Provider notification payment account could not be resolved'), {
+          statusCode: 404, code: 'PAYMENT_ACCOUNT_NOT_FOUND',
+        });
+      }
+      if (String(paymentAccount.providerId || '').toLowerCase() !== providerId) {
+        throw Object.assign(new Error('Provider notification payment account provider mismatch'), {
+          statusCode: 409, code: 'PAYMENT_ACCOUNT_PROVIDER_MISMATCH',
+        });
+      }
+      correlationChatId = String(paymentAccount.chatId);
+    }
+
+    const attempt = attemptId
+      ? await this.store.getPaymentConfirmationAttempt(correlationChatId, attemptId)
+      : await this.store.getPaymentConfirmationAttemptByProviderTransaction(correlationChatId, {
+          providerId,
+          providerTransactionId,
+          paymentAccountId: paymentAccount?.id || null,
+        });
+    if (!attempt) throw Object.assign(new Error('Confirmation attempt not found'), {
+      statusCode: 404, code: 'CONFIRMATION_ATTEMPT_NOT_FOUND',
+    });
+
+    if (String(attempt.providerId || '').toLowerCase() !== providerId) {
+      throw Object.assign(new Error('Confirmation observation provider mismatch'), {
+        statusCode: 409, code: 'PROVIDER_MISMATCH',
+      });
+    }
+    if (paymentAccount?.id && attempt.paymentAccountId &&
+        String(paymentAccount.id) !== String(attempt.paymentAccountId)) {
+      throw Object.assign(new Error('Confirmation attempt payment account mismatch'), {
+        statusCode: 409, code: 'PAYMENT_ACCOUNT_BINDING_MISMATCH',
+      });
+    }
+    if (providerTransactionId && attempt.providerTransactionId &&
+        providerTransactionId !== String(attempt.providerTransactionId)) {
+      throw Object.assign(new Error('Provider transaction does not match confirmation attempt'), {
+        statusCode: 409, code: 'PROVIDER_TRANSACTION_MISMATCH',
+      });
+    }
+
+    const status = String(command.status || 'UNKNOWN').trim().toUpperCase();
+    if (!['CONFIRMED', 'PENDING', 'NOT_FOUND', 'FAILED', 'EXPIRED', 'UNKNOWN'].includes(status)) {
+      throw Object.assign(new Error('Unsupported confirmation observation status'), {
+        statusCode: 400, code: 'CONFIRMATION_STATUS_INVALID',
+      });
+    }
+
+    const observation = command.observation && typeof command.observation === 'object'
+      ? command.observation : {};
+    const updated = await this.store.updatePaymentConfirmationAttempt(correlationChatId, attempt.id, {
+      status,
+      providerTransactionId: providerTransactionId || observation.providerTransactionId || observation.provider_transaction_id || null,
+      reasonCodes: Array.isArray(command.reasonCodes)
+        ? command.reasonCodes
+        : (Array.isArray(observation.reasonCodes) ? observation.reasonCodes : []),
+      observation: { ...observation, providerId, status, source: command.source || 'provider-notification' },
+      observedAt: command.observedAt || this.clock().toISOString(),
+    }, command.actor || null);
+
+    return {
+      outcome: status === 'CONFIRMED' ? 'CONFIRMATION_OBSERVED' : 'PENDING_CONFIRMATION',
+      confirmationAttempt: updated,
+      pending: status !== 'CONFIRMED',
+    };
+  }
+
   #authorize(command, permission) {
     if (!this.authorization) return;
     const allowed = this.authorization(command.actor || null, command.organizationId || null, command.locationId || null, 'payments', permission);
