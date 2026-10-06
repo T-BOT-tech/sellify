@@ -16,8 +16,9 @@ const mpesa = getPaymentProvider('mpesa');
 assert.ok(mpesa);
 await assert.rejects(
   () => mpesa.authenticateNotification({ rawBody: '{}', headers: {} }),
-  error => error?.code === 'PAYMENT_PROVIDER_NOT_CONFIGURED'
-    && error?.operation === 'authenticateNotification'
+  error => error?.code === 'PAYMENT_NOTIFICATION_AUTH_NOT_CONFIGURED'
+    && error?.providerId === 'mpesa'
+    && error?.statusCode === 501
 );
 
 const certification = certifyPaymentProviderCapabilities('mpesa');
