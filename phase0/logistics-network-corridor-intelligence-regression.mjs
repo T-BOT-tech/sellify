@@ -214,8 +214,8 @@ assert.equal(noRecurring.recurring_demand_signal, 'NO_RECURRING_DEMAND_OBSERVED'
 
 const providerCapacitySignal = deriveProviderCapacityVisibilitySignal({
   observations: [
-    { ...observation, capacity_count: 4, demand_count: 10, observation_ref: 'OBS-PC1' },
-    { ...observation, capacity_count: 3, demand_count: 8, observation_ref: 'OBS-PC2' },
+    { ...observation, capacity_count: 4, demand_count: 10, fulfilled_count: 6, observation_ref: 'OBS-PC1' },
+    { ...observation, capacity_count: 3, demand_count: 8, fulfilled_count: 5, observation_ref: 'OBS-PC2' },
   ],
 });
 assert.equal(providerCapacitySignal.organization_id, 'org-1');
