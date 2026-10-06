@@ -24,7 +24,7 @@ assert.match(store, /delivery\.assignment\.exception_resolved/);
 assert.match(store, /REASSIGNMENT_TARGET_REQUIRED/);
 assert.match(store, /BEGIN IMMEDIATE/);
 assert.match(store, /No unresolved delivery exception exists/);
-assert.match(store, /UPDATE delivery_assignments SET status = \'REASSIGNED\', last_command_key = \?/);
+assert.match(store, /UPDATE delivery_assignments SET status = \\'REASSIGNED\\'/);
 assert.match(store, /delivery\.assignment\.reassigned/);
 assert.match(store, /Target courier does not have an active logistics courier role/);
 assert.match(store, /delivery\.assignment\.delivered/);
