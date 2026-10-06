@@ -109,7 +109,7 @@ async function verify(base) {
   const verification = await store.insertPaymentVerification(base.chatId, {
     paymentId: base.payment.id, paymentIntentId: intent.id,
     evidenceId: evidence.evidence.id, providerId: base.payment.providerId,
-    result: 'MATCH', observedAmountMinor: 10000, observedCurrency: 'ETB',
+    result: 'MATCH', observedAmountMinor: 10000, observedCurrency: 'ETB', observedReceiverAccount: 'ADV-ACCOUNT',
     observedAt: new Date().toISOString(), reasonCodes: [],
     rawResult: { status: 'COMPLETED' }, verifier: 'payment-core.gap1-19-adversarial',
     verifierVersion: '1',
