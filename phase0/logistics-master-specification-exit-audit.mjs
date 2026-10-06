@@ -13,7 +13,7 @@ const pkg = JSON.parse(read('package.json'));
 
 const evidence = [
   ['L1-L7 foundation', [
-    'test:phase13.10.1',
+    'phase13.10.1:logistics-boundary-test',
     'test:phase13.10.2',
     'test:phase13.10.3',
     'test:phase13.10.4',
