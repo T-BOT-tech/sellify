@@ -9,6 +9,7 @@ import { WAREHOUSE_PACK } from '../verticals/warehouse/pack.js';
 import { LOGISTICS_PACK } from '../verticals/logistics/pack.js';
 import { renderPackJourneyComposition } from './pack-journey-composition.js';
 import { getLogisticsWorkspaceComposition } from '../verticals/logistics/workspace-contract.js';
+import { getPackUxStateProjection } from './pack-activation-contract.js';
 
 const PACKS = Object.freeze([AGRICULTURE_PACK, RESTAURANT_PACK, WAREHOUSE_PACK, LOGISTICS_PACK]);
 const ENTRY_TO_TAB = Object.freeze({
@@ -39,6 +40,7 @@ export function getPackWorkspaceModel(lifecycles = new Map()) {
     const snapshot = lifecycles.get(pack.pack_id) || null;
     const lifecycle = snapshot?.lifecycle || null;
     const readiness = snapshot?.readiness || null;
+    const ux = getPackUxStateProjection({ lifecycle, readiness });
     const entries = pack.ui_entry_points.map(entry => ({
       entry,
       label: label(entry),
@@ -51,7 +53,8 @@ export function getPackWorkspaceModel(lifecycles = new Map()) {
       state: readiness?.state === 'DEPENDENCY_BLOCKED' ? 'DEPENDENCY_BLOCKED' : packState(lifecycle),
       lifecycle,
       readiness,
-      enabled: String(lifecycle?.state || '').toUpperCase() === 'ACTIVE',
+      enabled: ux.operational,
+      ux,
       capabilities: Object.freeze([...pack.capabilities]),
       entries: Object.freeze(entries),
       authority: lifecycle ? 'backend/server.js#handlePackLifecycle' : 'backend/server.js#handlePackLifecycle (unavailable)',
@@ -96,6 +99,7 @@ function renderPackWorkspaceModel(el, model) {
               <span class="status-badge">${esc(pack.state)}</span>
             </div>
             <div class="hint">${pack.capabilities.slice(0, 4).map(esc).join(' · ') || 'No declared capabilities'}</div>
+            <div class="hint">Installed: ${pack.ux.installed ? 'YES' : 'NO'} · Eligible: ${pack.ux.eligible ? 'YES' : 'NO'} · Active: ${pack.ux.active ? 'YES' : 'NO'} · Operational: ${pack.ux.operational ? 'YES' : 'NO'}</div>
             ${active && usableEntries.length ? `<div class="fux-pack-actions">${usableEntries.map(entry => `<button class="fux-action" type="button" data-pack-tab="${esc(entry.tab)}"><strong>${esc(entry.label)}</strong><small>Open existing workspace</small></button>`).join('')}</div>` : ''}
             ${active && pack.pack_id === 'logistics' ? (() => {
               const composition = getLogisticsWorkspaceComposition(currentStaff?.role || 'staff');
