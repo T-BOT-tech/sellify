@@ -1845,6 +1845,53 @@ async function handleTenantPatch(req, res, chatId) {
 }
 
 
+async function handlePaymentProviderNotification(req, res, providerId) {
+  const provider = requirePaymentProvider(providerId);
+  if (provider.capabilities?.authenticateNotification !== true) {
+    throw Object.assign(new Error('Payment provider notification authentication is not configured'), {
+      statusCode: 503, code: 'PAYMENT_NOTIFICATION_NOT_CONFIGURED',
+    });
+  }
+
+  const rawBody = await readRawBody(req);
+  let body = {};
+  try {
+    body = rawBody.length ? JSON.parse(rawBody.toString('utf8')) : {};
+  } catch {
+    throw Object.assign(new Error('Invalid provider notification payload'), {
+      statusCode: 400, code: 'INVALID_PROVIDER_NOTIFICATION',
+    });
+  }
+
+  const submitted = await notificationPaymentCore.ingestProviderNotification({
+    providerId: provider.id,
+    rawRequest: {
+      body,
+      rawBody,
+      headers: req.headers,
+      method: req.method,
+      url: req.url,
+    },
+    requestContext: {
+      requestId: req._requestId,
+      remoteAddress: req.socket?.remoteAddress || null,
+      providerAuthenticated: /^(1|true|yes)$/i.test(
+        String(req.headers['x-sellify-provider-authenticated'] || '')
+      ),
+    },
+    config: {},
+  });
+
+  const outcome = submitted.duplicate ? 'DUPLICATE' : 'RECEIVED';
+  return sendJSON(res, submitted.duplicate ? 200 : 202, {
+    accepted: true,
+    notification_id: submitted.evidence?.providerNotificationId || null,
+    evidence_id: submitted.evidence?.id || null,
+    status: outcome,
+    outcome_code: outcome,
+  }, req);
+}
+
 async function handlePaymentProviderMetadata(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
