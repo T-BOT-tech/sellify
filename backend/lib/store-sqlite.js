@@ -5213,6 +5213,8 @@ function tenantFromRow(row) {
     branding: parseJSON(row.branding_json, null),
     vendorCode: row.vendor_code,
     organizationId: row.organization_id || null,
+    // Backward-compatible DB-facing alias for legacy internal consumers.
+    organization_id: row.organization_id || null,
   };
 }
 
