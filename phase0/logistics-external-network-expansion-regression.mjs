@@ -916,3 +916,145 @@ assert.throws(() => assertExternalEvidenceReconciliationBoundary({
   duplicate_reconciliation_store: true,
 }), /duplicate store/i);
 
+const matchedHandoff = normalizeExternalCanonicalHandoff({
+  reconciliation: matchedReconciliation,
+  canonical_target: 'core_fulfillment',
+  transition_ref: 'TRANS-001',
+  authorization_scope: 'org-1:fulfillment:write',
+});
+assert.equal(matchedHandoff.action, 'CANONICAL_PROCESSING_ELIGIBLE');
+assert.equal(matchedHandoff.canonical_processing_authority, 'existing_canonical_domain_authority');
+assert.equal(matchedHandoff.authorization_authority, 'existing_server_side_auth_scope');
+assert.equal(matchedHandoff.direct_domain_mutation, false);
+assert.equal(matchedHandoff.external_execution_authority, false);
+assert.equal(matchedHandoff.financial_completion_authority, 'existing_payment_and_settlement_authority');
+assert.equal(assertExternalCanonicalHandoffBoundary(matchedHandoff), true);
+const matchedDisposition = buildExternalCanonicalHandoffDisposition({ handoff: matchedHandoff });
+assert.equal(matchedDisposition.canonical_processing_allowed, true);
+assert.equal(matchedDisposition.canonical_transition_allowed, false);
+assert.equal(matchedDisposition.mutation_executor, 'existing_canonical_domain_authority');
+assert.equal(matchedDisposition.external_adapter_execution, false);
+
+const blockedHandoff = normalizeExternalCanonicalHandoff({
+  reconciliation: conflictingReference,
+  canonical_target: 'core_fulfillment',
+  transition_ref: 'TRANS-002',
+  authorization_scope: 'org-1:fulfillment:write',
+});
+assert.equal(blockedHandoff.action, 'CANONICAL_TRANSITION_BLOCKED');
+assert.equal(buildExternalCanonicalHandoffDisposition({ handoff: blockedHandoff }).canonical_processing_allowed, false);
+
+const observationHandoff = normalizeExternalCanonicalHandoff({
+  reconciliation: newObservation,
+  canonical_target: 'logistics_evidence',
+  transition_ref: 'TRANS-003',
+  authorization_scope: 'org-1:logistics:evidence',
+});
+assert.equal(observationHandoff.action, 'CANONICAL_PROCESSING_ELIGIBLE');
+
+assert.throws(() => assertExternalCanonicalHandoffBoundary({
+  ...matchedHandoff,
+  direct_domain_mutation: true,
+}), /must not execute or directly mutate/i);
+
+assert.throws(() => assertExternalCanonicalHandoffBoundary({
+  ...matchedHandoff,
+  external_execution_authority: true,
+}), /must not execute or directly mutate/i);
+
+assert.throws(() => assertExternalCanonicalHandoffBoundary({
+  ...matchedHandoff,
+  authorization_authority: 'external_adapter',
+}), /server-side auth scope/i);
+
+assert.throws(() => assertExternalCanonicalHandoffBoundary({
+  ...matchedHandoff,
+  canonical_processing_authority: 'external_adapter',
+}), /canonical domain authority/i);
+
+assert.throws(() => assertExternalCanonicalHandoffBoundary({
+  ...matchedHandoff,
+  financial_completion_authority: 'external_adapter',
+}), /financial completion/i);
+
+assert.throws(() => assertExternalCanonicalHandoffBoundary({
+  ...matchedHandoff,
+  provider_selection_authority: true,
+}), /provider_selection_authority/i);
+
+assert.throws(() => assertExternalCanonicalHandoffBoundary({
+  ...matchedHandoff,
+  routing_authority: true,
+}), /routing_authority/i);
+
+assert.throws(() => assertExternalCanonicalHandoffBoundary({
+  ...matchedHandoff,
+  assignment_authority: true,
+}), /assignment_authority/i);
+
+assert.throws(() => assertExternalCanonicalHandoffBoundary({
+  ...matchedHandoff,
+  duplicate_handoff_store: true,
+}), /duplicate handoff store/i);
+
+assert.throws(() => assertExternalCanonicalHandoffBoundary({
+  ...matchedHandoff,
+  persistence: 'external_handoff_store',
+}), /canonical domain persistence/i);
+
+const closureLifecycle = normalizeExternalIntegrationLifecycle({ integration, state: 'ENABLED' });
+
+const closure = externalNetworkExpansionClosureGate({
+  integration: normalized,
+  capabilities,
+  lifecycle: closureLifecycle,
+  inbound,
+  reconciliation: matchedReconciliation,
+  handoff: matchedHandoff,
+});
+assert.equal(closure.closed, true);
+assert.equal(closure.provider_neutral, true);
+assert.equal(closure.canonical_mutation_delegated, true);
+assert.equal(closure.persistence, 'existing_integration_or_canonical_domain_state_only');
+assert.equal(closure.integration_ref, 'INT-001');
+
+assert.throws(() => externalNetworkExpansionClosureGate({
+  integration: normalized,
+  capabilities: { ...capabilities, provider_selection_authority: true },
+  lifecycle: closureLifecycle,
+  inbound,
+  reconciliation: matchedReconciliation,
+  handoff: matchedHandoff,
+}), /provider selection authority/i);
+
+assert.throws(() => externalNetworkExpansionClosureGate({
+  integration: normalized,
+  capabilities,
+  lifecycle: closureLifecycle,
+  inbound: { ...inbound, direct_domain_mutation: true },
+  reconciliation: matchedReconciliation,
+  handoff: matchedHandoff,
+}), /direct canonical mutation/i);
+
+assert.throws(() => externalNetworkExpansionClosureGate({
+  integration: normalized,
+  capabilities,
+  lifecycle: closureLifecycle,
+  inbound,
+  reconciliation: matchedReconciliation,
+  handoff: { ...matchedHandoff, external_execution_authority: true },
+}), /external execution authority/i);
+
+assert.throws(() => externalNetworkExpansionClosureGate({
+  integration: normalized,
+  capabilities,
+  lifecycle: closureLifecycle,
+  inbound,
+  reconciliation: matchedReconciliation,
+  handoff: { ...matchedHandoff, persistence: 'external_handoff_store' },
+}), /existing canonical-domain persistence/i);
+
+console.log('L21.10 External Canonical Handoff Boundary Regression: PASS');
+
+
+
