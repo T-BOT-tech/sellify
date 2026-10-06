@@ -17,7 +17,7 @@ assert.match(server, /Idempotency-Key is required/);
 assert.match(server, /paymentCore\.queryStatus/);
 assert.match(server, /paymentCore\.resolveRouting/);
 assert.match(server, /idempotencyKey,\n    chatId/);
-assert.match(server, /\/payments\/routing\/resolve/);
+assert.ok(server.includes('\\/payments\\/routing\\/resolve'), 'payment routing resolve endpoint must exist');
 assert.match(client, /requiredIdempotencyKey\(idempotencyKey\)/g);
 assert.match(proof, /payment_proof/);
 assert.match(checkout, /payment_method_id/);
