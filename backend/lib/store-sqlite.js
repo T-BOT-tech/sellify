@@ -6799,7 +6799,7 @@ export async function getPaymentRefunds(chatId, paymentId, { status = null } = {
   const tenant = getTenantByChatId(chatId);
   if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
   const rows = db.prepare(`SELECT * FROM payment_refunds WHERE organization_id = ? AND payment_id = ? ${status ? 'AND status = ?' : ''} ORDER BY created_at DESC`).all(
-    tenant.organization_id, paymentId, ...(status ? [String(status).toUpperCase()] : [])
+    tenant.organizationId, paymentId, ...(status ? [String(status).toUpperCase()] : [])
   );
   return rows.map(normalizePaymentRefund);
 }
@@ -6808,7 +6808,7 @@ export async function getPaymentRefundByIdempotencyKey(chatId, idempotencyKey) {
   const db = ensureDatabase();
   const tenant = getTenantByChatId(chatId);
   if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
-  const row = db.prepare('SELECT * FROM payment_refunds WHERE organization_id = ? AND idempotency_key = ?').get(tenant.organization_id, String(idempotencyKey));
+  const row = db.prepare('SELECT * FROM payment_refunds WHERE organization_id = ? AND idempotency_key = ?').get(tenant.organizationId, String(idempotencyKey));
   return row ? normalizePaymentRefund(row) : null;
 }
 
@@ -6816,11 +6816,11 @@ export async function createPaymentRefundRequest(chatId, input = {}, actor = nul
   const db = ensureDatabase();
   const tenant = getTenantByChatId(chatId);
   if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
-  const payment = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(String(input.paymentId), tenant.organization_id);
+  const payment = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(String(input.paymentId), tenant.organizationId);
   if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
   const key = String(input.idempotencyKey || input.idempotency_key || '').trim();
   if (!key) throw Object.assign(new Error('Refund idempotencyKey is required'), { statusCode: 400, code: 'REFUND_IDEMPOTENCY_REQUIRED' });
-  const existing = db.prepare('SELECT * FROM payment_refunds WHERE organization_id = ? AND idempotency_key = ?').get(tenant.organization_id, key);
+  const existing = db.prepare('SELECT * FROM payment_refunds WHERE organization_id = ? AND idempotency_key = ?').get(tenant.organizationId, key);
   if (existing) return { refund: normalizePaymentRefund(existing), duplicate: true };
 
   const amountMinor = Number(input.amountMinor ?? input.amount_minor);
@@ -6841,7 +6841,7 @@ export async function createPaymentRefundRequest(chatId, input = {}, actor = nul
   const now = nowIso();
   const refund = {
     id: String(input.refundId || crypto.randomUUID()),
-    organization_id: tenant.organization_id,
+    organization_id: tenant.organizationId,
     payment_id: payment.id,
     payment_intent_id: payment.payment_intent_id || null,
     provider_id: payment.provider_id,
@@ -6880,13 +6880,13 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
   const now = nowIso();
   db.exec('BEGIN IMMEDIATE');
   try {
-    const refund = db.prepare('SELECT * FROM payment_refunds WHERE id = ? AND organization_id = ?').get(String(refundId), tenant.organization_id);
+    const refund = db.prepare('SELECT * FROM payment_refunds WHERE id = ? AND organization_id = ?').get(String(refundId), tenant.organizationId);
     if (!refund) throw Object.assign(new Error('Refund not found'), { statusCode: 404, code: 'REFUND_NOT_FOUND' });
     if (refund.status === 'SUCCEEDED') {
       db.exec('COMMIT');
       return normalizePaymentRefund(refund);
     }
-    const payment = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(refund.payment_id, tenant.organization_id);
+    const payment = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(refund.payment_id, tenant.organizationId);
     if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
 
     const status = String(input.status || '').toUpperCase();
@@ -6896,7 +6896,7 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
         input.providerTransactionId || input.provider_transaction_id || null,
         input.providerResult == null ? null : json(input.providerResult),
         input.evidence == null ? null : json(input.evidence),
-        input.failureCode || input.failure_code || null, now, now, refund.id, tenant.organization_id
+        input.failureCode || input.failure_code || null, now, now, refund.id, tenant.organizationId
       );
       audit(String(chatId), 'payment.refund.result', payment.id, actor?.userId || null, { refundId: refund.id, status: status || 'UNKNOWN' });
       db.exec('COMMIT');
@@ -6913,15 +6913,15 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
       input.providerTransactionId || input.provider_transaction_id || null,
       input.providerResult == null ? null : json(input.providerResult),
       input.evidence == null ? null : json(input.evidence),
-      now, now, refund.id, tenant.organization_id
+      now, now, refund.id, tenant.organizationId
     );
     if (fullRefund) {
-      db.prepare('UPDATE payments SET state = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND state IN (\'VERIFIED\',\'RECONCILED\')').run('REFUNDED', now, payment.id, tenant.organization_id);
+      db.prepare('UPDATE payments SET state = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND state IN (\'VERIFIED\',\'RECONCILED\')').run('REFUNDED', now, payment.id, tenant.organizationId);
     }
     db.prepare(`INSERT INTO payment_ledger_entries
       (id,payment_id,organization_id,entry_type,amount_minor,currency,from_state,to_state,actor_id,reason,metadata_json,created_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      crypto.randomUUID(), payment.id, tenant.organization_id, 'REFUNDED', Number(refund.amount_minor), refund.currency,
+      crypto.randomUUID(), payment.id, tenant.organizationId, 'REFUNDED', Number(refund.amount_minor), refund.currency,
       payment.state, fullRefund ? 'REFUNDED' : payment.state, actor?.userId || null,
       refund.reason || 'Payment refund',
       json({ lifecycle: 'GAP-1.14', refundId: refund.id, providerRefundId: input.providerRefundId || input.provider_refund_id || null }),
