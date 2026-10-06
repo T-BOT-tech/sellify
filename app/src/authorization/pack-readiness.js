@@ -2,6 +2,7 @@
 // Read-only readiness model. It distinguishes Pack configuration state from
 // dependency availability, authorization, and executable journey availability.
 import { config, currentStaff } from '../state.js';
+import { getPackLifecycleSnapshot } from '../experience/pack-lifecycle-client.js';
 import { hasPermission } from '../auth/permissions.js';
 import { CORE_AUTHORITIES } from '../verticals/contract.js';
 import { getVerticalPackConfiguration } from '../verticals/configuration.js';
@@ -31,7 +32,12 @@ function readinessFor(pack, resolved) {
   return executable ? 'READY' : 'JOURNEY_UNAVAILABLE';
 }
 
-export function getPackReadinessModel() {
+export async function getPackReadinessModel() {
+  const snapshots = new Map();
+  const results = await Promise.allSettled(PACKS.map(async pack => [pack.pack_id, await getPackLifecycleSnapshot(pack.pack_id)]));
+  results.forEach(result => {
+    if (result.status === 'fulfilled') snapshots.set(result.value[0], result.value[1]);
+  });
   return PACKS.map(pack => {
     const resolved = getVerticalPackConfiguration({
       packId: pack.pack_id,
@@ -40,12 +46,22 @@ export function getPackReadinessModel() {
       locationId: config.locationId || null,
     });
     const dependencies = dependencyRows(pack);
+    const snapshot = snapshots.get(pack.pack_id) || null;
+    const lifecycleState = String(snapshot?.lifecycle?.state || 'UNKNOWN').trim().toUpperCase();
+    const configEnabled = resolved.enabled;
+    const configurationLifecycleDivergence = configEnabled === true
+      ? ['ACTIVE','UPGRADE_AVAILABLE','UPGRADE_BLOCKED','RECOVERY_REQUIRED'].includes(lifecycleState) ? null : 'CONFIG_ENABLED_LIFECYCLE_NOT_ACTIVE'
+      : configEnabled === false
+        ? ['NOT_INSTALLED','DEACTIVATED','UNKNOWN','DEPENDENCY_BLOCKED'].includes(lifecycleState) ? null : 'CONFIG_DISABLED_LIFECYCLE_ACTIVE'
+        : null;
     return Object.freeze({
       packId: pack.pack_id,
       name: pack.name,
       version: pack.version,
       configurationState: resolved.enabled === null ? 'DECLARATIVE_ONLY' : (resolved.enabled ? 'ACTIVE_BY_CONFIG' : 'INACTIVE_BY_CONFIG'),
       readiness: readinessFor(pack, resolved),
+      lifecycleState,
+      configurationLifecycleDivergence,
       dependencies: Object.freeze(dependencies),
       missingDependencies: Object.freeze(dependencies.filter(item => !item.available).map(item => item.name)),
       journeyAvailability: Object.freeze(pack.ui_entry_points.length ? pack.ui_entry_points.map(entry => ({ entry, status: 'ENTRY_DECLARED' })) : []),
@@ -66,7 +82,7 @@ export function renderPackReadinessPanel(containerId = 'packReadinessPanel') {
     el.innerHTML = '<div class="hint">PERMISSION_DENIED — Pack readiness evidence is restricted to an authorized administrator.</div>';
     return;
   }
-  const rows = getPackReadinessModel();
+  getPackReadinessModel().then(rows => {
   el.innerHTML = `
     <div class="settings-section-label" style="margin-top:16px;">Pack dependency &amp; readiness</div>
     <div class="hint">Read-only readiness evidence. Dependency availability, configuration state, authorization, and journey availability are separate concerns.</div>
@@ -76,6 +92,7 @@ export function renderPackReadinessPanel(containerId = 'packReadinessPanel') {
           <th style="text-align:left;padding:8px;border-bottom:1px solid var(--line);">Pack</th>
           <th style="text-align:left;padding:8px;border-bottom:1px solid var(--line);">Readiness</th>
           <th style="text-align:left;padding:8px;border-bottom:1px solid var(--line);">Configuration</th>
+          <th style="text-align:left;padding:8px;border-bottom:1px solid var(--line);">Lifecycle reconciliation</th>
           <th style="text-align:left;padding:8px;border-bottom:1px solid var(--line);">Core dependencies</th>
           <th style="text-align:left;padding:8px;border-bottom:1px solid var(--line);">Journey availability</th>
         </tr></thead>
@@ -88,6 +105,9 @@ export function renderPackReadinessPanel(containerId = 'packReadinessPanel') {
         </tr>`).join('')}</tbody>
       </table>
     </div>
-    <div class="hint" style="margin-top:10px;"><strong>Boundary:</strong> readiness does not grant authorization. User access still follows canonical role → permission → scope/conditions → server enforcement.</div>
+    <div class="hint" style="margin-top:10px;"><strong>Boundary:</strong> configuration remains a feature/configuration input; server lifecycle remains lifecycle authority. A divergence is surfaced, never converted into an inferred lifecycle mutation.</div>
   `;
+  }).catch(() => {
+    el.innerHTML = '<div class="settings-section-label" style="margin-top:16px;">Pack dependency &amp; readiness</div><div class="hint">UNKNOWN — canonical Pack lifecycle state could not be reconciled.</div>';
+  });
 }
