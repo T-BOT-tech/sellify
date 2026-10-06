@@ -6028,6 +6028,17 @@ export async function insertProviderNotificationEvidence(notification = {}) {
   const accountRow = account[0];
   const organizationId = String(accountRow.organization_id);
   const providerId = authenticated.providerId;
+  const resolution = await resolvePaymentIntentForProviderEvidence({
+    providerId,
+    accountIdentifier: authenticated.accountIdentifier,
+    providerTransactionId: evidenceInput.providerTransactionId || evidenceInput.provider_transaction_id || '',
+    externalReference: evidenceInput.externalReference || evidenceInput.external_reference || '',
+  });
+  if (resolution.duplicateEvidence) {
+    return { evidence: resolution.duplicateEvidence, duplicate: true };
+  }
+  const resolvedIntentId = resolution.paymentIntent?.id || null;
+  const resolvedLocationId = resolution.locationId || null;
   const fingerprint = String(
     evidenceInput.fingerprint
       || crypto.createHash('sha256').update(JSON.stringify({
@@ -6047,9 +6058,11 @@ export async function insertProviderNotificationEvidence(notification = {}) {
 
   const id = String(evidenceInput.id || crypto.randomUUID());
   try {
-    db.prepare("INSERT INTO payment_evidence (id, organization_id, location_id, payment_id, payment_intent_id, payment_account_id, provider_id, channel, evidence_type, external_reference, provider_transaction_id, provider_notification_id, authentication_reference, fingerprint, raw_payload_json, normalized_payload_json, source, observed_at, received_at, submitted_by_user_id, status, created_at, updated_at) VALUES (?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'provider.notification', ?, ?, NULL, 'RECEIVED', ?, ?)").run(
+    db.prepare("INSERT INTO payment_evidence (id, organization_id, location_id, payment_id, payment_intent_id, payment_account_id, provider_id, channel, evidence_type, external_reference, provider_transaction_id, provider_notification_id, authentication_reference, fingerprint, raw_payload_json, normalized_payload_json, source, observed_at, received_at, submitted_by_user_id, status, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'provider.notification', ?, ?, NULL, 'RECEIVED', ?, ?)").run(
       id,
       organizationId,
+      resolvedLocationId,
+      resolvedIntentId,
       accountRow.id,
       providerId,
       String(evidenceInput.channel || 'notification').trim().toLowerCase(),
