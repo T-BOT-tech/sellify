@@ -75,7 +75,7 @@ const overlappingPreferences = {
     {
       service_profile: 'B2B_DISTRIBUTION',
       start: '2026-10-04T06:00:00Z',
-      end: '2026-10-04T12:00:00Z',
+      end: '2026-10-04T14:00:00Z',
     },
     {
       service_profile: 'B2C_DELIVERY',
