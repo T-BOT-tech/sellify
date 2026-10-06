@@ -142,7 +142,7 @@ const pc = core();
   const second = await pc.queryStatus({ chatId: base.chatId, paymentId: base.paymentId });
   assert.equal(first.status, 'MATCH');
   assert.equal(second.status, 'MATCH');
-  assert.equal((await store.listPaymentLedger(base.chatId, base.paymentId)).length, 2);
+  assert.equal((await store.listPaymentLedger(base.chatId, base.paymentId)).length, 1);
   assert.equal(statusCalls >= 2, true);
 }
 
