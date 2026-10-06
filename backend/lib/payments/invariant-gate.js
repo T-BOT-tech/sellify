@@ -130,7 +130,7 @@ export class InvariantGate {
         if (item.code === 'RECEIVER_MATCH' && !item.available) mapped = 'RECEIVER_UNAVAILABLE';
         if (item.code === 'TRANSACTION_ID_PRESENT') mapped = 'TRANSACTION_ID_MISSING';
         if (item.code === 'TRANSACTION_EVIDENCE_BINDING') mapped = 'TRANSACTION_MISMATCH';
-        if (item.code === 'PAYMENT_INTENT_AMOUNT_MATCH') mapped = 'AMOUNT_MISMATCH';
+        if (item.code === 'AMOUNT_MATCH' || item.code === 'PAYMENT_INTENT_AMOUNT_MATCH') mapped = 'AMOUNT_MISMATCH';
         if (item.code === 'PAYMENT_INTENT_CURRENCY_MATCH') mapped = 'CURRENCY_MISMATCH';
         reasons.push(mapped);
       }
