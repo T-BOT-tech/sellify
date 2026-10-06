@@ -42,6 +42,21 @@ const ACTION_REQUIREMENTS = Object.freeze({
   VIEW: Object.freeze({ requiresCanonicalLifecycleApi: false, mutation: false }),
 });
 
+export function getPackUxStateProjection({ lifecycle = null, readiness = null, configured = null, entitled = null } = {}) {
+  const lifecycleState = String(lifecycle?.state || 'UNKNOWN').trim().toUpperCase();
+  const readinessState = String(readiness?.state || readiness?.readiness || 'UNKNOWN').trim().toUpperCase();
+  return Object.freeze({
+    installed: !['NOT_INSTALLED', 'UNKNOWN'].includes(lifecycleState),
+    eligible: readiness?.eligible === true || ['ELIGIBLE', 'ACTIVE'].includes(readinessState),
+    active: lifecycleState === 'ACTIVE',
+    configured: configured === true,
+    entitled: entitled === true,
+    operational: lifecycleState === 'ACTIVE' && readiness?.active === true,
+    lifecycleState,
+    readinessState,
+  });
+}
+
 export function getPackActivationExperienceModel({ pack, readiness = null, entitlement = null, lifecycle = null } = {}) {
   if (!pack || typeof pack !== 'object' || !pack.pack_id) {
     throw new TypeError('pack.pack_id is required');
