@@ -380,7 +380,7 @@ assert.match(storeSource, /PROVIDER_TRANSACTION_DUPLICATE/);
 // Partial ledger certification: PARTIAL must record the actually observed
 // received amount, while VERIFIED/RECONCILED continue to use the obligation.
 
-const ledgerInsertStart = storeSource.indexOf("INSERT INTO payment_ledger_entries");
+const ledgerInsertStart = storeSource.lastIndexOf("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor");
 assert.notEqual(ledgerInsertStart, -1);
 const ledgerInsertBlock = storeSource.slice(ledgerInsertStart - 600, ledgerInsertStart + 1800);
 assert.match(ledgerInsertBlock, /target === 'PARTIAL'/);
