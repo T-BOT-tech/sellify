@@ -82,14 +82,25 @@ async function requestAndParseProviderVerification(id, name, operation, {
   };
 }
 
+function createUnimplementedNotificationAuthenticator(id, name) {
+  return async () => {
+    const error = new Error(`${name} inbound notification authentication is not configured`);
+    error.code = 'PAYMENT_NOTIFICATION_AUTH_NOT_CONFIGURED';
+    error.providerId = id;
+    error.statusCode = 501;
+    throw error;
+  };
+}
+
 function createProviderAdapter(id, name) {
   return {
     id,
     name,
     version: '1',
-    capabilities: { getMetadata: true, probeCapability: true },
+    capabilities: { getMetadata: true, probeCapability: true, authenticateNotification: false },
     configured: getProviderAdapterConfig(id).configured,
     getMetadata: async () => ({ id, name, version: '1' }),
+    authenticateNotification: createUnimplementedNotificationAuthenticator(id, name),
     verify: async ({ context = {}, query = {}, payment = null, paymentIntent = null, paymentAccount = null } = {}) => {
       context = { ...query, ...context };
       const config = getProviderAdapterConfig(id, context.env || process.env);
