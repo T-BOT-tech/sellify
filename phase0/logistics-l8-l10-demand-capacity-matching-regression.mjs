@@ -54,7 +54,6 @@ const result = matchLogisticsProviders([
   geoCode: demand.destination.geoCode,
   minimumQuantity: demand.payload.weightKg,
   unit: 'kg',
-  productId: 'parcel',
 });
 
 assert.equal(result.authority, 'discovery_matching');
