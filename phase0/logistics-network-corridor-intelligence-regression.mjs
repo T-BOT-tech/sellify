@@ -428,6 +428,7 @@ const constrainedDepot = deriveDepotThroughputSignal({
     ...observation,
     throughput_count: 3,
     demand_count: 10,
+    fulfilled_count: 5,
     observation_ref: 'OBS-DEPOT-GAP',
   }],
 });
