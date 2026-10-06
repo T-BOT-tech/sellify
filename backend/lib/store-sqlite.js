@@ -2009,6 +2009,38 @@ function runMigrations() {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(61, nowIso());
   }
 
+
+  // GAP-1.22 — durable provider confirmation attempts.
+  if (!applied.includes(62)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS payment_confirmation_attempts (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
+        payment_intent_id TEXT NOT NULL REFERENCES payment_intents(id) ON DELETE CASCADE,
+        evidence_id TEXT NOT NULL REFERENCES payment_evidence(id) ON DELETE CASCADE,
+        payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL,
+        provider_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED','PENDING','CONFIRMED','NOT_FOUND','FAILED','EXPIRED','UNKNOWN')),
+        attempt_number INTEGER NOT NULL DEFAULT 1 CHECK (attempt_number > 0),
+        provider_transaction_id TEXT,
+        reason_codes_json TEXT NOT NULL DEFAULT '[]',
+        observation_json TEXT NOT NULL DEFAULT '{}',
+        requested_at TEXT NOT NULL,
+        observed_at TEXT,
+        expires_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(payment_intent_id, evidence_id, attempt_number)
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_org_status ON payment_confirmation_attempts(organization_id,status,updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_evidence ON payment_confirmation_attempts(evidence_id,created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_intent ON payment_confirmation_attempts(payment_intent_id,created_at DESC);
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_confirmation_attempts_provider_tx ON payment_confirmation_attempts(organization_id,provider_id,payment_account_id,provider_transaction_id) WHERE provider_transaction_id IS NOT NULL AND trim(provider_transaction_id) <> '';
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(62, nowIso());
+  }
+
   if (!applied.includes(60)) {
     db.exec(`
       CREATE TABLE IF NOT EXISTS marketplace_payment_allocations_v40 (
