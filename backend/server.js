@@ -146,6 +146,7 @@ import { AUTHZ, authorize, ROLES, getRolePermissions } from './lib/authorization
 import { assertTenantScope, assertLocationScope } from './lib/tenant-isolation.js';
 import { getPaymentProvider, listPaymentProviders, certifyPaymentProviderCapabilities, certifyAllPaymentProviders } from './lib/payments/provider-registry.js';
 import { PaymentCore } from './lib/payments/payment-core.js';
+import { derivePackLifecycleReadiness } from './lib/pack-lifecycle-readiness.js';
 import { InvariantGate } from './lib/payments/invariant-gate.js';
 import { PaymentDecisionEngine } from './lib/payments/decision-engine.js';
 import { listPaymentChannels } from './lib/payments/channel-registry.js';
@@ -2615,7 +2616,10 @@ async function handlePackLifecycle(req, res, chatId, packId) {
       deniedMessage: 'Pack lifecycle view permission required',
     });
     const lifecycle = getPackLifecycle(tenant.organizationId, packId);
-    return sendJSON(res, 200, { lifecycle }, req);
+    const readiness = derivePackLifecycleReadiness(packId, lifecycle, {
+      organizationId: tenant.organizationId,
+    });
+    return sendJSON(res, 200, { lifecycle, readiness }, req);
   }
 
   if (req.method === 'POST') {
