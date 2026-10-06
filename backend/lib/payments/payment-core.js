@@ -1,3 +1,4 @@
+import { assertAuthenticatedNotificationContext, assertProviderNotificationEvidenceShape } from './provider-notification-authority.js';
 import { assertUntrustedPaymentEvidenceShape } from './payment-evidence-authority.js';
 import { evaluateCapabilityCertification } from './capability-certification.js';
 import { evaluateVerificationFreshness } from './verification-freshness.js';
@@ -826,6 +827,69 @@ export class PaymentCore {
         ...provider,
         evidence: evidence.filter(item => item.providerId === provider.providerId),
       })),
+    };
+  }
+
+  async ingestProviderNotification(command = {}) {
+    const providerId = String(command.providerId || command.provider_id || '').trim().toLowerCase();
+    if (!providerId) {
+      throw Object.assign(new Error('providerId is required'), { statusCode: 400, code: 'PAYMENT_PROVIDER_REQUIRED' });
+    }
+    const provider = this.providerRegistry?.requirePaymentProvider
+      ? this.providerRegistry.requirePaymentProvider(providerId)
+      : this.providerRegistry?.getPaymentProvider?.(providerId);
+    if (!provider) {
+      throw Object.assign(new Error('Unknown payment provider'), { statusCode: 400, code: 'UNKNOWN_PAYMENT_PROVIDER' });
+    }
+    if (provider.capabilities?.authenticateNotification !== true) {
+      throw Object.assign(new Error('Payment provider notification authentication is not configured'), {
+        statusCode: 503, code: 'PAYMENT_NOTIFICATION_NOT_CONFIGURED',
+      });
+    }
+
+    const rawNotification = command.rawRequest || command.rawNotification || command.notification || {};
+    const authenticated = assertAuthenticatedNotificationContext(
+      await provider.authenticateNotification(rawNotification)
+    );
+    if (authenticated.providerId !== provider.id) {
+      throw Object.assign(new Error('Authenticated notification provider mismatch'), {
+        statusCode: 409, code: 'PAYMENT_NOTIFICATION_PROVIDER_MISMATCH',
+      });
+    }
+
+    const parsed = await provider.parseEvidence({
+      notification: rawNotification,
+      authentication: authenticated,
+    });
+    assertProviderNotificationEvidenceShape(parsed);
+
+    if (String(parsed.providerId || provider.id).trim().toLowerCase() !== provider.id) {
+      throw Object.assign(new Error('Provider evidence provider mismatch'), {
+        statusCode: 409, code: 'PAYMENT_NOTIFICATION_PROVIDER_MISMATCH',
+      });
+    }
+
+    if (!parsed.accountIdentifier && !parsed.account_identifier) {
+      parsed.accountIdentifier = authenticated.accountIdentifier;
+    }
+    if (parsed.accountIdentifier && String(parsed.accountIdentifier).trim() !== authenticated.accountIdentifier) {
+      throw Object.assign(new Error('Provider evidence account mismatch'), {
+        statusCode: 409, code: 'PAYMENT_NOTIFICATION_ACCOUNT_MISMATCH',
+      });
+    }
+
+    const recorded = await this.store.insertProviderNotificationEvidence({
+      authenticatedContext: authenticated,
+      evidence: parsed,
+      rawPayload: rawNotification,
+      authenticationReference: authenticated.notificationId,
+    });
+
+    return {
+      accepted: true,
+      duplicate: Boolean(recorded?.duplicate),
+      authenticatedContext: authenticated,
+      evidence: recorded?.evidence || recorded,
     };
   }
 
