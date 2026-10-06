@@ -59,7 +59,7 @@ const amountMismatch = evaluatePaymentInvariants({
   ...base,
   verification: { ...base.verification, observedAmountMinor: 999 },
 });
-assert.ok(amountMismatch.reasonCodes.includes('AMOUNT_MATCH'));
+assert.ok(amountMismatch.reasonCodes.includes('AMOUNT_MISMATCH'));
 assert.ok(amountMismatch.hardFailures.includes('AMOUNT_MISMATCH'));
 
 const intentMismatch = evaluatePaymentInvariants({
