@@ -2886,6 +2886,7 @@ async function handleOrderFulfillment(req, res, chatId, serverOrderId) {
 // ---------- routing ----------
 
 const ROUTES = [
+  { method: 'POST', pattern: /^\/integrations\/payments\/([^/]+)\/notifications$/, handler: (req, res, m) => handlePaymentProviderNotification(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/auth\/telegram$/, handler: handleTelegramAuth },
   { method: 'POST', pattern: /^\/auth\/migrate-legacy$/, handler: handleLegacyMigration },
   { method: 'POST', pattern: /^\/auth\/tenants$/, handler: handleCreateTenant },
