@@ -100,6 +100,7 @@ export function renderPackReadinessPanel(containerId = 'packReadinessPanel') {
           <td style="vertical-align:top;padding:8px;border-bottom:1px solid var(--line);"><strong>${esc(row.name)}</strong><div class="hint">${esc(row.packId)} · v${esc(row.version)}</div></td>
           <td style="vertical-align:top;padding:8px;border-bottom:1px solid var(--line);"><span class="status-badge">${esc(row.readiness)}</span></td>
           <td style="vertical-align:top;padding:8px;border-bottom:1px solid var(--line);">${esc(row.configurationState)}<div class="hint">authority=${esc(row.authority)}</div></td>
+          <td style="vertical-align:top;padding:8px;border-bottom:1px solid var(--line);"><strong>${esc(row.lifecycleState)}</strong>${row.configurationLifecycleDivergence ? `<div class="hint">DIVERGED · ${esc(row.configurationLifecycleDivergence)}</div>` : '<div class="hint">CONSISTENT</div>'}</td>
           <td style="vertical-align:top;padding:8px;border-bottom:1px solid var(--line);">${row.dependencies.map(dep => `<div>${esc(dep.name)} · ${dep.available ? 'AVAILABLE' : 'UNAVAILABLE'}</div>`).join('')}</td>
           <td style="vertical-align:top;padding:8px;border-bottom:1px solid var(--line);">${row.journeyAvailability.map(j => `<div><strong>${esc(j.entry)}</strong> · ${esc(j.status)}</div>`).join('') || 'No executable Pack entry declared.'}</td>
         </tr>`).join('')}</tbody>
