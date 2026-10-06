@@ -111,7 +111,7 @@ async function verify(base) {
     evidenceId: evidence.evidence.id, providerId: base.payment.providerId,
     result: 'MATCH', observedAmountMinor: 10000, observedCurrency: 'ETB',
     observedAt: new Date().toISOString(), reasonCodes: [],
-    rawResult: { status: 'COMPLETED' }, verifier: 'gap1-19-adversarial',
+    rawResult: { status: 'COMPLETED' }, verifier: 'payment-core.gap1-19-adversarial',
     verifierVersion: '1',
   });
   return store.commitPaymentDecision(base.chatId, {
