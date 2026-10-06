@@ -23,6 +23,7 @@ import { requirePaymentChannel } from './payments/channel-registry.js';
 import { decideEventReplay } from './event-replay.js';
 import { assertPackLifecyclePrecondition, getPackLifecycleManifest } from './pack-lifecycle-readiness.js';
 import { assertUntrustedPaymentEvidenceShape, normalizePaymentEvidenceSource } from './payments/payment-evidence-authority.js';
+import { assertAuthenticatedNotificationContext, assertProviderNotificationEvidenceShape } from './payments/provider-notification-authority.js';
 import { normalizeLogisticsSchedulingRequest } from '../../app/src/verticals/logistics/scheduling-contract.js';
 import { evaluateLogisticsSchedulingFeasibility } from '../../app/src/verticals/logistics/scheduling-feasibility-contract.js';
 import { decideLogisticsScheduling } from '../../app/src/verticals/logistics/scheduling-decision-contract.js';
@@ -5867,6 +5868,96 @@ export async function insertPaymentIntent(chatId, input = {}, actor = null) {
   );
   return paymentIntentFromRow(db.prepare('SELECT * FROM payment_intents WHERE id = ?').get(id));
 }
+export async function insertProviderNotificationEvidence(notification = {}) {
+  ensureDatabase();
+  const authenticated = assertAuthenticatedNotificationContext(notification.authenticatedContext || notification);
+  const evidenceInput = notification.evidence || notification.parsedEvidence || {};
+  assertProviderNotificationEvidenceShape(evidenceInput);
+
+  const account = db.prepare(`
+    SELECT id, organization_id, status
+    FROM payment_accounts
+    WHERE provider_id = ? AND account_identifier = ?
+      AND status = 'active'
+  `).all(authenticated.providerId, authenticated.accountIdentifier);
+
+  if (account.length === 0) {
+    throw Object.assign(new Error('Payment account is not configured for provider notification'), {
+      statusCode: 404, code: 'PAYMENT_NOTIFICATION_ACCOUNT_NOT_CONFIGURED',
+    });
+  }
+  if (account.length > 1) {
+    throw Object.assign(new Error('Provider notification account binding is ambiguous'), {
+      statusCode: 409, code: 'PAYMENT_NOTIFICATION_ACCOUNT_AMBIGUOUS',
+    });
+  }
+
+  const accountRow = account[0];
+  const organizationId = String(accountRow.organization_id);
+  const providerId = authenticated.providerId;
+  const fingerprint = String(
+    evidenceInput.fingerprint
+      || crypto.createHash('sha256').update(JSON.stringify({
+        providerId,
+        accountIdentifier: authenticated.accountIdentifier,
+        notificationId: authenticated.notificationId,
+      })).digest('hex')
+  ).trim();
+  const evidenceType = String(evidenceInput.evidenceType || evidenceInput.evidence_type).trim().toUpperCase();
+  const rawPayload = evidenceInput.rawPayload ?? evidenceInput.raw_payload ?? notification.rawPayload ?? notification.raw ?? null;
+  const normalizedPayload = evidenceInput.normalizedPayload ?? evidenceInput.normalized_payload ?? evidenceInput;
+  const now = nowIso();
+  const existing = db.prepare(
+    'SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND fingerprint = ?'
+  ).get(organizationId, providerId, fingerprint);
+  if (existing) return { evidence: paymentEvidenceFromRow(existing), duplicate: true };
+
+  const id = String(evidenceInput.id || crypto.randomUUID());
+  try {
+    db.prepare("INSERT INTO payment_evidence (id, organization_id, location_id, payment_id, payment_intent_id, provider_id, channel, evidence_type, external_reference, provider_transaction_id, fingerprint, raw_payload_json, normalized_payload_json, source, observed_at, received_at, submitted_by_user_id, status, created_at, updated_at) VALUES (?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 'provider.notification', ?, ?, NULL, 'RECEIVED', ?, ?)").run(
+      id,
+      organizationId,
+      providerId,
+      String(evidenceInput.channel || 'notification').trim().toLowerCase(),
+      evidenceType,
+      evidenceInput.externalReference || evidenceInput.external_reference || null,
+      evidenceInput.providerTransactionId || evidenceInput.provider_transaction_id || null,
+      fingerprint,
+      rawPayload == null ? null : json(rawPayload),
+      normalizedPayload == null ? null : json(normalizedPayload),
+      evidenceInput.observedAt || evidenceInput.observed_at || authenticated.receivedAt || null,
+      now,
+      now,
+    );
+  } catch (error) {
+    if (String(error?.message || '').includes('UNIQUE constraint failed: payment_evidence')) {
+      const duplicate = db.prepare(
+        'SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND fingerprint = ?'
+      ).get(organizationId, providerId, fingerprint);
+      if (duplicate) return { evidence: paymentEvidenceFromRow(duplicate), duplicate: true };
+    }
+    throw error;
+  }
+
+  const persistedEvidence = paymentEvidenceFromRow(db.prepare('SELECT * FROM payment_evidence WHERE id = ?').get(id));
+  audit(null, 'payment.evidence.notification.recorded', 'payment_evidence', id, {
+    paymentId: null,
+    paymentIntentId: null,
+    providerId,
+    accountIdentifier: authenticated.accountIdentifier,
+    notificationId: authenticated.notificationId,
+    evidenceType: persistedEvidence.evidenceType,
+    fingerprint: persistedEvidence.fingerprint,
+    source: persistedEvidence.source,
+    observedAt: persistedEvidence.observedAt,
+  }, {
+    organizationId,
+    lineageType: 'payment_evidence',
+    lineageId: id,
+  });
+  return { evidence: persistedEvidence, duplicate: false };
+}
+
 export async function insertPaymentEvidence(chatId, input = {}, actor = null) {
   ensureDatabase();
   assertUntrustedPaymentEvidenceShape(input);
