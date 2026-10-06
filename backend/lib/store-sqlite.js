@@ -5926,6 +5926,81 @@ export async function insertPaymentIntent(chatId, input = {}, actor = null) {
   );
   return paymentIntentFromRow(db.prepare('SELECT * FROM payment_intents WHERE id = ?').get(id));
 }
+export async function getPaymentAccountForProviderNotification(providerId, accountIdentifier) {
+  ensureDatabase();
+  const id = String(providerId || '').trim().toLowerCase();
+  const account = String(accountIdentifier || '').trim();
+  if (!id || !account) return null;
+  const rows = db.prepare(`
+    SELECT pa.*, t.chat_id
+    FROM payment_accounts pa
+    JOIN tenants t ON t.organization_id = pa.organization_id
+    WHERE pa.provider_id = ? AND pa.account_identifier = ? AND pa.status = 'active'
+    ORDER BY pa.created_at ASC
+  `).all(id, account);
+  if (rows.length === 0) throw Object.assign(new Error('No active payment account matches provider notification'), { statusCode: 404, code: 'UNMATCHED_PROVIDER_NOTIFICATION' });
+  if (rows.length > 1) throw Object.assign(new Error('Multiple active payment accounts match provider notification'), { statusCode: 409, code: 'AMBIGUOUS_PAYMENT_ACCOUNT' });
+  const row = rows[0];
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    chatId: row.chat_id,
+    providerId: row.provider_id,
+    accountIdentifier: row.account_identifier,
+    metadata: parseJSON(row.metadata_json, {}),
+  };
+}
+
+export async function resolvePaymentIntentForProviderEvidence(input = {}) {
+  ensureDatabase();
+  const providerId = String(input.providerId || '').trim().toLowerCase();
+  const accountIdentifier = String(input.accountIdentifier || '').trim();
+  const providerTransactionId = String(input.providerTransactionId || '').trim();
+  const externalReference = String(input.externalReference || '').trim();
+  if (!providerId || !accountIdentifier) throw Object.assign(new Error('Provider and account identity are required'), { statusCode: 400, code: 'PAYMENT_NOTIFICATION_CONTEXT_REQUIRED' });
+
+  const account = await getPaymentAccountForProviderNotification(providerId, accountIdentifier);
+  if (!account) return { paymentIntent: null, resolutionStatus: 'UNMATCHED' };
+
+  if (providerTransactionId) {
+    const consumed = db.prepare('SELECT * FROM payment_evidence WHERE organization_id=? AND provider_id=? AND payment_account_id=? AND provider_transaction_id=? LIMIT 1')
+      .get(account.organizationId, providerId, account.id, providerTransactionId);
+    if (consumed) {
+      return {
+        chatId: account.chatId,
+        organizationId: account.organizationId,
+        locationId: consumed.location_id || null,
+        paymentAccount: account,
+        duplicateEvidence: paymentEvidenceFromRow(consumed),
+        paymentIntent: consumed.payment_intent_id
+          ? paymentIntentFromRow(db.prepare('SELECT * FROM payment_intents WHERE id=? AND organization_id=?').get(consumed.payment_intent_id, account.organizationId))
+          : null,
+      };
+    }
+  }
+
+  const base = `SELECT pi.* FROM payment_intents pi
+    WHERE pi.organization_id=? AND pi.provider_id=? AND pi.payment_account_id=?
+      AND pi.status IN ('OPEN','PAYMENT_ATTEMPTED')
+      AND (pi.expires_at IS NULL OR pi.expires_at > ?)`;
+  const params = [account.organizationId, providerId, account.id, nowIso()];
+  let candidates = [];
+  if (externalReference) {
+    candidates = db.prepare(base + ` AND (json_extract(pi.metadata_json,'$.externalReference')=? OR json_extract(pi.metadata_json,'$.merchantReference')=?)`)
+      .all(...params, externalReference, externalReference);
+  }
+  if (candidates.length === 0) candidates = db.prepare(base).all(...params);
+  if (candidates.length > 1) throw Object.assign(new Error('Provider notification matches multiple active payment intents'), { statusCode: 409, code: 'AMBIGUOUS_PAYMENT_INTENT' });
+  return {
+    chatId: account.chatId,
+    organizationId: account.organizationId,
+    locationId: candidates[0]?.location_id || null,
+    paymentAccount: account,
+    paymentIntent: candidates[0] ? paymentIntentFromRow(candidates[0]) : null,
+    resolutionStatus: candidates[0] ? 'MATCHED' : 'UNMATCHED',
+  };
+}
+
 export async function insertProviderNotificationEvidence(notification = {}) {
   ensureDatabase();
   const authenticated = assertAuthenticatedNotificationContext(notification.authenticatedContext || notification);
