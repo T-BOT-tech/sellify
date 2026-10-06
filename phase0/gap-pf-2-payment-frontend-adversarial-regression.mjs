@@ -219,9 +219,9 @@ assert.match(projection, /sequence === paymentStatusSequences\.get\(id\)/);
 // for the same payment flow, but cannot be revived from terminal states and
 // cannot be promoted directly to VERIFIED.
 const paymentTransitions = storeSource.slice(storeSource.indexOf('const PAYMENT_TRANSITIONS'), storeSource.indexOf('function paymentStateTimestampColumn'));
-assert.match(paymentTransitions, /EXPIRED: new Set\\(\['RECEIVED'\]\\)/);
-assert.match(paymentTransitions, /CANCELLED: new Set\\(\['RECEIVED'\]\\)/);
-assert.match(paymentTransitions, /PARTIAL: new Set\\(\['RECEIVED','FAILED','REJECTED'\]\\)/);
+assert.match(paymentTransitions, /EXPIRED: new Set\(\['RECEIVED'\]\)/);
+assert.match(paymentTransitions, /CANCELLED: new Set\(\['RECEIVED'\]\)/);
+assert.match(paymentTransitions, /PARTIAL: new Set\(\['RECEIVED','FAILED','REJECTED'\]\)/);
 assert.doesNotMatch(paymentTransitions, /PARTIAL: new Set\(\['RECEIVED','VERIFIED'/);
 assert.match(paymentCoreSource, /Late-success recovery is only valid from EXPIRED or CANCELLED/);
 assert.match(paymentCoreSource, /LATE_SUCCESS_CONFIRMATION_REQUIRED/);
@@ -249,7 +249,7 @@ assert.match(reservationBlock, /MAX\(0, amount_minor/);
 const finalizeRefundStart = refundSource.indexOf('export async function finalizePaymentRefund');
 const finalRefundBlock = refundSource.slice(finalizeRefundStart, finalizeRefundStart + 7000);
 assert.match(finalRefundBlock, /fullRefund/);
-assert.match(finalRefundBlock, /state = \\?, updated_at = \\?/);
+assert.match(finalRefundBlock, /state = \?, updated_at = \?/);
 assert.match(finalRefundBlock, /'REFUNDED'/);
 assert.match(refundBlock, /REFUND_AMOUNT_EXCEEDS_PAYMENT/);
 assert.match(refundBlock, /entry_type,amount_minor/);
@@ -258,8 +258,8 @@ const transitionText = refundSource.slice(
   refundSource.indexOf('const PAYMENT_TRANSITIONS'),
   refundSource.indexOf('function paymentStateTimestampColumn')
 );
-assert.match(transitionText, /VERIFIED: new Set\\(\['RECONCILED','REVERSED','REFUNDED','MISMATCH'\]\\)/);
-assert.match(transitionText, /RECONCILED: new Set\\(\['REVERSED','REFUNDED'\]\\)/);
+assert.match(transitionText, /VERIFIED: new Set\(\['RECONCILED','REVERSED','REFUNDED','MISMATCH'\]\)/);
+assert.match(transitionText, /RECONCILED: new Set\(\['REVERSED','REFUNDED'\]\)/);
 
 // Reversal certification: a reversed payment must stop contributing to
 // accepted order value and must reverse marketplace allocation/settlement.
@@ -267,7 +267,7 @@ assert.match(refundSource, /target === 'REVERSED'/);
 assert.match(refundSource, /status = 'REVERSED'/);
 assert.match(refundSource, /marketplace_payment_allocations/);
 assert.match(refundSource, /marketplace_settlements/);
-assert.match(refundSource, /status IN \\('PENDING','READY','HELD'\\)/);
+assert.match(refundSource, /status IN \('PENDING','READY','HELD'\)/);
 
 // Reservation-release certification: terminal/released states must not
 // continue consuming an order's outstanding payment capacity.
@@ -281,7 +281,7 @@ assert.doesNotMatch(reservationStates, /REJECTED/);
 assert.doesNotMatch(reservationStates, /REFUNDED/);
 
 const refundFinalBlock = storeSource.slice(storeSource.indexOf('export async function finalizePaymentRefund'), storeSource.indexOf('export async function getPayment(chatId'));
-assert.match(refundFinalBlock, /state = \\?, updated_at = \\?/);
+assert.match(refundFinalBlock, /state = \?, updated_at = \?/);
 assert.match(refundFinalBlock, /'REFUNDED'/);
 assert.match(refundFinalBlock, /fullRefund/);
 
@@ -315,7 +315,7 @@ assert.doesNotMatch(stateSource, /localStorage|saveJSON|STORAGE_KEYS/);
 // once a newer status query wins, an older response must not be returned to
 // callers where it could render a stale financial state.
 assert.match(projection, /const isLatest = sequence === paymentStatusSequences\.get\(id\)/);
-assert.match(projection, /if \(isLatest[\\s\\S]*return upsertPayment\(payment\)/);
+assert.match(projection, /if \(isLatest[\s\S]*return upsertPayment\(payment\)/);
 assert.match(projection, /A superseded status response must never escape to its caller/);
 assert.match(projection, /getPayments\(\)\.find\(item => String\(item\?\.id\) === id\)/);
 
@@ -352,9 +352,9 @@ assert.match(storeSource, /pendingMinor/);
 assert.match(storeSource, /outstandingMinor/);
 assert.match(storeSource, /state = \\? AND order_id = \\?/);
 assert.match(storeSource, /'UNPAID','CLAIMED','RECEIVED','PARTIAL'/);
-assert.match(storeSource, /'VERIFIED' \\|\\| 'RECONCILED'/);
+assert.match(storeSource, /'VERIFIED' \|\| 'RECONCILED'/);
 assert.match(paymentCoreSource, /getOrderPaymentSummary/);
-assert.match(serverSource, /orders\\/\\(\\[\\^\\/\\]\\+\\)\\/payments\\/summary/);
+assert.ok(serverSource.includes('orders\\/([^/]+)\\/payments\\/summary'), 'tenant-scoped order payment summary route must exist');
 assert.match(serverSource, /payments', 'payments:view'/);
 
 // Cross-tenant / cross-order isolation certification:
