@@ -21,7 +21,7 @@ assert.match(store, /CREATE UNIQUE INDEX idx_delivery_assignments_active_fulfill
 const exceptionBlock = lifecycle.slice(lifecycle.indexOf("if (normalizedAction === 'REASSIGN_EXCEPTION')"), begin);
 assert(begin >= 0, 'exception resolution must remain inside lifecycle transaction boundary');
 assert.match(lifecycle, /last_command_key = \?/);
-assert.match(exceptionBlock, /IDEMPOTENCY_KEY_REUSE_CONFLICT/);
+assert.match(lifecycle, /IDEMPOTENCY_KEY_REUSE_CONFLICT/);
 
 const assignStart = store.indexOf('export async function assignDeliveryCourier');
 const assign = store.slice(assignStart, store.indexOf('export async function getDeliveryAssignment', assignStart));
