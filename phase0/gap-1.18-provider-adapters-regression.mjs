@@ -14,7 +14,7 @@ for (const id of ['telebirr', 'cbe', 'mpesa', 'boa']) {
 const calls = [];
 const fetchImpl = async (_url, options) => {
   calls.push(options);
-  return new Response(JSON.stringify({ reference: 'adapter-auth-118b' }), { status: 200 });
+  return new Response(JSON.stringify({ status: 'SUCCESS', reference: 'adapter-auth-118b' }), { status: 200 });
 };
 const authResult = await PROVIDER_ADAPTERS.telebirr.probeCapability({
   capability: 'getStatus',
