@@ -6,13 +6,13 @@ const migration55 = source.indexOf('if (!applied.includes(55))');
 const uniqueIndex = source.indexOf('uq_payment_verifications_provider_transaction');
 const insertFn = source.indexOf('export async function insertPaymentVerification');
 const preflight = source.indexOf('PROVIDER_TRANSACTION_DUPLICATE', insertFn);
-const conflictQuery = source.indexOf('observed_transaction_id = ?', insertFn);
+const conflictQuery = source.indexOf('WHERE organization_id = ? AND provider_id = ? AND observed_transaction_id = ?', insertFn);
 
 assert.ok(migration55 > 0, 'GAP-1.18M migration 55 must exist');
 assert.ok(uniqueIndex > migration55, 'durable provider transaction unique index must be created');
 assert.ok(insertFn > uniqueIndex, 'verification persistence must follow schema migration');
 assert.ok(preflight > insertFn, 'verification persistence must reject an already-bound provider transaction');
-assert.ok(conflictQuery > preflight, 'transaction identity conflict lookup must be provider/org scoped');
+assert.ok(conflictQuery > insertFn, 'transaction identity conflict lookup must be provider/org scoped');
 assert.match(source, /CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_verifications_provider_transaction/);
 assert.match(source, /WHERE observed_transaction_id IS NOT NULL AND trim\(observed_transaction_id\) <> ''/);
 assert.match(source, /code: 'PROVIDER_TRANSACTION_DUPLICATE'/);
