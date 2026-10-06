@@ -9,7 +9,7 @@ function makeStore() {
     async getPayment() { return payment; },
     async getPaymentIntent() { return { id: 'intent-117', paymentId: payment.id }; },
     async listPaymentAccounts() { return [{ id: 'acct-117', providerId: 'test-provider', status: 'active' }]; },
-    async insertPaymentEvidence() { return { id: 'evidence-117' }; },
+    async insertPaymentEvidence() { return { evidence: { id: 'evidence-117' }, duplicate: false }; },
     async insertPaymentVerification() { return { id: 'verification-117' }; },
     async insertPaymentDecision() { return { id: 'decision-117' }; },
     async commitPaymentDecision() { return { payment, decision: { targetState: payment.state } }; },
