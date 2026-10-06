@@ -51,6 +51,14 @@ console.log('GAP-6.3 canonical frontend lifecycle client contract: PASS');
 console.log('GAP-6.3 workspace/settings lifecycle authority integration: PASS');
 console.log('GAP-6.5 explicit upgrade command semantics: PASS');
 console.log('GAP-6.6 Pack recovery command boundary: PASS');
+console.log('GAP-6.7 configuration/lifecycle divergence detection: PASS');
+
+const packReadiness = fs.readFileSync(new URL('../app/src/authorization/pack-readiness.js', import.meta.url), 'utf8');
+assert.match(packReadiness, /getPackLifecycleSnapshot/);
+assert.match(packReadiness, /configurationLifecycleDivergence/);
+assert.match(packReadiness, /CONFIG_ENABLED_LIFECYCLE_NOT_ACTIVE/);
+assert.match(packReadiness, /CONFIG_DISABLED_LIFECYCLE_ACTIVE/);
+assert.match(packReadiness, /never converted into an inferred lifecycle mutation/);
 
 const readiness = fs.readFileSync(new URL('../backend/lib/pack-lifecycle-readiness.js', import.meta.url), 'utf8');
 assert.match(readiness, /export function derivePackLifecycleReadiness/);
