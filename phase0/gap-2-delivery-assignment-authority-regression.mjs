@@ -18,17 +18,21 @@ assert.match(store, /COURIER_ASSIGNMENT_REQUIRED/);
 assert.match(store, /COURIER_ROLE_REQUIRED/);
 assert.match(store, /COURIER_ORGANIZATION_DENIED/);
 assert.match(store, /membership_roles/);
-assert.match(store, /scope_type === 'LOCATION'/);\nassert.match(store, /assignmentKey/);
+assert.match(store, /scope_type === 'LOCATION'/);
+assert.match(store, /assignmentKey/);
 assert.match(store, /ASSIGNMENT_CONFLICT/);
 assert.match(store, /INSERT INTO fulfillments/);
 
 assert.match(server, /\/delivery-assignment\$/);
 assert.match(server, /logistics:deliveries:assign/);
 assert.match(server, /logistics:deliveries:update_assigned/);
-assert.match(server, /assertCourierOwnsDelivery\(chatId, serverOrderId, session\)/);\nassert.match(server, /Idempotency-Key is required/);\nassert.match(server, /assignmentKey: idempotencyKey/);
+assert.match(server, /assertCourierOwnsDelivery\(chatId, serverOrderId, session\)/);
+assert.match(server, /Idempotency-Key is required/);
+assert.match(server, /assignmentKey: idempotencyKey/);
 
 console.log('GAP-2 Delivery Assignment Authority Regression: PASS');
 console.log('Canonical assignment persistence: PASS');
 console.log('Courier own-assignment enforcement: PASS');
 console.log('Location scope enforcement: PASS');
-assert.match(fs.readFileSync(new URL('../app/src/logistics/fulfillment.js', import.meta.url), 'utf8'), /'Idempotency-Key': idempotencyKey/);\nconsole.log('Idempotent assignment conflict boundary: PASS');
+assert.match(fs.readFileSync(new URL('../app/src/logistics/fulfillment.js', import.meta.url), 'utf8'), /'Idempotency-Key': idempotencyKey/);
+console.log('Idempotent assignment conflict boundary: PASS');
