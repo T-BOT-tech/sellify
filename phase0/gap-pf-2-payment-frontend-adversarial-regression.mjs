@@ -352,7 +352,7 @@ assert.match(storeSource, /pendingMinor/);
 assert.match(storeSource, /outstandingMinor/);
 assert.ok(storeSource.includes('WHERE p.organization_id = ? AND p.order_id = ?'), 'order payment query must be tenant and order scoped');
 assert.match(storeSource, /'UNPAID','CLAIMED','RECEIVED','PARTIAL'/);
-assert.match(storeSource, /'VERIFIED' \|\| 'RECONCILED'/);
+assert.match(storeSource, /\['VERIFIED','RECONCILED'\]\.includes/);
 assert.match(paymentCoreSource, /getOrderPaymentSummary/);
 assert.ok(serverSource.includes('orders\\/([^/]+)\\/payments\\/summary'), 'tenant-scoped order payment summary route must exist');
 assert.match(serverSource, /payments', 'payments:view'/);
