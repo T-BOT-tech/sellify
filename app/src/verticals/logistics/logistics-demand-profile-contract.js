@@ -60,15 +60,15 @@ const PROFILE_DEFINITIONS = Object.freeze({
 });
 
 const FORBIDDEN_AUTHORITY_FIELDS = new Set([
-  'order_id',
-  'shipment_id',
-  'payment_id',
-  'inventory_id',
-  'provider_id',
-  'provider_selection',
-  'assignment_id',
-  'execution_id',
-  'match_id',
+  'order_id', 'orderId',
+  'shipment_id', 'shipmentId',
+  'payment_id', 'paymentId',
+  'inventory_id', 'inventoryId',
+  'provider_id', 'providerId',
+  'provider_selection', 'providerSelection',
+  'assignment_id', 'assignmentId',
+  'execution_id', 'executionId',
+  'match_id', 'matchId',
 ]);
 
 function requiredText(value, field) {
