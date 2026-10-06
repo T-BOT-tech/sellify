@@ -614,7 +614,7 @@ assert.equal(terminalRetryDecision.retry, false);
 assert.equal(terminalRetryDecision.terminal, true);
 assert.equal(terminalRetryDecision.resolution_required, true);
 
-assert.throws(() => buildExternalRetryDecision({
+const ambiguousRetryDecision = buildExternalRetryDecision({
   idempotency_key: 'idem-retry-003',
   attempt: 1,
   max_attempts: 3,
@@ -623,7 +623,10 @@ assert.throws(() => buildExternalRetryDecision({
     retryable: true,
     resolution_required: true,
   },
-}), /canonical/i);
+});
+assert.equal(ambiguousRetryDecision.retry, true);
+assert.equal(ambiguousRetryDecision.resolution_required, true);
+assert.equal(ambiguousRetryDecision.canonical_state_mutation, false);
 
 assert.throws(() => assertExternalRetryBoundary({
   ...retryDecision,
