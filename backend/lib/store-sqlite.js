@@ -6598,7 +6598,7 @@ export async function listPaymentRoutingPolicies(chatId, { channel = null, locat
   const tenant = getTenantByChatId(chatId);
   if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404 });
   const clauses = ['organization_id = ?'];
-  const params = [tenant.organization_id];
+  const params = [tenant.organizationId];
   if (channel) { clauses.push('channel = ?'); params.push(String(channel).toLowerCase()); }
   if (locationId) { clauses.push('(location_id IS NULL OR location_id = ?)'); params.push(String(locationId)); }
   if (activeOnly) clauses.push("status = 'ACTIVE'");
@@ -6623,7 +6623,7 @@ export async function upsertPaymentRoutingPolicy(chatId, input = {}, actor = nul
   const locationId = input.locationId || input.location_id || null;
   const now = nowIso();
   const id = String(input.id || crypto.randomUUID());
-  const existing = db.prepare('SELECT id FROM payment_routing_policies WHERE organization_id = ? AND channel = ? AND provider_id = ? AND location_id IS ?').get(tenant.organization_id, channel, providerId, locationId);
+  const existing = db.prepare('SELECT id FROM payment_routing_policies WHERE organization_id = ? AND channel = ? AND provider_id = ? AND location_id IS ?').get(tenant.organizationId, channel, providerId, locationId);
   if (existing) {
     db.prepare(`UPDATE payment_routing_policies SET priority=?, status=?, currencies_json=?, required_capabilities_json=?, reason=?, updated_at=? WHERE id=?`).run(
       Number.isInteger(Number(input.priority)) ? Number(input.priority) : 100,
@@ -6634,7 +6634,7 @@ export async function upsertPaymentRoutingPolicy(chatId, input = {}, actor = nul
   db.prepare(`INSERT INTO payment_routing_policies
     (id,organization_id,channel,provider_id,priority,status,currencies_json,required_capabilities_json,location_id,reason,created_by_user_id,created_at,updated_at)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      id, tenant.organization_id, channel, providerId, Number.isInteger(Number(input.priority)) ? Number(input.priority) : 100,
+      id, tenant.organizationId, channel, providerId, Number.isInteger(Number(input.priority)) ? Number(input.priority) : 100,
       String(input.status || 'ACTIVE').toUpperCase(), json(currencies), json(requiredCapabilities), locationId,
       String(input.reason || ''), actor?.userId || actor?.user_id || null, now, now);
   return (await listPaymentRoutingPolicies(chatId, { channel, locationId, activeOnly: false })).find(p => p.id === id);
@@ -7403,7 +7403,7 @@ export async function listDeliveryAssignments(chatId, actor = null, filters = {}
   ensureDatabase();
   const tenant = await getTenant(chatId);
   if (!tenant?.organization_id) return [];
-  const organizationId = String(tenant.organization_id);
+  const organizationId = String(tenant.organizationId);
   const status = String(filters.status || '').trim().toUpperCase();
   const locationId = String(filters.locationId || filters.location_id || '').trim();
   const courierUserId = String(filters.courierUserId || filters.courier_user_id || '').trim();
@@ -10110,7 +10110,7 @@ export async function recordPaymentProviderCapabilityEvidence(chatId, input = {}
     SELECT * FROM payment_provider_capability_certifications
     WHERE organization_id = ? AND provider_id = ? AND capability = ?
       AND certification_scope = ? AND evidence_fingerprint = ?
-  `).get(tenant.organization_id, providerId, capability, scope, fingerprint);
+  `).get(tenant.organizationId, providerId, capability, scope, fingerprint);
   if (existing) return normalizePaymentProviderCapabilityCertification(existing);
 
   db.prepare(`
@@ -10120,7 +10120,7 @@ export async function recordPaymentProviderCapabilityEvidence(chatId, input = {}
        expires_at, reason, certified_by_user_id, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    id, tenant.organization_id, providerId, capability, scope, status,
+    id, tenant.organizationId, providerId, capability, scope, status,
     evidenceJson, fingerprint, providerReference == null ? null : String(providerReference),
     observedAt, expiresAt, String(input.reason || ''), actor?.userId || actor?.id || null, now, now,
   );
@@ -10128,7 +10128,7 @@ export async function recordPaymentProviderCapabilityEvidence(chatId, input = {}
   audit(String(chatId), 'payment.provider_capability.evidence.recorded',
     'payment_provider_capability_certification', id,
     { providerId, capability, certificationScope: scope, status, evidenceFingerprint: fingerprint },
-    { organizationId: tenant.organization_id, actorId: actor?.userId || actor?.id || null, reason: input.reason || '' });
+    { organizationId: tenant.organizationId, actorId: actor?.userId || actor?.id || null, reason: input.reason || '' });
 
   return normalizePaymentProviderCapabilityCertification(
     db.prepare('SELECT * FROM payment_provider_capability_certifications WHERE id = ?').get(id),
@@ -10150,7 +10150,7 @@ export async function certifyPaymentProviderCapability(chatId, input = {}, actor
   const evidence = db.prepare(`
     SELECT * FROM payment_provider_capability_certifications
     WHERE id = ? AND organization_id = ? AND provider_id = ? AND capability = ?
-  `).get(evidenceId, tenant.organization_id, providerId, capability);
+  `).get(evidenceId, tenant.organizationId, providerId, capability);
   if (!evidence) throw Object.assign(new Error('Capability evidence not found'), { statusCode: 404, code: 'PROVIDER_CAPABILITY_EVIDENCE_NOT_FOUND' });
 
   if (evidence.certification_scope !== 'LIVE_EXTERNAL' || evidence.status !== 'OBSERVED') {
@@ -10168,7 +10168,7 @@ export async function certifyPaymentProviderCapability(chatId, input = {}, actor
     SELECT * FROM payment_provider_capability_certifications
     WHERE organization_id = ? AND provider_id = ? AND capability = ?
       AND certification_scope = 'LIVE_EXTERNAL' AND evidence_fingerprint = ?
-  `).get(tenant.organization_id, providerId, capability, fingerprint);
+  `).get(tenant.organizationId, providerId, capability, fingerprint);
   if (existing) return normalizePaymentProviderCapabilityCertification(existing);
 
   const id = crypto.randomUUID();
@@ -10179,7 +10179,7 @@ export async function certifyPaymentProviderCapability(chatId, input = {}, actor
        expires_at, reason, certified_by_user_id, created_at, updated_at)
     VALUES (?, ?, ?, ?, 'LIVE_EXTERNAL', 'CERTIFIED', ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    id, tenant.organization_id, providerId, capability,
+    id, tenant.organizationId, providerId, capability,
     json({
       sourceEvidenceId: evidence.id,
       sourceEvidenceFingerprint: evidence.evidence_fingerprint,
@@ -10198,7 +10198,7 @@ export async function certifyPaymentProviderCapability(chatId, input = {}, actor
   audit(String(chatId), 'payment.provider_capability.certified',
     'payment_provider_capability_certification', id,
     { providerId, capability, sourceEvidenceId: evidence.id, evidenceFingerprint: evidence.evidence_fingerprint },
-    { organizationId: tenant.organization_id, actorId: actor?.userId || actor?.id || null, reason: input.reason || '' });
+    { organizationId: tenant.organizationId, actorId: actor?.userId || actor?.id || null, reason: input.reason || '' });
 
   return normalizePaymentProviderCapabilityCertification(
     db.prepare('SELECT * FROM payment_provider_capability_certifications WHERE id = ?').get(id),
@@ -10210,7 +10210,7 @@ export async function listPaymentProviderCapabilityEvidence(chatId, providerId =
   const tenant = getTenantByChatId(chatId);
   if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
   const clauses = ['organization_id = ?'];
-  const params = [tenant.organization_id];
+  const params = [tenant.organizationId];
   if (providerId) { clauses.push('provider_id = ?'); params.push(String(providerId).trim().toLowerCase()); }
   if (options.capability) { clauses.push('capability = ?'); params.push(String(options.capability).trim()); }
   if (options.scope) { clauses.push('certification_scope = ?'); params.push(String(options.scope).trim().toUpperCase()); }
@@ -10255,12 +10255,12 @@ export async function recordPaymentProductionCertification(chatId, input = {}, a
   const evidenceJson = json(prerequisites);
   const capabilitiesJson = json(requiredCapabilities);
   const fingerprint = crypto.createHash('sha256').update([
-    tenant.organization_id, scope, providerId || '', capabilitiesJson, evidenceJson, status,
+    tenant.organizationId, scope, providerId || '', capabilitiesJson, evidenceJson, status,
   ].join('|')).digest('hex');
   const existing = db.prepare(`
     SELECT * FROM payment_production_certifications
     WHERE organization_id = ? AND certification_scope = ? AND evidence_fingerprint = ?
-  `).get(tenant.organization_id, scope, fingerprint);
+  `).get(tenant.organizationId, scope, fingerprint);
   if (existing) return normalizePaymentProductionCertification(existing);
 
   const now = nowIso();
@@ -10272,7 +10272,7 @@ export async function recordPaymentProductionCertification(chatId, input = {}, a
        reason, certified_by_user_id, observed_at, expires_at, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    id, tenant.organization_id, scope, status, providerId,
+    id, tenant.organizationId, scope, status, providerId,
     capabilitiesJson, evidenceJson, fingerprint, String(input.reason || ''),
     actor?.userId || actor?.id || null, input.observedAt || input.observed_at || now,
     input.expiresAt || input.expires_at || null, now, now,
@@ -10281,7 +10281,7 @@ export async function recordPaymentProductionCertification(chatId, input = {}, a
   audit(String(chatId), 'payment.production_certification.recorded',
     'payment_production_certification', id,
     { certificationScope: scope, status, providerId, evidenceFingerprint: fingerprint },
-    { organizationId: tenant.organization_id, actorId: actor?.userId || actor?.id || null, reason: input.reason || '' });
+    { organizationId: tenant.organizationId, actorId: actor?.userId || actor?.id || null, reason: input.reason || '' });
 
   return normalizePaymentProductionCertification(
     db.prepare('SELECT * FROM payment_production_certifications WHERE id = ?').get(id),
@@ -10293,8 +10293,8 @@ export async function listPaymentProductionCertifications(chatId, scope = null) 
   const tenant = getTenantByChatId(chatId);
   if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
   const rows = scope
-    ? db.prepare('SELECT * FROM payment_production_certifications WHERE organization_id = ? AND certification_scope = ? ORDER BY updated_at DESC, id DESC').all(tenant.organization_id, String(scope).toUpperCase())
-    : db.prepare('SELECT * FROM payment_production_certifications WHERE organization_id = ? ORDER BY updated_at DESC, id DESC').all(tenant.organization_id);
+    ? db.prepare('SELECT * FROM payment_production_certifications WHERE organization_id = ? AND certification_scope = ? ORDER BY updated_at DESC, id DESC').all(tenant.organizationId, String(scope).toUpperCase())
+    : db.prepare('SELECT * FROM payment_production_certifications WHERE organization_id = ? ORDER BY updated_at DESC, id DESC').all(tenant.organizationId);
   return rows.map(normalizePaymentProductionCertification);
 }
 
