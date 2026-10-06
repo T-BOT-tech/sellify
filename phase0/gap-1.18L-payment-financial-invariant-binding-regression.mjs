@@ -38,6 +38,7 @@ const base = {
     status: 'RECEIVED',
   },
   verification: {
+    evidenceId: 'evidence-1',
     result: 'MATCH',
     providerId: 'telebirr',
     observedAmountMinor: 1000,
