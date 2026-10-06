@@ -62,7 +62,7 @@ export function renderPackEntitlementPanel(containerId = 'packEntitlementPanel')
               return `<tr>
                 <td style="vertical-align:top;padding:8px;border-bottom:1px solid var(--line);"><strong>${esc(pack.name)}</strong><div class="hint">${esc(pack.pack_id)}</div></td>
                 <td style="vertical-align:top;padding:8px;border-bottom:1px solid var(--line);">${esc(pack.version)}</td>
-                <td style="vertical-align:top;padding:8px;border-bottom:1px solid var(--line);"><span class="status-badge">${esc(activationLabel(lifecycle))}</span><div class="hint">readiness=${esc(readiness?.code || 'UNKNOWN')} · authority=backend/server.js#handlePackLifecycle</div></td>
+                <td style="vertical-align:top;padding:8px;border-bottom:1px solid var(--line);"><span class="status-badge">${esc(readiness?.state || activationLabel(lifecycle))}</span><div class="hint">readiness=${esc(readiness?.code || 'UNKNOWN')} · authority=backend/server.js#handlePackLifecycle</div></td>
                 <td style="vertical-align:top;padding:8px;border-bottom:1px solid var(--line);">${pack.capabilities.map(esc).join(', ') || '—'}</td>
                 <td style="vertical-align:top;padding:8px;border-bottom:1px solid var(--line);">${pack.permissions.map(esc).join(', ') || '—'}</td>
                 <td style="vertical-align:top;padding:8px;border-bottom:1px solid var(--line);">${roles.map(row => `<div><strong>${esc(row.role)}</strong> · ${esc(row.status)}${row.canonicalRole ? ` → ${esc(row.canonicalRole)}` : ''}</div>`).join('') || '—'}</td>
