@@ -105,7 +105,7 @@ assert.equal(backhaulSignal.transaction, false);
 const depotSignal = deriveDepotThroughputSignal({
   observations: [
     observation,
-    { ...observation, observation_ref: 'OBS-004', throughput_count: 8, demand_count: 12, capacity_count: 6 },
+    { ...observation, observation_ref: 'OBS-004', throughput_count: 8, demand_count: 12, fulfilled_count: 10, capacity_count: 6 },
   ],
 });
 assert.equal(depotSignal.organization_id, 'org-1');
