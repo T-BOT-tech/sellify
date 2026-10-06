@@ -355,7 +355,7 @@ assert.match(storeSource, /'UNPAID','CLAIMED','RECEIVED','PARTIAL'/);
 assert.match(storeSource, /\['VERIFIED','RECONCILED'\]\.includes/);
 assert.match(paymentCoreSource, /getOrderPaymentSummary/);
 assert.ok(server.includes('orders\\/([^/]+)\\/payments\\/summary'), 'tenant-scoped order payment summary route must exist');
-assert.match(serverSource, /payments', 'payments:view'/);
+assert.match(server, /payments', 'payments:view'/);
 
 // Cross-tenant / cross-order isolation certification:
 // payment summaries and payment/refund reads are always constrained by the
