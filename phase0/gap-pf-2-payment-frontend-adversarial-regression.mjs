@@ -280,10 +280,10 @@ assert.doesNotMatch(reservationStates, /CANCELLED/);
 assert.doesNotMatch(reservationStates, /REJECTED/);
 assert.doesNotMatch(reservationStates, /REFUNDED/);
 
-const refundBlock = storeSource.slice(storeSource.indexOf('export async function finalizePaymentRefund'), storeSource.indexOf('export async function getPayment(chatId'));
-assert.match(refundBlock, /state = \\?, updated_at = \\?/);
-assert.match(refundBlock, /'REFUNDED'/);
-assert.match(refundBlock, /fullRefund/);
+const refundFinalBlock = storeSource.slice(storeSource.indexOf('export async function finalizePaymentRefund'), storeSource.indexOf('export async function getPayment(chatId'));
+assert.match(refundFinalBlock, /state = \\?, updated_at = \\?/);
+assert.match(refundFinalBlock, /'REFUNDED'/);
+assert.match(refundFinalBlock, /fullRefund/);
 
 // Order UI financial-status certification: the queue must consume the
 // canonical order-level Payment Core summary rather than infer PAID/PARTIAL/
