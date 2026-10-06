@@ -316,6 +316,7 @@
     "gap-1.18:provider-verification-lifecycle-test": "node phase0/gap-1.18-provider-verification-lifecycle-regression.mjs",
     "gap-1.18:provider-error-taxonomy-test": "node phase0/gap-1.18-provider-error-taxonomy-regression.mjs",
     "gap-1.18:provider-notification-ingestion-test": "node phase0/gap-1-provider-notification-ingestion-boundary-regression.mjs",
+    "gap-1:provider-transaction-correlation-test": "node phase0/gap-1-provider-transaction-confirmation-correlation-regression.mjs",
     "gap-1.18:provider-batch-verification-test": "node phase0/gap-1.18H-provider-batch-verification-regression.mjs",
     "gap-1.18:provider-verification-persistence-test": "node phase0/gap-1.18I-provider-verification-persistence-regression.mjs",
     "gap-1.18:verification-decision-binding-test": "node phase0/gap-1.18J-verification-decision-binding-regression.mjs",
