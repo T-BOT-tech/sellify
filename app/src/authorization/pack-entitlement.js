@@ -4,7 +4,7 @@
 // entitlement state, or a second authorization authority.
 import { config, currentStaff } from '../state.js';
 import { hasPermission } from '../auth/permissions.js';
-import { getPackLifecycle } from '../experience/pack-lifecycle-client.js';
+import { getPackLifecycleSnapshot } from '../experience/pack-lifecycle-client.js';
 import { AGRICULTURE_PACK } from '../verticals/agriculture/pack.js';
 import { RESTAURANT_PACK } from '../verticals/restaurant/pack.js';
 import { WAREHOUSE_PACK } from '../verticals/warehouse/pack.js';
@@ -34,7 +34,7 @@ export function renderPackEntitlementPanel(containerId = 'packEntitlementPanel')
 
   el.innerHTML = '<div class="settings-section-label" style="margin-top:16px;">Pack activation &amp; role entitlement</div><div class="hint">Loading canonical Pack lifecycle state…</div>';
 
-  Promise.allSettled(PACKS.map(async pack => [pack.pack_id, await getPackLifecycle(pack.pack_id)]))
+  Promise.allSettled(PACKS.map(async pack => [pack.pack_id, await getPackLifecycleSnapshot(pack.pack_id)]))
     .then(results => {
       const lifecycles = new Map();
       results.forEach(result => {
@@ -55,7 +55,8 @@ export function renderPackEntitlementPanel(containerId = 'packEntitlementPanel')
               <th style="text-align:left;padding:8px;border-bottom:1px solid var(--line);">Target roles</th>
             </tr></thead>
             <tbody>${PACKS.map(pack => {
-              const lifecycle = lifecycles.get(pack.pack_id) || null;
+              const snapshot = lifecycles.get(pack.pack_id) || null;
+              const lifecycle = snapshot?.lifecycle || null;
               const roles = roleRows(pack.pack_id);
               return `<tr>
                 <td style="vertical-align:top;padding:8px;border-bottom:1px solid var(--line);"><strong>${esc(pack.name)}</strong><div class="hint">${esc(pack.pack_id)}</div></td>
