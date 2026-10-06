@@ -231,7 +231,7 @@ assert.throws(
       },
     ],
   }),
-  /conflicting utilization policy/i,
+  /duplicate utilization allocation is not allowed/i,
 );
 
 assert.throws(
