@@ -23,7 +23,7 @@ for (const permission of ['payments:view', 'payments:accept', 'payments:manage']
 assert.match(server, /handlePaymentRoutingResolve/);
 assert.match(
   server,
-  /handlePaymentRoutingResolve[\\s\\S]*?requireAuthorization\(session, tenant, 'payments', 'payments:view'/
+  /handlePaymentRoutingResolve[\s\S]*?requireAuthorization\(session, tenant, 'payments', 'payments:view'/
 );
 
 // Tenant scope is derived from the authenticated session, not caller-controlled body data.
@@ -350,7 +350,7 @@ assert.match(storeSource, /getOrderPaymentSummary/);
 assert.match(storeSource, /verifiedMinor/);
 assert.match(storeSource, /pendingMinor/);
 assert.match(storeSource, /outstandingMinor/);
-assert.match(storeSource, /state = \\? AND order_id = \\?/);
+assert.match(storeSource, /state = \? AND order_id = \?/);
 assert.match(storeSource, /'UNPAID','CLAIMED','RECEIVED','PARTIAL'/);
 assert.match(storeSource, /'VERIFIED' \|\| 'RECONCILED'/);
 assert.match(paymentCoreSource, /getOrderPaymentSummary/);
