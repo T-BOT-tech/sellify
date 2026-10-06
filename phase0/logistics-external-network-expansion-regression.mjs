@@ -767,7 +767,7 @@ assert.throws(() => assertExternalEvidenceReconciliationBoundary({
 assert.throws(() => assertExternalEvidenceReconciliationBoundary({
   ...matchedReconciliation,
   financial_completion_authority: 'external_adapter',
-}), /payment and settlement/i);
+}), /financial completion/i);
 
 assert.throws(() => assertExternalEvidenceReconciliationBoundary({
   ...matchedReconciliation,
