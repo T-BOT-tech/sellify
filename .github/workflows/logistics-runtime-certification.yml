@@ -1,14 +1,10 @@
 name: Logistics Runtime Certification
 
+# This gate depends on shared tenant/auth/backend contracts, so it must not be skipped by path filtering.
+
 on:
   push:
-    paths:
-      - 'phase0/logistics-**.mjs'
-      - 'app/src/verticals/logistics/**'
-      - 'backend/lib/discovery/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - '.github/workflows/logistics-runtime-certification.yml'
+    branches: [main]
   workflow_dispatch:
 
 jobs:
