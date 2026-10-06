@@ -3,6 +3,8 @@ import fs from 'node:fs';
 
 const server = fs.readFileSync(new URL('../backend/server.js', import.meta.url), 'utf8');
 const client = fs.readFileSync(new URL('../app/src/experience/pack-lifecycle-client.js', import.meta.url), 'utf8');
+const workspace = fs.readFileSync(new URL('../app/src/experience/pack-workspace.js', import.meta.url), 'utf8');
+const entitlement = fs.readFileSync(new URL('../app/src/authorization/pack-entitlement.js', import.meta.url), 'utf8');
 
 assert.match(server, /requestedAction/);
 assert.match(server, /actionTargets/);
@@ -24,5 +26,15 @@ assert.match(client, /action, \.\.\.extra/);
 assert.match(client, /authHeaders\(\)/);
 assert.doesNotMatch(client, /targetState/);
 
+assert.match(workspace, /getPackLifecycle/);
+assert.match(workspace, /Promise\.allSettled/);
+assert.match(workspace, /pack\.state === 'ACTIVE'/);
+assert.doesNotMatch(workspace, /getVerticalPackConfiguration/);
+
+assert.match(entitlement, /getPackLifecycle/);
+assert.match(entitlement, /canonical server Pack lifecycle state/);
+assert.doesNotMatch(entitlement, /getVerticalPackConfiguration/);
+
 console.log('GAP-6.1 intent-based Pack lifecycle API regression: PASS');
 console.log('GAP-6.3 canonical frontend lifecycle client contract: PASS');
+console.log('GAP-6.3 workspace/settings lifecycle authority integration: PASS');
