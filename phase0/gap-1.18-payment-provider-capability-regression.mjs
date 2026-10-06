@@ -13,7 +13,7 @@ for (const id of ['telebirr','cbe','mpesa','boa']) {
   assert.equal(provider.configured, false);
   assert.equal(certification.status, 'UNCONFIGURED');
   assert.equal(certification.liveExternalCertification, false);
-  assert.deepEqual(certification.declaredExecutableCapabilities, []);
+  assert.deepEqual(certification.declaredExecutableCapabilities, ['getMetadata', 'parseEvidence']);
 }
 
 const all = certifyAllPaymentProviders();
