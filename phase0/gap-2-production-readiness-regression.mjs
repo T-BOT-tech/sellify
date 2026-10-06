@@ -28,8 +28,8 @@ assert.match(store, /export async function createDatabaseBackup/);
 assert.match(store, /VACUUM INTO/);
 assert.match(store, /SELLIFY_BACKUP_RETENTION/);
 assert.match(backup, /createDatabaseBackup/);
-assert.match(lifecycle, /BEGIN IMMEDIATE/);
-assert.match(lifecycle, /ROLLBACK/);
+assert.match(store, /BEGIN IMMEDIATE/);
+assert.match(store, /ROLLBACK/);
 
 console.log('GAP-2.12 Production Readiness Regression: PASS');
 console.log('Node 24 runtime floor and GAP-2 CI coverage: PASS');
