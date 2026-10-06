@@ -1,7 +1,7 @@
-// P1-11 — Unified Pack Workspace / Navigation Composition.
-// Composition only: Pack manifests + existing configuration determine which
-// product surfaces are offered. Navigation visibility is not authorization.
-import { config, currentStaff } from '../state.js';
+// P1-11 / GAP-6.3 — Unified Pack Workspace / Navigation Composition.
+// Composition only: Pack manifests determine product surfaces; canonical Pack
+// lifecycle state comes from the server. Navigation visibility is not authorization.
+import { currentStaff } from '../state.js';
 import { getPackLifecycle } from './pack-lifecycle-client.js';
 import { AGRICULTURE_PACK } from '../verticals/agriculture/pack.js';
 import { RESTAURANT_PACK } from '../verticals/restaurant/pack.js';
