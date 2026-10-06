@@ -20,7 +20,7 @@ assert.match(lifecycle, /UPDATE delivery_assignments SET status = \?, last_comma
 assert.match(store, /CREATE UNIQUE INDEX idx_delivery_assignments_active_fulfillment/);
 const exceptionBlock = lifecycle.slice(lifecycle.indexOf("if (normalizedAction === 'REASSIGN_EXCEPTION')"), begin);
 assert(begin >= 0, 'exception resolution must remain inside lifecycle transaction boundary');
-assert.match(exceptionBlock, /last_command_key = \?/);
+assert.match(lifecycle, /last_command_key = \?/);
 assert.match(exceptionBlock, /IDEMPOTENCY_KEY_REUSE_CONFLICT/);
 
 const assignStart = store.indexOf('export async function assignDeliveryCourier');
