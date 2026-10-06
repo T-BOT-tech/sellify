@@ -2648,6 +2648,25 @@ async function handlePackLifecycle(req, res, chatId, packId) {
     }
 
     const current = getPackLifecycle(tenant.organizationId, packId)?.state || 'NOT_INSTALLED';
+    const upgradeStates = new Set(['UPGRADE_AVAILABLE', 'UPGRADE_AUTHORIZATION_REQUIRED', 'UPGRADE_BLOCKED']);
+    if (upgradeStates.has(current) && requestedAction !== 'UPGRADE') {
+      return sendJSON(res, 409, {
+        error: {
+          message: 'Pack upgrade state requires the UPGRADE command',
+          status: 409,
+          code: 'PACK_UPGRADE_COMMAND_REQUIRED',
+        },
+      }, req);
+    }
+    if (requestedAction === 'UPGRADE' && !['UPGRADE_AVAILABLE', 'UPGRADE_AUTHORIZATION_REQUIRED'].includes(current)) {
+      return sendJSON(res, 409, {
+        error: {
+          message: 'No Pack upgrade is currently available',
+          status: 409,
+          code: 'PACK_UPGRADE_NOT_AVAILABLE',
+        },
+      }, req);
+    }
     // The public API exposes user actions, not internal lifecycle evidence/recovery states.
     // Internal states such as ELIGIBLE, DEPENDENCY_BLOCKED, UNKNOWN and RECOVERY_REQUIRED
     // are produced by lifecycle/readiness/recovery boundaries and must not be user-selectable.
