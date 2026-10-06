@@ -23,7 +23,7 @@ assert.match(client, /\/status/);
 assert.match(state, /In-memory frontend projection only/);
 assert.doesNotMatch(state, /localStorage|saveJSON|STORAGE_KEYS/);
 assert.match(ui, /never decides financial outcomes/);
-assert.match(server, /\/tenants\/\(\[\^\/\]\+\)\/payments/);
+assert.ok(server.includes('pattern: /^\\/tenants\\/([^/]+)\\/payments'), 'canonical tenant payment route must exist');
 assert.match(server, /payments:view/);
 assert.match(server, /payments:accept/);
 assert.match(server, /payments:reconcile/);
