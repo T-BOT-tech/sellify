@@ -271,7 +271,7 @@ assert.match(refundSource, /status IN \('PENDING','READY','HELD'\)/);
 
 // Reservation-release certification: terminal/released states must not
 // continue consuming an order's outstanding payment capacity.
-const reservationStates = createPaymentBlock.match(/state IN \\('UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','PARTIAL'\\)/)?.[0] || '';
+const reservationStates = createPaymentBlock.match(/state IN \('UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','PARTIAL'\)/)?.[0] || '';
 assert.match(reservationStates, /UNPAID/);
 assert.match(reservationStates, /PARTIAL/);
 assert.doesNotMatch(reservationStates, /FAILED/);
@@ -360,7 +360,7 @@ assert.match(serverSource, /payments', 'payments:view'/);
 // Cross-tenant / cross-order isolation certification:
 // payment summaries and payment/refund reads are always constrained by the
 // authenticated tenant organization and the requested canonical order.
-assert.match(storeSource, /FROM payments p[\\s\\n]+WHERE p\.organization_id = \? AND p\.order_id = \?/);
+assert.match(storeSource, /FROM payments p[\s\n]+WHERE p\.organization_id = \? AND p\.order_id = \?/);
 assert.match(storeSource, /FROM payment_refunds WHERE payment_id = \? AND organization_id = \?/);
 assert.match(storeSource, /SELECT \* FROM payments WHERE id = \? AND organization_id = \?/);
 assert.match(storeSource, /SELECT \* FROM payment_refunds WHERE id = \? AND organization_id = \?/);
