@@ -5971,14 +5971,17 @@ export async function insertProviderNotificationEvidence(notification = {}) {
 
   const id = String(evidenceInput.id || crypto.randomUUID());
   try {
-    db.prepare("INSERT INTO payment_evidence (id, organization_id, location_id, payment_id, payment_intent_id, provider_id, channel, evidence_type, external_reference, provider_transaction_id, fingerprint, raw_payload_json, normalized_payload_json, source, observed_at, received_at, submitted_by_user_id, status, created_at, updated_at) VALUES (?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 'provider.notification', ?, ?, NULL, 'RECEIVED', ?, ?)").run(
+    db.prepare("INSERT INTO payment_evidence (id, organization_id, location_id, payment_id, payment_intent_id, payment_account_id, provider_id, channel, evidence_type, external_reference, provider_transaction_id, provider_notification_id, authentication_reference, fingerprint, raw_payload_json, normalized_payload_json, source, observed_at, received_at, submitted_by_user_id, status, created_at, updated_at) VALUES (?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'provider.notification', ?, ?, NULL, 'RECEIVED', ?, ?)").run(
       id,
       organizationId,
+      accountRow.id,
       providerId,
       String(evidenceInput.channel || 'notification').trim().toLowerCase(),
       evidenceType,
       evidenceInput.externalReference || evidenceInput.external_reference || null,
       evidenceInput.providerTransactionId || evidenceInput.provider_transaction_id || null,
+      authenticated.notificationId || null,
+      notification.authenticationReference || authenticated.authenticationReference || null,
       fingerprint,
       rawPayload == null ? null : json(rawPayload),
       normalizedPayload == null ? null : json(normalizedPayload),
