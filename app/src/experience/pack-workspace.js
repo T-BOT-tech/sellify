@@ -38,6 +38,7 @@ export function getPackWorkspaceModel(lifecycles = new Map()) {
   return PACKS.map(pack => {
     const snapshot = lifecycles.get(pack.pack_id) || null;
     const lifecycle = snapshot?.lifecycle || null;
+    const readiness = snapshot?.readiness || null;
     const entries = pack.ui_entry_points.map(entry => ({
       entry,
       label: label(entry),
@@ -47,8 +48,9 @@ export function getPackWorkspaceModel(lifecycles = new Map()) {
       packId: pack.pack_id,
       name: pack.name,
       version: pack.version,
-      state: packState(lifecycle),
+      state: readiness?.state === 'DEPENDENCY_BLOCKED' ? 'DEPENDENCY_BLOCKED' : packState(lifecycle),
       lifecycle,
+      readiness,
       enabled: String(lifecycle?.state || '').toUpperCase() === 'ACTIVE',
       capabilities: Object.freeze([...pack.capabilities]),
       entries: Object.freeze(entries),
