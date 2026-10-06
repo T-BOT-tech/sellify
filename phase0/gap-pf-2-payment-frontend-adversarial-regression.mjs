@@ -247,10 +247,10 @@ assert.match(reservationBlock, /MAX\(0, amount_minor/);
 // Refund/reversal certification: accepted payment value must be removed
 // from order-level acceptance when fully refunded or reversed.
 const finalizeRefundStart = refundSource.indexOf('export async function finalizePaymentRefund');
-const refundBlock = refundSource.slice(finalizeRefundStart, finalizeRefundStart + 7000);
-assert.match(refundBlock, /fullRefund/);
-assert.match(refundBlock, /state = \\?, updated_at = \\?/);
-assert.match(refundBlock, /'REFUNDED'/);
+const finalRefundBlock = refundSource.slice(finalizeRefundStart, finalizeRefundStart + 7000);
+assert.match(finalRefundBlock, /fullRefund/);
+assert.match(finalRefundBlock, /state = \\?, updated_at = \\?/);
+assert.match(finalRefundBlock, /'REFUNDED'/);
 assert.match(refundBlock, /REFUND_AMOUNT_EXCEEDS_PAYMENT/);
 assert.match(refundBlock, /entry_type,amount_minor/);
 
