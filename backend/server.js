@@ -145,6 +145,7 @@ import {
 import { AUTHZ, authorize, ROLES, getRolePermissions } from './lib/authorization.js';
 import { assertTenantScope, assertLocationScope } from './lib/tenant-isolation.js';
 import { getPaymentProvider, listPaymentProviders, certifyPaymentProviderCapabilities, certifyAllPaymentProviders } from './lib/payments/provider-registry.js';
+import { PROVIDER_ADAPTERS } from './lib/payments/provider-adapters.js';
 import { PaymentCore } from './lib/payments/payment-core.js';
 import { derivePackLifecycleReadiness } from './lib/pack-lifecycle-readiness.js';
 import { InvariantGate } from './lib/payments/invariant-gate.js';
