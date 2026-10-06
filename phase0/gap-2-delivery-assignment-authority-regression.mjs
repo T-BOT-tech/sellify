@@ -28,7 +28,8 @@ assert.match(server, /logistics:deliveries:assign/);
 assert.match(server, /logistics:deliveries:update_assigned/);
 assert.match(server, /assertCourierOwnsDelivery\(chatId, serverOrderId, session\)/);
 assert.match(server, /Idempotency-Key is required/);
-assert.match(server, /assignmentKey: idempotencyKey/);
+assert.match(store, /last_command_key/);
+assert.match(store, /input\.assignmentKey/);
 
 console.log('GAP-2 Delivery Assignment Authority Regression: PASS');
 console.log('Canonical assignment persistence: PASS');
