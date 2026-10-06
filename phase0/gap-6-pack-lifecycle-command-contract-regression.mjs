@@ -59,8 +59,21 @@ assert.match(packReadiness, /configurationLifecycleDivergence/);
 assert.match(packReadiness, /CONFIG_ENABLED_LIFECYCLE_NOT_ACTIVE/);
 assert.match(packReadiness, /CONFIG_DISABLED_LIFECYCLE_ACTIVE/);
 assert.match(packReadiness, /never converted into an inferred lifecycle mutation/);
+const activationContract = fs.readFileSync(new URL('../app/src/experience/pack-activation-contract.js', import.meta.url), 'utf8');
+const workspace = fs.readFileSync(new URL('../app/src/experience/pack-workspace.js', import.meta.url), 'utf8');
+assert.match(activationContract, /getPackUxStateProjection/);
+assert.match(activationContract, /installed:/);
+assert.match(activationContract, /eligible:/);
+assert.match(activationContract, /active:/);
+assert.match(activationContract, /configured:/);
+assert.match(activationContract, /entitled:/);
+assert.match(activationContract, /operational:/);
+assert.match(workspace, /getPackUxStateProjection/);
+assert.match(workspace, /pack\.ux\.operational/);
 
 const readiness = fs.readFileSync(new URL('../backend/lib/pack-lifecycle-readiness.js', import.meta.url), 'utf8');
 assert.match(readiness, /export function derivePackLifecycleReadiness/);
 assert.match(readiness, /organizationScoped/);
 assert.match(readiness, /DEPENDENCY_BLOCKED/);
+
+console.log('GAP-6.8 distinct Pack UX state projection: PASS');
