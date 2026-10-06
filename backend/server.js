@@ -2630,6 +2630,7 @@ async function handlePackLifecycle(req, res, chatId, packId) {
       ACTIVATE: 'ACTIVE',
       DEACTIVATE: 'DEACTIVATED',
       UPGRADE: 'ACTIVE',
+      RECOVER: 'ELIGIBLE',
     });
     const legacyTarget = String(body.targetState || body.target_state || body.state || '').trim().toUpperCase();
     if (!requestedAction && !legacyTarget) {
@@ -2658,6 +2659,15 @@ async function handlePackLifecycle(req, res, chatId, packId) {
         },
       }, req);
     }
+    if (requestedAction === 'RECOVER' && current !== 'RECOVERY_REQUIRED') {
+      return sendJSON(res, 409, {
+        error: {
+          message: 'Pack recovery is not currently required',
+          status: 409,
+          code: 'PACK_RECOVERY_NOT_REQUIRED',
+        },
+      }, req);
+    }
     if (requestedAction === 'UPGRADE' && !['UPGRADE_AVAILABLE', 'UPGRADE_AUTHORIZATION_REQUIRED'].includes(current)) {
       return sendJSON(res, 409, {
         error: {
@@ -2671,12 +2681,15 @@ async function handlePackLifecycle(req, res, chatId, packId) {
     // Internal states such as ELIGIBLE, DEPENDENCY_BLOCKED, UNKNOWN and RECOVERY_REQUIRED
     // are produced by lifecycle/readiness/recovery boundaries and must not be user-selectable.
     const publicActionStates = new Set(['INSTALLED', 'ACTIVE', 'DEACTIVATED']);
-    if (!publicActionStates.has(targetState)) {
+    const internalCommandTarget = requestedAction === 'RECOVER' && targetState === 'ELIGIBLE';
+    if (!publicActionStates.has(targetState) && !internalCommandTarget) {
       return sendJSON(res, 400, {
         error: { message: 'Unsupported Pack lifecycle API target state', status: 400, code: 'UNSUPPORTED_PACK_LIFECYCLE_API_STATE' },
       }, req);
     }
-    const permission = requestedAction === 'INSTALL' || targetState === 'INSTALLED'
+    const permission = requestedAction === 'RECOVER'
+      ? 'pack:lifecycle:recover'
+      : requestedAction === 'INSTALL' || targetState === 'INSTALLED'
       ? 'pack:lifecycle:install'
       : requestedAction === 'DEACTIVATE' || targetState === 'DEACTIVATED'
         ? 'pack:lifecycle:deactivate'
