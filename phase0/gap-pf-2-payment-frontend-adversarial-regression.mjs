@@ -221,7 +221,7 @@ assert.match(projection, /sequence === paymentStatusSequences\.get\(id\)/);
 const paymentTransitions = storeSource.slice(storeSource.indexOf('const PAYMENT_TRANSITIONS'), storeSource.indexOf('function paymentStateTimestampColumn'));
 assert.match(paymentTransitions, /EXPIRED: new Set\(\['RECEIVED'\]\)/);
 assert.match(paymentTransitions, /CANCELLED: new Set\(\['RECEIVED'\]\)/);
-assert.match(paymentTransitions, /PARTIAL: new Set\(\['RECEIVED','FAILED','REJECTED'\]\)/);
+assert.match(paymentTransitions, /PARTIAL: new Set\(\['PAID','OVERDUE','WRITTEN_OFF','CANCELLED'\]\)/);
 assert.doesNotMatch(paymentTransitions, /PARTIAL: new Set\(\['RECEIVED','VERIFIED'/);
 assert.match(paymentCoreSource, /Late-success recovery is only valid from EXPIRED or CANCELLED/);
 assert.match(paymentCoreSource, /LATE_SUCCESS_CONFIRMATION_REQUIRED/);
