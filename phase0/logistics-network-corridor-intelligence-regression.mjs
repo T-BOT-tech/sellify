@@ -244,7 +244,7 @@ assert.equal(noCapacity.visibility_signal, 'NO_CAPACITY_OBSERVED');
 const networkSnapshot = composeNetworkIntelligenceSnapshot({
   demandSignal,
   backhaulSignal,
-  depotThroughputSignal,
+  depotSignal,
   capacityShortageSignal: shortageSignal,
   serviceAreaGapSignal: serviceAreaSignal,
   recurringDemandSignal: recurringSignal,
@@ -265,7 +265,7 @@ assert.equal(networkSnapshot.assignment_authority, false);
 assert.equal(networkSnapshot.dispatch_authority, false);
 assert.equal(networkSnapshot.demand, demandSignal);
 assert.equal(networkSnapshot.backhaul, backhaulSignal);
-assert.equal(networkSnapshot.depot_throughput, depotThroughputSignal);
+assert.equal(networkSnapshot.depot_throughput, depotSignal);
 assert.equal(networkSnapshot.capacity_shortage, shortageSignal);
 assert.equal(networkSnapshot.service_area_gap, serviceAreaSignal);
 assert.equal(networkSnapshot.recurring_demand, recurringSignal);
@@ -350,7 +350,7 @@ assert.throws(() => networkCorridorIntelligenceClosureGate({
 assert.throws(() => composeNetworkIntelligenceSnapshot({
   demandSignal,
   backhaulSignal: { ...backhaulSignal, organization_id: 'org-2' },
-  depotThroughputSignal,
+  depotSignal,
   capacityShortageSignal: shortageSignal,
   serviceAreaGapSignal: serviceAreaSignal,
   recurringDemandSignal: recurringSignal,
@@ -360,7 +360,7 @@ assert.throws(() => composeNetworkIntelligenceSnapshot({
 assert.throws(() => composeNetworkIntelligenceSnapshot({
   demandSignal,
   backhaulSignal: { ...backhaulSignal, corridor_ref: 'OTHER-CORRIDOR' },
-  depotThroughputSignal,
+  depotSignal,
   capacityShortageSignal: shortageSignal,
   serviceAreaGapSignal: serviceAreaSignal,
   recurringDemandSignal: recurringSignal,
@@ -370,7 +370,7 @@ assert.throws(() => composeNetworkIntelligenceSnapshot({
 assert.throws(() => composeNetworkIntelligenceSnapshot({
   demandSignal,
   backhaulSignal: { ...backhaulSignal, service_profile: 'B2C_DELIVERY' },
-  depotThroughputSignal,
+  depotSignal,
   capacityShortageSignal: shortageSignal,
   serviceAreaGapSignal: serviceAreaSignal,
   recurringDemandSignal: recurringSignal,
