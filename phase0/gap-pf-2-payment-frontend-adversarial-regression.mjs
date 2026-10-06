@@ -350,7 +350,7 @@ assert.match(storeSource, /getOrderPaymentSummary/);
 assert.match(storeSource, /verifiedMinor/);
 assert.match(storeSource, /pendingMinor/);
 assert.match(storeSource, /outstandingMinor/);
-assert.ok(storeSource.includes('state = ? AND order_id = ?'), 'order payment state query must be parameterized');
+assert.ok(storeSource.includes('WHERE p.organization_id = ? AND p.order_id = ?'), 'order payment query must be tenant and order scoped');
 assert.match(storeSource, /'UNPAID','CLAIMED','RECEIVED','PARTIAL'/);
 assert.match(storeSource, /'VERIFIED' \|\| 'RECONCILED'/);
 assert.match(paymentCoreSource, /getOrderPaymentSummary/);
