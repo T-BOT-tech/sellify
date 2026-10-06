@@ -313,6 +313,25 @@ function sendError(res, status, err, req) {
   sendJSON(res, status, { error: { message, status } }, req);
 }
 
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', chunk => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += buffer.length;
+      if (size > 2 * 1024 * 1024) {
+        reject(Object.assign(new Error('Payload too large'), { statusCode: 413 }));
+        req.destroy();
+        return;
+      }
+      chunks.push(buffer);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let data = '';
