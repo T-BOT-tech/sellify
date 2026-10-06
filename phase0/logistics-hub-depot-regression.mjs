@@ -45,7 +45,7 @@ assert.throws(
     location_ref: 'location-1',
     organization_id: 'org-1',
   }),
-  /Unsupported hub/depot node type/,
+  /Unsupported hub\/depot node type/,
 );
 
 const base = {
