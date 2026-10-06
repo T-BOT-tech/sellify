@@ -2,7 +2,7 @@
 // Composition only: Pack manifests determine product surfaces; canonical Pack
 // lifecycle state comes from the server. Navigation visibility is not authorization.
 import { currentStaff } from '../state.js';
-import { getPackLifecycle } from './pack-lifecycle-client.js';
+import { getPackLifecycleSnapshot } from './pack-lifecycle-client.js';
 import { AGRICULTURE_PACK } from '../verticals/agriculture/pack.js';
 import { RESTAURANT_PACK } from '../verticals/restaurant/pack.js';
 import { WAREHOUSE_PACK } from '../verticals/warehouse/pack.js';
@@ -36,7 +36,8 @@ function packState(lifecycle) {
 
 export function getPackWorkspaceModel(lifecycles = new Map()) {
   return PACKS.map(pack => {
-    const lifecycle = lifecycles.get(pack.pack_id) || null;
+    const snapshot = lifecycles.get(pack.pack_id) || null;
+    const lifecycle = snapshot?.lifecycle || null;
     const entries = pack.ui_entry_points.map(entry => ({
       entry,
       label: label(entry),
@@ -64,7 +65,7 @@ export function renderPackWorkspace(containerId = 'fux-pack-workspace') {
   // same surface from the canonical server lifecycle authority. A failed
   // lifecycle read is UNKNOWN rather than a local configuration-derived state.
   renderPackWorkspaceModel(el, getPackWorkspaceModel());
-  Promise.allSettled(PACKS.map(async pack => [pack.pack_id, await getPackLifecycle(pack.pack_id)]))
+  Promise.allSettled(PACKS.map(async pack => [pack.pack_id, await getPackLifecycleSnapshot(pack.pack_id)]))
     .then(results => {
       const lifecycles = new Map();
       results.forEach(result => {
