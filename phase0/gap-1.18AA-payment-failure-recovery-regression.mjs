@@ -11,10 +11,14 @@ function store() {
     async listPaymentAccounts(){return [{id:'acct-aa',providerId:'test-provider',accountIdentifier:'acct-ref',status:'active'}];},
     async createPaymentOperationalAction(c,input){const key=input.idempotencyKey||null;const old=actions.find(a=>a.idempotencyKey===key);if(old)return {action:old,duplicate:true};const a={id:'op-'+(actions.length+1),paymentId:payment.id,actionType:String(input.actionType).toUpperCase(),operation:String(input.operation).toUpperCase(),status:'REQUESTED',idempotencyKey:key};actions.push(a);return {action:a,duplicate:false};},
     async updatePaymentOperationalAction(c,id,patch){const a=actions.find(x=>x.id===id);assert.ok(a);Object.assign(a,patch);return a;},
+    async insertPaymentEvidence(){return {evidence:{id:'evidence-aa'},duplicate:false};},
+    async insertPaymentVerification(){return {verification:{id:'verification-aa'},duplicate:false};},
+    async insertPaymentDecision(){return {decision:{id:'decision-aa',targetState:null}};},
+    async recordPaymentReconciliation(){return {reconciliation:{id:'recon-aa'}};},
     async commitPaymentDecision(){throw new Error('financial mutation during recovery');}
   };
 }
-function core(s){return new PaymentCore({store:s,authorization:()=>true,providerRegistry:{getPaymentProvider(){return {id:'test-provider',capabilities:{getStatus:true},async getStatus(){return {status:'PENDING',amountMinor:1000,currency:'ETB',reference:'ref-aa'};}};}}});}
+function core(s){return new PaymentCore({store:s,authorization:()=>true,providerRegistry:{getPaymentProvider(){return {id:'test-provider',capabilities:{getStatus:true,reconcile:true},async getStatus(){return {status:'PENDING',amountMinor:1000,currency:'ETB',reference:'ref-aa'};},async reconcile(){return {status:'MATCHED',amountMinor:1000,currency:'ETB',reference:'ref-aa'};}};}}});}
 
 test('GAP-1.18AA blocks financial retries',async()=>{const c=core(store());const r=await c.retryOperationalAction({chatId:'c',paymentId:'pay-aa',actionType:'REFUND',idempotencyKey:'r',actor:{userId:'u'}});assert.equal(r.status,'BLOCKED');assert.deepEqual(r.reasonCodes,['MANUAL_REVIEW_REQUIRED']);});
 test('GAP-1.18AA permits only non-mutating recovery retries',async()=>{const c=core(store());const r=await c.retryOperationalAction({chatId:'c',paymentId:'pay-aa',actionType:'STATUS_QUERY',idempotencyKey:'s',actor:{userId:'u'}});assert.equal(r.status,'SUCCEEDED');assert.equal(r.result.payment.state,'EXPIRED');});
