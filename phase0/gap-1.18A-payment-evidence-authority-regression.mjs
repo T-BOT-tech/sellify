@@ -21,6 +21,6 @@ for (const field of [
 
 const paymentCoreSource = await readFile(new URL('../backend/lib/payments/payment-core.js', import.meta.url), 'utf8');
 assert.match(paymentCoreSource, /assertUntrustedPaymentEvidenceShape\(command\)/);
-assert.match(paymentCoreSource, /source: 'caller\\.submitted'/);
+assert.match(paymentCoreSource, /source: 'caller\.submitted'/);
 
 console.log('GAP-1.18A evidence authority regression passed');
