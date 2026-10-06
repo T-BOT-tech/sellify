@@ -350,7 +350,7 @@ assert.throws(() => networkCorridorIntelligenceClosureGate({
 assert.throws(() => composeNetworkIntelligenceSnapshot({
   demandSignal,
   backhaulSignal: { ...backhaulSignal, organization_id: 'org-2' },
-  depotSignal,
+  depotThroughputSignal: depotSignal,
   capacityShortageSignal: shortageSignal,
   serviceAreaGapSignal: serviceAreaSignal,
   recurringDemandSignal: recurringSignal,
@@ -360,7 +360,7 @@ assert.throws(() => composeNetworkIntelligenceSnapshot({
 assert.throws(() => composeNetworkIntelligenceSnapshot({
   demandSignal,
   backhaulSignal: { ...backhaulSignal, corridor_ref: 'OTHER-CORRIDOR' },
-  depotSignal,
+  depotThroughputSignal: depotSignal,
   capacityShortageSignal: shortageSignal,
   serviceAreaGapSignal: serviceAreaSignal,
   recurringDemandSignal: recurringSignal,
@@ -370,7 +370,7 @@ assert.throws(() => composeNetworkIntelligenceSnapshot({
 assert.throws(() => composeNetworkIntelligenceSnapshot({
   demandSignal,
   backhaulSignal: { ...backhaulSignal, service_profile: 'B2C_DELIVERY' },
-  depotSignal,
+  depotThroughputSignal: depotSignal,
   capacityShortageSignal: shortageSignal,
   serviceAreaGapSignal: serviceAreaSignal,
   recurringDemandSignal: recurringSignal,
