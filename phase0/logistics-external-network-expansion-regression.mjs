@@ -684,6 +684,97 @@ assert.throws(() => assertExternalIntegrationLifecycleBoundary({
 }), /provider registry authority/i);
 
 
+const reconciliationBase = {
+  ...inbound,
+  payload: {
+    external_ref: 'EXT-DEL-01',
+    status: 'COMPLETED',
+    evidence_ref: 'EVID-01',
+  },
+};
+
+const matchedReconciliation = normalizeExternalEvidenceReconciliation({
+  inbound_message: reconciliationBase,
+  canonical_reference: 'EXT-DEL-01',
+  canonical_status: 'COMPLETED',
+  canonical_evidence_ref: 'EVID-01',
+});
+assert.equal(matchedReconciliation.reconciliation_outcome, 'MATCHED');
+assert.equal(matchedReconciliation.evidence_authority, 'existing_logistics_evidence_and_proof_boundaries');
+assert.equal(matchedReconciliation.tracking_authority, 'existing_shipment_tracking_boundary');
+assert.equal(matchedReconciliation.fulfillment_authority, 'existing_core_fulfillment');
+assert.equal(matchedReconciliation.financial_completion_authority, 'existing_payment_and_settlement_authority');
+assert.equal(matchedReconciliation.direct_domain_mutation, false);
+assert.equal(assertExternalEvidenceReconciliationBoundary(matchedReconciliation), true);
+assert.equal(
+  buildExternalEvidenceReconciliationDisposition({ reconciliation: matchedReconciliation }).action,
+  'ACCEPT_OBSERVATION',
+);
+
+const newObservation = normalizeExternalEvidenceReconciliation({
+  inbound_message: reconciliationBase,
+});
+assert.equal(newObservation.reconciliation_outcome, 'NEW_OBSERVATION');
+assert.equal(
+  buildExternalEvidenceReconciliationDisposition({ reconciliation: newObservation }).action,
+  'PRESERVE_FOR_CANONICAL_EVIDENCE_PROCESSING',
+);
+
+const conflictingReference = normalizeExternalEvidenceReconciliation({
+  inbound_message: reconciliationBase,
+  canonical_reference: 'DIFFERENT-REF',
+  canonical_status: 'COMPLETED',
+});
+assert.equal(conflictingReference.reconciliation_outcome, 'CONFLICT');
+assert.equal(
+  buildExternalEvidenceReconciliationDisposition({ reconciliation: conflictingReference }).action,
+  'BLOCK_CANONICAL_TRANSITION',
+);
+
+const conflictingStatus = normalizeExternalEvidenceReconciliation({
+  inbound_message: reconciliationBase,
+  canonical_reference: 'EXT-DEL-01',
+  canonical_status: 'IN_TRANSIT',
+});
+assert.equal(conflictingStatus.reconciliation_outcome, 'CONFLICT');
+
+const conflictingEvidence = normalizeExternalEvidenceReconciliation({
+  inbound_message: reconciliationBase,
+  canonical_evidence_ref: 'EVID-DIFFERENT',
+});
+assert.equal(conflictingEvidence.reconciliation_outcome, 'CONFLICT');
+
+assert.throws(() => assertExternalEvidenceReconciliationBoundary({
+  ...matchedReconciliation,
+  direct_domain_mutation: true,
+}), /must not directly mutate/i);
+
+assert.throws(() => assertExternalEvidenceReconciliationBoundary({
+  ...matchedReconciliation,
+  evidence_authority: 'external_adapter',
+}), /existing Logistics evidence/i);
+
+assert.throws(() => assertExternalEvidenceReconciliationBoundary({
+  ...matchedReconciliation,
+  tracking_authority: 'external_adapter',
+}), /existing shipment tracking/i);
+
+assert.throws(() => assertExternalEvidenceReconciliationBoundary({
+  ...matchedReconciliation,
+  fulfillment_authority: 'external_adapter',
+}), /existing Core fulfillment/i);
+
+assert.throws(() => assertExternalEvidenceReconciliationBoundary({
+  ...matchedReconciliation,
+  financial_completion_authority: 'external_adapter',
+}), /payment and settlement/i);
+
+assert.throws(() => assertExternalEvidenceReconciliationBoundary({
+  ...matchedReconciliation,
+  duplicate_reconciliation_store: true,
+}), /duplicate store/i);
+
+
 const matchedHandoff = normalizeExternalCanonicalHandoff({
   reconciliation: matchedReconciliation,
   canonical_target: 'core_fulfillment',
@@ -824,96 +915,5 @@ assert.throws(() => externalNetworkExpansionClosureGate({
 
 console.log('L21.10 External Canonical Handoff Boundary Regression: PASS');
 
-
-
-const reconciliationBase = {
-  ...inbound,
-  payload: {
-    external_ref: 'EXT-DEL-01',
-    status: 'COMPLETED',
-    evidence_ref: 'EVID-01',
-  },
-};
-
-const matchedReconciliation = normalizeExternalEvidenceReconciliation({
-  inbound_message: reconciliationBase,
-  canonical_reference: 'EXT-DEL-01',
-  canonical_status: 'COMPLETED',
-  canonical_evidence_ref: 'EVID-01',
-});
-assert.equal(matchedReconciliation.reconciliation_outcome, 'MATCHED');
-assert.equal(matchedReconciliation.evidence_authority, 'existing_logistics_evidence_and_proof_boundaries');
-assert.equal(matchedReconciliation.tracking_authority, 'existing_shipment_tracking_boundary');
-assert.equal(matchedReconciliation.fulfillment_authority, 'existing_core_fulfillment');
-assert.equal(matchedReconciliation.financial_completion_authority, 'existing_payment_and_settlement_authority');
-assert.equal(matchedReconciliation.direct_domain_mutation, false);
-assert.equal(assertExternalEvidenceReconciliationBoundary(matchedReconciliation), true);
-assert.equal(
-  buildExternalEvidenceReconciliationDisposition({ reconciliation: matchedReconciliation }).action,
-  'ACCEPT_OBSERVATION',
-);
-
-const newObservation = normalizeExternalEvidenceReconciliation({
-  inbound_message: reconciliationBase,
-});
-assert.equal(newObservation.reconciliation_outcome, 'NEW_OBSERVATION');
-assert.equal(
-  buildExternalEvidenceReconciliationDisposition({ reconciliation: newObservation }).action,
-  'PRESERVE_FOR_CANONICAL_EVIDENCE_PROCESSING',
-);
-
-const conflictingReference = normalizeExternalEvidenceReconciliation({
-  inbound_message: reconciliationBase,
-  canonical_reference: 'DIFFERENT-REF',
-  canonical_status: 'COMPLETED',
-});
-assert.equal(conflictingReference.reconciliation_outcome, 'CONFLICT');
-assert.equal(
-  buildExternalEvidenceReconciliationDisposition({ reconciliation: conflictingReference }).action,
-  'BLOCK_CANONICAL_TRANSITION',
-);
-
-const conflictingStatus = normalizeExternalEvidenceReconciliation({
-  inbound_message: reconciliationBase,
-  canonical_reference: 'EXT-DEL-01',
-  canonical_status: 'IN_TRANSIT',
-});
-assert.equal(conflictingStatus.reconciliation_outcome, 'CONFLICT');
-
-const conflictingEvidence = normalizeExternalEvidenceReconciliation({
-  inbound_message: reconciliationBase,
-  canonical_evidence_ref: 'EVID-DIFFERENT',
-});
-assert.equal(conflictingEvidence.reconciliation_outcome, 'CONFLICT');
-
-assert.throws(() => assertExternalEvidenceReconciliationBoundary({
-  ...matchedReconciliation,
-  direct_domain_mutation: true,
-}), /must not directly mutate/i);
-
-assert.throws(() => assertExternalEvidenceReconciliationBoundary({
-  ...matchedReconciliation,
-  evidence_authority: 'external_adapter',
-}), /existing Logistics evidence/i);
-
-assert.throws(() => assertExternalEvidenceReconciliationBoundary({
-  ...matchedReconciliation,
-  tracking_authority: 'external_adapter',
-}), /existing shipment tracking/i);
-
-assert.throws(() => assertExternalEvidenceReconciliationBoundary({
-  ...matchedReconciliation,
-  fulfillment_authority: 'external_adapter',
-}), /existing Core fulfillment/i);
-
-assert.throws(() => assertExternalEvidenceReconciliationBoundary({
-  ...matchedReconciliation,
-  financial_completion_authority: 'external_adapter',
-}), /payment and settlement/i);
-
-assert.throws(() => assertExternalEvidenceReconciliationBoundary({
-  ...matchedReconciliation,
-  duplicate_reconciliation_store: true,
-}), /duplicate store/i);
 
 
