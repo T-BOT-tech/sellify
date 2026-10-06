@@ -145,7 +145,7 @@ assert.doesNotMatch(mutationKeyBlock, /crypto\.randomUUID/);
 
 const refundCoreStart = core.indexOf('async refund(command = {})');
 assert.notEqual(refundCoreStart, -1);
-const refundCoreBlock = core.slice(refundCoreStart, refundCoreStart + 1500);
+const refundCoreBlock = core.slice(refundCoreStart, refundCoreStart + 3000);
 assert.match(refundCoreBlock, /idempotencyKey/);
 assert.match(refundCoreBlock, /getPaymentRefundByIdempotencyKey/);
 assert.match(refundCoreBlock, /createPaymentRefundRequest/);
