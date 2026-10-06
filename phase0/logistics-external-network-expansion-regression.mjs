@@ -1771,6 +1771,7 @@ assert.throws(() => assertExternalCanonicalHandoffBoundary({
   persistence: 'external_handoff_store',
 }), /canonical domain persistence/i);
 
-console.log('L21.10 External Evidence Reconciliation Boundary Regression: PASS');\nconsole.log('L21.9 External Evidence Reconciliation Boundary Regression: PASS');
+console.log('L21.10 External Evidence Reconciliation Boundary Regression: PASS');
+console.log('L21.9 External Evidence Reconciliation Boundary Regression: PASS');
 
 
