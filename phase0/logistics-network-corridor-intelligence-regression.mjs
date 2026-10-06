@@ -244,7 +244,7 @@ assert.equal(noCapacity.visibility_signal, 'NO_CAPACITY_OBSERVED');
 const networkSnapshot = composeNetworkIntelligenceSnapshot({
   demandSignal,
   backhaulSignal,
-  depotSignal,
+  depotThroughputSignal: depotSignal,
   capacityShortageSignal: shortageSignal,
   serviceAreaGapSignal: serviceAreaSignal,
   recurringDemandSignal: recurringSignal,
