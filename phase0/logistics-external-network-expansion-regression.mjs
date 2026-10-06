@@ -809,7 +809,7 @@ const observationHandoff = normalizeExternalCanonicalHandoff({
   transition_ref: 'TRANS-003',
   authorization_scope: 'org-1:logistics:evidence',
 });
-assert.equal(observationHandoff.action, 'CANONICAL_PROCESSING_ELIGIBLE');
+assert.equal(observationHandoff.action, 'OBSERVATION_ONLY');
 
 assert.throws(() => assertExternalCanonicalHandoffBoundary({
   ...matchedHandoff,
