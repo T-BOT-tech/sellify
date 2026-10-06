@@ -20,6 +20,9 @@ assert.match(server, /PACK_UPGRADE_COMMAND_REQUIRED/);
 assert.match(server, /PACK_UPGRADE_NOT_AVAILABLE/);
 assert.match(server, /requestedAction !== 'UPGRADE'/);
 assert.match(server, /requestedAction === 'UPGRADE'/);
+assert.match(server, /RECOVER: 'ELIGIBLE'/);
+assert.match(server, /PACK_RECOVERY_NOT_REQUIRED/);
+assert.match(server, /pack:lifecycle:recover/);
 
 assert.match(client, /export async function getPackLifecycle/);
 assert.match(client, /export async function getPackLifecycleSnapshot/);
@@ -47,6 +50,7 @@ console.log('GAP-6.1 intent-based Pack lifecycle API regression: PASS');
 console.log('GAP-6.3 canonical frontend lifecycle client contract: PASS');
 console.log('GAP-6.3 workspace/settings lifecycle authority integration: PASS');
 console.log('GAP-6.5 explicit upgrade command semantics: PASS');
+console.log('GAP-6.6 Pack recovery command boundary: PASS');
 
 const readiness = fs.readFileSync(new URL('../backend/lib/pack-lifecycle-readiness.js', import.meta.url), 'utf8');
 assert.match(readiness, /export function derivePackLifecycleReadiness/);
