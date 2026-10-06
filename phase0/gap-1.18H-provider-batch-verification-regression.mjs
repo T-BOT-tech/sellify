@@ -14,7 +14,7 @@ const providers = {
       active -= 1;
       calls.push(query.id);
       return {
-        status: 'SUCCESS',
+        status: 'VERIFIED',
         providerId: 'telebirr',
         providerReference: query.id,
         evidence: {
