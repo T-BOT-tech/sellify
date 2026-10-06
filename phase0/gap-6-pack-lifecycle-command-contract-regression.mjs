@@ -17,7 +17,9 @@ assert.match(server, /UNSUPPORTED_PACK_LIFECYCLE_ACTION/);
 assert.match(server, /PACK_LIFECYCLE_ACTION_STATE_MISMATCH/);
 assert.match(server, /transitionPackLifecycle\(chatId, packId, targetState, session/);
 
-assert.match(client, /export function getPackLifecycle/);
+assert.match(client, /export async function getPackLifecycle/);
+assert.match(client, /export async function getPackLifecycleSnapshot/);
+assert.match(client, /data\.readiness/);
 assert.match(client, /export function installPack/);
 assert.match(client, /export function activatePack/);
 assert.match(client, /export function deactivatePack/);
@@ -26,15 +28,22 @@ assert.match(client, /action, \.\.\.extra/);
 assert.match(client, /authHeaders\(\)/);
 assert.doesNotMatch(client, /targetState/);
 
-assert.match(workspace, /getPackLifecycle/);
+assert.match(workspace, /getPackLifecycleSnapshot/);
+assert.match(workspace, /snapshot\?\.readiness/);
 assert.match(workspace, /Promise\.allSettled/);
 assert.match(workspace, /pack\.state === 'ACTIVE'/);
 assert.doesNotMatch(workspace, /getVerticalPackConfiguration/);
 
-assert.match(entitlement, /getPackLifecycle/);
+assert.match(entitlement, /getPackLifecycleSnapshot/);
+assert.match(entitlement, /snapshot\?\.readiness/);
 assert.match(entitlement, /canonical server Pack lifecycle state/);
 assert.doesNotMatch(entitlement, /getVerticalPackConfiguration/);
 
 console.log('GAP-6.1 intent-based Pack lifecycle API regression: PASS');
 console.log('GAP-6.3 canonical frontend lifecycle client contract: PASS');
 console.log('GAP-6.3 workspace/settings lifecycle authority integration: PASS');
+
+const readiness = fs.readFileSync(new URL('../backend/lib/pack-lifecycle-readiness.js', import.meta.url), 'utf8');
+assert.match(readiness, /export function derivePackLifecycleReadiness/);
+assert.match(readiness, /organizationScoped/);
+assert.match(readiness, /DEPENDENCY_BLOCKED/);
