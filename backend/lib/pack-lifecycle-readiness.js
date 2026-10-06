@@ -78,6 +78,52 @@ export function evaluatePackLifecyclePrecondition(packId, targetState) {
   });
 }
 
+export function derivePackLifecycleReadiness(packId, lifecycle = null, context = {}) {
+  const normalized = normalizePackId(packId);
+  const pack = getPackLifecycleManifest(normalized);
+  if (!pack) {
+    return Object.freeze({
+      state: 'UNKNOWN',
+      code: 'PACK_UNKNOWN',
+      eligible: false,
+      active: false,
+      organizationScoped: Boolean(context.organizationId),
+      packId: normalized,
+      packVersion: null,
+      missingDependencies: Object.freeze([]),
+    });
+  }
+
+  const staticReadiness = evaluatePackLifecyclePrecondition(normalized, 'ELIGIBLE');
+  if (!staticReadiness.ok) {
+    return Object.freeze({
+      state: 'DEPENDENCY_BLOCKED',
+      code: staticReadiness.code,
+      eligible: false,
+      active: false,
+      organizationScoped: Boolean(context.organizationId),
+      packId: pack.pack_id,
+      packVersion: pack.version,
+      missingDependencies: Object.freeze([...staticReadiness.missingDependencies]),
+    });
+  }
+
+  const lifecycleState = String(lifecycle?.state || 'NOT_INSTALLED').trim().toUpperCase();
+  const eligible = ['INSTALLED', 'ELIGIBLE', 'ACTIVE', 'DEACTIVATED', 'UPGRADE_AVAILABLE'].includes(lifecycleState);
+  const active = lifecycleState === 'ACTIVE';
+
+  return Object.freeze({
+    state: active ? 'ACTIVE' : eligible ? 'ELIGIBLE' : lifecycleState,
+    code: active ? 'ACTIVE' : eligible ? 'READY' : lifecycleState,
+    eligible,
+    active,
+    organizationScoped: Boolean(context.organizationId),
+    packId: pack.pack_id,
+    packVersion: lifecycle?.packVersion || pack.version,
+    missingDependencies: Object.freeze([]),
+  });
+}
+
 export function assertPackLifecyclePrecondition(packId, targetState) {
   const result = evaluatePackLifecyclePrecondition(packId, targetState);
   if (!result.ok) {
