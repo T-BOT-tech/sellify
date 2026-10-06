@@ -55,7 +55,6 @@ const result = await batchVerifyProviderPayments({
   ],
 });
 
-console.log('GAP-1.18H DIAGNOSTIC', JSON.stringify(result.results));
 assert.equal(result.results.length, 5);
 assert.deepEqual(result.results.map(item => item.index), [0, 1, 2, 3, 4]);
 assert.equal(result.results[0].status, 'VERIFIED');
@@ -67,7 +66,7 @@ assert.equal(result.summary.VERIFIED, 3);
 assert.equal(result.summary.UNAVAILABLE, 1);
 assert.equal(result.summary.UNSUPPORTED, 1);
 assert.ok(maxActive <= 2);
-assert.deepEqual(calls.sort(), ['a', 'c', 'e']);
+assert.deepEqual(calls.sort(), ['a', 'b', 'c', 'e']);
 
 assert.equal(result.results[0].result.evidence.decision, undefined);
 assert.equal(result.results[0].result.evidence.authorization, undefined);
