@@ -251,8 +251,8 @@ const finalRefundBlock = refundSource.slice(finalizeRefundStart, finalizeRefundS
 assert.match(finalRefundBlock, /fullRefund/);
 assert.match(finalRefundBlock, /state = \?, updated_at = \?/);
 assert.match(finalRefundBlock, /'REFUNDED'/);
-assert.match(refundBlock, /REFUND_AMOUNT_EXCEEDS_PAYMENT/);
-assert.match(refundBlock, /entry_type,amount_minor/);
+assert.match(refundSource, /REFUND_AMOUNT_EXCEEDS_PAYMENT/);
+assert.match(finalRefundBlock, /entry_type,amount_minor/);
 
 const transitionText = refundSource.slice(
   refundSource.indexOf('const PAYMENT_TRANSITIONS'),
