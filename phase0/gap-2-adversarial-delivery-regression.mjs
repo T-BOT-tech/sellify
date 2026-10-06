@@ -17,7 +17,7 @@ assert.match(lifecycle, /IDEMPOTENCY_KEY_REUSE_CONFLICT/);
 assert.match(lifecycle, /db\.exec\('COMMIT'\);\n      return existingCommand/);
 assert.match(lifecycle, /last_command_key = \?/);
 assert.match(lifecycle, /UPDATE delivery_assignments SET status = \?, last_command_key = \?/);
-assert.match(lifecycle, /CREATE UNIQUE INDEX idx_delivery_assignments_active_fulfillment/);
+assert.match(store, /CREATE UNIQUE INDEX idx_delivery_assignments_active_fulfillment/);
 const exceptionBlock = lifecycle.slice(lifecycle.indexOf("if (normalizedAction === 'REASSIGN_EXCEPTION')"), begin);
 assert.match(exceptionBlock, /BEGIN IMMEDIATE/);
 assert.match(exceptionBlock, /last_command_key = \?/);
