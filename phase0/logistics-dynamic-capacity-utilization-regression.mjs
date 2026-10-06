@@ -331,17 +331,20 @@ const allProfilesRequest = {
   ],
 };
 
-for (const profile of [
-  'REGIONAL_FREIGHT',
-  'B2B_DISTRIBUTION',
-  'B2C_DELIVERY',
-  'P2P_DELIVERY',
-]) {
+const preferenceWindows = {
+  REGIONAL_FREIGHT: ['2026-10-04T12:30:00Z', '2026-10-04T13:30:00Z'],
+  B2B_DISTRIBUTION: ['2026-10-04T12:30:00Z', '2026-10-04T13:30:00Z'],
+  B2C_DELIVERY: ['2026-10-04T12:30:00Z', '2026-10-04T13:30:00Z'],
+  P2P_DELIVERY: ['2026-10-04T18:30:00Z', '2026-10-04T19:30:00Z'],
+};
+
+for (const profile of Object.keys(preferenceWindows)) {
+  const [preferredStart, preferredEnd] = preferenceWindows[profile];
   const preferred = evaluateDynamicCapacityUtilization({
     request: allProfilesRequest,
     requestedProfile: profile,
-    requestedStart: '2026-10-04T12:30:00Z',
-    requestedEnd: '2026-10-04T13:30:00Z',
+    requestedStart: preferredStart,
+    requestedEnd: preferredEnd,
   });
 
   assert.equal(preferred.evaluation, 'PREFERRED_WINDOW');
