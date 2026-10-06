@@ -361,7 +361,7 @@ assert.match(server, /payments', 'payments:view'/);
 // payment summaries and payment/refund reads are always constrained by the
 // authenticated tenant organization and the requested canonical order.
 assert.match(storeSource, /FROM payments p[\s\n]+WHERE p\.organization_id = \? AND p\.order_id = \?/);
-assert.match(storeSource, /FROM payment_refunds WHERE payment_id = \? AND status = 'SUCCEEDED'/);
+assert.match(storeSource, /FROM payment_refunds r[\s\S]*?r\.payment_id = payments\.id AND r\.organization_id = payments\.organization_id/);
 assert.match(storeSource, /SELECT \* FROM payments WHERE id = \? AND organization_id = \?/);
 assert.match(storeSource, /SELECT \* FROM payment_refunds WHERE id = \? AND organization_id = \?/);
 
