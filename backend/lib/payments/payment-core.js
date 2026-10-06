@@ -869,10 +869,12 @@ export class PaymentCore {
       });
     }
 
-    if (!parsed.accountIdentifier && !parsed.account_identifier) {
-      parsed.accountIdentifier = authenticated.accountIdentifier;
-    }
-    if (parsed.accountIdentifier && String(parsed.accountIdentifier).trim() !== authenticated.accountIdentifier) {
+    const evidence = {
+      ...parsed,
+      providerId: provider.id,
+      accountIdentifier: parsed.accountIdentifier || parsed.account_identifier || authenticated.accountIdentifier,
+    };
+    if (String(evidence.accountIdentifier).trim() !== authenticated.accountIdentifier) {
       throw Object.assign(new Error('Provider evidence account mismatch'), {
         statusCode: 409, code: 'PAYMENT_NOTIFICATION_ACCOUNT_MISMATCH',
       });
@@ -880,7 +882,7 @@ export class PaymentCore {
 
     const recorded = await this.store.insertProviderNotificationEvidence({
       authenticatedContext: authenticated,
-      evidence: parsed,
+      evidence,
       rawPayload: rawNotification,
       authenticationReference: authenticated.notificationId,
     });
