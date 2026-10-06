@@ -2620,9 +2620,27 @@ async function handlePackLifecycle(req, res, chatId, packId) {
 
   if (req.method === 'POST') {
     const body = await readBody(req);
-    const targetState = String(body.targetState || body.target_state || body.state || '').trim().toUpperCase();
-    if (!targetState) {
-      return sendJSON(res, 400, { error: { message: 'targetState is required', status: 400 } }, req);
+    const requestedAction = String(body.action || '').trim().toUpperCase();
+    const actionTargets = Object.freeze({
+      INSTALL: 'INSTALLED',
+      ACTIVATE: 'ACTIVE',
+      DEACTIVATE: 'DEACTIVATED',
+      UPGRADE: 'ACTIVE',
+    });
+    const legacyTarget = String(body.targetState || body.target_state || body.state || '').trim().toUpperCase();
+    if (!requestedAction && !legacyTarget) {
+      return sendJSON(res, 400, { error: { message: 'action is required', status: 400, code: 'PACK_LIFECYCLE_ACTION_REQUIRED' } }, req);
+    }
+    if (requestedAction && !Object.prototype.hasOwnProperty.call(actionTargets, requestedAction)) {
+      return sendJSON(res, 400, {
+        error: { message: 'Unsupported Pack lifecycle action', status: 400, code: 'UNSUPPORTED_PACK_LIFECYCLE_ACTION' },
+      }, req);
+    }
+    const targetState = requestedAction ? actionTargets[requestedAction] : legacyTarget;
+    if (requestedAction && legacyTarget && legacyTarget !== targetState) {
+      return sendJSON(res, 400, {
+        error: { message: 'action and targetState describe different lifecycle intents', status: 400, code: 'PACK_LIFECYCLE_ACTION_STATE_MISMATCH' },
+      }, req);
     }
 
     const current = getPackLifecycle(tenant.organizationId, packId)?.state || 'NOT_INSTALLED';
@@ -2635,13 +2653,15 @@ async function handlePackLifecycle(req, res, chatId, packId) {
         error: { message: 'Unsupported Pack lifecycle API target state', status: 400, code: 'UNSUPPORTED_PACK_LIFECYCLE_API_STATE' },
       }, req);
     }
-    const permission = targetState === 'INSTALLED'
+    const permission = requestedAction === 'INSTALL' || targetState === 'INSTALLED'
       ? 'pack:lifecycle:install'
-      : targetState === 'DEACTIVATED'
+      : requestedAction === 'DEACTIVATE' || targetState === 'DEACTIVATED'
         ? 'pack:lifecycle:deactivate'
-        : (current === 'UPGRADE_AVAILABLE' || current === 'UPGRADE_AUTHORIZATION_REQUIRED' || current === 'UPGRADE_BLOCKED')
+        : requestedAction === 'UPGRADE'
           ? 'pack:lifecycle:upgrade'
-          : 'pack:lifecycle:activate';
+          : (current === 'UPGRADE_AVAILABLE' || current === 'UPGRADE_AUTHORIZATION_REQUIRED' || current === 'UPGRADE_BLOCKED')
+            ? 'pack:lifecycle:upgrade'
+            : 'pack:lifecycle:activate';
 
     await requireAuthorization(session, tenant, 'pack_lifecycle', permission, {
       deniedMessage: 'Pack lifecycle action permission required',
