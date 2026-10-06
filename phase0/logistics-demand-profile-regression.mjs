@@ -52,6 +52,9 @@ for (const serviceProfile of contract.service_profiles) {
     timing: { mode: 'on_demand' },
     payload: { weightKg: 5 },
     capacityRequirements: { vehicleType: 'motorbike' },
+    ...(profile.required_fields.includes('handling_requirements')
+      ? { handlingRequirements: { fragile: false } }
+      : {}),
   });
   assert.equal(result.valid, true);
   assert.equal(result.demand.service_profile, serviceProfile);
