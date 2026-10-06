@@ -131,9 +131,12 @@ function createProviderAdapter(id, name) {
     probeCapability: async ({ capability, context = {} }) => {
       const config = getProviderAdapterConfig(id, context.env || process.env);
       if (!config.configured) {
-        const error = new Error(`${name} is not configured`);
-        error.code = 'PAYMENT_PROVIDER_NOT_CONFIGURED';
-        throw error;
+        return {
+          status: 'UNKNOWN',
+          capability,
+          reasonCodes: ['PAYMENT_PROVIDER_NOT_CONFIGURED'],
+          evidence: { providerId: id, configured: false },
+        };
       }
 
       const path = context.probePath;
