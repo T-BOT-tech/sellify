@@ -5699,6 +5699,7 @@ function paymentEvidenceFromRow(row) {
   return {
     id: row.id, organizationId: row.organization_id, locationId: row.location_id || null,
     paymentId: row.payment_id || null, paymentIntentId: row.payment_intent_id || null,
+    paymentAccountId: row.payment_account_id || null,
     providerId: row.provider_id, channel: row.channel, evidenceType: row.evidence_type,
     externalReference: row.external_reference || null, providerTransactionId: row.provider_transaction_id || null,
     fingerprint: row.fingerprint, rawPayload: parseJSON(row.raw_payload_json, null),
