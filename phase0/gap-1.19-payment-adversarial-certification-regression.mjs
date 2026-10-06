@@ -160,14 +160,17 @@ const pc = core();
   const base = await setup();
   await verify(base);
   const [a, b] = await Promise.all([
-    pc.refund({ chatId: base.chatId, paymentId: base.paymentId, amountMinor: 6000, currency: 'ETB', idempotencyKey: 'ADV-R-1', reason: 'concurrent refund A' }),
-    pc.refund({ chatId: base.chatId, paymentId: base.paymentId, amountMinor: 6000, currency: 'ETB', idempotencyKey: 'ADV-R-2', reason: 'concurrent refund B' }),
+    pc.refund({ chatId: base.chatId, paymentId: base.paymentId, amountMinor: 6000, currency: 'ETB', idempotencyKey: 'ADV-R-1', reason: 'concurrent refund A' })
+      .catch(error => ({ status: 'REJECTED', code: error.code })),
+    pc.refund({ chatId: base.chatId, paymentId: base.paymentId, amountMinor: 6000, currency: 'ETB', idempotencyKey: 'ADV-R-2', reason: 'concurrent refund B' })
+      .catch(error => ({ status: 'REJECTED', code: error.code })),
   ]);
   const refunds = await store.getPaymentRefunds(base.chatId, base.paymentId);
   const succeeded = refunds.filter(item => item.status === 'SUCCEEDED');
   assert.equal(succeeded.reduce((sum, item) => sum + item.amountMinor, 0) <= 10000, true);
   assert.equal((await store.getPayment(base.chatId, base.paymentId)).state === 'REFUNDED', succeeded.reduce((sum, item) => sum + item.amountMinor, 0) === 10000);
-  assert.equal([a.status, b.status].every(status => ['SUCCEEDED', 'UNKNOWN'].includes(status)), true);
+  assert.equal([a.status, b.status].every(status => ['SUCCEEDED', 'UNKNOWN', 'REJECTED'].includes(status)), true);
+   for (const result of [a, b]) if (result.status === 'REJECTED') assert.equal(result.code, 'REFUND_AMOUNT_EXCEEDS_PAYMENT');
 }
 
 {
