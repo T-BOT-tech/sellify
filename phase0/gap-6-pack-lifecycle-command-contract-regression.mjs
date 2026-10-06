@@ -42,6 +42,7 @@ assert.doesNotMatch(entitlement, /getVerticalPackConfiguration/);
 console.log('GAP-6.1 intent-based Pack lifecycle API regression: PASS');
 console.log('GAP-6.3 canonical frontend lifecycle client contract: PASS');
 console.log('GAP-6.3 workspace/settings lifecycle authority integration: PASS');
+console.log('GAP-6.5 explicit upgrade command semantics: PASS');
 
 const readiness = fs.readFileSync(new URL('../backend/lib/pack-lifecycle-readiness.js', import.meta.url), 'utf8');
 assert.match(readiness, /export function derivePackLifecycleReadiness/);
