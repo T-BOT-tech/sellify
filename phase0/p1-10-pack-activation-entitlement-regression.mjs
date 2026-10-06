@@ -17,9 +17,9 @@ assert.equal(getVerticalPackConfiguration({ packId:'warehouse', config:{warehous
 assert.equal(getVerticalPackConfiguration({ packId:'logistics', config:{logisticsEnabled:true} }).enabled, true);
 assert.equal(getVerticalPackConfiguration({ packId:'agriculture', config:{} }).enabled, null);
 const ui = fs.readFileSync(new URL('../app/src/authorization/pack-entitlement.js', import.meta.url), 'utf8');
-assert.match(ui, /Pack configured\/available ≠ organization entitlement ≠ user authorization/);
-assert.match(ui, /canonical server authorization/);
-assert.match(ui, /No executable Pack install\/activate\/deactivate control/);
+assert.match(ui, /Pack lifecycle state ≠ organization entitlement ≠ user authorization/);
+assert.match(ui, /second authorization authority/);
+assert.doesNotMatch(ui, /installPack\(|activatePack\(|deactivatePack\(|upgradePack\(/);
 const html = fs.readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
 assert.match(html, /id="packEntitlementPanel"/);
 console.log('P1-10 pack activation & entitlement regression: PASS');

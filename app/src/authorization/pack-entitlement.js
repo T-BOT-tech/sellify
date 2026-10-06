@@ -43,7 +43,7 @@ export function renderPackEntitlementPanel(containerId = 'packEntitlementPanel')
 
       el.innerHTML = `
         <div class="settings-section-label" style="margin-top:16px;">Pack activation &amp; role entitlement</div>
-        <div class="hint">Lifecycle state is read from the canonical server Pack lifecycle authority. Pack state does not grant user authorization.</div>
+        <div class="hint">Lifecycle state is read from the canonical server Pack lifecycle state. Pack state does not grant user authorization.</div>
         <div style="overflow:auto;margin-top:10px;">
           <table style="width:100%;border-collapse:collapse;min-width:1100px;">
             <thead><tr>

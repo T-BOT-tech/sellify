@@ -1999,7 +1999,7 @@ function runMigrations() {
   // channel configuration and a reference to an external secret, never a raw
   // Telegram bot token. Commerce, inventory, payment, fulfillment and events
   // remain authoritative in their existing domains.
-    if (!applied.includes(40)) {
+    if (!applied.includes(60)) {
     db.exec(`
       CREATE TABLE IF NOT EXISTS marketplace_payment_allocations_v40 (
         id TEXT PRIMARY KEY,
@@ -2022,7 +2022,7 @@ function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_marketplace_payment_allocations_order
         ON marketplace_payment_allocations(marketplace_order_id, status);
     `);
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(40, nowIso());
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(60, nowIso());
   }
 
 if (!applied.includes(39)) {
@@ -2963,7 +2963,7 @@ function assertTelegramStorefrontTransition(currentStatus, nextStatus) {
   }
 }
 
-function getTelegramStorefrontConfig(chatId) {
+export function getTelegramStorefrontConfig(chatId) {
   ensureDatabase();
   const org = db.prepare('SELECT organization_id FROM tenants WHERE chat_id=?').get(String(chatId));
   if (!org?.organization_id) return null;
