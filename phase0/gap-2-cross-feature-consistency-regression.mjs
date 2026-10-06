@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const store = fs.readFileSync(new URL('../backend/lib/store-sqlite.js', import.meta.url), 'utf8');
-const lifecycle = store.slice(store.indexOf('export async function transitionDeliveryAssignment'));
+const lifecycleStart = store.indexOf('export async function transitionDeliveryAssignment');
+const lifecycleEnd = store.indexOf('\nexport async function ', lifecycleStart + 1);
+const lifecycle = store.slice(lifecycleStart, lifecycleEnd === -1 ? store.length : lifecycleEnd);
 const fulfillment = store.slice(store.indexOf('export async function transitionOrderFulfillment'), store.indexOf('export function coreFulfillmentContract'));
 
 assert.match(lifecycle, /db\.exec\('BEGIN IMMEDIATE'\)/);
