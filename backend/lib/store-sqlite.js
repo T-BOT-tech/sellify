@@ -6644,7 +6644,7 @@ export async function getPaymentSettlementByIdempotencyKey(chatId, idempotencyKe
   const db = ensureDatabase();
   const tenant = getTenantByChatId(chatId);
   if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
-  const row = db.prepare('SELECT * FROM payment_settlements WHERE organization_id = ? AND idempotency_key = ?').get(tenant.organization_id, String(idempotencyKey));
+  const row = db.prepare('SELECT * FROM payment_settlements WHERE organization_id = ? AND idempotency_key = ?').get(tenant.organizationId, String(idempotencyKey));
   return row ? normalizePaymentSettlement(row) : null;
 }
 
@@ -6652,12 +6652,12 @@ export async function createPaymentSettlement(chatId, input = {}, actor = null) 
   const db = ensureDatabase();
   const tenant = getTenantByChatId(chatId);
   if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
-  const payment = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(String(input.paymentId), tenant.organization_id);
+  const payment = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(String(input.paymentId), tenant.organizationId);
   if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
 
   const key = String(input.idempotencyKey || input.idempotency_key || '').trim();
   if (!key) throw Object.assign(new Error('Settlement idempotencyKey is required'), { statusCode: 400, code: 'SETTLEMENT_IDEMPOTENCY_REQUIRED' });
-  const existing = db.prepare('SELECT * FROM payment_settlements WHERE organization_id = ? AND idempotency_key = ?').get(tenant.organization_id, key);
+  const existing = db.prepare('SELECT * FROM payment_settlements WHERE organization_id = ? AND idempotency_key = ?').get(tenant.organizationId, key);
   if (existing) return { settlement: normalizePaymentSettlement(existing), duplicate: true };
 
   if (!['VERIFIED','RECONCILED'].includes(String(payment.state).toUpperCase())) {
@@ -6682,7 +6682,7 @@ export async function createPaymentSettlement(chatId, input = {}, actor = null) 
   const now = nowIso();
   const settlement = {
     id: String(input.settlementId || crypto.randomUUID()),
-    organization_id: tenant.organization_id,
+    organization_id: tenant.organizationId,
     payment_id: payment.id,
     provider_id: payment.provider_id,
     idempotency_key: key,
@@ -6705,7 +6705,7 @@ export async function createPaymentSettlement(chatId, input = {}, actor = null) 
   db.prepare(`INSERT INTO payment_settlements
     (id,organization_id,payment_id,provider_id,idempotency_key,gross_amount_minor,provider_fee_minor,sellify_fee_minor,net_amount_minor,currency,status,settlement_reference,reconciliation_id,provider_settlement_reference,evidence_json,reason,created_by_user_id,created_at,updated_at,settled_at)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      settlement.id, tenant.organization_id, payment.id, payment.provider_id, key,
+      settlement.id, tenant.organizationId, payment.id, payment.provider_id, key,
       gross, providerFee, sellifyFee, net, currency, 'PENDING',
       settlement.settlement_reference, settlement.reconciliation_id, settlement.provider_settlement_reference,
       settlement.evidence_json, settlement.reason, settlement.created_by_user_id, now, now, null
@@ -6728,7 +6728,7 @@ export async function finalizePaymentSettlement(chatId, settlementId, input = {}
   const now = nowIso();
   db.exec('BEGIN IMMEDIATE');
   try {
-    const row = db.prepare('SELECT * FROM payment_settlements WHERE id = ? AND organization_id = ?').get(String(settlementId), tenant.organization_id);
+    const row = db.prepare('SELECT * FROM payment_settlements WHERE id = ? AND organization_id = ?').get(String(settlementId), tenant.organizationId);
     if (!row) throw Object.assign(new Error('Settlement not found'), { statusCode: 404, code: 'SETTLEMENT_NOT_FOUND' });
     if (row.status === 'SETTLED' && status !== 'SETTLED') {
       db.exec('COMMIT');
@@ -6744,7 +6744,7 @@ export async function finalizePaymentSettlement(chatId, settlementId, input = {}
       String(input.reason || row.reason || ''),
       now,
       status === 'SETTLED' ? now : row.settled_at,
-      row.id, tenant.organization_id
+      row.id, tenant.organizationId
     );
     audit(String(chatId), `payment.settlement.${status.toLowerCase()}`, row.payment_id, actor?.userId || null, {
       settlementId: row.id, status, grossAmountMinor: row.gross_amount_minor,
@@ -6764,7 +6764,7 @@ export async function listPaymentSettlements(chatId, paymentId, { status = null 
   const tenant = getTenantByChatId(chatId);
   if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
   const rows = db.prepare(`SELECT * FROM payment_settlements WHERE organization_id = ? AND payment_id = ? ${status ? 'AND status = ?' : ''} ORDER BY created_at DESC`).all(
-    tenant.organization_id, paymentId, ...(status ? [String(status).toUpperCase()] : [])
+    tenant.organizationId, paymentId, ...(status ? [String(status).toUpperCase()] : [])
   );
   return rows.map(normalizePaymentSettlement);
 }
