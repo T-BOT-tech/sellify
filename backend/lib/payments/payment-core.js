@@ -887,13 +887,110 @@ export class PaymentCore {
       authenticationReference: authenticated.notificationId,
     });
 
+    const recordedEvidence = recorded?.evidence || recorded;
+    const paymentIntentId = String(recordedEvidence?.paymentIntentId || recordedEvidence?.payment_intent_id || '').trim();
+    if (!paymentIntentId) {
+      return {
+        accepted: true,
+        duplicate: Boolean(recorded?.duplicate),
+        authenticatedContext: authenticated,
+        evidence: recordedEvidence,
+        resolution: { status: 'UNMATCHED' },
+        confirmationAttempt: null,
+        finalization: null,
+      };
+    }
+
+    if (typeof this.store.resolvePaymentIntentForProviderEvidence !== 'function' ||
+        typeof this.store.createPaymentConfirmationAttempt !== 'function' ||
+        typeof this.store.getPaymentConfirmationAttempt !== 'function') {
+      throw Object.assign(new Error('Provider notification confirmation bridge is unavailable'), {
+        statusCode: 503, code: 'PAYMENT_NOTIFICATION_CONFIRMATION_BRIDGE_UNAVAILABLE',
+      });
+    }
+
+    const resolution = await this.store.resolvePaymentIntentForProviderEvidence({
+      providerId: provider.id,
+      accountIdentifier: authenticated.accountIdentifier,
+      providerTransactionId: evidence.providerTransactionId || evidence.provider_transaction_id || '',
+      externalReference: evidence.externalReference || evidence.external_reference || '',
+    });
+
+    if (!resolution.paymentIntent?.id || !resolution.chatId) {
+      return {
+        accepted: true,
+        duplicate: Boolean(recorded?.duplicate),
+        authenticatedContext: authenticated,
+        evidence: recordedEvidence,
+        resolution: { status: resolution.resolutionStatus || 'UNMATCHED' },
+        confirmationAttempt: null,
+        finalization: null,
+      };
+    }
+
+    const confirmationAttempt = await this.store.createPaymentConfirmationAttempt(
+      resolution.chatId,
+      {
+        evidenceId: recordedEvidence.id,
+        paymentIntentId: resolution.paymentIntent.id,
+      },
+      null,
+    );
+
+    const parsedStatus = String(parsed.status || parsed.result || parsed.state || '').trim().toUpperCase();
+    const observationStatus = parsedStatus === 'VERIFIED'
+      ? 'CONFIRMED'
+      : parsedStatus === 'NOT_FOUND'
+        ? 'NOT_FOUND'
+        : parsedStatus === 'FAILED'
+          ? 'FAILED'
+          : parsedStatus === 'EXPIRED'
+            ? 'EXPIRED'
+            : 'PENDING';
+
+    const observed = await this.recordProviderConfirmationObservation({
+      chatId: resolution.chatId,
+      providerId: provider.id,
+      confirmationAttemptId: confirmationAttempt.id,
+      providerTransactionId: evidence.providerTransactionId || evidence.provider_transaction_id || '',
+      status: observationStatus,
+      observation: {
+        ...parsed,
+        providerId: provider.id,
+        providerTransactionId: evidence.providerTransactionId || evidence.provider_transaction_id || null,
+        externalReference: evidence.externalReference || evidence.external_reference || null,
+        observedAt: evidence.observedAt || evidence.observed_at || authenticated.receivedAt,
+        source: 'provider-notification',
+      },
+      reasonCodes: Array.isArray(parsed.reasonCodes) ? parsed.reasonCodes : [],
+      observedAt: evidence.observedAt || evidence.observed_at || authenticated.receivedAt,
+    });
+
+    let finalization = null;
+    if (observed.confirmationAttempt?.status === 'CONFIRMED') {
+      finalization = await this.finalizeProviderConfirmation({
+        chatId: resolution.chatId,
+        confirmationAttemptId: observed.confirmationAttempt.id,
+        idempotencyKey: `provider-notification:${observed.confirmationAttempt.id}`,
+      });
+    }
+
     return {
       accepted: true,
       duplicate: Boolean(recorded?.duplicate),
       authenticatedContext: authenticated,
-      evidence: recorded?.evidence || recorded,
+      evidence: recordedEvidence,
+      resolution: {
+        status: resolution.resolutionStatus || 'MATCHED',
+        chatId: resolution.chatId,
+        organizationId: resolution.organizationId,
+        paymentIntentId: resolution.paymentIntent.id,
+      },
+      confirmationAttempt: observed.confirmationAttempt,
+      finalization,
     };
   }
+
 
   async finalizeProviderConfirmation(command = {}) {
     this.#authorize(command, 'payments:accept');
