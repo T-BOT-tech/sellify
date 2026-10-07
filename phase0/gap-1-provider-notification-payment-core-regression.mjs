@@ -8,7 +8,7 @@ const store = {
     evidence: {
       id: 'evidence-1',
       paymentId: null,
-      paymentIntentId: null,
+      paymentIntentId: 'intent-1',
       providerId: input.authenticatedContext.providerId,
       paymentAccountId: 'account-1',
       providerNotificationId: input.authenticatedContext.notificationId,
@@ -31,10 +31,48 @@ const provider = {
     providerId: 'mpesa',
     accountIdentifier: notification.body.accountIdentifier,
     evidenceType: 'PROVIDER_NOTIFICATION',
+    status: 'VERIFIED',
     providerTransactionId: notification.body.transactionId,
     externalReference: notification.body.reference,
   }),
 };
+
+let attempt = {
+  id: 'attempt-1',
+  paymentIntentId: 'intent-1',
+  paymentId: 'payment-1',
+  paymentAccountId: 'account-1',
+  providerId: 'mpesa',
+  status: 'REQUESTED',
+  providerTransactionId: null,
+  reasonCodes: [],
+  observation: {},
+};
+
+Object.assign(store, {
+  resolvePaymentIntentForProviderEvidence: async () => ({
+    resolutionStatus: 'MATCHED',
+    chatId: 'chat-1',
+    organizationId: 'org-1',
+    paymentIntent: { id: 'intent-1' },
+  }),
+  createPaymentConfirmationAttempt: async () => attempt,
+  getPaymentConfirmationAttempt: async () => attempt,
+  updatePaymentConfirmationAttempt: async (chatId, id, input) => {
+    attempt = { ...attempt, ...input, id };
+    return attempt;
+  },
+  getPayment: async () => ({
+    id: 'payment-1',
+    state: 'UNPAID',
+    providerId: 'mpesa',
+    paymentIntentId: 'intent-1',
+    paymentAccountId: 'account-1',
+  }),
+  getPaymentIntent: async () => ({ id: 'intent-1' }),
+  listPaymentAccounts: async () => [{ id: 'account-1', accountIdentifier: '600001', providerId: 'mpesa' }],
+  commitPaymentDecision: async (chatId, input) => ({ id: 'payment-1', state: input.targetState }),
+});
 
 const core = new PaymentCore({
   store,
@@ -43,6 +81,12 @@ const core = new PaymentCore({
       assert.equal(id, 'mpesa');
       return provider;
     },
+  },
+  invariantGate: {
+    evaluate: () => ({ passed: true, checks: [], reasonCodes: [], hardFailures: [] }),
+  },
+  decisionEngine: {
+    decide: () => ({ decision: 'ACCEPT', targetState: 'VERIFIED', reasonCodes: [] }),
   },
 });
 
@@ -62,9 +106,12 @@ const result = await core.ingestProviderNotification({
 
 assert.equal(result.accepted, true);
 assert.equal(result.evidence.paymentId, null);
-assert.equal(result.evidence.paymentIntentId, null);
+assert.equal(result.evidence.paymentIntentId, 'intent-1');
 assert.equal(result.evidence.providerId, 'mpesa');
 assert.equal(result.evidence.providerNotificationId, 'notif-1');
+assert.equal(result.confirmationAttempt.status, 'CONFIRMED');
+assert.equal(result.finalization.finalized, true);
+assert.equal(result.finalization.payment.state, 'VERIFIED');
 
 const maliciousProvider = {
   ...provider,
