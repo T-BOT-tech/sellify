@@ -895,6 +895,223 @@ export class PaymentCore {
     };
   }
 
+  async finalizeProviderConfirmation(command = {}) {
+    this.#authorize(command, 'payments:accept');
+
+    const requestedChatId = String(command.chatId || '').trim();
+    const attemptId = String(command.confirmationAttemptId || command.confirmation_attempt_id || '').trim();
+    if (!requestedChatId || !attemptId) {
+      throw Object.assign(new Error('chatId and confirmationAttemptId are required'), {
+        statusCode: 400, code: 'CONFIRMATION_FINALIZATION_CONTEXT_REQUIRED',
+      });
+    }
+
+    const attempt = await this.store.getPaymentConfirmationAttempt(requestedChatId, attemptId);
+    if (!attempt) {
+      throw Object.assign(new Error('Confirmation attempt not found'), {
+        statusCode: 404, code: 'CONFIRMATION_ATTEMPT_NOT_FOUND',
+      });
+    }
+
+    if (String(attempt.status || '').toUpperCase() !== 'CONFIRMED') {
+      return {
+        finalized: false,
+        paymentStateMutated: false,
+        financialEffect: false,
+        status: String(attempt.status || 'UNKNOWN').toUpperCase(),
+        reasonCodes: ['CONFIRMATION_NOT_FINALIZABLE'],
+        confirmationAttempt: attempt,
+      };
+    }
+
+    const paymentId = String(attempt.paymentId || attempt.payment_id || '').trim();
+    if (!paymentId) {
+      throw Object.assign(new Error('Confirmation attempt is not bound to a payment'), {
+        statusCode: 409, code: 'CONFIRMATION_PAYMENT_BINDING_REQUIRED',
+      });
+    }
+
+    const payment = await this.store.getPayment(requestedChatId, paymentId);
+    if (!payment) {
+      throw Object.assign(new Error('Payment not found'), {
+        statusCode: 404, code: 'PAYMENT_NOT_FOUND',
+      });
+    }
+
+    if (attempt.providerId && String(attempt.providerId).toLowerCase() !== String(payment.providerId).toLowerCase()) {
+      throw Object.assign(new Error('Confirmation attempt provider does not match payment'), {
+        statusCode: 409, code: 'PROVIDER_MISMATCH',
+      });
+    }
+
+    if (attempt.paymentAccountId && payment.paymentAccountId &&
+        String(attempt.paymentAccountId) !== String(payment.paymentAccountId)) {
+      throw Object.assign(new Error('Confirmation attempt payment account does not match payment'), {
+        statusCode: 409, code: 'PAYMENT_ACCOUNT_BINDING_MISMATCH',
+      });
+    }
+
+    const intent = payment.paymentIntentId
+      ? await this.store.getPaymentIntent(requestedChatId, payment.paymentIntentId)
+      : null;
+    if (!intent) {
+      throw Object.assign(new Error('Payment intent not found'), {
+        statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND',
+      });
+    }
+
+    const accounts = await this.store.listPaymentAccounts(requestedChatId, { status: 'all' });
+    const paymentAccount = accounts.find(account => String(account.id) === String(payment.paymentAccountId));
+    if (!paymentAccount) {
+      throw Object.assign(new Error('Payment account not found'), {
+        statusCode: 404, code: 'PAYMENT_ACCOUNT_NOT_FOUND',
+      });
+    }
+
+    const observation = attempt.observation && typeof attempt.observation === 'object'
+      ? attempt.observation
+      : {};
+    const observedTransactionId = String(
+      attempt.providerTransactionId ||
+      observation.providerTransactionId ||
+      observation.provider_transaction_id ||
+      ''
+    ).trim();
+
+    const evidence = {
+      id: attempt.evidenceId || attempt.evidence_id || null,
+      paymentId,
+      paymentIntentId: intent.id,
+      paymentAccountId: payment.paymentAccountId || attempt.paymentAccountId || null,
+      providerId: payment.providerId,
+      evidenceType: 'PROVIDER_NOTIFICATION',
+      providerTransactionId: observedTransactionId || null,
+      externalReference: observation.externalReference || observation.external_reference || null,
+      observedAt: attempt.observedAt || observation.observedAt || observation.observed_at || null,
+      normalizedPayload: observation,
+      source: 'provider-notification',
+    };
+
+    const verification = {
+      result: 'VERIFIED',
+      confidence: observation.confidence == null ? null : Number(observation.confidence),
+      observedAmountMinor: observation.amountMinor ?? observation.amount_minor ?? observation.observedAmountMinor ?? observation.observed_amount_minor ?? null,
+      observedCurrency: observation.currency || observation.observedCurrency || observation.observed_currency || null,
+      observedReceiver: observation.receiver || observation.observedReceiver || observation.observed_receiver || null,
+      observedReceiverAccount: observation.receiverAccount || observation.receiver_account || observation.observedReceiverAccount || observation.observed_receiver_account || paymentAccount.accountIdentifier || null,
+      observedReference: evidence.externalReference,
+      observedTransactionId,
+      observedAt: evidence.observedAt,
+      rawResult: observation,
+      reasonCodes: Array.isArray(attempt.reasonCodes) ? attempt.reasonCodes : [],
+      paymentId,
+      paymentIntentId: intent.id,
+      evidenceId: evidence.id,
+      providerId: payment.providerId,
+    };
+
+    const invariants = this.invariantGate
+      ? this.invariantGate.evaluate({
+          payment,
+          paymentIntent: intent,
+          paymentAccount,
+          evidence,
+          verification,
+          now: this.clock(),
+        })
+      : { passed: true, checks: [], reasonCodes: [], hardFailures: [] };
+
+    const decision = this.decisionEngine
+      ? this.decisionEngine.decide({ verification, invariants, payment })
+      : {
+          decision: invariants.passed ? 'ACCEPT' : 'RETRY_VERIFICATION',
+          targetState: invariants.passed ? 'VERIFIED' : null,
+          reasonCodes: invariants.passed ? [] : (invariants.reasonCodes || []),
+        };
+
+    if (!decision.targetState) {
+      const persistedVerificationResult = await this.store.insertPaymentVerification(requestedChatId, {
+        paymentId,
+        paymentIntentId: intent.id,
+        evidenceId: evidence.id,
+        providerId: payment.providerId,
+        ...verification,
+        result: 'PENDING',
+        reasonCodes: decision.reasonCodes,
+        verifier: 'payment-core.provider-notification',
+        verifierVersion: '1',
+      }, command.actor || null);
+      const persistedVerification = persistedVerificationResult.verification || persistedVerificationResult;
+      const persistedDecision = await this.store.insertPaymentDecision(requestedChatId, {
+        paymentId,
+        paymentIntentId: intent.id,
+        evidenceId: evidence.id,
+        verificationId: persistedVerification.id,
+        decision: decision.decision,
+        targetState: null,
+        reasonCodes: decision.reasonCodes,
+        invariantResults: invariants,
+        decisionSource: 'PAYMENT_CORE',
+      }, command.actor || null);
+
+      return {
+        finalized: false,
+        paymentStateMutated: false,
+        financialEffect: false,
+        payment,
+        confirmationAttempt: attempt,
+        verification: persistedVerification,
+        decision: persistedDecision,
+        invariants,
+      };
+    }
+
+    const committed = await this.store.commitPaymentDecision(requestedChatId, {
+      paymentId,
+      expectedState: payment.state,
+      targetState: decision.targetState,
+      idempotencyKey: String(
+        command.idempotencyKey ||
+        command.idempotency_key ||
+        `provider-confirmation:${attempt.id}`
+      ).trim(),
+      verification: {
+        paymentIntentId: intent.id,
+        evidenceId: evidence.id,
+        providerId: payment.providerId,
+        ...verification,
+        verifier: 'payment-core.provider-notification',
+        verifierVersion: '1',
+      },
+      decision: {
+        paymentIntentId: intent.id,
+        evidenceId: evidence.id,
+        decision: decision.decision,
+        targetState: decision.targetState,
+        reasonCodes: decision.reasonCodes,
+        invariantResults: invariants,
+        decisionSource: 'PAYMENT_CORE',
+        entryType: decision.targetState,
+        metadata: {
+          confirmationAttemptId: attempt.id,
+          providerTransactionId: observedTransactionId || null,
+          source: 'provider-notification',
+        },
+      },
+    }, command.actor || null);
+
+    return {
+      finalized: true,
+      paymentStateMutated: true,
+      financialEffect: true,
+      payment: committed,
+      confirmationAttempt: attempt,
+      verification,
+      decision,
+      invariants,
+    };
+  }
+
   async recordProviderConfirmationObservation(command = {}) {
     this.#authorize(command, 'payments:accept');
     const requestedChatId = String(command.chatId || '').trim();
