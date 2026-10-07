@@ -171,6 +171,7 @@ const paymentCore = new PaymentCore({
     getPaymentConfirmationAttempt,
     getPaymentConfirmationAttemptByProviderTransaction,
     insertPaymentEvidence,
+    insertProviderNotificationEvidence,
     insertPaymentVerification,
     insertPaymentDecision,
     commitPaymentDecision,
@@ -190,20 +191,10 @@ const paymentCore = new PaymentCore({
     recordPaymentProductionCertification,
     listPaymentProductionCertifications,
   },
-  providerRegistry: { getPaymentProvider, certifyPaymentProviderCapabilities, certifyAllPaymentProviders },
+  providerRegistry: { getPaymentProvider, requirePaymentProvider, certifyPaymentProviderCapabilities, certifyAllPaymentProviders },
   invariantGate: new InvariantGate(),
   decisionEngine: new PaymentDecisionEngine(),
 });
-
-const notificationPaymentCore = new PaymentCore({
-  store: {
-    getPaymentAccountForProviderNotification,
-    resolvePaymentIntentForProviderEvidence,
-    insertProviderNotificationEvidence,
-  },
-  providerRegistry: { requirePaymentProvider, getPaymentProvider },
-});
-
 
 // ---------- env-driven config ----------
 
@@ -1888,7 +1879,7 @@ async function handlePaymentProviderNotification(req, res, providerId) {
     });
   }
 
-  const submitted = await notificationPaymentCore.ingestProviderNotification({
+  const submitted = await paymentCore.ingestProviderNotification({
     providerId: provider.id,
     rawRequest: {
       body,
@@ -2156,6 +2147,24 @@ async function handlePaymentRefundHistory(req, res, chatId, paymentId) {
     organizationId: tenant.organizationId,
     actor: session,
   }), req);
+}
+
+async function handlePaymentConfirmationFinalization(req, res, chatId, attemptId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+  await requireAuthorization(session, tenant, 'payments', 'payments:accept', {
+    deniedMessage: 'Payment confirmation permission required',
+  });
+  const body = await readBody(req);
+  const result = await paymentCore.finalizeProviderConfirmation({
+    ...body,
+    chatId,
+    confirmationAttemptId: attemptId,
+    organizationId: tenant.organizationId,
+    actor: session,
+  });
+  return sendJSON(res, result.finalized ? 200 : 202, result, req);
 }
 
 async function handlePaymentLifecycle(req, res, chatId, paymentId) {
@@ -3072,6 +3081,7 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/reconcile$/, handler: (req, res, m) => handlePaymentReconciliation(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/reconciliation$/, handler: (req, res, m) => handlePaymentCoreReconciliation(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/reconciliation$/, handler: (req, res, m) => handlePaymentReconciliationHistory(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/confirmation-attempts\/([^/]+)\/finalize$/, handler: (req, res, m) => handlePaymentConfirmationFinalization(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/status$/, handler: (req, res, m) => handlePaymentStatusQuery(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/lifecycle$/, handler: (req, res, m) => handlePaymentLifecycle(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/refund$/, handler: (req, res, m) => handlePaymentRefund(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
