@@ -53,6 +53,9 @@ jobs:
           node --check backend/backup.js
           node --check phase0/golden-regression.mjs
 
+      - name: J1 business readiness regression
+        run: npm run test:j1-business-readiness
+
       - name: Run baseline regression
         run: npm run phase0:test
 
