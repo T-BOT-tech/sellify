@@ -70,7 +70,7 @@ function runInterruptedRetryScenario() {
     const executeMigration = new Function('db', 'applied', 'nowIso', migrationBlock);
     assert.throws(
       () => executeMigration(db, [], () => '2026-10-09T00:00:00.000Z'),
-      /already exists|there is already an object named/i,
+      /already exists|there is already a (?:table|object) named/i,
       'first attempt should fail after adding columns but before completing index creation'
     );
 
