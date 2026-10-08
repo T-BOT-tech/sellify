@@ -10,8 +10,11 @@ function isSaleableCatalogItem(item) {
     && item.id.trim().length > 0
     && typeof item.name === 'string'
     && item.name.trim().length > 0
-    && Number.isFinite(Number(item.price))
-    && Number(item.price) >= 0;
+    // Product prices are normalized to integer minor units by the
+    // existing storage migration; do not coerce null/blank strings to zero.
+    && typeof item.price === 'number'
+    && Number.isFinite(item.price)
+    && item.price >= 0;
 }
 
 export function getBusinessReadiness({ config = {}, catalogItems = [] } = {}) {
