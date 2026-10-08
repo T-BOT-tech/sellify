@@ -2000,14 +2000,7 @@ function runMigrations() {
   // channel configuration and a reference to an external secret, never a raw
   // Telegram bot token. Commerce, inventory, payment, fulfillment and events
   // remain authoritative in their existing domains.
-    // GAP-1.21 — bind payment evidence to canonical PaymentAccount.
-  if (!applied.includes(61)) {
-    const evidenceColumns = db.prepare('PRAGMA table_info(payment_evidence)').all();
-    if (!evidenceColumns.some(column => String(column.name) === 'payment_account_id')) {
-      db.exec('ALTER TABLE payment_evidence ADD COLUMN payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL');
-    }
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(61, nowIso());
-  }
+
 
 
   // GAP-1.22 — durable provider confirmation attempts.
@@ -2357,6 +2350,16 @@ if (!applied.includes(39)) {
       CREATE INDEX IF NOT EXISTS idx_payment_idempotency_expiry ON payment_idempotency_keys(expires_at);
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(45, nowIso());
+  }
+
+  // GAP-1.21 — bind payment evidence to canonical PaymentAccount.
+  // Keep this after migration 45, which creates payment_evidence on fresh databases.
+  if (!applied.includes(61)) {
+    const evidenceColumns = db.prepare('PRAGMA table_info(payment_evidence)').all();
+    if (!evidenceColumns.some(column => String(column.name) === 'payment_account_id')) {
+      db.exec('ALTER TABLE payment_evidence ADD COLUMN payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL');
+    }
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(61, nowIso());
   }
 
   // GAP-1.2 — link existing canonical payments to payment intents.
