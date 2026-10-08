@@ -221,7 +221,7 @@ import { saveWarehouseLocations, addWarehouseLocation, removeWarehouseLocation, 
 import {
   applyWarehouseUI, switchWarehouseSubtab, warehouseActiveSubtab, renderWarehouseInventory,
   renderWarehouseReceiving, renderWarehouseTransactions, txItemMarkup, renderWarehouseLocationsList,
-  warehouseProductOptions, selectWarehouseLocation, openStockAdjustModal, onStockAdjustProductChange, closeStockAdjustModal,
+  warehouseProductOptions, selectWarehouseLocation, openLowStockInventory, clearInventoryFilter, openStockAdjustModal, onStockAdjustProductChange, closeStockAdjustModal,
   saveStockAdjustModal, openReceiveModal, closeReceiveModal, saveReceiveModal, onWarehouseToggle
 } from './warehouse/ui.js';
 import {
@@ -264,7 +264,7 @@ export {
   saveStockTransactions, applyStockChange, saveWarehouseLocations, addWarehouseLocation,
   removeWarehouseLocation, loadOrganizationLocations, selectOrganizationLocation, openOrganizationLocationModal, closeOrganizationLocationModal, saveOrganizationLocationModal, applyWarehouseUI, switchWarehouseSubtab, renderWarehouseInventory,
   renderWarehouseReceiving, renderWarehouseTransactions, txItemMarkup, renderWarehouseLocationsList,
-  warehouseProductOptions, selectWarehouseLocation, openStockAdjustModal, onStockAdjustProductChange, closeStockAdjustModal,
+  warehouseProductOptions, selectWarehouseLocation, openLowStockInventory, clearInventoryFilter, openStockAdjustModal, onStockAdjustProductChange, closeStockAdjustModal,
   saveStockAdjustModal, openReceiveModal, closeReceiveModal, saveReceiveModal, onWarehouseToggle,
   isLogisticsEnabled, nextFulfillmentStatus, isFulfillmentFinal, fulfillmentStatusLabel,
   advanceFulfillmentOrder, selectedFulfillmentType, setSelectedFulfillmentType,

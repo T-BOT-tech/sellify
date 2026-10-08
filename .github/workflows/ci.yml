@@ -53,6 +53,9 @@ jobs:
           node --check backend/backup.js
           node --check phase0/golden-regression.mjs
 
+      - name: J5 canonical low-stock journey regression
+        run: npm run test:j5-canonical-low-stock-journey
+
       - name: Run baseline regression
         run: npm run phase0:test
 
