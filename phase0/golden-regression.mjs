@@ -32,17 +32,30 @@ async function request(method, url, body, headers = {}) {
   let json = null; try { json = text ? JSON.parse(text) : null; } catch {}
   return { response, json, text };
 }
+let stdout = '';
+let stderr = '';
+let lastHealthFailure = 'No health response received';
+
 async function waitForHealth(child) {
   for (let i=0;i<80;i++) {
-    try { const r = await request('GET','/health'); if (r.response.ok) return; } catch {}
-    if (child.exitCode !== null) throw new Error(`server exited with ${child.exitCode}`);
+    try {
+      const r = await request('GET','/health');
+      if (r.response.ok) return;
+      lastHealthFailure = `HTTP ${r.response.status}: ${r.text.slice(0, 500)}`;
+    } catch (error) {
+      lastHealthFailure = `${error?.name || 'Error'}: ${error?.message || String(error)}`;
+    }
+    if (child.exitCode !== null) {
+      throw new Error(`server exited with ${child.exitCode}; last health check: ${lastHealthFailure}`);
+    }
     await sleep(50);
   }
-  throw new Error('server did not become healthy');
+  throw new Error(`server did not become healthy; last health check: ${lastHealthFailure}; stdout:\n${stdout.slice(-4000)}; stderr:\n${stderr.slice(-4000)}`);
 }
 
 const child = spawn(process.execPath, [path.join(backend, 'server.js')], { cwd: root, env, stdio: ['ignore','pipe','pipe'] });
-let stderr=''; child.stderr.on('data', d => stderr += d);
+child.stdout.on('data', d => stdout += d);
+child.stderr.on('data', d => stderr += d);
 try {
   await waitForHealth(child);
   const store = await import(path.join(backend, 'lib/store-sqlite.js'));
