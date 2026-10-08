@@ -22,8 +22,8 @@ const migrations = [...store.matchAll(/if \(!applied\.includes\((\d+)\)\)/g)].ma
 assert.equal(Math.max(...migrations), 63, 'latest migration must remain explicit');
 const migration63 = store.slice(store.indexOf('// GAP-1.23 — durable provider notification identity'), store.indexOf('// GAP-1.2 — link existing canonical payments'));
 assert.match(migration63, /PRAGMA table_info\(payment_evidence\)/, 'migration 63 must inspect existing columns before additive DDL');
-assert.match(migration63, /provider_notification_id[\s\S]*?if \(!evidenceColumns\.some/, 'migration 63 must guard provider notification column creation');
-assert.match(migration63, /authentication_reference[\s\S]*?if \(!evidenceColumns\.some/, 'migration 63 must guard authentication reference column creation');
+assert.match(migration63, /if \(!evidenceColumns\.some\(column => String\(column\.name\) === 'provider_notification_id'\)\)\s*\{\s*db\.exec\('ALTER TABLE payment_evidence ADD COLUMN provider_notification_id TEXT'\);/, 'migration 63 must guard provider notification column creation');
+assert.match(migration63, /if \(!evidenceColumns\.some\(column => String\(column\.name\) === 'authentication_reference'\)\)\s*\{\s*db\.exec\('ALTER TABLE payment_evidence ADD COLUMN authentication_reference TEXT'\);/, 'migration 63 must guard authentication reference column creation');
 assert.match(store, /PRAGMA foreign_keys = ON/);
 assert.match(store, /PRAGMA journal_mode = WAL/);
 assert.match(store, /CREATE TABLE IF NOT EXISTS schema_migrations/);
