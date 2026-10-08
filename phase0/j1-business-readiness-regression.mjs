@@ -24,12 +24,13 @@ assert.equal(catalogOnly.readyToTakeOrders, false);
 assert.equal(catalogOnly.nextAction, 'settings');
 
 const ready = getBusinessReadiness({
-  config: { sellerName: 'Corner Shop', currencyCode: 'ETB' },
+  config: { sellerName: 'Corner Shop', currencyCode: 'ETB', staff: [], printerConfigured: false },
   catalogItems: [{ id: 'item-1' }],
 });
 assert.equal(ready.status, 'ready');
 assert.equal(ready.readyToTakeOrders, true);
 assert.equal(ready.completedSteps, 2);
+assert.equal(ready.steps.length, 2, 'staff and printer setup must not become blockers for the first sale');
 assert.equal(ready.nextAction, 'order');
 assert.equal(ready.financialReadinessCertified, false);
 
