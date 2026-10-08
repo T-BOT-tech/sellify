@@ -42,7 +42,7 @@ async function waitForHealth(child) {
 }
 
 const child = spawn(process.execPath, [path.join(backend, 'server.js')], { cwd: root, env, stdio: ['ignore','pipe','pipe'] });
-let stderr=''; child.stderr.on('data', d => stderr += d);
+let stdout=''; let stderr=''; child.stdout.on('data', d => stdout += d); child.stderr.on('data', d => stderr += d);
 try {
   await waitForHealth(child);
   const store = await import(path.join(backend, 'lib/store-sqlite.js'));
@@ -181,7 +181,7 @@ try {
     let r=await request('POST','/admin/backup'); assert.equal(r.response.status,401);
     r=await request('POST','/admin/backup',undefined,{Authorization:'Bearer phase0-test-backup-token'}); assert.equal(r.response.status,201); assert.ok(r.json.file);
     const backupPath=path.join(dataDir,'backups',r.json.file); backupPathForRestore=backupPath; const info=await stat(backupPath); assert.ok(info.size>0);
-    const db=new DatabaseSync(backupPath); const migrations=db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(x=>x.version); assert.deepEqual(migrations,Array.from({ length: 60 }, (_, index) => index + 1)); const tenantCount=db.prepare('SELECT COUNT(*) AS c FROM tenants').get().c; assert.ok(tenantCount>=2); db.close();
+    const db=new DatabaseSync(backupPath); const migrations=db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(x=>x.version); assert.deepEqual(migrations,Array.from({ length: 63 }, (_, index) => index + 1)); const tenantCount=db.prepare('SELECT COUNT(*) AS c FROM tenants').get().c; assert.ok(tenantCount>=2); db.close();
   });
   await test('backup restore opens and preserves core rows', async () => {
     assert.ok(backupPathForRestore);
@@ -192,7 +192,7 @@ try {
     await writeFile(restorePath, bytes);
     const restored = new DatabaseSync(restorePath);
     const migrations=restored.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(x=>x.version);
-    assert.deepEqual(migrations,Array.from({ length: 60 }, (_, index) => index + 1));
+    assert.deepEqual(migrations,Array.from({ length: 63 }, (_, index) => index + 1));
     assert.ok(restored.prepare('SELECT COUNT(*) AS c FROM tenants').get().c >= 2);
     assert.ok(restored.prepare('SELECT COUNT(*) AS c FROM orders').get().c >= 1);
     restored.close();
@@ -201,14 +201,16 @@ try {
   await test('migration idempotency on second process start', async () => {
     child.kill('SIGTERM'); await new Promise(resolve=>child.once('exit',resolve));
     const second=spawn(process.execPath,[path.join(backend,'server.js')],{cwd:root,env,stdio:['ignore','ignore','pipe']});
-    try { await waitForHealth(second); const db=new DatabaseSync(path.join(dataDir,'sellify.sqlite')); const migrations=db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(x=>x.version); assert.deepEqual(migrations,Array.from({ length: 60 }, (_, index) => index + 1)); db.close(); } finally { second.kill('SIGTERM'); await new Promise(resolve=>second.once('exit',resolve)); }
+    try { await waitForHealth(second); const db=new DatabaseSync(path.join(dataDir,'sellify.sqlite')); const migrations=db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(x=>x.version); assert.deepEqual(migrations,Array.from({ length: 63 }, (_, index) => index + 1)); db.close(); } finally { second.kill('SIGTERM'); await new Promise(resolve=>second.once('exit',resolve)); }
   });
   console.log(`\nPhase 0 Golden Regression: ${results.filter(x=>x[0]==='PASS').length} PASS, 0 FAIL`);
   for (const [status,name] of results) console.log(`${status}  ${name}`);
 } catch (e) {
   console.error(`\nPhase 0 Golden Regression: FAILED`);
+  console.error(`Failure detail: ${e?.stack || e?.message || String(e)}`);
   for (const [status,name,err] of results) console.error(`${status}  ${name}${err ? ` — ${err.message}`:''}`);
-  if (stderr) console.error('\nServer stderr:\n'+stderr);
+  if (stdout) console.error('\nServer stdout (last 4000 chars):\n'+stdout.slice(-4000));
+  if (stderr) console.error('\nServer stderr (last 4000 chars):\n'+stderr.slice(-4000));
   process.exitCode=1;
 } finally {
   if (child.exitCode === null) child.kill('SIGTERM');
