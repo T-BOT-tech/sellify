@@ -42,7 +42,7 @@ async function waitForHealth(child) {
 }
 
 const child = spawn(process.execPath, [path.join(backend, 'server.js')], { cwd: root, env, stdio: ['ignore','pipe','pipe'] });
-let stderr=''; child.stderr.on('data', d => stderr += d);
+let stdout=''; let stderr=''; child.stdout.on('data', d => stdout += d); child.stderr.on('data', d => stderr += d);
 try {
   await waitForHealth(child);
   const store = await import(path.join(backend, 'lib/store-sqlite.js'));
@@ -181,7 +181,7 @@ try {
     let r=await request('POST','/admin/backup'); assert.equal(r.response.status,401);
     r=await request('POST','/admin/backup',undefined,{Authorization:'Bearer phase0-test-backup-token'}); assert.equal(r.response.status,201); assert.ok(r.json.file);
     const backupPath=path.join(dataDir,'backups',r.json.file); backupPathForRestore=backupPath; const info=await stat(backupPath); assert.ok(info.size>0);
-    const db=new DatabaseSync(backupPath); const migrations=db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(x=>x.version); assert.deepEqual(migrations,Array.from({ length: 60 }, (_, index) => index + 1)); const tenantCount=db.prepare('SELECT COUNT(*) AS c FROM tenants').get().c; assert.ok(tenantCount>=2); db.close();
+    const db=new DatabaseSync(backupPath); const migrations=db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(x=>x.version); assert.deepEqual(migrations,Array.from({ length: 63 }, (_, index) => index + 1)); const tenantCount=db.prepare('SELECT COUNT(*) AS c FROM tenants').get().c; assert.ok(tenantCount>=2); db.close();
   });
   await test('backup restore opens and preserves core rows', async () => {
     assert.ok(backupPathForRestore);
