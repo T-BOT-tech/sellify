@@ -56,6 +56,9 @@ jobs:
       - name: J5 canonical low-stock journey regression
         run: npm run test:j5-canonical-low-stock-journey
 
+      - name: J1 business readiness regression
+        run: npm run test:j1-business-readiness
+
       - name: Run baseline regression
         run: npm run phase0:test
 
