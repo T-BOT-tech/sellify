@@ -38,6 +38,8 @@ const invalidCatalog = getBusinessReadiness({
   catalogItems: [
     { id: 'missing-name', name: ' ', price: 100 },
     { id: 'missing-price', name: 'Tea' },
+    { id: 'blank-price', name: 'Juice', price: '' },
+    { id: 'null-price', name: 'Bread', price: null },
     { id: 'bad-price', name: 'Cake', price: Number.NaN },
   ],
 });
