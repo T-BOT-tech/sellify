@@ -2355,10 +2355,16 @@ if (!applied.includes(39)) {
 
 
   // GAP-1.23 — durable provider notification identity and authentication lineage.
+  // Guard each additive column so a partially applied migration can be retried safely.
   if (!applied.includes(63)) {
+    const evidenceColumns = db.prepare('PRAGMA table_info(payment_evidence)').all();
+    if (!evidenceColumns.some(column => String(column.name) === 'provider_notification_id')) {
+      db.exec('ALTER TABLE payment_evidence ADD COLUMN provider_notification_id TEXT');
+    }
+    if (!evidenceColumns.some(column => String(column.name) === 'authentication_reference')) {
+      db.exec('ALTER TABLE payment_evidence ADD COLUMN authentication_reference TEXT');
+    }
     db.exec(`
-      ALTER TABLE payment_evidence ADD COLUMN provider_notification_id TEXT;
-      ALTER TABLE payment_evidence ADD COLUMN authentication_reference TEXT;
       CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_evidence_notification
         ON payment_evidence(organization_id,provider_id,payment_account_id,provider_notification_id)
         WHERE provider_notification_id IS NOT NULL AND trim(provider_notification_id) <> '';
