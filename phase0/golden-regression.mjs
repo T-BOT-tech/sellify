@@ -207,8 +207,10 @@ try {
   for (const [status,name] of results) console.log(`${status}  ${name}`);
 } catch (e) {
   console.error(`\nPhase 0 Golden Regression: FAILED`);
+  console.error(`Failure detail: ${e?.stack || e?.message || String(e)}`);
   for (const [status,name,err] of results) console.error(`${status}  ${name}${err ? ` — ${err.message}`:''}`);
-  if (stderr) console.error('\nServer stderr:\n'+stderr);
+  if (stdout) console.error('\nServer stdout (last 4000 chars):\n'+stdout.slice(-4000));
+  if (stderr) console.error('\nServer stderr (last 4000 chars):\n'+stderr.slice(-4000));
   process.exitCode=1;
 } finally {
   if (child.exitCode === null) child.kill('SIGTERM');
