@@ -49,9 +49,53 @@ function runScenario(existingColumns) {
   }
 }
 
+function runInterruptedRetryScenario() {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sellify-gap123-retry-'));
+  const dbPath = path.join(directory, 'migration-test.sqlite');
+  const db = new DatabaseSync(dbPath);
+  try {
+    db.exec(`
+      CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+      CREATE TABLE payment_evidence (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL,
+        provider_id TEXT NOT NULL,
+        payment_account_id TEXT,
+        evidence_payload TEXT NOT NULL
+      );
+      INSERT INTO payment_evidence (id, organization_id, provider_id, payment_account_id, evidence_payload)
+      VALUES ('evidence-retry', 'org-1', 'provider-1', 'account-1', 'preserve-after-retry');
+      CREATE TABLE uq_payment_evidence_notification (placeholder TEXT);
+    `);
+    const executeMigration = new Function('db', 'applied', 'nowIso', migrationBlock);
+    assert.throws(
+      () => executeMigration(db, [], () => '2026-10-09T00:00:00.000Z'),
+      /already exists|there is already an object named/i,
+      'first attempt should fail after adding columns but before completing index creation'
+    );
+
+    const columnsAfterFailure = db.prepare('PRAGMA table_info(payment_evidence)').all().map(row => row.name);
+    assert.ok(columnsAfterFailure.includes('provider_notification_id'), 'first column addition should persist before index failure');
+    assert.ok(columnsAfterFailure.includes('authentication_reference'), 'second column addition should persist before index failure');
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = 63').get().count, 0, 'failed migration must not record version 63');
+
+    db.exec('DROP TABLE uq_payment_evidence_notification');
+    executeMigration(db, [], () => '2026-10-09T00:00:01.000Z');
+
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = 63').get().count, 1, 'retry must record version 63 exactly once');
+    assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='uq_payment_evidence_notification'").get(), 'retry must create notification index');
+    assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_payment_evidence_auth_reference'").get(), 'retry must create authentication reference index');
+    assert.equal(db.prepare('SELECT evidence_payload FROM payment_evidence WHERE id = ?').get('evidence-retry').evidence_payload, 'preserve-after-retry', 'retry must preserve existing evidence');
+  } finally {
+    db.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+}
+
 runScenario([]);
 runScenario(['provider_notification_id']);
 runScenario(['authentication_reference']);
 runScenario(['provider_notification_id', 'authentication_reference']);
+runInterruptedRetryScenario();
 console.log('GAP-1.23 Migration Retry Runtime Regression: PASS');
-console.log('Fresh schema, either partial-column state, both existing columns, indexes, version recording, and evidence preservation: PASS');
+console.log('Fresh schema, partial-column states, interrupted migration retry, indexes, version recording, and evidence preservation: PASS');
