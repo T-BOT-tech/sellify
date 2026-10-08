@@ -125,6 +125,7 @@ export function applyBusinessModelUI() {
 }
 
 export function openSettings() {
+  currencySelectionTouched = false;
   document.getElementById('setSellerName').value = config.sellerName || '';
   document.getElementById('setSyncUrl').value = config.syncUrl || '';
   document.getElementById('setLang').value = getLang();
@@ -342,7 +343,10 @@ export async function saveStorefrontBranding() {
   }
 }
 
+let currencySelectionTouched = false;
+
 export function onCurrencyCodeChange() {
+  currencySelectionTouched = true;
   const codeSel = document.getElementById('setCurrencyCode');
   const symInput = document.getElementById('setCurrencySymbol');
   symInput.style.display = (codeSel.value === 'CUSTOM') ? 'block' : 'none';
@@ -352,6 +356,9 @@ export function saveSettings() {
   const codeSel = document.getElementById('setCurrencyCode');
   const symInput = document.getElementById('setCurrencySymbol');
   const isCustom = codeSel.value === 'CUSTOM';
+  const currencySelectionValid = isCustom
+    ? symInput.value.trim().length > 0
+    : typeof codeSel.value === 'string' && codeSel.value.trim().length > 0;
 
   const nicheSel = document.getElementById('setNiche');
   const modelSel = document.getElementById('setBusinessModel');
@@ -364,6 +371,7 @@ export function saveSettings() {
     niche: nicheSel ? nicheSel.value : (config.niche || ''),
     currencyCode: isCustom ? 'CUSTOM' : codeSel.value,
     currencySymbol: isCustom ? symInput.value.trim() : '',
+    currencyConfirmed: currencySelectionTouched ? currencySelectionValid : config.currencyConfirmed === true,
     paymentMethods: config.paymentMethods,
     wholesaleEnabled: !!(document.getElementById('setWholesaleEnabled') && document.getElementById('setWholesaleEnabled').checked),
     volumeDiscountEnabled: !!(document.getElementById('setVolumeDiscountEnabled') && document.getElementById('setVolumeDiscountEnabled').checked),
