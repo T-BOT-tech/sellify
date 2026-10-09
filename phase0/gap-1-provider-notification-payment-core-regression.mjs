@@ -2,9 +2,13 @@ import assert from 'node:assert/strict';
 
 const { PaymentCore } = await import('../backend/lib/payments/payment-core.js');
 
+let returnDuplicateEvidence = false;
+const financialCommits = new Map();
+let financialCommitCalls = 0;
+const financialCommitKeys = [];
 const store = {
   insertProviderNotificationEvidence: async input => ({
-    duplicate: false,
+    duplicate: returnDuplicateEvidence,
     evidence: {
       id: 'evidence-1',
       paymentId: null,
@@ -71,7 +75,16 @@ Object.assign(store, {
   }),
   getPaymentIntent: async () => ({ id: 'intent-1' }),
   listPaymentAccounts: async () => [{ id: 'account-1', accountIdentifier: '600001', providerId: 'mpesa' }],
-  commitPaymentDecision: async (chatId, input) => ({ id: 'payment-1', state: input.targetState }),
+  commitPaymentDecision: async (chatId, input) => {
+    financialCommitCalls += 1;
+    financialCommitKeys.push(input.idempotencyKey);
+    if (financialCommits.has(input.idempotencyKey)) {
+      return { ...financialCommits.get(input.idempotencyKey), duplicate: true };
+    }
+    const committed = { id: 'payment-1', state: input.targetState };
+    financialCommits.set(input.idempotencyKey, committed);
+    return committed;
+  },
 });
 
 const core = new PaymentCore({
@@ -112,6 +125,36 @@ assert.equal(result.evidence.providerNotificationId, 'notif-1');
 assert.equal(result.confirmationAttempt.status, 'CONFIRMED');
 assert.equal(result.finalization.finalized, true);
 assert.equal(result.finalization.payment.state, 'VERIFIED');
+
+assert.equal(financialCommitCalls, 1, 'first authenticated notification should commit once');
+assert.equal(financialCommitKeys[0], 'provider-notification:attempt-1');
+
+// An exact provider notification replay may re-enter the recovery path, but the
+// stable confirmation-attempt idempotency key must prevent a second financial
+// transition. Model the durable store's idempotency contract explicitly.
+returnDuplicateEvidence = true;
+const replayResult = await core.ingestProviderNotification({
+  providerId: 'mpesa',
+  rawRequest: {
+    body: {
+      notificationId: 'notif-1',
+      accountIdentifier: '600001',
+      transactionId: 'TX-42',
+      reference: 'ORDER-42',
+    },
+    rawBody: Buffer.from('raw'),
+    headers: {},
+  },
+});
+assert.equal(replayResult.duplicate, true, 'exact notification replay should be identified');
+assert.equal(replayResult.finalization.finalized, true, 'replay may re-enter finalization for recovery');
+assert.equal(financialCommitCalls, 2, 'replay may call the idempotent commit boundary again');
+assert.deepEqual(
+  [...new Set(financialCommitKeys)],
+  ['provider-notification:attempt-1'],
+  'replay must reuse the same durable idempotency key'
+);
+assert.equal(financialCommits.size, 1, 'replay must not create a second financial transition');
 
 const maliciousProvider = {
   ...provider,
