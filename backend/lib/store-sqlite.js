@@ -2000,61 +2000,13 @@ function runMigrations() {
   // channel configuration and a reference to an external secret, never a raw
   // Telegram bot token. Commerce, inventory, payment, fulfillment and events
   // remain authoritative in their existing domains.
-    // GAP-1.21 — bind payment evidence to canonical PaymentAccount.
-  if (!applied.includes(61)) {
-    const evidenceColumns = db.prepare('PRAGMA table_info(payment_evidence)').all();
-    if (!evidenceColumns.some(column => String(column.name) === 'payment_account_id')) {
-      db.exec('ALTER TABLE payment_evidence ADD COLUMN payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL');
-    }
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(61, nowIso());
-  }
 
 
-  // GAP-1.22 — durable provider confirmation attempts.
-  if (!applied.includes(62)) {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS payment_confirmation_attempts (
-        id TEXT PRIMARY KEY,
-        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-        payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
-        payment_intent_id TEXT NOT NULL REFERENCES payment_intents(id) ON DELETE CASCADE,
-        evidence_id TEXT NOT NULL REFERENCES payment_evidence(id) ON DELETE CASCADE,
-        payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL,
-        provider_id TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED','PENDING','CONFIRMED','NOT_FOUND','FAILED','EXPIRED','UNKNOWN')),
-        attempt_number INTEGER NOT NULL DEFAULT 1 CHECK (attempt_number > 0),
-        provider_transaction_id TEXT,
-        reason_codes_json TEXT NOT NULL DEFAULT '[]',
-        observation_json TEXT NOT NULL DEFAULT '{}',
-        requested_at TEXT NOT NULL,
-        observed_at TEXT,
-        expires_at TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        UNIQUE(payment_intent_id, evidence_id, attempt_number)
-      );
-      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_org_status ON payment_confirmation_attempts(organization_id,status,updated_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_evidence ON payment_confirmation_attempts(evidence_id,created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_intent ON payment_confirmation_attempts(payment_intent_id,created_at DESC);
-      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_confirmation_attempts_provider_tx ON payment_confirmation_attempts(organization_id,provider_id,payment_account_id,provider_transaction_id) WHERE provider_transaction_id IS NOT NULL AND trim(provider_transaction_id) <> '';
-    `);
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(62, nowIso());
-  }
 
 
-  // GAP-1.23 — durable provider notification identity and authentication lineage.
-  if (!applied.includes(63)) {
-    db.exec(`
-      ALTER TABLE payment_evidence ADD COLUMN provider_notification_id TEXT;
-      ALTER TABLE payment_evidence ADD COLUMN authentication_reference TEXT;
-      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_evidence_notification
-        ON payment_evidence(organization_id,provider_id,payment_account_id,provider_notification_id)
-        WHERE provider_notification_id IS NOT NULL AND trim(provider_notification_id) <> '';
-      CREATE INDEX IF NOT EXISTS idx_payment_evidence_auth_reference
-        ON payment_evidence(organization_id,provider_id,payment_account_id,authentication_reference);
-    `);
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(63, nowIso());
-  }
+
+
+
 
   if (!applied.includes(60)) {
     db.exec(`
@@ -2357,6 +2309,69 @@ if (!applied.includes(39)) {
       CREATE INDEX IF NOT EXISTS idx_payment_idempotency_expiry ON payment_idempotency_keys(expires_at);
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(45, nowIso());
+  }
+
+  // GAP-1.21 — bind payment evidence to canonical PaymentAccount.
+  // Keep this after migration 45, which creates payment_evidence on fresh databases.
+  if (!applied.includes(61)) {
+    const evidenceColumns = db.prepare('PRAGMA table_info(payment_evidence)').all();
+    if (!evidenceColumns.some(column => String(column.name) === 'payment_account_id')) {
+      db.exec('ALTER TABLE payment_evidence ADD COLUMN payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL');
+    }
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(61, nowIso());
+  }
+
+
+  // GAP-1.22 — durable provider confirmation attempts.
+  if (!applied.includes(62)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS payment_confirmation_attempts (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
+        payment_intent_id TEXT NOT NULL REFERENCES payment_intents(id) ON DELETE CASCADE,
+        evidence_id TEXT NOT NULL REFERENCES payment_evidence(id) ON DELETE CASCADE,
+        payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL,
+        provider_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED','PENDING','CONFIRMED','NOT_FOUND','FAILED','EXPIRED','UNKNOWN')),
+        attempt_number INTEGER NOT NULL DEFAULT 1 CHECK (attempt_number > 0),
+        provider_transaction_id TEXT,
+        reason_codes_json TEXT NOT NULL DEFAULT '[]',
+        observation_json TEXT NOT NULL DEFAULT '{}',
+        requested_at TEXT NOT NULL,
+        observed_at TEXT,
+        expires_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(payment_intent_id, evidence_id, attempt_number)
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_org_status ON payment_confirmation_attempts(organization_id,status,updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_evidence ON payment_confirmation_attempts(evidence_id,created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_intent ON payment_confirmation_attempts(payment_intent_id,created_at DESC);
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_confirmation_attempts_provider_tx ON payment_confirmation_attempts(organization_id,provider_id,payment_account_id,provider_transaction_id) WHERE provider_transaction_id IS NOT NULL AND trim(provider_transaction_id) <> '';
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(62, nowIso());
+  }
+
+
+  // GAP-1.23 — durable provider notification identity and authentication lineage.
+  // Guard each additive column so a partially applied migration can be retried safely.
+  if (!applied.includes(63)) {
+    const evidenceColumns = db.prepare('PRAGMA table_info(payment_evidence)').all();
+    if (!evidenceColumns.some(column => String(column.name) === 'provider_notification_id')) {
+      db.exec('ALTER TABLE payment_evidence ADD COLUMN provider_notification_id TEXT');
+    }
+    if (!evidenceColumns.some(column => String(column.name) === 'authentication_reference')) {
+      db.exec('ALTER TABLE payment_evidence ADD COLUMN authentication_reference TEXT');
+    }
+    db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_evidence_notification
+        ON payment_evidence(organization_id,provider_id,payment_account_id,provider_notification_id)
+        WHERE provider_notification_id IS NOT NULL AND trim(provider_notification_id) <> '';
+      CREATE INDEX IF NOT EXISTS idx_payment_evidence_auth_reference
+        ON payment_evidence(organization_id,provider_id,payment_account_id,authentication_reference);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(63, nowIso());
   }
 
   // GAP-1.2 — link existing canonical payments to payment intents.
@@ -3079,6 +3094,11 @@ export async function upsertTelegramStorefrontConfig(chatId, input = {}, actor =
   } catch (e) { db.exec('ROLLBACK'); throw e; }
   return getTelegramStorefrontConfig(chatId);
 }
+
+
+
+
+
 
 
 export async function verifyTelegramStorefront(chatId, actor = null) {
