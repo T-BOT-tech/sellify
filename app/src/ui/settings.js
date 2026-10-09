@@ -343,12 +343,6 @@ export async function saveStorefrontBranding() {
   }
 }
 
-export function onCurrencyCodeChange() {
-  const codeSel = document.getElementById('setCurrencyCode');
-  const symInput = document.getElementById('setCurrencySymbol');
-  symInput.style.display = (codeSel.value === 'CUSTOM') ? 'block' : 'none';
-}
-
 let currencySelectionTouched = false;
 
 export function onCurrencyCodeChange() {
