@@ -2,9 +2,13 @@ import assert from 'node:assert/strict';
 
 const { PaymentCore } = await import('../backend/lib/payments/payment-core.js');
 
+let returnDuplicateEvidence = false;
+const financialCommits = new Map();
+let financialCommitCalls = 0;
+const financialCommitKeys = [];
 const store = {
   insertProviderNotificationEvidence: async input => ({
-    duplicate: false,
+    duplicate: returnDuplicateEvidence,
     evidence: {
       id: 'evidence-1',
       paymentId: null,
@@ -71,7 +75,16 @@ Object.assign(store, {
   }),
   getPaymentIntent: async () => ({ id: 'intent-1' }),
   listPaymentAccounts: async () => [{ id: 'account-1', accountIdentifier: '600001', providerId: 'mpesa' }],
-  commitPaymentDecision: async (chatId, input) => ({ id: 'payment-1', state: input.targetState }),
+  commitPaymentDecision: async (chatId, input) => {
+    financialCommitCalls += 1;
+    financialCommitKeys.push(input.idempotencyKey);
+    if (financialCommits.has(input.idempotencyKey)) {
+      return { ...financialCommits.get(input.idempotencyKey), duplicate: true };
+    }
+    const committed = { id: 'payment-1', state: input.targetState };
+    financialCommits.set(input.idempotencyKey, committed);
+    return committed;
+  },
 });
 
 const core = new PaymentCore({
@@ -113,6 +126,36 @@ assert.equal(result.confirmationAttempt.status, 'CONFIRMED');
 assert.equal(result.finalization.finalized, true);
 assert.equal(result.finalization.payment.state, 'VERIFIED');
 
+assert.equal(financialCommitCalls, 1, 'first authenticated notification should commit once');
+assert.equal(financialCommitKeys[0], 'provider-notification:attempt-1');
+
+// An exact provider notification replay may re-enter the recovery path, but the
+// stable confirmation-attempt idempotency key must prevent a second financial
+// transition. Model the durable store's idempotency contract explicitly.
+returnDuplicateEvidence = true;
+const replayResult = await core.ingestProviderNotification({
+  providerId: 'mpesa',
+  rawRequest: {
+    body: {
+      notificationId: 'notif-1',
+      accountIdentifier: '600001',
+      transactionId: 'TX-42',
+      reference: 'ORDER-42',
+    },
+    rawBody: Buffer.from('raw'),
+    headers: {},
+  },
+});
+assert.equal(replayResult.duplicate, true, 'exact notification replay should be identified');
+assert.equal(replayResult.finalization.finalized, true, 'replay may re-enter finalization for recovery');
+assert.equal(financialCommitCalls, 2, 'replay may call the idempotent commit boundary again');
+assert.deepEqual(
+  [...new Set(financialCommitKeys)],
+  ['provider-notification:attempt-1'],
+  'replay must reuse the same durable idempotency key'
+);
+assert.equal(financialCommits.size, 1, 'replay must not create a second financial transition');
+
 const maliciousProvider = {
   ...provider,
   parseEvidence: async () => ({
@@ -135,5 +178,47 @@ await assert.rejects(
   }),
   error => error?.code === 'PAYMENT_NOTIFICATION_AUTHORITY_FIELD_FORBIDDEN'
 );
+
+let postConflictConfirmationCalls = 0;
+const collisionStore = {
+  ...store,
+  insertProviderNotificationEvidence: async () => {
+    throw Object.assign(new Error('Provider notification identity was already used with different evidence'), {
+      statusCode: 409,
+      code: 'PAYMENT_NOTIFICATION_IDENTITY_CONFLICT',
+    });
+  },
+  createPaymentConfirmationAttempt: async (...args) => {
+    postConflictConfirmationCalls += 1;
+    return store.createPaymentConfirmationAttempt(...args);
+  },
+};
+const collisionCore = new PaymentCore({
+  store: collisionStore,
+  providerRegistry: { requirePaymentProvider: () => provider },
+  invariantGate: {
+    evaluate: () => ({ passed: true, checks: [], reasonCodes: [], hardFailures: [] }),
+  },
+  decisionEngine: {
+    decide: () => ({ decision: 'ACCEPT', targetState: 'VERIFIED', reasonCodes: [] }),
+  },
+});
+await assert.rejects(
+  collisionCore.ingestProviderNotification({
+    providerId: 'mpesa',
+    rawRequest: {
+      body: {
+        notificationId: 'notif-1',
+        accountIdentifier: '600001',
+        transactionId: 'TX-CONFLICT',
+        reference: 'ORDER-42',
+      },
+      rawBody: Buffer.from('conflicting-replay'),
+      headers: {},
+    },
+  }),
+  error => error?.statusCode === 409 && error?.code === 'PAYMENT_NOTIFICATION_IDENTITY_CONFLICT'
+);
+assert.equal(postConflictConfirmationCalls, 0, 'identity conflict must stop before confirmation or financial finalization');
 
 console.log('GAP-1 provider notification Payment Core ingestion regression: PASS');
