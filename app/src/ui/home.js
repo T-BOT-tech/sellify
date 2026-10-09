@@ -77,7 +77,7 @@ export function renderSellerHome() {
 
     <div class="seller-home-metrics">
       <button class="home-metric" onclick="switchTab('queue')">
-        <span class="home-metric-label">${t('todaySales')}</span>
+        <span class="home-metric-label">Today’s order value</span>
         <strong>${CS()}${formatMoney(sales, config.currencyCode)}</strong>
       </button>
       <button class="home-metric" onclick="switchTab('queue')">
