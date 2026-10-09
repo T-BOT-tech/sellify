@@ -43,6 +43,30 @@ function runScenario(existingColumns) {
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = 63').get().count, 1, 'migration version must be recorded exactly once');
     assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='uq_payment_evidence_notification'").get(), 'notification uniqueness index must exist');
     assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_payment_evidence_auth_reference'").get(), 'authentication reference index must exist');
+
+    // Verify that the partial unique index enforces provider notification
+    // idempotency within its intended organization/provider/account scope.
+    const insertNotification = db.prepare(
+      'INSERT INTO payment_evidence (id, organization_id, provider_id, payment_account_id, evidence_payload, provider_notification_id) VALUES (?, ?, ?, ?, ?, ?)'
+    );
+    insertNotification.run('notification-1', 'org-1', 'provider-1', 'account-1', 'first', 'notif-1');
+    assert.throws(
+      () => insertNotification.run('notification-duplicate', 'org-1', 'provider-1', 'account-1', 'duplicate', 'notif-1'),
+      /UNIQUE constraint failed/,
+      'same notification identity must be unique within one account scope'
+    );
+    assert.doesNotThrow(
+      () => insertNotification.run('notification-other-account', 'org-1', 'provider-1', 'account-2', 'other-account', 'notif-1'),
+      'same notification ID must be allowed for another payment account'
+    );
+    assert.doesNotThrow(
+      () => insertNotification.run('notification-other-org', 'org-2', 'provider-1', 'account-1', 'other-org', 'notif-1'),
+      'same notification ID must be allowed for another organization'
+    );
+    assert.doesNotThrow(
+      () => insertNotification.run('notification-empty', 'org-1', 'provider-1', 'account-1', 'empty-id', ''),
+      'empty notification IDs must be excluded from the uniqueness boundary'
+    );
   } finally {
     db.close();
     fs.rmSync(directory, { recursive: true, force: true });
