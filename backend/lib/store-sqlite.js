@@ -6104,6 +6104,21 @@ export async function insertProviderNotificationEvidence(notification = {}) {
         'SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND fingerprint = ?'
       ).get(organizationId, providerId, fingerprint);
       if (duplicate) return { evidence: paymentEvidenceFromRow(duplicate), duplicate: true };
+
+      // The provider notification identity is a separate idempotency boundary
+      // from the evidence fingerprint. Reuse with different evidence is a
+      // conflict, not an exact replay and not a raw SQLite error.
+      if (authenticated.notificationId) {
+        const identityCollision = db.prepare(
+          'SELECT id FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND payment_account_id = ? AND provider_notification_id = ?'
+        ).get(organizationId, providerId, accountRow.id, authenticated.notificationId);
+        if (identityCollision) {
+          throw Object.assign(new Error('Provider notification identity was already used with different evidence'), {
+            statusCode: 409,
+            code: 'PAYMENT_NOTIFICATION_IDENTITY_CONFLICT',
+          });
+        }
+      }
     }
     throw error;
   }
