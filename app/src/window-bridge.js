@@ -51,7 +51,7 @@ import {
   printReceipt, productPriceMarkup, reapplyConfigDefaults, recordTelegramSentOrder,
   removeAccount, removeKitchenNode, removePaymentMethod, removePricingTier,
   removeProduct, removeTable, removeTicketNode, removeVolumeDiscountTier,
-  removeWarehouseLocation, bootstrapTenantAuth, closeOnboarding, createOnboardingTenant, selectOnboardingTenant, pairThisDevice, showPairing, createDevicePairing, showJoinByInvite, submitStaffInvite, createStaffInvite, addOnboardingProduct, skipOnboardingProduct, finishOnboarding, submitSettingsInvite, switchActiveTenant, renderAccountTierOptions, renderAccounts, renderCustomers, openCustomerModal, closeCustomerModal, saveCustomerModal, renderAll,
+  removeWarehouseLocation, openLowStockInventory, clearInventoryFilter, bootstrapTenantAuth, closeOnboarding, createOnboardingTenant, selectOnboardingTenant, pairThisDevice, showPairing, createDevicePairing, showJoinByInvite, submitStaffInvite, createStaffInvite, addOnboardingProduct, skipOnboardingProduct, finishOnboarding, submitSettingsInvite, switchActiveTenant, renderAccountTierOptions, renderAccounts, renderCustomers, openCustomerModal, closeCustomerModal, saveCustomerModal, renderAll,
   renderBrand, renderCatalog, renderCategoryPills, renderSellerHome, renderDailySummary, renderStorefrontBranding, updateBrandingPreview, saveStorefrontBranding,
   renderKitchen, renderLogistics, renderMarketplace, renderNicheSelect,
   renderOrderAccountSelect, renderOrderCourseSelect, renderOrderFulfillmentPicker, renderOrderTableSelect,
