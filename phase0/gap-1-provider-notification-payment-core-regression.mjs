@@ -136,4 +136,46 @@ await assert.rejects(
   error => error?.code === 'PAYMENT_NOTIFICATION_AUTHORITY_FIELD_FORBIDDEN'
 );
 
+let postConflictConfirmationCalls = 0;
+const collisionStore = {
+  ...store,
+  insertProviderNotificationEvidence: async () => {
+    throw Object.assign(new Error('Provider notification identity was already used with different evidence'), {
+      statusCode: 409,
+      code: 'PAYMENT_NOTIFICATION_IDENTITY_CONFLICT',
+    });
+  },
+  createPaymentConfirmationAttempt: async (...args) => {
+    postConflictConfirmationCalls += 1;
+    return store.createPaymentConfirmationAttempt(...args);
+  },
+};
+const collisionCore = new PaymentCore({
+  store: collisionStore,
+  providerRegistry: { requirePaymentProvider: () => provider },
+  invariantGate: {
+    evaluate: () => ({ passed: true, checks: [], reasonCodes: [], hardFailures: [] }),
+  },
+  decisionEngine: {
+    decide: () => ({ decision: 'ACCEPT', targetState: 'VERIFIED', reasonCodes: [] }),
+  },
+});
+await assert.rejects(
+  collisionCore.ingestProviderNotification({
+    providerId: 'mpesa',
+    rawRequest: {
+      body: {
+        notificationId: 'notif-1',
+        accountIdentifier: '600001',
+        transactionId: 'TX-CONFLICT',
+        reference: 'ORDER-42',
+      },
+      rawBody: Buffer.from('conflicting-replay'),
+      headers: {},
+    },
+  }),
+  error => error?.statusCode === 409 && error?.code === 'PAYMENT_NOTIFICATION_IDENTITY_CONFLICT'
+);
+assert.equal(postConflictConfirmationCalls, 0, 'identity conflict must stop before confirmation or financial finalization');
+
 console.log('GAP-1 provider notification Payment Core ingestion regression: PASS');
