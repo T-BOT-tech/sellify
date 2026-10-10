@@ -42,7 +42,7 @@ assert.match(settings, /renderSellerStorefrontChannelsPanel\(\)/);
 assert.match(workspace, /getLowStockProducts\(\)/);
 assert.match(workspace, /getOutOfStockProducts\(\)/);
 assert.doesNotMatch(workspace, /stock\s*<=\s*5/);
-assert.match(workspace, /Saved projection only; open Warehouse to refresh\./);
+assert.match(workspace, /Saved projection only; review stock in Catalog\./);
 assert.match(workspace, /onclick=\"switchTab\('catalog'\)\"/);
 
 // Seller registration is deliberately not claimed as a working action until a
