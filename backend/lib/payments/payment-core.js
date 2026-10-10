@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { assertAuthenticatedNotificationContext, assertProviderNotificationEvidenceShape } from './provider-notification-authority.js';
 import { assertUntrustedPaymentEvidenceShape } from './payment-evidence-authority.js';
 import { evaluateCapabilityCertification } from './capability-certification.js';
@@ -388,6 +389,169 @@ export class PaymentCore {
   }
 
   async queryStatus(command = {}) {
+    this.#authorize(command, 'payments:accept');
+    const chatId = String(command.chatId || '').trim();
+    const paymentId = String(command.paymentId || command.payment_id || '').trim();
+    const idempotencyKey = String(command.idempotencyKey || command.idempotency_key || '').trim();
+    if (!chatId || !paymentId) {
+      throw Object.assign(new Error('chatId and paymentId are required'), { statusCode: 400, code: 'PAYMENT_CONTEXT_REQUIRED' });
+    }
+
+    // Idempotency is a Payment Core invariant, not only an HTTP-route rule.
+    // Never let an internal caller or a partially wired store bypass durable
+    // command tracking for a status query that can cause a financial transition.
+    if (!idempotencyKey) {
+      throw Object.assign(new Error('Idempotency-Key is required for payment status queries'), {
+        statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED',
+      });
+    }
+    if (typeof this.store.beginPaymentStatusQuery !== 'function' ||
+        typeof this.store.completePaymentStatusQuery !== 'function') {
+      throw Object.assign(new Error('Durable payment status-query idempotency is unavailable'), {
+        statusCode: 500, code: 'PAYMENT_STATUS_QUERY_IDEMPOTENCY_UNAVAILABLE',
+      });
+    }
+
+    const requestFields = Object.fromEntries(Object.entries(command).filter(([key]) =>
+      !['chatId', 'paymentId', 'payment_id', 'organizationId', 'actor', 'idempotencyKey', 'idempotency_key'].includes(key)));
+    const stable = value => {
+      if (Array.isArray(value)) return value.map(stable);
+      if (value && typeof value === 'object') {
+        return Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])]));
+      }
+      return value;
+    };
+    const requestHash = createHash('sha256')
+      .update(JSON.stringify(stable({ paymentId, request: requestFields })))
+      .digest('hex');
+    const started = await this.store.beginPaymentStatusQuery(chatId, {
+      paymentId, idempotencyKey, requestHash,
+    });
+
+    if (started.duplicate) {
+      if (started.status === 'SUCCEEDED') return started.result;
+      if (started.status === 'FAILED') {
+        const savedError = started.error || {};
+        throw Object.assign(new Error(savedError.message || 'Previous payment status query failed'), {
+          statusCode: savedError.statusCode || 500,
+          code: savedError.code || 'PAYMENT_STATUS_QUERY_FAILED',
+        });
+      }
+      // If the process crashed after the canonical financial transition committed
+      // but before the query response was persisted, reconstruct only from the
+      // durable transition record and its matching evidence lineage. Never
+      // re-run the provider or financial transition during this recovery path.
+      const recovered = await this.#recoverCommittedStatusQuery({ chatId, paymentId, idempotencyKey, requestHash });
+      if (recovered) {
+        await this.store.completePaymentStatusQuery(chatId, {
+          idempotencyKey, requestHash, status: 'SUCCEEDED', result: recovered,
+        });
+        return recovered;
+      }
+      throw Object.assign(new Error('Payment status query with this idempotency key is unresolved or already in progress'), {
+        statusCode: 409, code: 'PAYMENT_STATUS_QUERY_IN_PROGRESS',
+      });
+    }
+
+    let result;
+    try {
+      result = await this.#queryStatusOnce(command);
+    } catch (error) {
+      try {
+        await this.store.completePaymentStatusQuery(chatId, {
+          idempotencyKey, requestHash, status: 'FAILED',
+          error: {
+            message: error?.message || 'Payment status query failed',
+            statusCode: error?.statusCode || 500,
+            code: error?.code || 'PAYMENT_STATUS_QUERY_FAILED',
+            // Only provider network/timeouts thrown before evidence persistence
+            // are safe for same-key retry. Other failures remain terminal or
+            // unresolved so retries cannot repeat partial domain side effects.
+            retryable: error?.retryable === true &&
+              ['PAYMENT_PROVIDER_NETWORK_ERROR', 'PAYMENT_PROVIDER_PROBE_TIMEOUT'].includes(String(error?.code || '')),
+          },
+        });
+      } catch (persistError) {
+        // Preserve the original provider/domain error; a failed completion write
+        // leaves the durable command in progress for explicit recovery.
+      }
+      throw error;
+    }
+
+    // Keep result persistence outside the provider/domain failure handler. If
+    // the result write fails after the financial commit, do not misclassify the
+    // committed operation as FAILED; leave it recoverable from canonical state.
+    await this.store.completePaymentStatusQuery(chatId, {
+      idempotencyKey, requestHash, status: 'SUCCEEDED', result,
+    });
+    return result;
+  }
+
+  async #recoverCommittedStatusQuery({ chatId, paymentId, idempotencyKey }) {
+    const required = [
+      'getPaymentIdempotency', 'getPayment', 'listPaymentEvidence',
+      'listPaymentVerifications', 'listPaymentDecisions',
+    ];
+    if (required.some(name => typeof this.store[name] !== 'function')) return null;
+
+    const command = await this.store.getPaymentIdempotency(chatId, idempotencyKey, 'TRANSITION_LIFECYCLE');
+    if (!command || String(command.resource_id || command.resourceId || '') !== paymentId) return null;
+
+    let saved;
+    try { saved = JSON.parse(command.response_json || command.responseJson || '{}'); } catch { return null; }
+    const paymentSnapshot = saved.payment;
+    const targetState = String(paymentSnapshot?.state || '').toUpperCase();
+    // Status queries can authoritatively commit mismatch, duplicate, expiry,
+    // partial-payment, or rejection outcomes as well as successful payment.
+    // Recovery must cover every state this status-query decision path can
+    // commit, otherwise a lost response can leave those commands stuck forever.
+    const recoverableTargets = new Set([
+      'VERIFIED', 'RECONCILED', 'REJECTED', 'DUPLICATE',
+      'MISMATCH', 'EXPIRED', 'PARTIAL',
+    ]);
+    if (!paymentSnapshot || !recoverableTargets.has(targetState)) return null;
+
+    const [evidenceRows, verificationRows, decisionRows] = await Promise.all([
+      this.store.listPaymentEvidence(chatId, paymentId),
+      this.store.listPaymentVerifications(chatId, paymentId),
+      this.store.listPaymentDecisions(chatId, paymentId),
+    ]);
+    if (!Array.isArray(evidenceRows) || !Array.isArray(verificationRows) || !Array.isArray(decisionRows)) return null;
+
+    // The financial transition and its idempotency record are committed in
+    // one SQLite transaction. Match the decision to that transaction's
+    // persisted timestamp and require its evidence/verification lineage.
+    const decision = decisionRows.find(item =>
+      String(item.targetState || '').toUpperCase() === targetState &&
+      item.evidenceId && item.verificationId &&
+      (!command.created_at || String(item.createdAt) === String(command.created_at))
+    );
+    if (!decision) return null;
+    const evidence = evidenceRows.find(item => String(item.id) === String(decision.evidenceId));
+    const verification = verificationRows.find(item =>
+      String(item.id) === String(decision.verificationId) &&
+      String(item.evidenceId) === String(decision.evidenceId)
+    );
+    if (!evidence || !verification ||
+        String(evidence.paymentId || '') !== paymentId ||
+        String(verification.paymentId || '') !== paymentId) return null;
+
+    return {
+      payment: paymentSnapshot,
+      status: verification.result,
+      supported: true,
+      evidence,
+      verification,
+      invariants: decision.invariantResults || {},
+      decision: {
+        decision: decision.decision,
+        targetState: decision.targetState,
+        reasonCodes: decision.reasonCodes || [],
+      },
+    };
+  }
+
+  async #queryStatusOnce(command = {}) {
     this.#authorize(command, 'payments:accept');
     const chatId = String(command.chatId || '').trim();
     const paymentId = String(command.paymentId || command.payment_id || '').trim();
@@ -1332,7 +1496,7 @@ function normalizeRefundResult(raw = {}, refund = {}) {
 
 function normalizeProviderStatus(raw = {}) {
   const value = String(raw.status ?? raw.result ?? raw.state ?? '').trim().toUpperCase();
-  if (['SUCCESS', 'SUCCEEDED', 'COMPLETED', 'PAID', 'SETTLED', 'MATCH', 'CONFIRMED'].includes(value)) return 'MATCH';
+  if (['SUCCESS', 'SUCCEEDED', 'COMPLETED', 'PAID', 'SETTLED', 'MATCH', 'CONFIRMED', 'VERIFIED'].includes(value)) return 'MATCH';
   if (['FAILED', 'DECLINED', 'REJECTED', 'MISMATCH'].includes(value)) return 'MISMATCH';
   if (['DUPLICATE'].includes(value)) return 'DUPLICATE';
   if (['EXPIRED'].includes(value)) return 'EXPIRED';

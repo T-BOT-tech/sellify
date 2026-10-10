@@ -37,6 +37,7 @@ export function recordInventoryMovement(product, quantity, type, meta = {}) {
   const movement = {
     id: uid(),
     eventId: meta.eventId || eventId(),
+    tenantChatId: String(config.chatId || ''),
     organizationId: config.organizationId || '',
     locationId: meta.locationId || config.locationId || '',
     productId: String(product.id),
@@ -68,6 +69,8 @@ export async function recordCanonicalInventoryMovement(input = {}) {
   }
   const event = {
     eventId: input.eventId || eventId(),
+    tenantChatId: String(config.chatId || ''),
+    organizationId: String(config.organizationId || ''),
     productId,
     quantity,
     movementType,
@@ -98,7 +101,7 @@ export async function recordCanonicalInventoryMovement(input = {}) {
     );
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { const error = new Error(data?.error?.message || `Inventory update failed (${res.status})`); error.status = res.status; error.code = data?.error?.code; throw error; }
-    const remote = data.movement || event;
+    const remote = { ...(data.movement || event), tenantChatId: String(config.chatId || ''), organizationId: String(config.organizationId || '') };
     const existing = inventoryMovements.filter(m => m.eventId !== remote.eventId);
     setInventoryMovements([{ ...remote, syncStatus: 'synced' }, ...existing]);
     persist();
@@ -137,17 +140,40 @@ export async function syncInventoryMovement(movement) {
 
 export async function loadInventoryMovements({ productId = '', locationId = '', limit = 100 } = {}) {
   if (!config.chatId || !config.sessionToken) return inventoryMovements;
+  const scope = {
+    tenantChatId: String(config.chatId),
+    organizationId: String(config.organizationId || ''),
+    locationId: String(config.locationId || ''),
+    sessionToken: String(config.sessionToken),
+    syncUrl: String(config.syncUrl || ''),
+  };
+  const isScopeActive = () => String(config.chatId || '') === scope.tenantChatId
+    && String(config.organizationId || '') === scope.organizationId
+    && String(config.locationId || '') === scope.locationId
+    && String(config.sessionToken || '') === scope.sessionToken
+    && String(config.syncUrl || '') === scope.syncUrl;
   const params = new URLSearchParams({ limit: String(limit) });
   if (productId) params.set('product_id', productId);
   if (locationId) params.set('location_id', locationId);
-  const res = await fetch(`${baseUrl()}/tenants/${encodeURIComponent(config.chatId)}/inventory/movements?${params}`, {
-    headers: { Authorization: `Bearer ${config.sessionToken}` },
+  const res = await fetch(`${(scope.syncUrl || window.location.origin).replace(/\/$/, '')}/tenants/${encodeURIComponent(scope.tenantChatId)}/inventory/movements?${params}`, {
+    headers: { Authorization: `Bearer ${scope.sessionToken}` },
   });
+  // Tenant, organization, location, or session changes invalidate the result.
+  if (!isScopeActive()) return inventoryMovements;
   if (!res.ok) return inventoryMovements;
   const data = await res.json();
-  if (!Array.isArray(data.movements)) return inventoryMovements;
-  const byEvent = new Map(inventoryMovements.map(m => [m.eventId, m]));
-  for (const remote of data.movements) byEvent.set(remote.eventId, { ...remote, syncStatus: 'synced' });
+  if (!isScopeActive() || !Array.isArray(data.movements)) return inventoryMovements;
+  const scopedExisting = inventoryMovements.filter(m => {
+    if (String(m.tenantChatId || '') === scope.tenantChatId) return true;
+    // Legacy records without tenantChatId may only be retained when their
+    // organization matches the authenticated scope. Unknown ownership fails closed.
+    return !m.tenantChatId && scope.organizationId && String(m.organizationId || '') === scope.organizationId;
+  });
+  const byEvent = new Map(scopedExisting.map(m => [m.eventId, m]));
+  for (const remote of data.movements) {
+    if (!remote || typeof remote.eventId !== 'string' || !remote.eventId.trim()) continue;
+    byEvent.set(remote.eventId, { ...remote, tenantChatId: scope.tenantChatId, organizationId: String(remote.organizationId || scope.organizationId), syncStatus: 'synced' });
+  }
   const merged = [...byEvent.values()].sort((a, b) => String(b.occurredAt || '').localeCompare(String(a.occurredAt || '')));
   setInventoryMovements(merged);
   persist();
@@ -155,35 +181,175 @@ export async function loadInventoryMovements({ productId = '', locationId = '', 
 }
 
 
+// Refresh status is deliberately in-memory. The balances endpoint does not
+// provide server-side freshness metadata, so refreshedAt means only that this
+// client received a valid balance response at that time.
+let inventoryBalanceRefreshState = {
+  status: 'UNKNOWN',
+  tenantChatId: '',
+  locationId: '',
+  refreshedAt: null,
+  httpStatus: null,
+};
+let lastSuccessfulInventoryBalanceRefresh = null;
+
+export function getInventoryBalanceRefreshState({ locationId = config.locationId || '' } = {}) {
+  const tenantChatId = String(config.chatId || '');
+  const scopedLocationId = String(locationId || '');
+  if (
+    inventoryBalanceRefreshState.tenantChatId !== tenantChatId
+    || inventoryBalanceRefreshState.locationId !== scopedLocationId
+  ) {
+    return { status: 'UNKNOWN', tenantChatId, locationId: scopedLocationId, refreshedAt: null, httpStatus: null };
+  }
+  return { ...inventoryBalanceRefreshState };
+}
+
+function setInventoryBalanceRefreshStatus(status, scope, { refreshedAt = null, httpStatus = null } = {}) {
+  inventoryBalanceRefreshState = {
+    status,
+    tenantChatId: scope.tenantChatId,
+    locationId: scope.locationId,
+    refreshedAt,
+    httpStatus,
+  };
+}
+
+function isActiveInventoryBalanceScope(scope, sessionToken) {
+  return String(config.chatId || '') === scope.tenantChatId
+    && (!scope.locationId || String(config.locationId || '') === scope.locationId)
+    && String(config.sessionToken || '') === String(sessionToken || '');
+}
+
+function lastSuccessfulRefreshFor(scope) {
+  const last = lastSuccessfulInventoryBalanceRefresh;
+  return last && last.tenantChatId === scope.tenantChatId && last.locationId === scope.locationId
+    ? last
+    : null;
+}
+
 export async function loadInventoryBalances({ locationId = '' } = {}) {
-  if (!config.chatId || !config.sessionToken) return inventoryBalances;
-  const params = new URLSearchParams();
-  if (locationId) params.set('location_id', locationId);
-  const query = params.toString();
-  const res = await fetch(`${baseUrl()}/tenants/${encodeURIComponent(config.chatId)}/inventory/balances${query ? `?${query}` : ''}`, {
-    headers: { Authorization: `Bearer ${config.sessionToken}` },
+  const scope = {
+    tenantChatId: String(config.chatId || ''),
+    locationId: String(locationId || ''),
+  };
+  if (!scope.tenantChatId || !config.sessionToken) {
+    setInventoryBalanceRefreshStatus('UNKNOWN', scope);
+    return inventoryBalances;
+  }
+
+  const sessionToken = config.sessionToken;
+  const lastSuccessful = lastSuccessfulRefreshFor(scope);
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    setInventoryBalanceRefreshStatus(lastSuccessful ? 'CACHED' : 'OFFLINE', scope, {
+      refreshedAt: lastSuccessful?.refreshedAt || null,
+    });
+    return inventoryBalances;
+  }
+
+  setInventoryBalanceRefreshStatus('REFRESHING', scope, {
+    refreshedAt: lastSuccessful?.refreshedAt || null,
   });
-  if (!res.ok) return inventoryBalances;
-  const data = await res.json();
-  if (!Array.isArray(data.balances)) return inventoryBalances;
-  const next = data.balances.map(row => ({
-    locationId: row.locationId || '', productId: String(row.productId), quantity: Number(row.quantity || 0)
-  }));
-  setInventoryBalances(next);
-  persistBalances();
-  return next;
+
+  try {
+    const params = new URLSearchParams();
+    if (scope.locationId) params.set('location_id', scope.locationId);
+    const query = params.toString();
+    const url = baseUrl() + '/tenants/' + encodeURIComponent(scope.tenantChatId)
+      + '/inventory/balances' + (query ? '?' + query : '');
+    const res = await fetch(url, {
+      headers: { Authorization: 'Bearer ' + sessionToken },
+    });
+
+    // A response for a tenant/location/session that is no longer active must
+    // not change the current UI status or the shared balance projection.
+    if (!isActiveInventoryBalanceScope(scope, sessionToken)) return inventoryBalances;
+
+    if (!res.ok) {
+      setInventoryBalanceRefreshStatus(
+        res.status === 401 || res.status === 403 ? 'PERMISSION_DENIED' : (lastSuccessful ? 'CACHED' : 'UNKNOWN'),
+        scope,
+        { refreshedAt: lastSuccessful?.refreshedAt || null, httpStatus: res.status },
+      );
+      return inventoryBalances;
+    }
+
+    const data = await res.json().catch(() => null);
+    if (!isActiveInventoryBalanceScope(scope, sessionToken)) return inventoryBalances;
+
+    const validBalances = Array.isArray(data?.balances)
+      && data.balances.every(row =>
+        row
+        && row.productId !== undefined
+        && row.productId !== null
+        && String(row.productId).trim() !== ''
+        && Number.isFinite(Number(row.quantity))
+        && (row.locationId === undefined || row.locationId === null || typeof row.locationId === 'string')
+      );
+    if (!validBalances) {
+      setInventoryBalanceRefreshStatus(lastSuccessful ? 'CACHED' : 'UNKNOWN', scope, {
+        refreshedAt: lastSuccessful?.refreshedAt || null,
+        httpStatus: res.status,
+      });
+      return inventoryBalances;
+    }
+
+    const next = data.balances.map(row => ({
+      tenantChatId: scope.tenantChatId,
+      locationId: row.locationId || '',
+      productId: String(row.productId),
+      quantity: Number(row.quantity || 0),
+    }));
+    // Keep cached projections for other scopes intact, but never let them
+    // satisfy reads for the active tenant/location. Legacy rows without a
+    // tenant marker are retained for migration compatibility and are not
+    // considered canonical for an authenticated tenant.
+    const retained = inventoryBalances.filter(row => {
+      if (String(row.tenantChatId || '') !== scope.tenantChatId) return true;
+      return scope.locationId && String(row.locationId || '') !== scope.locationId;
+    });
+    setInventoryBalances([...retained, ...next]);
+    persistBalances();
+    const refreshedAt = new Date().toISOString();
+    lastSuccessfulInventoryBalanceRefresh = { ...scope, refreshedAt };
+    setInventoryBalanceRefreshStatus('FRESH', scope, { refreshedAt, httpStatus: res.status });
+    return next;
+  } catch (error) {
+    // Keep late failures from an obsolete tenant/location/session from
+    // overwriting the active scope's refresh status.
+    if (isActiveInventoryBalanceScope(scope, sessionToken)) {
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      setInventoryBalanceRefreshStatus(offline ? (lastSuccessful ? 'CACHED' : 'OFFLINE') : (lastSuccessful ? 'CACHED' : 'UNKNOWN'), scope, {
+        refreshedAt: lastSuccessful?.refreshedAt || null,
+      });
+    }
+    throw error;
+  }
 }
 
 function persistBalances() { saveJSON(STORAGE_KEYS.inventoryBalances, inventoryBalances); }
 
 export function getInventoryBalance(productId, locationId = '') {
-  const row = inventoryBalances.find(item => String(item.productId) === String(productId) && (!locationId || String(item.locationId) === String(locationId)));
+  const tenantChatId = String(config.chatId || '');
+  const scopedRows = tenantChatId
+    ? inventoryBalances.filter(item => String(item.tenantChatId || '') === tenantChatId)
+    : inventoryBalances;
+  const row = scopedRows.find(item => String(item.productId) === String(productId) && (!locationId || String(item.locationId) === String(locationId)));
   if (row) return Number(row.quantity || 0);
   return localInventoryBalance(productId, locationId);
 }
 
 export function localInventoryBalance(productId, locationId = '') {
-  return inventoryMovements
+  // Legacy movement rows are global local storage. In an authenticated tenant
+  // context, use them only when they carry the active organization scope;
+  // unscoped legacy rows must not become a cross-tenant stock fallback.
+  const organizationId = String(config.organizationId || '');
+  const scopedMovements = config.chatId
+    ? (organizationId
+      ? inventoryMovements.filter(m => String(m.organizationId || '') === organizationId)
+      : [])
+    : inventoryMovements;
+  return scopedMovements
     .filter(m => String(m.productId) === String(productId) && (!locationId || String(m.locationId || '') === String(locationId)))
     .reduce((sum, m) => sum + Number(m.quantity || 0), 0);
 }

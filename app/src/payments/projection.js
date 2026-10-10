@@ -28,7 +28,33 @@ function notifyCanonicalPaymentUpdated(payment) {
   }));
 }
 
-export async function ensurePaymentForSyncedOrder(order, { statusQueryKey = null } = {}) {
+const paymentEnsureInFlight = new Map();
+
+export async function ensurePaymentForSyncedOrder(order, options = {}) {
+  const serverOrderId = String(order?.server_order_id || order?.serverOrderId || '').trim();
+  if (!serverOrderId) return { status: 'SKIPPED', reason: 'ORDER_NOT_SYNCED' };
+
+  const statusQueryKey = String(options.statusQueryKey || '').trim();
+  // An explicit key represents a caller-owned Payment Core operation and is
+  // never coalesced with another command. Ordinary order-sync retries, however,
+  // share one in-flight ensure/query per canonical order within this client.
+  if (statusQueryKey) return ensurePaymentForSyncedOrderOnce(order, { statusQueryKey });
+
+  const inFlight = paymentEnsureInFlight.get(serverOrderId);
+  if (inFlight) return inFlight;
+
+  const task = ensurePaymentForSyncedOrderOnce(order, options);
+  paymentEnsureInFlight.set(serverOrderId, task);
+  try {
+    return await task;
+  } finally {
+    if (paymentEnsureInFlight.get(serverOrderId) === task) {
+      paymentEnsureInFlight.delete(serverOrderId);
+    }
+  }
+}
+
+async function ensurePaymentForSyncedOrderOnce(order, { statusQueryKey = null } = {}) {
   const serverOrderId = String(order?.server_order_id || order?.serverOrderId || '').trim();
   if (!serverOrderId) return { status: 'SKIPPED', reason: 'ORDER_NOT_SYNCED' };
 

@@ -116,7 +116,7 @@ import {
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
   createComplianceRequest, getComplianceRequest, listComplianceRequests, resolveComplianceRequest, buildComplianceExport,
-  listPaymentAccounts, createPaymentAccount, createPayment, getPayment, getPaymentIntent, listPayments, listPaymentLedger, reconcilePayment, recordPaymentReconciliation, listPaymentReconciliations, insertPaymentEvidence, insertProviderNotificationEvidence, getPaymentAccountForProviderNotification, resolvePaymentIntentForProviderEvidence, createPaymentConfirmationAttempt, updatePaymentConfirmationAttempt, getPaymentConfirmationAttempt, getPaymentConfirmationAttemptByProviderTransaction, insertPaymentVerification, insertPaymentDecision, commitPaymentDecision, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
+  listPaymentAccounts, createPaymentAccount, createPayment, getPayment, getPaymentIdempotency, getPaymentIntent, listPayments, listPaymentLedger, listPaymentEvidence, listPaymentVerifications, listPaymentDecisions, reconcilePayment, recordPaymentReconciliation, listPaymentReconciliations, insertPaymentEvidence, insertProviderNotificationEvidence, getPaymentAccountForProviderNotification, resolvePaymentIntentForProviderEvidence, createPaymentConfirmationAttempt, updatePaymentConfirmationAttempt, getPaymentConfirmationAttempt, getPaymentConfirmationAttemptByProviderTransaction, insertPaymentVerification, insertPaymentDecision, commitPaymentDecision, beginPaymentStatusQuery, completePaymentStatusQuery, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
   listCustomerPricing, getCustomerPricing, upsertCustomerPricing, updateCustomerPricing,
   listQuotes, getQuote, createQuote, transitionQuote,
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, createPurchaseOrderFromProcurementAward, transitionPurchaseOrder,
@@ -152,6 +152,7 @@ import { InvariantGate } from './lib/payments/invariant-gate.js';
 import { PaymentDecisionEngine } from './lib/payments/decision-engine.js';
 import { listPaymentChannels } from './lib/payments/channel-registry.js';
 import { processEventIsolated } from './lib/event-failure-isolation.js';
+import { assertEventTenantScope } from './lib/event-replay.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -162,8 +163,12 @@ for (const adapter of Object.values(PROVIDER_ADAPTERS)) {
 const paymentCore = new PaymentCore({
   store: {
     getPayment,
+    getPaymentIdempotency,
     getPaymentIntent,
     listPaymentAccounts,
+    listPaymentEvidence,
+    listPaymentVerifications,
+    listPaymentDecisions,
     getPaymentAccountForProviderNotification,
     resolvePaymentIntentForProviderEvidence,
     createPaymentConfirmationAttempt,
@@ -175,6 +180,8 @@ const paymentCore = new PaymentCore({
     insertPaymentVerification,
     insertPaymentDecision,
     commitPaymentDecision,
+    beginPaymentStatusQuery,
+    completePaymentStatusQuery,
     recordPaymentReconciliation,
     listPaymentReconciliations,
     getPaymentSettlementByIdempotencyKey,
@@ -926,7 +933,10 @@ async function handleSyncEvents(req, res, chatId) {
   if (events.length > 100) throw Object.assign(new Error('Too many events in one batch'), { statusCode: 400 });
   const results = [];
   for (const event of events) {
-    results.push(await processEventIsolated(event, (candidate) => processSyncEvent(chatId, candidate, session)));
+    results.push(await processEventIsolated(event, (candidate) => {
+      assertEventTenantScope(candidate, { chatId: tenant.chatId, organizationId: tenant.organizationId });
+      return processSyncEvent(chatId, candidate, session);
+    }));
   }
   sendJSON(res, 200, { results }, req);
 }

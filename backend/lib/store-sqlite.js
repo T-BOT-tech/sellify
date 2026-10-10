@@ -119,6 +119,27 @@ function normaliseProduct(product) {
   return value;
 }
 
+function queuedOrderIdentityHash(order, expectedCurrency) {
+  const normalized = validateAndTotalOrderItems(order?.items, expectedCurrency).items
+    .map(item => ({
+      itemId: String(item.item_id ?? item.product_id ?? item.id ?? ''),
+      name: String(item.name ?? item.title ?? ''),
+      price: Math.round(Number(item.price)),
+      qty: Math.floor(Number(item.qty)),
+      category: String(item.category ?? ''),
+    }))
+    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  const identity = {
+    currency: normaliseCurrency(order?.currency, expectedCurrency),
+    items: normalized,
+    customerName: String(order?.customer_name ?? order?.customer?.name ?? ''),
+    customerPhone: String(order?.customer_phone ?? order?.customer?.phone ?? ''),
+    isMarketplace: Boolean(order?.is_marketplace),
+    marketplaceOrderId: String(order?.marketplace_order_id ?? ''),
+  };
+  return crypto.createHash('sha256').update(JSON.stringify(identity)).digest('hex');
+}
+
 function validateAndTotalOrderItems(rawItems, expectedCurrency = null) {
   const items = [];
   for (const raw of Array.isArray(rawItems) ? rawItems : []) {
@@ -2000,61 +2021,7 @@ function runMigrations() {
   // channel configuration and a reference to an external secret, never a raw
   // Telegram bot token. Commerce, inventory, payment, fulfillment and events
   // remain authoritative in their existing domains.
-    // GAP-1.21 — bind payment evidence to canonical PaymentAccount.
-  if (!applied.includes(61)) {
-    const evidenceColumns = db.prepare('PRAGMA table_info(payment_evidence)').all();
-    if (!evidenceColumns.some(column => String(column.name) === 'payment_account_id')) {
-      db.exec('ALTER TABLE payment_evidence ADD COLUMN payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL');
-    }
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(61, nowIso());
-  }
-
-
-  // GAP-1.22 — durable provider confirmation attempts.
-  if (!applied.includes(62)) {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS payment_confirmation_attempts (
-        id TEXT PRIMARY KEY,
-        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-        payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
-        payment_intent_id TEXT NOT NULL REFERENCES payment_intents(id) ON DELETE CASCADE,
-        evidence_id TEXT NOT NULL REFERENCES payment_evidence(id) ON DELETE CASCADE,
-        payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL,
-        provider_id TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED','PENDING','CONFIRMED','NOT_FOUND','FAILED','EXPIRED','UNKNOWN')),
-        attempt_number INTEGER NOT NULL DEFAULT 1 CHECK (attempt_number > 0),
-        provider_transaction_id TEXT,
-        reason_codes_json TEXT NOT NULL DEFAULT '[]',
-        observation_json TEXT NOT NULL DEFAULT '{}',
-        requested_at TEXT NOT NULL,
-        observed_at TEXT,
-        expires_at TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        UNIQUE(payment_intent_id, evidence_id, attempt_number)
-      );
-      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_org_status ON payment_confirmation_attempts(organization_id,status,updated_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_evidence ON payment_confirmation_attempts(evidence_id,created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_intent ON payment_confirmation_attempts(payment_intent_id,created_at DESC);
-      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_confirmation_attempts_provider_tx ON payment_confirmation_attempts(organization_id,provider_id,payment_account_id,provider_transaction_id) WHERE provider_transaction_id IS NOT NULL AND trim(provider_transaction_id) <> '';
-    `);
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(62, nowIso());
-  }
-
-
-  // GAP-1.23 — durable provider notification identity and authentication lineage.
-  if (!applied.includes(63)) {
-    db.exec(`
-      ALTER TABLE payment_evidence ADD COLUMN provider_notification_id TEXT;
-      ALTER TABLE payment_evidence ADD COLUMN authentication_reference TEXT;
-      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_evidence_notification
-        ON payment_evidence(organization_id,provider_id,payment_account_id,provider_notification_id)
-        WHERE provider_notification_id IS NOT NULL AND trim(provider_notification_id) <> '';
-      CREATE INDEX IF NOT EXISTS idx_payment_evidence_auth_reference
-        ON payment_evidence(organization_id,provider_id,payment_account_id,authentication_reference);
-    `);
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(63, nowIso());
-  }
+  // Payment migrations 61–63 are applied after migration 45 creates payment_evidence.
 
   if (!applied.includes(60)) {
     db.exec(`
@@ -2358,6 +2325,138 @@ if (!applied.includes(39)) {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(45, nowIso());
   }
+
+    // GAP-1.21 — bind payment evidence to canonical PaymentAccount.
+  if (!applied.includes(61)) {
+    const evidenceColumns = db.prepare('PRAGMA table_info(payment_evidence)').all();
+    if (!evidenceColumns.some(column => String(column.name) === 'payment_account_id')) {
+      db.exec('ALTER TABLE payment_evidence ADD COLUMN payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL');
+    }
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(61, nowIso());
+  }
+
+
+  // GAP-1.22 — durable provider confirmation attempts.
+  if (!applied.includes(62)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS payment_confirmation_attempts (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
+        payment_intent_id TEXT NOT NULL REFERENCES payment_intents(id) ON DELETE CASCADE,
+        evidence_id TEXT NOT NULL REFERENCES payment_evidence(id) ON DELETE CASCADE,
+        payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL,
+        provider_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED','PENDING','CONFIRMED','NOT_FOUND','FAILED','EXPIRED','UNKNOWN')),
+        attempt_number INTEGER NOT NULL DEFAULT 1 CHECK (attempt_number > 0),
+        provider_transaction_id TEXT,
+        reason_codes_json TEXT NOT NULL DEFAULT '[]',
+        observation_json TEXT NOT NULL DEFAULT '{}',
+        requested_at TEXT NOT NULL,
+        observed_at TEXT,
+        expires_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(payment_intent_id, evidence_id, attempt_number)
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_org_status ON payment_confirmation_attempts(organization_id,status,updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_evidence ON payment_confirmation_attempts(evidence_id,created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_intent ON payment_confirmation_attempts(payment_intent_id,created_at DESC);
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_confirmation_attempts_provider_tx ON payment_confirmation_attempts(organization_id,provider_id,payment_account_id,provider_transaction_id) WHERE provider_transaction_id IS NOT NULL AND trim(provider_transaction_id) <> '';
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(62, nowIso());
+  }
+
+
+  // GAP-1.24 — durable Payment Core provider-status command idempotency.
+  if (!applied.includes(64)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS payment_status_query_commands (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        payment_id TEXT NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+        idempotency_key TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('IN_PROGRESS','SUCCEEDED','FAILED')),
+        response_json TEXT,
+        error_json TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(organization_id, idempotency_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_status_query_commands_payment
+        ON payment_status_query_commands(organization_id, payment_id, created_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(64, nowIso());
+  }
+
+  // GAP-1.24A — prevent in-place mutation of canonical payment evidence,
+  // verification, and decision records. Corrections must be represented as new
+  // records so previously committed financial lineage remains auditable.
+  if (!applied.includes(65)) {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS payment_evidence_no_update
+      BEFORE UPDATE ON payment_evidence
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_evidence is append-only');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS payment_verifications_no_update
+      BEFORE UPDATE ON payment_verifications
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_verifications are append-only');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS payment_decisions_no_update
+      BEFORE UPDATE ON payment_decisions
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_decisions are append-only');
+      END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(65, nowIso());
+  }
+
+  // GAP-1.24B — preserve payment lineage against direct deletes and FK cascades.
+  // There is no supported hard-delete lifecycle for payment history. Corrections
+  // are represented by new records; any future retention/purge workflow must be
+  // explicitly designed rather than relying on ON DELETE CASCADE.
+  if (!applied.includes(66)) {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS payment_evidence_no_delete
+      BEFORE DELETE ON payment_evidence
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_evidence is append-only');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS payment_verifications_no_delete
+      BEFORE DELETE ON payment_verifications
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_verifications are append-only');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS payment_decisions_no_delete
+      BEFORE DELETE ON payment_decisions
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_decisions are append-only');
+      END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(66, nowIso());
+  }
+
+  // GAP-1.23 — durable provider notification identity and authentication lineage.
+  if (!applied.includes(63)) {
+    db.exec(`
+      ALTER TABLE payment_evidence ADD COLUMN provider_notification_id TEXT;
+      ALTER TABLE payment_evidence ADD COLUMN authentication_reference TEXT;
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_evidence_notification
+        ON payment_evidence(organization_id,provider_id,payment_account_id,provider_notification_id)
+        WHERE provider_notification_id IS NOT NULL AND trim(provider_notification_id) <> '';
+      CREATE INDEX IF NOT EXISTS idx_payment_evidence_auth_reference
+        ON payment_evidence(organization_id,provider_id,payment_account_id,authentication_reference);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(63, nowIso());
+  }
+
 
   // GAP-1.2 — link existing canonical payments to payment intents.
   if (!applied.includes(46)) {
@@ -5520,9 +5619,9 @@ export async function getCustomer(chatId, customerId) {
   return customerFromRow(db.prepare('SELECT * FROM customers WHERE id = ? AND organization_id = ?').get(String(customerId), tenant.organizationId));
 }
 
-export async function upsertCustomer(chatId, input = {}) {
+function upsertCustomerSync(chatId, input = {}) {
   ensureDatabase();
-  const tenant = await getTenant(chatId);
+  const tenant = getTenantByChatId(chatId);
   if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
   const value = normalizeCustomerInput(input);
   if (!value.name && !value.phone) throw Object.assign(new Error('Customer name or phone is required'), { statusCode: 400 });
@@ -5549,6 +5648,12 @@ export async function upsertCustomer(chatId, input = {}) {
     organizationId: tenant.organizationId,
   });
   return customerFromRow(db.prepare('SELECT * FROM customers WHERE id = ?').get(id));
+}
+
+// Preserve the existing async API for callers while exposing a synchronous
+// internal path for callers that must not yield inside a SQLite transaction.
+export async function upsertCustomer(chatId, input = {}) {
+  return upsertCustomerSync(chatId, input);
 }
 
 export async function updateCustomer(chatId, customerId, patch = {}) {
@@ -6498,6 +6603,101 @@ export async function insertPaymentIdempotency(chatId, input = {}) {
   );
   return getPaymentIdempotency(chatId, input.idempotencyKey || input.idempotency_key, input.commandType || input.command_type);
 }
+export async function beginPaymentStatusQuery(chatId, input = {}) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const paymentId = String(input.paymentId || input.payment_id || '').trim();
+  const idempotencyKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  const requestHash = String(input.requestHash || input.request_hash || '').trim();
+  if (!paymentId || !idempotencyKey || !requestHash) {
+    throw Object.assign(new Error('paymentId, idempotencyKey and requestHash are required'), {
+      statusCode: 400, code: 'PAYMENT_STATUS_QUERY_CONTEXT_REQUIRED',
+    });
+  }
+  const now = nowIso();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const existing = db.prepare('SELECT * FROM payment_status_query_commands WHERE organization_id = ? AND idempotency_key = ?')
+      .get(organizationId, idempotencyKey);
+    if (existing) {
+      if (String(existing.payment_id) !== paymentId || String(existing.request_hash) !== requestHash) {
+        throw Object.assign(new Error('Idempotency key was already used with a different status-query request'), {
+          statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE',
+        });
+      }
+
+      // A retryable provider network/timeout failure occurs before evidence or
+      // financial decision persistence. Reclaim that same command atomically
+      // on a same-key retry; terminal failures and uncertain IN_PROGRESS claims
+      // remain replayed/blocked and are never blindly re-executed.
+      let previousError = null;
+      try { previousError = existing.error_json ? JSON.parse(existing.error_json) : null; } catch {}
+      const retryableProviderFailure = String(existing.status) === 'FAILED' &&
+        previousError?.retryable === true &&
+        ['PAYMENT_PROVIDER_NETWORK_ERROR', 'PAYMENT_PROVIDER_PROBE_TIMEOUT'].includes(String(previousError.code || ''));
+      if (retryableProviderFailure) {
+        const reclaimed = db.prepare(`UPDATE payment_status_query_commands
+          SET status = 'IN_PROGRESS', response_json = NULL, error_json = NULL, updated_at = ?
+          WHERE organization_id = ? AND idempotency_key = ? AND request_hash = ? AND status = 'FAILED'`)
+          .run(now, organizationId, idempotencyKey, requestHash);
+        if (reclaimed.changes === 1) {
+          db.exec('COMMIT');
+          return { duplicate: false, status: 'IN_PROGRESS', result: null, error: null, retry: true };
+        }
+      }
+
+      db.exec('COMMIT');
+      return {
+        duplicate: true,
+        status: existing.status,
+        result: existing.response_json ? JSON.parse(existing.response_json) : null,
+        error: existing.error_json ? JSON.parse(existing.error_json) : null,
+      };
+    }
+    const payment = db.prepare('SELECT id FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
+    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    db.prepare(`INSERT INTO payment_status_query_commands
+      (id, organization_id, payment_id, idempotency_key, request_hash, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'IN_PROGRESS', ?, ?)`).run(
+        crypto.randomUUID(), organizationId, paymentId, idempotencyKey, requestHash, now, now);
+    db.exec('COMMIT');
+    return { duplicate: false, status: 'IN_PROGRESS', result: null, error: null };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
+export async function completePaymentStatusQuery(chatId, input = {}) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const idempotencyKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  const requestHash = String(input.requestHash || input.request_hash || '').trim();
+  const status = String(input.status || '').trim().toUpperCase();
+  if (!idempotencyKey || !requestHash || !['SUCCEEDED', 'FAILED'].includes(status)) {
+    throw Object.assign(new Error('idempotencyKey, requestHash and terminal status are required'), {
+      statusCode: 400, code: 'PAYMENT_STATUS_QUERY_COMPLETION_REQUIRED',
+    });
+  }
+  const now = nowIso();
+  const resultJson = input.result == null ? null : json(input.result);
+  const errorJson = input.error == null ? null : json(input.error);
+  const updated = db.prepare(`UPDATE payment_status_query_commands
+    SET status = ?, response_json = ?, error_json = ?, updated_at = ?
+    WHERE organization_id = ? AND idempotency_key = ? AND request_hash = ? AND status = 'IN_PROGRESS'`)
+    .run(status, resultJson, errorJson, now, organizationId, idempotencyKey, requestHash);
+  if (updated.changes === 0) {
+    const existing = db.prepare('SELECT status, request_hash FROM payment_status_query_commands WHERE organization_id = ? AND idempotency_key = ?')
+      .get(organizationId, idempotencyKey);
+    if (!existing || String(existing.request_hash) !== requestHash || String(existing.status) !== status) {
+      throw Object.assign(new Error('Status-query command could not be completed from its current state'), {
+        statusCode: 409, code: 'PAYMENT_STATUS_QUERY_STATE_CONFLICT',
+      });
+    }
+  }
+  return { status, idempotent: updated.changes === 0 };
+}
+
 export async function commitPaymentDecision(chatId, input = {}, actor = null) {
   ensureDatabase();
   const { organizationId } = await resolvePaymentContext(chatId);
@@ -6693,17 +6893,22 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       String(decision.decision || '').toUpperCase(), target, json(decision.reasonCodes || decision.reason_codes || []),
       json(decision.invariantResults || decision.invariant_results || {}), decision.decisionSource || 'PAYMENT_CORE', actor?.userId || null, now
     );
-    const result = db.prepare("UPDATE payments SET state = ?, updated_at = ?, claimed_at = CASE WHEN ? = 'CLAIMED' THEN ? ELSE claimed_at END, received_at = CASE WHEN ? = 'RECEIVED' THEN ? ELSE received_at END, verified_at = CASE WHEN ? = 'VERIFIED' THEN ? ELSE verified_at END, reconciled_at = CASE WHEN ? = 'RECONCILED' THEN ? ELSE reconciled_at END WHERE id = ? AND organization_id = ?" + (expectedState ? " AND state = ?" : ""))
-      .run(target, now, target, now, target, now, target, now, target, now, paymentId, organizationId, ...(expectedState ? [expectedState] : []));
-    if (Number(result.changes || 0) !== 1) throw Object.assign(new Error('Payment state changed before commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
-    db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), paymentId, organizationId, String(decision.entryType || target),
-      target === 'PARTIAL'
-        ? Number(decision.amountMinor ?? decision.amount_minor ?? input.verification?.observedAmountMinor ?? input.verification?.observed_amount_minor ?? row.amount_minor)
-        : Number(row.amount_minor),
-      normaliseCurrency(row.currency, 'ETB'),
-      row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now
-    );
+    // A repeated authoritative decision may reaffirm the current state, but
+    // it is not a new financial transition and must not append another ledger
+    // entry or reset the original state-transition timestamps.
+    if (row.state !== target) {
+      const result = db.prepare("UPDATE payments SET state = ?, updated_at = ?, claimed_at = CASE WHEN ? = 'CLAIMED' THEN ? ELSE claimed_at END, received_at = CASE WHEN ? = 'RECEIVED' THEN ? ELSE received_at END, verified_at = CASE WHEN ? = 'VERIFIED' THEN ? ELSE verified_at END, reconciled_at = CASE WHEN ? = 'RECONCILED' THEN ? ELSE reconciled_at END WHERE id = ? AND organization_id = ?" + (expectedState ? " AND state = ?" : ""))
+        .run(target, now, target, now, target, now, target, now, target, now, paymentId, organizationId, ...(expectedState ? [expectedState] : []));
+      if (Number(result.changes || 0) !== 1) throw Object.assign(new Error('Payment state changed before commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
+      db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+        crypto.randomUUID(), paymentId, organizationId, String(decision.entryType || target),
+        target === 'PARTIAL'
+          ? Number(decision.amountMinor ?? decision.amount_minor ?? input.verification?.observedAmountMinor ?? input.verification?.observed_amount_minor ?? row.amount_minor)
+          : Number(row.amount_minor),
+        normaliseCurrency(row.currency, 'ETB'),
+        row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now
+      );
+    }
     const marketplaceAllocation = db.prepare("SELECT a.*, so.id AS canonical_seller_order_id FROM marketplace_payment_allocations a JOIN marketplace_seller_orders so ON so.id = a.seller_order_id WHERE a.payment_id = ? AND a.organization_id = ? LIMIT 1").get(paymentId, organizationId);
     if (marketplaceAllocation) {
       if (target === 'REFUNDED') {
@@ -8752,12 +8957,39 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         continue;
       }
       const localId = String(order.id);
-      const already = db.prepare('SELECT server_order_id FROM orders WHERE chat_id = ? AND local_id = ?').get(key, localId);
+      const expectedCurrency = tenantCurrency(key);
+      const already = db.prepare('SELECT server_order_id, order_json FROM orders WHERE chat_id = ? AND local_id = ?').get(key, localId);
       if (already) {
-        results.push({ local_id: order.id, status: 'synced', order_id: already.server_order_id });
+        const storedOrder = parseJSON(already.order_json, {});
+        const currencyMismatch = order.currency != null
+          && normaliseCurrency(order.currency, expectedCurrency) !== expectedCurrency;
+        const identityMismatch = currencyMismatch
+          || queuedOrderIdentityHash(order, expectedCurrency) !== queuedOrderIdentityHash(storedOrder, expectedCurrency);
+        if (identityMismatch) {
+          results.push({
+            local_id: order.id,
+            status: 'rejected',
+            code: 'ORDER_IDEMPOTENCY_CONFLICT',
+            error: 'Order id was already used with different contents',
+          });
+          continue;
+        }
+        const payment = db.prepare(`
+          SELECT p.id
+          FROM payments p
+          JOIN tenants t ON t.organization_id = p.organization_id
+          WHERE t.chat_id = ? AND p.order_id = ?
+          LIMIT 1
+        `).get(key, already.server_order_id);
+        results.push({
+          local_id: order.id,
+          status: 'synced',
+          order_id: already.server_order_id,
+          ...(payment?.id ? { payment_id: payment.id } : {}),
+          payment_state: 'UNPAID',
+        });
         continue;
       }
-      const expectedCurrency = tenantCurrency(key);
       if (order.currency != null && normaliseCurrency(order.currency, expectedCurrency) !== expectedCurrency) {
         results.push({ local_id: order.id, status: 'rejected', error: 'Order currency does not match the organization currency' });
         continue;
@@ -8769,10 +9001,10 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
       }
       let customerId = order.customer_id ? String(order.customer_id) : null;
       if (order.customer && typeof order.customer === 'object') {
-        const customer = await upsertCustomer(key, order.customer);
+        const customer = upsertCustomerSync(key, order.customer);
         customerId = customer.id;
       } else if (order.customer_name || order.customer_phone) {
-        const customer = await upsertCustomer(key, {
+        const customer = upsertCustomerSync(key, {
           id: customerId || undefined,
           name: order.customer_name || '',
           phone: order.customer_phone || '',
@@ -9418,6 +9650,77 @@ export async function listAuditEvents(chatId, limit = 100, filters = {}) {
     metadata: parseJSON(row.metadata_json, {}),
     createdAt: row.created_at,
   }));
+}
+
+export async function verifyAuditEventChain(chatId) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organizationId) {
+    throw Object.assign(new Error('Unknown organization'), { statusCode: 404, code: 'ORGANIZATION_NOT_FOUND' });
+  }
+
+  const rows = db.prepare(`
+    SELECT id, chat_id, organization_id, location_id, actor_id, device_id,
+           action, entity_type, entity_id, reason, result, metadata_json,
+           created_at, previous_hash, event_hash, lineage_type, lineage_id
+    FROM audit_events
+    WHERE organization_id = ? AND event_hash IS NOT NULL
+    ORDER BY id ASC
+  `).all(String(tenant.organizationId));
+
+  let previousHash = null;
+  let hasPrevious = false;
+  let checked = 0;
+  for (const row of rows) {
+    checked += 1;
+    if (hasPrevious && String(row.previous_hash || '') !== previousHash) {
+      return {
+        valid: false,
+        organizationId: tenant.organizationId,
+        eventsChecked: checked,
+        invalidEventId: Number(row.id),
+        reasonCode: 'AUDIT_PREVIOUS_HASH_MISMATCH',
+      };
+    }
+
+    const canonical = [
+      row.previous_hash || '',
+      row.organization_id || '',
+      String(row.chat_id ?? ''),
+      String(row.location_id ?? ''),
+      String(row.actor_id ?? ''),
+      String(row.device_id ?? ''),
+      String(row.action || ''),
+      String(row.entity_type || ''),
+      row.entity_id || '',
+      String(row.reason || ''),
+      String(row.result || 'success'),
+      row.metadata_json || json({}),
+      String(row.created_at || ''),
+      row.lineage_type || '',
+      row.lineage_id || '',
+    ].join('|');
+    const calculatedHash = crypto.createHash('sha256').update(canonical).digest('hex');
+    if (calculatedHash !== String(row.event_hash || '')) {
+      return {
+        valid: false,
+        organizationId: tenant.organizationId,
+        eventsChecked: checked,
+        invalidEventId: Number(row.id),
+        reasonCode: 'AUDIT_EVENT_HASH_MISMATCH',
+      };
+    }
+    previousHash = String(row.event_hash);
+    hasPrevious = true;
+  }
+
+  return {
+    valid: true,
+    organizationId: tenant.organizationId,
+    eventsChecked: checked,
+    invalidEventId: null,
+    reasonCode: null,
+  };
 }
 
 export async function createDatabaseBackup() {

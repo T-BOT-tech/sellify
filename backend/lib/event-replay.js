@@ -22,6 +22,34 @@ export function eventReplayFingerprint({ organizationId, eventType, aggregateTyp
   }))).digest('hex');
 }
 
+// Reject tenant/organization claims that conflict with the authenticated route scope.
+// Missing claims remain compatible with legacy unscoped events; the route session
+// still determines the authoritative tenant and organization.
+export function assertEventTenantScope(event, { chatId, organizationId } = {}) {
+  const tenantClaims = [event?.tenantChatId, event?.tenant_chat_id, event?.payload?.tenantChatId, event?.payload?.tenant_chat_id];
+  for (const claim of tenantClaims) {
+    if (claim == null || String(claim).trim() === '') continue;
+    if (String(claim) !== String(chatId)) {
+      throw Object.assign(new Error('Event tenant does not match the authenticated tenant'), {
+        statusCode: 403,
+        code: 'EVENT_TENANT_SCOPE_MISMATCH',
+      });
+    }
+  }
+
+  const organizationClaims = [event?.organizationId, event?.organization_id, event?.payload?._event?.organization_id];
+  for (const claim of organizationClaims) {
+    if (claim == null || String(claim).trim() === '') continue;
+    if (String(claim) !== String(organizationId)) {
+      throw Object.assign(new Error('Event organization does not match the authenticated organization'), {
+        statusCode: 403,
+        code: 'EVENT_ORGANIZATION_SCOPE_MISMATCH',
+      });
+    }
+  }
+  return true;
+}
+
 export function decideEventReplay(existing, incoming) {
   if (!existing) return Object.freeze({ decision: 'new', duplicate: false, conflict: false });
 

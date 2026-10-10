@@ -22,6 +22,10 @@
   .logistics-workspace-stats { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; font-size:12px; }
   .logistics-workspace-stats span { padding:7px 9px; border:1px solid var(--line); border-radius:999px; background:var(--paper-dim); }
   .logistics-workspace-stats strong { font-size:14px; }
+.nav-add-button { align-self:center; min-width:58px; min-height:58px; margin-top:-18px; border-radius:18px; background:var(--teal-solid); color:#fff; box-shadow:0 4px 14px rgba(0,0,0,.18); font-weight:700; }
+  .nav-add-button .icon { width:23px; height:23px; stroke:currentColor; }
+  .add-sheet-modal { max-width:440px; }
+  .add-sheet-list { margin:14px 0; }
   @media (max-width:560px) {
     .logistics-workspace-head { align-items:flex-start; flex-direction:column; }
     .logistics-workspace-stats { justify-content:flex-start; }
@@ -732,8 +736,8 @@
   <button id="navOrder" onclick="switchTab('order')">
     <svg class="icon"><use href="#i-receipt"/></svg><span data-i18n="takeOrderNav">Take Order</span>
   </button>
-  <button id="navQueue" onclick="switchTab('queue')">
-    <svg class="icon"><use href="#i-inbox"/></svg><span data-i18n="queueNav">Queue</span><span class="queue-count" id="queueBadge" style="display:none;">0</span>
+  <button id="navAdd" class="nav-add-button" onclick="openAddSheet()" aria-label="Add or discover">
+    <svg class="icon"><use href="#i-plus"/></svg><span>Add</span>
   </button>
   <button id="navCatalog" onclick="switchTab('catalog')">
     <svg class="icon"><use href="#i-box"/></svg><span data-i18n="catalogNav" id="navCatalogLabel">Catalog</span>
@@ -752,6 +756,9 @@
   <div class="modal" role="dialog" aria-modal="true">
     <h3 data-i18n="moreNav">More</h3>
     <div class="more-sheet-list">
+  <button id="navQueue" onclick="switchTab('queue')">
+    <svg class="icon"><use href="#i-inbox"/></svg><span data-i18n="queueNav">Queue</span><span class="queue-count" id="queueBadge" style="display:none;">0</span>
+  </button>
       <button id="navMarketplace" class="btn-ghost more-sheet-item" onclick="switchTab('marketplace'); closeMoreSheet();">
         <svg class="icon"><use href="#i-globe"/></svg><span data-i18n="marketNav">Market</span>
       </button>
@@ -778,6 +785,31 @@
       </button>
     </div>
     <button type="button" class="btn-secondary" onclick="closeMoreSheet()" data-i18n="cancel">Cancel</button>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="addSheet" style="display:none;">
+  <div class="modal add-sheet-modal" role="dialog" aria-modal="true" aria-labelledby="addSheetTitle">
+    <h3 id="addSheetTitle">What would you like to do?</h3>
+    <p class="hint">Start selling, discover the ecosystem, or configure your business.</p>
+    <div class="more-sheet-list add-sheet-list">
+      <button type="button" class="btn-ghost more-sheet-item" onclick="switchTab('order'); closeAddSheet();">
+        <svg class="icon"><use href="#i-receipt"/></svg><span>Take an order</span>
+      </button>
+      <button type="button" class="btn-ghost more-sheet-item" onclick="openAddProduct();">
+        <svg class="icon"><use href="#i-box"/></svg><span>Add product</span>
+      </button>
+      <button type="button" class="btn-ghost more-sheet-item" onclick="switchTab('marketplace'); closeAddSheet();">
+        <svg class="icon"><use href="#i-globe"/></svg><span>Discover marketplace</span>
+      </button>
+      <button type="button" class="btn-ghost more-sheet-item" onclick="openAddSettings();">
+        <svg class="icon"><use href="#i-sliders"/></svg><span>Configure packs and channels</span>
+      </button>
+      <button type="button" class="btn-ghost more-sheet-item" onclick="openAddSettings();">
+        <svg class="icon"><use href="#i-settings"/></svg><span>Business setup</span>
+      </button>
+    </div>
+    <button type="button" class="btn-secondary" onclick="closeAddSheet()">Cancel</button>
   </div>
 </div>
 

@@ -173,7 +173,7 @@ assert.doesNotMatch(client, /ledgerEntry|ledger_entry|payment_ledger_entries/);
 // provider observation must address the same evidence fingerprint.
 const queryStatusStart = core.indexOf('async queryStatus(command = {})');
 assert.notEqual(queryStatusStart, -1);
-const queryStatusBlock = core.slice(queryStatusStart, queryStatusStart + 8500);
+const queryStatusBlock = core.slice(queryStatusStart, queryStatusStart + 16000);
 assert.match(queryStatusBlock, /try\s*\{[\s\S]*provider\.getStatus/);
 assert.match(queryStatusBlock, /catch \(error\)/);
 assert.match(queryStatusBlock, /throw error/);

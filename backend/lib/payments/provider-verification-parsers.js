@@ -22,22 +22,42 @@ function classify(payload, success, failure) {
 
 function parseProvider(id, payload = {}, context = {}, success, failure) {
   const status = classify(payload, success, failure);
-  if (status) {
-    return providerVerificationResult(status, {
-      providerId: id,
-      reference: value(payload, ['reference', 'externalReference', 'external_reference', 'transactionId', 'transaction_id']),
-      transactionId: value(payload, ['transactionId', 'transaction_id', 'providerTransactionId', 'provider_transaction_id']),
-      observedAt: value(payload, ['observedAt', 'observed_at', 'timestamp', 'createdAt', 'created_at']),
-      reasonCodes: status === 'VERIFIED' ? ['PROVIDER_TRANSACTION_CONFIRMED'] : ['PROVIDER_' + status],
-      evidence: { providerId: id, payload, operation: context.operation || null },
-    });
-  }
+  const observed = {
+    amountMinor: value(payload, ['amountMinor', 'amount_minor', 'observedAmountMinor', 'observed_amount_minor']),
+    currency: value(payload, ['currency', 'observedCurrency', 'observed_currency']),
+    receiverAccount: value(payload, ['receiverAccount', 'receiver_account', 'observedReceiverAccount', 'observed_receiver_account']),
+    reference: value(payload, ['reference', 'externalReference', 'external_reference']),
+    transactionId: value(payload, ['transactionId', 'transaction_id', 'providerTransactionId', 'provider_transaction_id']),
+    observedAt: value(payload, ['observedAt', 'observed_at', 'timestamp', 'createdAt', 'created_at']),
+  };
 
-  return providerVerificationResult('FAILED', {
-    providerId: id,
-    reasonCodes: ['PROVIDER_RESPONSE_UNRECOGNIZED'],
-    evidence: { providerId: id, payload, operation: context.operation || null },
-  });
+  const result = status
+    ? providerVerificationResult(status, {
+        providerId: id,
+        reference: observed.reference ?? observed.transactionId,
+        transactionId: observed.transactionId,
+        observedAt: observed.observedAt,
+        reasonCodes: status === 'VERIFIED' ? ['PROVIDER_TRANSACTION_CONFIRMED'] : ['PROVIDER_' + status],
+        evidence: { providerId: id, payload, operation: context.operation || null },
+      })
+    : providerVerificationResult('FAILED', {
+        providerId: id,
+        reasonCodes: ['PROVIDER_RESPONSE_UNRECOGNIZED'],
+        evidence: { providerId: id, payload, operation: context.operation || null },
+      });
+
+  // Preserve provider observations in the adapter contract. Payment Core consumes
+  // these fields only as evidence and independently validates amount, currency,
+  // receiver, reference, transaction identity, freshness, and tenant/payment binding.
+  return {
+    ...result,
+    ...observed,
+    observedAmountMinor: observed.amountMinor,
+    observedCurrency: observed.currency,
+    observedReceiverAccount: observed.receiverAccount,
+    observedReference: observed.reference,
+    observedTransactionId: observed.transactionId,
+  };
 }
 
 export function parseTelebirrVerification(payload, context = {}) {

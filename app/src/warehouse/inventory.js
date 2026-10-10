@@ -13,8 +13,20 @@ export function isWarehouseEnabled() {
 }
 
 function hasCanonicalInventory(productId) {
-  return inventoryBalances.some(row => String(row.productId) === String(productId))
-    || inventoryMovements.some(row => String(row.productId) === String(productId));
+  const tenantChatId = String(config.chatId || '');
+  const locationId = String(config.locationId || '');
+  const hasScopedBalance = inventoryBalances.some(row =>
+    String(row.productId) === String(productId)
+    && (!tenantChatId || String(row.tenantChatId || '') === tenantChatId)
+    && (!locationId || String(row.locationId || '') === locationId)
+  );
+  // Movement rows predate tenant-scoped balance metadata. Do not use another
+  // tenant's balance projection to declare this product canonically tracked.
+  return hasScopedBalance
+    || inventoryMovements.some(row =>
+      String(row.productId) === String(productId)
+      && (!locationId || String(row.locationId || '') === locationId)
+    );
 }
 
 export function isStockTracked(p) {
