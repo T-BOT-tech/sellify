@@ -152,6 +152,7 @@ import { InvariantGate } from './lib/payments/invariant-gate.js';
 import { PaymentDecisionEngine } from './lib/payments/decision-engine.js';
 import { listPaymentChannels } from './lib/payments/channel-registry.js';
 import { processEventIsolated } from './lib/event-failure-isolation.js';
+import { assertEventTenantScope } from './lib/event-replay.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -926,7 +927,10 @@ async function handleSyncEvents(req, res, chatId) {
   if (events.length > 100) throw Object.assign(new Error('Too many events in one batch'), { statusCode: 400 });
   const results = [];
   for (const event of events) {
-    results.push(await processEventIsolated(event, (candidate) => processSyncEvent(chatId, candidate, session)));
+    results.push(await processEventIsolated(event, (candidate) => {
+      assertEventTenantScope(candidate, { chatId: tenant.chatId, organizationId: tenant.organizationId });
+      return processSyncEvent(chatId, candidate, session);
+    }));
   }
   sendJSON(res, 200, { results }, req);
 }
