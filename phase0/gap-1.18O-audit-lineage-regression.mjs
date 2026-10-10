@@ -72,6 +72,9 @@ try {
       'SELECT id FROM audit_events WHERE chat_id = ? AND action = ? ORDER BY id DESC LIMIT 1',
     ).get(String(tenant.chatId), 'gap1-18o.audit-chain.test');
     assert.ok(row);
+    // Simulate privileged database-level tampering that bypasses the normal
+    // append-only guard; the verifier must still detect the broken hash.
+    directDb.exec('DROP TRIGGER IF EXISTS audit_events_no_update');
     directDb.prepare('UPDATE audit_events SET metadata_json = ? WHERE id = ?')
       .run(JSON.stringify({ sequence: 'tampered' }), Number(row.id));
     const tampered = await store.verifyAuditEventChain(tenant.chatId);
