@@ -104,6 +104,36 @@ test('GAP-1.11 provider getStatus MATCH flows through evidence, invariants, deci
   assert.equal(calls, 1);
 });
 
+test('GAP-1.24 exact status-query retry replays persisted result without another provider call', async () => {
+  const base = await setup('COMPLETED');
+  const command = {
+    chatId: base.chatId,
+    paymentId: base.payment.id,
+    actor: null,
+    idempotencyKey: 'gap1-24-status-replay-' + crypto.randomUUID(),
+  };
+  const paymentCore = core();
+  const first = await paymentCore.queryStatus(command);
+  const callsAfterFirst = calls;
+  const evidenceAfterFirst = await store.listPaymentEvidence(base.chatId, base.payment.id);
+  const verificationsAfterFirst = await store.listPaymentVerifications(base.chatId, base.payment.id);
+  const ledgerAfterFirst = await store.listPaymentLedger(base.chatId, base.payment.id);
+
+  const replay = await paymentCore.queryStatus({ ...command });
+  assert.equal(calls, callsAfterFirst, 'an exact retry must not call the provider again');
+  assert.equal(replay.payment.id, first.payment.id);
+  assert.equal(replay.payment.state, first.payment.state);
+  assert.equal((await store.listPaymentEvidence(base.chatId, base.payment.id)).length, evidenceAfterFirst.length);
+  assert.equal((await store.listPaymentVerifications(base.chatId, base.payment.id)).length, verificationsAfterFirst.length);
+  assert.equal((await store.listPaymentLedger(base.chatId, base.payment.id)).length, ledgerAfterFirst.length);
+
+  await assert.rejects(
+    () => paymentCore.queryStatus({ ...command, query: { deliberatelyDifferent: true } }),
+    error => error.code === 'IDEMPOTENCY_KEY_REUSE',
+  );
+  assert.equal(calls, callsAfterFirst, 'reusing the key with different input must be rejected before provider access');
+});
+
 test('GAP-1.11 unknown/pending provider status never becomes payment success', async () => {
   const base = await setup('PENDING');
   const result = await core().queryStatus({
