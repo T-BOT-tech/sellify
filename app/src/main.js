@@ -310,6 +310,7 @@ import { patchList, renderAll, renderBrand, renderStatus } from './ui/render.js'
 import { renderSellerHome } from './ui/home.js';
 import { applyStoreBranding } from './ui/branding.js';
 import { switchTab, openMoreSheet, closeMoreSheet } from './ui/tabs.js';
+import { openAddSheet, closeAddSheet, openAddProduct, openAddSettings } from './ui/add-menu.js';
 import {
   renderNicheSelect, onNicheChange, updateNicheFieldVisibility, onBusinessModelChange,
   applyBusinessModelUI, openSettings, onCurrencyCodeChange, saveSettings,
@@ -322,6 +323,7 @@ export {
   patchList, renderAll, renderBrand, renderStatus, renderSellerHome,
   applyStoreBranding,
   switchTab, openMoreSheet, closeMoreSheet,
+  openAddSheet, closeAddSheet, openAddProduct, openAddSettings,
   renderNicheSelect, onNicheChange, updateNicheFieldVisibility, onBusinessModelChange,
   applyBusinessModelUI, openSettings, onCurrencyCodeChange, saveSettings,
   renderDeviceList, revokeDeviceInList, renderStorefrontBranding, updateBrandingPreview, saveStorefrontBranding
