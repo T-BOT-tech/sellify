@@ -47,6 +47,9 @@ jobs:
       - name: Install root dependencies
         run: npm install --ignore-scripts
 
+      - name: Ecosystem Add menu regression
+        run: node phase0/ecosystem-add-menu-regression.mjs
+
       - name: Syntax check core entrypoints
         run: |
           node --check backend/server.js
