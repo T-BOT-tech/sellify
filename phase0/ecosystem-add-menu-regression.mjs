@@ -24,8 +24,8 @@ assert.equal(ADD_MENU_ACTIONS.filter(({ destination }) => destination === 'setti
 
 assert.match(html, /id="navAdd"[^>]*onclick="openAddSheet\(\)"/);
 assert.match(html, /id="addSheet"/);
-assert.match(html, /onclick="openAddProduct\(\)"/);
-assert.match(html, /onclick="openAddSettings\(\)"/);
+assert.match(html, /onclick="openAddProduct\\\(\\\);?"/);
+assert.match(html, /onclick="openAddSettings\\\(\\\);?"/);
 assert.match(html, /id="navQueue"/);
 assert.ok(html.indexOf('id="navQueue"') > html.indexOf('id="moreSheet"'), 'Queue remains reachable in More');
 assert.match(main, /from '\.\/ui\/add-menu\.js'/);
