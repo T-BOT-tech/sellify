@@ -379,7 +379,7 @@ try {
       { query: { statusPath: '/recovery' } },
       { idempotencyKey: committedRecoveryKey },
     ),
-    /500|failed|error|request/i,
+    error => error?.status === 500 || error?.code === 'HTTP_500',
     'HTTP request should fail when status-query result persistence fails after financial commit',
   );
   const paymentAfterResultWriteFailure = await store.getPayment(tenantA.chatId, paymentRecoveryA.id);
