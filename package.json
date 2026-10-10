@@ -98,6 +98,7 @@
     "test:phase13.11.8": "node phase0/phase13.11.8-restaurant-warehouse-logistics-regression.mjs",
     "test:phase13.11.9": "node phase0/phase13.11.9-unified-fulfillment-regression.mjs",
     "test:phase13.11.10": "node phase0/phase13.11.10-event-boundary-regression.mjs",
+    "test:outbox-tenant-scope": "node phase0/event-outbox-tenant-scope-regression.mjs",
     "test:phase13.11.11": "node phase0/phase13.11.11-idempotency-replay-regression.mjs",
     "test:phase13.11.12": "node phase0/phase13.11.12-failure-isolation-regression.mjs",
     "test:phase13.11.13": "node phase0/phase13.11.13-cancellation-returns-regression.mjs",
