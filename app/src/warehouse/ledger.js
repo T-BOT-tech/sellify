@@ -37,6 +37,7 @@ export function recordInventoryMovement(product, quantity, type, meta = {}) {
   const movement = {
     id: uid(),
     eventId: meta.eventId || eventId(),
+    tenantChatId: String(config.chatId || ''),
     organizationId: config.organizationId || '',
     locationId: meta.locationId || config.locationId || '',
     productId: String(product.id),
@@ -68,6 +69,8 @@ export async function recordCanonicalInventoryMovement(input = {}) {
   }
   const event = {
     eventId: input.eventId || eventId(),
+    tenantChatId: String(config.chatId || ''),
+    organizationId: String(config.organizationId || ''),
     productId,
     quantity,
     movementType,
@@ -98,7 +101,7 @@ export async function recordCanonicalInventoryMovement(input = {}) {
     );
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { const error = new Error(data?.error?.message || `Inventory update failed (${res.status})`); error.status = res.status; error.code = data?.error?.code; throw error; }
-    const remote = data.movement || event;
+    const remote = { ...(data.movement || event), tenantChatId: String(config.chatId || ''), organizationId: String(config.organizationId || '') };
     const existing = inventoryMovements.filter(m => m.eventId !== remote.eventId);
     setInventoryMovements([{ ...remote, syncStatus: 'synced' }, ...existing]);
     persist();
@@ -160,10 +163,16 @@ export async function loadInventoryMovements({ productId = '', locationId = '', 
   if (!res.ok) return inventoryMovements;
   const data = await res.json();
   if (!isScopeActive() || !Array.isArray(data.movements)) return inventoryMovements;
-  const byEvent = new Map(inventoryMovements.map(m => [m.eventId, m]));
+  const scopedExisting = inventoryMovements.filter(m => {
+    if (String(m.tenantChatId || '') === scope.tenantChatId) return true;
+    // Legacy records without tenantChatId may only be retained when their
+    // organization matches the authenticated scope. Unknown ownership fails closed.
+    return !m.tenantChatId && scope.organizationId && String(m.organizationId || '') === scope.organizationId;
+  });
+  const byEvent = new Map(scopedExisting.map(m => [m.eventId, m]));
   for (const remote of data.movements) {
     if (!remote || typeof remote.eventId !== 'string' || !remote.eventId.trim()) continue;
-    byEvent.set(remote.eventId, { ...remote, syncStatus: 'synced' });
+    byEvent.set(remote.eventId, { ...remote, tenantChatId: scope.tenantChatId, organizationId: String(remote.organizationId || scope.organizationId), syncStatus: 'synced' });
   }
   const merged = [...byEvent.values()].sort((a, b) => String(b.occurredAt || '').localeCompare(String(a.occurredAt || '')));
   setInventoryMovements(merged);
