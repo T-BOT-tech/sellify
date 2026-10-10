@@ -196,6 +196,42 @@ test('GAP-1.24 recovers committed financial result when query-result persistence
   assert.equal((await store.listPaymentLedger(base.chatId, base.payment.id)).length, 2);
 });
 
+test('GAP-1.24 recovers committed expiry decision when query-result persistence fails', async () => {
+  const base = await setup('EXPIRED');
+  let failCompletion = true;
+  const paymentCore = core({
+    completePaymentStatusQuery: async (...args) => {
+      if (failCompletion) {
+        failCompletion = false;
+        throw new Error('simulated crash after expiry decision commit');
+      }
+      return store.completePaymentStatusQuery(...args);
+    },
+  });
+  const command = {
+    chatId: base.chatId,
+    paymentId: base.payment.id,
+    actor: null,
+    idempotencyKey: 'gap1-24-expiry-recovery-' + crypto.randomUUID(),
+  };
+  const callsBefore = calls;
+
+  await assert.rejects(() => paymentCore.queryStatus(command), /simulated crash after expiry decision commit/);
+  assert.equal((await store.getPayment(base.chatId, base.payment.id)).state, 'EXPIRED');
+  const ledgerAfterCommit = await store.listPaymentLedger(base.chatId, base.payment.id);
+  assert.equal(ledgerAfterCommit.length, 2);
+  assert.equal(ledgerAfterCommit[1].entryType, 'EXPIRED');
+
+  failCompletion = false;
+  const recovered = await paymentCore.queryStatus({ ...command });
+  assert.equal(recovered.payment.state, 'EXPIRED');
+  assert.equal(recovered.status, 'EXPIRED');
+  assert.equal(recovered.decision.targetState, 'EXPIRED');
+  assert.equal(calls - callsBefore, 1, 'recovery must not query the provider again');
+  assert.equal((await store.listPaymentLedger(base.chatId, base.payment.id)).length, 2,
+    'recovery must not duplicate the expiry transition');
+});
+
 test('GAP-1.24 leaves pre-commit crash unresolved instead of replaying blindly', async () => {
   const base = await setup('COMPLETED');
   const callsBefore = calls;
