@@ -113,6 +113,17 @@ try {
     idempotencyKey: 'pf-http-create-success-' + randomUUID(),
   });
   const paymentSuccessA = createdSuccessA.payment;
+  const createdRecoveryA = await store.createPaymentWithIntent(tenantA.chatId, {
+    organizationId: sessionA.organizationId,
+    paymentAccountId: accountA.id,
+    providerId: 'telebirr',
+    channel: 'api',
+    amountMinor: 88000,
+    currency: 'ETB',
+    externalReference: 'PF-HTTP-RECOVERY-' + randomUUID(),
+    idempotencyKey: 'pf-http-create-recovery-' + randomUUID(),
+  });
+  const paymentRecoveryA = createdRecoveryA.payment;
   const createdRetryA = await store.createPaymentWithIntent(tenantA.chatId, {
     organizationId: sessionA.organizationId,
     paymentAccountId: accountA.id,
@@ -146,7 +157,7 @@ try {
   });
   const paymentB = createdB.payment;
 
-  const providerCalls = { unknown: 0, success: 0, flaky: 0 };
+  const providerCalls = { unknown: 0, success: 0, recovery: 0, flaky: 0 };
   let flakyMode = 'fail';
   providerServer = createHttpServer((req, res) => {
     const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname;
@@ -189,6 +200,20 @@ try {
         receiverAccount: accountA.accountIdentifier,
         reference: paymentSuccessA.externalReference,
         transactionId: 'PF-HTTP-TX-' + paymentSuccessA.id,
+        observedAt: new Date().toISOString(),
+      }));
+      return;
+    }
+    if (pathname === '/recovery') {
+      providerCalls.recovery += 1;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: 'SUCCESS',
+        amountMinor: paymentRecoveryA.amountMinor,
+        currency: paymentRecoveryA.currency,
+        receiverAccount: accountA.accountIdentifier,
+        reference: paymentRecoveryA.externalReference,
+        transactionId: 'PF-HTTP-TX-' + paymentRecoveryA.id,
         observedAt: new Date().toISOString(),
       }));
       return;
@@ -239,6 +264,8 @@ try {
     '/payments/' + encodeURIComponent(paymentA.id) + '/status';
   const successStatusPath = '/tenants/' + encodeURIComponent(tenantA.chatId) +
     '/payments/' + encodeURIComponent(paymentSuccessA.id) + '/status';
+  const recoveryStatusPath = '/tenants/' + encodeURIComponent(tenantA.chatId) +
+    '/payments/' + encodeURIComponent(paymentRecoveryA.id) + '/status';
   let lostResponsePath = statusPath;
   let simulateLostResponse = true;
   const simulateResponseLoss = async (input, init = {}) => {
@@ -335,6 +362,65 @@ try {
   assert.equal(successCommandRows[0].status, 'SUCCEEDED');
   assert.equal(successCommandRows[0].payment_id, paymentSuccessA.id);
 
+  // Simulate a real SQLite failure after the canonical financial transaction
+  // commits but before the status-query command can persist its result. The
+  // first HTTP request must fail without undoing the financial transaction;
+  // a same-key retry must reconstruct the result from canonical persisted
+  // decision/evidence lineage and must not call the provider or write ledger
+  // entries a second time.
+  const committedRecoveryKey = 'pf-http-commit-before-result-' + randomUUID();
+  db.exec(`CREATE TRIGGER test_fail_status_query_completion
+    BEFORE UPDATE ON payment_status_query_commands
+    WHEN NEW.idempotency_key = '${committedRecoveryKey}' AND NEW.status = 'SUCCEEDED'
+    BEGIN SELECT RAISE(ABORT, 'simulated result persistence crash'); END;`);
+  await assert.rejects(
+    () => queryPaymentStatus(
+      paymentRecoveryA.id,
+      { query: { statusPath: '/recovery' } },
+      { idempotencyKey: committedRecoveryKey },
+    ),
+    /500|failed|error|request/i,
+    'HTTP request should fail when status-query result persistence fails after financial commit',
+  );
+  const paymentAfterResultWriteFailure = await store.getPayment(tenantA.chatId, paymentRecoveryA.id);
+  assert.equal(paymentAfterResultWriteFailure.state, 'VERIFIED',
+    'canonical financial decision must remain committed when command result persistence fails');
+  assert.deepEqual(
+    (await store.listPaymentLedger(tenantA.chatId, paymentRecoveryA.id)).map(entry => entry.entryType),
+    ['CREATED', 'VERIFIED'],
+  );
+  assert.equal((await store.listPaymentEvidence(tenantA.chatId, paymentRecoveryA.id)).length, 1);
+  assert.equal((await store.listPaymentVerifications(tenantA.chatId, paymentRecoveryA.id)).length, 1);
+  assert.equal((await store.listPaymentDecisions(tenantA.chatId, paymentRecoveryA.id)).length, 1);
+  assert.equal(providerCalls.recovery, 1);
+  assert.equal(db.prepare(
+    'SELECT status FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(committedRecoveryKey).status, 'IN_PROGRESS',
+  'failed completion write leaves a recoverable command claim');
+
+  db.exec('DROP TRIGGER test_fail_status_query_completion');
+  const recoveredCommittedResult = await queryPaymentStatus(
+    paymentRecoveryA.id,
+    { query: { statusPath: '/recovery' } },
+    { idempotencyKey: committedRecoveryKey },
+  );
+  assert.equal(recoveredCommittedResult.status, 'MATCH');
+  assert.equal(recoveredCommittedResult.payment.state, 'VERIFIED');
+  assert.equal(recoveredCommittedResult.decision.targetState, 'VERIFIED');
+  assert.equal(providerCalls.recovery, 1, 'recovery must not repeat the provider call');
+  assert.deepEqual(
+    (await store.listPaymentLedger(tenantA.chatId, paymentRecoveryA.id)).map(entry => entry.entryType),
+    ['CREATED', 'VERIFIED'],
+    'recovery must not duplicate the committed ledger transition',
+  );
+  assert.equal((await store.listPaymentEvidence(tenantA.chatId, paymentRecoveryA.id)).length, 1);
+  assert.equal((await store.listPaymentVerifications(tenantA.chatId, paymentRecoveryA.id)).length, 1);
+  assert.equal((await store.listPaymentDecisions(tenantA.chatId, paymentRecoveryA.id)).length, 1);
+  assert.equal(db.prepare(
+    'SELECT status FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(committedRecoveryKey).status, 'SUCCEEDED',
+  'successful recovery persists the reconstructed command result');
+
   // Provider network errors are retryable only before evidence persistence.
   // A same-key retry should reclaim that known-safe failed attempt, then become
   // a durable successful command once the provider responds.
@@ -412,6 +498,7 @@ try {
   console.log('PASS PF-1 HTTP + real frontend client + SQLite lost-response retry');
   console.log('PASS unavailable provider outcome remains UNKNOWN and causes no financial transition');
   console.log('PASS successful MATCH -> VERIFIED -> ledger transition and lost-response replay');
+  console.log('PASS HTTP + SQLite recovery after financial commit but failed query-result persistence');
   console.log('PASS evidence, verification, decision, and ledger are not duplicated on replay');
   console.log('PASS retryable provider network failure can retry safely with the same key');
   console.log('PASS durable status-query command replays through the actual HTTP route');
