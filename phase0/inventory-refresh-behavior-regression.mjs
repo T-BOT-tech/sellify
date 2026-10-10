@@ -37,7 +37,7 @@ Object.defineProperty(globalThis, 'navigator', {
 const state = await import('../app/src/state.js');
 const ledger = await import('../app/src/warehouse/ledger.js');
 const { setConfig, setInventoryBalances, setInventoryMovements } = state;
-const { loadInventoryBalances, getInventoryBalanceRefreshState, getInventoryBalance } = ledger;
+const { loadInventoryBalances, loadInventoryMovements, getInventoryBalanceRefreshState, getInventoryBalance } = ledger;
 
 function configure(overrides = {}) {
   setConfig({
@@ -198,6 +198,37 @@ assert.equal(getInventoryBalance('product-b', 'location-b'), 22,
   'active tenant balance remains after an older request resolves');
 assert.equal(getInventoryBalance('product-a', 'location-a'), 0,
   'late response from previous tenant is ignored instead of entering the shared projection');
+
+// Movement-list responses must also be discarded when the active scope changes.
+setInventoryMovements([]);
+configure({ chatId: 'tenant-a', organizationId: 'org-a', sessionToken: 'session-a', locationId: 'location-a' });
+let resolveTenantAMovements;
+globalThis.fetch = async (url) => {
+  if (String(url).includes('/tenants/tenant-a/inventory/movements')) {
+    return new Promise(resolve => { resolveTenantAMovements = resolve; });
+  }
+  if (String(url).includes('/tenants/tenant-b/inventory/movements')) {
+    return response(200, { movements: [{
+      eventId: 'tenant-b-event', organizationId: 'org-b', productId: 'product-b',
+      locationId: 'location-b', quantity: 2, occurredAt: '2026-10-10T12:00:00.000Z',
+    }] });
+  }
+  throw new Error('Unexpected movement URL in scope-race test: ' + url);
+};
+const pendingTenantAMovements = loadInventoryMovements({ locationId: 'location-a' });
+configure({ chatId: 'tenant-b', organizationId: 'org-b', sessionToken: 'session-b', locationId: 'location-b' });
+await loadInventoryMovements({ locationId: 'location-b' });
+assert.equal(state.inventoryMovements.some(m => m.eventId === 'tenant-b-event'), true,
+  'active tenant movement history is loaded');
+resolveTenantAMovements(response(200, { movements: [{
+  eventId: 'tenant-a-event', organizationId: 'org-a', productId: 'product-a',
+  locationId: 'location-a', quantity: 99, occurredAt: '2026-10-10T11:00:00.000Z',
+}] }));
+await pendingTenantAMovements;
+assert.equal(state.inventoryMovements.some(m => m.eventId === 'tenant-a-event'), false,
+  'late movement response from previous tenant is discarded');
+assert.equal(state.inventoryMovements.some(m => m.eventId === 'tenant-b-event'), true,
+  'late previous-tenant response does not remove active tenant movement history');
 
 console.log('Inventory refresh behavior regression: PASS');
 console.log('Success, failures, offline, malformed payloads, tenant/location isolation, and scope changes: PASS');
