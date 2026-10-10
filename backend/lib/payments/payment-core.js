@@ -484,7 +484,15 @@ export class PaymentCore {
     try { saved = JSON.parse(command.response_json || command.responseJson || '{}'); } catch { return null; }
     const paymentSnapshot = saved.payment;
     const targetState = String(paymentSnapshot?.state || '').toUpperCase();
-    if (!paymentSnapshot || !['VERIFIED', 'RECONCILED'].includes(targetState)) return null;
+    // Status queries can authoritatively commit mismatch, duplicate, expiry,
+    // partial-payment, or rejection outcomes as well as successful payment.
+    // Recovery must cover every state this status-query decision path can
+    // commit, otherwise a lost response can leave those commands stuck forever.
+    const recoverableTargets = new Set([
+      'VERIFIED', 'RECONCILED', 'REJECTED', 'DUPLICATE',
+      'MISMATCH', 'EXPIRED', 'PARTIAL',
+    ]);
+    if (!paymentSnapshot || !recoverableTargets.has(targetState)) return null;
 
     const [evidenceRows, verificationRows, decisionRows] = await Promise.all([
       this.store.listPaymentEvidence(chatId, paymentId),
