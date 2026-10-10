@@ -11,7 +11,7 @@ Resume Sellify implementation in a new ChatGPT conversation without losing curre
 - Pull request: [#40 — feat(ux): introduce ecosystem Add action menu](https://github.com/T-BOT-tech/sellify/pull/40)
 - PR status at handoff preparation: open, draft, unmerged.
 - Diagnostic commit previously added: `21173747fe3b4d791d63586c0a635b1194cac950` — adds stack/error output to Phase 0 Golden Regression failure reporting.
-- PR head observed during the latest check: `e1db4c1fffb10fb6a2560f92c2b473ff98ffad9b`. Verify current head before acting.
+- Current candidate head at this handoff refresh: `7ec2c68ad04c8f1bf3a0f601a313dc1058d3f771`. Re-check GitHub before acting.
 
 **Do not merge or close PR #40 without explicit user authorization.**
 
@@ -40,34 +40,46 @@ Relevant files changed on the feature branch include:
 
 The focused Add-menu regression passed in the latest checked CI run. Syntax and separate security/logistics jobs also passed in the checked runs. Recheck current workflow runs before relying on these statuses.
 
-## Newly confirmed baseline failure
+## Current verified baseline and payment certification
 
-The latest checked Phase 0 job log now exposes the underlying exception:
+The previously reported Golden Regression failure involving `payment_evidence` and migration ordering is no longer the current blocker. The candidate branch now passes the full required CI workflow and repository security checks.
 
-```
-Phase 0 Golden Regression: FAILED
-Regression error: Error: no such table: payment_evidence
-    at runMigrations (backend/lib/store-sqlite.js:2007:10)
-    at ensureDatabase (backend/lib/store-sqlite.js:5216:3)
-    at Module.getOrCreateUserByTelegram (backend/lib/store-sqlite.js:9447:3)
-    at phase0/golden-regression.mjs:50:28
-```
+- Latest candidate head: `7ec2c68ad04c8f1bf3a0f601a313dc1058d3f771`
+- Sellify CI: run 1395 — passed.
+- Repository Security Checks: run 1395 — passed.
+- PR #40 remains open, draft, and unmerged. These results apply to the candidate branch, not `main`.
 
-The failure happens during early database initialization, before the Golden Regression test suite proceeds. The evidence points to a migration/schema dependency or ordering problem involving `payment_evidence`; **the exact migration responsible has not yet been identified**.
+### Payment Core / frontend certification completed on candidate branch
 
-Latest checked workflow run: [38057857623](https://github.com/T-BOT-tech/sellify/actions/runs/38057857623). The failed baseline job was `114229905421`. This is the pull-request merge-ref CI run; verify newer runs first.
+The latest PF-1L regression, `phase0/gap-pf-1L-payment-frontend-http-sqlite-e2e-regression.mjs`, runs the real frontend client through the actual HTTP route, provider adapter, Payment Core, and isolated SQLite persistence.
 
-### Required investigation
+It verifies:
 
-1. Fetch the current PR head and latest CI run/jobs.
-2. Inspect `backend/lib/store-sqlite.js` around migration execution line ~2007 and initialization line ~5216.
-3. Find every migration that creates or references `payment_evidence`; determine which migration references it before creation or assumes a schema state not yet established.
-4. Compare the current feature branch with `main` to determine whether the defect is pre-existing or introduced by this branch.
-5. Reproduce using the supported Node runtime and an isolated temporary database if possible.
-6. Fix the underlying migration dependency/order or incorrect schema assumption without skipping migrations, weakening assertions, or editing persisted production data.
-7. Re-run the Phase 0 baseline, Add-menu regression, and relevant payment/migration regressions. Record actual outcomes and commit SHA.
+1. An unavailable provider result remains UNKNOWN and does not mutate the payment or ledger.
+2. A successful provider observation validates amount, currency, receiver account, reference, transaction ID, and observation time before Payment Core commits MATCH → VERIFIED.
+3. A lost HTTP response followed by the same-key retry replays the persisted result without repeating provider work or duplicating evidence, verification, decision, or ledger entries.
+4. A transient provider network failure can be retried with the same key when the failure is known to have occurred before evidence persistence; the later successful result commits once.
+5. A session from one tenant cannot query another tenant's payment or claim its status-query command.
 
-Do not call the baseline healthy until it passes. A passing focused Add-menu regression does not replace the baseline gate.
+The route-level test exposed and fixed:
+- Missing durable status-query and recovery lookup methods in the HTTP server's Payment Core store adapter.
+- Provider adapters not exposing observation fields in the shape Payment Core needs to validate.
+- Decision logic that could interpret missing fields on an UNKNOWN observation as a financial mismatch.
+- Same-key retry semantics for known-safe, retryable provider network/timeout failures.
+
+The current implementation reuses migration 64 and the existing command table; no additional migration was needed for retryable failure metadata.
+
+### Key recent commits
+
+- `d8057ade394049e89b165e339365e865107c5ef4` — preserve provider observation fields for Payment Core validation.
+- `53d4271ae51a7df4522e4ce711b7aa7dc326e316` — normalize verified provider observations through the status-query boundary.
+- `87c9e28252c2ecd8adde9b660d89e2f49aca4c2c` — prevent UNKNOWN observations with missing fields from causing financial mismatch decisions.
+- `df3d552f95b241026884a87172aefb7ba457788a` — safely reclaim same-key commands after retryable provider transport failures.
+- `1e46659e1de82685b5b2baae2e9bd46eefb03e0a` — persist retryability metadata for safe provider failures.
+- `c9f0f84b26e555379fb29b2cc5de15e05e8278ff` — certify successful route-level transition and same-key provider-error recovery.
+- `7ec2c68ad04c8f1bf3a0f601a313dc1058d3f771` — update the authoritative gap analysis with current evidence.
+
+**Interpretation:** Phases 1–3 are hardened and regression-certified on the candidate branch for the critical retry, recovery, successful-transition, unresolved-outcome, duplicate-effect, and tenant-isolation paths. This is not a claim that the same changes are on `main`; PR #40 has not been merged.
 
 ## Architecture boundaries — preserve
 
@@ -98,17 +110,18 @@ Optional staff/printer setup should not block a basic “ready to sell” journe
 ## Wider project context to preserve
 
 - User's current focus includes the first-time merchant experience and ecosystem entry, but Sellify implementation must continue from actual live repository state.
-- Payment Core hardening previously tracked GAP-1.18 onward, including evidence → verification → decision → payment transition lineage, persistence, idempotency, immutability, recovery, security boundaries, and production-readiness gates. Do not claim those are newly revalidated by this handoff.
+- Payment Core hardening tracked GAP-1.18 onward, including evidence → verification → decision → payment transition lineage, persistence, idempotency, immutability, recovery, security boundaries, and production-readiness gates. These regressions passed on candidate CI run 1395; main still requires separate verification after an authorized merge.
 - Logistics scheduling boundary L11.8 is designed so FEASIBLE can proceed to SCHEDULE, while CONFLICT/UNKNOWN blocks; scheduling must not itself reserve capacity, select a provider, dispatch, or mutate execution state.
 - Dynamic capacity utilization was discussed as a future/additional feature, with flexible allocations rather than making the core verticals depend on rigid fixed-hour schedules.
 
 ## Recommended continuation sequence
 
 1. **Refresh state:** inspect current PR #40, branch head, latest workflow runs, and repository files.
-2. **Diagnose the baseline:** resolve the `payment_evidence` initialization/migration failure based on code and migration evidence.
-3. **Revalidate UX:** verify Add-menu behavior and integrations with existing catalog, marketplace, settings, pack, and channel workflows.
-4. **Update status:** distinguish implemented, tested, partially verified, blocked, and deferred items.
-5. **Continue implementation:** take the next approved task only after the current regression state is clear.
+2. **Preserve payment baseline:** do not reopen completed payment work without new evidence; the current candidate passes CI and security checks.
+3. **Review the Add-menu / first-experience scope:** verify the existing navigation against the agreed merchant journeys and ensure every action reaches a canonical existing surface.
+4. **Choose the smallest next UX slice:** prefer one journey at a time, reusing existing backend authority and tests.
+5. **Update the authoritative gap document** only when new implementation or regression evidence changes a status.
+6. **Do not merge or close PR #40** without explicit user authorization.
 
 ## Working rules for the next chat
 
