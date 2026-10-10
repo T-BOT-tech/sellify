@@ -30,6 +30,7 @@ assert.match(html, /id="navQueue"/);
 assert.ok(html.indexOf('id="navQueue"') > html.indexOf('id="moreSheet"'), 'Queue remains reachable in More');
 assert.match(main, /from '\.\/ui\/add-menu\.js'/);
 assert.match(bridge, /openAddSheet, closeAddSheet, openAddProduct, openAddSettings/);
+assert.match(bridge, /Object\.assign\(window, \{[\s\S]*?openAddSheet, closeAddSheet, openAddProduct, openAddSettings,/);
 assert.match(tabs, /const overflowIds = \['navQueue'/);
 assert.match(tabs, /const overflowTabs = \['queue'/);
 assert.match(settings, /renderPackReadinessPanel\(\)/);
