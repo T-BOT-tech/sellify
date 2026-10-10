@@ -7,6 +7,7 @@ import { statusClass } from '../design-system/index.js';
 import { t } from '../ui/i18n.js';
 import { hasPermission } from '../auth/permissions.js';
 import { renderPackWorkspace } from './pack-workspace.js';
+import { getLowStockProducts, getOutOfStockProducts } from '../warehouse/inventory.js';
 
 function connectivityState() {
   return navigator.onLine ? 'ONLINE' : UI_STATES.OFFLINE;
@@ -25,10 +26,12 @@ export function renderWorkspace() {
   if (!root) return;
 
   const queued = orders.filter(order => order.status === 'queued').length;
-  const lowStock = products.filter(product => {
-    const stock = Number(product.stock);
-    return Number.isFinite(stock) && stock >= 0 && stock <= 5;
-  }).length;
+  // Use Sellify's existing inventory projection and reorder-point rules rather
+  // than inventing a fixed threshold in the Home workspace. These are saved
+  // projections; this surface does not claim that they were freshly verified.
+  const lowStock = getLowStockProducts().length;
+  const outOfStock = getOutOfStockProducts().length;
+  const inventoryAttention = lowStock + outOfStock;
   const state = connectivityState();
   const business = config.sellerName || t('setupBusiness');
   const role = roleLabel(currentRole());
@@ -49,7 +52,7 @@ export function renderWorkspace() {
       <section class="fux-workspace-section" aria-labelledby="fux-attention-title">
         <div class="fux-section-heading">
           <h3 id="fux-attention-title">Attention</h3>
-          <span>${queued + lowStock} items</span>
+          <span>${queued + inventoryAttention} items</span>
         </div>
         <div class="fux-card-grid">
           <button class="fux-work-card ${queued ? 'has-attention' : ''}" type="button" onclick="switchTab('queue')">
@@ -57,10 +60,10 @@ export function renderWorkspace() {
             <strong>${queued ? `${queued} waiting` : 'All synced'}</strong>
             <small>${queued ? 'Review queued work' : 'No queued orders'}</small>
           </button>
-          <button class="fux-work-card ${lowStock ? 'has-attention' : ''}" type="button" onclick="switchTab('catalog')">
-            <span class="fux-card-label">Inventory attention</span>
-            <strong>${lowStock} low stock</strong>
-            <small>Open the catalog to review stock</small>
+          <button class="fux-work-card ${inventoryAttention ? 'has-attention' : ''}" type="button" onclick="switchTab('warehouse')">
+            <span class="fux-card-label">Inventory health</span>
+            <strong>${inventoryAttention ? `${inventoryAttention} to review` : 'No saved exceptions'}</strong>
+            <small>${lowStock} below reorder point · ${outOfStock} out of stock. Saved projection only; open Warehouse to refresh.</small>
           </button>
         </div>
       </section>
