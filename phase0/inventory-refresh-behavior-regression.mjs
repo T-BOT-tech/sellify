@@ -20,6 +20,7 @@ const rootElement = {
 };
 globalThis.document = {
   documentElement: rootElement,
+  getElementById() { return null; },
   querySelector() { return { setAttribute() {} }; },
   createElement() { return { setAttribute() {} }; },
   head: { appendChild() {} },
