@@ -9573,6 +9573,77 @@ export async function listAuditEvents(chatId, limit = 100, filters = {}) {
   }));
 }
 
+export async function verifyAuditEventChain(chatId) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organizationId) {
+    throw Object.assign(new Error('Unknown organization'), { statusCode: 404, code: 'ORGANIZATION_NOT_FOUND' });
+  }
+
+  const rows = db.prepare(`
+    SELECT id, chat_id, organization_id, location_id, actor_id, device_id,
+           action, entity_type, entity_id, reason, result, metadata_json,
+           created_at, previous_hash, event_hash, lineage_type, lineage_id
+    FROM audit_events
+    WHERE organization_id = ? AND event_hash IS NOT NULL
+    ORDER BY id ASC
+  `).all(String(tenant.organizationId));
+
+  let previousHash = null;
+  let hasPrevious = false;
+  let checked = 0;
+  for (const row of rows) {
+    checked += 1;
+    if (hasPrevious && String(row.previous_hash || '') !== previousHash) {
+      return {
+        valid: false,
+        organizationId: tenant.organizationId,
+        eventsChecked: checked,
+        invalidEventId: Number(row.id),
+        reasonCode: 'AUDIT_PREVIOUS_HASH_MISMATCH',
+      };
+    }
+
+    const canonical = [
+      row.previous_hash || '',
+      row.organization_id || '',
+      String(row.chat_id ?? ''),
+      String(row.location_id ?? ''),
+      String(row.actor_id ?? ''),
+      String(row.device_id ?? ''),
+      String(row.action || ''),
+      String(row.entity_type || ''),
+      row.entity_id || '',
+      String(row.reason || ''),
+      String(row.result || 'success'),
+      row.metadata_json || json({}),
+      String(row.created_at || ''),
+      row.lineage_type || '',
+      row.lineage_id || '',
+    ].join('|');
+    const calculatedHash = crypto.createHash('sha256').update(canonical).digest('hex');
+    if (calculatedHash !== String(row.event_hash || '')) {
+      return {
+        valid: false,
+        organizationId: tenant.organizationId,
+        eventsChecked: checked,
+        invalidEventId: Number(row.id),
+        reasonCode: 'AUDIT_EVENT_HASH_MISMATCH',
+      };
+    }
+    previousHash = String(row.event_hash);
+    hasPrevious = true;
+  }
+
+  return {
+    valid: true,
+    organizationId: tenant.organizationId,
+    eventsChecked: checked,
+    invalidEventId: null,
+    reasonCode: null,
+  };
+}
+
 export async function createDatabaseBackup() {
   ensureDatabase();
   await mkdir(BACKUP_DIR, { recursive: true });
