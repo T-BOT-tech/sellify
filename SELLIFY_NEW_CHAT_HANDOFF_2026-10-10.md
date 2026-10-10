@@ -20,7 +20,7 @@ Resume Sellify implementation in a new ChatGPT conversation without losing curre
 The feature is navigation/composition only and should reuse existing domain flows:
 
 - Take Order → existing order tab.
-- Add Product or Service → existing catalog form.
+- Add Product → existing catalog form. First-class service creation is deferred: the current catalog is product-shaped, and service-specific inventory/fulfillment semantics have not been established.
 - Discover Marketplace → existing marketplace tab.
 - Configure Packs and Channels → existing settings/readiness/channel surfaces.
 - Business Setup → existing settings surface.
@@ -98,7 +98,7 @@ The current implementation reuses migration 64 and the existing command table; n
 Sellify should help a merchant start selling quickly and progressively discover more capabilities. Keep these workflows distinct even when they are reachable from one entry surface:
 
 1. Take an order.
-2. Create the merchant's own product or service.
+2. Create the merchant's own product. First-class service creation follows only after a canonical service type and compatible inventory/fulfillment behavior are implemented.
 3. Discover/buy marketplace products or services.
 4. Activate/configure vertical packs and capabilities.
 5. Connect sales channels.
@@ -119,9 +119,10 @@ Optional staff/printer setup should not block a basic “ready to sell” journe
 1. **Refresh state:** inspect current PR #40, branch head, latest workflow runs, and repository files.
 2. **Preserve payment baseline:** do not reopen completed payment work without new evidence; the current candidate passes CI and security checks.
 3. **Review the Add-menu / first-experience scope:** verify the existing navigation against the agreed merchant journeys and ensure every action reaches a canonical existing surface.
-4. **Choose the smallest next UX slice:** prefer one journey at a time, reusing existing backend authority and tests.
-5. **Update the authoritative gap document** only when new implementation or regression evidence changes a status.
-6. **Do not merge or close PR #40** without explicit user authorization.
+4. **Define the service catalog contract:** inspect order, inventory, and fulfillment boundaries before adding a service type; do not treat an untracked product as a fully supported service.
+5. **Choose the smallest next UX slice:** prefer one journey at a time, reusing existing backend authority and tests.
+6. **Update the authoritative gap document** only when new implementation or regression evidence changes a status.
+7. **Do not merge or close PR #40** without explicit user authorization.
 
 ## Working rules for the next chat
 
