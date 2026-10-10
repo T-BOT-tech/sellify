@@ -247,11 +247,20 @@ export async function loadInventoryBalances({ locationId = '' } = {}) {
     }
 
     const next = data.balances.map(row => ({
+      tenantChatId: scope.tenantChatId,
       locationId: row.locationId || '',
       productId: String(row.productId),
       quantity: Number(row.quantity || 0),
     }));
-    setInventoryBalances(next);
+    // Keep cached projections for other scopes intact, but never let them
+    // satisfy reads for the active tenant/location. Legacy rows without a
+    // tenant marker are retained for migration compatibility and are not
+    // considered canonical for an authenticated tenant.
+    const retained = inventoryBalances.filter(row => {
+      if (String(row.tenantChatId || '') !== scope.tenantChatId) return true;
+      return scope.locationId && String(row.locationId || '') !== scope.locationId;
+    });
+    setInventoryBalances([...retained, ...next]);
     persistBalances();
     const refreshedAt = new Date().toISOString();
     lastSuccessfulInventoryBalanceRefresh = { ...scope, refreshedAt };
@@ -269,7 +278,11 @@ export async function loadInventoryBalances({ locationId = '' } = {}) {
 function persistBalances() { saveJSON(STORAGE_KEYS.inventoryBalances, inventoryBalances); }
 
 export function getInventoryBalance(productId, locationId = '') {
-  const row = inventoryBalances.find(item => String(item.productId) === String(productId) && (!locationId || String(item.locationId) === String(locationId)));
+  const tenantChatId = String(config.chatId || '');
+  const scopedRows = tenantChatId
+    ? inventoryBalances.filter(item => String(item.tenantChatId || '') === tenantChatId)
+    : inventoryBalances;
+  const row = scopedRows.find(item => String(item.productId) === String(productId) && (!locationId || String(item.locationId) === String(locationId)));
   if (row) return Number(row.quantity || 0);
   return localInventoryBalance(productId, locationId);
 }
