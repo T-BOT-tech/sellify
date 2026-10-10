@@ -359,6 +359,65 @@ test('GAP-1.11 unknown/pending provider status never becomes payment success', a
   assert.equal(verifications[0].result, 'PENDING');
 });
 
+test('GAP-1.24 concurrent recovery after committed transition returns one canonical result', async () => {
+  const base = await setup('COMPLETED');
+  let failCompletion = true;
+  let recoveryBarrierEnabled = false;
+  let recoveryArrivals = 0;
+  let releaseRecovery;
+  const recoveryGate = new Promise(resolve => { releaseRecovery = resolve; });
+  const paymentCore = core({
+    completePaymentStatusQuery: async (...args) => {
+      if (failCompletion) {
+        failCompletion = false;
+        throw new Error('simulated crash after financial commit');
+      }
+      return store.completePaymentStatusQuery(...args);
+    },
+    getPaymentIdempotency: async (...args) => {
+      if (recoveryBarrierEnabled) {
+        recoveryArrivals += 1;
+        if (recoveryArrivals === 2) releaseRecovery();
+        await recoveryGate;
+      }
+      return store.getPaymentIdempotency(...args);
+    },
+  });
+  const command = {
+    chatId: base.chatId,
+    paymentId: base.payment.id,
+    actor: null,
+    idempotencyKey: 'gap1-24-concurrent-recovery-' + crypto.randomUUID(),
+  };
+  const callsBefore = calls;
+
+  await assert.rejects(() => paymentCore.queryStatus(command), /simulated crash after financial commit/);
+  assert.equal((await store.getPayment(base.chatId, base.payment.id)).state, 'VERIFIED');
+  assert.equal((await store.listPaymentLedger(base.chatId, base.payment.id)).length, 2);
+
+  recoveryBarrierEnabled = true;
+  const recovered = await Promise.all([
+    paymentCore.queryStatus({ ...command }),
+    paymentCore.queryStatus({ ...command }),
+  ]);
+  recoveryBarrierEnabled = false;
+
+  assert.equal(recoveryArrivals, 2, 'both retries should exercise the committed-recovery path');
+  assert.equal(recovered.length, 2);
+  assert.ok(recovered.every(result => result.payment.state === 'VERIFIED'));
+  assert.ok(recovered.every(result => result.decision.targetState === 'VERIFIED'));
+  assert.equal(calls - callsBefore, 1, 'concurrent recovery must not query the provider again');
+  assert.equal((await store.listPaymentLedger(base.chatId, base.payment.id)).length, 2,
+    'concurrent recovery must not duplicate the committed financial transition');
+  const commandRow = await store.beginPaymentStatusQuery(base.chatId, {
+    paymentId: base.payment.id,
+    idempotencyKey: command.idempotencyKey,
+    requestHash: 'not-the-real-hash',
+  }).catch(error => error);
+  assert.equal(commandRow?.code, 'IDEMPOTENCY_KEY_REUSE',
+    'recovery must leave one completed command bound to its original request fingerprint');
+});
+
 test.after(async () => {
   await rm(tempDir, { recursive: true, force: true });
 });
