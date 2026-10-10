@@ -34,7 +34,7 @@ registerPaymentProvider({
   },
 }, { replace: true });
 
-function core() {
+function core(storeOverrides = {}) {
   return new PaymentCore({
     store: {
       getPayment: store.getPayment,
@@ -46,6 +46,11 @@ function core() {
       commitPaymentDecision: store.commitPaymentDecision,
       beginPaymentStatusQuery: store.beginPaymentStatusQuery,
       completePaymentStatusQuery: store.completePaymentStatusQuery,
+      getPaymentIdempotency: store.getPaymentIdempotency,
+      listPaymentEvidence: store.listPaymentEvidence,
+      listPaymentVerifications: store.listPaymentVerifications,
+      listPaymentDecisions: store.listPaymentDecisions,
+      ...storeOverrides,
     },
     providerRegistry: { getPaymentProvider },
     invariantGate: new InvariantGate(),
@@ -141,6 +146,50 @@ test('GAP-1.24 exact status-query retry replays persisted result without another
     error => error.code === 'IDEMPOTENCY_KEY_REUSE',
   );
   assert.equal(calls, callsAfterFirst, 'reusing the key with different input must be rejected before provider access');
+});
+
+test('GAP-1.24 recovers committed financial result when query-result persistence fails', async () => {
+  const base = await setup('COMPLETED');
+  let failCompletion = true;
+  const paymentCore = core({
+    completePaymentStatusQuery: async (...args) => {
+      if (failCompletion) throw new Error('simulated crash before status-query result persistence');
+      return store.completePaymentStatusQuery(...args);
+    },
+  });
+  const command = {
+    chatId: base.chatId,
+    paymentId: base.payment.id,
+    actor: null,
+    idempotencyKey: 'gap1-24-crash-after-commit-' + crypto.randomUUID(),
+  };
+
+  await assert.rejects(() => paymentCore.queryStatus(command), /simulated crash/);
+  assert.equal(calls, 1, 'the initial query must contact the provider exactly once');
+  const ledgerAfterCrash = await store.listPaymentLedger(base.chatId, base.payment.id);
+  assert.equal(ledgerAfterCrash.length, 2, 'the financial transition should already be committed');
+  assert.equal(ledgerAfterCrash[1].entryType, 'VERIFIED');
+
+  failCompletion = false;
+  const recovered = await paymentCore.queryStatus({ ...command });
+  assert.equal(recovered.payment.id, base.payment.id);
+  assert.equal(recovered.payment.state, 'VERIFIED');
+  assert.equal(recovered.status, 'MATCH');
+  assert.ok(recovered.evidence?.id);
+  assert.ok(recovered.verification?.id);
+  assert.equal(recovered.decision.targetState, 'VERIFIED');
+  assert.equal(calls, 1, 'recovery must not contact the provider again');
+  assert.equal((await store.listPaymentLedger(base.chatId, base.payment.id)).length, 2,
+    'recovery must not repeat the financial transition');
+
+  const evidenceCount = (await store.listPaymentEvidence(base.chatId, base.payment.id)).length;
+  const verificationCount = (await store.listPaymentVerifications(base.chatId, base.payment.id)).length;
+  const replay = await paymentCore.queryStatus({ ...command });
+  assert.equal(replay.payment.state, 'VERIFIED');
+  assert.equal(calls, 1, 'completed recovery must replay the persisted result');
+  assert.equal((await store.listPaymentEvidence(base.chatId, base.payment.id)).length, evidenceCount);
+  assert.equal((await store.listPaymentVerifications(base.chatId, base.payment.id)).length, verificationCount);
+  assert.equal((await store.listPaymentLedger(base.chatId, base.payment.id)).length, 2);
 });
 
 test('GAP-1.11 unknown/pending provider status never becomes payment success', async () => {
