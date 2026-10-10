@@ -150,5 +150,37 @@ configure({ sessionToken: '' });
 await loadInventoryBalances({ locationId: 'location-a' });
 assert.equal(currentState().status, 'UNKNOWN', 'missing authentication cannot imply fresh data');
 
+// An older request that resolves after the active tenant/location changes must
+// not overwrite the new scope's balances or refresh status.
+setInventoryBalances([]);
+configure({ chatId: 'tenant-a', sessionToken: 'session-a', locationId: 'location-a' });
+let resolveTenantA;
+globalThis.fetch = async (url) => {
+  if (String(url).includes('/tenants/tenant-a/')) {
+    return new Promise(resolve => { resolveTenantA = resolve; });
+  }
+  if (String(url).includes('/tenants/tenant-b/')) {
+    return response(200, {
+      balances: [{ productId: 'product-b', locationId: 'location-b', quantity: 22 }],
+    });
+  }
+  throw new Error('Unexpected tenant in race test URL: ' + url);
+};
+const pendingTenantARefresh = loadInventoryBalances({ locationId: 'location-a' });
+configure({ chatId: 'tenant-b', sessionToken: 'session-b', locationId: 'location-b' });
+await loadInventoryBalances({ locationId: 'location-b' });
+assert.equal(currentState('location-b').status, 'FRESH',
+  'active tenant refresh succeeds while an older tenant request is pending');
+resolveTenantA(response(200, {
+  balances: [{ productId: 'product-a', locationId: 'location-a', quantity: 11 }],
+}));
+await pendingTenantARefresh;
+assert.equal(currentState('location-b').status, 'FRESH',
+  'late response from the previous tenant cannot overwrite active refresh status');
+assert.equal(getInventoryBalance('product-b', 'location-b'), 22,
+  'active tenant balance remains after an older request resolves');
+assert.equal(getInventoryBalance('product-a', 'location-a'), 0,
+  'late response from previous tenant is ignored instead of entering the shared projection');
+
 console.log('Inventory refresh behavior regression: PASS');
 console.log('Success, failures, offline, malformed payloads, tenant/location isolation, and scope changes: PASS');
