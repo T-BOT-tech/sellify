@@ -318,6 +318,7 @@ test('GAP-1.24A persisted evidence, verification, and decision records are appen
 
   const directDb = new DatabaseSync(process.env.SELLIFY_DB_PATH);
   try {
+    directDb.exec('PRAGMA foreign_keys = ON');
     assert.throws(
       () => directDb.prepare('UPDATE payment_evidence SET raw_payload_json = raw_payload_json WHERE id = ?').run(evidenceRows[0].id),
       /payment_evidence is append-only/,
@@ -343,6 +344,16 @@ test('GAP-1.24A persisted evidence, verification, and decision records are appen
     assert.throws(
       () => directDb.prepare('DELETE FROM payment_decisions WHERE id = ?').run(decisionRows[0].id),
       /payment_decisions are append-only/,
+    );
+
+    // Parent deletion must not bypass child append-only triggers through FK cascades.
+    assert.throws(
+      () => directDb.prepare('DELETE FROM payments WHERE id = ?').run(base.payment.id),
+      /append-only/,
+    );
+    assert.ok(
+      directDb.prepare('SELECT id FROM payments WHERE id = ?').get(base.payment.id),
+      'a payment with immutable evidence lineage must not be deleted by cascade',
     );
   } finally {
     directDb.close();
