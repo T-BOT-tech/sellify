@@ -113,6 +113,32 @@ test('GAP-1.11 provider getStatus MATCH flows through evidence, invariants, deci
   assert.equal(calls, 1);
 });
 
+test('GAP-1.24 direct Payment Core status queries require durable idempotency', async () => {
+  const base = await setup('COMPLETED');
+  const callsBefore = calls;
+  const paymentCore = core();
+
+  await assert.rejects(
+    () => paymentCore.queryStatus({ chatId: base.chatId, paymentId: base.payment.id }),
+    error => error.code === 'IDEMPOTENCY_KEY_REQUIRED',
+  );
+  assert.equal(calls, callsBefore, 'missing idempotency key must be rejected before provider access');
+
+  const unwiredCore = core({
+    beginPaymentStatusQuery: undefined,
+    completePaymentStatusQuery: undefined,
+  });
+  await assert.rejects(
+    () => unwiredCore.queryStatus({
+      chatId: base.chatId,
+      paymentId: base.payment.id,
+      idempotencyKey: 'gap1-24-missing-durable-store-' + crypto.randomUUID(),
+    }),
+    error => error.code === 'PAYMENT_STATUS_QUERY_IDEMPOTENCY_UNAVAILABLE',
+  );
+  assert.equal(calls, callsBefore, 'a store without durable command tracking must fail closed');
+});
+
 test('GAP-1.24 exact status-query retry replays persisted result without another provider call', async () => {
   const base = await setup('COMPLETED');
   const command = {
