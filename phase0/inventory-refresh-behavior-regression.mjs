@@ -19,7 +19,7 @@ Object.defineProperty(globalThis, 'navigator', {
 
 const state = await import('../app/src/state.js');
 const ledger = await import('../app/src/warehouse/ledger.js');
-const { setConfig, setInventoryBalances } = state;
+const { setConfig, setInventoryBalances, setInventoryMovements } = state;
 const { loadInventoryBalances, getInventoryBalanceRefreshState, getInventoryBalance } = ledger;
 
 function configure(overrides = {}) {
@@ -123,6 +123,13 @@ assert.equal(getInventoryBalanceRefreshState({ locationId: 'location-b' }).statu
 // A second tenant gets its own cached rows without deleting or exposing the
 // first tenant's rows. Switching back must select the matching scoped cache.
 configure({ chatId: 'tenant-b', sessionToken: 'session-b', locationId: 'location-b' });
+setInventoryMovements([{
+  productId: 'legacy-product',
+  locationId: 'location-b',
+  quantity: 500,
+}]);
+assert.equal(getInventoryBalance('legacy-product', 'location-b'), 0,
+  'unscoped legacy movement rows must not become an authenticated tenant balance fallback');
 globalThis.fetch = async () => response(200, {
   balances: [{ productId: 'product-1', locationId: 'location-b', quantity: 99 }],
 });
