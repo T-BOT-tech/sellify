@@ -397,11 +397,19 @@ export class PaymentCore {
       throw Object.assign(new Error('chatId and paymentId are required'), { statusCode: 400, code: 'PAYMENT_CONTEXT_REQUIRED' });
     }
 
-    // The HTTP status-query route requires a key. Persist the command before
-    // calling the provider so retries after a lost response do not re-query
-    // the provider or repeat evidence/verification/decision persistence.
-    if (!idempotencyKey || !this.store.beginPaymentStatusQuery || !this.store.completePaymentStatusQuery) {
-      return this.#queryStatusOnce(command);
+    // Idempotency is a Payment Core invariant, not only an HTTP-route rule.
+    // Never let an internal caller or a partially wired store bypass durable
+    // command tracking for a status query that can cause a financial transition.
+    if (!idempotencyKey) {
+      throw Object.assign(new Error('Idempotency-Key is required for payment status queries'), {
+        statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED',
+      });
+    }
+    if (typeof this.store.beginPaymentStatusQuery !== 'function' ||
+        typeof this.store.completePaymentStatusQuery !== 'function') {
+      throw Object.assign(new Error('Durable payment status-query idempotency is unavailable'), {
+        statusCode: 500, code: 'PAYMENT_STATUS_QUERY_IDEMPOTENCY_UNAVAILABLE',
+      });
     }
 
     const requestFields = Object.fromEntries(Object.entries(command).filter(([key]) =>
