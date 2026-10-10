@@ -155,23 +155,115 @@ export async function loadInventoryMovements({ productId = '', locationId = '', 
 }
 
 
+// Refresh status is deliberately in-memory. The balances endpoint does not
+// provide server-side freshness metadata, so refreshedAt means only that this
+// client received a valid balance response at that time.
+let inventoryBalanceRefreshState = {
+  status: 'UNKNOWN',
+  tenantChatId: '',
+  locationId: '',
+  refreshedAt: null,
+  httpStatus: null,
+};
+let lastSuccessfulInventoryBalanceRefresh = null;
+
+export function getInventoryBalanceRefreshState({ locationId = config.locationId || '' } = {}) {
+  const tenantChatId = String(config.chatId || '');
+  const scopedLocationId = String(locationId || '');
+  if (
+    inventoryBalanceRefreshState.tenantChatId !== tenantChatId
+    || inventoryBalanceRefreshState.locationId !== scopedLocationId
+  ) {
+    return { status: 'UNKNOWN', tenantChatId, locationId: scopedLocationId, refreshedAt: null, httpStatus: null };
+  }
+  return { ...inventoryBalanceRefreshState };
+}
+
+function setInventoryBalanceRefreshStatus(status, scope, { refreshedAt = null, httpStatus = null } = {}) {
+  inventoryBalanceRefreshState = {
+    status,
+    tenantChatId: scope.tenantChatId,
+    locationId: scope.locationId,
+    refreshedAt,
+    httpStatus,
+  };
+}
+
+function lastSuccessfulRefreshFor(scope) {
+  const last = lastSuccessfulInventoryBalanceRefresh;
+  return last && last.tenantChatId === scope.tenantChatId && last.locationId === scope.locationId
+    ? last
+    : null;
+}
+
 export async function loadInventoryBalances({ locationId = '' } = {}) {
-  if (!config.chatId || !config.sessionToken) return inventoryBalances;
-  const params = new URLSearchParams();
-  if (locationId) params.set('location_id', locationId);
-  const query = params.toString();
-  const res = await fetch(`${baseUrl()}/tenants/${encodeURIComponent(config.chatId)}/inventory/balances${query ? `?${query}` : ''}`, {
-    headers: { Authorization: `Bearer ${config.sessionToken}` },
+  const scope = {
+    tenantChatId: String(config.chatId || ''),
+    locationId: String(locationId || ''),
+  };
+  if (!scope.tenantChatId || !config.sessionToken) {
+    setInventoryBalanceRefreshStatus('UNKNOWN', scope);
+    return inventoryBalances;
+  }
+
+  const lastSuccessful = lastSuccessfulRefreshFor(scope);
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    setInventoryBalanceRefreshStatus(lastSuccessful ? 'CACHED' : 'OFFLINE', scope, {
+      refreshedAt: lastSuccessful?.refreshedAt || null,
+    });
+    return inventoryBalances;
+  }
+
+  setInventoryBalanceRefreshStatus('REFRESHING', scope, {
+    refreshedAt: lastSuccessful?.refreshedAt || null,
   });
-  if (!res.ok) return inventoryBalances;
-  const data = await res.json();
-  if (!Array.isArray(data.balances)) return inventoryBalances;
-  const next = data.balances.map(row => ({
-    locationId: row.locationId || '', productId: String(row.productId), quantity: Number(row.quantity || 0)
-  }));
-  setInventoryBalances(next);
-  persistBalances();
-  return next;
+
+  try {
+    const params = new URLSearchParams();
+    if (scope.locationId) params.set('location_id', scope.locationId);
+    const query = params.toString();
+    const url = baseUrl() + '/tenants/' + encodeURIComponent(scope.tenantChatId)
+      + '/inventory/balances' + (query ? '?' + query : '');
+    const res = await fetch(url, {
+      headers: { Authorization: 'Bearer ' + config.sessionToken },
+    });
+
+    if (!res.ok) {
+      setInventoryBalanceRefreshStatus(
+        res.status === 401 || res.status === 403 ? 'PERMISSION_DENIED' : (lastSuccessful ? 'CACHED' : 'UNKNOWN'),
+        scope,
+        { refreshedAt: lastSuccessful?.refreshedAt || null, httpStatus: res.status },
+      );
+      return inventoryBalances;
+    }
+
+    const data = await res.json().catch(() => null);
+    if (!Array.isArray(data?.balances)) {
+      setInventoryBalanceRefreshStatus(lastSuccessful ? 'CACHED' : 'UNKNOWN', scope, {
+        refreshedAt: lastSuccessful?.refreshedAt || null,
+        httpStatus: res.status,
+      });
+      return inventoryBalances;
+    }
+
+    const next = data.balances.map(row => ({
+      locationId: row.locationId || '',
+      productId: String(row.productId),
+      quantity: Number(row.quantity || 0),
+    }));
+    setInventoryBalances(next);
+    persistBalances();
+    const refreshedAt = new Date().toISOString();
+    lastSuccessfulInventoryBalanceRefresh = { ...scope, refreshedAt };
+    setInventoryBalanceRefreshStatus('FRESH', scope, { refreshedAt, httpStatus: res.status });
+    return next;
+  } catch (error) {
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    setInventoryBalanceRefreshStatus(offline ? (lastSuccessful ? 'CACHED' : 'OFFLINE') : (lastSuccessful ? 'CACHED' : 'UNKNOWN'), scope, {
+      refreshedAt: lastSuccessful?.refreshedAt || null,
+    });
+    throw error;
+  }
 }
 
 function persistBalances() { saveJSON(STORAGE_KEYS.inventoryBalances, inventoryBalances); }
