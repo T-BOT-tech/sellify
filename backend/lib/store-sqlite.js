@@ -119,6 +119,27 @@ function normaliseProduct(product) {
   return value;
 }
 
+function queuedOrderIdentityHash(order, expectedCurrency) {
+  const normalized = validateAndTotalOrderItems(order?.items, expectedCurrency).items
+    .map(item => ({
+      itemId: String(item.item_id ?? item.product_id ?? item.id ?? ''),
+      name: String(item.name ?? item.title ?? ''),
+      price: Math.round(Number(item.price)),
+      qty: Math.floor(Number(item.qty)),
+      category: String(item.category ?? ''),
+    }))
+    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  const identity = {
+    currency: normaliseCurrency(order?.currency, expectedCurrency),
+    items: normalized,
+    customerName: String(order?.customer_name ?? order?.customer?.name ?? ''),
+    customerPhone: String(order?.customer_phone ?? order?.customer?.phone ?? ''),
+    isMarketplace: Boolean(order?.is_marketplace),
+    marketplaceOrderId: String(order?.marketplace_order_id ?? ''),
+  };
+  return crypto.createHash('sha256').update(JSON.stringify(identity)).digest('hex');
+}
+
 function validateAndTotalOrderItems(rawItems, expectedCurrency = null) {
   const items = [];
   for (const raw of Array.isArray(rawItems) ? rawItems : []) {
@@ -8755,12 +8776,39 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         continue;
       }
       const localId = String(order.id);
-      const already = db.prepare('SELECT server_order_id FROM orders WHERE chat_id = ? AND local_id = ?').get(key, localId);
+      const expectedCurrency = tenantCurrency(key);
+      const already = db.prepare('SELECT server_order_id, order_json FROM orders WHERE chat_id = ? AND local_id = ?').get(key, localId);
       if (already) {
-        results.push({ local_id: order.id, status: 'synced', order_id: already.server_order_id });
+        const storedOrder = parseJSON(already.order_json, {});
+        const currencyMismatch = order.currency != null
+          && normaliseCurrency(order.currency, expectedCurrency) !== expectedCurrency;
+        const identityMismatch = currencyMismatch
+          || queuedOrderIdentityHash(order, expectedCurrency) !== queuedOrderIdentityHash(storedOrder, expectedCurrency);
+        if (identityMismatch) {
+          results.push({
+            local_id: order.id,
+            status: 'rejected',
+            code: 'ORDER_IDEMPOTENCY_CONFLICT',
+            error: 'Order id was already used with different contents',
+          });
+          continue;
+        }
+        const payment = db.prepare(`
+          SELECT p.id
+          FROM payments p
+          JOIN tenants t ON t.organization_id = p.organization_id
+          WHERE t.chat_id = ? AND p.order_id = ?
+          LIMIT 1
+        `).get(key, already.server_order_id);
+        results.push({
+          local_id: order.id,
+          status: 'synced',
+          order_id: already.server_order_id,
+          ...(payment?.id ? { payment_id: payment.id } : {}),
+          payment_state: 'UNPAID',
+        });
         continue;
       }
-      const expectedCurrency = tenantCurrency(key);
       if (order.currency != null && normaliseCurrency(order.currency, expectedCurrency) !== expectedCurrency) {
         results.push({ local_id: order.id, status: 'rejected', error: 'Order currency does not match the organization currency' });
         continue;
