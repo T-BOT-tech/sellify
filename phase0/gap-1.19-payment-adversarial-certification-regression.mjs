@@ -67,6 +67,8 @@ function core() {
       createPaymentRefundRequest: store.createPaymentRefundRequest,
       finalizePaymentRefund: store.finalizePaymentRefund,
       getPaymentRefunds: store.getPaymentRefunds,
+      beginPaymentStatusQuery: store.beginPaymentStatusQuery,
+      completePaymentStatusQuery: store.completePaymentStatusQuery,
     },
     providerRegistry: { getPaymentProvider },
   });
@@ -130,7 +132,10 @@ const pc = core();
 
 {
   const base = await setup({ providerMode: 'UNKNOWN' });
-  const result = await pc.queryStatus({ chatId: base.chatId, paymentId: base.paymentId });
+  const result = await pc.queryStatus({
+    chatId: base.chatId, paymentId: base.paymentId,
+    idempotencyKey: 'ADV-STATUS-UNKNOWN-' + base.paymentId,
+  });
   assert.equal(result.status, 'UNKNOWN');
   assert.equal(result.payment.state, 'UNPAID');
   assert.equal((await store.listPaymentLedger(base.chatId, base.paymentId)).length, 1);
@@ -138,8 +143,14 @@ const pc = core();
 
 {
   const base = await setup();
-  const first = await pc.queryStatus({ chatId: base.chatId, paymentId: base.paymentId });
-  const second = await pc.queryStatus({ chatId: base.chatId, paymentId: base.paymentId });
+  const first = await pc.queryStatus({
+    chatId: base.chatId, paymentId: base.paymentId,
+    idempotencyKey: 'ADV-STATUS-FIRST-' + base.paymentId,
+  });
+  const second = await pc.queryStatus({
+    chatId: base.chatId, paymentId: base.paymentId,
+    idempotencyKey: 'ADV-STATUS-SECOND-' + base.paymentId,
+  });
   assert.equal(first.status, 'MATCH');
   assert.equal(second.status, 'MATCH');
   assert.equal((await store.listPaymentLedger(base.chatId, base.paymentId)).length, 1);
