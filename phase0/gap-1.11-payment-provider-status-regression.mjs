@@ -44,6 +44,8 @@ function core() {
       insertPaymentVerification: store.insertPaymentVerification,
       insertPaymentDecision: store.insertPaymentDecision,
       commitPaymentDecision: store.commitPaymentDecision,
+      beginPaymentStatusQuery: store.beginPaymentStatusQuery,
+      completePaymentStatusQuery: store.completePaymentStatusQuery,
     },
     providerRegistry: { getPaymentProvider },
     invariantGate: new InvariantGate(),
