@@ -3,6 +3,7 @@ import test from 'node:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 const tempDir = await mkdtemp(path.join(os.tmpdir(), 'sellify-gap1-11-'));
 process.env.SELLIFY_DATA_DIR = tempDir;
@@ -296,6 +297,42 @@ test('GAP-1.24 leaves pre-commit crash unresolved instead of replaying blindly',
   assert.equal(calls - callsBefore, 1, 'uncertain recovery must not re-query the provider automatically');
   assert.equal((await store.getPayment(base.chatId, base.payment.id)).state, 'UNPAID');
   assert.equal((await store.listPaymentLedger(base.chatId, base.payment.id)).length, 1);
+});
+
+test('GAP-1.24A persisted evidence, verification, and decision records are append-only', async () => {
+  const base = await setup('COMPLETED');
+  const result = await core().queryStatus({
+    chatId: base.chatId,
+    paymentId: base.payment.id,
+    actor: null,
+    idempotencyKey: 'gap1-24a-append-only-' + crypto.randomUUID(),
+  });
+  assert.equal(result.payment.state, 'VERIFIED');
+
+  const evidenceRows = await store.listPaymentEvidence(base.chatId, base.payment.id);
+  const verificationRows = await store.listPaymentVerifications(base.chatId, base.payment.id);
+  const decisionRows = await store.listPaymentDecisions(base.chatId, base.payment.id);
+  assert.ok(evidenceRows.length > 0);
+  assert.ok(verificationRows.length > 0);
+  assert.ok(decisionRows.length > 0);
+
+  const directDb = new DatabaseSync(process.env.SELLIFY_DB_PATH);
+  try {
+    assert.throws(
+      () => directDb.prepare('UPDATE payment_evidence SET raw_payload_json = raw_payload_json WHERE id = ?').run(evidenceRows[0].id),
+      /payment_evidence is append-only/,
+    );
+    assert.throws(
+      () => directDb.prepare('UPDATE payment_verifications SET result = result WHERE id = ?').run(verificationRows[0].id),
+      /payment_verifications are append-only/,
+    );
+    assert.throws(
+      () => directDb.prepare('UPDATE payment_decisions SET decision = decision WHERE id = ?').run(decisionRows[0].id),
+      /payment_decisions are append-only/,
+    );
+  } finally {
+    directDb.close();
+  }
 });
 
 test('GAP-1.11 unknown/pending provider status never becomes payment success', async () => {
