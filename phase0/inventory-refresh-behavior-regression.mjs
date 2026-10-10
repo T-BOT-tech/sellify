@@ -11,6 +11,8 @@ globalThis.localStorage = {
 globalThis.window = {
   __APP_CONFIG__: {},
   location: { origin: 'https://sellify-test.invalid' },
+  addEventListener() {},
+  removeEventListener() {},
 };
 const rootElement = {
   style: { setProperty() {}, removeProperty() {} },
