@@ -4,6 +4,7 @@ import { PaymentCore } from '../backend/lib/payments/payment-core.js';
 
 function makeStore() {
   const actions = new Map();
+  const statusQueries = new Map();
   const payment = { id: 'pay-117', organizationId: 'org-117', state: 'UNPAID', providerId: 'test-provider', paymentIntentId: 'intent-117', paymentAccountId: 'acct-117', amountMinor: 1000, currency: 'ETB' };
   return {
     async getPayment() { return payment; },
@@ -15,6 +16,25 @@ function makeStore() {
     async commitPaymentDecision() { return { payment, decision: { targetState: payment.state } }; },
     async recordPaymentReconciliation() { return { id: 'recon-117' }; },
     async listPaymentReconciliations() { return []; },
+    async beginPaymentStatusQuery(chatId, input) {
+      const key = String(input.idempotencyKey || '');
+      const existing = statusQueries.get(key);
+      if (existing) return { duplicate: true, ...existing };
+      const row = { status: 'IN_PROGRESS', result: null, error: null };
+      statusQueries.set(key, row);
+      return { duplicate: false, ...row };
+    },
+    async completePaymentStatusQuery(chatId, input) {
+      const key = String(input.idempotencyKey || '');
+      const row = statusQueries.get(key);
+      assert.ok(row, 'status query must be claimed before completion');
+      Object.assign(row, {
+        status: input.status,
+        result: input.result || null,
+        error: input.error || null,
+      });
+      return { status: row.status };
+    },
     async createPaymentOperationalAction(chatId, input, actor) {
       const key = input.idempotencyKey || input.idempotency_key || null;
       if (key) {
