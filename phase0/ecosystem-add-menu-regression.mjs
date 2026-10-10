@@ -40,4 +40,50 @@ assert.match(settings, /renderSellerStorefrontChannelsPanel\(\)/);
 // canonical seller-onboarding flow exists; this menu only routes to existing surfaces.
 assert.doesNotMatch(html, />Become a seller</);
 
-console.log('Ecosystem Add menu regression passed (navigation, existing destinations, Queue overflow, settings/readiness boundary).');
+// Exercise the menu handlers with a minimal DOM boundary, not only source matching.
+const sheetClasses = new Set();
+const sheet = {
+  style: { display: 'none' },
+  classList: {
+    add(name) { sheetClasses.add(name); },
+    remove(name) { sheetClasses.delete(name); },
+  },
+};
+let switchedTab = null;
+let settingsClicked = false;
+let inputFocused = false;
+let inputScrolled = false;
+const input = {
+  focus() { inputFocused = true; },
+  scrollIntoView() { inputScrolled = true; },
+};
+const settingsButton = { click() { settingsClicked = true; } };
+globalThis.document = {
+  getElementById(id) {
+    return ({
+      addSheet: sheet,
+      newProdName: input,
+      gearSettingsBtn: settingsButton,
+    })[id] ?? null;
+  },
+};
+globalThis.window = {
+  switchTab(tab) { switchedTab = tab; },
+  setTimeout(callback) { callback(); },
+};
+assert.equal(openAddSheet(), true);
+assert.equal(sheet.style.display, 'flex');
+assert.ok(sheetClasses.has('open'));
+assert.equal(closeAddSheet(), true);
+assert.equal(sheet.style.display, 'none');
+assert.ok(!sheetClasses.has('open'));
+assert.equal(openAddProduct(), true);
+assert.equal(switchedTab, 'catalog');
+assert.ok(inputFocused);
+assert.ok(inputScrolled);
+assert.equal(openAddSettings(), true);
+assert.ok(settingsClicked);
+delete globalThis.document;
+delete globalThis.window;
+
+console.log('Ecosystem Add menu regression passed (navigation, DOM handlers, Queue overflow, settings/readiness boundary).');
