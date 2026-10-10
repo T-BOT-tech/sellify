@@ -134,7 +134,10 @@ export async function flushOutbox() {
   const activeTenant = String(config.chatId);
   const pending = outboxEvents.filter(e => !e.kind && e.status !== 'synced' && e.status !== 'rejected'
     && String(e.tenantChatId || e.payload?.tenantChatId || '') === activeTenant).slice(0, 100);
-  if (!pending.length) return { processed: 0, pending: 0 };
+  if (!pending.length) {
+    const retainedPending = outboxEvents.filter(event => event.status !== 'synced' && event.status !== 'rejected').length;
+    return { processed: commandResult.processed || 0, pending: retainedPending, skipped: true };
+  }
   try {
     const res = await fetch(`${baseUrl()}/events/${encodeURIComponent(config.chatId)}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
