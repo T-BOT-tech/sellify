@@ -14,6 +14,8 @@ for (const event of [
   { tenant_chat_id: 'tenant-b', payload: {} },
   { payload: { tenantChatId: 'tenant-b' } },
   { payload: { tenant_chat_id: 'tenant-b' } },
+  { payload: { _event: { tenant_chat_id: 'tenant-b' } } },
+  { payload: { _event: { tenantChatId: 'tenant-b' } } },
 ]) {
   assert.throws(() => assertEventTenantScope(event, scope), error =>
     error?.statusCode === 403 && error?.code === 'EVENT_TENANT_SCOPE_MISMATCH');
@@ -21,7 +23,10 @@ for (const event of [
 for (const event of [
   { organizationId: 'org-b', payload: {} },
   { organization_id: 'org-b', payload: {} },
+  { payload: { organizationId: 'org-b' } },
+  { payload: { organization_id: 'org-b' } },
   { payload: { _event: { organization_id: 'org-b' } } },
+  { payload: { _event: { organizationId: 'org-b' } } },
 ]) {
   assert.throws(() => assertEventTenantScope(event, scope), error =>
     error?.statusCode === 403 && error?.code === 'EVENT_ORGANIZATION_SCOPE_MISMATCH');
