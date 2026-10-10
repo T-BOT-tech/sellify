@@ -196,6 +196,43 @@ test('GAP-1.24 recovers committed financial result when query-result persistence
   assert.equal((await store.listPaymentLedger(base.chatId, base.payment.id)).length, 2);
 });
 
+test('GAP-1.24 leaves pre-commit crash unresolved instead of replaying blindly', async () => {
+  const base = await setup('COMPLETED');
+  const callsBefore = calls;
+  const paymentCore = core({
+    commitPaymentDecision: async () => {
+      throw new Error('simulated process crash before financial decision commit');
+    },
+    completePaymentStatusQuery: async () => {
+      throw new Error('simulated process crash prevents command completion persistence');
+    },
+  });
+  const command = {
+    chatId: base.chatId,
+    paymentId: base.payment.id,
+    actor: null,
+    idempotencyKey: 'gap1-24-crash-before-commit-' + crypto.randomUUID(),
+  };
+
+  await assert.rejects(
+    () => paymentCore.queryStatus(command),
+    /simulated process crash before financial decision commit/,
+  );
+  assert.equal(calls - callsBefore, 1);
+  assert.equal((await store.getPayment(base.chatId, base.payment.id)).state, 'UNPAID');
+  assert.equal((await store.listPaymentLedger(base.chatId, base.payment.id)).length, 1);
+  assert.equal((await store.listPaymentVerifications(base.chatId, base.payment.id)).length, 0);
+  assert.equal((await store.listPaymentDecisions(base.chatId, base.payment.id)).length, 0);
+
+  await assert.rejects(
+    () => paymentCore.queryStatus({ ...command }),
+    error => error.code === 'PAYMENT_STATUS_QUERY_IN_PROGRESS',
+  );
+  assert.equal(calls - callsBefore, 1, 'uncertain recovery must not re-query the provider automatically');
+  assert.equal((await store.getPayment(base.chatId, base.payment.id)).state, 'UNPAID');
+  assert.equal((await store.listPaymentLedger(base.chatId, base.payment.id)).length, 1);
+});
+
 test('GAP-1.11 unknown/pending provider status never becomes payment success', async () => {
   const base = await setup('PENDING');
   const result = await core().queryStatus({
