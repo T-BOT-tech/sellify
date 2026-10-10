@@ -1,7 +1,5 @@
 // Ecosystem Add (+) entry point.
 // This is navigation/composition only: domain actions remain owned by their existing screens.
-import { switchTab } from './tabs.js';
-
 export const ADD_MENU_ACTIONS = Object.freeze([
   Object.freeze({ id: 'take-order', destination: 'order' }),
   Object.freeze({ id: 'add-product', destination: 'catalog' }),
@@ -32,7 +30,7 @@ export function closeAddSheet() {
 
 export function openAddProduct() {
   closeAddSheet();
-  switchTab('catalog');
+  if (typeof window !== 'undefined' && typeof window.switchTab === 'function') window.switchTab('catalog');
   const input = typeof document === 'undefined' ? null : document.getElementById('newProdName');
   if (input) {
     window.setTimeout(() => {
