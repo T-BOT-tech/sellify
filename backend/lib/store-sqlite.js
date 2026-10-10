@@ -2416,6 +2416,33 @@ if (!applied.includes(39)) {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(65, nowIso());
   }
 
+  // GAP-1.24B — preserve payment lineage against direct deletes and FK cascades.
+  // There is no supported hard-delete lifecycle for payment history. Corrections
+  // are represented by new records; any future retention/purge workflow must be
+  // explicitly designed rather than relying on ON DELETE CASCADE.
+  if (!applied.includes(66)) {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS payment_evidence_no_delete
+      BEFORE DELETE ON payment_evidence
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_evidence is append-only');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS payment_verifications_no_delete
+      BEFORE DELETE ON payment_verifications
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_verifications are append-only');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS payment_decisions_no_delete
+      BEFORE DELETE ON payment_decisions
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_decisions are append-only');
+      END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(66, nowIso());
+  }
+
   // GAP-1.23 — durable provider notification identity and authentication lineage.
   if (!applied.includes(63)) {
     db.exec(`
