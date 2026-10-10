@@ -200,7 +200,12 @@ assert.equal(getInventoryBalance('product-a', 'location-a'), 0,
   'late response from previous tenant is ignored instead of entering the shared projection');
 
 // Movement-list responses must also be discarded when the active scope changes.
-setInventoryMovements([]);
+// Persisted tenant-A records must also be excluded from tenant-B's projection.
+setInventoryMovements([{
+  eventId: 'tenant-a-persisted-event', tenantChatId: 'tenant-a',
+  organizationId: 'org-a', productId: 'product-a', locationId: 'location-a',
+  quantity: 99, occurredAt: '2026-10-10T10:00:00.000Z',
+}]);
 configure({ chatId: 'tenant-a', organizationId: 'org-a', sessionToken: 'session-a', locationId: 'location-a' });
 let resolveTenantAMovements;
 globalThis.fetch = async (url) => {
@@ -220,6 +225,8 @@ configure({ chatId: 'tenant-b', organizationId: 'org-b', sessionToken: 'session-
 await loadInventoryMovements({ locationId: 'location-b' });
 assert.equal(state.inventoryMovements.some(m => m.eventId === 'tenant-b-event'), true,
   'active tenant movement history is loaded');
+assert.equal(state.inventoryMovements.some(m => m.eventId === 'tenant-a-persisted-event'), false,
+  'persisted movement records from another tenant are excluded from the active projection');
 resolveTenantAMovements(response(200, { movements: [{
   eventId: 'tenant-a-event', organizationId: 'org-a', productId: 'product-a',
   locationId: 'location-a', quantity: 99, occurredAt: '2026-10-10T11:00:00.000Z',
