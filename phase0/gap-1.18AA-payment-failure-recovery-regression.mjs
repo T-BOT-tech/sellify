@@ -4,6 +4,7 @@ import { PaymentCore } from '../backend/lib/payments/payment-core.js';
 
 function store() {
   const actions=[];
+  const statusQueries=new Map();
   const payment={id:'pay-aa',organizationId:'org-aa',state:'EXPIRED',providerId:'test-provider',paymentIntentId:'intent-aa',paymentAccountId:'acct-aa',amountMinor:1000,currency:'ETB'};
   return {
     async getPayment(){return {...payment};},
@@ -11,6 +12,8 @@ function store() {
     async listPaymentAccounts(){return [{id:'acct-aa',providerId:'test-provider',accountIdentifier:'acct-ref',status:'active'}];},
     async createPaymentOperationalAction(c,input){const key=input.idempotencyKey||null;const old=actions.find(a=>a.idempotencyKey===key);if(old)return {action:old,duplicate:true};const a={id:'op-'+(actions.length+1),paymentId:payment.id,actionType:String(input.actionType).toUpperCase(),operation:String(input.operation).toUpperCase(),status:'REQUESTED',idempotencyKey:key};actions.push(a);return {action:a,duplicate:false};},
     async updatePaymentOperationalAction(c,id,patch){const a=actions.find(x=>x.id===id);assert.ok(a);Object.assign(a,patch);return a;},
+    async beginPaymentStatusQuery(c,input){const key=String(input.idempotencyKey||'');const old=statusQueries.get(key);if(old)return {duplicate:true,...old};const row={status:'IN_PROGRESS',result:null,error:null};statusQueries.set(key,row);return {duplicate:false,...row};},
+    async completePaymentStatusQuery(c,input){const row=statusQueries.get(String(input.idempotencyKey||''));assert.ok(row);Object.assign(row,{status:input.status,result:input.result||null,error:input.error||null});return {status:row.status};},
     async insertPaymentEvidence(){return {evidence:{id:'evidence-aa'},duplicate:false};},
     async insertPaymentVerification(){return {verification:{id:'verification-aa'},duplicate:false};},
     async insertPaymentDecision(){return {decision:{id:'decision-aa',targetState:null}};},
