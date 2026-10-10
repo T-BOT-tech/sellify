@@ -179,6 +179,8 @@ jobs:
         run: npm run test:pf-1-payment-frontend-projection
       - name: PF-2 payment frontend adversarial certification regression
         run: npm run test:pf-2-payment-frontend-adversarial
+      - name: PF-1 real frontend HTTP route and SQLite end-to-end regression
+        run: npm run test:pf-1-payment-frontend-http-sqlite-e2e
       - name: L11.8 logistics scheduling decision boundary regression
         run: npm run test:logistics-l11.8
       - name: GAP-2 logistics authorization foundation regression
