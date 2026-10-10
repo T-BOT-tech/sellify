@@ -22,7 +22,8 @@ export function enqueueEvent(eventType, payload, { aggregateType = '', aggregate
   if (!eventType || !payload || typeof payload !== 'object') return null;
   const id = String(eventId || `${eventType}:${Date.now()}:${crypto.randomUUID()}`);
   if (outboxEvents.some(e => e.eventId === id)) return outboxEvents.find(e => e.eventId === id);
-  const event = { eventId: id, eventType, aggregateType, aggregateId, payload, occurredAt: occurredAt || new Date().toISOString(), attempts: 0, status: 'pending' };
+  const tenantChatId = String(config.chatId || payload.tenantChatId || '');
+  const event = { eventId: id, tenantChatId, eventType, aggregateType, aggregateId, payload, occurredAt: occurredAt || new Date().toISOString(), attempts: 0, status: 'pending' };
   setOutboxEvents([event, ...outboxEvents]);
   persist();
   return event;
@@ -31,10 +32,12 @@ export function enqueueEvent(eventType, payload, { aggregateType = '', aggregate
 
 export function enqueueCommand({ commandType, endpoint, method = 'POST', payload = {}, idempotencyKey, aggregateType = '', aggregateId = null } = {}) {
   if (!commandType || !endpoint || !idempotencyKey || !payload || typeof payload !== 'object') return null;
-  const existing = outboxEvents.find(e => e.kind === 'command' && e.idempotencyKey === String(idempotencyKey));
+  const tenantChatId = String(config.chatId || '');
+  const existing = outboxEvents.find(e => e.kind === 'command' && e.tenantChatId === tenantChatId && e.idempotencyKey === String(idempotencyKey));
   if (existing) return existing;
   const command = {
     kind: 'command',
+    tenantChatId,
     eventId: `command:${commandType}:${crypto.randomUUID()}`,
     commandType,
     endpoint,
@@ -82,7 +85,11 @@ export async function flushCommandOutbox(commandType = '') {
   if (!config.chatId || !config.sessionToken || !navigator.onLine) {
     return { processed: 0, pending: getPendingCommands(commandType).length, failed: getFailedCommands(commandType).length, skipped: true };
   }
-  const pending = getPendingCommands(commandType).slice(0, 50);
+  // Never replay a command under a different tenant's active session.
+  // Legacy commands without an explicit tenant binding remain queued for
+  // deliberate recovery; they are not silently reassigned.
+  const activeTenant = String(config.chatId);
+  const pending = getPendingCommands(commandType).filter(command => command.tenantChatId === activeTenant).slice(0, 50);
   let processed = 0;
   let failed = 0;
   for (const command of pending) {
@@ -121,7 +128,12 @@ export async function flushOutbox() {
   if (!config.chatId || !config.sessionToken || !navigator.onLine || !outboxEvents.length) {
     return { ...commandResult, processed: commandResult.processed || 0, pending: commandResult.pending ?? outboxEvents.length };
   }
-  const pending = outboxEvents.filter(e => !e.kind && e.status !== 'synced' && e.status !== 'rejected').slice(0, 100);
+  // Bind replay to the tenant that enqueued the event. Unscoped legacy
+  // events are retained but fail closed until their original tenant can be
+  // established; switching tenants must never implicitly reassign them.
+  const activeTenant = String(config.chatId);
+  const pending = outboxEvents.filter(e => !e.kind && e.status !== 'synced' && e.status !== 'rejected'
+    && String(e.tenantChatId || e.payload?.tenantChatId || '') === activeTenant).slice(0, 100);
   if (!pending.length) return { processed: 0, pending: 0 };
   try {
     const res = await fetch(`${baseUrl()}/events/${encodeURIComponent(config.chatId)}`, {
