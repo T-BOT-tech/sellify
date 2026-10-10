@@ -8,6 +8,44 @@ import { t } from '../ui/i18n.js';
 import { hasPermission } from '../auth/permissions.js';
 import { renderPackWorkspace } from './pack-workspace.js';
 import { getLowStockProducts, getOutOfStockProducts } from '../warehouse/inventory.js';
+import { getInventoryBalanceRefreshState, loadInventoryBalances } from '../warehouse/ledger.js';
+
+let inventoryRefreshScope = '';
+let inventoryRefreshInFlight = null;
+
+function startInventoryRefresh({ force = false } = {}) {
+  if (!config.chatId || !config.sessionToken) return null;
+  const locationId = config.locationId || '';
+  const scope = [config.chatId, locationId].join('::');
+  if (inventoryRefreshInFlight && inventoryRefreshScope === scope) return inventoryRefreshInFlight;
+  if (!force && inventoryRefreshScope === scope) return null;
+
+  inventoryRefreshScope = scope;
+  const task = loadInventoryBalances({ locationId })
+    .catch(() => null)
+    .finally(() => {
+      if (inventoryRefreshInFlight === task) {
+        inventoryRefreshInFlight = null;
+        renderWorkspace();
+      }
+    });
+  inventoryRefreshInFlight = task;
+  return task;
+}
+
+export function refreshWorkspaceInventory() {
+  return startInventoryRefresh({ force: true });
+}
+
+function inventoryRefreshMessage(refresh) {
+  const time = refresh.refreshedAt ? new Date(refresh.refreshedAt).toLocaleTimeString() : null;
+  if (refresh.status === 'REFRESHING') return 'Refreshing balances from the server…';
+  if (refresh.status === 'FRESH') return 'Last successful client refresh: ' + (time || 'just now') + '. Server freshness metadata is not supplied.';
+  if (refresh.status === 'CACHED') return 'Refresh unavailable; saved projection only' + (time ? ' · last successful refresh ' + time : '') + '.';
+  if (refresh.status === 'OFFLINE') return 'Offline; no successful refresh for this business and location in this session.';
+  if (refresh.status === 'PERMISSION_DENIED') return 'Inventory refresh denied; freshness is unknown. Check your access.';
+  return config.sessionToken ? 'Freshness unknown; saved projection only.' : 'Sign in to refresh inventory. Saved projection only.';
+}
 
 function connectivityState() {
   return navigator.onLine ? 'ONLINE' : UI_STATES.OFFLINE;
@@ -25,6 +63,7 @@ export function renderWorkspace() {
   const root = document.getElementById('sellerHome');
   if (!root) return;
 
+  startInventoryRefresh();
   const queued = orders.filter(order => order.status === 'queued').length;
   // Use Sellify's existing inventory projection and reorder-point rules rather
   // than inventing a fixed threshold in the Home workspace. These are saved
@@ -32,6 +71,8 @@ export function renderWorkspace() {
   const lowStock = getLowStockProducts().length;
   const outOfStock = getOutOfStockProducts().length;
   const inventoryAttention = lowStock + outOfStock;
+  const inventoryRefresh = getInventoryBalanceRefreshState({ locationId: config.locationId || '' });
+  const refreshMessage = inventoryRefreshMessage(inventoryRefresh);
   const state = connectivityState();
   const business = config.sellerName || t('setupBusiness');
   const role = roleLabel(currentRole());
@@ -63,8 +104,9 @@ export function renderWorkspace() {
           <button class="fux-work-card ${inventoryAttention ? 'has-attention' : ''}" type="button" onclick="switchTab('catalog')">
             <span class="fux-card-label">Inventory health</span>
             <strong>${inventoryAttention ? `${inventoryAttention} to review` : 'No saved exceptions'}</strong>
-            <small>${lowStock} below reorder point · ${outOfStock} out of stock. Saved projection only; review stock in Catalog.</small>
+            <small>${lowStock} below reorder point · ${outOfStock} out of stock. ${refreshMessage}</small>
           </button>
+          ${config.chatId && config.sessionToken ? '<button class="fux-action" type="button" data-action="refresh-inventory">Refresh inventory</button>' : ''}
         </div>
       </section>
 
@@ -106,6 +148,9 @@ export function renderWorkspace() {
       <div id="fux-pack-workspace"></div>
     </section>`;
   renderPackWorkspace();
+  root.querySelector('[data-action="refresh-inventory"]')?.addEventListener('click', () => {
+    refreshWorkspaceInventory();
+  });
 }
 
 
