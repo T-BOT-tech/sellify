@@ -19,13 +19,13 @@ assert.match(ci, /node-version: \[24\]/);
 for (const script of requiredScripts) assert.ok(ci.includes('npm run ' + script), 'CI missing ' + script);
 
 const migrations = [...store.matchAll(/if \(!applied\.includes\((\d+)\)\)/g)].map(m => Number(m[1]));
-assert.equal(Math.max(...migrations), 64, 'latest migration must remain explicit');
-for (const version of [45, 60, 61, 62, 63, 64]) {
+assert.equal(Math.max(...migrations), 65, 'latest migration must remain explicit');
+for (const version of [45, 60, 61, 62, 63, 64, 65]) {
   assert.ok(migrations.includes(version), 'missing explicit migration ' + version);
 }
 const migrationPosition = version => store.indexOf(`if (!applied.includes(${version}))`);
 assert.ok(migrationPosition(45) >= 0, 'payment_evidence creation migration must remain explicit');
-for (const version of [61, 62, 63, 64]) {
+for (const version of [61, 62, 63, 64, 65]) {
   assert.ok(migrationPosition(version) > migrationPosition(45),
     'payment evidence dependent migration ' + version + ' must follow payment_evidence creation');
 }
