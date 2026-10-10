@@ -38,6 +38,7 @@ const state = await import('../app/src/state.js');
 const ledger = await import('../app/src/warehouse/ledger.js');
 const { setConfig, setInventoryBalances, setInventoryMovements } = state;
 const { loadInventoryBalances, loadInventoryMovements, getInventoryBalanceRefreshState, getInventoryBalance } = ledger;
+const { isStockTracked } = await import('../app/src/warehouse/inventory.js');
 
 function configure(overrides = {}) {
   setConfig({
@@ -147,6 +148,25 @@ setInventoryMovements([{
 }]);
 assert.equal(getInventoryBalance('legacy-product', 'location-b'), 0,
   'unscoped legacy movement rows must not become an authenticated tenant balance fallback');
+setInventoryMovements([{
+  eventId: 'foreign-tenant-movement', tenantChatId: 'tenant-a',
+  organizationId: 'org-a', productId: 'foreign-product', locationId: 'location-b',
+  quantity: 5,
+}]);
+assert.equal(isStockTracked({ id: 'foreign-product' }), false,
+  'a movement explicitly owned by another tenant must not mark this tenant product as canonically tracked');
+setInventoryMovements([{
+  eventId: 'legacy-other-org-movement', organizationId: 'org-a',
+  productId: 'legacy-other-org-product', locationId: 'location-b', quantity: 5,
+}]);
+assert.equal(isStockTracked({ id: 'legacy-other-org-product' }), false,
+  'legacy movement without tenant id must not cross organization scope');
+setInventoryMovements([{
+  eventId: 'legacy-same-org-movement', organizationId: 'org-b',
+  productId: 'legacy-same-org-product', locationId: 'location-b', quantity: 5,
+}]);
+assert.equal(isStockTracked({ id: 'legacy-same-org-product' }), true,
+  'legacy movement may be used when its organization matches the active organization');
 globalThis.fetch = async () => response(200, {
   balances: [{ productId: 'product-1', locationId: 'location-b', quantity: 99 }],
 });
