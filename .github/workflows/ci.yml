@@ -55,6 +55,8 @@ jobs:
         run: node phase0/inventory-refresh-behavior-regression.mjs
       - name: Outbox tenant-scope regression
         run: npm run test:outbox-tenant-scope
+      - name: Order sync idempotency regression
+        run: npm run test:order-sync-idempotency
 
       - name: Syntax check core entrypoints
         run: |
