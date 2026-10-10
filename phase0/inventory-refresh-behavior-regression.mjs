@@ -91,6 +91,13 @@ await loadInventoryBalances({ locationId: 'location-a' });
 assert.equal(currentState().status, 'CACHED', 'malformed payload cannot be labelled FRESH');
 assert.deepEqual(state.inventoryBalances, freshBalances, 'malformed payload does not overwrite balances');
 
+globalThis.fetch = async () => response(200, {
+  balances: [{ productId: 'product-1', locationId: 'location-a', quantity: 'not-a-number' }],
+});
+await loadInventoryBalances({ locationId: 'location-a' });
+assert.equal(currentState().status, 'CACHED', 'invalid row values cannot be labelled FRESH');
+assert.deepEqual(state.inventoryBalances, freshBalances, 'invalid row values do not overwrite balances');
+
 let offlineFetchCount = 0;
 globalThis.fetch = async () => { offlineFetchCount += 1; return response(200, { balances: [] }); };
 Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { onLine: false } });
