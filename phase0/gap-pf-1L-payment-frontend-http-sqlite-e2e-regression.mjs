@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createServer as createHttpServer } from 'node:http';
 import { createServer as createNetServer } from 'node:net';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
@@ -13,6 +14,7 @@ process.env.SELLIFY_DATA_DIR = tempDir;
 process.env.SELLIFY_DB_PATH = dbPath;
 
 let child = null;
+let providerServer = null;
 let db = null;
 const originalFetch = globalThis.fetch;
 const originalWindow = globalThis.window;
@@ -100,6 +102,17 @@ try {
     idempotencyKey: 'pf-http-create-' + randomUUID(),
   });
   const paymentA = createdA.payment;
+  const createdSuccessA = await store.createPaymentWithIntent(tenantA.chatId, {
+    organizationId: sessionA.organizationId,
+    paymentAccountId: accountA.id,
+    providerId: 'telebirr',
+    channel: 'api',
+    amountMinor: 150000,
+    currency: 'ETB',
+    externalReference: 'PF-HTTP-SUCCESS-' + randomUUID(),
+    idempotencyKey: 'pf-http-create-success-' + randomUUID(),
+  });
+  const paymentSuccessA = createdSuccessA.payment;
 
   const userB = await store.getOrCreateUserByTelegram('pf-http-user-b-' + randomUUID(), 'PF HTTP User B');
   const tenantB = await store.createTenantForUser({
@@ -122,6 +135,43 @@ try {
   });
   const paymentB = createdB.payment;
 
+  const providerCalls = { unknown: 0, success: 0 };
+  providerServer = createHttpServer((req, res) => {
+    const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname;
+    if (req.headers.authorization !== 'Bearer pf-http-test-provider-key') {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'FAILED' }));
+      return;
+    }
+    if (pathname === '/unknown') {
+      providerCalls.unknown += 1;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'UNAVAILABLE' }));
+      return;
+    }
+    if (pathname === '/success') {
+      providerCalls.success += 1;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: 'SUCCESS',
+        amountMinor: paymentSuccessA.amountMinor,
+        currency: paymentSuccessA.currency,
+        receiverAccount: accountA.accountIdentifier,
+        reference: paymentSuccessA.externalReference,
+        transactionId: 'PF-HTTP-TX-' + paymentSuccessA.id,
+        observedAt: new Date().toISOString(),
+      }));
+      return;
+    }
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'NOT_FOUND' }));
+  });
+  await new Promise((resolve, reject) => {
+    providerServer.once('error', reject);
+    providerServer.listen(0, '127.0.0.1', resolve);
+  });
+  const providerBaseUrl = 'http://127.0.0.1:' + providerServer.address().port;
+
   const port = await freePort();
   const baseUrl = 'http://127.0.0.1:' + port;
   child = spawn(process.execPath, ['backend/server.js'], {
@@ -133,6 +183,8 @@ try {
       SELLIFY_DB_PATH: dbPath,
       NODE_ENV: 'test',
       SERVE_STATIC: 'false',
+      SELLIFY_TELEBIRR_BASE_URL: providerBaseUrl,
+      SELLIFY_TELEBIRR_API_KEY: 'pf-http-test-provider-key',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -155,21 +207,25 @@ try {
   const idempotencyKey = 'pf-http-lost-response-' + randomUUID();
   const statusPath = '/tenants/' + encodeURIComponent(tenantA.chatId) +
     '/payments/' + encodeURIComponent(paymentA.id) + '/status';
+  const successStatusPath = '/tenants/' + encodeURIComponent(tenantA.chatId) +
+    '/payments/' + encodeURIComponent(paymentSuccessA.id) + '/status';
+  let lostResponsePath = statusPath;
   let simulateLostResponse = true;
-  globalThis.fetch = async (input, init = {}) => {
+  const simulateResponseLoss = async (input, init = {}) => {
     const url = typeof input === 'string' ? input : input.url;
     const method = String(init.method || 'GET').toUpperCase();
     const response = await originalFetch(input, init);
-    if (simulateLostResponse && method === 'POST' && url.endsWith(statusPath)) {
+    if (simulateLostResponse && method === 'POST' && url.endsWith(lostResponsePath)) {
       simulateLostResponse = false;
       await response.arrayBuffer();
       throw new TypeError('Simulated response loss after backend completion');
     }
     return response;
   };
+  globalThis.fetch = simulateResponseLoss;
 
   await assert.rejects(
-    () => queryPaymentStatus(paymentA.id, {}, { idempotencyKey }),
+    () => queryPaymentStatus(paymentA.id, { query: { statusPath: '/unknown' } }, { idempotencyKey }),
     /Simulated response loss/,
     'first client call should lose the response after the backend has completed',
   );
@@ -177,12 +233,12 @@ try {
 
   let retry;
   try {
-    retry = await queryPaymentStatus(paymentA.id, {}, { idempotencyKey });
+    retry = await queryPaymentStatus(paymentA.id, { query: { statusPath: '/unknown' } }, { idempotencyKey });
   } catch (error) {
     throw new Error('Status-query retry failed: ' + JSON.stringify(error) + '\\nBackend output:\\n' + childOutput);
   }
-  assert.equal(retry.status, 'UNKNOWN', 'an unconfigured provider must remain an unresolved outcome');
-  assert.equal(retry.supported, false, 'the frontend must not convert an unavailable provider into success');
+  assert.equal(retry.status, 'UNKNOWN', 'an unavailable provider observation must remain unresolved');
+  assert.equal(retry.supported, true, 'the configured adapter supports status queries even when the outcome is unavailable');
   assert.equal(retry.payment.id, paymentA.id);
 
   const afterRetry = await store.getPayment(tenantA.chatId, paymentA.id);
@@ -198,6 +254,56 @@ try {
   assert.equal(commandRows.length, 1, 'the HTTP route must persist one durable status-query command');
   assert.equal(commandRows[0].status, 'SUCCEEDED', 'the unresolved provider result must be durably replayable');
   assert.equal(commandRows[0].payment_id, paymentA.id);
+  assert.equal(providerCalls.unknown, 1, 'replay must not query the provider again');
+
+  // Exercise the successful provider observation through the same real client,
+  // HTTP route, adapter, Payment Core, and SQLite persistence boundary.
+  const successIdempotencyKey = 'pf-http-success-lost-response-' + randomUUID();
+  lostResponsePath = successStatusPath;
+  simulateLostResponse = true;
+  globalThis.fetch = simulateResponseLoss;
+  await assert.rejects(
+    () => queryPaymentStatus(paymentSuccessA.id, { query: { statusPath: '/success' } }, { idempotencyKey: successIdempotencyKey }),
+    /Simulated response loss/,
+    'successful status query should commit before the simulated response loss',
+  );
+  globalThis.fetch = originalFetch;
+
+  let successfulRetry;
+  try {
+    successfulRetry = await queryPaymentStatus(
+      paymentSuccessA.id,
+      { query: { statusPath: '/success' } },
+      { idempotencyKey: successIdempotencyKey },
+    );
+  } catch (error) {
+    throw new Error('Successful status-query retry failed: ' + JSON.stringify(error) + '\\nBackend output:\\n' + childOutput);
+  }
+  assert.equal(successfulRetry.status, 'MATCH');
+  assert.equal(successfulRetry.supported, true);
+  assert.equal(successfulRetry.payment.state, 'VERIFIED');
+  assert.equal(successfulRetry.invariants.passed, true);
+  assert.equal(successfulRetry.decision.targetState, 'VERIFIED');
+  assert.equal(providerCalls.success, 1, 'successful result replay must not query the provider twice');
+
+  const successfulPaymentAfterRetry = await store.getPayment(tenantA.chatId, paymentSuccessA.id);
+  assert.equal(successfulPaymentAfterRetry.state, 'VERIFIED');
+  const successfulLedger = await store.listPaymentLedger(tenantA.chatId, paymentSuccessA.id);
+  assert.deepEqual(successfulLedger.map(entry => entry.entryType), ['CREATED', 'VERIFIED'],
+    'successful status-query replay must not duplicate financial ledger entries');
+  const successfulEvidence = await store.listPaymentEvidence(tenantA.chatId, paymentSuccessA.id);
+  const successfulVerifications = await store.listPaymentVerifications(tenantA.chatId, paymentSuccessA.id);
+  const successfulDecisions = await store.listPaymentDecisions(tenantA.chatId, paymentSuccessA.id);
+  assert.equal(successfulEvidence.length, 1, 'replay must not duplicate provider evidence');
+  assert.equal(successfulVerifications.length, 1, 'replay must not duplicate verification');
+  assert.equal(successfulDecisions.length, 1, 'replay must not duplicate the authoritative decision');
+
+  const successCommandRows = db.prepare(
+    'SELECT status, payment_id FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).all(successIdempotencyKey);
+  assert.equal(successCommandRows.length, 1);
+  assert.equal(successCommandRows[0].status, 'SUCCEEDED');
+  assert.equal(successCommandRows[0].payment_id, paymentSuccessA.id);
 
   const crossTenantKey = 'pf-http-cross-tenant-' + randomUUID();
   const crossTenantResponse = await originalFetch(
@@ -223,7 +329,9 @@ try {
   assert.equal((await store.listPaymentLedger(tenantB.chatId, paymentB.id)).length, 1);
 
   console.log('PASS PF-1 HTTP + real frontend client + SQLite lost-response retry');
-  console.log('PASS unresolved provider outcome remains UNKNOWN and causes no financial transition');
+  console.log('PASS unavailable provider outcome remains UNKNOWN and causes no financial transition');
+  console.log('PASS successful MATCH -> VERIFIED -> ledger transition and lost-response replay');
+  console.log('PASS evidence, verification, decision, and ledger are not duplicated on replay');
   console.log('PASS durable status-query command replays through the actual HTTP route');
   console.log('PASS cross-tenant session is rejected before command claim');
 } catch (error) {
@@ -232,6 +340,9 @@ try {
 } finally {
   globalThis.fetch = originalFetch;
   if (db) db.close();
+  if (providerServer?.listening) {
+    await new Promise(resolve => providerServer.close(() => resolve()));
+  }
   if (child && child.exitCode === null) {
     child.kill('SIGTERM');
     await new Promise(resolve => {
