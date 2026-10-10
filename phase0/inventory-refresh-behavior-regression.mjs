@@ -12,6 +12,17 @@ globalThis.window = {
   __APP_CONFIG__: {},
   location: { origin: 'https://sellify-test.invalid' },
 };
+const rootElement = {
+  style: { setProperty() {}, removeProperty() {} },
+  setAttribute() {},
+};
+globalThis.document = {
+  documentElement: rootElement,
+  querySelector() { return { setAttribute() {} }; },
+  createElement() { return { setAttribute() {} }; },
+  head: { appendChild() {} },
+};
+globalThis.getComputedStyle = () => ({ getPropertyValue() { return ''; } });
 Object.defineProperty(globalThis, 'navigator', {
   configurable: true,
   value: { onLine: true },
