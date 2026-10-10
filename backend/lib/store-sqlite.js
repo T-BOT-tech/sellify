@@ -6819,17 +6819,22 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       String(decision.decision || '').toUpperCase(), target, json(decision.reasonCodes || decision.reason_codes || []),
       json(decision.invariantResults || decision.invariant_results || {}), decision.decisionSource || 'PAYMENT_CORE', actor?.userId || null, now
     );
-    const result = db.prepare("UPDATE payments SET state = ?, updated_at = ?, claimed_at = CASE WHEN ? = 'CLAIMED' THEN ? ELSE claimed_at END, received_at = CASE WHEN ? = 'RECEIVED' THEN ? ELSE received_at END, verified_at = CASE WHEN ? = 'VERIFIED' THEN ? ELSE verified_at END, reconciled_at = CASE WHEN ? = 'RECONCILED' THEN ? ELSE reconciled_at END WHERE id = ? AND organization_id = ?" + (expectedState ? " AND state = ?" : ""))
-      .run(target, now, target, now, target, now, target, now, target, now, paymentId, organizationId, ...(expectedState ? [expectedState] : []));
-    if (Number(result.changes || 0) !== 1) throw Object.assign(new Error('Payment state changed before commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
-    db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), paymentId, organizationId, String(decision.entryType || target),
-      target === 'PARTIAL'
-        ? Number(decision.amountMinor ?? decision.amount_minor ?? input.verification?.observedAmountMinor ?? input.verification?.observed_amount_minor ?? row.amount_minor)
-        : Number(row.amount_minor),
-      normaliseCurrency(row.currency, 'ETB'),
-      row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now
-    );
+    // A repeated authoritative decision may reaffirm the current state, but
+    // it is not a new financial transition and must not append another ledger
+    // entry or reset the original state-transition timestamps.
+    if (row.state !== target) {
+      const result = db.prepare("UPDATE payments SET state = ?, updated_at = ?, claimed_at = CASE WHEN ? = 'CLAIMED' THEN ? ELSE claimed_at END, received_at = CASE WHEN ? = 'RECEIVED' THEN ? ELSE received_at END, verified_at = CASE WHEN ? = 'VERIFIED' THEN ? ELSE verified_at END, reconciled_at = CASE WHEN ? = 'RECONCILED' THEN ? ELSE reconciled_at END WHERE id = ? AND organization_id = ?" + (expectedState ? " AND state = ?" : ""))
+        .run(target, now, target, now, target, now, target, now, target, now, paymentId, organizationId, ...(expectedState ? [expectedState] : []));
+      if (Number(result.changes || 0) !== 1) throw Object.assign(new Error('Payment state changed before commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
+      db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+        crypto.randomUUID(), paymentId, organizationId, String(decision.entryType || target),
+        target === 'PARTIAL'
+          ? Number(decision.amountMinor ?? decision.amount_minor ?? input.verification?.observedAmountMinor ?? input.verification?.observed_amount_minor ?? row.amount_minor)
+          : Number(row.amount_minor),
+        normaliseCurrency(row.currency, 'ETB'),
+        row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now
+      );
+    }
     const marketplaceAllocation = db.prepare("SELECT a.*, so.id AS canonical_seller_order_id FROM marketplace_payment_allocations a JOIN marketplace_seller_orders so ON so.id = a.seller_order_id WHERE a.payment_id = ? AND a.organization_id = ? LIMIT 1").get(paymentId, organizationId);
     if (marketplaceAllocation) {
       if (target === 'REFUNDED') {
