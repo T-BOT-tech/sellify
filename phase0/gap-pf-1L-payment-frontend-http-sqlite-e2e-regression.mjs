@@ -17,6 +17,8 @@ let db = null;
 const originalFetch = globalThis.fetch;
 const originalWindow = globalThis.window;
 const originalLocalStorage = globalThis.localStorage;
+const originalDocument = globalThis.document;
+const originalGetComputedStyle = globalThis.getComputedStyle;
 const localValues = new Map();
 
 globalThis.localStorage = {
@@ -25,6 +27,27 @@ globalThis.localStorage = {
   removeItem(key) { localValues.delete(key); },
   clear() { localValues.clear(); },
 };
+
+const noop = () => {};
+const fakeElement = {
+  style: { setProperty: noop, removeProperty: noop, getPropertyValue: () => '' },
+  classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
+  setAttribute: noop, getAttribute: () => null, appendChild: noop,
+  addEventListener: noop, removeEventListener: noop, dataset: {}, children: [],
+  options: [], value: '',
+};
+globalThis.document = new Proxy({
+  documentElement: fakeElement,
+  head: fakeElement,
+  body: fakeElement,
+  querySelector: () => null,
+  querySelectorAll: () => [],
+  getElementById: () => null,
+  createElement: () => ({ ...fakeElement, style: { ...fakeElement.style }, classList: { ...fakeElement.classList } }),
+}, {
+  get(target, key) { return key in target ? target[key] : noop; },
+});
+globalThis.getComputedStyle = () => ({ getPropertyValue: () => '' });
 
 async function freePort() {
   const server = createNetServer();
@@ -118,7 +141,7 @@ try {
   child.stderr.on('data', chunk => { childOutput += chunk.toString(); });
   await waitForHealth(baseUrl, child);
 
-  globalThis.window = { location: { origin: baseUrl } };
+  globalThis.window = { location: { origin: baseUrl }, matchMedia: () => ({ addEventListener: noop }), addEventListener: noop, removeEventListener: noop, navigator: { onLine: true } };
   const { setConfig } = await import('../app/src/state.js');
   setConfig({
     chatId: tenantA.chatId,
@@ -215,5 +238,9 @@ try {
   else globalThis.window = originalWindow;
   if (originalLocalStorage === undefined) delete globalThis.localStorage;
   else globalThis.localStorage = originalLocalStorage;
+  if (originalDocument === undefined) delete globalThis.document;
+  else globalThis.document = originalDocument;
+  if (originalGetComputedStyle === undefined) delete globalThis.getComputedStyle;
+  else globalThis.getComputedStyle = originalGetComputedStyle;
   await rm(tempDir, { recursive: true, force: true });
 }
