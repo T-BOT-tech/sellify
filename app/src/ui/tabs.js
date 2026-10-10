@@ -15,7 +15,7 @@ import { renderSourcing, bindSourcingUI } from '../procurement/ui.js';
 // ---------- Tabs ----------
 export function switchTab(tab) {
   const allTabs = ['home', 'order', 'marketplace', 'queue', 'catalog', 'customers', 'tables', 'kitchen', 'accounts', 'warehouse', 'logistics', 'sourcing'];
-  const overflowTabs = ['marketplace', 'tables', 'kitchen', 'accounts', 'warehouse', 'logistics', 'sourcing'];
+  const overflowTabs = ['queue', 'marketplace', 'tables', 'kitchen', 'accounts', 'warehouse', 'logistics', 'sourcing'];
   allTabs.forEach(t => {
     const el = document.getElementById('tab-' + t);
     const nav = document.getElementById('nav' + capitalize(t));
@@ -55,7 +55,7 @@ export function closeMoreSheet() {
 // enabled?), and does More need a presence dot (any enabled one currently
 // showing a nonzero badge?).
 (function initMoreNavManager() {
-  const overflowIds = ['navMarketplace', 'navTables', 'navKitchen', 'navAccounts', 'navWarehouse', 'navLogistics', 'navSourcing'];
+  const overflowIds = ['navQueue', 'navMarketplace', 'navTables', 'navKitchen', 'navAccounts', 'navWarehouse', 'navLogistics', 'navSourcing'];
   function recompute() {
     const navMore = document.getElementById('navMore');
     const dot = document.getElementById('navMoreDot');
