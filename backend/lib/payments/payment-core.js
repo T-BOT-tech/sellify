@@ -460,7 +460,16 @@ export class PaymentCore {
       try {
         await this.store.completePaymentStatusQuery(chatId, {
           idempotencyKey, requestHash, status: 'FAILED',
-          error: { message: error?.message || 'Payment status query failed', statusCode: error?.statusCode || 500, code: error?.code || 'PAYMENT_STATUS_QUERY_FAILED' },
+          error: {
+            message: error?.message || 'Payment status query failed',
+            statusCode: error?.statusCode || 500,
+            code: error?.code || 'PAYMENT_STATUS_QUERY_FAILED',
+            // Only provider network/timeouts thrown before evidence persistence
+            // are safe for same-key retry. Other failures remain terminal or
+            // unresolved so retries cannot repeat partial domain side effects.
+            retryable: error?.retryable === true &&
+              ['PAYMENT_PROVIDER_NETWORK_ERROR', 'PAYMENT_PROVIDER_PROBE_TIMEOUT'].includes(String(error?.code || '')),
+          },
         });
       } catch (persistError) {
         // Preserve the original provider/domain error; a failed completion write
