@@ -175,7 +175,12 @@ try {
   );
   globalThis.fetch = originalFetch;
 
-  const retry = await queryPaymentStatus(paymentA.id, {}, { idempotencyKey });
+  let retry;
+  try {
+    retry = await queryPaymentStatus(paymentA.id, {}, { idempotencyKey });
+  } catch (error) {
+    throw new Error('Status-query retry failed: ' + JSON.stringify(error) + '\\nBackend output:\\n' + childOutput);
+  }
   assert.equal(retry.status, 'UNKNOWN', 'an unconfigured provider must remain an unresolved outcome');
   assert.equal(retry.supported, false, 'the frontend must not convert an unavailable provider into success');
   assert.equal(retry.payment.id, paymentA.id);
