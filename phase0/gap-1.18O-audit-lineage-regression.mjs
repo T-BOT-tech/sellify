@@ -69,8 +69,8 @@ try {
   const directDb = new DatabaseSync(process.env.SELLIFY_DB_PATH);
   try {
     const row = directDb.prepare(
-      'SELECT id FROM audit_events WHERE organization_id = ? ORDER BY id DESC LIMIT 1',
-    ).get(String(tenant.organizationId));
+      'SELECT id FROM audit_events WHERE chat_id = ? AND action = ? ORDER BY id DESC LIMIT 1',
+    ).get(String(tenant.chatId), 'gap1-18o.audit-chain.test');
     assert.ok(row);
     directDb.prepare('UPDATE audit_events SET metadata_json = ? WHERE id = ?')
       .run(JSON.stringify({ sequence: 'tampered' }), Number(row.id));
