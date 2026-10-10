@@ -429,7 +429,18 @@ export class PaymentCore {
           code: savedError.code || 'PAYMENT_STATUS_QUERY_FAILED',
         });
       }
-      throw Object.assign(new Error('Payment status query with this idempotency key is already in progress'), {
+      // If the process crashed after the canonical financial transition committed
+      // but before the query response was persisted, reconstruct only from the
+      // durable transition record and its matching evidence lineage. Never
+      // re-run the provider or financial transition during this recovery path.
+      const recovered = await this.#recoverCommittedStatusQuery({ chatId, paymentId, idempotencyKey, requestHash });
+      if (recovered) {
+        await this.store.completePaymentStatusQuery(chatId, {
+          idempotencyKey, requestHash, status: 'SUCCEEDED', result: recovered,
+        });
+        return recovered;
+      }
+      throw Object.assign(new Error('Payment status query with this idempotency key is unresolved or already in progress'), {
         statusCode: 409, code: 'PAYMENT_STATUS_QUERY_IN_PROGRESS',
       });
     }
@@ -452,6 +463,62 @@ export class PaymentCore {
       }
       throw error;
     }
+  }
+
+  async #recoverCommittedStatusQuery({ chatId, paymentId, idempotencyKey }) {
+    const required = [
+      'getPaymentIdempotency', 'getPayment', 'listPaymentEvidence',
+      'listPaymentVerifications', 'listPaymentDecisions',
+    ];
+    if (required.some(name => typeof this.store[name] !== 'function')) return null;
+
+    const command = await this.store.getPaymentIdempotency(chatId, idempotencyKey, 'TRANSITION_LIFECYCLE');
+    if (!command || String(command.resource_id || command.resourceId || '') !== paymentId) return null;
+
+    let saved;
+    try { saved = JSON.parse(command.response_json || command.responseJson || '{}'); } catch { return null; }
+    const paymentSnapshot = saved.payment;
+    const targetState = String(paymentSnapshot?.state || '').toUpperCase();
+    if (!paymentSnapshot || !['VERIFIED', 'RECONCILED'].includes(targetState)) return null;
+
+    const [evidenceRows, verificationRows, decisionRows] = await Promise.all([
+      this.store.listPaymentEvidence(chatId, paymentId),
+      this.store.listPaymentVerifications(chatId, paymentId),
+      this.store.listPaymentDecisions(chatId, paymentId),
+    ]);
+    if (!Array.isArray(evidenceRows) || !Array.isArray(verificationRows) || !Array.isArray(decisionRows)) return null;
+
+    // The financial transition and its idempotency record are committed in
+    // one SQLite transaction. Match the decision to that transaction's
+    // persisted timestamp and require its evidence/verification lineage.
+    const decision = decisionRows.find(item =>
+      String(item.targetState || '').toUpperCase() === targetState &&
+      item.evidenceId && item.verificationId &&
+      (!command.created_at || String(item.createdAt) === String(command.created_at))
+    );
+    if (!decision) return null;
+    const evidence = evidenceRows.find(item => String(item.id) === String(decision.evidenceId));
+    const verification = verificationRows.find(item =>
+      String(item.id) === String(decision.verificationId) &&
+      String(item.evidenceId) === String(decision.evidenceId)
+    );
+    if (!evidence || !verification ||
+        String(evidence.paymentId || '') !== paymentId ||
+        String(verification.paymentId || '') !== paymentId) return null;
+
+    return {
+      payment: paymentSnapshot,
+      status: verification.result,
+      supported: true,
+      evidence,
+      verification,
+      invariants: decision.invariantResults || {},
+      decision: {
+        decision: decision.decision,
+        targetState: decision.targetState,
+        reasonCodes: decision.reasonCodes || [],
+      },
+    };
   }
 
   async #queryStatusOnce(command = {}) {
