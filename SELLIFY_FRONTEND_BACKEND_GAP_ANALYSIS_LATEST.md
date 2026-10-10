@@ -1,9 +1,9 @@
 # Sellify Frontend ↔ Backend Gap Analysis — Latest
 
-Status: CURRENT RECONCILIATION BASELINE
-Branch: main
-Date: 2026-10-02
-Authority: live repository source on main; historical gap documents are reference only.
+Status: CANDIDATE RECONCILIATION UPDATE — NOT YET MERGED
+Branch: ux/ecosystem-add-action-menu
+Date: 2026-10-10
+Authority: live repository source and observed CI on this branch. Main remains unchanged until this PR is reviewed and explicitly merged. Historical gap documents are reference only.
 
 ## 1. Purpose
 
@@ -82,9 +82,9 @@ A domain may be CLOSED in source while still carrying a VERIFICATION GAP.
 | Logistics / fulfillment | HARDENED | GAP-2.1–2.13 completed; delivery authority is now canonical. |
 | Delivery staff | HARDENED | Courier role, ownership, tenant/location scope and lifecycle enforcement are server-side. |
 | Rich dispatch UX | PARTIAL | Workload/balancing/projection contracts exist; richer operational UX is future refinement. |
-| Payment Core | HARDENED | Payment authority, evidence, verification, decisions, ledger, authorization and reconciliation boundaries exist. |
-| Payment frontend | OPEN / MAJOR | No dedicated app/src/payments contract/state/UI module is currently established as the operational frontend boundary. |
-| Payment frontend certification | OPEN / MAJOR | Dedicated adversarial frontend-to-backend contract certification remains. |
+| Payment Core | HARDENED | Payment authority, evidence, verification, decisions, ledger, authorization and reconciliation boundaries exist. Durable status-query idempotency/recovery, append-only evidence/verification/decision records, and runtime audit-chain tamper detection are covered by regressions. |
+| Payment frontend | PARTIAL | Dedicated app/src/payments contract/client/state/UI and canonical projection exist. The remaining work is operational UX refinement and certification through the actual HTTP route, not creating a second payment authority. |
+| Payment frontend certification | PARTIAL / VERIFICATION GAP | PF-1/PF-2 contract, projection, client-runtime, adversarial and Payment Core regressions are registered and passing on the candidate branch. A full real-client → HTTP route → persisted SQLite lifecycle certification remains the next meaningful gate. |
 | Provider execution | PARTIAL / DELIBERATE | Provider-neutral registry and existing flows exist; live provider capability must only be implemented when verified. |
 | Compliance frontend | PARTIAL | Canonical backend authority and frontend authority work exist; operational workspace refinement remains. |
 | Audit frontend | PARTIAL | Strong backend lineage exists; management/visibility UX remains. |
@@ -92,32 +92,20 @@ A domain may be CLOSED in source while still carrying a VERIFICATION GAP.
 | Contextual domain authorization | PARTIAL | Base IAM is closed; contextual capability/pack/domain-role composition remains a refinement. |
 | Offline / outbox | CLOSED | Canonical event boundary exists. |
 | Pack lifecycle | DEFERRED | Intentionally gated; do not treat as a defect. |
-| Release / CI certification | VERIFICATION GAP | Source gates exist, but absence of observed workflow runs must remain explicit. |
+| Release / CI certification | HARDENED ON CANDIDATE BRANCH / MAIN VERIFICATION GAP | Latest verified candidate head 68cd9fa9d4082376527376df5402e355f65bbec8 passed Sellify CI and Repository Security Checks. PR #40 remains draft and unmerged, so this is not yet evidence for main. |
 
-## 5. Primary active gap: Payment Frontend
+## 5. Primary remaining gap: End-to-end Payment Frontend certification
 
-The backend Payment Core is not the missing piece.
+The backend Payment Core is not the primary missing piece, and the dedicated frontend payment modules now exist.
 
-The current gap is operational frontend integration around the existing authority.
+Existing implementation and regression evidence includes:
+- app/src/payments/client.js, contract.js, state.js, ui.js, and canonical payment projection;
+- authenticated tenant/session-aware API calls and required idempotency keys;
+- order-to-payment linkage and coalesced ordinary payment-ensure operations;
+- Payment Core regressions covering durable status-query idempotency, concurrent retries, committed-result recovery, unresolved pre-commit crashes, append-only lineage records, and audit-chain tamper detection;
+- PF-1/PF-2 frontend contract, projection, runtime-client and adversarial regressions.
 
-Target module:
-
-app/src/payments/
-- client.js
-- contract.js
-- state.js
-- ui.js
-
-Required capabilities include:
-- payment account projection and selection;
-- order/payment linkage;
-- payment intent and payment state projection;
-- evidence submission/status;
-- verification/reconciliation status;
-- explicit error handling;
-- audit/lineage projection;
-- idempotent mutating commands;
-- tenant/session-aware API access.
+**Remaining gap:** the frontend status-query runtime test uses a controlled fetch boundary, while Payment Core persistence is exercised by separate SQLite integration tests. The next meaningful certification step is to connect these through the actual HTTP route in a focused end-to-end test, including a lost response/retry and an unresolved provider outcome. Operational UX for account selection, payment history, error recovery and audit-lineage visibility can then be refined against the verified contract.
 
 Frontend must never:
 - maintain a financial ledger;
@@ -178,23 +166,26 @@ Pack lifecycle remains intentionally gated. Activation/installation should only 
 Source-level implementation does not equal runtime certification.
 
 For every gap:
-1. inspect live main;
+1. inspect the current branch and compare it with main;
 2. implement minimally;
 3. add focused regression;
 4. wire CI;
 5. observe CI execution where available;
 6. record any unavailable workflow evidence explicitly.
 
+The candidate branch's current CI result must not be represented as a main-branch result while PR #40 remains unmerged.
+
 ## 11. Recommended sequence
 
-1. PF-1 Payment frontend operationalization
-2. PF-2 Payment frontend adversarial/certification
-3. STF-1 Seller storefront/channel refinement
-4. CMP-1 Compliance/Audit operational refinement
-5. IAM-1 Contextual authorization refinement
-6. LOG-3 Rich dispatch UX refinement
-7. Final release/CI certification
-8. Re-evaluate Pack lifecycle
+1. PF-1 — connect the real frontend client to the actual HTTP route and persisted Payment Core in a focused end-to-end regression.
+2. PF-2 — complete route-level tenant-isolation, retry, timeout and uncertain-outcome certification without duplicating existing unit/integration coverage.
+3. Reconcile this candidate status against main after PR review/explicit merge; do not close gaps on main based on feature-branch CI.
+4. STF-1 Seller storefront/channel refinement.
+5. CMP-1 Compliance/Audit operational refinement.
+6. IAM-1 Contextual authorization refinement.
+7. LOG-3 Rich dispatch UX refinement.
+8. Final release/CI certification.
+9. Re-evaluate Pack lifecycle
 
 ## 12. Non-negotiable rule
 
