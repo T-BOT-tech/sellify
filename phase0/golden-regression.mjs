@@ -192,7 +192,7 @@ try {
     await writeFile(restorePath, bytes);
     const restored = new DatabaseSync(restorePath);
     const migrations=restored.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(x=>x.version);
-    assert.deepEqual(migrations,Array.from({ length: 63 }, (_, index) => index + 1));
+    assert.deepEqual(migrations,Array.from({ length: 64 }, (_, index) => index + 1));
     assert.ok(restored.prepare('SELECT COUNT(*) AS c FROM tenants').get().c >= 2);
     assert.ok(restored.prepare('SELECT COUNT(*) AS c FROM orders').get().c >= 1);
     restored.close();
