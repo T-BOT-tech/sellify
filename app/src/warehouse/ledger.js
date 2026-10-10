@@ -297,7 +297,16 @@ export function getInventoryBalance(productId, locationId = '') {
 }
 
 export function localInventoryBalance(productId, locationId = '') {
-  return inventoryMovements
+  // Legacy movement rows are global local storage. In an authenticated tenant
+  // context, use them only when they carry the active organization scope;
+  // unscoped legacy rows must not become a cross-tenant stock fallback.
+  const organizationId = String(config.organizationId || '');
+  const scopedMovements = config.chatId
+    ? (organizationId
+      ? inventoryMovements.filter(m => String(m.organizationId || '') === organizationId)
+      : [])
+    : inventoryMovements;
+  return scopedMovements
     .filter(m => String(m.productId) === String(productId) && (!locationId || String(m.locationId || '') === String(locationId)))
     .reduce((sum, m) => sum + Number(m.quantity || 0), 0);
 }
