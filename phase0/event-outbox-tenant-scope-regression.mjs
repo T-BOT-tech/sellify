@@ -29,12 +29,12 @@ for (const event of [
 
 const server = await readFile(new URL('../backend/server.js', import.meta.url), 'utf8');
 const start = server.indexOf('async function handleSyncEvents');
-const end = server.indexOf('\\nasync function handleSync(', start);
+const end = server.indexOf('async function handleSync(', start);
 assert.ok(start >= 0 && end > start, 'sync event route handler is present');
 const handler = server.slice(start, end);
-assert.match(handler, /requireSession\\(req, tenant\\.chatId\\)/,
+assert.ok(handler.includes('requireSession(req, tenant.chatId)'),
   'event batch requires a tenant-scoped authenticated session');
-assert.match(handler, /assertEventTenantScope\\(candidate, \\{ chatId: tenant\\.chatId, organizationId: tenant\\.organizationId \\}\\)/,
+assert.ok(handler.includes('assertEventTenantScope(candidate, { chatId: tenant.chatId, organizationId: tenant.organizationId })'),
   'each event is checked against authoritative route tenant and organization');
 assert.ok(handler.indexOf('assertEventTenantScope(candidate') < handler.indexOf('processSyncEvent(chatId, candidate, session)'),
   'scope validation runs before canonical event processing');
