@@ -237,5 +237,37 @@ assert.equal(state.inventoryMovements.some(m => m.eventId === 'tenant-a-event'),
 assert.equal(state.inventoryMovements.some(m => m.eventId === 'tenant-b-event'), true,
   'late previous-tenant response does not remove active tenant movement history');
 
+// Durable outbox events must only replay under their originating tenant.
+const { setOutboxEvents } = state;
+const outbox = await import('../app/src/sync/outbox.js');
+setOutboxEvents([]);
+configure({ chatId: 'tenant-a', organizationId: 'org-a', sessionToken: 'session-a', locationId: 'location-a' });
+outbox.enqueueEvent('test.inventory', { value: 'from-a' }, { eventId: 'outbox-tenant-a' });
+configure({ chatId: 'tenant-b', organizationId: 'org-b', sessionToken: 'session-b', locationId: 'location-b' });
+outbox.enqueueEvent('test.inventory', { value: 'from-b' }, { eventId: 'outbox-tenant-b' });
+const replayedTenants = [];
+globalThis.fetch = async (url, options) => {
+  const match = String(url).match(/\\/events\\/([^/?]+)/);
+  if (!match) throw new Error('Unexpected outbox URL: ' + url);
+  const tenant = decodeURIComponent(match[1]);
+  replayedTenants.push(tenant);
+  const body = JSON.parse(options.body);
+  assert.equal(body.events.every(event => event.tenantChatId === tenant), true,
+    'every submitted outbox event is bound to the URL tenant');
+  return response(200, { results: body.events.map(event => ({ eventId: event.eventId, status: 'processed' })) });
+};
+await outbox.flushOutbox();
+assert.deepEqual(replayedTenants, ['tenant-b'],
+  'tenant B replay must not submit tenant A events');
+assert.equal(state.outboxEvents.some(event => event.eventId === 'outbox-tenant-a'), true,
+  'tenant A event remains queued rather than being discarded or reassigned');
+assert.equal(state.outboxEvents.some(event => event.eventId === 'outbox-tenant-b'), false,
+  'successfully replayed tenant B event is removed');
+configure({ chatId: 'tenant-a', organizationId: 'org-a', sessionToken: 'session-a', locationId: 'location-a' });
+await outbox.flushOutbox();
+assert.deepEqual(replayedTenants, ['tenant-b', 'tenant-a'],
+  'tenant A event replays only after tenant A is active again');
+
 console.log('Inventory refresh behavior regression: PASS');
 console.log('Success, failures, offline, malformed payloads, tenant/location isolation, and scope changes: PASS');
+console.log('Outbox replay tenant isolation: PASS');
