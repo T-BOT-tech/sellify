@@ -181,7 +181,7 @@ try {
     let r=await request('POST','/admin/backup'); assert.equal(r.response.status,401);
     r=await request('POST','/admin/backup',undefined,{Authorization:'Bearer phase0-test-backup-token'}); assert.equal(r.response.status,201); assert.ok(r.json.file);
     const backupPath=path.join(dataDir,'backups',r.json.file); backupPathForRestore=backupPath; const info=await stat(backupPath); assert.ok(info.size>0);
-    const db=new DatabaseSync(backupPath); const migrations=db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(x=>x.version); assert.deepEqual(migrations,Array.from({ length: 64 }, (_, index) => index + 1)); const tenantCount=db.prepare('SELECT COUNT(*) AS c FROM tenants').get().c; assert.ok(tenantCount>=2); db.close();
+    const db=new DatabaseSync(backupPath); const migrations=db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(x=>x.version); assert.deepEqual(migrations,Array.from({ length: 65 }, (_, index) => index + 1)); const tenantCount=db.prepare('SELECT COUNT(*) AS c FROM tenants').get().c; assert.ok(tenantCount>=2); db.close();
   });
   await test('backup restore opens and preserves core rows', async () => {
     assert.ok(backupPathForRestore);
