@@ -63,7 +63,8 @@ A domain may be CLOSED in source while still carrying a VERIFICATION GAP.
 |---|---|---|
 | Auth / tenant sessions | CLOSED | Canonical tenant/session boundary exists. |
 | Customers | CLOSED | Canonical customer APIs are connected. |
-| Catalog | CLOSED | Canonical catalog authority is connected. |
+| Catalog | CLOSED | Canonical product catalog authority is connected and reused by the Add menu. |
+| First-class service catalog type | DEFERRED | The existing catalog form and persisted contract are product-shaped. A service needs explicit canonical type semantics and compatible inventory/fulfillment behavior; do not advertise service creation as supported until those boundaries are implemented and tested. |
 | Orders | CLOSED | Canonical order/sync path is connected. |
 | Inventory | HARDENED | Canonical inventory authority exists; legacy projections must not become competing authority. |
 | Locations | CLOSED | Canonical location CRUD exists. |
@@ -92,9 +93,9 @@ A domain may be CLOSED in source while still carrying a VERIFICATION GAP.
 | Contextual domain authorization | PARTIAL | Base IAM is closed; contextual capability/pack/domain-role composition remains a refinement. |
 | Offline / outbox | CLOSED | Canonical event boundary exists. |
 | Pack lifecycle | DEFERRED | Intentionally gated; do not treat as a defect. |
-| Release / CI certification | HARDENED ON CANDIDATE BRANCH / MAIN VERIFICATION GAP | Candidate head `c9f0f84b26e555379fb29b2cc5de15e05e8278ff` passed Sellify CI and Repository Security Checks (run 1394). PR #40 remains draft and unmerged, so this is not yet evidence for main. |
+| Release / CI certification | HARDENED ON CANDIDATE BRANCH / MAIN VERIFICATION GAP | Candidate head `1070efbb71b5208b98e909394676628477e27055` passed Sellify CI and Repository Security Checks (run 1398). PR #40 remains draft and unmerged, so this is not yet evidence for main. |
 
-## 5. Primary remaining gap: End-to-end Payment Frontend certification
+## 5. Payment frontend certification — candidate branch hardened
 
 The backend Payment Core is not the primary missing piece, and the dedicated frontend payment modules now exist.
 
@@ -105,7 +106,7 @@ Existing implementation and regression evidence includes:
 - Payment Core regressions covering durable status-query idempotency, concurrent retries, committed-result recovery, unresolved pre-commit crashes, append-only lineage records, and audit-chain tamper detection;
 - PF-1/PF-2 frontend contract, projection, runtime-client and adversarial regressions.
 
-**Latest certification:** `phase0/gap-pf-1L-payment-frontend-http-sqlite-e2e-regression.mjs` runs the real frontend client against a spawned backend server and isolated SQLite database. It covers unavailable and successful provider observations through the real adapter. The successful case validates observed amount, currency, receiver account, reference, transaction ID, and observation time before Payment Core commits `MATCH → VERIFIED`. A lost response followed by a same-key retry replays the committed result without another provider call or duplicate evidence, verification, decision, or ledger entries. An unavailable outcome remains `UNKNOWN` and leaves payment `UNPAID`; cross-tenant requests are rejected before command claim. The test also simulates provider network failure followed by recovery: the retryable failure is persisted, a same-key retry atomically reclaims only this known-safe pre-evidence failure, and the later successful result is committed once. This exposed and fixed missing durable HTTP store wiring, provider-adapter observation-field/status-shape mismatch, and decision logic that could turn UNKNOWN plus missing fields into a financial mismatch. Candidate head `c9f0f84b26e555379fb29b2cc5de15e05e8278ff` passed Sellify CI and Repository Security Checks (run 1394).
+**Latest certification:** `phase0/gap-pf-1L-payment-frontend-http-sqlite-e2e-regression.mjs` runs the real frontend client against a spawned backend server and isolated SQLite database. It covers unavailable and successful provider observations through the real adapter. The successful case validates observed amount, currency, receiver account, reference, transaction ID, and observation time before Payment Core commits `MATCH → VERIFIED`. A lost response followed by a same-key retry replays the committed result without another provider call or duplicate evidence, verification, decision, or ledger entries. An unavailable outcome remains `UNKNOWN` and leaves payment `UNPAID`; cross-tenant requests are rejected before command claim. The test also simulates provider network failure followed by recovery: the retryable failure is persisted, a same-key retry atomically reclaims only this known-safe pre-evidence failure, and the later successful result is committed once. This exposed and fixed missing durable HTTP store wiring, provider-adapter observation-field/status-shape mismatch, and decision logic that could turn UNKNOWN plus missing fields into a financial mismatch. Candidate head `1070efbb71b5208b98e909394676628477e27055` passed Sellify CI and Repository Security Checks (run 1398).
 
 **Remaining certification gap:** the critical success, unresolved-outcome, lost-response replay, same-key recovery after a retryable network failure, no-duplicate-effects, and tenant-isolation paths now pass through the real frontend-client/HTTP route harness. A dedicated timeout-specific variant may be added only if it adds evidence beyond the network-failure case and existing provider transport tests. Operational UX for account selection, payment history, error recovery and audit-lineage visibility remains future refinement.
 
@@ -179,15 +180,16 @@ The candidate branch's current CI result must not be represented as a main-branc
 
 ## 11. Recommended sequence
 
-1. PF-1L — completed on candidate head `c9f0f84b26e555379fb29b2cc5de15e05e8278ff`: actual frontend client → HTTP route → provider adapter → Payment Core → SQLite; success, unresolved outcome, lost-response replay, safe same-key retry after transient provider network failure, no-duplicate effects, and tenant isolation pass.
-2. PF-2 — only add a timeout-specific case if it proves a distinct invariant; otherwise retain existing transport coverage and move to the next product milestone.
-3. Reconcile this candidate status against main after PR review/explicit merge; do not close gaps on main based on feature-branch CI.
-4. STF-1 Seller storefront/channel refinement.
-5. CMP-1 Compliance/Audit operational refinement.
-6. IAM-1 Contextual authorization refinement.
-7. LOG-3 Rich dispatch UX refinement.
-8. Final release/CI certification.
-9. Re-evaluate Pack lifecycle
+1. PF-1L — completed and CI-certified on candidate branch; success, unresolved outcome, lost-response replay, safe same-key retry after transient provider network failure, no-duplicate effects, and tenant isolation pass.
+2. First-experience catalog contract — the Add menu now says “Add product” because the current catalog form is product-shaped. Define first-class service semantics only after checking order, inventory, and fulfillment boundaries; do not create a competing catalog authority.
+3. PF-2 — add a timeout-specific route case only if it proves a distinct invariant beyond the existing transport and network-retry regressions.
+4. Reconcile candidate status against main after PR review and explicit merge; do not close gaps on main based on feature-branch CI.
+5. STF-1 Seller storefront/channel refinement.
+6. CMP-1 Compliance/Audit operational refinement.
+7. IAM-1 Contextual authorization refinement.
+8. LOG-3 Rich dispatch UX refinement.
+9. Final release/CI certification.
+10. Re-evaluate Pack lifecycle
 
 ## 12. Non-negotiable rule
 
