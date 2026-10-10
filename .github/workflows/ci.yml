@@ -53,6 +53,8 @@ jobs:
         run: node phase0/inventory-refresh-lifecycle-regression.mjs
       - name: Inventory refresh behavior regression
         run: node phase0/inventory-refresh-behavior-regression.mjs
+      - name: Outbox tenant-scope regression
+        run: npm run test:outbox-tenant-scope
 
       - name: Syntax check core entrypoints
         run: |
