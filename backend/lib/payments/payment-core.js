@@ -445,12 +445,9 @@ export class PaymentCore {
       });
     }
 
+    let result;
     try {
-      const result = await this.#queryStatusOnce(command);
-      await this.store.completePaymentStatusQuery(chatId, {
-        idempotencyKey, requestHash, status: 'SUCCEEDED', result,
-      });
-      return result;
+      result = await this.#queryStatusOnce(command);
     } catch (error) {
       try {
         await this.store.completePaymentStatusQuery(chatId, {
@@ -463,6 +460,14 @@ export class PaymentCore {
       }
       throw error;
     }
+
+    // Keep result persistence outside the provider/domain failure handler. If
+    // the result write fails after the financial commit, do not misclassify the
+    // committed operation as FAILED; leave it recoverable from canonical state.
+    await this.store.completePaymentStatusQuery(chatId, {
+      idempotencyKey, requestHash, status: 'SUCCEEDED', result,
+    });
+    return result;
   }
 
   async #recoverCommittedStatusQuery({ chatId, paymentId, idempotencyKey }) {
