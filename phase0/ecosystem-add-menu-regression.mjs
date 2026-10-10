@@ -26,6 +26,8 @@ assert.equal(ADD_MENU_ACTIONS.filter(({ destination }) => destination === 'setti
 assert.match(html, /id="navAdd"[^>]*onclick="openAddSheet\(\)"/);
 assert.match(html, /id="addSheet"/);
 assert.ok(html.includes('onclick="openAddProduct();'));
+assert.ok(html.includes('<span>Add product</span>'), 'menu must describe the currently supported catalog action accurately');
+assert.doesNotMatch(html, /Add product or service/, 'do not advertise first-class service creation before its canonical lifecycle exists');
 assert.ok(html.includes('onclick="openAddSettings();'));
 assert.match(html, /id="navQueue"/);
 assert.ok(html.indexOf('id="navQueue"') > html.indexOf('id="moreSheet"'), 'Queue remains reachable in More');
