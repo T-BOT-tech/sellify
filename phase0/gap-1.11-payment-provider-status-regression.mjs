@@ -166,9 +166,10 @@ test('GAP-1.24 recovers committed financial result when query-result persistence
     actor: null,
     idempotencyKey: 'gap1-24-crash-after-commit-' + crypto.randomUUID(),
   };
+  const callsBefore = calls;
 
   await assert.rejects(() => paymentCore.queryStatus(command), /simulated crash/);
-  assert.equal(calls, 1, 'the initial query must contact the provider exactly once');
+  assert.equal(calls - callsBefore, 1, 'the initial query must contact the provider exactly once');
   const ledgerAfterCrash = await store.listPaymentLedger(base.chatId, base.payment.id);
   assert.equal(ledgerAfterCrash.length, 2, 'the financial transition should already be committed');
   assert.equal(ledgerAfterCrash[1].entryType, 'VERIFIED');
@@ -181,7 +182,7 @@ test('GAP-1.24 recovers committed financial result when query-result persistence
   assert.ok(recovered.evidence?.id);
   assert.ok(recovered.verification?.id);
   assert.equal(recovered.decision.targetState, 'VERIFIED');
-  assert.equal(calls, 1, 'recovery must not contact the provider again');
+  assert.equal(calls - callsBefore, 1, 'recovery must not contact the provider again');
   assert.equal((await store.listPaymentLedger(base.chatId, base.payment.id)).length, 2,
     'recovery must not repeat the financial transition');
 
@@ -189,7 +190,7 @@ test('GAP-1.24 recovers committed financial result when query-result persistence
   const verificationCount = (await store.listPaymentVerifications(base.chatId, base.payment.id)).length;
   const replay = await paymentCore.queryStatus({ ...command });
   assert.equal(replay.payment.state, 'VERIFIED');
-  assert.equal(calls, 1, 'completed recovery must replay the persisted result');
+  assert.equal(calls - callsBefore, 1, 'completed recovery must replay the persisted result');
   assert.equal((await store.listPaymentEvidence(base.chatId, base.payment.id)).length, evidenceCount);
   assert.equal((await store.listPaymentVerifications(base.chatId, base.payment.id)).length, verificationCount);
   assert.equal((await store.listPaymentLedger(base.chatId, base.payment.id)).length, 2);
