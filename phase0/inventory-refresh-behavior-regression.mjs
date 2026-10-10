@@ -21,7 +21,10 @@ const rootElement = {
 globalThis.document = {
   documentElement: rootElement,
   getElementById() { return null; },
+  addEventListener() {},
+  removeEventListener() {},
   querySelector() { return { setAttribute() {} }; },
+  querySelectorAll() { return []; },
   createElement() { return { setAttribute() {} }; },
   head: { appendChild() {} },
 };
