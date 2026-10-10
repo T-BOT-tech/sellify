@@ -1487,7 +1487,7 @@ function normalizeRefundResult(raw = {}, refund = {}) {
 
 function normalizeProviderStatus(raw = {}) {
   const value = String(raw.status ?? raw.result ?? raw.state ?? '').trim().toUpperCase();
-  if (['SUCCESS', 'SUCCEEDED', 'COMPLETED', 'PAID', 'SETTLED', 'MATCH', 'CONFIRMED'].includes(value)) return 'MATCH';
+  if (['SUCCESS', 'SUCCEEDED', 'COMPLETED', 'PAID', 'SETTLED', 'MATCH', 'CONFIRMED', 'VERIFIED'].includes(value)) return 'MATCH';
   if (['FAILED', 'DECLINED', 'REJECTED', 'MISMATCH'].includes(value)) return 'MISMATCH';
   if (['DUPLICATE'].includes(value)) return 'DUPLICATE';
   if (['EXPIRED'].includes(value)) return 'EXPIRED';
