@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { assertAuthenticatedNotificationContext, assertProviderNotificationEvidenceShape } from './provider-notification-authority.js';
 import { assertUntrustedPaymentEvidenceShape } from './payment-evidence-authority.js';
 import { evaluateCapabilityCertification } from './capability-certification.js';
@@ -388,6 +389,72 @@ export class PaymentCore {
   }
 
   async queryStatus(command = {}) {
+    this.#authorize(command, 'payments:accept');
+    const chatId = String(command.chatId || '').trim();
+    const paymentId = String(command.paymentId || command.payment_id || '').trim();
+    const idempotencyKey = String(command.idempotencyKey || command.idempotency_key || '').trim();
+    if (!chatId || !paymentId) {
+      throw Object.assign(new Error('chatId and paymentId are required'), { statusCode: 400, code: 'PAYMENT_CONTEXT_REQUIRED' });
+    }
+
+    // The HTTP status-query route requires a key. Persist the command before
+    // calling the provider so retries after a lost response do not re-query
+    // the provider or repeat evidence/verification/decision persistence.
+    if (!idempotencyKey || !this.store.beginPaymentStatusQuery || !this.store.completePaymentStatusQuery) {
+      return this.queryStatusOnce(command);
+    }
+
+    const requestFields = Object.fromEntries(Object.entries(command).filter(([key]) =>
+      !['chatId', 'paymentId', 'payment_id', 'organizationId', 'actor', 'idempotencyKey', 'idempotency_key'].includes(key)));
+    const stable = value => {
+      if (Array.isArray(value)) return value.map(stable);
+      if (value && typeof value === 'object') {
+        return Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])]));
+      }
+      return value;
+    };
+    const requestHash = createHash('sha256')
+      .update(JSON.stringify(stable({ paymentId, request: requestFields })))
+      .digest('hex');
+    const started = await this.store.beginPaymentStatusQuery(chatId, {
+      paymentId, idempotencyKey, requestHash,
+    });
+
+    if (started.duplicate) {
+      if (started.status === 'SUCCEEDED') return started.result;
+      if (started.status === 'FAILED') {
+        const savedError = started.error || {};
+        throw Object.assign(new Error(savedError.message || 'Previous payment status query failed'), {
+          statusCode: savedError.statusCode || 500,
+          code: savedError.code || 'PAYMENT_STATUS_QUERY_FAILED',
+        });
+      }
+      throw Object.assign(new Error('Payment status query with this idempotency key is already in progress'), {
+        statusCode: 409, code: 'PAYMENT_STATUS_QUERY_IN_PROGRESS',
+      });
+    }
+
+    try {
+      const result = await this.queryStatusOnce(command);
+      await this.store.completePaymentStatusQuery(chatId, {
+        idempotencyKey, requestHash, status: 'SUCCEEDED', result,
+      });
+      return result;
+    } catch (error) {
+      try {
+        await this.store.completePaymentStatusQuery(chatId, {
+          idempotencyKey, requestHash, status: 'FAILED',
+          error: { message: error?.message || 'Payment status query failed', statusCode: error?.statusCode || 500, code: error?.code || 'PAYMENT_STATUS_QUERY_FAILED' },
+        });
+      } catch (persistError) {
+        // Preserve the original provider/domain error; a failed completion write
+        // leaves the durable command in progress for explicit recovery.
+      }
+      throw error;
+    }
+  }
+
+  async queryStatusOnce(command = {}) {
     this.#authorize(command, 'payments:accept');
     const chatId = String(command.chatId || '').trim();
     const paymentId = String(command.paymentId || command.payment_id || '').trim();
