@@ -20,7 +20,7 @@ Object.defineProperty(globalThis, 'navigator', {
 const state = await import('../app/src/state.js');
 const ledger = await import('../app/src/warehouse/ledger.js');
 const { setConfig, setInventoryBalances } = state;
-const { loadInventoryBalances, getInventoryBalanceRefreshState } = ledger;
+const { loadInventoryBalances, getInventoryBalanceRefreshState, getInventoryBalance } = ledger;
 
 function configure(overrides = {}) {
   setConfig({
@@ -113,9 +113,28 @@ await loadInventoryBalances({ locationId: 'location-b' });
 assert.equal(getInventoryBalanceRefreshState({ locationId: 'location-b' }).status, 'UNKNOWN',
   'server failure without a successful refresh for this scope remains UNKNOWN');
 
+// A second tenant gets its own cached rows without deleting or exposing the
+// first tenant's rows. Switching back must select the matching scoped cache.
+configure({ chatId: 'tenant-b', sessionToken: 'session-b', locationId: 'location-b' });
+globalThis.fetch = async () => response(200, {
+  balances: [{ productId: 'product-1', locationId: 'location-b', quantity: 99 }],
+});
+const tenantBBalances = await loadInventoryBalances({ locationId: 'location-b' });
+assert.equal(tenantBBalances[0].tenantChatId, 'tenant-b');
+assert.equal(getInventoryBalance('product-1', 'location-b'), 99,
+  'active tenant reads its own cached balance');
+configure({ chatId: 'tenant-a', sessionToken: 'session-a', locationId: 'location-a' });
+assert.equal(getInventoryBalance('product-1', 'location-a'), 12,
+  'switching back reads tenant A cached balance');
+configure({ chatId: 'tenant-b', sessionToken: 'session-b', locationId: 'location-b' });
+assert.equal(getInventoryBalance('product-1', 'location-b'), 99,
+  'tenant B balance remains available from its own scoped cache');
+assert.equal(getInventoryBalance('product-1', 'location-a'), 0,
+  'tenant B cannot read tenant A balance by requesting tenant A location');
+
 configure({ sessionToken: '' });
 await loadInventoryBalances({ locationId: 'location-a' });
 assert.equal(currentState().status, 'UNKNOWN', 'missing authentication cannot imply fresh data');
 
 console.log('Inventory refresh behavior regression: PASS');
-console.log('Success, server errors, permission denial, transport errors, malformed payloads, offline, and scope changes: PASS');
+console.log('Success, failures, offline, malformed payloads, tenant/location isolation, and scope changes: PASS');
