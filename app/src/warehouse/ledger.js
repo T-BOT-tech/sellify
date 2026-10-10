@@ -189,6 +189,12 @@ function setInventoryBalanceRefreshStatus(status, scope, { refreshedAt = null, h
   };
 }
 
+function isActiveInventoryBalanceScope(scope, sessionToken) {
+  return String(config.chatId || '') === scope.tenantChatId
+    && (!scope.locationId || String(config.locationId || '') === scope.locationId)
+    && String(config.sessionToken || '') === String(sessionToken || '');
+}
+
 function lastSuccessfulRefreshFor(scope) {
   const last = lastSuccessfulInventoryBalanceRefresh;
   return last && last.tenantChatId === scope.tenantChatId && last.locationId === scope.locationId
@@ -206,6 +212,7 @@ export async function loadInventoryBalances({ locationId = '' } = {}) {
     return inventoryBalances;
   }
 
+  const sessionToken = config.sessionToken;
   const lastSuccessful = lastSuccessfulRefreshFor(scope);
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     setInventoryBalanceRefreshStatus(lastSuccessful ? 'CACHED' : 'OFFLINE', scope, {
@@ -225,8 +232,12 @@ export async function loadInventoryBalances({ locationId = '' } = {}) {
     const url = baseUrl() + '/tenants/' + encodeURIComponent(scope.tenantChatId)
       + '/inventory/balances' + (query ? '?' + query : '');
     const res = await fetch(url, {
-      headers: { Authorization: 'Bearer ' + config.sessionToken },
+      headers: { Authorization: 'Bearer ' + sessionToken },
     });
+
+    // A response for a tenant/location/session that is no longer active must
+    // not change the current UI status or the shared balance projection.
+    if (!isActiveInventoryBalanceScope(scope, sessionToken)) return inventoryBalances;
 
     if (!res.ok) {
       setInventoryBalanceRefreshStatus(
@@ -238,6 +249,8 @@ export async function loadInventoryBalances({ locationId = '' } = {}) {
     }
 
     const data = await res.json().catch(() => null);
+    if (!isActiveInventoryBalanceScope(scope, sessionToken)) return inventoryBalances;
+
     const validBalances = Array.isArray(data?.balances)
       && data.balances.every(row =>
         row
@@ -276,10 +289,14 @@ export async function loadInventoryBalances({ locationId = '' } = {}) {
     setInventoryBalanceRefreshStatus('FRESH', scope, { refreshedAt, httpStatus: res.status });
     return next;
   } catch (error) {
-    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
-    setInventoryBalanceRefreshStatus(offline ? (lastSuccessful ? 'CACHED' : 'OFFLINE') : (lastSuccessful ? 'CACHED' : 'UNKNOWN'), scope, {
-      refreshedAt: lastSuccessful?.refreshedAt || null,
-    });
+    // Keep late failures from an obsolete tenant/location/session from
+    // overwriting the active scope's refresh status.
+    if (isActiveInventoryBalanceScope(scope, sessionToken)) {
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      setInventoryBalanceRefreshStatus(offline ? (lastSuccessful ? 'CACHED' : 'OFFLINE') : (lastSuccessful ? 'CACHED' : 'UNKNOWN'), scope, {
+        refreshedAt: lastSuccessful?.refreshedAt || null,
+      });
+    }
     throw error;
   }
 }
