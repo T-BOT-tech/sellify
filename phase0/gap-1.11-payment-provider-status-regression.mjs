@@ -21,6 +21,7 @@ registerPaymentProvider({
   capabilities: { getStatus: true },
   getStatus: async ({ payment }) => {
     calls += 1;
+    await new Promise(resolve => setTimeout(resolve, 30));
     return {
       status: payment.metadata?.status || 'COMPLETED',
       transactionId: payment.metadata?.transactionId || `TX-${payment.id}`,
@@ -113,7 +114,13 @@ test('GAP-1.24 exact status-query retry replays persisted result without another
     idempotencyKey: 'gap1-24-status-replay-' + crypto.randomUUID(),
   };
   const paymentCore = core();
-  const first = await paymentCore.queryStatus(command);
+  const concurrent = await Promise.allSettled([
+    paymentCore.queryStatus(command),
+    paymentCore.queryStatus({ ...command }),
+  ]);
+  assert.equal(concurrent.filter(item => item.status === 'fulfilled').length, 1);
+  assert.equal(concurrent.filter(item => item.status === 'rejected' && item.reason?.code === 'PAYMENT_STATUS_QUERY_IN_PROGRESS').length, 1);
+  const first = concurrent.find(item => item.status === 'fulfilled').value;
   const callsAfterFirst = calls;
   const evidenceAfterFirst = await store.listPaymentEvidence(base.chatId, base.payment.id);
   const verificationsAfterFirst = await store.listPaymentVerifications(base.chatId, base.payment.id);
