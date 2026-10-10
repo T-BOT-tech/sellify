@@ -247,7 +247,7 @@ configure({ chatId: 'tenant-b', organizationId: 'org-b', sessionToken: 'session-
 outbox.enqueueEvent('test.inventory', { value: 'from-b' }, { eventId: 'outbox-tenant-b' });
 const replayedTenants = [];
 globalThis.fetch = async (url, options) => {
-  const match = String(url).match(/\\/events\\/([^/?]+)/);
+  const match = new URL(String(url)).pathname.match(/^\/events\/([^/]+)$/);
   if (!match) throw new Error('Unexpected outbox URL: ' + url);
   const tenant = decodeURIComponent(match[1]);
   replayedTenants.push(tenant);
