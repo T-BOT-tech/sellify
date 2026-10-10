@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { ADD_MENU_ACTIONS, openAddSheet, closeAddSheet, openAddProduct, openAddSettings } from '../app/src/ui/add-menu.js';
 
-const [html, main, bridge, tabs, settings] = await Promise.all([
+const [html, main, bridge, tabs, settings, workspace] = await Promise.all([
   readFile(new URL('../app/index.html', import.meta.url), 'utf8'),
   readFile(new URL('../app/src/main.js', import.meta.url), 'utf8'),
   readFile(new URL('../app/src/window-bridge.js', import.meta.url), 'utf8'),
   readFile(new URL('../app/src/ui/tabs.js', import.meta.url), 'utf8'),
   readFile(new URL('../app/src/ui/settings.js', import.meta.url), 'utf8'),
+  readFile(new URL('../app/src/experience/workspace.js', import.meta.url), 'utf8'),
 ]);
 
 assert.deepEqual(ADD_MENU_ACTIONS.map(({ id }) => id), [
@@ -35,6 +36,14 @@ assert.match(tabs, /const overflowIds = \['navQueue'/);
 assert.match(tabs, /const overflowTabs = \['queue'/);
 assert.match(settings, /renderPackReadinessPanel\(\)/);
 assert.match(settings, /renderSellerStorefrontChannelsPanel\(\)/);
+
+// Home inventory attention must reuse the existing inventory projection,
+// never invent a fixed stock threshold or imply that cached data is fresh.
+assert.match(workspace, /getLowStockProducts\(\)/);
+assert.match(workspace, /getOutOfStockProducts\(\)/);
+assert.doesNotMatch(workspace, /stock\s*<=\s*5/);
+assert.match(workspace, /Saved projection only; open Warehouse to refresh\./);
+assert.match(workspace, /onclick=\"switchTab\('catalog'\)\"/);
 
 // Seller registration is deliberately not claimed as a working action until a
 // canonical seller-onboarding flow exists; this menu only routes to existing surfaces.
