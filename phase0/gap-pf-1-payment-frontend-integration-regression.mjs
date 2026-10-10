@@ -31,10 +31,22 @@ console.log('PASS PF-1 payment frontend mutation/idempotency integration boundar
 const originalFetch=globalThis.fetch;
 const originalWindow=globalThis.window;
 const originalLocalStorage=globalThis.localStorage;
+const originalDocument=globalThis.document;
+const originalGetComputedStyle=globalThis.getComputedStyle;
 const captured=[];
 try {
   globalThis.window={location:{origin:'http://sellify.test'}};
   globalThis.localStorage={getItem(){return null;},setItem(){},removeItem(){}};
+  globalThis.document={
+    documentElement:{style:{setProperty(){},removeProperty(){}},setAttribute(){}},
+    querySelector(){return null;},
+    createElement(){return {setAttribute(){}};},
+    head:{appendChild(){}},
+    getElementById(){return null;},
+    querySelectorAll(){return [];},
+    addEventListener(){},
+  };
+  globalThis.getComputedStyle=()=>({getPropertyValue(){return '';}});
   const {setConfig}=await import('../app/src/state.js');
   setConfig({chatId:'tenant-runtime',syncUrl:'http://sellify.test',sessionToken:'session-runtime'});
   globalThis.fetch=async (url,options={})=>{
@@ -61,5 +73,7 @@ try {
   globalThis.fetch=originalFetch;
   if(originalWindow===undefined) delete globalThis.window; else globalThis.window=originalWindow;
   if(originalLocalStorage===undefined) delete globalThis.localStorage; else globalThis.localStorage=originalLocalStorage;
+  if(originalDocument===undefined) delete globalThis.document; else globalThis.document=originalDocument;
+  if(originalGetComputedStyle===undefined) delete globalThis.getComputedStyle; else globalThis.getComputedStyle=originalGetComputedStyle;
 }
 console.log('PASS PF-1 runtime status-query client authentication/idempotency contract');
