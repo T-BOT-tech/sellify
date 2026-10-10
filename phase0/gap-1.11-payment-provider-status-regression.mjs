@@ -196,6 +196,35 @@ test('GAP-1.24 recovers committed financial result when query-result persistence
   assert.equal((await store.listPaymentLedger(base.chatId, base.payment.id)).length, 2);
 });
 
+test('GAP-1.24 fresh status observations do not duplicate an unchanged financial ledger transition', async () => {
+  const base = await setup('COMPLETED');
+  const paymentCore = core();
+  const first = await paymentCore.queryStatus({
+    chatId: base.chatId,
+    paymentId: base.payment.id,
+    actor: null,
+    idempotencyKey: 'gap1-24-first-observation-' + crypto.randomUUID(),
+  });
+  assert.equal(first.payment.state, 'VERIFIED');
+  const ledgerAfterFirst = await store.listPaymentLedger(base.chatId, base.payment.id);
+  assert.equal(ledgerAfterFirst.length, 2);
+  assert.equal(ledgerAfterFirst[1].fromState, 'UNPAID');
+  assert.equal(ledgerAfterFirst[1].toState, 'VERIFIED');
+
+  const second = await paymentCore.queryStatus({
+    chatId: base.chatId,
+    paymentId: base.payment.id,
+    actor: null,
+    idempotencyKey: 'gap1-24-second-observation-' + crypto.randomUUID(),
+  });
+  assert.equal(second.payment.state, 'VERIFIED');
+  const ledgerAfterSecond = await store.listPaymentLedger(base.chatId, base.payment.id);
+  assert.equal(ledgerAfterSecond.length, 2,
+    'a new provider observation that reaffirms VERIFIED must not create another financial transition');
+  assert.equal(ledgerAfterSecond[1].fromState, 'UNPAID');
+  assert.equal(ledgerAfterSecond[1].toState, 'VERIFIED');
+});
+
 test('GAP-1.24 recovers committed expiry decision when query-result persistence fails', async () => {
   const base = await setup('EXPIRED');
   let failCompletion = true;
