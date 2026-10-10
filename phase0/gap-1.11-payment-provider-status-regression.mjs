@@ -153,7 +153,10 @@ test('GAP-1.24 recovers committed financial result when query-result persistence
   let failCompletion = true;
   const paymentCore = core({
     completePaymentStatusQuery: async (...args) => {
-      if (failCompletion) throw new Error('simulated crash before status-query result persistence');
+      if (failCompletion) {
+        failCompletion = false;
+        throw new Error('simulated crash before status-query result persistence');
+      }
       return store.completePaymentStatusQuery(...args);
     },
   });
