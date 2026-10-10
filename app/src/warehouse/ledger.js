@@ -137,17 +137,34 @@ export async function syncInventoryMovement(movement) {
 
 export async function loadInventoryMovements({ productId = '', locationId = '', limit = 100 } = {}) {
   if (!config.chatId || !config.sessionToken) return inventoryMovements;
+  const scope = {
+    tenantChatId: String(config.chatId),
+    organizationId: String(config.organizationId || ''),
+    locationId: String(config.locationId || ''),
+    sessionToken: String(config.sessionToken),
+    syncUrl: String(config.syncUrl || ''),
+  };
+  const isScopeActive = () => String(config.chatId || '') === scope.tenantChatId
+    && String(config.organizationId || '') === scope.organizationId
+    && String(config.locationId || '') === scope.locationId
+    && String(config.sessionToken || '') === scope.sessionToken
+    && String(config.syncUrl || '') === scope.syncUrl;
   const params = new URLSearchParams({ limit: String(limit) });
   if (productId) params.set('product_id', productId);
   if (locationId) params.set('location_id', locationId);
-  const res = await fetch(`${baseUrl()}/tenants/${encodeURIComponent(config.chatId)}/inventory/movements?${params}`, {
-    headers: { Authorization: `Bearer ${config.sessionToken}` },
+  const res = await fetch(`${(scope.syncUrl || window.location.origin).replace(/\/$/, '')}/tenants/${encodeURIComponent(scope.tenantChatId)}/inventory/movements?${params}`, {
+    headers: { Authorization: `Bearer ${scope.sessionToken}` },
   });
+  // Tenant, organization, location, or session changes invalidate the result.
+  if (!isScopeActive()) return inventoryMovements;
   if (!res.ok) return inventoryMovements;
   const data = await res.json();
-  if (!Array.isArray(data.movements)) return inventoryMovements;
+  if (!isScopeActive() || !Array.isArray(data.movements)) return inventoryMovements;
   const byEvent = new Map(inventoryMovements.map(m => [m.eventId, m]));
-  for (const remote of data.movements) byEvent.set(remote.eventId, { ...remote, syncStatus: 'synced' });
+  for (const remote of data.movements) {
+    if (!remote || typeof remote.eventId !== 'string' || !remote.eventId.trim()) continue;
+    byEvent.set(remote.eventId, { ...remote, syncStatus: 'synced' });
+  }
   const merged = [...byEvent.values()].sort((a, b) => String(b.occurredAt || '').localeCompare(String(a.occurredAt || '')));
   setInventoryMovements(merged);
   persist();
