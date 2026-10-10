@@ -148,7 +148,7 @@ setInventoryMovements([{
 }]);
 assert.equal(getInventoryBalance('legacy-product', 'location-b'), 0,
   'unscoped legacy movement rows must not become an authenticated tenant balance fallback');
-configure({ organizationId: 'org-b' });
+configure({ chatId: 'tenant-b', sessionToken: 'session-b', locationId: 'location-b', organizationId: 'org-b' });
 setInventoryMovements([{
   eventId: 'foreign-tenant-movement', tenantChatId: 'tenant-a',
   organizationId: 'org-a', productId: 'foreign-product', locationId: 'location-b',
