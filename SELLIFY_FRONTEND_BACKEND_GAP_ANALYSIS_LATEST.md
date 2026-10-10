@@ -84,7 +84,7 @@ A domain may be CLOSED in source while still carrying a VERIFICATION GAP.
 | Rich dispatch UX | PARTIAL | Workload/balancing/projection contracts exist; richer operational UX is future refinement. |
 | Payment Core | HARDENED | Payment authority, evidence, verification, decisions, ledger, authorization and reconciliation boundaries exist. Durable status-query idempotency/recovery, append-only evidence/verification/decision records, and runtime audit-chain tamper detection are covered by regressions. |
 | Payment frontend | PARTIAL | Dedicated app/src/payments contract/client/state/UI and canonical projection exist. The real frontend client now has a focused HTTP-route/SQLite integration regression; operational UX refinement remains. No second payment authority is needed. |
-| Payment frontend certification | HARDENED ON CANDIDATE BRANCH / MAIN VERIFICATION GAP | The PF-1L real-client → actual HTTP route → Payment Core → SQLite regression passes. It verifies lost-response retry/replay, durable command persistence, unresolved provider UNKNOWN without financial mutation or duplicate ledger entries, and cross-tenant session rejection before command claim. Broader route-level positive-transition/timeout coverage remains a possible strengthening; PR #40 is still unmerged. |
+| Payment frontend certification | HARDENED ON CANDIDATE BRANCH / MAIN VERIFICATION GAP | PF-1L now exercises the real frontend client → HTTP route → provider adapter → Payment Core → SQLite path for both unresolved and successful provider observations. It verifies lost-response replay, UNKNOWN without financial mutation, successful MATCH → VERIFIED with one canonical ledger transition, no duplicate evidence/verification/decision/ledger on replay, and cross-tenant rejection before command claim. Candidate head 87c9e28252c2ecd8adde9b660d89e2f49aca4c2c passed Sellify CI and Repository Security Checks (run 1390); PR #40 remains unmerged, so main is still a verification gap. |
 | Provider execution | PARTIAL / DELIBERATE | Provider-neutral registry and existing flows exist; live provider capability must only be implemented when verified. |
 | Compliance frontend | PARTIAL | Canonical backend authority and frontend authority work exist; operational workspace refinement remains. |
 | Audit frontend | PARTIAL | Strong backend lineage exists; management/visibility UX remains. |
@@ -92,7 +92,7 @@ A domain may be CLOSED in source while still carrying a VERIFICATION GAP.
 | Contextual domain authorization | PARTIAL | Base IAM is closed; contextual capability/pack/domain-role composition remains a refinement. |
 | Offline / outbox | CLOSED | Canonical event boundary exists. |
 | Pack lifecycle | DEFERRED | Intentionally gated; do not treat as a defect. |
-| Release / CI certification | HARDENED ON CANDIDATE BRANCH / MAIN VERIFICATION GAP | Candidate head b8676de7b0f6da5a24ef3de1d2a61d7a3001cd24 passed Sellify CI and Repository Security Checks (run 1385). PR #40 remains draft and unmerged, so this is not yet evidence for main. |
+| Release / CI certification | HARDENED ON CANDIDATE BRANCH / MAIN VERIFICATION GAP | Candidate head 87c9e28252c2ecd8adde9b660d89e2f49aca4c2c passed Sellify CI and Repository Security Checks (run 1390). PR #40 remains draft and unmerged, so this is not yet evidence for main. |
 
 ## 5. Primary remaining gap: End-to-end Payment Frontend certification
 
@@ -105,9 +105,9 @@ Existing implementation and regression evidence includes:
 - Payment Core regressions covering durable status-query idempotency, concurrent retries, committed-result recovery, unresolved pre-commit crashes, append-only lineage records, and audit-chain tamper detection;
 - PF-1/PF-2 frontend contract, projection, runtime-client and adversarial regressions.
 
-**Latest certification:** `phase0/gap-pf-1L-payment-frontend-http-sqlite-e2e-regression.mjs` runs the real frontend client against a spawned backend server and an isolated SQLite database. It confirms a lost response can be retried with the same key and replay the stored UNKNOWN result; the payment remains UNPAID with only its original CREATED ledger entry. It also verifies a session from tenant A cannot query tenant B's payment and cannot claim a status-query command. This test exposed a real wiring defect: the HTTP server's Payment Core store adapter omitted durable status-query and recovery lookup methods. Those methods are now wired, and the regression passes.
+**Latest certification:** `phase0/gap-pf-1L-payment-frontend-http-sqlite-e2e-regression.mjs` runs the real frontend client against a spawned backend server and isolated SQLite database. It now covers both an unavailable provider outcome and a successful provider response through the real adapter. The successful case validates observed amount, currency, receiver account, reference, transaction ID, and observation time before Payment Core commits `MATCH → VERIFIED`. A simulated lost response followed by the same-key retry replays the committed result without another provider call or duplicate evidence, verification, decision, or ledger entries. The unresolved case remains `UNKNOWN` and leaves the payment `UNPAID`; cross-tenant requests are rejected before command claim. The work exposed and fixed two defects: missing durable store methods in the HTTP server adapter, and provider adapters not exposing the observed fields/status shape required by Payment Core. It also hardened decision evaluation so missing fields on an UNKNOWN observation cannot independently trigger a financial mismatch transition. CI and Repository Security Checks pass on candidate head `87c9e28252c2ecd8adde9b660d89e2f49aca4c2c` (run 1390).
 
-**Remaining certification gap:** the focused route test deliberately exercises an unresolved provider outcome; the successful MATCH → VERIFIED → ledger path is covered by Payment Core integration tests but is not yet exercised through this exact frontend-client/HTTP route harness. Add that positive route-level case only if it can be done without creating a second provider authority or duplicating existing tests. Operational UX for account selection, payment history, error recovery and audit-lineage visibility remains future refinement.
+**Remaining certification gap:** the critical success, unresolved-outcome, lost-response replay, no-duplicate-effects, and tenant-isolation paths now pass through the real frontend-client/HTTP route harness. A provider-timeout/error route case may be added if it provides distinct evidence about retry semantics without duplicating existing Payment Core coverage. Operational UX for account selection, payment history, error recovery and audit-lineage visibility remains future refinement.
 
 Frontend must never:
 - maintain a financial ledger;
@@ -179,8 +179,8 @@ The candidate branch's current CI result must not be represented as a main-branc
 
 ## 11. Recommended sequence
 
-1. PF-1L — completed on candidate head b8676de7b0f6da5a24ef3de1d2a61d7a3001cd24: actual frontend client → HTTP route → Payment Core → SQLite; lost-response replay, unresolved outcome and tenant isolation pass.
-2. PF-2 — optionally add a route-level successful MATCH → VERIFIED → ledger case and any non-duplicative timeout/error cases; existing Payment Core success-path regressions remain authoritative for now.
+1. PF-1L — completed on candidate head `87c9e28252c2ecd8adde9b660d89e2f49aca4c2c`: actual frontend client → HTTP route → provider adapter → Payment Core → SQLite; success, unresolved outcome, lost-response replay, no-duplicate effects, and tenant isolation pass.
+2. PF-2 — assess whether a route-level timeout/error case adds distinct retry/recovery evidence; do not add redundant tests or a second provider/payment authority.
 3. Reconcile this candidate status against main after PR review/explicit merge; do not close gaps on main based on feature-branch CI.
 4. STF-1 Seller storefront/channel refinement.
 5. CMP-1 Compliance/Audit operational refinement.
