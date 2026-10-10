@@ -330,6 +330,20 @@ test('GAP-1.24A persisted evidence, verification, and decision records are appen
       () => directDb.prepare('UPDATE payment_decisions SET decision = decision WHERE id = ?').run(decisionRows[0].id),
       /payment_decisions are append-only/,
     );
+
+    // GAP-1.24B: append-only means direct deletion must be blocked as well.
+    assert.throws(
+      () => directDb.prepare('DELETE FROM payment_evidence WHERE id = ?').run(evidenceRows[0].id),
+      /payment_evidence is append-only/,
+    );
+    assert.throws(
+      () => directDb.prepare('DELETE FROM payment_verifications WHERE id = ?').run(verificationRows[0].id),
+      /payment_verifications are append-only/,
+    );
+    assert.throws(
+      () => directDb.prepare('DELETE FROM payment_decisions WHERE id = ?').run(decisionRows[0].id),
+      /payment_decisions are append-only/,
+    );
   } finally {
     directDb.close();
   }
