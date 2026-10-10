@@ -26,7 +26,11 @@ export function eventReplayFingerprint({ organizationId, eventType, aggregateTyp
 // Missing claims remain compatible with legacy unscoped events; the route session
 // still determines the authoritative tenant and organization.
 export function assertEventTenantScope(event, { chatId, organizationId } = {}) {
-  const tenantClaims = [event?.tenantChatId, event?.tenant_chat_id, event?.payload?.tenantChatId, event?.payload?.tenant_chat_id];
+  const tenantClaims = [
+    event?.tenantChatId, event?.tenant_chat_id,
+    event?.payload?.tenantChatId, event?.payload?.tenant_chat_id,
+    event?.payload?._event?.tenantChatId, event?.payload?._event?.tenant_chat_id,
+  ];
   for (const claim of tenantClaims) {
     if (claim == null || String(claim).trim() === '') continue;
     if (String(claim) !== String(chatId)) {
@@ -37,7 +41,11 @@ export function assertEventTenantScope(event, { chatId, organizationId } = {}) {
     }
   }
 
-  const organizationClaims = [event?.organizationId, event?.organization_id, event?.payload?._event?.organization_id];
+  const organizationClaims = [
+    event?.organizationId, event?.organization_id,
+    event?.payload?.organizationId, event?.payload?.organization_id,
+    event?.payload?._event?.organizationId, event?.payload?._event?.organization_id,
+  ];
   for (const claim of organizationClaims) {
     if (claim == null || String(claim).trim() === '') continue;
     if (String(claim) !== String(organizationId)) {
