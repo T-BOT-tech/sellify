@@ -6625,6 +6625,27 @@ export async function beginPaymentStatusQuery(chatId, input = {}) {
           statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE',
         });
       }
+
+      // A retryable provider network/timeout failure occurs before evidence or
+      // financial decision persistence. Reclaim that same command atomically
+      // on a same-key retry; terminal failures and uncertain IN_PROGRESS claims
+      // remain replayed/blocked and are never blindly re-executed.
+      let previousError = null;
+      try { previousError = existing.error_json ? JSON.parse(existing.error_json) : null; } catch {}
+      const retryableProviderFailure = String(existing.status) === 'FAILED' &&
+        previousError?.retryable === true &&
+        ['PAYMENT_PROVIDER_NETWORK_ERROR', 'PAYMENT_PROVIDER_PROBE_TIMEOUT'].includes(String(previousError.code || ''));
+      if (retryableProviderFailure) {
+        const reclaimed = db.prepare(`UPDATE payment_status_query_commands
+          SET status = 'IN_PROGRESS', response_json = NULL, error_json = NULL, updated_at = ?
+          WHERE organization_id = ? AND idempotency_key = ? AND request_hash = ? AND status = 'FAILED'`)
+          .run(now, organizationId, idempotencyKey, requestHash);
+        if (reclaimed.changes === 1) {
+          db.exec('COMMIT');
+          return { duplicate: false, status: 'IN_PROGRESS', result: null, error: null, retry: true };
+        }
+      }
+
       db.exec('COMMIT');
       return {
         duplicate: true,
