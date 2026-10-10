@@ -2390,6 +2390,32 @@ if (!applied.includes(39)) {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(64, nowIso());
   }
 
+  // GAP-1.24A — prevent in-place mutation of canonical payment evidence,
+  // verification, and decision records. Corrections must be represented as new
+  // records so previously committed financial lineage remains auditable.
+  if (!applied.includes(65)) {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS payment_evidence_no_update
+      BEFORE UPDATE ON payment_evidence
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_evidence is append-only');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS payment_verifications_no_update
+      BEFORE UPDATE ON payment_verifications
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_verifications are append-only');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS payment_decisions_no_update
+      BEFORE UPDATE ON payment_decisions
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_decisions are append-only');
+      END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(65, nowIso());
+  }
+
   // GAP-1.23 — durable provider notification identity and authentication lineage.
   if (!applied.includes(63)) {
     db.exec(`
