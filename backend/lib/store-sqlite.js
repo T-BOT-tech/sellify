@@ -2368,6 +2368,28 @@ if (!applied.includes(39)) {
   }
 
 
+  // GAP-1.24 — durable Payment Core provider-status command idempotency.
+  if (!applied.includes(64)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS payment_status_query_commands (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        payment_id TEXT NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+        idempotency_key TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('IN_PROGRESS','SUCCEEDED','FAILED')),
+        response_json TEXT,
+        error_json TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(organization_id, idempotency_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_status_query_commands_payment
+        ON payment_status_query_commands(organization_id, payment_id, created_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(64, nowIso());
+  }
+
   // GAP-1.23 — durable provider notification identity and authentication lineage.
   if (!applied.includes(63)) {
     db.exec(`
@@ -6528,6 +6550,80 @@ export async function insertPaymentIdempotency(chatId, input = {}) {
   );
   return getPaymentIdempotency(chatId, input.idempotencyKey || input.idempotency_key, input.commandType || input.command_type);
 }
+export async function beginPaymentStatusQuery(chatId, input = {}) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const paymentId = String(input.paymentId || input.payment_id || '').trim();
+  const idempotencyKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  const requestHash = String(input.requestHash || input.request_hash || '').trim();
+  if (!paymentId || !idempotencyKey || !requestHash) {
+    throw Object.assign(new Error('paymentId, idempotencyKey and requestHash are required'), {
+      statusCode: 400, code: 'PAYMENT_STATUS_QUERY_CONTEXT_REQUIRED',
+    });
+  }
+  const now = nowIso();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const existing = db.prepare('SELECT * FROM payment_status_query_commands WHERE organization_id = ? AND idempotency_key = ?')
+      .get(organizationId, idempotencyKey);
+    if (existing) {
+      if (String(existing.payment_id) !== paymentId || String(existing.request_hash) !== requestHash) {
+        throw Object.assign(new Error('Idempotency key was already used with a different status-query request'), {
+          statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE',
+        });
+      }
+      db.exec('COMMIT');
+      return {
+        duplicate: true,
+        status: existing.status,
+        result: existing.response_json ? JSON.parse(existing.response_json) : null,
+        error: existing.error_json ? JSON.parse(existing.error_json) : null,
+      };
+    }
+    const payment = db.prepare('SELECT id FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
+    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    db.prepare(`INSERT INTO payment_status_query_commands
+      (id, organization_id, payment_id, idempotency_key, request_hash, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'IN_PROGRESS', ?, ?)`).run(
+        crypto.randomUUID(), organizationId, paymentId, idempotencyKey, requestHash, now, now);
+    db.exec('COMMIT');
+    return { duplicate: false, status: 'IN_PROGRESS', result: null, error: null };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
+export async function completePaymentStatusQuery(chatId, input = {}) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const idempotencyKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  const requestHash = String(input.requestHash || input.request_hash || '').trim();
+  const status = String(input.status || '').trim().toUpperCase();
+  if (!idempotencyKey || !requestHash || !['SUCCEEDED', 'FAILED'].includes(status)) {
+    throw Object.assign(new Error('idempotencyKey, requestHash and terminal status are required'), {
+      statusCode: 400, code: 'PAYMENT_STATUS_QUERY_COMPLETION_REQUIRED',
+    });
+  }
+  const now = nowIso();
+  const resultJson = input.result == null ? null : json(input.result);
+  const errorJson = input.error == null ? null : json(input.error);
+  const updated = db.prepare(`UPDATE payment_status_query_commands
+    SET status = ?, response_json = ?, error_json = ?, updated_at = ?
+    WHERE organization_id = ? AND idempotency_key = ? AND request_hash = ? AND status = 'IN_PROGRESS'`)
+    .run(status, resultJson, errorJson, now, organizationId, idempotencyKey, requestHash);
+  if (updated.changes === 0) {
+    const existing = db.prepare('SELECT status, request_hash FROM payment_status_query_commands WHERE organization_id = ? AND idempotency_key = ?')
+      .get(organizationId, idempotencyKey);
+    if (!existing || String(existing.request_hash) !== requestHash || String(existing.status) !== status) {
+      throw Object.assign(new Error('Status-query command could not be completed from its current state'), {
+        statusCode: 409, code: 'PAYMENT_STATUS_QUERY_STATE_CONFLICT',
+      });
+    }
+  }
+  return { status, idempotent: updated.changes === 0 };
+}
+
 export async function commitPaymentDecision(chatId, input = {}, actor = null) {
   ensureDatabase();
   const { organizationId } = await resolvePaymentContext(chatId);
