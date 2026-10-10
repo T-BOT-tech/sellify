@@ -113,6 +113,17 @@ try {
     idempotencyKey: 'pf-http-create-success-' + randomUUID(),
   });
   const paymentSuccessA = createdSuccessA.payment;
+  const createdRetryA = await store.createPaymentWithIntent(tenantA.chatId, {
+    organizationId: sessionA.organizationId,
+    paymentAccountId: accountA.id,
+    providerId: 'telebirr',
+    channel: 'api',
+    amountMinor: 76000,
+    currency: 'ETB',
+    externalReference: 'PF-HTTP-RETRY-' + randomUUID(),
+    idempotencyKey: 'pf-http-create-retry-' + randomUUID(),
+  });
+  const paymentRetryA = createdRetryA.payment;
 
   const userB = await store.getOrCreateUserByTelegram('pf-http-user-b-' + randomUUID(), 'PF HTTP User B');
   const tenantB = await store.createTenantForUser({
@@ -135,12 +146,31 @@ try {
   });
   const paymentB = createdB.payment;
 
-  const providerCalls = { unknown: 0, success: 0 };
+  const providerCalls = { unknown: 0, success: 0, flaky: 0 };
+  let flakyMode = 'fail';
   providerServer = createHttpServer((req, res) => {
     const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname;
     if (req.headers.authorization !== 'Bearer pf-http-test-provider-key') {
       res.writeHead(401, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'FAILED' }));
+      return;
+    }
+    if (pathname === '/flaky') {
+      providerCalls.flaky += 1;
+      if (flakyMode === 'fail') {
+        req.socket.destroy();
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: 'SUCCESS',
+        amountMinor: paymentRetryA.amountMinor,
+        currency: paymentRetryA.currency,
+        receiverAccount: accountA.accountIdentifier,
+        reference: paymentRetryA.externalReference,
+        transactionId: 'PF-HTTP-TX-' + paymentRetryA.id,
+        observedAt: new Date().toISOString(),
+      }));
       return;
     }
     if (pathname === '/unknown') {
@@ -305,6 +335,57 @@ try {
   assert.equal(successCommandRows[0].status, 'SUCCEEDED');
   assert.equal(successCommandRows[0].payment_id, paymentSuccessA.id);
 
+  // Provider network errors are retryable only before evidence persistence.
+  // A same-key retry should reclaim that known-safe failed attempt, then become
+  // a durable successful command once the provider responds.
+  const retryableProviderKey = 'pf-http-provider-retry-' + randomUUID();
+  await assert.rejects(
+    () => queryPaymentStatus(paymentRetryA.id, { query: { statusPath: '/flaky' } }, { idempotencyKey: retryableProviderKey }),
+    error => error.status === 502 && error.retryable === true,
+    'provider network failure should surface as a retryable error',
+  );
+  const failedProviderCommand = db.prepare(
+    'SELECT status, error_json FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(retryableProviderKey);
+  assert.equal(failedProviderCommand.status, 'FAILED');
+  const persistedProviderError = JSON.parse(failedProviderCommand.error_json);
+  assert.equal(persistedProviderError.retryable, true);
+  assert.equal(persistedProviderError.code, 'PAYMENT_PROVIDER_NETWORK_ERROR');
+  const failedProviderCallCount = providerCalls.flaky;
+  assert.ok(failedProviderCallCount >= 1);
+
+  flakyMode = 'success';
+  const recoveredProviderRetry = await queryPaymentStatus(
+    paymentRetryA.id,
+    { query: { statusPath: '/flaky' } },
+    { idempotencyKey: retryableProviderKey },
+  );
+  assert.equal(recoveredProviderRetry.status, 'MATCH');
+  assert.equal(recoveredProviderRetry.payment.state, 'VERIFIED');
+  assert.equal(providerCalls.flaky, failedProviderCallCount + 1,
+    'safe same-key retry should perform one new provider request after the failed attempt');
+  const successfulProviderCallCount = providerCalls.flaky;
+  const finalProviderReplay = await queryPaymentStatus(
+    paymentRetryA.id,
+    { query: { statusPath: '/flaky' } },
+    { idempotencyKey: retryableProviderKey },
+  );
+  assert.equal(finalProviderReplay.payment.state, 'VERIFIED');
+  assert.equal(providerCalls.flaky, successfulProviderCallCount,
+    'a completed successful retry must replay without another provider request');
+  assert.deepEqual(
+    (await store.listPaymentLedger(tenantA.chatId, paymentRetryA.id)).map(entry => entry.entryType),
+    ['CREATED', 'VERIFIED'],
+  );
+  assert.equal((await store.listPaymentEvidence(tenantA.chatId, paymentRetryA.id)).length, 1);
+  assert.equal((await store.listPaymentVerifications(tenantA.chatId, paymentRetryA.id)).length, 1);
+  assert.equal((await store.listPaymentDecisions(tenantA.chatId, paymentRetryA.id)).length, 1);
+  const completedProviderCommand = db.prepare(
+    'SELECT status, error_json FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(retryableProviderKey);
+  assert.equal(completedProviderCommand.status, 'SUCCEEDED');
+  assert.equal(completedProviderCommand.error_json, null);
+
   const crossTenantKey = 'pf-http-cross-tenant-' + randomUUID();
   const crossTenantResponse = await originalFetch(
     baseUrl + '/tenants/' + encodeURIComponent(tenantB.chatId) +
@@ -332,6 +413,7 @@ try {
   console.log('PASS unavailable provider outcome remains UNKNOWN and causes no financial transition');
   console.log('PASS successful MATCH -> VERIFIED -> ledger transition and lost-response replay');
   console.log('PASS evidence, verification, decision, and ledger are not duplicated on replay');
+  console.log('PASS retryable provider network failure can retry safely with the same key');
   console.log('PASS durable status-query command replays through the actual HTTP route');
   console.log('PASS cross-tenant session is rejected before command claim');
 } catch (error) {
