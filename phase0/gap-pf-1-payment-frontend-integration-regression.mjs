@@ -35,7 +35,7 @@ const originalDocument=globalThis.document;
 const originalGetComputedStyle=globalThis.getComputedStyle;
 const captured=[];
 try {
-  globalThis.window={location:{origin:'http://sellify.test'}};
+  globalThis.window={location:{origin:'http://sellify.test'},addEventListener(){},matchMedia(){return {addEventListener(){}};}};
   globalThis.localStorage={getItem(){return null;},setItem(){},removeItem(){}};
   globalThis.document={
     documentElement:{style:{setProperty(){},removeProperty(){}},setAttribute(){}},
