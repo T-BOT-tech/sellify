@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { ADD_MENU_ACTIONS } from '../app/src/ui/add-menu.js';
+import { ADD_MENU_ACTIONS, openAddSheet, closeAddSheet, openAddProduct, openAddSettings } from '../app/src/ui/add-menu.js';
 
 const [html, main, bridge, tabs, settings] = await Promise.all([
   readFile(new URL('../app/index.html', import.meta.url), 'utf8'),
