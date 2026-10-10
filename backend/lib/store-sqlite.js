@@ -5544,9 +5544,9 @@ export async function getCustomer(chatId, customerId) {
   return customerFromRow(db.prepare('SELECT * FROM customers WHERE id = ? AND organization_id = ?').get(String(customerId), tenant.organizationId));
 }
 
-export async function upsertCustomer(chatId, input = {}) {
+function upsertCustomerSync(chatId, input = {}) {
   ensureDatabase();
-  const tenant = await getTenant(chatId);
+  const tenant = getTenantByChatId(chatId);
   if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
   const value = normalizeCustomerInput(input);
   if (!value.name && !value.phone) throw Object.assign(new Error('Customer name or phone is required'), { statusCode: 400 });
@@ -5573,6 +5573,12 @@ export async function upsertCustomer(chatId, input = {}) {
     organizationId: tenant.organizationId,
   });
   return customerFromRow(db.prepare('SELECT * FROM customers WHERE id = ?').get(id));
+}
+
+// Preserve the existing async API for callers while exposing a synchronous
+// internal path for callers that must not yield inside a SQLite transaction.
+export async function upsertCustomer(chatId, input = {}) {
+  return upsertCustomerSync(chatId, input);
 }
 
 export async function updateCustomer(chatId, customerId, patch = {}) {
@@ -8820,10 +8826,10 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
       }
       let customerId = order.customer_id ? String(order.customer_id) : null;
       if (order.customer && typeof order.customer === 'object') {
-        const customer = await upsertCustomer(key, order.customer);
+        const customer = upsertCustomerSync(key, order.customer);
         customerId = customer.id;
       } else if (order.customer_name || order.customer_phone) {
-        const customer = await upsertCustomer(key, {
+        const customer = upsertCustomerSync(key, {
           id: customerId || undefined,
           name: order.customer_name || '',
           phone: order.customer_phone || '',
