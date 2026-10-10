@@ -63,7 +63,7 @@ export function renderWorkspace() {
           <button class="fux-work-card ${inventoryAttention ? 'has-attention' : ''}" type="button" onclick="switchTab('catalog')">
             <span class="fux-card-label">Inventory health</span>
             <strong>${inventoryAttention ? `${inventoryAttention} to review` : 'No saved exceptions'}</strong>
-            <small>${lowStock} below reorder point · ${outOfStock} out of stock. Saved projection only; open Warehouse to refresh.</small>
+            <small>${lowStock} below reorder point · ${outOfStock} out of stock. Saved projection only; review stock in Catalog.</small>
           </button>
         </div>
       </section>
