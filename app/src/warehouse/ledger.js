@@ -238,7 +238,16 @@ export async function loadInventoryBalances({ locationId = '' } = {}) {
     }
 
     const data = await res.json().catch(() => null);
-    if (!Array.isArray(data?.balances)) {
+    const validBalances = Array.isArray(data?.balances)
+      && data.balances.every(row =>
+        row
+        && row.productId !== undefined
+        && row.productId !== null
+        && String(row.productId).trim() !== ''
+        && Number.isFinite(Number(row.quantity))
+        && (row.locationId === undefined || row.locationId === null || typeof row.locationId === 'string')
+      );
+    if (!validBalances) {
       setInventoryBalanceRefreshStatus(lastSuccessful ? 'CACHED' : 'UNKNOWN', scope, {
         refreshedAt: lastSuccessful?.refreshedAt || null,
         httpStatus: res.status,
