@@ -401,7 +401,7 @@ export class PaymentCore {
     // calling the provider so retries after a lost response do not re-query
     // the provider or repeat evidence/verification/decision persistence.
     if (!idempotencyKey || !this.store.beginPaymentStatusQuery || !this.store.completePaymentStatusQuery) {
-      return this.queryStatusOnce(command);
+      return this.#queryStatusOnce(command);
     }
 
     const requestFields = Object.fromEntries(Object.entries(command).filter(([key]) =>
@@ -435,7 +435,7 @@ export class PaymentCore {
     }
 
     try {
-      const result = await this.queryStatusOnce(command);
+      const result = await this.#queryStatusOnce(command);
       await this.store.completePaymentStatusQuery(chatId, {
         idempotencyKey, requestHash, status: 'SUCCEEDED', result,
       });
@@ -454,7 +454,7 @@ export class PaymentCore {
     }
   }
 
-  async queryStatusOnce(command = {}) {
+  async #queryStatusOnce(command = {}) {
     this.#authorize(command, 'payments:accept');
     const chatId = String(command.chatId || '').trim();
     const paymentId = String(command.paymentId || command.payment_id || '').trim();
