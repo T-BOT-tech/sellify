@@ -14,7 +14,7 @@ assert.match(ledger, /getInventoryBalanceRefreshState/);
 assert.match(ledger, /tenantChatId: String\(config\.chatId \|\| ''\)/);
 assert.match(ledger, /locationId: String\(locationId \|\| ''\)/);
 assert.match(ledger, /res\.status === 401 \|\| res\.status === 403 \? 'PERMISSION_DENIED'/);
-assert.match(ledger, /setInventoryBalances\(next\)[\s\S]*?persistBalances\(\)[\s\S]*?setInventoryBalanceRefreshStatus\('FRESH'/);
+assert.match(ledger, /setInventoryBalances\(\[\.\.\.retained, \.\.\.next\]\)[\s\S]*?persistBalances\(\)[\s\S]*?setInventoryBalanceRefreshStatus\('FRESH'/);
 assert.match(ledger, /setInventoryBalanceRefreshStatus\(offline \?/);
 assert.match(workspace, /startInventoryRefresh\(\)/);
 assert.match(workspace, /data-action="refresh-inventory"/);
