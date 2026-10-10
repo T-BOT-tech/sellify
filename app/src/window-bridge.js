@@ -18,7 +18,6 @@
 import {
   CS, addCustomPaymentMethod, addPricingTier, addProduct,
   openAddSheet, closeAddSheet, openAddProduct, openAddSettings,
-  openAddSheet, closeAddSheet, openAddProduct, openAddSettings,
   refreshDeliveryAssignments, transitionDeliveryAssignmentForOrder,
   addTable, addVolumeDiscountTier, addWarehouseLocation, loadOrganizationLocations, selectOrganizationLocation, selectWarehouseLocation, openOrganizationLocationModal, closeOrganizationLocationModal, saveOrganizationLocationModal, advanceFulfillmentOrder,
   applyBusinessModelUI, applyLogisticsUI, applyRolePermissions, applyStockChange,
@@ -83,6 +82,7 @@ import {
 if (typeof window !== 'undefined') {
   Object.assign(window, {
   CS, addCustomPaymentMethod, addPricingTier, addProduct,
+  openAddSheet, closeAddSheet, openAddProduct, openAddSettings,
   addTable, addVolumeDiscountTier, addWarehouseLocation, loadOrganizationLocations, selectOrganizationLocation, selectWarehouseLocation, openOrganizationLocationModal, closeOrganizationLocationModal, saveOrganizationLocationModal, advanceFulfillmentOrder,
   applyBusinessModelUI, applyLogisticsUI, applyRolePermissions, applyStockChange,
   applyStoreBranding, applyWarehouseUI, applyWholesaleUI, cancelProductEdit,
