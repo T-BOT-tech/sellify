@@ -199,6 +199,21 @@ Added `phase0/payment-lineage-append-only-regression.mjs` and wired it into the 
 
 This regression validates the migration-65/66 trigger behavior on a fresh isolated database. It does not replace a production-like migration/restore rehearsal, nor does it define an approved data-retention process.
 
+## 10C. GAP-1.24 — fenced status-query claims (candidate; runtime verification pending)
+
+The candidate branch now adds migration 67 for durable status-query claim ownership: monotonically increasing claim generation, unique claim token, execution phase, and an unstarted-claim lease. Migration handling checks each column independently so an interrupted additive DDL sequence can resume. Existing legacy `IN_PROGRESS` commands are conservatively classified as `PROVIDER_IN_FLIGHT`; they are not automatically reclaimed because their provider-execution phase cannot be proven.
+
+The SQLite store permits takeover only when a command remains `IN_PROGRESS` in phase `CLAIMED` and its lease has expired. Provider work must first atomically change the phase to `PROVIDER_IN_FLIGHT` under the current token/generation. The canonical `commitPaymentDecision` transaction checks the same claim ownership before financial mutation, and normal command completion is claim-token-aware. The provider adapter query payload excludes the internal fencing token.
+
+The PF-1L regression now includes direct SQLite coverage for expired unstarted-claim takeover, generation/token rotation, rejection of the superseded owner before provider work, rejection at the canonical financial commit boundary, rejection of stale completion, and non-reclaim of provider-in-flight commands.
+
+**Evidence status for this candidate:**
+- Source-level syntax parsing: passed for `backend/lib/store-sqlite.js`, `backend/lib/payments/payment-core.js`, and the updated PF-1L regression.
+- Focused runtime regression: **not yet executed**.
+- Candidate CI and Repository Security Checks: **no workflow runs are available for the current candidate head**; the earlier passing runs belong to the prior candidate and must not be reused as evidence for this change.
+- Concurrent-recovery race, full HTTP crash-boundary coverage for the new claim phases, mixed-version worker compatibility, and production-like migration/restore rehearsal: **not yet evidenced**.
+
+GAP-1.24 therefore remains **IMPLEMENTED ON CANDIDATE / NOT YET RUNTIME-VERIFIED / NOT CERTIFIED**. Do not treat the new fencing behavior as production-ready until the focused tests and CI/security checks have actually run on this candidate. The conservative unresolved behavior for a command whose provider call may have started remains intentional.
 ## 11. Recommended sequence
 
 1. PF-1L — completed and CI-certified on candidate branch; success, unresolved outcome, lost-response replay, safe same-key retry after transient provider network failure, no-duplicate effects, and tenant isolation pass.
