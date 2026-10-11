@@ -119,7 +119,7 @@ function normaliseProduct(product) {
   return value;
 }
 
-function queuedOrderIdentityHash(order, expectedCurrency) {
+function queuedOrderIdentityHash(order, expectedCurrency, storedOrder = false) {
   const normalized = validateAndTotalOrderItems(order?.items, expectedCurrency).items
     .map(item => ({
       itemId: String(item.item_id ?? item.product_id ?? item.id ?? ''),
@@ -129,12 +129,19 @@ function queuedOrderIdentityHash(order, expectedCurrency) {
       category: String(item.category ?? ''),
     }))
     .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  // The backend may attach a canonical customer_id when it resolves a
+  // name/phone-only order. Preserve whether the incoming command explicitly
+  // bound a customer so an unchanged retry hashes identically, while an
+  // explicitly changed customer association still conflicts.
+  const hasExplicitCustomerId = storedOrder && typeof order?._sellifyCustomerIdProvided === 'boolean'
+    ? order._sellifyCustomerIdProvided
+    : Boolean(order?.customer_id ?? order?.customerId ?? order?.customer?.id);
   const identity = {
     currency: normaliseCurrency(order?.currency, expectedCurrency),
     items: normalized,
     customerName: String(order?.customer_name ?? order?.customer?.name ?? ''),
     customerPhone: String(order?.customer_phone ?? order?.customer?.phone ?? ''),
-    customerId: String(order?.customer_id ?? order?.customerId ?? order?.customer?.id ?? ''),
+    customerId: hasExplicitCustomerId ? String(order?.customer_id ?? order?.customerId ?? order?.customer?.id ?? '') : '',
     // A retry is idempotent only when the business-relevant order payload is
     // unchanged. These fields are retained in order_json and can affect
     // fulfillment/instructions even when the line-item total is identical.
@@ -5402,7 +5409,9 @@ function productFromRow(row) {
 }
 
 function orderFromRow(row) {
-  return parseJSON(row.order_json, {});
+  const order = parseJSON(row.order_json, {});
+  if (order && typeof order === 'object') delete order._sellifyCustomerIdProvided;
+  return order;
 }
 
 function insertProduct(chatId, product) {
@@ -8983,7 +8992,7 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         const currencyMismatch = order.currency != null
           && normaliseCurrency(order.currency, expectedCurrency) !== expectedCurrency;
         const identityMismatch = currencyMismatch
-          || queuedOrderIdentityHash(order, expectedCurrency) !== queuedOrderIdentityHash(storedOrder, expectedCurrency);
+          || queuedOrderIdentityHash(order, expectedCurrency) !== queuedOrderIdentityHash(storedOrder, expectedCurrency, true);
         if (identityMismatch) {
           results.push({
             local_id: order.id,
@@ -9039,6 +9048,10 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
       const stored = {
         ...order,
         ...(customerId ? { customer_id: customerId } : {}),
+        // Internal identity metadata is server-owned and stripped from public
+        // order reads. It distinguishes an explicit customer binding from a
+        // canonical ID inferred from name/phone during first synchronization.
+        _sellifyCustomerIdProvided: Boolean(order.customer_id ?? order.customerId ?? order.customer?.id),
         items,
         total,
         currency: expectedCurrency,
