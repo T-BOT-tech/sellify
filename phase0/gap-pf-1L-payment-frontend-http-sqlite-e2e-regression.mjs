@@ -763,7 +763,8 @@ try {
   assert.equal(afterRestart.status, 409,
     'restart retry must report unresolved in-flight work instead of reclaiming it');
   const afterRestartBody = await afterRestart.json();
-  assert.equal(afterRestartBody.error?.code, 'PAYMENT_STATUS_QUERY_IN_PROGRESS');
+  assert.match(afterRestartBody.error?.message || '', /unresolved or already in progress/i,
+    'restart retry must expose the existing unresolved-command response without leaking internal state');
   assert.equal(providerCalls.crashInFlight, 1,
     'backend restart must not repeat uncertain provider I/O');
   const persistedAfterRestart = db.prepare(
