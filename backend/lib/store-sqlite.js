@@ -2415,6 +2415,23 @@ if (!applied.includes(39)) {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(64, nowIso());
   }
+  // GAP-1.24: fence status-query workers and permit takeover only before
+  // provider I/O has been authorized. Legacy IN_PROGRESS commands are treated
+  // as provider-in-flight because their execution phase cannot be proven.
+  if (!applied.includes(65)) {
+    db.exec(`
+      ALTER TABLE payment_status_query_commands ADD COLUMN claim_generation INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE payment_status_query_commands ADD COLUMN claim_token TEXT;
+      ALTER TABLE payment_status_query_commands ADD COLUMN phase TEXT NOT NULL DEFAULT 'LEGACY';
+      ALTER TABLE payment_status_query_commands ADD COLUMN lease_expires_at TEXT;
+      UPDATE payment_status_query_commands
+        SET claim_generation = 1,
+            claim_token = 'legacy:' || id,
+            phase = CASE WHEN status = 'IN_PROGRESS' THEN 'PROVIDER_IN_FLIGHT' ELSE 'COMPLETE' END,
+            lease_expires_at = NULL;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(65, nowIso());
+  }
 
   // GAP-1.24A — prevent in-place mutation of canonical payment evidence,
   // verification, and decision records. Corrections must be represented as new
@@ -6644,6 +6661,8 @@ export async function beginPaymentStatusQuery(chatId, input = {}) {
     });
   }
   const now = nowIso();
+  const claimToken = crypto.randomUUID();
+  const leaseExpiresAt = new Date(Date.now() + 60_000).toISOString();
   db.exec('BEGIN IMMEDIATE');
   try {
     const existing = db.prepare('SELECT * FROM payment_status_query_commands WHERE organization_id = ? AND idempotency_key = ?')
@@ -6655,23 +6674,48 @@ export async function beginPaymentStatusQuery(chatId, input = {}) {
         });
       }
 
-      // A retryable provider network/timeout failure occurs before evidence or
-      // financial decision persistence. Reclaim that same command atomically
-      // on a same-key retry; terminal failures and uncertain IN_PROGRESS claims
-      // remain replayed/blocked and are never blindly re-executed.
+      // Only a CLAIMED command can be taken over after its lease expires.
+      // Provider-in-flight legacy/current commands remain unresolved because
+      // elapsed time cannot prove that an external call did not happen.
+      const phase = String(existing.phase || 'LEGACY');
+      const expiredUnstartedClaim = String(existing.status) === 'IN_PROGRESS' &&
+        phase === 'CLAIMED' && existing.lease_expires_at &&
+        String(existing.lease_expires_at) <= now;
+      if (expiredUnstartedClaim) {
+        const generation = Number(existing.claim_generation || 0) + 1;
+        const reclaimed = db.prepare(`UPDATE payment_status_query_commands
+          SET claim_generation = ?, claim_token = ?, lease_expires_at = ?, updated_at = ?
+          WHERE organization_id = ? AND idempotency_key = ? AND request_hash = ?
+            AND status = 'IN_PROGRESS' AND phase = 'CLAIMED'
+            AND claim_generation = ? AND lease_expires_at <= ?`)
+          .run(generation, claimToken, leaseExpiresAt, now, organizationId, idempotencyKey, requestHash,
+            Number(existing.claim_generation || 0), now);
+        if (reclaimed.changes === 1) {
+          db.exec('COMMIT');
+          return { duplicate: false, status: 'IN_PROGRESS', result: null, error: null,
+            claimToken, claimGeneration: generation, phase: 'CLAIMED', recovered: true };
+        }
+      }
+
       let previousError = null;
       try { previousError = existing.error_json ? JSON.parse(existing.error_json) : null; } catch {}
       const retryableProviderFailure = String(existing.status) === 'FAILED' &&
         previousError?.retryable === true &&
         ['PAYMENT_PROVIDER_NETWORK_ERROR', 'PAYMENT_PROVIDER_PROBE_TIMEOUT'].includes(String(previousError.code || ''));
       if (retryableProviderFailure) {
+        const generation = Number(existing.claim_generation || 0) + 1;
         const reclaimed = db.prepare(`UPDATE payment_status_query_commands
-          SET status = 'IN_PROGRESS', response_json = NULL, error_json = NULL, updated_at = ?
-          WHERE organization_id = ? AND idempotency_key = ? AND request_hash = ? AND status = 'FAILED'`)
-          .run(now, organizationId, idempotencyKey, requestHash);
+          SET status = 'IN_PROGRESS', response_json = NULL, error_json = NULL,
+              claim_generation = ?, claim_token = ?, phase = 'CLAIMED',
+              lease_expires_at = ?, updated_at = ?
+          WHERE organization_id = ? AND idempotency_key = ? AND request_hash = ?
+            AND status = 'FAILED' AND claim_generation = ?`)
+          .run(generation, claimToken, leaseExpiresAt, now, organizationId, idempotencyKey,
+            requestHash, Number(existing.claim_generation || 0));
         if (reclaimed.changes === 1) {
           db.exec('COMMIT');
-          return { duplicate: false, status: 'IN_PROGRESS', result: null, error: null, retry: true };
+          return { duplicate: false, status: 'IN_PROGRESS', result: null, error: null,
+            retry: true, claimToken, claimGeneration: generation, phase: 'CLAIMED' };
         }
       }
 
@@ -6681,20 +6725,52 @@ export async function beginPaymentStatusQuery(chatId, input = {}) {
         status: existing.status,
         result: existing.response_json ? JSON.parse(existing.response_json) : null,
         error: existing.error_json ? JSON.parse(existing.error_json) : null,
+        phase,
+        claimGeneration: Number(existing.claim_generation || 0),
       };
     }
     const payment = db.prepare('SELECT id FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
     if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
     db.prepare(`INSERT INTO payment_status_query_commands
-      (id, organization_id, payment_id, idempotency_key, request_hash, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'IN_PROGRESS', ?, ?)`).run(
-        crypto.randomUUID(), organizationId, paymentId, idempotencyKey, requestHash, now, now);
+      (id, organization_id, payment_id, idempotency_key, request_hash, status,
+       claim_generation, claim_token, phase, lease_expires_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'IN_PROGRESS', 1, ?, 'CLAIMED', ?, ?, ?)`).run(
+        crypto.randomUUID(), organizationId, paymentId, idempotencyKey, requestHash,
+        claimToken, leaseExpiresAt, now, now);
     db.exec('COMMIT');
-    return { duplicate: false, status: 'IN_PROGRESS', result: null, error: null };
+    return { duplicate: false, status: 'IN_PROGRESS', result: null, error: null,
+      claimToken, claimGeneration: 1, phase: 'CLAIMED' };
   } catch (error) {
     try { db.exec('ROLLBACK'); } catch {}
     throw error;
   }
+}
+
+export async function markPaymentStatusQueryProviderStarted(chatId, input = {}) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const idempotencyKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  const requestHash = String(input.requestHash || input.request_hash || '').trim();
+  const claimToken = String(input.claimToken || input.claim_token || '').trim();
+  const claimGeneration = Number(input.claimGeneration ?? input.claim_generation);
+  if (!idempotencyKey || !requestHash || !claimToken || !Number.isInteger(claimGeneration) || claimGeneration < 1) {
+    throw Object.assign(new Error('Status-query claim ownership is required before provider work'), {
+      statusCode: 400, code: 'PAYMENT_STATUS_QUERY_CLAIM_REQUIRED',
+    });
+  }
+  const now = nowIso();
+  const updated = db.prepare(`UPDATE payment_status_query_commands
+    SET phase = 'PROVIDER_IN_FLIGHT', lease_expires_at = NULL, updated_at = ?
+    WHERE organization_id = ? AND idempotency_key = ? AND request_hash = ?
+      AND status = 'IN_PROGRESS' AND phase = 'CLAIMED'
+      AND claim_generation = ? AND claim_token = ?`)
+    .run(now, organizationId, idempotencyKey, requestHash, claimGeneration, claimToken);
+  if (updated.changes !== 1) {
+    throw Object.assign(new Error('Status-query claim was superseded before provider work began'), {
+      statusCode: 409, code: 'PAYMENT_STATUS_QUERY_CLAIM_FENCED',
+    });
+  }
+  return { phase: 'PROVIDER_IN_FLIGHT', claimGeneration };
 }
 
 export async function completePaymentStatusQuery(chatId, input = {}) {
@@ -6703,6 +6779,7 @@ export async function completePaymentStatusQuery(chatId, input = {}) {
   const idempotencyKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
   const requestHash = String(input.requestHash || input.request_hash || '').trim();
   const status = String(input.status || '').trim().toUpperCase();
+  const claimToken = String(input.claimToken || input.claim_token || '').trim();
   if (!idempotencyKey || !requestHash || !['SUCCEEDED', 'FAILED'].includes(status)) {
     throw Object.assign(new Error('idempotencyKey, requestHash and terminal status are required'), {
       statusCode: 400, code: 'PAYMENT_STATUS_QUERY_COMPLETION_REQUIRED',
@@ -6711,15 +6788,25 @@ export async function completePaymentStatusQuery(chatId, input = {}) {
   const now = nowIso();
   const resultJson = input.result == null ? null : json(input.result);
   const errorJson = input.error == null ? null : json(input.error);
-  const updated = db.prepare(`UPDATE payment_status_query_commands
-    SET status = ?, response_json = ?, error_json = ?, updated_at = ?
-    WHERE organization_id = ? AND idempotency_key = ? AND request_hash = ? AND status = 'IN_PROGRESS'`)
-    .run(status, resultJson, errorJson, now, organizationId, idempotencyKey, requestHash);
+  const hasClaim = Boolean(claimToken);
+  const updated = hasClaim
+    ? db.prepare(`UPDATE payment_status_query_commands
+        SET status = ?, response_json = ?, error_json = ?, phase = 'COMPLETE',
+            lease_expires_at = NULL, updated_at = ?
+        WHERE organization_id = ? AND idempotency_key = ? AND request_hash = ?
+          AND status = 'IN_PROGRESS' AND claim_token = ?`)
+        .run(status, resultJson, errorJson, now, organizationId, idempotencyKey, requestHash, claimToken)
+    : db.prepare(`UPDATE payment_status_query_commands
+        SET status = ?, response_json = ?, error_json = ?, phase = 'COMPLETE',
+            lease_expires_at = NULL, updated_at = ?
+        WHERE organization_id = ? AND idempotency_key = ? AND request_hash = ? AND status = 'IN_PROGRESS'`)
+        .run(status, resultJson, errorJson, now, organizationId, idempotencyKey, requestHash);
   if (updated.changes === 0) {
-    const existing = db.prepare('SELECT status, request_hash FROM payment_status_query_commands WHERE organization_id = ? AND idempotency_key = ?')
+    const existing = db.prepare('SELECT status, request_hash, claim_token FROM payment_status_query_commands WHERE organization_id = ? AND idempotency_key = ?')
       .get(organizationId, idempotencyKey);
-    if (!existing || String(existing.request_hash) !== requestHash || String(existing.status) !== status) {
-      throw Object.assign(new Error('Status-query command could not be completed from its current state'), {
+    if (!existing || String(existing.request_hash) !== requestHash ||
+        String(existing.status) !== status || (hasClaim && String(existing.claim_token || '') !== claimToken)) {
+      throw Object.assign(new Error('Status-query command could not be completed from its current state or claim'), {
         statusCode: 409, code: 'PAYMENT_STATUS_QUERY_STATE_CONFLICT',
       });
     }
@@ -6752,6 +6839,29 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
         const replay = JSON.parse(existingCommand.response_json || '{}');
         db.exec('COMMIT');
         return replay.payment || replay;
+      }
+    }
+    // GAP-1.24: a status-query worker must still own the durable command
+    // at the canonical financial commit boundary. This check runs inside the
+    // same BEGIN IMMEDIATE transaction as the payment/ledger/decision writes.
+    if (input.statusQueryClaim) {
+      const claim = input.statusQueryClaim;
+      const commandKey = String(claim.idempotencyKey || claim.idempotency_key || '').trim();
+      const commandHash = String(claim.requestHash || claim.request_hash || '').trim();
+      const claimToken = String(claim.claimToken || claim.claim_token || '').trim();
+      const claimGeneration = Number(claim.claimGeneration ?? claim.claim_generation);
+      const currentClaim = db.prepare(`SELECT payment_id, request_hash, status, phase, claim_generation, claim_token
+        FROM payment_status_query_commands
+        WHERE organization_id = ? AND idempotency_key = ?`).get(organizationId, commandKey);
+      if (!currentClaim || String(currentClaim.payment_id) !== paymentId ||
+          String(currentClaim.request_hash) !== commandHash ||
+          String(currentClaim.status) !== 'IN_PROGRESS' ||
+          String(currentClaim.phase) !== 'PROVIDER_IN_FLIGHT' ||
+          Number(currentClaim.claim_generation) !== claimGeneration ||
+          String(currentClaim.claim_token || '') !== claimToken || !claimToken) {
+        throw Object.assign(new Error('Status-query claim was superseded before financial decision commit'), {
+          statusCode: 409, code: 'PAYMENT_STATUS_QUERY_CLAIM_FENCED',
+        });
       }
     }
     const row = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
