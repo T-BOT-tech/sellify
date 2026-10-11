@@ -124,6 +124,17 @@ try {
     idempotencyKey: 'pf-http-create-recovery-' + randomUUID(),
   });
   const paymentRecoveryA = createdRecoveryA.payment;
+  const createdMismatchA = await store.createPaymentWithIntent(tenantA.chatId, {
+    organizationId: sessionA.organizationId,
+    paymentAccountId: accountA.id,
+    providerId: 'telebirr',
+    channel: 'api',
+    amountMinor: 91000,
+    currency: 'ETB',
+    externalReference: 'PF-HTTP-MISMATCH-' + randomUUID(),
+    idempotencyKey: 'pf-http-create-mismatch-' + randomUUID(),
+  });
+  const paymentMismatchA = createdMismatchA.payment;
   const createdRetryA = await store.createPaymentWithIntent(tenantA.chatId, {
     organizationId: sessionA.organizationId,
     paymentAccountId: accountA.id,
@@ -157,7 +168,7 @@ try {
   });
   const paymentB = createdB.payment;
 
-  const providerCalls = { unknown: 0, success: 0, recovery: 0, flaky: 0 };
+  const providerCalls = { unknown: 0, success: 0, recovery: 0, mismatch: 0, flaky: 0 };
   let flakyMode = 'fail';
   providerServer = createHttpServer((req, res) => {
     const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname;
@@ -200,6 +211,20 @@ try {
         receiverAccount: accountA.accountIdentifier,
         reference: paymentSuccessA.externalReference,
         transactionId: 'PF-HTTP-TX-' + paymentSuccessA.id,
+        observedAt: new Date().toISOString(),
+      }));
+      return;
+    }
+    if (pathname === '/mismatch') {
+      providerCalls.mismatch += 1;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: 'FAILED',
+        amountMinor: paymentMismatchA.amountMinor,
+        currency: paymentMismatchA.currency,
+        receiverAccount: accountA.accountIdentifier,
+        reference: paymentMismatchA.externalReference,
+        transactionId: 'PF-HTTP-TX-' + paymentMismatchA.id,
         observedAt: new Date().toISOString(),
       }));
       return;
@@ -266,6 +291,8 @@ try {
     '/payments/' + encodeURIComponent(paymentSuccessA.id) + '/status';
   const recoveryStatusPath = '/tenants/' + encodeURIComponent(tenantA.chatId) +
     '/payments/' + encodeURIComponent(paymentRecoveryA.id) + '/status';
+  const mismatchStatusPath = '/tenants/' + encodeURIComponent(tenantA.chatId) +
+    '/payments/' + encodeURIComponent(paymentMismatchA.id) + '/status';
   let lostResponsePath = statusPath;
   let simulateLostResponse = true;
   const simulateResponseLoss = async (input, init = {}) => {
@@ -361,6 +388,50 @@ try {
   assert.equal(successCommandRows.length, 1);
   assert.equal(successCommandRows[0].status, 'SUCCEEDED');
   assert.equal(successCommandRows[0].payment_id, paymentSuccessA.id);
+
+  // A determinate provider failure must commit its MISMATCH outcome even when
+  // the payment began UNPAID. A lost response then recovers that non-success
+  // decision from canonical lineage without repeating the provider query.
+  const mismatchRecoveryKey = 'pf-http-mismatch-recovery-' + randomUUID();
+  lostResponsePath = mismatchStatusPath;
+  simulateLostResponse = true;
+  globalThis.fetch = simulateResponseLoss;
+  await assert.rejects(
+    () => queryPaymentStatus(
+      paymentMismatchA.id,
+      { query: { statusPath: '/mismatch' } },
+      { idempotencyKey: mismatchRecoveryKey },
+    ),
+    /Simulated response loss/,
+    'MISMATCH query should commit before the simulated response loss',
+  );
+  globalThis.fetch = originalFetch;
+  assert.equal((await store.getPayment(tenantA.chatId, paymentMismatchA.id)).state, 'MISMATCH',
+    'a determinate mismatch must not remain UNPAID');
+  assert.equal(db.prepare(
+    'SELECT status FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(mismatchRecoveryKey).status, 'IN_PROGRESS',
+  'lost MISMATCH response leaves a recoverable status-query claim');
+  const recoveredMismatch = await queryPaymentStatus(
+    paymentMismatchA.id,
+    { query: { statusPath: '/mismatch' } },
+    { idempotencyKey: mismatchRecoveryKey },
+  );
+  assert.equal(recoveredMismatch.status, 'MISMATCH');
+  assert.equal(recoveredMismatch.payment.state, 'MISMATCH');
+  assert.equal(recoveredMismatch.decision.targetState, 'MISMATCH');
+  assert.equal(providerCalls.mismatch, 1, 'MISMATCH recovery must not query the provider again');
+  assert.deepEqual(
+    (await store.listPaymentLedger(tenantA.chatId, paymentMismatchA.id)).map(entry => entry.entryType),
+    ['CREATED', 'MISMATCH'],
+    'MISMATCH recovery must not duplicate the committed ledger transition',
+  );
+  assert.equal((await store.listPaymentEvidence(tenantA.chatId, paymentMismatchA.id)).length, 1);
+  assert.equal((await store.listPaymentVerifications(tenantA.chatId, paymentMismatchA.id)).length, 1);
+  assert.equal((await store.listPaymentDecisions(tenantA.chatId, paymentMismatchA.id)).length, 1);
+  assert.equal(db.prepare(
+    'SELECT status FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(mismatchRecoveryKey).status, 'SUCCEEDED');
 
   // Simulate a real SQLite failure after the canonical financial transaction
   // commits but before the status-query command can persist its result. The
