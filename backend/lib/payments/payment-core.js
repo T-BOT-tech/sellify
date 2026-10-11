@@ -603,7 +603,10 @@ export class PaymentCore {
         payment,
         paymentIntent: intent,
         paymentAccount,
-        query: command.query || command,
+        // Never forward the internal fencing token to a provider adapter.
+        query: command.query || Object.fromEntries(
+          Object.entries(command).filter(([key]) => key !== 'statusQueryClaim')
+        ),
       });
     } catch (error) {
       if (['PAYMENT_PROVIDER_OPERATION_UNSUPPORTED', 'PAYMENT_PROVIDER_NOT_CONFIGURED'].includes(error?.code)) {
