@@ -31,6 +31,7 @@ function assertIntegrity(databasePath, label) {
 try {
   const sourceStore = await import(`../backend/lib/store-sqlite.js?restore-source=${crypto.randomUUID()}`);
   const original = await sourceStore.getOrCreateUserByTelegram('restore-regression-user', 'Restore Regression');
+  await sourceStore.getOrCreateTenant('restore-regression-tenant');
 
   // Seed representative financial history and an unresolved provider-in-flight
   // command. The backup must preserve these exact rows, not just the schema.
