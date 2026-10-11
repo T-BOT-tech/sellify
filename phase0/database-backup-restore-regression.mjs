@@ -31,6 +31,34 @@ function assertIntegrity(databasePath, label) {
 try {
   const sourceStore = await import(`../backend/lib/store-sqlite.js?restore-source=${crypto.randomUUID()}`);
   const original = await sourceStore.getOrCreateUserByTelegram('restore-regression-user', 'Restore Regression');
+
+  // Seed representative financial history and an unresolved provider-in-flight
+  // command. The backup must preserve these exact rows, not just the schema.
+  const sourceDbHandle = new DatabaseSync(sourceDb);
+  const paymentId = crypto.randomUUID();
+  const ledgerEntryId = crypto.randomUUID();
+  const statusCommandId = crypto.randomUUID();
+  const statusClaimToken = crypto.randomUUID();
+  const statusIdempotencyKey = 'restore-inflight-' + crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+  try {
+    const organization = sourceDbHandle.prepare(
+      'SELECT id FROM organizations WHERE id IN (SELECT organization_id FROM tenants WHERE organization_id IS NOT NULL) ORDER BY created_at LIMIT 1'
+    ).get();
+    assert.ok(organization?.id, 'fixture must have a tenant organization');
+    sourceDbHandle.prepare(
+      'INSERT INTO payments (id, organization_id, provider_id, channel, amount_minor, currency, state, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(paymentId, organization.id, 'restore-test-provider', 'api', 12500, 'ETB', 'UNPAID', timestamp, timestamp);
+    sourceDbHandle.prepare(
+      'INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(ledgerEntryId, paymentId, organization.id, 'CREATED', 12500, 'ETB', null, 'UNPAID', 'backup restore regression fixture', timestamp);
+    sourceDbHandle.prepare(
+      'INSERT INTO payment_status_query_commands (id, organization_id, payment_id, idempotency_key, request_hash, status, response_json, error_json, created_at, updated_at, claim_generation, claim_token, phase, lease_expires_at) VALUES (?, ?, ?, ?, ?, \'IN_PROGRESS\', NULL, NULL, ?, ?, 1, ?, \'PROVIDER_IN_FLIGHT\', NULL)'
+    ).run(statusCommandId, organization.id, paymentId, statusIdempotencyKey, 'restore-fixture-request-hash', timestamp, timestamp, statusClaimToken);
+  } finally {
+    sourceDbHandle.close();
+  }
+
   const backup = await sourceStore.createDatabaseBackup();
 
   assertIntegrity(backup.path, 'backup');
@@ -54,6 +82,19 @@ try {
     assert.equal(Number(latestMigration.version), 67, 'restored database must retain current schema migration state');
     assert.ok(check.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'payment_status_query_commands'").get(),
       'restored database must retain the payment status-query command table');
+    assert.equal(check.prepare('SELECT COUNT(*) AS count FROM payments WHERE id = ?').get(paymentId).count, 1,
+      'restored database must preserve the canonical payment');
+    assert.equal(check.prepare('SELECT COUNT(*) AS count FROM payment_ledger_entries WHERE id = ? AND payment_id = ?').get(ledgerEntryId, paymentId).count, 1,
+      'restored database must preserve the linked financial ledger entry');
+    const restoredCommand = check.prepare(
+      'SELECT status, phase, claim_generation, claim_token, idempotency_key FROM payment_status_query_commands WHERE id = ? AND payment_id = ?'
+    ).get(statusCommandId, paymentId);
+    assert.ok(restoredCommand, 'restored database must preserve the status-query command');
+    assert.equal(restoredCommand.status, 'IN_PROGRESS', 'uncertain provider command must remain unresolved after restore');
+    assert.equal(restoredCommand.phase, 'PROVIDER_IN_FLIGHT', 'restore must not turn provider-in-flight work into reclaimable work');
+    assert.equal(restoredCommand.claim_generation, 1, 'restore must preserve claim generation');
+    assert.equal(restoredCommand.claim_token, statusClaimToken, 'restore must preserve claim ownership token');
+    assert.equal(restoredCommand.idempotency_key, statusIdempotencyKey, 'restore must preserve idempotency identity');
   } finally {
     check.close();
   }
