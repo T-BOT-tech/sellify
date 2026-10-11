@@ -63,6 +63,18 @@ try {
   assert.equal(currencyConflict[0].status, 'rejected');
   assert.equal(currencyConflict[0].code, 'ORDER_IDEMPOTENCY_CONFLICT');
 
+  // A reused local ID must not silently accept changed fulfillment instructions
+  // merely because its line items and total still match.
+  const changedNotes = { ...structuredClone(original), notes: 'Leave at reception' };
+  const notesConflict = await store.saveQueuedOrders(tenant.chatId, [changedNotes]);
+  assert.equal(notesConflict[0].status, 'rejected');
+  assert.equal(notesConflict[0].code, 'ORDER_IDEMPOTENCY_CONFLICT');
+
+  const changedDeliveryLocation = { ...structuredClone(original), delivery_location_id: 'location-other' };
+  const deliveryLocationConflict = await store.saveQueuedOrders(tenant.chatId, [changedDeliveryLocation]);
+  assert.equal(deliveryLocationConflict[0].status, 'rejected');
+  assert.equal(deliveryLocationConflict[0].code, 'ORDER_IDEMPOTENCY_CONFLICT');
+
   const ordersAfterRetries = await store.getOrders(tenant.chatId);
   const paymentsAfterRetries = await store.listPayments(tenant.chatId);
   assert.equal(ordersAfterRetries.filter(order => order.id === original.id).length, 1);
