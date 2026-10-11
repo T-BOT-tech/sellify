@@ -393,25 +393,26 @@ try {
   // the payment began UNPAID. A lost response then recovers that non-success
   // decision from canonical lineage without repeating the provider query.
   const mismatchRecoveryKey = 'pf-http-mismatch-recovery-' + randomUUID();
-  lostResponsePath = mismatchStatusPath;
-  simulateLostResponse = true;
-  globalThis.fetch = simulateResponseLoss;
+  db.exec(`CREATE TRIGGER test_fail_mismatch_status_query_completion
+    BEFORE UPDATE ON payment_status_query_commands
+    WHEN NEW.idempotency_key = '${mismatchRecoveryKey}' AND NEW.status = 'SUCCEEDED'
+    BEGIN SELECT RAISE(ABORT, 'simulated MISMATCH result persistence crash'); END;`);
   await assert.rejects(
     () => queryPaymentStatus(
       paymentMismatchA.id,
       { query: { statusPath: '/mismatch' } },
       { idempotencyKey: mismatchRecoveryKey },
     ),
-    /Simulated response loss/,
-    'MISMATCH query should commit before the simulated response loss',
+    error => error?.status === 500 || error?.code === 'HTTP_500',
+    'MISMATCH query should fail when result persistence fails after the canonical transition',
   );
-  globalThis.fetch = originalFetch;
   assert.equal((await store.getPayment(tenantA.chatId, paymentMismatchA.id)).state, 'MISMATCH',
     'a determinate mismatch must not remain UNPAID');
   assert.equal(db.prepare(
     'SELECT status FROM payment_status_query_commands WHERE idempotency_key = ?'
   ).get(mismatchRecoveryKey).status, 'IN_PROGRESS',
-  'lost MISMATCH response leaves a recoverable status-query claim');
+  'failed result persistence leaves a recoverable MISMATCH command claim');
+  db.exec('DROP TRIGGER test_fail_mismatch_status_query_completion');
   const recoveredMismatch = await queryPaymentStatus(
     paymentMismatchA.id,
     { query: { statusPath: '/mismatch' } },
