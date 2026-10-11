@@ -37,6 +37,9 @@ try {
   // command. The backup must preserve these exact rows, not just the schema.
   const sourceDbHandle = new DatabaseSync(sourceDb);
   const paymentId = crypto.randomUUID();
+  const evidenceId = crypto.randomUUID();
+  const verificationId = crypto.randomUUID();
+  const decisionId = crypto.randomUUID();
   const ledgerEntryId = crypto.randomUUID();
   const statusCommandId = crypto.randomUUID();
   const statusClaimToken = crypto.randomUUID();
@@ -50,6 +53,15 @@ try {
     sourceDbHandle.prepare(
       'INSERT INTO payments (id, organization_id, provider_id, channel, amount_minor, currency, state, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(paymentId, organization.id, 'restore-test-provider', 'api', 12500, 'ETB', 'UNPAID', timestamp, timestamp);
+    sourceDbHandle.prepare(
+      'INSERT INTO payment_evidence (id, organization_id, payment_id, provider_id, channel, evidence_type, fingerprint, received_at, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(evidenceId, organization.id, paymentId, 'restore-test-provider', 'api', 'PROVIDER_STATUS', 'restore-evidence-' + crypto.randomUUID(), timestamp, 'VERIFIED', timestamp, timestamp);
+    sourceDbHandle.prepare(
+      'INSERT INTO payment_verifications (id, organization_id, payment_id, evidence_id, provider_id, result, verifier, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(verificationId, organization.id, paymentId, evidenceId, 'restore-test-provider', 'MATCH', 'restore-regression-verifier', timestamp);
+    sourceDbHandle.prepare(
+      'INSERT INTO payment_decisions (id, organization_id, payment_id, evidence_id, verification_id, decision, target_state, reason_codes_json, invariant_results_json, decision_source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(decisionId, organization.id, paymentId, evidenceId, verificationId, 'ACCEPT', 'PAID', '[]', '{}', 'PAYMENT_CORE', timestamp);
     sourceDbHandle.prepare(
       'INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(ledgerEntryId, paymentId, organization.id, 'CREATED', 12500, 'ETB', null, 'UNPAID', 'backup restore regression fixture', timestamp);
@@ -85,6 +97,21 @@ try {
       'restored database must retain the payment status-query command table');
     assert.equal(check.prepare('SELECT COUNT(*) AS count FROM payments WHERE id = ?').get(paymentId).count, 1,
       'restored database must preserve the canonical payment');
+    const restoredEvidence = check.prepare('SELECT payment_id, fingerprint FROM payment_evidence WHERE id = ?').get(evidenceId);
+    assert.ok(restoredEvidence, 'restored database must preserve payment evidence');
+    assert.equal(restoredEvidence.payment_id, paymentId, 'restored evidence must remain linked to payment');
+    const restoredVerification = check.prepare('SELECT payment_id, evidence_id, result FROM payment_verifications WHERE id = ?').get(verificationId);
+    assert.ok(restoredVerification, 'restored database must preserve verification');
+    assert.equal(restoredVerification.evidence_id, evidenceId, 'verification must remain linked to evidence');
+    assert.equal(restoredVerification.payment_id, paymentId, 'verification must remain linked to payment');
+    assert.equal(restoredVerification.result, 'MATCH');
+    const restoredDecision = check.prepare('SELECT payment_id, evidence_id, verification_id, decision, target_state FROM payment_decisions WHERE id = ?').get(decisionId);
+    assert.ok(restoredDecision, 'restored database must preserve Payment Core decision');
+    assert.equal(restoredDecision.payment_id, paymentId);
+    assert.equal(restoredDecision.evidence_id, evidenceId);
+    assert.equal(restoredDecision.verification_id, verificationId);
+    assert.equal(restoredDecision.decision, 'ACCEPT');
+    assert.equal(restoredDecision.target_state, 'PAID');
     assert.equal(check.prepare('SELECT COUNT(*) AS count FROM payment_ledger_entries WHERE id = ? AND payment_id = ?').get(ledgerEntryId, paymentId).count, 1,
       'restored database must preserve the linked financial ledger entry');
     const restoredCommand = check.prepare(
@@ -100,8 +127,8 @@ try {
     check.close();
   }
 
-  console.log('Database backup/restore regression passed: backup and restored SQLite integrity, persisted identity, and migration 67 verified.');
-  console.log('Scope limit: this isolated regression does not certify restoration of a production database or specific payment-lineage rows.');
+  console.log('Database backup/restore regression passed: integrity, migration 67, payment → evidence → verification → decision → ledger lineage, and unresolved provider-in-flight claim verified.');
+  console.log('Scope limit: this isolated regression does not certify production-database restoration or operational recovery timing.');
 } finally {
   await rm(root, { recursive: true, force: true });
 }
