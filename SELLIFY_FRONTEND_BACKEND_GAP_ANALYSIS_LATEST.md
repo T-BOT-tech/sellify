@@ -193,6 +193,12 @@ The current SQLite migration chain contains these relevant boundaries:
 
 These are rollout/rollback safeguards, not a claim that a production migration or restore has already been executed.
 
+## 10B. Payment lineage append-only regression coverage
+
+Added `phase0/payment-lineage-append-only-regression.mjs` and wired it into the Node 24 baseline CI. The runtime SQLite test seeds canonical payment/evidence/verification/decision rows, then proves updates and direct deletes are rejected for all three lineage tables. It also attempts to delete the parent payment and confirms the decision-history cascade is blocked and all seeded records remain present.
+
+This regression validates the migration-65/66 trigger behavior on a fresh isolated database. It does not replace a production-like migration/restore rehearsal, nor does it define an approved data-retention process.
+
 ## 11. Recommended sequence
 
 1. PF-1L — completed and CI-certified on candidate branch; success, unresolved outcome, lost-response replay, safe same-key retry after transient provider network failure, no-duplicate effects, and tenant isolation pass.
