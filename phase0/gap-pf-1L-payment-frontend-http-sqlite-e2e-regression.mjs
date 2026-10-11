@@ -694,6 +694,91 @@ try {
   assert.equal((await store.getPayment(tenantB.chatId, paymentB.id)).state, 'UNPAID');
   assert.equal((await store.listPaymentLedger(tenantB.chatId, paymentB.id)).length, 1);
 
+  // GAP-1.24 complementary process-crash boundary: a worker that dies after
+  // durable claim acquisition but before provider-start may be recovered after
+  // the lease expires. This uses a separate Node process, not a production hook.
+  const preProviderCrashKey = 'pf-http-crash-before-provider-' + randomUUID();
+  const preProviderCrashHash = 'pf-http-crash-before-provider-request-' + randomUUID();
+  const claimWorkerScript = [
+    "import { beginPaymentStatusQuery } from './backend/lib/store-sqlite.js';",
+    "const claim = await beginPaymentStatusQuery(process.env.PF_CHAT_ID, {",
+    "  paymentId: process.env.PF_PAYMENT_ID,",
+    "  idempotencyKey: process.env.PF_IDEMPOTENCY_KEY,",
+    "  requestHash: process.env.PF_REQUEST_HASH,",
+    "});",
+    "console.log(JSON.stringify(claim));",
+    "await new Promise(() => {});",
+  ].join('\\n');
+  const claimWorker = spawn(process.execPath, ['--input-type=module', '-e', claimWorkerScript], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      SELLIFY_DATA_DIR: tempDir,
+      SELLIFY_DB_PATH: dbPath,
+      PF_CHAT_ID: tenantA.chatId,
+      PF_PAYMENT_ID: paymentRecoveryA.id,
+      PF_IDEMPOTENCY_KEY: preProviderCrashKey,
+      PF_REQUEST_HASH: preProviderCrashHash,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let claimWorkerOutput = '';
+  claimWorker.stdout.on('data', chunk => { claimWorkerOutput += chunk.toString(); });
+  claimWorker.stderr.on('data', chunk => { claimWorkerOutput += chunk.toString(); });
+  let claimWorkerClaim = null;
+  for (let attempt = 0; attempt < 100 && !claimWorkerClaim; attempt += 1) {
+    const line = claimWorkerOutput.split('\\n').find(value => value.startsWith('{'));
+    if (line) {
+      try { claimWorkerClaim = JSON.parse(line); } catch {}
+    }
+    if (claimWorker.exitCode !== null) break;
+    if (!claimWorkerClaim) await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  assert.ok(claimWorkerClaim, 'separate worker must persist a claim before simulated process death; output: ' + claimWorkerOutput);
+  assert.equal(claimWorkerClaim.phase, 'CLAIMED');
+  assert.equal(claimWorkerClaim.claimGeneration, 1);
+  claimWorker.kill('SIGKILL');
+  await new Promise(resolve => {
+    if (claimWorker.exitCode !== null) return resolve();
+    claimWorker.once('exit', resolve);
+  });
+  const preProviderCrashRow = db.prepare(
+    'SELECT status, phase, claim_generation, claim_token FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(preProviderCrashKey);
+  assert.equal(preProviderCrashRow.status, 'IN_PROGRESS');
+  assert.equal(preProviderCrashRow.phase, 'CLAIMED',
+    'process death before provider-start must leave a recoverable unstarted claim');
+  assert.equal(Number(preProviderCrashRow.claim_generation), 1);
+  db.prepare('UPDATE payment_status_query_commands SET lease_expires_at = ? WHERE idempotency_key = ?')
+    .run('2000-01-01T00:00:00.000Z', preProviderCrashKey);
+  const afterPreProviderCrash = await store.beginPaymentStatusQuery(tenantA.chatId, {
+    paymentId: paymentRecoveryA.id,
+    idempotencyKey: preProviderCrashKey,
+    requestHash: preProviderCrashHash,
+  });
+  assert.equal(afterPreProviderCrash.duplicate, false);
+  assert.equal(afterPreProviderCrash.recovered, true);
+  assert.equal(afterPreProviderCrash.phase, 'CLAIMED');
+  assert.equal(afterPreProviderCrash.claimGeneration, 2);
+  assert.notEqual(afterPreProviderCrash.claimToken, claimWorkerClaim.claimToken);
+  await assert.rejects(
+    () => store.markPaymentStatusQueryProviderStarted(tenantA.chatId, {
+      idempotencyKey: preProviderCrashKey,
+      requestHash: preProviderCrashHash,
+      claimToken: claimWorkerClaim.claimToken,
+      claimGeneration: claimWorkerClaim.claimGeneration,
+    }),
+    error => error?.code === 'PAYMENT_STATUS_QUERY_CLAIM_FENCED',
+    'crashed worker claim must remain fenced after recovery',
+  );
+  await store.completePaymentStatusQuery(tenantA.chatId, {
+    idempotencyKey: preProviderCrashKey,
+    requestHash: preProviderCrashHash,
+    claimToken: afterPreProviderCrash.claimToken,
+    status: 'FAILED',
+    error: { code: 'TEST_CLEANUP' },
+  });
+
   // GAP-1.24 process-crash boundary: once the external provider request has
   // begun, a backend restart must not auto-reclaim the uncertain operation.
   const crashKey = 'pf-http-crash-provider-in-flight-' + randomUUID();
@@ -782,6 +867,7 @@ try {
   console.log('PASS retryable provider network failure can retry safely with the same key');
   console.log('PASS durable status-query command replays through the actual HTTP route');
   console.log('PASS cross-tenant session is rejected before command claim');
+  console.log('PASS process crash before provider execution safely recovers expired CLAIMED work and fences stale worker');
   console.log('PASS process crash after provider invocation preserves unresolved PROVIDER_IN_FLIGHT claim across backend restart');
 } catch (error) {
   globalThis.fetch = originalFetch;
