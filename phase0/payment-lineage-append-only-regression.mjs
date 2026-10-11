@@ -20,6 +20,9 @@ try {
     timezone: 'Africa/Addis_Ababa',
   });
 
+  const session = await store.createSession({ userId: user.id, chatId: tenant.chatId });
+  assert.ok(session.organizationId, 'tenant must resolve its canonical organization');
+
   const db = new DatabaseSync(process.env.SELLIFY_DB_PATH);
   try {
     db.exec('PRAGMA foreign_keys = ON');
@@ -27,26 +30,26 @@ try {
     db.prepare(`INSERT INTO payments (
       id, organization_id, provider_id, channel, amount_minor, currency, state, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      'append-only-payment', tenant.organizationId, 'manual', 'manual', 1000, 'ETB', 'UNPAID', now, now,
+      'append-only-payment', session.organizationId, 'manual', 'manual', 1000, 'ETB', 'UNPAID', now, now,
     );
     db.prepare(`INSERT INTO payment_evidence (
       id, organization_id, payment_id, provider_id, channel, evidence_type, fingerprint,
       received_at, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      'append-only-evidence', tenant.organizationId, 'append-only-payment', 'manual', 'manual',
+      'append-only-evidence', session.organizationId, 'append-only-payment', 'manual', 'manual',
       'REGRESSION', 'append-only-fingerprint', now, now, now,
     );
     db.prepare(`INSERT INTO payment_verifications (
       id, organization_id, payment_id, evidence_id, provider_id, result, verifier, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      'append-only-verification', tenant.organizationId, 'append-only-payment',
+      'append-only-verification', session.organizationId, 'append-only-payment',
       'append-only-evidence', 'manual', 'MATCH', 'payment-core-test', now,
     );
     db.prepare(`INSERT INTO payment_decisions (
       id, organization_id, payment_id, evidence_id, verification_id, decision,
       reason_codes_json, invariant_results_json, decision_source, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      'append-only-decision', tenant.organizationId, 'append-only-payment',
+      'append-only-decision', session.organizationId, 'append-only-payment',
       'append-only-evidence', 'append-only-verification', 'ACCEPT', '[]', '{}', 'PAYMENT_CORE', now,
     );
 
