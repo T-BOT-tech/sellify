@@ -64,6 +64,9 @@ jobs:
       - name: Database backup filename collision regression
         run: npm run test:backup-collision
 
+      - name: Isolated SQLite backup/restore regression
+        run: npm run test:backup-restore
+
       - name: Payment lineage append-only and cascade-blocking regression
         run: npm run test:payment-lineage-append-only
 
