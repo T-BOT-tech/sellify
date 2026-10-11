@@ -210,7 +210,7 @@ The PF-1L regression now includes direct SQLite coverage for expired unstarted-c
 **Evidence status for this candidate:**
 - Source-level syntax parsing: passed for `backend/lib/store-sqlite.js`, `backend/lib/payments/payment-core.js`, and the updated PF-1L regression.
 - Focused runtime regression: **not yet executed**.
-- Candidate CI and Repository Security Checks: **no workflow runs are available for the current candidate head**; the earlier passing runs belong to the prior candidate and must not be reused as evidence for this change.
+- Candidate CI evidence: the first CI run on the preceding candidate failed at the Phase 0 golden regression because its backup assertion still expected exactly 66 schema migrations after migration 67 was added. The assertion has been updated to expect 67. The current head has **no workflow runs available yet**, so the fix is not verified. Repository Security Checks passed on the preceding candidate, but that result does not certify this head.
 - A concurrent-recovery race regression has been added but is **not yet executed**. Full HTTP crash-boundary coverage for the new claim phases, mixed-version worker compatibility, and production-like migration/restore rehearsal remain **not yet evidenced**.
 
 GAP-1.24 therefore remains **IMPLEMENTED ON CANDIDATE / NOT YET RUNTIME-VERIFIED / NOT CERTIFIED**. Do not treat the new fencing behavior as production-ready until the focused tests and CI/security checks have actually run on this candidate. The conservative unresolved behavior for a command whose provider call may have started remains intentional.
