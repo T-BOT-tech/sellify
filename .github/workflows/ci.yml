@@ -58,6 +58,9 @@ jobs:
       - name: Order sync idempotency regression
         run: npm run test:order-sync-idempotency
 
+      - name: GAP-1.18I payment verification migration independence regression
+        run: npm run gap-1.18:provider-verification-migration-test
+
       - name: Syntax check core entrypoints
         run: |
           node --check backend/server.js
