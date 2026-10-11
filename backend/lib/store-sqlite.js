@@ -134,6 +134,24 @@ function queuedOrderIdentityHash(order, expectedCurrency) {
     items: normalized,
     customerName: String(order?.customer_name ?? order?.customer?.name ?? ''),
     customerPhone: String(order?.customer_phone ?? order?.customer?.phone ?? ''),
+    // A retry is idempotent only when the business-relevant order payload is
+    // unchanged. These fields are retained in order_json and can affect
+    // fulfillment/instructions even when the line-item total is identical.
+    notes: String(order?.notes ?? order?.order_notes ?? ''),
+    locationId: String(order?.location_id ?? order?.locationId ?? ''),
+    deliveryLocationId: String(order?.delivery_location_id ?? order?.deliveryLocationId ?? ''),
+    orderType: String(order?.order_type ?? order?.orderType ?? ''),
+    fulfillmentType: String(order?.fulfillment_type ?? order?.fulfillmentType ?? ''),
+    deliveryMethod: String(order?.delivery_method ?? order?.deliveryMethod ?? ''),
+    paymentMethodId: String(order?.payment_method_id ?? order?.paymentMethodId ?? ''),
+    paymentMethodName: String(order?.payment_method_name ?? order?.paymentMethodName ?? ''),
+    discount: String(order?.discount ?? ''),
+    discountMinor: String(order?.discount_minor ?? order?.discountMinor ?? ''),
+    tax: String(order?.tax ?? ''),
+    taxMinor: String(order?.tax_minor ?? order?.taxMinor ?? ''),
+    deliveryFee: String(order?.delivery_fee ?? order?.deliveryFee ?? ''),
+    deliveryFeeMinor: String(order?.delivery_fee_minor ?? order?.deliveryFeeMinor ?? ''),
+    requiredBy: String(order?.required_by ?? order?.requiredBy ?? ''),
     isMarketplace: Boolean(order?.is_marketplace),
     marketplaceOrderId: String(order?.marketplace_order_id ?? ''),
   };
