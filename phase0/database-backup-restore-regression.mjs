@@ -21,7 +21,8 @@ function assertIntegrity(databasePath, label) {
   const db = new DatabaseSync(databasePath);
   try {
     const rows = db.prepare('PRAGMA integrity_check').all();
-    assert.deepEqual(rows, [{ integrity_check: 'ok' }], label + ' SQLite integrity check');
+    assert.equal(rows.length, 1, label + ' must return one integrity result');
+    assert.equal(rows[0].integrity_check, 'ok', label + ' SQLite integrity check');
   } finally {
     db.close();
   }
