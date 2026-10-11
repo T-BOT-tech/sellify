@@ -340,6 +340,91 @@ try {
   assert.equal(commandRows[0].payment_id, paymentA.id);
   assert.equal(providerCalls.unknown, 1, 'replay must not query the provider again');
 
+  // GAP-1.24: only an expired, provably unstarted claim may be taken over.
+  // The previous owner must be fenced before provider work or financial commit.
+  const fencedPaymentKey = 'pf-http-fenced-claim-' + randomUUID();
+  const fencedRequestHash = 'pf-http-claim-request-' + randomUUID();
+  const originalClaim = await store.beginPaymentStatusQuery(tenantA.chatId, {
+    paymentId: paymentA.id,
+    idempotencyKey: fencedPaymentKey,
+    requestHash: fencedRequestHash,
+  });
+  assert.equal(originalClaim.duplicate, false);
+  assert.equal(originalClaim.phase, 'CLAIMED');
+  assert.equal(originalClaim.claimGeneration, 1);
+  assert.ok(originalClaim.claimToken);
+
+  db.prepare(`UPDATE payment_status_query_commands
+    SET lease_expires_at = ?
+    WHERE idempotency_key = ?`).run('2000-01-01T00:00:00.000Z', fencedPaymentKey);
+  const recoveredClaim = await store.beginPaymentStatusQuery(tenantA.chatId, {
+    paymentId: paymentA.id,
+    idempotencyKey: fencedPaymentKey,
+    requestHash: fencedRequestHash,
+  });
+  assert.equal(recoveredClaim.duplicate, false, 'expired unstarted command should be recoverable');
+  assert.equal(recoveredClaim.recovered, true);
+  assert.equal(recoveredClaim.claimGeneration, 2, 'recovery must advance the fencing generation');
+  assert.notEqual(recoveredClaim.claimToken, originalClaim.claimToken);
+
+  await assert.rejects(
+    () => store.markPaymentStatusQueryProviderStarted(tenantA.chatId, {
+      idempotencyKey: fencedPaymentKey,
+      requestHash: fencedRequestHash,
+      claimToken: originalClaim.claimToken,
+      claimGeneration: originalClaim.claimGeneration,
+    }),
+    error => error?.code === 'PAYMENT_STATUS_QUERY_CLAIM_FENCED',
+    'superseded owner must be rejected before provider I/O',
+  );
+  await assert.rejects(
+    () => store.commitPaymentDecision(tenantA.chatId, {
+      paymentId: paymentA.id,
+      targetState: 'VERIFIED',
+      idempotencyKey: fencedPaymentKey,
+      statusQueryClaim: {
+        idempotencyKey: fencedPaymentKey,
+        requestHash: fencedRequestHash,
+        claimToken: originalClaim.claimToken,
+        claimGeneration: originalClaim.claimGeneration,
+      },
+    }),
+    error => error?.code === 'PAYMENT_STATUS_QUERY_CLAIM_FENCED',
+    'superseded owner must be rejected at the canonical financial commit boundary',
+  );
+  await assert.rejects(
+    () => store.completePaymentStatusQuery(tenantA.chatId, {
+      idempotencyKey: fencedPaymentKey,
+      requestHash: fencedRequestHash,
+      claimToken: originalClaim.claimToken,
+      status: 'FAILED',
+      error: { code: 'STALE_WORKER' },
+    }),
+    error => error?.code === 'PAYMENT_STATUS_QUERY_STATE_CONFLICT',
+    'superseded owner must not complete the recovered command',
+  );
+
+  await store.markPaymentStatusQueryProviderStarted(tenantA.chatId, {
+    idempotencyKey: fencedPaymentKey,
+    requestHash: fencedRequestHash,
+    claimToken: recoveredClaim.claimToken,
+    claimGeneration: recoveredClaim.claimGeneration,
+  });
+  const inFlightRetry = await store.beginPaymentStatusQuery(tenantA.chatId, {
+    paymentId: paymentA.id,
+    idempotencyKey: fencedPaymentKey,
+    requestHash: fencedRequestHash,
+  });
+  assert.equal(inFlightRetry.duplicate, true, 'provider-in-flight command must not be reclaimed by timeout');
+  assert.equal(inFlightRetry.phase, 'PROVIDER_IN_FLIGHT');
+  await store.completePaymentStatusQuery(tenantA.chatId, {
+    idempotencyKey: fencedPaymentKey,
+    requestHash: fencedRequestHash,
+    claimToken: recoveredClaim.claimToken,
+    status: 'SUCCEEDED',
+    result: { testOnly: true },
+  });
+
   // Exercise the successful provider observation through the same real client,
   // HTTP route, adapter, Payment Core, and SQLite persistence boundary.
   const successIdempotencyKey = 'pf-http-success-lost-response-' + randomUUID();
