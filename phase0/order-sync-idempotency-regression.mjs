@@ -65,7 +65,7 @@ try {
 
   // Customer association is part of the canonical order identity, even when
   // line items and the display name/phone are unchanged.
-  const customerBoundOrder = { ...structuredClone(original), customer_id: 'customer-a' };
+  const customerBoundOrder = { ...structuredClone(original), id: 'local-order-customer-bound', customer_id: 'customer-a' };
   const customerBoundFirst = await store.saveQueuedOrders(tenant.chatId, [customerBoundOrder]);
   assert.equal(customerBoundFirst[0].status, 'synced');
   const changedCustomer = { ...structuredClone(customerBoundOrder), customer_id: 'customer-b' };
