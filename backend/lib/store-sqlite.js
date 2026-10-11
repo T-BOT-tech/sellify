@@ -2472,16 +2472,31 @@ if (!applied.includes(39)) {
   // provider I/O has been authorized. Legacy IN_PROGRESS commands are treated
   // as provider-in-flight because their execution phase cannot be proven.
   if (!applied.includes(67)) {
+    // Inspect columns individually so a process interruption during additive
+    // DDL can be repaired on restart without a duplicate-column failure.
+    const statusQueryColumns = new Set(
+      db.prepare('PRAGMA table_info(payment_status_query_commands)').all().map(column => String(column.name))
+    );
+    if (!statusQueryColumns.has('claim_generation')) {
+      db.exec('ALTER TABLE payment_status_query_commands ADD COLUMN claim_generation INTEGER NOT NULL DEFAULT 0');
+    }
+    if (!statusQueryColumns.has('claim_token')) {
+      db.exec('ALTER TABLE payment_status_query_commands ADD COLUMN claim_token TEXT');
+    }
+    if (!statusQueryColumns.has('phase')) {
+      db.exec("ALTER TABLE payment_status_query_commands ADD COLUMN phase TEXT NOT NULL DEFAULT 'LEGACY'");
+    }
+    if (!statusQueryColumns.has('lease_expires_at')) {
+      db.exec('ALTER TABLE payment_status_query_commands ADD COLUMN lease_expires_at TEXT');
+    }
     db.exec(`
-      ALTER TABLE payment_status_query_commands ADD COLUMN claim_generation INTEGER NOT NULL DEFAULT 0;
-      ALTER TABLE payment_status_query_commands ADD COLUMN claim_token TEXT;
-      ALTER TABLE payment_status_query_commands ADD COLUMN phase TEXT NOT NULL DEFAULT 'LEGACY';
-      ALTER TABLE payment_status_query_commands ADD COLUMN lease_expires_at TEXT;
       UPDATE payment_status_query_commands
-        SET claim_generation = 1,
-            claim_token = 'legacy:' || id,
-            phase = CASE WHEN status = 'IN_PROGRESS' THEN 'PROVIDER_IN_FLIGHT' ELSE 'COMPLETE' END,
-            lease_expires_at = NULL;
+      SET claim_generation = CASE WHEN claim_generation < 1 THEN 1 ELSE claim_generation END,
+          claim_token = COALESCE(claim_token, 'legacy:' || id),
+          phase = CASE WHEN phase = 'LEGACY'
+            THEN CASE WHEN status = 'IN_PROGRESS' THEN 'PROVIDER_IN_FLIGHT' ELSE 'COMPLETE' END
+            ELSE phase END,
+          lease_expires_at = CASE WHEN phase = 'LEGACY' THEN NULL ELSE lease_expires_at END;
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(67, nowIso());
   }
