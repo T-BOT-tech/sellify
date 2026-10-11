@@ -30,4 +30,48 @@ const start54 = source.indexOf('if (!applied.includes(54))', start53);
 assert.ok(start53 >= 0 && end53 > start53 && close53 > end53 && start54 > close53,
   'migration 54 is not nested inside migration 53');
 
+// Runtime upgrade simulation: a database can have migration 53 recorded while
+// migration 54 was missed by an interrupted/older deployment. Start from that
+// recorded state and let the real SQLite store migration runner complete.
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { DatabaseSync } from 'node:sqlite';
+
+const tempDir = await mkdtemp(join(tmpdir(), 'sellify-migration54-recovery-'));
+const dbPath = join(tempDir, 'sellify.sqlite');
+process.env.SELLIFY_DATA_DIR = tempDir;
+process.env.SELLIFY_DB_PATH = dbPath;
+let inspectDb;
+try {
+  const seededDb = new DatabaseSync(dbPath);
+  seededDb.exec(`CREATE TABLE schema_migrations (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL
+  );
+  INSERT INTO schema_migrations (version, applied_at)
+  VALUES (53, '2026-10-01T00:00:00.000Z');`);
+  seededDb.close();
+
+  const store = await import('../backend/lib/store-sqlite.js?gap118i-runtime');
+  await store.getOrCreateUserByTelegram('gap118i-migration-user', 'GAP-1.18I Migration Test');
+
+  inspectDb = new DatabaseSync(dbPath);
+  const migration54Row = inspectDb.prepare(
+    'SELECT version FROM schema_migrations WHERE version = 54'
+  ).get();
+  assert.ok(migration54Row, 'real migration runner records migration 54 when 53 already exists');
+  const index = inspectDb.prepare(
+    "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_payment_verifications_evidence_verifier'"
+  ).get();
+  assert.ok(index, 'real migration runner creates the provider-verification uniqueness index');
+  const indexMetadata = inspectDb.prepare("PRAGMA index_list('payment_verifications')").all()
+    .find(row => row.name === 'idx_payment_verifications_evidence_verifier');
+  assert.equal(Number(indexMetadata?.unique), 1, 'the installed verification index is unique');
+  console.log('GAP-1.18I runtime migration recovery passed (migration 53 present, 54 missing).');
+} finally {
+  if (inspectDb) inspectDb.close();
+  await rm(tempDir, { recursive: true, force: true });
+}
+
 console.log('GAP-1.18I migration independence regression passed');
