@@ -61,6 +61,9 @@ jobs:
       - name: GAP-1.18I payment verification migration independence regression
         run: npm run gap-1.18:provider-verification-migration-test
 
+      - name: Database backup filename collision regression
+        run: npm run test:backup-collision
+
       - name: Syntax check core entrypoints
         run: |
           node --check backend/server.js

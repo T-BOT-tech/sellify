@@ -9759,7 +9759,7 @@ export async function verifyAuditEventChain(chatId) {
 export async function createDatabaseBackup() {
   ensureDatabase();
   await mkdir(BACKUP_DIR, { recursive: true });
-  const fileName = `sellify-${new Date().toISOString().replaceAll(':', '').replace(/\.\d{3}Z$/, 'Z')}.sqlite`;
+  const fileName = `sellify-${new Date().toISOString().replaceAll(':', '').replace(/\.\d{3}Z$/, 'Z')}-${crypto.randomUUID()}.sqlite`;
   const destination = path.join(BACKUP_DIR, fileName);
   // VACUUM INTO produces a compact, consistent snapshot even while the
   // service is live. The destination is generated under our own backup dir.
