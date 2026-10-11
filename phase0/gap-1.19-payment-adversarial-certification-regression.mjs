@@ -68,6 +68,7 @@ function core() {
       finalizePaymentRefund: store.finalizePaymentRefund,
       getPaymentRefunds: store.getPaymentRefunds,
       beginPaymentStatusQuery: store.beginPaymentStatusQuery,
+      markPaymentStatusQueryProviderStarted: store.markPaymentStatusQueryProviderStarted,
       completePaymentStatusQuery: store.completePaymentStatusQuery,
     },
     providerRegistry: { getPaymentProvider },
