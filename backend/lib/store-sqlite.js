@@ -2415,24 +2415,6 @@ if (!applied.includes(39)) {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(64, nowIso());
   }
-  // GAP-1.24: fence status-query workers and permit takeover only before
-  // provider I/O has been authorized. Legacy IN_PROGRESS commands are treated
-  // as provider-in-flight because their execution phase cannot be proven.
-  if (!applied.includes(65)) {
-    db.exec(`
-      ALTER TABLE payment_status_query_commands ADD COLUMN claim_generation INTEGER NOT NULL DEFAULT 0;
-      ALTER TABLE payment_status_query_commands ADD COLUMN claim_token TEXT;
-      ALTER TABLE payment_status_query_commands ADD COLUMN phase TEXT NOT NULL DEFAULT 'LEGACY';
-      ALTER TABLE payment_status_query_commands ADD COLUMN lease_expires_at TEXT;
-      UPDATE payment_status_query_commands
-        SET claim_generation = 1,
-            claim_token = 'legacy:' || id,
-            phase = CASE WHEN status = 'IN_PROGRESS' THEN 'PROVIDER_IN_FLIGHT' ELSE 'COMPLETE' END,
-            lease_expires_at = NULL;
-    `);
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(65, nowIso());
-  }
-
   // GAP-1.24A — prevent in-place mutation of canonical payment evidence,
   // verification, and decision records. Corrections must be represented as new
   // records so previously committed financial lineage remains auditable.
@@ -2484,6 +2466,24 @@ if (!applied.includes(39)) {
       END;
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(66, nowIso());
+  }
+
+  // GAP-1.24: fence status-query workers and permit takeover only before
+  // provider I/O has been authorized. Legacy IN_PROGRESS commands are treated
+  // as provider-in-flight because their execution phase cannot be proven.
+  if (!applied.includes(67)) {
+    db.exec(`
+      ALTER TABLE payment_status_query_commands ADD COLUMN claim_generation INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE payment_status_query_commands ADD COLUMN claim_token TEXT;
+      ALTER TABLE payment_status_query_commands ADD COLUMN phase TEXT NOT NULL DEFAULT 'LEGACY';
+      ALTER TABLE payment_status_query_commands ADD COLUMN lease_expires_at TEXT;
+      UPDATE payment_status_query_commands
+        SET claim_generation = 1,
+            claim_token = 'legacy:' || id,
+            phase = CASE WHEN status = 'IN_PROGRESS' THEN 'PROVIDER_IN_FLIGHT' ELSE 'COMPLETE' END,
+            lease_expires_at = NULL;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(67, nowIso());
   }
 
   // GAP-1.23 — durable provider notification identity and authentication lineage.
