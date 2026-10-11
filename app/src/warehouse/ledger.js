@@ -340,14 +340,18 @@ export function getInventoryBalance(productId, locationId = '') {
 }
 
 export function localInventoryBalance(productId, locationId = '') {
-  // Legacy movement rows are global local storage. In an authenticated tenant
-  // context, use them only when they carry the active organization scope;
-  // unscoped legacy rows must not become a cross-tenant stock fallback.
+  // Legacy movement rows are global local storage. Explicit tenant ownership
+  // takes precedence: never accept a row owned by another tenant, even if a
+  // stale or malformed row happens to carry the active organization ID.
+  // Rows without tenantChatId are legacy and require a matching organization.
+  const tenantChatId = String(config.chatId || '');
   const organizationId = String(config.organizationId || '');
-  const scopedMovements = config.chatId
-    ? (organizationId
-      ? inventoryMovements.filter(m => String(m.organizationId || '') === organizationId)
-      : [])
+  const scopedMovements = tenantChatId
+    ? inventoryMovements.filter(m => {
+        const rowTenant = String(m.tenantChatId || '');
+        if (rowTenant) return rowTenant === tenantChatId;
+        return Boolean(organizationId && String(m.organizationId || '') === organizationId);
+      })
     : inventoryMovements;
   return scopedMovements
     .filter(m => String(m.productId) === String(productId) && (!locationId || String(m.locationId || '') === String(locationId)))
