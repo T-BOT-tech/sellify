@@ -168,13 +168,22 @@ try {
   });
   const paymentB = createdB.payment;
 
-  const providerCalls = { unknown: 0, success: 0, recovery: 0, mismatch: 0, flaky: 0 };
+  const providerCalls = { unknown: 0, success: 0, recovery: 0, mismatch: 0, flaky: 0, crashInFlight: 0 };
+  let resolveCrashInFlightObserved;
+  const crashInFlightObserved = new Promise(resolve => { resolveCrashInFlightObserved = resolve; });
   let flakyMode = 'fail';
   providerServer = createHttpServer((req, res) => {
     const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname;
     if (req.headers.authorization !== 'Bearer pf-http-test-provider-key') {
       res.writeHead(401, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'FAILED' }));
+      return;
+    }
+    if (pathname === '/crash-inflight') {
+      providerCalls.crashInFlight += 1;
+      resolveCrashInFlightObserved();
+      // Deliberately leave the provider response unresolved. The test kills the
+      // backend after this request proves the command reached PROVIDER_IN_FLIGHT.
       return;
     }
     if (pathname === '/flaky') {
@@ -685,6 +694,85 @@ try {
   assert.equal((await store.getPayment(tenantB.chatId, paymentB.id)).state, 'UNPAID');
   assert.equal((await store.listPaymentLedger(tenantB.chatId, paymentB.id)).length, 1);
 
+  // GAP-1.24 process-crash boundary: once the external provider request has
+  // begun, a backend restart must not auto-reclaim the uncertain operation.
+  const crashKey = 'pf-http-crash-provider-in-flight-' + randomUUID();
+  const crashStatusPath = '/tenants/' + encodeURIComponent(tenantA.chatId) +
+    '/payments/' + encodeURIComponent(paymentRecoveryA.id) + '/status';
+  const interruptedRequest = originalFetch(baseUrl + crashStatusPath, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + sessionA.token,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': crashKey,
+    },
+    body: JSON.stringify({ query: { statusPath: '/crash-inflight' } }),
+  }).catch(error => ({ interrupted: true, error }));
+  await Promise.race([
+    crashInFlightObserved,
+    new Promise((_, reject) => setTimeout(() => reject(
+      new Error('Provider request was not reached before crash-boundary timeout'),
+    ), 5000)),
+  ]);
+  assert.equal(providerCalls.crashInFlight, 1);
+  child.kill('SIGKILL');
+  await new Promise(resolve => {
+    if (child.exitCode !== null) return resolve();
+    child.once('exit', resolve);
+  });
+  await interruptedRequest;
+
+  const inFlightAfterCrash = db.prepare(
+    'SELECT status, phase, claim_generation FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(crashKey);
+  assert.equal(inFlightAfterCrash.status, 'IN_PROGRESS');
+  assert.equal(inFlightAfterCrash.phase, 'PROVIDER_IN_FLIGHT',
+    'crash after provider invocation must retain the conservative in-flight phase');
+  assert.equal(Number(inFlightAfterCrash.claim_generation), 1);
+
+  // Restart the actual HTTP process against the same SQLite database and retry
+  // the same command. It must remain unresolved and must not call the provider
+  // a second time merely because the previous worker disappeared.
+  childOutput = '';
+  child = spawn(process.execPath, ['backend/server.js'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      PORT: String(port),
+      SELLIFY_DATA_DIR: tempDir,
+      SELLIFY_DB_PATH: dbPath,
+      NODE_ENV: 'test',
+      SERVE_STATIC: 'false',
+      SELLIFY_TELEBIRR_BASE_URL: providerBaseUrl,
+      SELLIFY_TELEBIRR_API_KEY: 'pf-http-test-provider-key',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  child.stdout.on('data', chunk => { childOutput += chunk.toString(); });
+  child.stderr.on('data', chunk => { childOutput += chunk.toString(); });
+  await waitForHealth(baseUrl, child);
+  const afterRestart = await originalFetch(baseUrl + crashStatusPath, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + sessionA.token,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': crashKey,
+    },
+    body: JSON.stringify({ query: { statusPath: '/crash-inflight' } }),
+  });
+  assert.equal(afterRestart.status, 409,
+    'restart retry must report unresolved in-flight work instead of reclaiming it');
+  const afterRestartBody = await afterRestart.json();
+  assert.equal(afterRestartBody.error?.code, 'PAYMENT_STATUS_QUERY_IN_PROGRESS');
+  assert.equal(providerCalls.crashInFlight, 1,
+    'backend restart must not repeat uncertain provider I/O');
+  const persistedAfterRestart = db.prepare(
+    'SELECT status, phase, claim_generation FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(crashKey);
+  assert.equal(persistedAfterRestart.status, 'IN_PROGRESS');
+  assert.equal(persistedAfterRestart.phase, 'PROVIDER_IN_FLIGHT');
+  assert.equal(Number(persistedAfterRestart.claim_generation), 1);
+
   console.log('PASS PF-1 HTTP + real frontend client + SQLite lost-response retry');
   console.log('PASS unavailable provider outcome remains UNKNOWN and causes no financial transition');
   console.log('PASS successful MATCH -> VERIFIED -> ledger transition and lost-response replay');
@@ -693,6 +781,7 @@ try {
   console.log('PASS retryable provider network failure can retry safely with the same key');
   console.log('PASS durable status-query command replays through the actual HTTP route');
   console.log('PASS cross-tenant session is rejected before command claim');
+  console.log('PASS process crash after provider invocation preserves unresolved PROVIDER_IN_FLIGHT claim across backend restart');
 } catch (error) {
   globalThis.fetch = originalFetch;
   throw error;
