@@ -46,6 +46,7 @@ function core(storeOverrides = {}) {
       insertPaymentDecision: store.insertPaymentDecision,
       commitPaymentDecision: store.commitPaymentDecision,
       beginPaymentStatusQuery: store.beginPaymentStatusQuery,
+      markPaymentStatusQueryProviderStarted: store.markPaymentStatusQueryProviderStarted,
       completePaymentStatusQuery: store.completePaymentStatusQuery,
       getPaymentIdempotency: store.getPaymentIdempotency,
       listPaymentEvidence: store.listPaymentEvidence,
