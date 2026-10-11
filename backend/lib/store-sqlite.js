@@ -134,6 +134,7 @@ function queuedOrderIdentityHash(order, expectedCurrency) {
     items: normalized,
     customerName: String(order?.customer_name ?? order?.customer?.name ?? ''),
     customerPhone: String(order?.customer_phone ?? order?.customer?.phone ?? ''),
+    customerId: String(order?.customer_id ?? order?.customerId ?? order?.customer?.id ?? ''),
     // A retry is idempotent only when the business-relevant order payload is
     // unchanged. These fields are retained in order_json and can affect
     // fulfillment/instructions even when the line-item total is identical.
