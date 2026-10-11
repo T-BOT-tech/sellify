@@ -425,6 +425,39 @@ try {
     result: { testOnly: true },
   });
 
+  // Two recoveries racing for one expired, unstarted claim must produce one
+  // owner only. SQLite's immediate transaction and conditional generation
+  // update serialize the acquisition.
+  const raceKey = 'pf-http-claim-race-' + randomUUID();
+  const raceHash = 'pf-http-claim-race-request-' + randomUUID();
+  const raceInitial = await store.beginPaymentStatusQuery(tenantA.chatId, {
+    paymentId: paymentA.id, idempotencyKey: raceKey, requestHash: raceHash,
+  });
+  assert.equal(raceInitial.claimGeneration, 1);
+  db.prepare(`UPDATE payment_status_query_commands SET lease_expires_at = ?
+    WHERE idempotency_key = ?`).run('2000-01-01T00:00:00.000Z', raceKey);
+  const raceClaims = await Promise.all([
+    store.beginPaymentStatusQuery(tenantA.chatId, {
+      paymentId: paymentA.id, idempotencyKey: raceKey, requestHash: raceHash,
+    }),
+    store.beginPaymentStatusQuery(tenantA.chatId, {
+      paymentId: paymentA.id, idempotencyKey: raceKey, requestHash: raceHash,
+    }),
+  ]);
+  assert.equal(raceClaims.filter(claim => claim.duplicate === false).length, 1,
+    'only one concurrent recovery attempt may acquire the command');
+  assert.equal(raceClaims.filter(claim => claim.duplicate === true).length, 1,
+    'the losing recovery attempt must observe the winning claim');
+  const winningRaceClaim = raceClaims.find(claim => claim.duplicate === false);
+  assert.equal(winningRaceClaim.claimGeneration, 2);
+  await store.completePaymentStatusQuery(tenantA.chatId, {
+    idempotencyKey: raceKey,
+    requestHash: raceHash,
+    claimToken: winningRaceClaim.claimToken,
+    status: 'FAILED',
+    error: { code: 'TEST_CLEANUP' },
+  });
+
   // Exercise the successful provider observation through the same real client,
   // HTTP route, adapter, Payment Core, and SQLite persistence boundary.
   const successIdempotencyKey = 'pf-http-success-lost-response-' + randomUUID();
