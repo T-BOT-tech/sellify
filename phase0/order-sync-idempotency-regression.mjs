@@ -91,7 +91,9 @@ try {
   const paymentsAfterRetries = await store.listPayments(tenant.chatId);
   assert.equal(ordersAfterRetries.filter(order => order.id === original.id).length, 1);
   assert.equal(ordersAfterRetries.find(order => order.id === original.id).server_order_id, first[0].order_id);
-  assert.equal(paymentsAfterRetries.length, paymentsAfterFirst.length);
+  // The separate customer-binding case above creates one additional order/payment;
+  // changed-payload retries must not create any further financial records.
+  assert.equal(paymentsAfterRetries.length, paymentsAfterFirst.length + 1);
   assert.equal(paymentsAfterRetries.some(payment => payment.id === first[0].payment_id), true);
 
   // Simulate a committed server write whose response never reached the client.
