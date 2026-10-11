@@ -708,7 +708,7 @@ try {
     "});",
     "console.log(JSON.stringify(claim));",
     "await new Promise(() => {});",
-  ].join('\\n');
+  ].join('\n');
   const claimWorker = spawn(process.execPath, ['--input-type=module', '-e', claimWorkerScript], {
     cwd: process.cwd(),
     env: {
@@ -727,7 +727,7 @@ try {
   claimWorker.stderr.on('data', chunk => { claimWorkerOutput += chunk.toString(); });
   let claimWorkerClaim = null;
   for (let attempt = 0; attempt < 100 && !claimWorkerClaim; attempt += 1) {
-    const line = claimWorkerOutput.split('\\n').find(value => value.startsWith('{'));
+    const line = claimWorkerOutput.split('\n').find(value => value.startsWith('{'));
     if (line) {
       try { claimWorkerClaim = JSON.parse(line); } catch {}
     }
