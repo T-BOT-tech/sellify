@@ -2609,16 +2609,17 @@ if (!applied.includes(39)) {
         ON payment_provider_capability_certifications(organization_id, provider_id, capability, certification_scope, updated_at DESC);
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(53, nowIso());
+  }
 
   // GAP-1.18I — provider verification persistence idempotency.
+  // Keep this migration independent: installations that already recorded 53
+  // may still need to apply 54 after an interrupted or older deployment.
   if (!applied.includes(54)) {
     db.exec(`
       CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_verifications_evidence_verifier
         ON payment_verifications(evidence_id, verifier, verifier_version);
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(54, nowIso());
-  }
-
   }
 
   // GAP-1.18N — verification provenance hardening.
