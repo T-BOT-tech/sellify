@@ -63,6 +63,16 @@ try {
   assert.equal(currencyConflict[0].status, 'rejected');
   assert.equal(currencyConflict[0].code, 'ORDER_IDEMPOTENCY_CONFLICT');
 
+  // Customer association is part of the canonical order identity, even when
+  // line items and the display name/phone are unchanged.
+  const customerBoundOrder = { ...structuredClone(original), customer_id: 'customer-a' };
+  const customerBoundFirst = await store.saveQueuedOrders(tenant.chatId, [customerBoundOrder]);
+  assert.equal(customerBoundFirst[0].status, 'synced');
+  const changedCustomer = { ...structuredClone(customerBoundOrder), customer_id: 'customer-b' };
+  const customerConflict = await store.saveQueuedOrders(tenant.chatId, [changedCustomer]);
+  assert.equal(customerConflict[0].status, 'rejected');
+  assert.equal(customerConflict[0].code, 'ORDER_IDEMPOTENCY_CONFLICT');
+
   // A reused local ID must not silently accept changed fulfillment instructions
   // merely because its line items and total still match.
   const changedNotes = { ...structuredClone(original), notes: 'Leave at reception' };
