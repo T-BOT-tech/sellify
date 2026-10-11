@@ -453,13 +453,22 @@ export class PaymentCore {
       });
     }
 
+    const statusQueryClaim = started.claimToken ? {
+      idempotencyKey,
+      requestHash,
+      claimToken: started.claimToken,
+      claimGeneration: started.claimGeneration,
+    } : null;
+    const ownedCommand = statusQueryClaim ? { ...command, statusQueryClaim } : command;
+
     let result;
     try {
-      result = await this.#queryStatusOnce(command);
+      result = await this.#queryStatusOnce(ownedCommand);
     } catch (error) {
       try {
         await this.store.completePaymentStatusQuery(chatId, {
           idempotencyKey, requestHash, status: 'FAILED',
+          ...(statusQueryClaim ? { claimToken: statusQueryClaim.claimToken } : {}),
           error: {
             message: error?.message || 'Payment status query failed',
             statusCode: error?.statusCode || 500,
@@ -483,6 +492,7 @@ export class PaymentCore {
     // committed operation as FAILED; leave it recoverable from canonical state.
     await this.store.completePaymentStatusQuery(chatId, {
       idempotencyKey, requestHash, status: 'SUCCEEDED', result,
+      ...(statusQueryClaim ? { claimToken: statusQueryClaim.claimToken } : {}),
     });
     return result;
   }
@@ -574,6 +584,18 @@ export class PaymentCore {
       ? this.providerRegistry.getPaymentProvider(payment.providerId)
       : null;
     if (!provider) throw Object.assign(new Error('Unknown payment provider'), { statusCode: 400, code: 'UNKNOWN_PAYMENT_PROVIDER' });
+
+    // Atomically move from an unstarted claim to provider-in-flight before
+    // making the external call. Recovery can take over only the former state;
+    // a stale worker therefore fails here before it can call the provider.
+    if (command.statusQueryClaim) {
+      if (typeof this.store.markPaymentStatusQueryProviderStarted !== 'function') {
+        throw Object.assign(new Error('Fenced status-query claims are unavailable'), {
+          statusCode: 500, code: 'PAYMENT_STATUS_QUERY_CLAIM_UNAVAILABLE',
+        });
+      }
+      await this.store.markPaymentStatusQueryProviderStarted(chatId, command.statusQueryClaim);
+    }
 
     let raw;
     try {
@@ -687,6 +709,7 @@ export class PaymentCore {
       expectedState: payment.state,
       targetState: decision.targetState,
       idempotencyKey: String(command.idempotencyKey || command.idempotency_key || '').trim(),
+      ...(command.statusQueryClaim ? { statusQueryClaim: command.statusQueryClaim } : {}),
       verification: {
         paymentIntentId: intent.id,
         evidenceId: evidence.id,
