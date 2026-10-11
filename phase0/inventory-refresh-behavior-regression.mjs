@@ -37,7 +37,7 @@ Object.defineProperty(globalThis, 'navigator', {
 const state = await import('../app/src/state.js');
 const ledger = await import('../app/src/warehouse/ledger.js');
 const { setConfig, setInventoryBalances, setInventoryMovements } = state;
-const { loadInventoryBalances, loadInventoryMovements, getInventoryBalanceRefreshState, getInventoryBalance } = ledger;
+const { loadInventoryBalances, loadInventoryMovements, getInventoryBalanceRefreshState, getInventoryBalance, localInventoryBalance } = ledger;
 const { isStockTracked } = await import('../app/src/warehouse/inventory.js');
 
 function configure(overrides = {}) {
@@ -168,6 +168,13 @@ setInventoryMovements([{
 }]);
 assert.equal(isStockTracked({ id: 'legacy-same-org-product' }), true,
   'legacy movement may be used when its organization matches the active organization');
+setInventoryMovements([{
+  eventId: 'foreign-tenant-same-org-movement', tenantChatId: 'tenant-a',
+  organizationId: 'org-b', productId: 'foreign-tenant-same-org-product',
+  locationId: 'location-b', quantity: 50,
+}]);
+assert.equal(localInventoryBalance('foreign-tenant-same-org-product', 'location-b'), 0,
+  'explicitly foreign-tenant movement must not be used even if its organization ID matches the active organization');
 globalThis.fetch = async () => response(200, {
   balances: [{ productId: 'product-1', locationId: 'location-b', quantity: 99 }],
 });
