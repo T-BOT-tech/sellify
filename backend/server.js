@@ -181,6 +181,7 @@ const paymentCore = new PaymentCore({
     insertPaymentDecision,
     commitPaymentDecision,
     beginPaymentStatusQuery,
+    markPaymentStatusQueryProviderStarted,
     completePaymentStatusQuery,
     recordPaymentReconciliation,
     listPaymentReconciliations,
