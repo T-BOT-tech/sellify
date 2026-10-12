@@ -74,4 +74,48 @@ try {
   await rm(tempDir, { recursive: true, force: true });
 }
 
+
+ // Migration 63 recovery simulation: emulate interruption after the first
+ // column was added but before the second column, indexes, and migration record.
+const partialTempDir = await mkdtemp(join(tmpdir(), 'sellify-migration63-recovery-'));
+const partialDbPath = join(partialTempDir, 'sellify.sqlite');
+process.env.SELLIFY_DATA_DIR = partialTempDir;
+process.env.SELLIFY_DB_PATH = partialDbPath;
+let partialInspectDb;
+try {
+  const initialStore = await import('../backend/lib/store-sqlite.js?gap118i-migration63-initial');
+  await initialStore.getOrCreateUserByTelegram('gap118i-migration63-user', 'GAP-1.18I Migration 63 Test');
+
+  partialInspectDb = new DatabaseSync(partialDbPath);
+  // Remove the migration record and later DDL, retaining the first column as
+  // if the process stopped immediately after its ALTER TABLE succeeded.
+  partialInspectDb.exec(`
+    DROP INDEX IF EXISTS uq_payment_evidence_notification;
+    DROP INDEX IF EXISTS idx_payment_evidence_auth_reference;
+    ALTER TABLE payment_evidence DROP COLUMN authentication_reference;
+    DELETE FROM schema_migrations WHERE version = 63;
+  `);
+  partialInspectDb.close();
+  partialInspectDb = null;
+
+  const recoveredStore = await import('../backend/lib/store-sqlite.js?gap118i-migration63-recovery');
+  await recoveredStore.getOrCreateUserByTelegram('gap118i-migration63-user', 'GAP-1.18I Migration 63 Test');
+
+  partialInspectDb = new DatabaseSync(partialDbPath);
+  const columnNames = new Set(partialInspectDb.prepare('PRAGMA table_info(payment_evidence)').all()
+    .map(column => String(column.name)));
+  assert.ok(columnNames.has('provider_notification_id'), 'recovery preserves the first partially added column');
+  assert.ok(columnNames.has('authentication_reference'), 'recovery adds the missing second column');
+  assert.ok(partialInspectDb.prepare('SELECT version FROM schema_migrations WHERE version = 63').get(),
+    'recovery records migration 63 after completing its DDL');
+  assert.ok(partialInspectDb.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'uq_payment_evidence_notification'").get(),
+    'recovery creates the provider-notification uniqueness index');
+  assert.ok(partialInspectDb.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_payment_evidence_auth_reference'").get(),
+    'recovery creates the authentication-reference index');
+  console.log('GAP-1.18I runtime migration 63 recovery passed (first column present, second column missing).');
+} finally {
+  if (partialInspectDb) partialInspectDb.close();
+  await rm(partialTempDir, { recursive: true, force: true });
+}
+
 console.log('GAP-1.18I migration independence regression passed');

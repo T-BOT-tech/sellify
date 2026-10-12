@@ -2468,6 +2468,20 @@ if (!applied.includes(39)) {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(66, nowIso());
   }
 
+  // GAP-1.18O — bind transition ledger entries directly to the authoritative decision.
+  // Legacy and non-decision ledger entries remain nullable; new canonical transitions
+  // record the decision ID in the same transaction as the state and ledger write.
+  if (!applied.includes(68)) {
+    const ledgerColumns = new Set(
+      db.prepare('PRAGMA table_info(payment_ledger_entries)').all().map(column => String(column.name)),
+    );
+    if (!ledgerColumns.has('decision_id')) {
+      db.exec('ALTER TABLE payment_ledger_entries ADD COLUMN decision_id TEXT REFERENCES payment_decisions(id)');
+    }
+    db.exec('CREATE INDEX IF NOT EXISTS idx_payment_ledger_decision ON payment_ledger_entries(decision_id)');
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(68, nowIso());
+  }
+
   // GAP-1.24: fence status-query workers and permit takeover only before
   // provider I/O has been authorized. Legacy IN_PROGRESS commands are treated
   // as provider-in-flight because their execution phase cannot be proven.
@@ -2502,10 +2516,21 @@ if (!applied.includes(39)) {
   }
 
   // GAP-1.23 — durable provider notification identity and authentication lineage.
+  // Additive DDL may be interrupted between statements. Inspect each column
+  // independently so a retry can finish a partially applied migration.
   if (!applied.includes(63)) {
+    const paymentEvidenceColumns = () => new Set(
+      db.prepare('PRAGMA table_info(payment_evidence)').all().map(column => String(column.name)),
+    );
+    let paymentEvidenceColumnNames = paymentEvidenceColumns();
+    if (!paymentEvidenceColumnNames.has('provider_notification_id')) {
+      db.exec('ALTER TABLE payment_evidence ADD COLUMN provider_notification_id TEXT');
+      paymentEvidenceColumnNames = paymentEvidenceColumns();
+    }
+    if (!paymentEvidenceColumnNames.has('authentication_reference')) {
+      db.exec('ALTER TABLE payment_evidence ADD COLUMN authentication_reference TEXT');
+    }
     db.exec(`
-      ALTER TABLE payment_evidence ADD COLUMN provider_notification_id TEXT;
-      ALTER TABLE payment_evidence ADD COLUMN authentication_reference TEXT;
       CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_evidence_notification
         ON payment_evidence(organization_id,provider_id,payment_account_id,provider_notification_id)
         WHERE provider_notification_id IS NOT NULL AND trim(provider_notification_id) <> '';
@@ -2775,6 +2800,8 @@ if (!applied.includes(39)) {
   // required lifecycle states.
   if (!applied.includes(48)) {
     db.exec('PRAGMA foreign_keys = OFF');
+    const hasLedgerDecisionId = db.prepare('PRAGMA table_info(payment_ledger_entries)').all()
+      .some(column => String(column.name) === 'decision_id');
     db.exec(`
       CREATE TABLE payments_gap113 (
         id TEXT PRIMARY KEY,
@@ -2829,9 +2856,17 @@ if (!applied.includes(39)) {
         actor_id TEXT,
         reason TEXT,
         metadata_json TEXT,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        decision_id TEXT REFERENCES payment_decisions(id)
       );
-      INSERT INTO payment_ledger_entries_gap113 SELECT * FROM payment_ledger_entries;
+      INSERT INTO payment_ledger_entries_gap113 (
+        id, payment_id, organization_id, entry_type, amount_minor, currency,
+        from_state, to_state, actor_id, reason, metadata_json, created_at${hasLedgerDecisionId ? ', decision_id' : ''}
+      )
+      SELECT
+        id, payment_id, organization_id, entry_type, amount_minor, currency,
+        from_state, to_state, actor_id, reason, metadata_json, created_at${hasLedgerDecisionId ? ', decision_id' : ', NULL'}
+      FROM payment_ledger_entries;
       DROP TABLE payment_ledger_entries;
       ALTER TABLE payment_ledger_entries_gap113 RENAME TO payment_ledger_entries;
       CREATE INDEX IF NOT EXISTS idx_payment_ledger_payment ON payment_ledger_entries(payment_id, created_at);
@@ -7065,13 +7100,13 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       const result = db.prepare("UPDATE payments SET state = ?, updated_at = ?, claimed_at = CASE WHEN ? = 'CLAIMED' THEN ? ELSE claimed_at END, received_at = CASE WHEN ? = 'RECEIVED' THEN ? ELSE received_at END, verified_at = CASE WHEN ? = 'VERIFIED' THEN ? ELSE verified_at END, reconciled_at = CASE WHEN ? = 'RECONCILED' THEN ? ELSE reconciled_at END WHERE id = ? AND organization_id = ?" + (expectedState ? " AND state = ?" : ""))
         .run(target, now, target, now, target, now, target, now, target, now, paymentId, organizationId, ...(expectedState ? [expectedState] : []));
       if (Number(result.changes || 0) !== 1) throw Object.assign(new Error('Payment state changed before commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
-      db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+      db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at, decision_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
         crypto.randomUUID(), paymentId, organizationId, String(decision.entryType || target),
         target === 'PARTIAL'
           ? Number(decision.amountMinor ?? decision.amount_minor ?? persistedDecisionVerification?.observedAmountMinor ?? row.amount_minor)
           : Number(row.amount_minor),
         normaliseCurrency(row.currency, 'ETB'),
-        row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now
+        row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now, decisionId
       );
     }
     const marketplaceAllocation = db.prepare("SELECT a.*, so.id AS canonical_seller_order_id FROM marketplace_payment_allocations a JOIN marketplace_seller_orders so ON so.id = a.seller_order_id WHERE a.payment_id = ? AND a.organization_id = ? LIMIT 1").get(paymentId, organizationId);
