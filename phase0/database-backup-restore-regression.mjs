@@ -92,7 +92,7 @@ try {
   const check = new DatabaseSync(restoredDb);
   try {
     const latestMigration = check.prepare('SELECT MAX(version) AS version FROM schema_migrations').get();
-    assert.equal(Number(latestMigration.version), 67, 'restored database must retain current schema migration state');
+    assert.equal(Number(latestMigration.version), 68, 'restored database must retain current schema migration state');
     assert.ok(check.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'payment_status_query_commands'").get(),
       'restored database must retain the payment status-query command table');
     assert.equal(check.prepare('SELECT COUNT(*) AS count FROM payments WHERE id = ?').get(paymentId).count, 1,
@@ -128,7 +128,7 @@ try {
     check.close();
   }
 
-  console.log('Database backup/restore regression passed: integrity, migration 67, payment → evidence → verification → decision → ledger lineage, and unresolved provider-in-flight claim verified.');
+  console.log('Database backup/restore regression passed: integrity, migration 68, payment → evidence → verification → decision → ledger lineage, and unresolved provider-in-flight claim verified.');
   console.log('Scope limit: this isolated regression does not certify production-database restoration or operational recovery timing.');
 } finally {
   await rm(root, { recursive: true, force: true });
