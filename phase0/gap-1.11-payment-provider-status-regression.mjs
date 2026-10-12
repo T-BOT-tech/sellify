@@ -314,7 +314,8 @@ test('GAP-1.24 leaves pre-commit crash unresolved instead of replaying blindly',
   assert.equal(calls - callsBefore, 1);
   assert.equal((await store.getPayment(base.chatId, base.payment.id)).state, 'UNPAID');
   assert.equal((await store.listPaymentLedger(base.chatId, base.payment.id)).length, 1);
-  assert.equal((await store.listPaymentVerifications(base.chatId, base.payment.id)).length, 0);
+  assert.equal((await store.listPaymentVerifications(base.chatId, base.payment.id)).length, 1,
+    'verification may be durably recorded before the financial commit; it must not imply a committed decision');
   assert.equal((await store.listPaymentDecisions(base.chatId, base.payment.id)).length, 0);
 
   await assert.rejects(
