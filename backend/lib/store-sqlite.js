@@ -6208,7 +6208,7 @@ export async function resolvePaymentIntentForProviderEvidence(input = {}) {
 function canonicalProviderNotificationValue(value) {
   const ignored = new Set([
     'fingerprint', 'rawPayload', 'raw_payload', 'receivedAt', 'received_at',
-    'signature', 'signatureVersion', 'signature_version',
+    'observedAt', 'observed_at', 'signature', 'signatureVersion', 'signature_version',
   ]);
   if (Array.isArray(value)) return value.map(canonicalProviderNotificationValue);
   if (!value || typeof value !== 'object') return value;
@@ -6226,7 +6226,6 @@ function providerNotificationSemanticEvidence(input = {}, authenticated = {}, no
     externalReference: String(input.externalReference ?? input.external_reference ?? '').trim() || null,
     providerTransactionId: String(input.providerTransactionId ?? input.provider_transaction_id ?? '').trim() || null,
     authenticationReference: String(input.authenticationReference ?? input.authentication_reference ?? authenticated.authenticationReference ?? '').trim() || null,
-    observedAt: String(input.observedAt ?? input.observed_at ?? '').trim() || null,
     normalizedPayload: canonicalProviderNotificationValue(
       typeof payload === 'string' ? parseJSON(payload, {}) : payload
     ),
