@@ -202,6 +202,11 @@ const paymentCore = new PaymentCore({
   providerRegistry: { getPaymentProvider, requirePaymentProvider, certifyPaymentProviderCapabilities, certifyAllPaymentProviders },
   invariantGate: new InvariantGate(),
   decisionEngine: new PaymentDecisionEngine(),
+  // Enforce the same central role/scope policy inside Payment Core as at the
+  // HTTP boundary. Provider notifications remain on their dedicated trusted
+  // ingestion path and do not rely on an interactive actor.
+  authorization: (actor, organizationId, locationId, resource, permission) =>
+    authorize(actor, organizationId, locationId, resource, permission),
 });
 
 // ---------- env-driven config ----------
