@@ -19,8 +19,8 @@ assert.match(ci, /node-version: \[24\]/);
 for (const script of requiredScripts) assert.ok(ci.includes('npm run ' + script), 'CI missing ' + script);
 
 const migrations = [...store.matchAll(/if \(!applied\.includes\((\d+)\)\)/g)].map(m => Number(m[1]));
-assert.equal(Math.max(...migrations), 67, 'latest migration must remain explicit');
-for (const version of [45, 60, 61, 62, 63, 64, 65, 66, 67]) {
+assert.equal(Math.max(...migrations), 68, 'latest migration must remain explicit');
+for (const version of [45, 60, 61, 62, 63, 64, 65, 66, 67, 68]) {
   assert.ok(migrations.includes(version), 'missing explicit migration ' + version);
 }
 const migrationPosition = version => store.indexOf(`if (!applied.includes(${version}))`);
