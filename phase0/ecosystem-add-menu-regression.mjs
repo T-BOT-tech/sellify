@@ -22,13 +22,19 @@ assert.equal(ADD_MENU_ACTIONS.find(({ id }) => id === 'take-order').destination,
 assert.equal(ADD_MENU_ACTIONS.find(({ id }) => id === 'add-product').destination, 'catalog');
 assert.equal(ADD_MENU_ACTIONS.find(({ id }) => id === 'discover-marketplace').destination, 'marketplace');
 assert.equal(ADD_MENU_ACTIONS.filter(({ destination }) => destination === 'settings').length, 2);
+assert.notEqual(
+  ADD_MENU_ACTIONS.find(({ id }) => id === 'configure-packs-and-channels').target,
+  ADD_MENU_ACTIONS.find(({ id }) => id === 'business-setup').target,
+  'settings actions must have distinct destinations within the existing Settings surface',
+);
 
 assert.match(html, /id="navAdd"[^>]*onclick="openAddSheet\(\)"/);
 assert.match(html, /id="addSheet"/);
 assert.ok(html.includes('onclick="openAddProduct();'));
 assert.ok(html.includes('<span>Add product</span>'), 'menu must describe the currently supported catalog action accurately');
 assert.doesNotMatch(html, /Add product or service/, 'do not advertise first-class service creation before its canonical lifecycle exists');
-assert.ok(html.includes('onclick="openAddSettings();'));
+assert.ok(html.includes("onclick=\"openAddSettings('packs-and-channels');\""));
+assert.ok(html.includes("onclick=\"openAddSettings('business-setup');\""));
 assert.match(html, /id="navQueue"/);
 assert.ok(html.indexOf('id="navQueue"') > html.indexOf('id="moreSheet"'), 'Queue remains reachable in More');
 assert.match(main, /from '\.\/ui\/add-menu\.js'/);
@@ -63,6 +69,8 @@ const sheet = {
 };
 let switchedTab = null;
 let settingsClicked = false;
+const scrolledTargets = [];
+let businessSetupFocused = false;
 let inputFocused = false;
 let inputScrolled = false;
 const input = {
@@ -70,12 +78,19 @@ const input = {
   scrollIntoView() { inputScrolled = true; },
 };
 const settingsButton = { click() { settingsClicked = true; } };
+const packReadinessTarget = { scrollIntoView() { scrolledTargets.push('packReadinessPanel'); } };
+const businessSetupTarget = {
+  scrollIntoView() { scrolledTargets.push('setBusinessModel'); },
+  focus() { businessSetupFocused = true; },
+};
 globalThis.document = {
   getElementById(id) {
     return ({
       addSheet: sheet,
       newProdName: input,
       gearSettingsBtn: settingsButton,
+      packReadinessPanel: packReadinessTarget,
+      setBusinessModel: businessSetupTarget,
     })[id] ?? null;
   },
 };
@@ -93,8 +108,12 @@ assert.equal(openAddProduct(), true);
 assert.equal(switchedTab, 'catalog');
 assert.ok(inputFocused);
 assert.ok(inputScrolled);
-assert.equal(openAddSettings(), true);
+assert.equal(openAddSettings('packs-and-channels'), true);
 assert.ok(settingsClicked);
+assert.equal(scrolledTargets.at(-1), 'packReadinessPanel');
+assert.equal(openAddSettings('business-setup'), true);
+assert.equal(scrolledTargets.at(-1), 'setBusinessModel');
+assert.ok(businessSetupFocused);
 delete globalThis.document;
 delete globalThis.window;
 
