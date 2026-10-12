@@ -199,6 +199,8 @@ Added `phase0/payment-lineage-append-only-regression.mjs` and wired it into the 
 
 This regression validates the migration-65/66 trigger behavior on a fresh isolated database. It does not replace a production-like migration/restore rehearsal, nor does it define an approved data-retention process.
 
+**GAP-1.18O coverage qualification (12 Oct 2026):** The audit-lineage regression is wired into `.github/workflows/ci.yml` through `npm run gap-1.18:audit-lineage-test`; the latest branch head `bb3959439c572789b593b6b915eca7ad34381106` passed Sellify CI run `38268280563` and Repository Security Checks run `38268280634`. Its runtime portion currently writes generic audit events, verifies the hash chain, then tampers with one event to prove detection. Payment evidence/verification/decision lineage is currently checked with source assertions rather than a runtime-created payment lifecycle. Therefore, the CI pass certifies the audit hash verifier and its tamper detection, but does **not** yet independently certify the end-to-end persisted payment-lineage chain.
+
 ## 10C. GAP-1.24 — fenced status-query claims (candidate; focused CI runtime verification passed, operational certification pending)
 
 The candidate branch now adds migration 67 for durable status-query claim ownership: monotonically increasing claim generation, unique claim token, execution phase, and an unstarted-claim lease. Migration handling checks each column independently so an interrupted additive DDL sequence can resume. Existing legacy `IN_PROGRESS` commands are conservatively classified as `PROVIDER_IN_FLIGHT`; they are not automatically reclaimed because their provider-execution phase cannot be proven.
