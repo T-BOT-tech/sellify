@@ -414,7 +414,8 @@
     "test:gap-5-iam": "node phase0/gap-5-iam-membership-contextual-role-regression.mjs",
     "test:backup-collision": "node phase0/database-backup-collision-regression.mjs",
     "test:backup-restore": "node phase0/database-backup-restore-regression.mjs",
-    "test:payment-lineage-append-only": "node phase0/payment-lineage-append-only-regression.mjs"
+    "test:payment-lineage-append-only": "node phase0/payment-lineage-append-only-regression.mjs",
+    "gap-1.18:decision-idempotency-test": "node phase0/gap-1.18Q-payment-decision-idempotency-regression.mjs"
   },
   "engines": {
     "node": ">=24"
