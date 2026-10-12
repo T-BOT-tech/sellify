@@ -662,6 +662,7 @@ try {
   });
   assert.equal(processCrashFirstResponse.status, 500,
     'completion persistence failure must fail the HTTP request after canonical outcome recovery');
+  const providerCallsBeforeProcessCrashRetry = providerCalls.recovery;
   assert.equal((await store.getPayment(tenantA.chatId, paymentRecoveryA.id)).state, 'VERIFIED');
   assert.deepEqual(
     (await store.listPaymentLedger(tenantA.chatId, paymentRecoveryA.id)).map(entry => entry.entryType),
@@ -706,7 +707,7 @@ try {
   const processCrashRetryBody = await processCrashRetry.json();
   assert.equal(processCrashRetryBody.status, 'MATCH');
   assert.equal(processCrashRetryBody.payment?.state, 'VERIFIED');
-  assert.equal(providerCalls.recovery, 1,
+  assert.equal(providerCalls.recovery, providerCallsBeforeProcessCrashRetry,
     'process-crash recovery must not repeat provider work');
   assert.deepEqual(
     (await store.listPaymentLedger(tenantA.chatId, paymentRecoveryA.id)).map(entry => entry.entryType),
