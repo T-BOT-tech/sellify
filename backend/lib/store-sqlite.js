@@ -6202,6 +6202,54 @@ export async function resolvePaymentIntentForProviderEvidence(input = {}) {
   };
 }
 
+// Compare authenticated notification replays by their semantic evidence, not
+// transport wrappers or a caller/provider-supplied fingerprint. Object keys are
+// sorted so equivalent JSON objects compare consistently.
+function canonicalProviderNotificationValue(value) {
+  const ignored = new Set([
+    'fingerprint', 'rawPayload', 'raw_payload', 'receivedAt', 'received_at',
+    'signature', 'signatureVersion', 'signature_version',
+  ]);
+  if (Array.isArray(value)) return value.map(canonicalProviderNotificationValue);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.keys(value).filter(key => !ignored.has(key))
+    .sort().map(key => [key, canonicalProviderNotificationValue(value[key])]));
+}
+
+function providerNotificationSemanticEvidence(input = {}, authenticated = {}, normalizedPayload = undefined) {
+  const payload = normalizedPayload !== undefined
+    ? normalizedPayload
+    : (input.normalizedPayload ?? input.normalized_payload ?? input.normalizedPayloadJson ?? {});
+  return JSON.stringify({
+    evidenceType: String(input.evidenceType || input.evidence_type || '').trim().toUpperCase(),
+    channel: String(input.channel || 'notification').trim().toLowerCase(),
+    externalReference: String(input.externalReference ?? input.external_reference ?? '').trim() || null,
+    providerTransactionId: String(input.providerTransactionId ?? input.provider_transaction_id ?? '').trim() || null,
+    authenticationReference: String(input.authenticationReference ?? input.authentication_reference ?? authenticated.authenticationReference ?? '').trim() || null,
+    observedAt: String(input.observedAt ?? input.observed_at ?? '').trim() || null,
+    normalizedPayload: canonicalProviderNotificationValue(
+      typeof payload === 'string' ? parseJSON(payload, {}) : payload
+    ),
+  });
+}
+
+function classifyProviderNotificationIdentity(existingRow, evidenceInput, authenticated, notification) {
+  const existingEvidence = paymentEvidenceFromRow(existingRow);
+  const incomingAuthentication = {
+    ...authenticated,
+    authenticationReference: notification.authenticationReference || authenticated.authenticationReference || '',
+  };
+  const existingSemantic = providerNotificationSemanticEvidence(existingEvidence, {}, existingEvidence.normalizedPayload);
+  const incomingSemantic = providerNotificationSemanticEvidence(evidenceInput, incomingAuthentication);
+  if (existingSemantic !== incomingSemantic) {
+    throw Object.assign(new Error('Provider notification identity was already used with different evidence'), {
+      statusCode: 409,
+      code: 'PAYMENT_NOTIFICATION_IDENTITY_CONFLICT',
+    });
+  }
+  return { evidence: existingEvidence, duplicate: true };
+}
+
 export async function insertProviderNotificationEvidence(notification = {}) {
   ensureDatabase();
   const authenticated = assertAuthenticatedNotificationContext(notification.authenticatedContext || notification);
@@ -6229,17 +6277,31 @@ export async function insertProviderNotificationEvidence(notification = {}) {
   const accountRow = account[0];
   const organizationId = String(accountRow.organization_id);
   const providerId = authenticated.providerId;
-  const resolution = await resolvePaymentIntentForProviderEvidence({
-    providerId,
-    accountIdentifier: authenticated.accountIdentifier,
-    providerTransactionId: evidenceInput.providerTransactionId || evidenceInput.provider_transaction_id || '',
-    externalReference: evidenceInput.externalReference || evidenceInput.external_reference || '',
-  });
-  if (resolution.duplicateEvidence) {
-    return { evidence: resolution.duplicateEvidence, duplicate: true };
+  const evidenceType = String(evidenceInput.evidenceType || evidenceInput.evidence_type).trim().toUpperCase();
+  const channel = String(evidenceInput.channel || 'notification').trim().toLowerCase();
+  const externalReference = evidenceInput.externalReference || evidenceInput.external_reference || null;
+  const providerTransactionId = evidenceInput.providerTransactionId || evidenceInput.provider_transaction_id || null;
+  const authenticationReference = notification.authenticationReference || authenticated.authenticationReference || null;
+  const rawPayload = evidenceInput.rawPayload ?? evidenceInput.raw_payload ?? notification.rawPayload ?? notification.raw ?? null;
+  const normalizedPayload = evidenceInput.normalizedPayload ?? evidenceInput.normalized_payload ?? evidenceInput;
+  const observedAt = evidenceInput.observedAt || evidenceInput.observed_at || authenticated.receivedAt || null;
+  const now = nowIso();
+
+  // Identity takes precedence over fingerprint deduplication. Otherwise a
+  // reused notification ID with changed evidence could be incorrectly accepted
+  // as a duplicate before SQLite's identity unique index is reached.
+  if (authenticated.notificationId) {
+    const identityRow = db.prepare(
+      'SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND payment_account_id = ? AND provider_notification_id = ?'
+    ).get(organizationId, providerId, accountRow.id, authenticated.notificationId);
+    if (identityRow) {
+      return classifyProviderNotificationIdentity(identityRow, {
+        ...evidenceInput, evidenceType, channel, externalReference, providerTransactionId,
+        authenticationReference, observedAt, normalizedPayload,
+      }, authenticated, notification);
+    }
   }
-  const resolvedIntentId = resolution.paymentIntent?.id || null;
-  const resolvedLocationId = resolution.locationId || null;
+
   const fingerprint = String(
     evidenceInput.fingerprint
       || crypto.createHash('sha256').update(JSON.stringify({
@@ -6248,10 +6310,22 @@ export async function insertProviderNotificationEvidence(notification = {}) {
         notificationId: authenticated.notificationId,
       })).digest('hex')
   ).trim();
-  const evidenceType = String(evidenceInput.evidenceType || evidenceInput.evidence_type).trim().toUpperCase();
-  const rawPayload = evidenceInput.rawPayload ?? evidenceInput.raw_payload ?? notification.rawPayload ?? notification.raw ?? null;
-  const normalizedPayload = evidenceInput.normalizedPayload ?? evidenceInput.normalized_payload ?? evidenceInput;
-  const now = nowIso();
+
+  // Resolve transaction identity only after the authenticated notification
+  // identity has been checked, so an earlier transaction duplicate cannot mask
+  // changed evidence for a reused notification ID.
+  const resolution = await resolvePaymentIntentForProviderEvidence({
+    providerId,
+    accountIdentifier: authenticated.accountIdentifier,
+    providerTransactionId: providerTransactionId || '',
+    externalReference: externalReference || '',
+  });
+  if (resolution.duplicateEvidence) {
+    return { evidence: resolution.duplicateEvidence, duplicate: true };
+  }
+  const resolvedIntentId = resolution.paymentIntent?.id || null;
+  const resolvedLocationId = resolution.locationId || null;
+
   const existing = db.prepare(
     'SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND fingerprint = ?'
   ).get(organizationId, providerId, fingerprint);
@@ -6266,21 +6340,34 @@ export async function insertProviderNotificationEvidence(notification = {}) {
       resolvedIntentId,
       accountRow.id,
       providerId,
-      String(evidenceInput.channel || 'notification').trim().toLowerCase(),
+      channel,
       evidenceType,
-      evidenceInput.externalReference || evidenceInput.external_reference || null,
-      evidenceInput.providerTransactionId || evidenceInput.provider_transaction_id || null,
+      externalReference,
+      providerTransactionId,
       authenticated.notificationId || null,
-      notification.authenticationReference || authenticated.authenticationReference || null,
+      authenticationReference,
       fingerprint,
       rawPayload == null ? null : json(rawPayload),
       normalizedPayload == null ? null : json(normalizedPayload),
-      evidenceInput.observedAt || evidenceInput.observed_at || authenticated.receivedAt || null,
+      observedAt,
       now,
       now,
     );
   } catch (error) {
     if (String(error?.message || '').includes('UNIQUE constraint failed: payment_evidence')) {
+      // A concurrent insert may have won after the preflight lookup. Re-read
+      // the identity tuple and apply the exact same semantic classification.
+      if (authenticated.notificationId) {
+        const identityCollision = db.prepare(
+          'SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND payment_account_id = ? AND provider_notification_id = ?'
+        ).get(organizationId, providerId, accountRow.id, authenticated.notificationId);
+        if (identityCollision) {
+          return classifyProviderNotificationIdentity(identityCollision, {
+            ...evidenceInput, evidenceType, channel, externalReference, providerTransactionId,
+            authenticationReference, observedAt, normalizedPayload,
+          }, authenticated, notification);
+        }
+      }
       const duplicate = db.prepare(
         'SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND fingerprint = ?'
       ).get(organizationId, providerId, fingerprint);
