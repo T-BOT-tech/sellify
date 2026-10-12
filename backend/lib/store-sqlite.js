@@ -2854,9 +2854,29 @@ if (!applied.includes(39)) {
         actor_id TEXT,
         reason TEXT,
         metadata_json TEXT,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        decision_id TEXT REFERENCES payment_decisions(id)
       );
-      INSERT INTO payment_ledger_entries_gap113 SELECT * FROM payment_ledger_entries;
+      const sourceLedgerColumns = new Set(
+        db.prepare('PRAGMA table_info(payment_ledger_entries)').all().map(column => String(column.name)),
+      );
+      const ledgerCopyColumns = [
+        'id', 'payment_id', 'organization_id', 'entry_type', 'amount_minor',
+        'currency', 'from_state', 'to_state', 'actor_id', 'reason',
+        'metadata_json', 'created_at',
+      ];
+      const ledgerCopySelect = [...ledgerCopyColumns];
+      if (sourceLedgerColumns.has('decision_id')) {
+        ledgerCopyColumns.push('decision_id');
+        ledgerCopySelect.push('decision_id');
+      } else {
+        ledgerCopyColumns.push('decision_id');
+        ledgerCopySelect.push('NULL');
+      }
+      db.exec(`
+        INSERT INTO payment_ledger_entries_gap113 (${ledgerCopyColumns.join(', ')})
+        SELECT ${ledgerCopySelect.join(', ')} FROM payment_ledger_entries;
+      `);
       DROP TABLE payment_ledger_entries;
       ALTER TABLE payment_ledger_entries_gap113 RENAME TO payment_ledger_entries;
       CREATE INDEX IF NOT EXISTS idx_payment_ledger_payment ON payment_ledger_entries(payment_id, created_at);
