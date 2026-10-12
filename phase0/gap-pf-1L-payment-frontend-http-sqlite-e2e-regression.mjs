@@ -642,6 +642,84 @@ try {
   ).get(committedRecoveryKey).status, 'SUCCEEDED',
   'successful recovery persists the reconstructed command result');
 
+  // Exercise the same boundary across an actual backend process death. A
+  // completion trigger forces the HTTP request to fail after recovery has read
+  // the canonical committed decision; the parent then kills the backend before
+  // removing the trigger and starting a fresh process against the same SQLite DB.
+  const processCrashRecoveryKey = 'pf-http-process-crash-after-commit-' + randomUUID();
+  db.exec(`CREATE TRIGGER test_fail_process_crash_query_completion
+    BEFORE UPDATE ON payment_status_query_commands
+    WHEN NEW.idempotency_key = '${processCrashRecoveryKey}' AND NEW.status = 'SUCCEEDED'
+    BEGIN SELECT RAISE(ABORT, 'simulated process crash after canonical decision'); END;`);
+  const processCrashFirstResponse = await originalFetch(baseUrl + recoveryStatusPath, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + sessionA.token,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': processCrashRecoveryKey,
+    },
+    body: JSON.stringify({ query: { statusPath: '/recovery' } }),
+  });
+  assert.equal(processCrashFirstResponse.status, 500,
+    'completion persistence failure must fail the HTTP request after canonical outcome recovery');
+  assert.equal((await store.getPayment(tenantA.chatId, paymentRecoveryA.id)).state, 'VERIFIED');
+  assert.deepEqual(
+    (await store.listPaymentLedger(tenantA.chatId, paymentRecoveryA.id)).map(entry => entry.entryType),
+    ['CREATED', 'VERIFIED'],
+  );
+  child.kill('SIGKILL');
+  await new Promise(resolve => {
+    if (child.exitCode !== null) return resolve();
+    child.once('exit', resolve);
+  });
+  db.exec('DROP TRIGGER test_fail_process_crash_query_completion');
+
+  childOutput = '';
+  child = spawn(process.execPath, ['backend/server.js'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      PORT: String(port),
+      SELLIFY_DATA_DIR: tempDir,
+      SELLIFY_DB_PATH: dbPath,
+      NODE_ENV: 'test',
+      SERVE_STATIC: 'false',
+      SELLIFY_TELEBIRR_BASE_URL: providerBaseUrl,
+      SELLIFY_TELEBIRR_API_KEY: 'pf-http-test-provider-key',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  child.stdout.on('data', chunk => { childOutput += chunk.toString(); });
+  child.stderr.on('data', chunk => { childOutput += chunk.toString(); });
+  await waitForHealth(baseUrl, child);
+  const processCrashRetry = await originalFetch(baseUrl + recoveryStatusPath, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + sessionA.token,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': processCrashRecoveryKey,
+    },
+    body: JSON.stringify({ query: { statusPath: '/recovery' } }),
+  });
+  assert.equal(processCrashRetry.status, 200,
+    'restarted backend must reconstruct the result from canonical persisted state');
+  const processCrashRetryBody = await processCrashRetry.json();
+  assert.equal(processCrashRetryBody.status, 'MATCH');
+  assert.equal(processCrashRetryBody.payment?.state, 'VERIFIED');
+  assert.equal(providerCalls.recovery, 1,
+    'process-crash recovery must not repeat provider work');
+  assert.deepEqual(
+    (await store.listPaymentLedger(tenantA.chatId, paymentRecoveryA.id)).map(entry => entry.entryType),
+    ['CREATED', 'VERIFIED'],
+    'process-crash recovery must not duplicate financial ledger writes',
+  );
+  assert.equal((await store.listPaymentEvidence(tenantA.chatId, paymentRecoveryA.id)).length, 1);
+  assert.equal((await store.listPaymentVerifications(tenantA.chatId, paymentRecoveryA.id)).length, 1);
+  assert.equal((await store.listPaymentDecisions(tenantA.chatId, paymentRecoveryA.id)).length, 1);
+  assert.equal(db.prepare(
+    'SELECT status FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(processCrashRecoveryKey).status, 'SUCCEEDED');
+
   // Provider network errors are retryable only before evidence persistence.
   // A same-key retry should reclaim that known-safe failed attempt, then become
   // a durable successful command once the provider responds.
