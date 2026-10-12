@@ -18,7 +18,7 @@ assert.ok(commitStart >= 0 && commitEnd > commitStart);
 const commitSection = store.slice(commitStart, commitEnd);
 assert.ok(commitSection.indexOf('evidenceRow') < commitSection.indexOf('payment_verifications'));
 assert.ok(commitSection.includes('PAYMENT_VERIFICATION_NOT_PERSISTED'));
-assert.match(commitSection, /SELECT \* FROM payment_verifications WHERE id = \\? AND organization_id = \\?/);
+assert.ok(commitSection.includes('SELECT * FROM payment_verifications WHERE id = ? AND organization_id = ?'));
 assert.ok(!commitSection.includes('INSERT INTO payment_verifications'), 'financial decision must not create verification records');
 assert.ok(commitSection.includes('paymentVerificationFromRow(persistedVerificationRow)'), 'decision must use the canonical persisted verification');
 
