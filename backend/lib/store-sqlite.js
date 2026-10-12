@@ -6319,6 +6319,22 @@ export async function insertProviderNotificationEvidence(notification = {}) {
     providerTransactionId: providerTransactionId || '',
     externalReference: externalReference || '',
   });
+
+  // The awaited resolution creates a concurrency window after the initial
+  // preflight. Recheck the authenticated identity before any transaction-level
+  // duplicate return so a concurrent changed replay cannot bypass conflict
+  // classification by reusing a provider transaction ID.
+  if (authenticated.notificationId) {
+    const identityAfterResolution = db.prepare(
+      'SELECT * FROM payment_evidence WHERE organization_id = ? AND provider_id = ? AND payment_account_id = ? AND provider_notification_id = ?'
+    ).get(organizationId, providerId, accountRow.id, authenticated.notificationId);
+    if (identityAfterResolution) {
+      return classifyProviderNotificationIdentity(identityAfterResolution, {
+        ...evidenceInput, evidenceType, channel, externalReference, providerTransactionId,
+        authenticationReference, observedAt, normalizedPayload,
+      }, authenticated, notification);
+    }
+  }
   if (resolution.duplicateEvidence) {
     return { evidence: resolution.duplicateEvidence, duplicate: true };
   }
