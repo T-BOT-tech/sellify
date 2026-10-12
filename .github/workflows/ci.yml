@@ -71,6 +71,8 @@ jobs:
         run: npm run test:payment-lineage-append-only
       - name: GAP-1.18Q payment decision idempotency regression
         run: npm run gap-1.18:decision-idempotency-test
+      - name: GAP-1.18U financial transition idempotency regression
+        run: npm run gap-1.18:financial-transition-idempotency-test
 
       - name: Syntax check core entrypoints
         run: |
