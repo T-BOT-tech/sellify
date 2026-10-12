@@ -4,8 +4,8 @@ export const ADD_MENU_ACTIONS = Object.freeze([
   Object.freeze({ id: 'take-order', destination: 'order' }),
   Object.freeze({ id: 'add-product', destination: 'catalog' }),
   Object.freeze({ id: 'discover-marketplace', destination: 'marketplace' }),
-  Object.freeze({ id: 'configure-packs-and-channels', destination: 'settings' }),
-  Object.freeze({ id: 'business-setup', destination: 'settings' }),
+  Object.freeze({ id: 'configure-packs-and-channels', destination: 'settings', target: 'packReadinessPanel' }),
+  Object.freeze({ id: 'business-setup', destination: 'settings', target: 'setBusinessModel' }),
 ]);
 
 function getSheet() {
@@ -41,9 +41,22 @@ export function openAddProduct() {
   return true;
 }
 
-export function openAddSettings() {
+// Opens the existing Settings surface and takes the user to the relevant section.
+// This does not create a second settings, pack, or channel authority.
+export function openAddSettings(section = 'packs-and-channels') {
   closeAddSheet();
   const button = typeof document === 'undefined' ? null : document.getElementById('gearSettingsBtn');
-  if (button) button.click();
-  return !!button;
+  if (!button) return false;
+
+  const targetId = section === 'business-setup' ? 'setBusinessModel' : 'packReadinessPanel';
+  const target = document.getElementById(targetId);
+  button.click();
+
+  if (target && typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+    window.setTimeout(() => {
+      target.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+      if (section === 'business-setup') target.focus?.();
+    }, 80);
+  }
+  return true;
 }
