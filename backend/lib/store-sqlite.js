@@ -2502,10 +2502,21 @@ if (!applied.includes(39)) {
   }
 
   // GAP-1.23 — durable provider notification identity and authentication lineage.
+  // Additive DDL may be interrupted between statements. Inspect each column
+  // independently so a retry can finish a partially applied migration.
   if (!applied.includes(63)) {
+    const paymentEvidenceColumns = () => new Set(
+      db.prepare('PRAGMA table_info(payment_evidence)').all().map(column => String(column.name)),
+    );
+    let paymentEvidenceColumnNames = paymentEvidenceColumns();
+    if (!paymentEvidenceColumnNames.has('provider_notification_id')) {
+      db.exec('ALTER TABLE payment_evidence ADD COLUMN provider_notification_id TEXT');
+      paymentEvidenceColumnNames = paymentEvidenceColumns();
+    }
+    if (!paymentEvidenceColumnNames.has('authentication_reference')) {
+      db.exec('ALTER TABLE payment_evidence ADD COLUMN authentication_reference TEXT');
+    }
     db.exec(`
-      ALTER TABLE payment_evidence ADD COLUMN provider_notification_id TEXT;
-      ALTER TABLE payment_evidence ADD COLUMN authentication_reference TEXT;
       CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_evidence_notification
         ON payment_evidence(organization_id,provider_id,payment_account_id,provider_notification_id)
         WHERE provider_notification_id IS NOT NULL AND trim(provider_notification_id) <> '';
