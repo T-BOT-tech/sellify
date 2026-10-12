@@ -707,21 +707,28 @@ export class PaymentCore {
       };
     }
 
+    // Persist verification before the financial decision. commitPaymentDecision
+    // must consume this canonical record and must never manufacture verification.
+    const persistedVerificationResult = await this.store.insertPaymentVerification(chatId, {
+      paymentId,
+      paymentIntentId: intent.id,
+      evidenceId: evidence.id,
+      providerId: payment.providerId,
+      ...boundVerification,
+      result: verification.result === 'UNKNOWN' ? 'PENDING' : verification.result,
+      reasonCodes: decision.reasonCodes,
+      verifier: 'payment-core.provider-status',
+      verifierVersion: '1',
+    }, command.actor || null);
+    const persistedVerification = persistedVerificationResult.verification || persistedVerificationResult;
+
     const committed = await this.store.commitPaymentDecision(chatId, {
       paymentId,
       expectedState: payment.state,
       targetState: decision.targetState,
       idempotencyKey: String(command.idempotencyKey || command.idempotency_key || '').trim(),
       ...(command.statusQueryClaim ? { statusQueryClaim: command.statusQueryClaim } : {}),
-      verification: {
-        paymentIntentId: intent.id,
-        evidenceId: evidence.id,
-        providerId: payment.providerId,
-        ...boundVerification,
-        reasonCodes: decision.reasonCodes,
-        verifier: 'payment-core.provider-status',
-        verifierVersion: '1',
-      },
+      verification: persistedVerification,
       decision: {
         paymentIntentId: intent.id,
         evidenceId: evidence.id,
