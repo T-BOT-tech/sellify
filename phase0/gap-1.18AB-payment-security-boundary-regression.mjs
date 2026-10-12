@@ -11,6 +11,68 @@ test('GAP-1.18AB decisions are tenant-bound and Payment-Core sourced',()=>{asser
 import { PaymentCore } from '../backend/lib/payments/payment-core.js';
 import { authorize } from '../backend/lib/authorization.js';
 
+test('GAP-1.18AB cashier can create payment through internal automatic routing', async () => {
+  const actor = { userId: 'cashier-user', role: 'cashier', organizationId: 'org-test' };
+  let created;
+  const core = new PaymentCore({
+    authorization: authorize,
+    providerRegistry: {
+      getPaymentProvider(providerId) {
+        return providerId === 'provider-test'
+          ? { id: 'provider-test', name: 'Test Provider', capabilities: {} }
+          : null;
+      },
+    },
+    store: {
+      async listPaymentRoutingPolicies(_chatId, options) {
+        assert.equal(options.channel, 'web');
+        return [{
+          id: 'policy-test',
+          providerId: 'provider-test',
+          currencies: [],
+          requiredCapabilities: [],
+          priority: 1,
+        }];
+      },
+      async listPaymentAccounts() {
+        return [{ id: 'account-test', providerId: 'provider-test' }];
+      },
+      async createPaymentWithIntent(_chatId, command) {
+        created = command;
+        return { id: 'payment-test', providerId: command.providerId };
+      },
+    },
+  });
+
+  const result = await core.createPayment({
+    organizationId: 'org-test',
+    chatId: 'tenant-test',
+    actor,
+    channel: 'web',
+    currency: 'ETB',
+  });
+  assert.equal(result.id, 'payment-test');
+  assert.equal(created.providerId, 'provider-test');
+  assert.equal(created.paymentAccountId, 'account-test');
+});
+
+test('GAP-1.18AB cashier cannot invoke protected routing resolution directly', async () => {
+  const core = new PaymentCore({
+    authorization: authorize,
+    providerRegistry: { getPaymentProvider() { return null; } },
+    store: { async listPaymentRoutingPolicies() { throw new Error('must not reach store'); } },
+  });
+  await assert.rejects(
+    () => core.resolveRouting({
+      organizationId: 'org-test',
+      chatId: 'tenant-test',
+      actor: { userId: 'cashier-user', role: 'cashier', organizationId: 'org-test' },
+      channel: 'web',
+    }),
+    error => error.statusCode === 403 && error.code === 'UNAUTHORIZED_OPERATION',
+  );
+});
+
 test('GAP-1.18AB production Payment Core is wired to central authorization', () => {
   const start = server.indexOf('const paymentCore = new PaymentCore({');
   const end = server.indexOf('});', start);
