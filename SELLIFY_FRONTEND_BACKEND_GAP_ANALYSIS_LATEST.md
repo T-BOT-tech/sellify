@@ -7,7 +7,7 @@ Authority: current main commit and completed GitHub Actions results. This header
 
 ## Current authoritative baseline
 
-- Current main commit: `42d84f9291f41dd22d92e37a5a9d369a7940dd91`.
+- Payment Core integration commit: `42d84f9291f41dd22d92e37a5a9d369a7940dd91`; this reconciliation document is committed as `34043acbde2acf2a69fa3e515891e6f2c59399c3`.
 - Commerce candidate PR #40 and incremental Payment Core hardening PR #42 are merged to main.
 - Sellify CI run #1528 passed on the main-based payment hardening commit. Both CI jobs passed: Node 24 baseline and Logistics L18.
 - Repository Security Checks run #1514 passed on the main-based payment hardening commit.
