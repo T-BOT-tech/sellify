@@ -1,11 +1,26 @@
 # Sellify Frontend ↔ Backend Gap Analysis — Latest
 
-Status: CANDIDATE RECONCILIATION UPDATE — NOT YET MERGED
-Branch: ux/ecosystem-add-action-menu
-Date: 2026-10-11
-Authority: live repository source and observed CI on this branch. Main remains unchanged until this PR is reviewed and explicitly merged. Historical gap documents are reference only.
+Status: MAINLINE RECONCILIATION — PAYMENT CORE/PF-1 CI-CERTIFIED; OPERATIONAL GAP-1.24 GATE PENDING
+Branch: main
+Date: 2026-10-12
+Authority: current main commit and completed GitHub Actions results. This header supersedes historical candidate-era status statements retained below for traceability.
 
-Latest code candidate: `1afc0d4e6acc65f92eccfe52eea79a3e821bb988`. Sellify CI run `38271342844` and Repository Security Checks run `38271342740` both passed on 2026-10-12. This candidate adds the focused GAP-1.18U financial-transition idempotency regression and wires it into CI. PR #40 remains open, draft, and unmerged; this candidate evidence does not certify `main`. The current code candidate updates the isolated backup/restore fixture so its canonical payment state, Payment Core decision target, and append-only ledger transition consistently represent `UNPAID → VERIFIED`; the fixture still checks SQLite integrity before/after restore, application startup, migration 67, evidence/verification/decision lineage, and preservation of unresolved `IN_PROGRESS` / `PROVIDER_IN_FLIGHT` claim identity. CI for `592f3cf30c4db81b01d419cfc0f309a7b580c111` is pending verification. This improves fixture consistency but does not certify every valid financial transition or production recovery. PR #40 remains open, draft, and unmerged; candidate-branch evidence is not main-branch certification.
+## Current authoritative baseline
+
+- Current main commit: `42d84f9291f41dd22d92e37a5a9d369a7940dd91`.
+- Commerce candidate PR #40 and incremental Payment Core hardening PR #42 are merged to main.
+- Sellify CI run #1528 passed on the main-based payment hardening commit. Both CI jobs passed: Node 24 baseline and Logistics L18.
+- Repository Security Checks run #1514 passed on the main-based payment hardening commit.
+- The complete preceding candidate CI run #1526 also passed the GAP-1.18 recovery/audit/idempotency/security/invariant/production-readiness regressions, GAP-1.19 production/E2E/adversarial certification, PF-1 frontend contract/integration/projection and real HTTP + SQLite recovery E2E, PF-2 adversarial certification, baseline, and Logistics L18.
+- The mainline baseline run #1528 independently confirms the payment-related baseline and full configured GAP-1.18/GAP-1.19/PF-1/PF-2 test steps pass after integration. No additional code change is justified by the observed CI.
+- Migration 68 is the current schema ceiling. Migration 63 partial-DDL recovery, migration 68 ledger-to-decision lineage, backup/restore baseline, golden regression baseline, and logistics readiness baseline are aligned and CI-passing.
+- PR #41 was superseded and closed without merge; PR #42 reconstructed its ten-file incremental change against main and is merged. No open merge decision remains for these changes.
+
+### Remaining payment release gate
+
+GAP-1.24's code-level recovery tests are CI-certified, including claim fencing, retry/replay idempotency, crash boundaries, and preserving uncertain `PROVIDER_IN_FLIGHT` outcomes. **Operational certification is still pending** because repository CI cannot prove an actual deployment's backup/restore rehearsal, drain-and-switch procedure, rollback rehearsal, or operator handling of unresolved provider outcomes. Do not call those operational activities completed without recorded environment evidence.
+
+The historical detail below is retained as an audit trail; statements that PR #40 is unmerged, main is unchanged, or migration 67 is the current schema ceiling are superseded by this reconciliation.
 
 ## 1. Purpose
 
