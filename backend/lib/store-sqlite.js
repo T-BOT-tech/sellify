@@ -2800,6 +2800,8 @@ if (!applied.includes(39)) {
   // required lifecycle states.
   if (!applied.includes(48)) {
     db.exec('PRAGMA foreign_keys = OFF');
+    const hasLedgerDecisionId = db.prepare('PRAGMA table_info(payment_ledger_entries)').all()
+      .some(column => String(column.name) === 'decision_id');
     db.exec(`
       CREATE TABLE payments_gap113 (
         id TEXT PRIMARY KEY,
@@ -2859,11 +2861,11 @@ if (!applied.includes(39)) {
       );
       INSERT INTO payment_ledger_entries_gap113 (
         id, payment_id, organization_id, entry_type, amount_minor, currency,
-        from_state, to_state, actor_id, reason, metadata_json, created_at, decision_id
+        from_state, to_state, actor_id, reason, metadata_json, created_at${hasLedgerDecisionId ? ', decision_id' : ''}
       )
       SELECT
         id, payment_id, organization_id, entry_type, amount_minor, currency,
-        from_state, to_state, actor_id, reason, metadata_json, created_at, decision_id
+        from_state, to_state, actor_id, reason, metadata_json, created_at${hasLedgerDecisionId ? ', decision_id' : ', NULL'}
       FROM payment_ledger_entries;
       DROP TABLE payment_ledger_entries;
       ALTER TABLE payment_ledger_entries_gap113 RENAME TO payment_ledger_entries;
