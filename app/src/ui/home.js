@@ -5,6 +5,7 @@ import { CS } from '../config/currency.js';
 import { formatMoney } from '../utils/money.js';
 import { escapeHtml } from '../utils/index.js';
 import { t } from './i18n.js';
+import { getLowStockProducts, getOutOfStockProducts } from '../warehouse/inventory.js';
 
 function todayOrders() {
   const start = new Date();
@@ -18,11 +19,8 @@ export function renderSellerHome() {
   const todays = todayOrders();
   const sales = todays.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
   const queued = todays.filter(o => o.status !== 'synced').length;
-  const lowStock = products.filter(p => {
-    const n = Number(p.stock);
-    return Number.isFinite(n) && n >= 0 && n <= 5;
-  }).length;
-  const outOfStock = products.filter(p => Number(p.stock) === 0).length;
+  const lowStock = getLowStockProducts().length;
+  const outOfStock = getOutOfStockProducts().length;
   const business = escapeHtml(config.sellerName || t('setupBusiness'));
 
   el.innerHTML = `
@@ -48,7 +46,7 @@ export function renderSellerHome() {
         <span class="home-metric-label">Products</span>
         <strong>${products.length}</strong>
       </button>
-      <button class="home-metric ${lowStock ? 'attention' : ''}" onclick="switchTab('catalog')">
+      <button class="home-metric ${lowStock ? 'attention' : ''}" onclick="openLowStockInventory()">
         <span class="home-metric-label">Low stock</span>
         <strong>${lowStock}</strong>
       </button>
