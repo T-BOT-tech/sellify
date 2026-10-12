@@ -76,12 +76,28 @@ try {
   );
 
   // A provider-supplied fingerprint must not bypass the same identity check.
-  const providerFingerprint = evidence({ fingerprint: 'provider-fingerprint-1' });
+  const providerFingerprint = evidence({
+    fingerprint: 'provider-fingerprint-1',
+    providerTransactionId: 'TX-101',
+    normalizedPayload: {
+      externalReference: 'ORDER-100',
+      providerTransactionId: 'TX-101',
+      result: 'received',
+    },
+  });
   const providerFirst = await ingest('notif-provider-fingerprint', providerFingerprint);
   assert.equal(providerFirst.duplicate, false);
   const providerReplay = await ingest(
     'notif-provider-fingerprint',
-    evidence({ fingerprint: 'provider-fingerprint-1' }),
+    evidence({
+      fingerprint: 'provider-fingerprint-1',
+      providerTransactionId: 'TX-101',
+      normalizedPayload: {
+        externalReference: 'ORDER-100',
+        providerTransactionId: 'TX-101',
+        result: 'received',
+      },
+    }),
     '2026-10-12T00:10:00.000Z',
     { delivery: 3 },
   );
@@ -92,9 +108,10 @@ try {
     ingest('notif-provider-fingerprint', evidence({
       fingerprint: 'provider-fingerprint-1',
       externalReference: 'ORDER-CHANGED',
+      providerTransactionId: 'TX-101',
       normalizedPayload: {
         externalReference: 'ORDER-CHANGED',
-        providerTransactionId: 'TX-100',
+        providerTransactionId: 'TX-101',
         result: 'received',
       },
     })),
