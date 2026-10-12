@@ -30,7 +30,7 @@ export function renderSellerHome() {
       <div>
         <div class="seller-home-kicker">SELLIFY</div>
         <h2>${business}</h2>
-        <p>${navigator.onLine ? 'Ready to sell' : 'Working offline'}</p>
+        <p>${products.length > 0 ? t('catalogReady') : t('firstSaleAddProduct')}</p>
       </div>
       <div class="seller-home-status ${navigator.onLine ? 'online' : 'offline'}">${navigator.onLine ? 'Online' : 'Offline'}</div>
     </div>
