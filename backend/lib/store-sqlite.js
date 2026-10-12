@@ -119,6 +119,53 @@ function normaliseProduct(product) {
   return value;
 }
 
+function queuedOrderIdentityHash(order, expectedCurrency, storedOrder = false) {
+  const normalized = validateAndTotalOrderItems(order?.items, expectedCurrency).items
+    .map(item => ({
+      itemId: String(item.item_id ?? item.product_id ?? item.id ?? ''),
+      name: String(item.name ?? item.title ?? ''),
+      price: Math.round(Number(item.price)),
+      qty: Math.floor(Number(item.qty)),
+      category: String(item.category ?? ''),
+    }))
+    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  // The backend may attach a canonical customer_id when it resolves a
+  // name/phone-only order. Preserve whether the incoming command explicitly
+  // bound a customer so an unchanged retry hashes identically, while an
+  // explicitly changed customer association still conflicts.
+  const hasExplicitCustomerId = storedOrder && typeof order?._sellifyCustomerIdProvided === 'boolean'
+    ? order._sellifyCustomerIdProvided
+    : Boolean(order?.customer_id ?? order?.customerId ?? order?.customer?.id);
+  const identity = {
+    currency: normaliseCurrency(order?.currency, expectedCurrency),
+    items: normalized,
+    customerName: String(order?.customer_name ?? order?.customer?.name ?? ''),
+    customerPhone: String(order?.customer_phone ?? order?.customer?.phone ?? ''),
+    customerId: hasExplicitCustomerId ? String(order?.customer_id ?? order?.customerId ?? order?.customer?.id ?? '') : '',
+    // A retry is idempotent only when the business-relevant order payload is
+    // unchanged. These fields are retained in order_json and can affect
+    // fulfillment/instructions even when the line-item total is identical.
+    notes: String(order?.notes ?? order?.order_notes ?? ''),
+    locationId: String(order?.location_id ?? order?.locationId ?? ''),
+    deliveryLocationId: String(order?.delivery_location_id ?? order?.deliveryLocationId ?? ''),
+    orderType: String(order?.order_type ?? order?.orderType ?? ''),
+    fulfillmentType: String(order?.fulfillment_type ?? order?.fulfillmentType ?? ''),
+    deliveryMethod: String(order?.delivery_method ?? order?.deliveryMethod ?? ''),
+    paymentMethodId: String(order?.payment_method_id ?? order?.paymentMethodId ?? ''),
+    paymentMethodName: String(order?.payment_method_name ?? order?.paymentMethodName ?? ''),
+    discount: String(order?.discount ?? ''),
+    discountMinor: String(order?.discount_minor ?? order?.discountMinor ?? ''),
+    tax: String(order?.tax ?? ''),
+    taxMinor: String(order?.tax_minor ?? order?.taxMinor ?? ''),
+    deliveryFee: String(order?.delivery_fee ?? order?.deliveryFee ?? ''),
+    deliveryFeeMinor: String(order?.delivery_fee_minor ?? order?.deliveryFeeMinor ?? ''),
+    requiredBy: String(order?.required_by ?? order?.requiredBy ?? ''),
+    isMarketplace: Boolean(order?.is_marketplace),
+    marketplaceOrderId: String(order?.marketplace_order_id ?? ''),
+  };
+  return crypto.createHash('sha256').update(JSON.stringify(identity)).digest('hex');
+}
+
 function validateAndTotalOrderItems(rawItems, expectedCurrency = null) {
   const items = [];
   for (const raw of Array.isArray(rawItems) ? rawItems : []) {
@@ -2000,61 +2047,7 @@ function runMigrations() {
   // channel configuration and a reference to an external secret, never a raw
   // Telegram bot token. Commerce, inventory, payment, fulfillment and events
   // remain authoritative in their existing domains.
-    // GAP-1.21 — bind payment evidence to canonical PaymentAccount.
-  if (!applied.includes(61)) {
-    const evidenceColumns = db.prepare('PRAGMA table_info(payment_evidence)').all();
-    if (!evidenceColumns.some(column => String(column.name) === 'payment_account_id')) {
-      db.exec('ALTER TABLE payment_evidence ADD COLUMN payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL');
-    }
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(61, nowIso());
-  }
-
-
-  // GAP-1.22 — durable provider confirmation attempts.
-  if (!applied.includes(62)) {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS payment_confirmation_attempts (
-        id TEXT PRIMARY KEY,
-        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-        payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
-        payment_intent_id TEXT NOT NULL REFERENCES payment_intents(id) ON DELETE CASCADE,
-        evidence_id TEXT NOT NULL REFERENCES payment_evidence(id) ON DELETE CASCADE,
-        payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL,
-        provider_id TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED','PENDING','CONFIRMED','NOT_FOUND','FAILED','EXPIRED','UNKNOWN')),
-        attempt_number INTEGER NOT NULL DEFAULT 1 CHECK (attempt_number > 0),
-        provider_transaction_id TEXT,
-        reason_codes_json TEXT NOT NULL DEFAULT '[]',
-        observation_json TEXT NOT NULL DEFAULT '{}',
-        requested_at TEXT NOT NULL,
-        observed_at TEXT,
-        expires_at TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        UNIQUE(payment_intent_id, evidence_id, attempt_number)
-      );
-      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_org_status ON payment_confirmation_attempts(organization_id,status,updated_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_evidence ON payment_confirmation_attempts(evidence_id,created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_intent ON payment_confirmation_attempts(payment_intent_id,created_at DESC);
-      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_confirmation_attempts_provider_tx ON payment_confirmation_attempts(organization_id,provider_id,payment_account_id,provider_transaction_id) WHERE provider_transaction_id IS NOT NULL AND trim(provider_transaction_id) <> '';
-    `);
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(62, nowIso());
-  }
-
-
-  // GAP-1.23 — durable provider notification identity and authentication lineage.
-  if (!applied.includes(63)) {
-    db.exec(`
-      ALTER TABLE payment_evidence ADD COLUMN provider_notification_id TEXT;
-      ALTER TABLE payment_evidence ADD COLUMN authentication_reference TEXT;
-      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_evidence_notification
-        ON payment_evidence(organization_id,provider_id,payment_account_id,provider_notification_id)
-        WHERE provider_notification_id IS NOT NULL AND trim(provider_notification_id) <> '';
-      CREATE INDEX IF NOT EXISTS idx_payment_evidence_auth_reference
-        ON payment_evidence(organization_id,provider_id,payment_account_id,authentication_reference);
-    `);
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(63, nowIso());
-  }
+  // Payment migrations 61–63 are applied after migration 45 creates payment_evidence.
 
   if (!applied.includes(60)) {
     db.exec(`
@@ -2359,6 +2352,170 @@ if (!applied.includes(39)) {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(45, nowIso());
   }
 
+    // GAP-1.21 — bind payment evidence to canonical PaymentAccount.
+  if (!applied.includes(61)) {
+    const evidenceColumns = db.prepare('PRAGMA table_info(payment_evidence)').all();
+    if (!evidenceColumns.some(column => String(column.name) === 'payment_account_id')) {
+      db.exec('ALTER TABLE payment_evidence ADD COLUMN payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL');
+    }
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(61, nowIso());
+  }
+
+
+  // GAP-1.22 — durable provider confirmation attempts.
+  if (!applied.includes(62)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS payment_confirmation_attempts (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
+        payment_intent_id TEXT NOT NULL REFERENCES payment_intents(id) ON DELETE CASCADE,
+        evidence_id TEXT NOT NULL REFERENCES payment_evidence(id) ON DELETE CASCADE,
+        payment_account_id TEXT REFERENCES payment_accounts(id) ON DELETE SET NULL,
+        provider_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED','PENDING','CONFIRMED','NOT_FOUND','FAILED','EXPIRED','UNKNOWN')),
+        attempt_number INTEGER NOT NULL DEFAULT 1 CHECK (attempt_number > 0),
+        provider_transaction_id TEXT,
+        reason_codes_json TEXT NOT NULL DEFAULT '[]',
+        observation_json TEXT NOT NULL DEFAULT '{}',
+        requested_at TEXT NOT NULL,
+        observed_at TEXT,
+        expires_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(payment_intent_id, evidence_id, attempt_number)
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_org_status ON payment_confirmation_attempts(organization_id,status,updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_evidence ON payment_confirmation_attempts(evidence_id,created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_confirmation_attempts_intent ON payment_confirmation_attempts(payment_intent_id,created_at DESC);
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_confirmation_attempts_provider_tx ON payment_confirmation_attempts(organization_id,provider_id,payment_account_id,provider_transaction_id) WHERE provider_transaction_id IS NOT NULL AND trim(provider_transaction_id) <> '';
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(62, nowIso());
+  }
+
+
+  // GAP-1.24 — durable Payment Core provider-status command idempotency.
+  if (!applied.includes(64)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS payment_status_query_commands (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        payment_id TEXT NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+        idempotency_key TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('IN_PROGRESS','SUCCEEDED','FAILED')),
+        response_json TEXT,
+        error_json TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(organization_id, idempotency_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_status_query_commands_payment
+        ON payment_status_query_commands(organization_id, payment_id, created_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(64, nowIso());
+  }
+  // GAP-1.24A — prevent in-place mutation of canonical payment evidence,
+  // verification, and decision records. Corrections must be represented as new
+  // records so previously committed financial lineage remains auditable.
+  if (!applied.includes(65)) {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS payment_evidence_no_update
+      BEFORE UPDATE ON payment_evidence
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_evidence is append-only');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS payment_verifications_no_update
+      BEFORE UPDATE ON payment_verifications
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_verifications are append-only');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS payment_decisions_no_update
+      BEFORE UPDATE ON payment_decisions
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_decisions are append-only');
+      END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(65, nowIso());
+  }
+
+  // GAP-1.24B — preserve payment lineage against direct deletes and FK cascades.
+  // There is no supported hard-delete lifecycle for payment history. Corrections
+  // are represented by new records; any future retention/purge workflow must be
+  // explicitly designed rather than relying on ON DELETE CASCADE.
+  if (!applied.includes(66)) {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS payment_evidence_no_delete
+      BEFORE DELETE ON payment_evidence
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_evidence is append-only');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS payment_verifications_no_delete
+      BEFORE DELETE ON payment_verifications
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_verifications are append-only');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS payment_decisions_no_delete
+      BEFORE DELETE ON payment_decisions
+      BEGIN
+        SELECT RAISE(ABORT, 'payment_decisions are append-only');
+      END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(66, nowIso());
+  }
+
+  // GAP-1.24: fence status-query workers and permit takeover only before
+  // provider I/O has been authorized. Legacy IN_PROGRESS commands are treated
+  // as provider-in-flight because their execution phase cannot be proven.
+  if (!applied.includes(67)) {
+    // Inspect columns individually so a process interruption during additive
+    // DDL can be repaired on restart without a duplicate-column failure.
+    const statusQueryColumns = new Set(
+      db.prepare('PRAGMA table_info(payment_status_query_commands)').all().map(column => String(column.name))
+    );
+    if (!statusQueryColumns.has('claim_generation')) {
+      db.exec('ALTER TABLE payment_status_query_commands ADD COLUMN claim_generation INTEGER NOT NULL DEFAULT 0');
+    }
+    if (!statusQueryColumns.has('claim_token')) {
+      db.exec('ALTER TABLE payment_status_query_commands ADD COLUMN claim_token TEXT');
+    }
+    if (!statusQueryColumns.has('phase')) {
+      db.exec("ALTER TABLE payment_status_query_commands ADD COLUMN phase TEXT NOT NULL DEFAULT 'LEGACY'");
+    }
+    if (!statusQueryColumns.has('lease_expires_at')) {
+      db.exec('ALTER TABLE payment_status_query_commands ADD COLUMN lease_expires_at TEXT');
+    }
+    db.exec(`
+      UPDATE payment_status_query_commands
+      SET claim_generation = CASE WHEN claim_generation < 1 THEN 1 ELSE claim_generation END,
+          claim_token = COALESCE(claim_token, 'legacy:' || id),
+          phase = CASE WHEN phase = 'LEGACY'
+            THEN CASE WHEN status = 'IN_PROGRESS' THEN 'PROVIDER_IN_FLIGHT' ELSE 'COMPLETE' END
+            ELSE phase END,
+          lease_expires_at = CASE WHEN phase = 'LEGACY' THEN NULL ELSE lease_expires_at END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(67, nowIso());
+  }
+
+  // GAP-1.23 — durable provider notification identity and authentication lineage.
+  if (!applied.includes(63)) {
+    db.exec(`
+      ALTER TABLE payment_evidence ADD COLUMN provider_notification_id TEXT;
+      ALTER TABLE payment_evidence ADD COLUMN authentication_reference TEXT;
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_evidence_notification
+        ON payment_evidence(organization_id,provider_id,payment_account_id,provider_notification_id)
+        WHERE provider_notification_id IS NOT NULL AND trim(provider_notification_id) <> '';
+      CREATE INDEX IF NOT EXISTS idx_payment_evidence_auth_reference
+        ON payment_evidence(organization_id,provider_id,payment_account_id,authentication_reference);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(63, nowIso());
+  }
+
+
   // GAP-1.2 — link existing canonical payments to payment intents.
   if (!applied.includes(46)) {
     const columns = db.prepare('PRAGMA table_info(payments)').all();
@@ -2484,16 +2641,17 @@ if (!applied.includes(39)) {
         ON payment_provider_capability_certifications(organization_id, provider_id, capability, certification_scope, updated_at DESC);
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(53, nowIso());
+  }
 
   // GAP-1.18I — provider verification persistence idempotency.
+  // Keep this migration independent: installations that already recorded 53
+  // may still need to apply 54 after an interrupted or older deployment.
   if (!applied.includes(54)) {
     db.exec(`
       CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_verifications_evidence_verifier
         ON payment_verifications(evidence_id, verifier, verifier_version);
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(54, nowIso());
-  }
-
   }
 
   // GAP-1.18N — verification provenance hardening.
@@ -5284,7 +5442,9 @@ function productFromRow(row) {
 }
 
 function orderFromRow(row) {
-  return parseJSON(row.order_json, {});
+  const order = parseJSON(row.order_json, {});
+  if (order && typeof order === 'object') delete order._sellifyCustomerIdProvided;
+  return order;
 }
 
 function insertProduct(chatId, product) {
@@ -5520,9 +5680,9 @@ export async function getCustomer(chatId, customerId) {
   return customerFromRow(db.prepare('SELECT * FROM customers WHERE id = ? AND organization_id = ?').get(String(customerId), tenant.organizationId));
 }
 
-export async function upsertCustomer(chatId, input = {}) {
+function upsertCustomerSync(chatId, input = {}) {
   ensureDatabase();
-  const tenant = await getTenant(chatId);
+  const tenant = getTenantByChatId(chatId);
   if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
   const value = normalizeCustomerInput(input);
   if (!value.name && !value.phone) throw Object.assign(new Error('Customer name or phone is required'), { statusCode: 400 });
@@ -5549,6 +5709,12 @@ export async function upsertCustomer(chatId, input = {}) {
     organizationId: tenant.organizationId,
   });
   return customerFromRow(db.prepare('SELECT * FROM customers WHERE id = ?').get(id));
+}
+
+// Preserve the existing async API for callers while exposing a synchronous
+// internal path for callers that must not yield inside a SQLite transaction.
+export async function upsertCustomer(chatId, input = {}) {
+  return upsertCustomerSync(chatId, input);
 }
 
 export async function updateCustomer(chatId, customerId, patch = {}) {
@@ -6498,6 +6664,171 @@ export async function insertPaymentIdempotency(chatId, input = {}) {
   );
   return getPaymentIdempotency(chatId, input.idempotencyKey || input.idempotency_key, input.commandType || input.command_type);
 }
+export async function beginPaymentStatusQuery(chatId, input = {}) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const paymentId = String(input.paymentId || input.payment_id || '').trim();
+  const idempotencyKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  const requestHash = String(input.requestHash || input.request_hash || '').trim();
+  if (!paymentId || !idempotencyKey || !requestHash) {
+    throw Object.assign(new Error('paymentId, idempotencyKey and requestHash are required'), {
+      statusCode: 400, code: 'PAYMENT_STATUS_QUERY_CONTEXT_REQUIRED',
+    });
+  }
+  const now = nowIso();
+  const claimToken = crypto.randomUUID();
+  const leaseExpiresAt = new Date(Date.now() + 60_000).toISOString();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const existing = db.prepare('SELECT * FROM payment_status_query_commands WHERE organization_id = ? AND idempotency_key = ?')
+      .get(organizationId, idempotencyKey);
+    if (existing) {
+      if (String(existing.payment_id) !== paymentId || String(existing.request_hash) !== requestHash) {
+        throw Object.assign(new Error('Idempotency key was already used with a different status-query request'), {
+          statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE',
+        });
+      }
+
+      // Only a CLAIMED command can be taken over after its lease expires.
+      // Provider-in-flight legacy/current commands remain unresolved because
+      // elapsed time cannot prove that an external call did not happen.
+      const phase = String(existing.phase || 'LEGACY');
+      const expiredUnstartedClaim = String(existing.status) === 'IN_PROGRESS' &&
+        phase === 'CLAIMED' && existing.lease_expires_at &&
+        String(existing.lease_expires_at) <= now;
+      if (expiredUnstartedClaim) {
+        const generation = Number(existing.claim_generation || 0) + 1;
+        const reclaimed = db.prepare(`UPDATE payment_status_query_commands
+          SET claim_generation = ?, claim_token = ?, lease_expires_at = ?, updated_at = ?
+          WHERE organization_id = ? AND idempotency_key = ? AND request_hash = ?
+            AND status = 'IN_PROGRESS' AND phase = 'CLAIMED'
+            AND claim_generation = ? AND lease_expires_at <= ?`)
+          .run(generation, claimToken, leaseExpiresAt, now, organizationId, idempotencyKey, requestHash,
+            Number(existing.claim_generation || 0), now);
+        if (reclaimed.changes === 1) {
+          db.exec('COMMIT');
+          return { duplicate: false, status: 'IN_PROGRESS', result: null, error: null,
+            claimToken, claimGeneration: generation, phase: 'CLAIMED', recovered: true };
+        }
+      }
+
+      let previousError = null;
+      try { previousError = existing.error_json ? JSON.parse(existing.error_json) : null; } catch {}
+      const retryableProviderFailure = String(existing.status) === 'FAILED' &&
+        previousError?.retryable === true &&
+        ['PAYMENT_PROVIDER_NETWORK_ERROR', 'PAYMENT_PROVIDER_PROBE_TIMEOUT'].includes(String(previousError.code || ''));
+      if (retryableProviderFailure) {
+        const generation = Number(existing.claim_generation || 0) + 1;
+        const reclaimed = db.prepare(`UPDATE payment_status_query_commands
+          SET status = 'IN_PROGRESS', response_json = NULL, error_json = NULL,
+              claim_generation = ?, claim_token = ?, phase = 'CLAIMED',
+              lease_expires_at = ?, updated_at = ?
+          WHERE organization_id = ? AND idempotency_key = ? AND request_hash = ?
+            AND status = 'FAILED' AND claim_generation = ?`)
+          .run(generation, claimToken, leaseExpiresAt, now, organizationId, idempotencyKey,
+            requestHash, Number(existing.claim_generation || 0));
+        if (reclaimed.changes === 1) {
+          db.exec('COMMIT');
+          return { duplicate: false, status: 'IN_PROGRESS', result: null, error: null,
+            retry: true, claimToken, claimGeneration: generation, phase: 'CLAIMED' };
+        }
+      }
+
+      db.exec('COMMIT');
+      return {
+        duplicate: true,
+        status: existing.status,
+        result: existing.response_json ? JSON.parse(existing.response_json) : null,
+        error: existing.error_json ? JSON.parse(existing.error_json) : null,
+        phase,
+        claimGeneration: Number(existing.claim_generation || 0),
+      };
+    }
+    const payment = db.prepare('SELECT id FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
+    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    db.prepare(`INSERT INTO payment_status_query_commands
+      (id, organization_id, payment_id, idempotency_key, request_hash, status,
+       claim_generation, claim_token, phase, lease_expires_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'IN_PROGRESS', 1, ?, 'CLAIMED', ?, ?, ?)`).run(
+        crypto.randomUUID(), organizationId, paymentId, idempotencyKey, requestHash,
+        claimToken, leaseExpiresAt, now, now);
+    db.exec('COMMIT');
+    return { duplicate: false, status: 'IN_PROGRESS', result: null, error: null,
+      claimToken, claimGeneration: 1, phase: 'CLAIMED' };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
+export async function markPaymentStatusQueryProviderStarted(chatId, input = {}) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const idempotencyKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  const requestHash = String(input.requestHash || input.request_hash || '').trim();
+  const claimToken = String(input.claimToken || input.claim_token || '').trim();
+  const claimGeneration = Number(input.claimGeneration ?? input.claim_generation);
+  if (!idempotencyKey || !requestHash || !claimToken || !Number.isInteger(claimGeneration) || claimGeneration < 1) {
+    throw Object.assign(new Error('Status-query claim ownership is required before provider work'), {
+      statusCode: 400, code: 'PAYMENT_STATUS_QUERY_CLAIM_REQUIRED',
+    });
+  }
+  const now = nowIso();
+  const updated = db.prepare(`UPDATE payment_status_query_commands
+    SET phase = 'PROVIDER_IN_FLIGHT', lease_expires_at = NULL, updated_at = ?
+    WHERE organization_id = ? AND idempotency_key = ? AND request_hash = ?
+      AND status = 'IN_PROGRESS' AND phase = 'CLAIMED'
+      AND claim_generation = ? AND claim_token = ?`)
+    .run(now, organizationId, idempotencyKey, requestHash, claimGeneration, claimToken);
+  if (updated.changes !== 1) {
+    throw Object.assign(new Error('Status-query claim was superseded before provider work began'), {
+      statusCode: 409, code: 'PAYMENT_STATUS_QUERY_CLAIM_FENCED',
+    });
+  }
+  return { phase: 'PROVIDER_IN_FLIGHT', claimGeneration };
+}
+
+export async function completePaymentStatusQuery(chatId, input = {}) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const idempotencyKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  const requestHash = String(input.requestHash || input.request_hash || '').trim();
+  const status = String(input.status || '').trim().toUpperCase();
+  const claimToken = String(input.claimToken || input.claim_token || '').trim();
+  if (!idempotencyKey || !requestHash || !['SUCCEEDED', 'FAILED'].includes(status)) {
+    throw Object.assign(new Error('idempotencyKey, requestHash and terminal status are required'), {
+      statusCode: 400, code: 'PAYMENT_STATUS_QUERY_COMPLETION_REQUIRED',
+    });
+  }
+  const now = nowIso();
+  const resultJson = input.result == null ? null : json(input.result);
+  const errorJson = input.error == null ? null : json(input.error);
+  const hasClaim = Boolean(claimToken);
+  const updated = hasClaim
+    ? db.prepare(`UPDATE payment_status_query_commands
+        SET status = ?, response_json = ?, error_json = ?, phase = 'COMPLETE',
+            lease_expires_at = NULL, updated_at = ?
+        WHERE organization_id = ? AND idempotency_key = ? AND request_hash = ?
+          AND status = 'IN_PROGRESS' AND claim_token = ?`)
+        .run(status, resultJson, errorJson, now, organizationId, idempotencyKey, requestHash, claimToken)
+    : db.prepare(`UPDATE payment_status_query_commands
+        SET status = ?, response_json = ?, error_json = ?, phase = 'COMPLETE',
+            lease_expires_at = NULL, updated_at = ?
+        WHERE organization_id = ? AND idempotency_key = ? AND request_hash = ? AND status = 'IN_PROGRESS'`)
+        .run(status, resultJson, errorJson, now, organizationId, idempotencyKey, requestHash);
+  if (updated.changes === 0) {
+    const existing = db.prepare('SELECT status, request_hash, claim_token FROM payment_status_query_commands WHERE organization_id = ? AND idempotency_key = ?')
+      .get(organizationId, idempotencyKey);
+    if (!existing || String(existing.request_hash) !== requestHash ||
+        String(existing.status) !== status || (hasClaim && String(existing.claim_token || '') !== claimToken)) {
+      throw Object.assign(new Error('Status-query command could not be completed from its current state or claim'), {
+        statusCode: 409, code: 'PAYMENT_STATUS_QUERY_STATE_CONFLICT',
+      });
+    }
+  }
+  return { status, idempotent: updated.changes === 0 };
+}
+
 export async function commitPaymentDecision(chatId, input = {}, actor = null) {
   ensureDatabase();
   const { organizationId } = await resolvePaymentContext(chatId);
@@ -6525,12 +6856,54 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
         return replay.payment || replay;
       }
     }
+    // GAP-1.24: a status-query worker must still own the durable command
+    // at the canonical financial commit boundary. This check runs inside the
+    // same BEGIN IMMEDIATE transaction as the payment/ledger/decision writes.
+    if (input.statusQueryClaim) {
+      const claim = input.statusQueryClaim;
+      const commandKey = String(claim.idempotencyKey || claim.idempotency_key || '').trim();
+      const commandHash = String(claim.requestHash || claim.request_hash || '').trim();
+      const claimToken = String(claim.claimToken || claim.claim_token || '').trim();
+      const claimGeneration = Number(claim.claimGeneration ?? claim.claim_generation);
+      const currentClaim = db.prepare(`SELECT payment_id, request_hash, status, phase, claim_generation, claim_token
+        FROM payment_status_query_commands
+        WHERE organization_id = ? AND idempotency_key = ?`).get(organizationId, commandKey);
+      if (!currentClaim || String(currentClaim.payment_id) !== paymentId ||
+          String(currentClaim.request_hash) !== commandHash ||
+          String(currentClaim.status) !== 'IN_PROGRESS' ||
+          String(currentClaim.phase) !== 'PROVIDER_IN_FLIGHT' ||
+          Number(currentClaim.claim_generation) !== claimGeneration ||
+          String(currentClaim.claim_token || '') !== claimToken || !claimToken) {
+        throw Object.assign(new Error('Status-query claim was superseded before financial decision commit'), {
+          statusCode: 409, code: 'PAYMENT_STATUS_QUERY_CLAIM_FENCED',
+        });
+      }
+    }
     const row = db.prepare('SELECT * FROM payments WHERE id = ? AND organization_id = ?').get(paymentId, organizationId);
     if (!row) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
     if (expectedState && row.state !== expectedState) throw Object.assign(new Error('Payment state changed before decision could commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
     if (row.state !== target && !PAYMENT_TRANSITIONS[row.state]?.has(target)) throw Object.assign(new Error('Invalid payment transition'), { statusCode: 409, code: 'INVALID_PAYMENT_TRANSITION' });
+    let persistedDecisionVerification = null;
     if (input.verification) {
-      const v = input.verification;
+      const submittedVerification = input.verification;
+      const submittedVerificationId = String(submittedVerification.id || '').trim();
+      if (!submittedVerificationId) {
+        throw Object.assign(new Error('Financial decisions require a previously persisted verification ID'), {
+          statusCode: 409, code: 'PAYMENT_VERIFICATION_NOT_PERSISTED',
+        });
+      }
+      const persistedVerificationRow = db.prepare(
+        'SELECT * FROM payment_verifications WHERE id = ? AND organization_id = ?'
+      ).get(submittedVerificationId, organizationId);
+      if (!persistedVerificationRow ||
+          String(persistedVerificationRow.evidence_id || '') !== String(submittedVerification.evidenceId || submittedVerification.evidence_id || '') ||
+          String(persistedVerificationRow.payment_id || '') !== paymentId) {
+        throw Object.assign(new Error('Decision requires a persisted verification bound to this payment and evidence'), {
+          statusCode: 409, code: 'PAYMENT_VERIFICATION_NOT_PERSISTED',
+        });
+      }
+      const v = paymentVerificationFromRow(persistedVerificationRow);
+      persistedDecisionVerification = v;
       const verificationPaymentIntentId = String(v.paymentIntentId || v.payment_intent_id || row.payment_intent_id || '').trim() || null;
       const verificationEvidenceId = String(v.evidenceId || v.evidence_id || '').trim() || null;
       const verificationProviderId = String(v.providerId || v.provider_id || row.provider_id || '').trim().toLowerCase();
@@ -6634,20 +7007,14 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
           statusCode: 409, code: 'INVALID_VERIFIER_VERSION',
         });
       }
-      const provenanceSource = 'PAYMENT_CORE';
-      const provenanceOperation = verifier === 'payment-core.provider-status'
-        ? 'provider-status'
-        : verifier.replace(/^payment-core\./, '') || 'unknown';
-      const existingVerification = db.prepare('SELECT id FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND verifier_version = ?').get(verificationEvidenceId, verifier, verifierVersion);
-      if (!existingVerification) db.prepare("INSERT INTO payment_verifications (id, organization_id, payment_id, payment_intent_id, evidence_id, provider_id, result, confidence, observed_amount_minor, observed_currency, observed_receiver, observed_receiver_account, observed_reference, observed_transaction_id, observed_at, reason_codes_json, raw_result_json, verifier, verifier_version, provenance_source, provenance_operation, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-        verificationId, organizationId, paymentId, verificationPaymentIntentId, verificationEvidenceId,
-        verificationProviderId, String(v.result || '').toUpperCase(), v.confidence == null ? null : Number(v.confidence),
-        v.observedAmountMinor ?? v.observed_amount_minor ?? null, v.observedCurrency || v.observed_currency || null,
-        v.observedReceiver || v.observed_receiver || null, v.observedReceiverAccount || v.observed_receiver_account || null,
-        v.observedReference || v.observed_reference || null, v.observedTransactionId || v.observed_transaction_id || null,
-        v.observedAt || v.observed_at || null, json(v.reasonCodes || v.reason_codes || []),
-        v.rawResult == null ? null : json(v.rawResult || v.raw_result), verifier, verifierVersion, provenanceSource, provenanceOperation, now
-      );
+      const persistedIdentity = db.prepare(
+        'SELECT id FROM payment_verifications WHERE id = ? AND organization_id = ? AND evidence_id = ? AND verifier = ? AND verifier_version = ?'
+      ).get(String(v.id), organizationId, verificationEvidenceId, verifier, verifierVersion);
+      if (!persistedIdentity) {
+        throw Object.assign(new Error('Decision verification must already be persisted by the verification operation'), {
+          statusCode: 409, code: 'PAYMENT_VERIFICATION_NOT_PERSISTED',
+        });
+      }
     }
     const decision = input.decision || {};
     const decisionSource = String(decision.decisionSource || decision.decision_source || '').trim().toUpperCase();
@@ -6669,41 +7036,44 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
           statusCode: 409, code: 'INVARIANT_GATE_REQUIRED',
         });
       }
-      if (String(input.verification?.result || '').toUpperCase() !== 'MATCH') {
+      if (String(persistedDecisionVerification?.result || '').toUpperCase() !== 'MATCH') {
         throw Object.assign(new Error('Financial acceptance requires MATCH verification'), {
           statusCode: 409, code: 'VERIFICATION_MATCH_REQUIRED',
         });
       }
     }
-    const verificationVerifier = String(input.verification?.verifier || '').trim();
-    const verificationVerifierVersion = String(input.verification?.verifierVersion || input.verification?.verifier_version || '').trim();
-    const decisionVerificationId = String(decision.verificationId || decision.verification_id || (input.verification && verificationVerifier && verificationVerifierVersion ? (db.prepare('SELECT id FROM payment_verifications WHERE evidence_id = ? AND verifier = ? AND verifier_version = ?').get(
-      String(input.verification.evidenceId || input.verification.evidence_id), verificationVerifier, verificationVerifierVersion
-    )?.id || '') : '')).trim() || null;
+    const verificationVerifier = String(persistedDecisionVerification?.verifier || '').trim();
+    const verificationVerifierVersion = String(persistedDecisionVerification?.verifierVersion || '').trim();
+    const decisionVerificationId = String(decision.verificationId || decision.verification_id || (persistedDecisionVerification && verificationVerifier && verificationVerifierVersion ? persistedDecisionVerification.id : '')).trim() || null;
     if (decisionVerificationId) {
       const linked = db.prepare('SELECT payment_id, payment_intent_id, evidence_id FROM payment_verifications WHERE id = ? AND organization_id = ?').get(decisionVerificationId, organizationId);
-      if (!linked || String(linked.payment_id) !== paymentId || String(linked.payment_intent_id || '') !== String(decision.paymentIntentId || decision.payment_intent_id || row.payment_intent_id || '') || String(linked.evidence_id || '') !== String(decision.evidenceId || decision.evidence_id || input.verification?.evidenceId || input.verification?.evidence_id || '')) {
+      if (!linked || String(linked.payment_id) !== paymentId || String(linked.payment_intent_id || '') !== String(decision.paymentIntentId || decision.payment_intent_id || row.payment_intent_id || '') || String(linked.evidence_id || '') !== String(decision.evidenceId || decision.evidence_id || persistedDecisionVerification?.evidenceId || '')) {
         throw Object.assign(new Error('Decision verification reference is not bound to the committed context'), { statusCode: 409, code: 'DECISION_VERIFICATION_CONTEXT_MISMATCH' });
       }
     }
     const decisionId = String(decision.id || crypto.randomUUID());
     db.prepare("INSERT INTO payment_decisions (id, organization_id, payment_id, payment_intent_id, evidence_id, verification_id, decision, target_state, reason_codes_json, invariant_results_json, decision_source, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
       decisionId, organizationId, paymentId, decision.paymentIntentId || decision.payment_intent_id || row.payment_intent_id || null,
-      decision.evidenceId || decision.evidence_id || input.verification?.evidenceId || input.verification?.evidence_id || null, decisionVerificationId,
+      decision.evidenceId || decision.evidence_id || persistedDecisionVerification?.evidenceId || null, decisionVerificationId,
       String(decision.decision || '').toUpperCase(), target, json(decision.reasonCodes || decision.reason_codes || []),
       json(decision.invariantResults || decision.invariant_results || {}), decision.decisionSource || 'PAYMENT_CORE', actor?.userId || null, now
     );
-    const result = db.prepare("UPDATE payments SET state = ?, updated_at = ?, claimed_at = CASE WHEN ? = 'CLAIMED' THEN ? ELSE claimed_at END, received_at = CASE WHEN ? = 'RECEIVED' THEN ? ELSE received_at END, verified_at = CASE WHEN ? = 'VERIFIED' THEN ? ELSE verified_at END, reconciled_at = CASE WHEN ? = 'RECONCILED' THEN ? ELSE reconciled_at END WHERE id = ? AND organization_id = ?" + (expectedState ? " AND state = ?" : ""))
-      .run(target, now, target, now, target, now, target, now, target, now, paymentId, organizationId, ...(expectedState ? [expectedState] : []));
-    if (Number(result.changes || 0) !== 1) throw Object.assign(new Error('Payment state changed before commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
-    db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), paymentId, organizationId, String(decision.entryType || target),
-      target === 'PARTIAL'
-        ? Number(decision.amountMinor ?? decision.amount_minor ?? input.verification?.observedAmountMinor ?? input.verification?.observed_amount_minor ?? row.amount_minor)
-        : Number(row.amount_minor),
-      normaliseCurrency(row.currency, 'ETB'),
-      row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now
-    );
+    // A repeated authoritative decision may reaffirm the current state, but
+    // it is not a new financial transition and must not append another ledger
+    // entry or reset the original state-transition timestamps.
+    if (row.state !== target) {
+      const result = db.prepare("UPDATE payments SET state = ?, updated_at = ?, claimed_at = CASE WHEN ? = 'CLAIMED' THEN ? ELSE claimed_at END, received_at = CASE WHEN ? = 'RECEIVED' THEN ? ELSE received_at END, verified_at = CASE WHEN ? = 'VERIFIED' THEN ? ELSE verified_at END, reconciled_at = CASE WHEN ? = 'RECONCILED' THEN ? ELSE reconciled_at END WHERE id = ? AND organization_id = ?" + (expectedState ? " AND state = ?" : ""))
+        .run(target, now, target, now, target, now, target, now, target, now, paymentId, organizationId, ...(expectedState ? [expectedState] : []));
+      if (Number(result.changes || 0) !== 1) throw Object.assign(new Error('Payment state changed before commit'), { statusCode: 409, code: 'PAYMENT_STATE_CONFLICT' });
+      db.prepare("INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+        crypto.randomUUID(), paymentId, organizationId, String(decision.entryType || target),
+        target === 'PARTIAL'
+          ? Number(decision.amountMinor ?? decision.amount_minor ?? persistedDecisionVerification?.observedAmountMinor ?? row.amount_minor)
+          : Number(row.amount_minor),
+        normaliseCurrency(row.currency, 'ETB'),
+        row.state, target, actor?.userId || null, String(decision.reason || ''), json(decision.metadata || {}), now
+      );
+    }
     const marketplaceAllocation = db.prepare("SELECT a.*, so.id AS canonical_seller_order_id FROM marketplace_payment_allocations a JOIN marketplace_seller_orders so ON so.id = a.seller_order_id WHERE a.payment_id = ? AND a.organization_id = ? LIMIT 1").get(paymentId, organizationId);
     if (marketplaceAllocation) {
       if (target === 'REFUNDED') {
@@ -6722,7 +7092,7 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       toState: target,
       decision: decision.decision || null,
       reasonCodes: decision.reasonCodes || decision.reason_codes || [],
-      evidenceId: input.verification?.evidenceId || input.verification?.evidence_id || decision.evidenceId || decision.evidence_id || null,
+      evidenceId: persistedDecisionVerification?.evidenceId || decision.evidenceId || decision.evidence_id || null,
       verificationId: decisionVerificationId,
       decisionId,
     }, {
@@ -6747,7 +7117,7 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
 
 const PAYMENT_STATES = new Set(['UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','REJECTED','FAILED','DUPLICATE','MISMATCH','EXPIRED','CANCELLED','PARTIAL','REVERSED','REFUNDED']);
 const PAYMENT_TRANSITIONS = Object.freeze({
-  UNPAID: new Set(['CLAIMED','RECEIVED','VERIFIED','FAILED','EXPIRED','CANCELLED']),
+  UNPAID: new Set(['CLAIMED','RECEIVED','VERIFIED','FAILED','REJECTED','DUPLICATE','MISMATCH','EXPIRED','CANCELLED','PARTIAL']),
   CLAIMED: new Set(['RECEIVED','VERIFIED','FAILED','REJECTED','DUPLICATE','MISMATCH','EXPIRED','CANCELLED','PARTIAL']),
   RECEIVED: new Set(['VERIFIED','RECONCILED','FAILED','REJECTED','MISMATCH','PARTIAL','CANCELLED']),
   VERIFIED: new Set(['RECONCILED','REVERSED','REFUNDED','MISMATCH']),
@@ -8752,12 +9122,39 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         continue;
       }
       const localId = String(order.id);
-      const already = db.prepare('SELECT server_order_id FROM orders WHERE chat_id = ? AND local_id = ?').get(key, localId);
+      const expectedCurrency = tenantCurrency(key);
+      const already = db.prepare('SELECT server_order_id, order_json FROM orders WHERE chat_id = ? AND local_id = ?').get(key, localId);
       if (already) {
-        results.push({ local_id: order.id, status: 'synced', order_id: already.server_order_id });
+        const storedOrder = parseJSON(already.order_json, {});
+        const currencyMismatch = order.currency != null
+          && normaliseCurrency(order.currency, expectedCurrency) !== expectedCurrency;
+        const identityMismatch = currencyMismatch
+          || queuedOrderIdentityHash(order, expectedCurrency) !== queuedOrderIdentityHash(storedOrder, expectedCurrency, true);
+        if (identityMismatch) {
+          results.push({
+            local_id: order.id,
+            status: 'rejected',
+            code: 'ORDER_IDEMPOTENCY_CONFLICT',
+            error: 'Order id was already used with different contents',
+          });
+          continue;
+        }
+        const payment = db.prepare(`
+          SELECT p.id
+          FROM payments p
+          JOIN tenants t ON t.organization_id = p.organization_id
+          WHERE t.chat_id = ? AND p.order_id = ?
+          LIMIT 1
+        `).get(key, already.server_order_id);
+        results.push({
+          local_id: order.id,
+          status: 'synced',
+          order_id: already.server_order_id,
+          ...(payment?.id ? { payment_id: payment.id } : {}),
+          payment_state: 'UNPAID',
+        });
         continue;
       }
-      const expectedCurrency = tenantCurrency(key);
       if (order.currency != null && normaliseCurrency(order.currency, expectedCurrency) !== expectedCurrency) {
         results.push({ local_id: order.id, status: 'rejected', error: 'Order currency does not match the organization currency' });
         continue;
@@ -8769,10 +9166,10 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
       }
       let customerId = order.customer_id ? String(order.customer_id) : null;
       if (order.customer && typeof order.customer === 'object') {
-        const customer = await upsertCustomer(key, order.customer);
+        const customer = upsertCustomerSync(key, order.customer);
         customerId = customer.id;
       } else if (order.customer_name || order.customer_phone) {
-        const customer = await upsertCustomer(key, {
+        const customer = upsertCustomerSync(key, {
           id: customerId || undefined,
           name: order.customer_name || '',
           phone: order.customer_phone || '',
@@ -8788,6 +9185,10 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
       const stored = {
         ...order,
         ...(customerId ? { customer_id: customerId } : {}),
+        // Internal identity metadata is server-owned and stripped from public
+        // order reads. It distinguishes an explicit customer binding from a
+        // canonical ID inferred from name/phone during first synchronization.
+        _sellifyCustomerIdProvided: Boolean(order.customer_id ?? order.customerId ?? order.customer?.id),
         items,
         total,
         currency: expectedCurrency,
@@ -9420,10 +9821,81 @@ export async function listAuditEvents(chatId, limit = 100, filters = {}) {
   }));
 }
 
+export async function verifyAuditEventChain(chatId) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organizationId) {
+    throw Object.assign(new Error('Unknown organization'), { statusCode: 404, code: 'ORGANIZATION_NOT_FOUND' });
+  }
+
+  const rows = db.prepare(`
+    SELECT id, chat_id, organization_id, location_id, actor_id, device_id,
+           action, entity_type, entity_id, reason, result, metadata_json,
+           created_at, previous_hash, event_hash, lineage_type, lineage_id
+    FROM audit_events
+    WHERE organization_id = ? AND event_hash IS NOT NULL
+    ORDER BY id ASC
+  `).all(String(tenant.organizationId));
+
+  let previousHash = null;
+  let hasPrevious = false;
+  let checked = 0;
+  for (const row of rows) {
+    checked += 1;
+    if (hasPrevious && String(row.previous_hash || '') !== previousHash) {
+      return {
+        valid: false,
+        organizationId: tenant.organizationId,
+        eventsChecked: checked,
+        invalidEventId: Number(row.id),
+        reasonCode: 'AUDIT_PREVIOUS_HASH_MISMATCH',
+      };
+    }
+
+    const canonical = [
+      row.previous_hash || '',
+      row.organization_id || '',
+      String(row.chat_id ?? ''),
+      String(row.location_id ?? ''),
+      String(row.actor_id ?? ''),
+      String(row.device_id ?? ''),
+      String(row.action || ''),
+      String(row.entity_type || ''),
+      row.entity_id || '',
+      String(row.reason || ''),
+      String(row.result || 'success'),
+      row.metadata_json || json({}),
+      String(row.created_at || ''),
+      row.lineage_type || '',
+      row.lineage_id || '',
+    ].join('|');
+    const calculatedHash = crypto.createHash('sha256').update(canonical).digest('hex');
+    if (calculatedHash !== String(row.event_hash || '')) {
+      return {
+        valid: false,
+        organizationId: tenant.organizationId,
+        eventsChecked: checked,
+        invalidEventId: Number(row.id),
+        reasonCode: 'AUDIT_EVENT_HASH_MISMATCH',
+      };
+    }
+    previousHash = String(row.event_hash);
+    hasPrevious = true;
+  }
+
+  return {
+    valid: true,
+    organizationId: tenant.organizationId,
+    eventsChecked: checked,
+    invalidEventId: null,
+    reasonCode: null,
+  };
+}
+
 export async function createDatabaseBackup() {
   ensureDatabase();
   await mkdir(BACKUP_DIR, { recursive: true });
-  const fileName = `sellify-${new Date().toISOString().replaceAll(':', '').replace(/\.\d{3}Z$/, 'Z')}.sqlite`;
+  const fileName = `sellify-${new Date().toISOString().replaceAll(':', '').replace(/\.\d{3}Z$/, 'Z')}-${crypto.randomUUID()}.sqlite`;
   const destination = path.join(BACKUP_DIR, fileName);
   // VACUUM INTO produces a compact, consistent snapshot even while the
   // service is live. The destination is generated under our own backup dir.

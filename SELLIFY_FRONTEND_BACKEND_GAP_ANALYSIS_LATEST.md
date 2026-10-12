@@ -1,9 +1,11 @@
 # Sellify Frontend ↔ Backend Gap Analysis — Latest
 
-Status: CURRENT RECONCILIATION BASELINE
-Branch: main
-Date: 2026-10-02
-Authority: live repository source on main; historical gap documents are reference only.
+Status: CANDIDATE RECONCILIATION UPDATE — NOT YET MERGED
+Branch: ux/ecosystem-add-action-menu
+Date: 2026-10-11
+Authority: live repository source and observed CI on this branch. Main remains unchanged until this PR is reviewed and explicitly merged. Historical gap documents are reference only.
+
+Latest code candidate: `1afc0d4e6acc65f92eccfe52eea79a3e821bb988`. Sellify CI run `38271342844` and Repository Security Checks run `38271342740` both passed on 2026-10-12. This candidate adds the focused GAP-1.18U financial-transition idempotency regression and wires it into CI. PR #40 remains open, draft, and unmerged; this candidate evidence does not certify `main`. The current code candidate updates the isolated backup/restore fixture so its canonical payment state, Payment Core decision target, and append-only ledger transition consistently represent `UNPAID → VERIFIED`; the fixture still checks SQLite integrity before/after restore, application startup, migration 67, evidence/verification/decision lineage, and preservation of unresolved `IN_PROGRESS` / `PROVIDER_IN_FLIGHT` claim identity. CI for `592f3cf30c4db81b01d419cfc0f309a7b580c111` is pending verification. This improves fixture consistency but does not certify every valid financial transition or production recovery. PR #40 remains open, draft, and unmerged; candidate-branch evidence is not main-branch certification.
 
 ## 1. Purpose
 
@@ -63,7 +65,8 @@ A domain may be CLOSED in source while still carrying a VERIFICATION GAP.
 |---|---|---|
 | Auth / tenant sessions | CLOSED | Canonical tenant/session boundary exists. |
 | Customers | CLOSED | Canonical customer APIs are connected. |
-| Catalog | CLOSED | Canonical catalog authority is connected. |
+| Catalog | CLOSED | Canonical product catalog authority is connected and reused by the Add menu. |
+| First-class service catalog type | DEFERRED | The existing catalog form and persisted contract are product-shaped. A service needs explicit canonical type semantics and compatible inventory/fulfillment behavior; do not advertise service creation as supported until those boundaries are implemented and tested. |
 | Orders | CLOSED | Canonical order/sync path is connected. |
 | Inventory | HARDENED | Canonical inventory authority exists; legacy projections must not become competing authority. |
 | Locations | CLOSED | Canonical location CRUD exists. |
@@ -82,9 +85,10 @@ A domain may be CLOSED in source while still carrying a VERIFICATION GAP.
 | Logistics / fulfillment | HARDENED | GAP-2.1–2.13 completed; delivery authority is now canonical. |
 | Delivery staff | HARDENED | Courier role, ownership, tenant/location scope and lifecycle enforcement are server-side. |
 | Rich dispatch UX | PARTIAL | Workload/balancing/projection contracts exist; richer operational UX is future refinement. |
-| Payment Core | HARDENED | Payment authority, evidence, verification, decisions, ledger, authorization and reconciliation boundaries exist. |
-| Payment frontend | OPEN / MAJOR | No dedicated app/src/payments contract/state/UI module is currently established as the operational frontend boundary. |
-| Payment frontend certification | OPEN / MAJOR | Dedicated adversarial frontend-to-backend contract certification remains. |
+| Payment Core | HARDENED | Payment authority, evidence, verification, decisions, ledger, authorization and reconciliation boundaries exist. Durable status-query idempotency/recovery, append-only evidence/verification/decision records, and runtime audit-chain tamper detection are covered by regressions. |
+| Payment schema migration recovery | HARDENED | Migration 54 (provider-verification uniqueness index) is evaluated independently of migration 53. The regression now exercises the real SQLite migration runner from a seeded state where migration 53 is recorded but migration 54 is absent, then verifies migration 54 is recorded and the unique index exists. |
+| Payment frontend | PARTIAL | Dedicated app/src/payments contract/client/state/UI and canonical projection exist. The real frontend client now has a focused HTTP-route/SQLite integration regression; operational UX refinement remains. No second payment authority is needed. |
+| Payment frontend certification | HARDENED ON CANDIDATE BRANCH / MAIN VERIFICATION GAP | PF-1L exercises the real frontend client → HTTP route → provider adapter → Payment Core → SQLite path for unresolved and successful provider observations. It verifies lost-response replay, UNKNOWN without financial mutation, successful MATCH → VERIFIED with one canonical ledger transition, no duplicate evidence/verification/decision/ledger on replay, same-key retry after a retryable provider network failure, a determinate MISMATCH transition from UNPAID and recovery after query-result persistence failure, and cross-tenant rejection before command claim. Previously verified code candidate `f4fc0491adb3f8993cf47d4361243eb72589ffee` passed Sellify CI and Repository Security Checks (runs 38153693840 and 38153693830); PR #40 remains open, draft, and unmerged, so main is still a verification gap. |
 | Provider execution | PARTIAL / DELIBERATE | Provider-neutral registry and existing flows exist; live provider capability must only be implemented when verified. |
 | Compliance frontend | PARTIAL | Canonical backend authority and frontend authority work exist; operational workspace refinement remains. |
 | Audit frontend | PARTIAL | Strong backend lineage exists; management/visibility UX remains. |
@@ -92,32 +96,22 @@ A domain may be CLOSED in source while still carrying a VERIFICATION GAP.
 | Contextual domain authorization | PARTIAL | Base IAM is closed; contextual capability/pack/domain-role composition remains a refinement. |
 | Offline / outbox | CLOSED | Canonical event boundary exists. |
 | Pack lifecycle | DEFERRED | Intentionally gated; do not treat as a defect. |
-| Release / CI certification | VERIFICATION GAP | Source gates exist, but absence of observed workflow runs must remain explicit. |
+| Release / CI certification | HARDENED ON CANDIDATE BRANCH / MAIN VERIFICATION GAP | Previously verified code candidate `f4fc0491adb3f8993cf47d4361243eb72589ffee` passed Sellify CI and Repository Security Checks (runs 38153693840 and 38153693830). PR #40 remains draft and unmerged, so this is not yet evidence for main. |
 
-## 5. Primary active gap: Payment Frontend
+## 5. Payment frontend certification — candidate branch hardened
 
-The backend Payment Core is not the missing piece.
+The backend Payment Core is not the primary missing piece, and the dedicated frontend payment modules now exist.
 
-The current gap is operational frontend integration around the existing authority.
+Existing implementation and regression evidence includes:
+- app/src/payments/client.js, contract.js, state.js, ui.js, and canonical payment projection;
+- authenticated tenant/session-aware API calls and required idempotency keys;
+- order-to-payment linkage and coalesced ordinary payment-ensure operations;
+- Payment Core regressions covering durable status-query idempotency, concurrent retries, committed-result recovery, unresolved pre-commit crashes, append-only lineage records, and audit-chain tamper detection;
+- PF-1/PF-2 frontend contract, projection, runtime-client and adversarial regressions.
 
-Target module:
+**Latest certification:** `phase0/gap-pf-1L-payment-frontend-http-sqlite-e2e-regression.mjs` runs the real frontend client against a spawned backend server and isolated SQLite database. It covers unavailable and successful provider observations through the real adapter. The successful case validates observed amount, currency, receiver account, reference, transaction ID, and observation time before Payment Core commits `MATCH → VERIFIED`. A lost response followed by a same-key retry replays the committed result without another provider call or duplicate evidence, verification, decision, or ledger entries. An unavailable outcome remains `UNKNOWN` and leaves payment `UNPAID`; cross-tenant requests are rejected before command claim. The test also simulates provider network failure followed by recovery: the retryable failure is persisted, a same-key retry atomically reclaims only this known-safe pre-evidence failure, and the later successful result is committed once. A determinate provider failure now transitions an initially UNPAID payment to MISMATCH; the regression forces SQLite to reject the status-query result write after the canonical transition, then verifies same-key recovery reconstructs the persisted mismatch lineage without another provider call or duplicate ledger/evidence/verification/decision rows. This exposed and fixed missing durable HTTP store wiring, provider-adapter observation-field/status-shape mismatch, and decision logic that could turn UNKNOWN plus missing fields into a financial mismatch. Previously verified code candidate `f4fc0491adb3f8993cf47d4361243eb72589ffee` passed Sellify CI and Repository Security Checks (runs 38153693840 and 38153693830).
 
-app/src/payments/
-- client.js
-- contract.js
-- state.js
-- ui.js
-
-Required capabilities include:
-- payment account projection and selection;
-- order/payment linkage;
-- payment intent and payment state projection;
-- evidence submission/status;
-- verification/reconciliation status;
-- explicit error handling;
-- audit/lineage projection;
-- idempotent mutating commands;
-- tenant/session-aware API access.
+**Remaining certification gap:** the critical success, unresolved-outcome, lost-response replay, same-key recovery after a retryable network failure, no-duplicate-effects, and tenant-isolation paths now pass through the real frontend-client/HTTP route harness. A dedicated timeout-specific variant may be added only if it adds evidence beyond the network-failure case and existing provider transport tests. An ambiguous pre-commit crash intentionally remains unresolved unless canonical records establish a trustworthy outcome; recovery must not blindly repeat provider or financial work. Operational UX for account selection, payment history, unresolved-command recovery, and audit-lineage visibility remains future refinement. The PF-1L non-success recovery case specifically covers MISMATCH; the other supported non-success recovery targets do not each yet have a separate lost-result HTTP/SQLite scenario.
 
 Frontend must never:
 - maintain a financial ledger;
@@ -178,23 +172,89 @@ Pack lifecycle remains intentionally gated. Activation/installation should only 
 Source-level implementation does not equal runtime certification.
 
 For every gap:
-1. inspect live main;
+1. inspect the current branch and compare it with main;
 2. implement minimally;
 3. add focused regression;
 4. wire CI;
 5. observe CI execution where available;
 6. record any unavailable workflow evidence explicitly.
 
+The candidate branch's current CI result must not be represented as a main-branch result while PR #40 remains unmerged.
+
+## 10A. Deployment and rollback safety review
+
+The current SQLite migration chain contains these relevant boundaries:
+
+- Migration 54 independently installs the unique verification identity index even when migration 53 is already recorded. The runtime regression proves this recovery shape on an isolated database, but it does not prove production data is free of duplicates. Before rollout, check for duplicate `(evidence_id, verifier, verifier_version)` tuples; the unique-index migration will fail if conflicting historical rows exist.
+- Migration 64 adds the durable `payment_status_query_commands` table. Migrations 65 and 66 add triggers that reject updates and deletes to canonical payment evidence, verification, and decision records. They are additive schema changes, but 65/66 intentionally change runtime behavior: an older application path that attempts to mutate/delete those rows, including via parent-row cascades, can fail after the triggers are installed. Treat this as a forward-only application compatibility boundary, not a normal binary-only rollback.
+- Do not remove the append-only triggers as a rollback shortcut. If an operational retention/purge requirement emerges, define an explicitly authorized, audited retention/archive workflow with tested lineage preservation before implementation.
+- The rolling backup uses SQLite `VACUUM INTO`. Review found that its filename discarded milliseconds, so two backup calls in the same second could target the same destination. Commit f4fc0491adb3f8993cf47d4361243eb72589ffee adds a random suffix and a runtime regression that creates two immediate snapshots and checks both are distinct and non-empty. Sellify CI run `38153693840` and Repository Security Checks run `38153693830` passed for that code candidate.
+- Remaining operational evidence gap: no production-like restore rehearsal is established by the focused regressions reviewed here. Before a production rollout, take a pre-deploy backup, verify the copied database with SQLite integrity checks, rehearse migrations against a recent production-like copy, and confirm restore plus critical payment/order/inventory reads. Keep an independently stored protected backup; the seven-file local rotation is not itself a disaster-recovery strategy.
+
+These are rollout/rollback safeguards, not a claim that a production migration or restore has already been executed.
+
+## 10B. Payment lineage append-only regression coverage
+
+Added `phase0/payment-lineage-append-only-regression.mjs` and wired it into the Node 24 baseline CI. The runtime SQLite test seeds canonical payment/evidence/verification/decision rows, then proves updates and direct deletes are rejected for all three lineage tables. It also attempts to delete the parent payment and confirms the decision-history cascade is blocked and all seeded records remain present.
+
+This regression validates the migration-65/66 trigger behavior on a fresh isolated database. It does not replace a production-like migration/restore rehearsal, nor does it define an approved data-retention process.
+
+**GAP-1.18O coverage qualification (12 Oct 2026):** The current `phase0/gap-1.18O-audit-lineage-regression.mjs` creates a tenant, payment account, payment and intent, then persists linked evidence → verification → decision through the SQLite store. It asserts persisted foreign lineage IDs and organization/chat scope, verifies the runtime audit hash chain, tampers with an audit event after dropping the guard to prove hash-mismatch detection, and checks that the verifier detects the tampering. CI step `GAP-1.18O audit lineage regression` is present in `.github/workflows/ci.yml`. This is runtime end-to-end lineage evidence, not only source assertions.
+
+**GAP-1.18Q / GAP-1.18U candidate verification (12 Oct 2026):** The CI workflow runs both `gap-1.18:decision-idempotency-test` and `gap-1.18:financial-transition-idempotency-test`. GAP-1.18Q verifies same-key decision replay, rejects reuse of a key with a conflicting decision, and asserts a single decision/ledger entry. GAP-1.18U additionally verifies that a separate command key reaffirming the already-committed `REJECTED` state does not append or alter a ledger transition. Both focused regressions passed in Sellify CI run `38271342844`; Repository Security Checks run `38271342740` also passed. Evidence is on candidate commit `1afc0d4e6acc65f92eccfe52eea79a3e821bb988`; PR #40 is still unmerged.
+
+## 10C. GAP-1.24 — fenced status-query claims (candidate; focused CI runtime verification passed, operational certification pending)
+
+The candidate branch now adds migration 67 for durable status-query claim ownership: monotonically increasing claim generation, unique claim token, execution phase, and an unstarted-claim lease. Migration handling checks each column independently so an interrupted additive DDL sequence can resume. Existing legacy `IN_PROGRESS` commands are conservatively classified as `PROVIDER_IN_FLIGHT`; they are not automatically reclaimed because their provider-execution phase cannot be proven.
+
+The SQLite store permits takeover only when a command remains `IN_PROGRESS` in phase `CLAIMED` and its lease has expired. Provider work must first atomically change the phase to `PROVIDER_IN_FLIGHT` under the current token/generation. The canonical `commitPaymentDecision` transaction checks the same claim ownership before financial mutation, and normal command completion is claim-token-aware. The provider adapter query payload excludes the internal fencing token.
+
+The PF-1L regression now includes direct SQLite coverage for expired unstarted-claim takeover, generation/token rotation, rejection of the superseded owner before provider work, rejection at the canonical financial commit boundary, rejection of stale completion, and non-reclaim of provider-in-flight commands.
+
+**Evidence status for this candidate:**
+- Source-level syntax parsing: passed for `backend/lib/store-sqlite.js`, `backend/lib/payments/payment-core.js`, and the updated PF-1L regression.
+- Focused runtime regression: **PASS in Sellify CI run `38158277929`**. The PF-1 real HTTP + SQLite regression exercises migration 67 claim ownership, expired unstarted-claim takeover, generation/token rotation, stale-owner rejection before provider work, stale-owner rejection at canonical financial commit, stale completion rejection, and non-reclaim of `PROVIDER_IN_FLIGHT` commands.
+- Candidate CI evidence: the first fully wired candidate exposed a missing production `backend/server.js` Payment Core store wrapper for `markPaymentStatusQueryProviderStarted`; the wrapper and its `store-sqlite.js` import were corrected in commits `e1b9c6d6cc6eb7a74d828720c3a16a0ae7c11ae8` and `01c855dd6a96d13d4a97b712ccec19925e8587e7`. The next CI run then found an outdated migration ceiling in `phase0/gap-2-production-readiness-regression.mjs` (expected 66 while migration 67 is present), corrected in commit `cbaa8f4486c27c39d190dd663dcf952dc23c7587`. On `cbaa8f4486c27c39d190dd663dcf952dc23c7587`, Sellify CI run `38158277929` passed, including baseline (Node 24), PF-1 real frontend HTTP + SQLite E2E, GAP-2.12 production readiness, and Logistics L18; Repository Security Checks run `38158278097` also passed. This establishes that the candidate's wired path and current CI suite passed. It does not by itself prove every unexercised crash boundary, mixed-version worker behavior, or production-like migration/restore rehearsal.
+- Concurrent-recovery race regression: **PASS in Sellify CI run `38158277929`**; two contenders racing to recover one expired unstarted claim produce only one owner. The PF-1L regression and source-hygiene security workflow passed on branch head `33ea0018aaeb54d409c05a52d68617bd677229b7` (runs `38158385990` and `38158386034`).
+
+- Process-crash boundaries: PF-1L now covers both sides of the provider-start fence. For the pre-provider boundary, a separate Node worker persists a `CLAIMED` command and is killed before provider execution; after lease expiry, recovery rotates token/generation and fences the crashed worker. For the post-provider boundary, the real backend is killed after the provider confirms receipt; after restart against the same SQLite database, the command remains `IN_PROGRESS` / `PROVIDER_IN_FLIGHT`, the same-key retry stays unresolved, and provider call count remains one. **Both boundaries PASS in Sellify CI run `38158874706`**; Repository Security Checks run `38158874698` also passed. The provider-in-flight test deliberately does not claim the external provider outcome is known or safely repeatable.
+
+These tests establish recovery behavior for a crashed unstarted claim and conservative non-recovery for an uncertain provider-in-flight command. They do not cover every possible crash point. Mixed-version worker compatibility and production-like migration/restore rehearsal remain **not yet evidenced**.
+
+**Post-decision / result-persistence crash boundary (12 Oct 2026):** PF-1L now additionally forces the status-query command-result update to fail after canonical outcome recovery, confirms the backend request fails, terminates the backend process, restarts against the same SQLite database, and retries the same key. The regression asserts the recovered result is returned without repeating provider work or adding ledger, evidence, verification, or decision records. This added boundary passed Sellify CI run `38268089349` and Repository Security Checks run `38268089269` on commit `db62335edb62c001623629680dc0ee983d8a9666`. This is automated crash/recovery regression evidence, not a production-like deployment or restore rehearsal. The first run of the new pre-provider test exposed newline escaping in the spawned worker script; that harness issue was corrected, and the subsequent full CI and security workflows passed.
+
+**Backup/restore evidence added on the candidate:** the isolated `phase0/database-backup-restore-regression.mjs` creates a SQLite backup through the existing `createDatabaseBackup()` / `VACUUM INTO` path, validates integrity before and after restore, starts a fresh store module against the restored database, and checks that the schema remains at migration 67. It seeds and verifies a representative linked chain across `payments` → `payment_evidence` → `payment_verifications` → `payment_decisions` → `payment_ledger_entries`; identifiers and foreign lineage references are asserted after restore. It also verifies a status-query command in `IN_PROGRESS` / `PROVIDER_IN_FLIGHT` retains its claim generation, claim token, and idempotency key and remains unresolved/non-reclaimable in the restored database. The test is wired into baseline CI.
+
+**Validation:** after correcting the tenant-organization fixture, the isolated backup/restore regression passed in Sellify CI run `38161929179` and Repository Security Checks run `38161929199` on commit `3f491474fb0759660ed387adf8fed9b24f893bcd`. The later candidate `c27b8f7466f3e6ef4a3ba9ad4b7930bcc096c4d3` also passed Sellify CI run `38163771950` and Repository Security Checks run `38163772007`. This proves preservation of the seeded rows and references in an isolated SQLite restore test. The fixture now aligns the payment state, Payment Core decision target, and ledger transition as `UNPAID → VERIFIED`, but it still does **not** prove every valid financial transition, production-sized restore performance against an RTO/RPO target, or a rehearsed operational backup/restore runbook. Production-like restore, recovery timing, and operational runbook rehearsal remain **pending**.
+
+**Mixed-version deployment decision:** compatibility between old and new status-query workers is **not certified and must not be assumed**. An older worker may not enforce the generation/token fence even though migration 67 has added the columns. Until an explicit compatibility test and protocol are implemented, deploy this change with a drain-and-switch procedure: stop/drain all old backend workers before the new version begins handling payment status queries; take and verify a database backup; apply/start the candidate on the migrated database; run the status-query smoke/regression checks; and do not roll back by simply restarting an old binary against the migrated live database. If rollback is needed, stop the candidate and follow a rehearsed database restore/recovery procedure. Keep any persisted `PROVIDER_IN_FLIGHT` command unresolved pending authoritative reconciliation. This is a rollout constraint, not a claim of mixed-version compatibility.
+
+GAP-1.24 therefore remains **IMPLEMENTED ON CANDIDATE / PRE-PROVIDER RECOVERY AND PROVIDER-IN-FLIGHT CRASH-RECOVERY REGRESSIONS PASS / OPERATIONAL CERTIFICATION PENDING**. The conservative unresolved behavior for a command whose provider call may have started remains intentional; do not automatically reclaim that uncertain provider-in-flight work.
+
+### GAP-1.24 operational certification gate (next required evidence)
+
+Do not mark GAP-1.24 fully certified from CI alone. Before production rollout, record the following evidence against the actual deployment environment:
+
+1. **Backup and restore rehearsal:** create a pre-deploy backup; run SQLite integrity checks on both backup and restored copy; restore into an isolated environment; verify migration 67 and critical payment/order/inventory reads.
+2. **Drain-and-switch rehearsal:** stop and drain all old backend workers before the candidate handles status queries; verify no old worker remains able to claim or complete commands.
+3. **Post-deploy smoke test:** exercise one successful status query, one unresolved provider outcome, and one same-key replay; confirm no duplicate evidence, verification, decision, or ledger rows.
+4. **Rollback rehearsal:** prove the documented restore path before rollout. Do not start an old binary against the migrated live database as a shortcut rollback.
+5. **Uncertain provider outcome:** confirm operational staff can identify and leave `PROVIDER_IN_FLIGHT` commands unresolved until authoritative reconciliation; do not blindly reissue provider work.
+
+Record environment, database snapshot identifier, migration result, start/end times, command IDs, row-count checks, restore result, and operator sign-off. If these observations have not been performed, leave the gate **PENDING**. No production environment or production-like restore rehearsal was available in this repository-only review, so no such operational result is claimed.
+
 ## 11. Recommended sequence
 
-1. PF-1 Payment frontend operationalization
-2. PF-2 Payment frontend adversarial/certification
-3. STF-1 Seller storefront/channel refinement
-4. CMP-1 Compliance/Audit operational refinement
-5. IAM-1 Contextual authorization refinement
-6. LOG-3 Rich dispatch UX refinement
-7. Final release/CI certification
-8. Re-evaluate Pack lifecycle
+1. PF-1L — completed and CI-certified on candidate branch; success, unresolved outcome, lost-response replay, safe same-key retry after transient provider network failure, no-duplicate effects, and tenant isolation pass.
+2. First-experience catalog contract — the Add menu now says “Add product” because the current catalog form is product-shaped. Define first-class service semantics only after checking order, inventory, and fulfillment boundaries; do not create a competing catalog authority.
+3. PF-2 — add a timeout-specific route case only if it proves a distinct invariant beyond the existing transport and network-retry regressions.
+4. Reconcile candidate status against main after PR review and explicit merge; do not close gaps on main based on feature-branch CI.
+5. STF-1 Seller storefront/channel refinement.
+6. CMP-1 Compliance/Audit operational refinement.
+7. IAM-1 Contextual authorization refinement.
+8. LOG-3 Rich dispatch UX refinement.
+9. Final release/CI certification.
+10. Re-evaluate Pack lifecycle
 
 ## 12. Non-negotiable rule
 

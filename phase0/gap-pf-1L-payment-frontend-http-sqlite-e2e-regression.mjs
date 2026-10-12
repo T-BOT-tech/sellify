@@ -1,0 +1,998 @@
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { createServer as createHttpServer } from 'node:http';
+import { createServer as createNetServer } from 'node:net';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { randomUUID } from 'node:crypto';
+
+const tempDir = await mkdtemp(path.join(os.tmpdir(), 'sellify-pf-http-sqlite-'));
+const dbPath = path.join(tempDir, 'sellify.sqlite');
+process.env.SELLIFY_DATA_DIR = tempDir;
+process.env.SELLIFY_DB_PATH = dbPath;
+
+let child = null;
+let providerServer = null;
+let db = null;
+const originalFetch = globalThis.fetch;
+const originalWindow = globalThis.window;
+const originalLocalStorage = globalThis.localStorage;
+const originalDocument = globalThis.document;
+const originalGetComputedStyle = globalThis.getComputedStyle;
+const localValues = new Map();
+
+globalThis.localStorage = {
+  getItem(key) { return localValues.has(key) ? localValues.get(key) : null; },
+  setItem(key, value) { localValues.set(key, String(value)); },
+  removeItem(key) { localValues.delete(key); },
+  clear() { localValues.clear(); },
+};
+
+const noop = () => {};
+const fakeElement = {
+  style: { setProperty: noop, removeProperty: noop, getPropertyValue: () => '' },
+  classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
+  setAttribute: noop, getAttribute: () => null, appendChild: noop,
+  addEventListener: noop, removeEventListener: noop, dataset: {}, children: [],
+  options: [], value: '',
+};
+globalThis.document = new Proxy({
+  documentElement: fakeElement,
+  head: fakeElement,
+  body: fakeElement,
+  querySelector: () => null,
+  querySelectorAll: () => [],
+  getElementById: () => null,
+  createElement: () => ({ ...fakeElement, style: { ...fakeElement.style }, classList: { ...fakeElement.classList } }),
+}, {
+  get(target, key) { return key in target ? target[key] : noop; },
+});
+globalThis.getComputedStyle = () => ({ getPropertyValue: () => '' });
+
+async function freePort() {
+  const server = createNetServer();
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const port = server.address().port;
+  await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  return port;
+}
+
+async function waitForHealth(baseUrl, processRef) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (processRef.exitCode !== null) {
+      throw new Error('Backend exited before becoming healthy (exit ' + processRef.exitCode + ')');
+    }
+    try {
+      const response = await originalFetch(baseUrl + '/health');
+      if (response.ok) return;
+      lastError = new Error('Health endpoint returned ' + response.status);
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error('Backend did not become healthy: ' + (lastError?.message || 'unknown error'));
+}
+
+try {
+  const store = await import('../backend/lib/store-sqlite.js');
+  const userA = await store.getOrCreateUserByTelegram('pf-http-user-a-' + randomUUID(), 'PF HTTP User A');
+  const tenantA = await store.createTenantForUser({
+    userId: userA.id, sellerName: 'PF HTTP Store A', businessType: 'retail',
+    country: 'ET', currency: 'ETB', timezone: 'Africa/Addis_Ababa',
+  });
+  const sessionA = await store.createSession({ userId: userA.id, chatId: tenantA.chatId, deviceName: 'PF HTTP test device A' });
+  const accountA = await store.createPaymentAccount(tenantA.chatId, {
+    providerId: 'telebirr', accountIdentifier: '251900123456', phone: '251900123456',
+  });
+  const createdA = await store.createPaymentWithIntent(tenantA.chatId, {
+    organizationId: sessionA.organizationId,
+    paymentAccountId: accountA.id,
+    providerId: 'telebirr',
+    channel: 'api',
+    amountMinor: 150000,
+    currency: 'ETB',
+    externalReference: 'PF-HTTP-' + randomUUID(),
+    idempotencyKey: 'pf-http-create-' + randomUUID(),
+  });
+  const paymentA = createdA.payment;
+  const createdSuccessA = await store.createPaymentWithIntent(tenantA.chatId, {
+    organizationId: sessionA.organizationId,
+    paymentAccountId: accountA.id,
+    providerId: 'telebirr',
+    channel: 'api',
+    amountMinor: 150000,
+    currency: 'ETB',
+    externalReference: 'PF-HTTP-SUCCESS-' + randomUUID(),
+    idempotencyKey: 'pf-http-create-success-' + randomUUID(),
+  });
+  const paymentSuccessA = createdSuccessA.payment;
+  const createdRecoveryA = await store.createPaymentWithIntent(tenantA.chatId, {
+    organizationId: sessionA.organizationId,
+    paymentAccountId: accountA.id,
+    providerId: 'telebirr',
+    channel: 'api',
+    amountMinor: 88000,
+    currency: 'ETB',
+    externalReference: 'PF-HTTP-RECOVERY-' + randomUUID(),
+    idempotencyKey: 'pf-http-create-recovery-' + randomUUID(),
+  });
+  const paymentRecoveryA = createdRecoveryA.payment;
+  const createdMismatchA = await store.createPaymentWithIntent(tenantA.chatId, {
+    organizationId: sessionA.organizationId,
+    paymentAccountId: accountA.id,
+    providerId: 'telebirr',
+    channel: 'api',
+    amountMinor: 91000,
+    currency: 'ETB',
+    externalReference: 'PF-HTTP-MISMATCH-' + randomUUID(),
+    idempotencyKey: 'pf-http-create-mismatch-' + randomUUID(),
+  });
+  const paymentMismatchA = createdMismatchA.payment;
+  const createdRetryA = await store.createPaymentWithIntent(tenantA.chatId, {
+    organizationId: sessionA.organizationId,
+    paymentAccountId: accountA.id,
+    providerId: 'telebirr',
+    channel: 'api',
+    amountMinor: 76000,
+    currency: 'ETB',
+    externalReference: 'PF-HTTP-RETRY-' + randomUUID(),
+    idempotencyKey: 'pf-http-create-retry-' + randomUUID(),
+  });
+  const paymentRetryA = createdRetryA.payment;
+
+  const userB = await store.getOrCreateUserByTelegram('pf-http-user-b-' + randomUUID(), 'PF HTTP User B');
+  const tenantB = await store.createTenantForUser({
+    userId: userB.id, sellerName: 'PF HTTP Store B', businessType: 'retail',
+    country: 'ET', currency: 'ETB', timezone: 'Africa/Addis_Ababa',
+  });
+  const sessionB = await store.createSession({ userId: userB.id, chatId: tenantB.chatId, deviceName: 'PF HTTP test device B' });
+  const accountB = await store.createPaymentAccount(tenantB.chatId, {
+    providerId: 'telebirr', accountIdentifier: '251900123457', phone: '251900123457',
+  });
+  const createdB = await store.createPaymentWithIntent(tenantB.chatId, {
+    organizationId: sessionB.organizationId,
+    paymentAccountId: accountB.id,
+    providerId: 'telebirr',
+    channel: 'api',
+    amountMinor: 99000,
+    currency: 'ETB',
+    externalReference: 'PF-HTTP-B-' + randomUUID(),
+    idempotencyKey: 'pf-http-create-b-' + randomUUID(),
+  });
+  const paymentB = createdB.payment;
+
+  const providerCalls = { unknown: 0, success: 0, recovery: 0, mismatch: 0, flaky: 0, crashInFlight: 0 };
+  let resolveCrashInFlightObserved;
+  const crashInFlightObserved = new Promise(resolve => { resolveCrashInFlightObserved = resolve; });
+  let flakyMode = 'fail';
+  providerServer = createHttpServer((req, res) => {
+    const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname;
+    if (req.headers.authorization !== 'Bearer pf-http-test-provider-key') {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'FAILED' }));
+      return;
+    }
+    if (pathname === '/crash-inflight') {
+      providerCalls.crashInFlight += 1;
+      resolveCrashInFlightObserved();
+      // Deliberately leave the provider response unresolved. The test kills the
+      // backend after this request proves the command reached PROVIDER_IN_FLIGHT.
+      return;
+    }
+    if (pathname === '/flaky') {
+      providerCalls.flaky += 1;
+      if (flakyMode === 'fail') {
+        req.socket.destroy();
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: 'SUCCESS',
+        amountMinor: paymentRetryA.amountMinor,
+        currency: paymentRetryA.currency,
+        receiverAccount: accountA.accountIdentifier,
+        reference: paymentRetryA.externalReference,
+        transactionId: 'PF-HTTP-TX-' + paymentRetryA.id,
+        observedAt: new Date().toISOString(),
+      }));
+      return;
+    }
+    if (pathname === '/unknown') {
+      providerCalls.unknown += 1;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'UNAVAILABLE' }));
+      return;
+    }
+    if (pathname === '/success') {
+      providerCalls.success += 1;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: 'SUCCESS',
+        amountMinor: paymentSuccessA.amountMinor,
+        currency: paymentSuccessA.currency,
+        receiverAccount: accountA.accountIdentifier,
+        reference: paymentSuccessA.externalReference,
+        transactionId: 'PF-HTTP-TX-' + paymentSuccessA.id,
+        observedAt: new Date().toISOString(),
+      }));
+      return;
+    }
+    if (pathname === '/mismatch') {
+      providerCalls.mismatch += 1;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: 'FAILED',
+        amountMinor: paymentMismatchA.amountMinor,
+        currency: paymentMismatchA.currency,
+        receiverAccount: accountA.accountIdentifier,
+        reference: paymentMismatchA.externalReference,
+        transactionId: 'PF-HTTP-TX-' + paymentMismatchA.id,
+        observedAt: new Date().toISOString(),
+      }));
+      return;
+    }
+    if (pathname === '/recovery') {
+      providerCalls.recovery += 1;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: 'SUCCESS',
+        amountMinor: paymentRecoveryA.amountMinor,
+        currency: paymentRecoveryA.currency,
+        receiverAccount: accountA.accountIdentifier,
+        reference: paymentRecoveryA.externalReference,
+        transactionId: 'PF-HTTP-TX-' + paymentRecoveryA.id,
+        observedAt: new Date().toISOString(),
+      }));
+      return;
+    }
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'NOT_FOUND' }));
+  });
+  await new Promise((resolve, reject) => {
+    providerServer.once('error', reject);
+    providerServer.listen(0, '127.0.0.1', resolve);
+  });
+  const providerBaseUrl = 'http://127.0.0.1:' + providerServer.address().port;
+
+  const port = await freePort();
+  const baseUrl = 'http://127.0.0.1:' + port;
+  child = spawn(process.execPath, ['backend/server.js'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      PORT: String(port),
+      SELLIFY_DATA_DIR: tempDir,
+      SELLIFY_DB_PATH: dbPath,
+      NODE_ENV: 'test',
+      SERVE_STATIC: 'false',
+      SELLIFY_TELEBIRR_BASE_URL: providerBaseUrl,
+      SELLIFY_TELEBIRR_API_KEY: 'pf-http-test-provider-key',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let childOutput = '';
+  child.stdout.on('data', chunk => { childOutput += chunk.toString(); });
+  child.stderr.on('data', chunk => { childOutput += chunk.toString(); });
+  await waitForHealth(baseUrl, child);
+
+  globalThis.window = { location: { origin: baseUrl }, matchMedia: () => ({ addEventListener: noop }), addEventListener: noop, removeEventListener: noop, navigator: { onLine: true } };
+  const { setConfig } = await import('../app/src/state.js');
+  setConfig({
+    chatId: tenantA.chatId,
+    sessionToken: sessionA.token,
+    syncUrl: baseUrl,
+    lang: 'en',
+    currencyCode: 'ETB',
+  });
+  const { queryPaymentStatus } = await import('../app/src/payments/client.js');
+
+  const idempotencyKey = 'pf-http-lost-response-' + randomUUID();
+  const statusPath = '/tenants/' + encodeURIComponent(tenantA.chatId) +
+    '/payments/' + encodeURIComponent(paymentA.id) + '/status';
+  const successStatusPath = '/tenants/' + encodeURIComponent(tenantA.chatId) +
+    '/payments/' + encodeURIComponent(paymentSuccessA.id) + '/status';
+  const recoveryStatusPath = '/tenants/' + encodeURIComponent(tenantA.chatId) +
+    '/payments/' + encodeURIComponent(paymentRecoveryA.id) + '/status';
+  const mismatchStatusPath = '/tenants/' + encodeURIComponent(tenantA.chatId) +
+    '/payments/' + encodeURIComponent(paymentMismatchA.id) + '/status';
+  let lostResponsePath = statusPath;
+  let simulateLostResponse = true;
+  const simulateResponseLoss = async (input, init = {}) => {
+    const url = typeof input === 'string' ? input : input.url;
+    const method = String(init.method || 'GET').toUpperCase();
+    const response = await originalFetch(input, init);
+    if (simulateLostResponse && method === 'POST' && url.endsWith(lostResponsePath)) {
+      simulateLostResponse = false;
+      await response.arrayBuffer();
+      throw new TypeError('Simulated response loss after backend completion');
+    }
+    return response;
+  };
+  globalThis.fetch = simulateResponseLoss;
+
+  await assert.rejects(
+    () => queryPaymentStatus(paymentA.id, { query: { statusPath: '/unknown' } }, { idempotencyKey }),
+    /Simulated response loss/,
+    'first client call should lose the response after the backend has completed',
+  );
+  globalThis.fetch = originalFetch;
+
+  let retry;
+  try {
+    retry = await queryPaymentStatus(paymentA.id, { query: { statusPath: '/unknown' } }, { idempotencyKey });
+  } catch (error) {
+    throw new Error('Status-query retry failed: ' + JSON.stringify(error) + '\\nBackend output:\\n' + childOutput);
+  }
+  assert.equal(retry.status, 'UNKNOWN', 'an unavailable provider observation must remain unresolved');
+  assert.equal(retry.supported, true, 'the configured adapter supports status queries even when the outcome is unavailable');
+  assert.equal(retry.payment.id, paymentA.id);
+
+  const afterRetry = await store.getPayment(tenantA.chatId, paymentA.id);
+  assert.equal(afterRetry.state, 'UNPAID', 'an unknown provider result must not mutate financial state');
+  const ledgerAfter = await store.listPaymentLedger(tenantA.chatId, paymentA.id);
+  assert.equal(ledgerAfter.length, 1, 'lost-response retry must not duplicate ledger entries');
+  assert.equal(ledgerAfter[0].entryType, 'CREATED');
+
+  db = new DatabaseSync(dbPath);
+  const commandRows = db.prepare(
+    'SELECT status, payment_id, request_hash FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).all(idempotencyKey);
+  assert.equal(commandRows.length, 1, 'the HTTP route must persist one durable status-query command');
+  assert.equal(commandRows[0].status, 'SUCCEEDED', 'the unresolved provider result must be durably replayable');
+  assert.equal(commandRows[0].payment_id, paymentA.id);
+  assert.equal(providerCalls.unknown, 1, 'replay must not query the provider again');
+
+  // A durable idempotency key is bound to the full canonical request. Reusing
+  // the completed key with a different provider query must be rejected before
+  // provider I/O, not replay the first result as if the requests were equal.
+  const changedRequestResponse = await originalFetch(baseUrl + statusPath, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + sessionA.token,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({ query: { statusPath: '/success' } }),
+  });
+  assert.equal(changedRequestResponse.status, 409,
+    'same key with a different status-query request must be rejected');
+  const changedRequestBody = await changedRequestResponse.json();
+  assert.match(changedRequestBody.error?.message || '', /idempotency key.*different status-query request/i,
+    'request-key conflict should explain that the key is bound to a different request');
+  assert.equal(providerCalls.unknown, 1,
+    'request-key conflict must not repeat the original provider query');
+  assert.equal(providerCalls.success, 0,
+    'request-key conflict must not execute the changed provider query');
+
+  // GAP-1.24: only an expired, provably unstarted claim may be taken over.
+  // The previous owner must be fenced before provider work or financial commit.
+  const fencedPaymentKey = 'pf-http-fenced-claim-' + randomUUID();
+  const fencedRequestHash = 'pf-http-claim-request-' + randomUUID();
+  const originalClaim = await store.beginPaymentStatusQuery(tenantA.chatId, {
+    paymentId: paymentA.id,
+    idempotencyKey: fencedPaymentKey,
+    requestHash: fencedRequestHash,
+  });
+  assert.equal(originalClaim.duplicate, false);
+  assert.equal(originalClaim.phase, 'CLAIMED');
+  assert.equal(originalClaim.claimGeneration, 1);
+  assert.ok(originalClaim.claimToken);
+
+  db.prepare(`UPDATE payment_status_query_commands
+    SET lease_expires_at = ?
+    WHERE idempotency_key = ?`).run('2000-01-01T00:00:00.000Z', fencedPaymentKey);
+  const recoveredClaim = await store.beginPaymentStatusQuery(tenantA.chatId, {
+    paymentId: paymentA.id,
+    idempotencyKey: fencedPaymentKey,
+    requestHash: fencedRequestHash,
+  });
+  assert.equal(recoveredClaim.duplicate, false, 'expired unstarted command should be recoverable');
+  assert.equal(recoveredClaim.recovered, true);
+  assert.equal(recoveredClaim.claimGeneration, 2, 'recovery must advance the fencing generation');
+  assert.notEqual(recoveredClaim.claimToken, originalClaim.claimToken);
+
+  await assert.rejects(
+    () => store.markPaymentStatusQueryProviderStarted(tenantA.chatId, {
+      idempotencyKey: fencedPaymentKey,
+      requestHash: fencedRequestHash,
+      claimToken: originalClaim.claimToken,
+      claimGeneration: originalClaim.claimGeneration,
+    }),
+    error => error?.code === 'PAYMENT_STATUS_QUERY_CLAIM_FENCED',
+    'superseded owner must be rejected before provider I/O',
+  );
+  await assert.rejects(
+    () => store.commitPaymentDecision(tenantA.chatId, {
+      paymentId: paymentA.id,
+      targetState: 'VERIFIED',
+      idempotencyKey: fencedPaymentKey,
+      statusQueryClaim: {
+        idempotencyKey: fencedPaymentKey,
+        requestHash: fencedRequestHash,
+        claimToken: originalClaim.claimToken,
+        claimGeneration: originalClaim.claimGeneration,
+      },
+    }),
+    error => error?.code === 'PAYMENT_STATUS_QUERY_CLAIM_FENCED',
+    'superseded owner must be rejected at the canonical financial commit boundary',
+  );
+  await assert.rejects(
+    () => store.completePaymentStatusQuery(tenantA.chatId, {
+      idempotencyKey: fencedPaymentKey,
+      requestHash: fencedRequestHash,
+      claimToken: originalClaim.claimToken,
+      status: 'FAILED',
+      error: { code: 'STALE_WORKER' },
+    }),
+    error => error?.code === 'PAYMENT_STATUS_QUERY_STATE_CONFLICT',
+    'superseded owner must not complete the recovered command',
+  );
+
+  await store.markPaymentStatusQueryProviderStarted(tenantA.chatId, {
+    idempotencyKey: fencedPaymentKey,
+    requestHash: fencedRequestHash,
+    claimToken: recoveredClaim.claimToken,
+    claimGeneration: recoveredClaim.claimGeneration,
+  });
+  const inFlightRetry = await store.beginPaymentStatusQuery(tenantA.chatId, {
+    paymentId: paymentA.id,
+    idempotencyKey: fencedPaymentKey,
+    requestHash: fencedRequestHash,
+  });
+  assert.equal(inFlightRetry.duplicate, true, 'provider-in-flight command must not be reclaimed by timeout');
+  assert.equal(inFlightRetry.phase, 'PROVIDER_IN_FLIGHT');
+  await store.completePaymentStatusQuery(tenantA.chatId, {
+    idempotencyKey: fencedPaymentKey,
+    requestHash: fencedRequestHash,
+    claimToken: recoveredClaim.claimToken,
+    status: 'SUCCEEDED',
+    result: { testOnly: true },
+  });
+
+  // Two recoveries racing for one expired, unstarted claim must produce one
+  // owner only. SQLite's immediate transaction and conditional generation
+  // update serialize the acquisition.
+  const raceKey = 'pf-http-claim-race-' + randomUUID();
+  const raceHash = 'pf-http-claim-race-request-' + randomUUID();
+  const raceInitial = await store.beginPaymentStatusQuery(tenantA.chatId, {
+    paymentId: paymentA.id, idempotencyKey: raceKey, requestHash: raceHash,
+  });
+  assert.equal(raceInitial.claimGeneration, 1);
+  db.prepare(`UPDATE payment_status_query_commands SET lease_expires_at = ?
+    WHERE idempotency_key = ?`).run('2000-01-01T00:00:00.000Z', raceKey);
+  const raceClaims = await Promise.all([
+    store.beginPaymentStatusQuery(tenantA.chatId, {
+      paymentId: paymentA.id, idempotencyKey: raceKey, requestHash: raceHash,
+    }),
+    store.beginPaymentStatusQuery(tenantA.chatId, {
+      paymentId: paymentA.id, idempotencyKey: raceKey, requestHash: raceHash,
+    }),
+  ]);
+  assert.equal(raceClaims.filter(claim => claim.duplicate === false).length, 1,
+    'only one concurrent recovery attempt may acquire the command');
+  assert.equal(raceClaims.filter(claim => claim.duplicate === true).length, 1,
+    'the losing recovery attempt must observe the winning claim');
+  const winningRaceClaim = raceClaims.find(claim => claim.duplicate === false);
+  assert.equal(winningRaceClaim.claimGeneration, 2);
+  await store.completePaymentStatusQuery(tenantA.chatId, {
+    idempotencyKey: raceKey,
+    requestHash: raceHash,
+    claimToken: winningRaceClaim.claimToken,
+    status: 'FAILED',
+    error: { code: 'TEST_CLEANUP' },
+  });
+
+  // Exercise the successful provider observation through the same real client,
+  // HTTP route, adapter, Payment Core, and SQLite persistence boundary.
+  const successIdempotencyKey = 'pf-http-success-lost-response-' + randomUUID();
+  lostResponsePath = successStatusPath;
+  simulateLostResponse = true;
+  globalThis.fetch = simulateResponseLoss;
+  await assert.rejects(
+    () => queryPaymentStatus(paymentSuccessA.id, { query: { statusPath: '/success' } }, { idempotencyKey: successIdempotencyKey }),
+    /Simulated response loss/,
+    'successful status query should commit before the simulated response loss',
+  );
+  globalThis.fetch = originalFetch;
+
+  let successfulRetry;
+  try {
+    successfulRetry = await queryPaymentStatus(
+      paymentSuccessA.id,
+      { query: { statusPath: '/success' } },
+      { idempotencyKey: successIdempotencyKey },
+    );
+  } catch (error) {
+    throw new Error('Successful status-query retry failed: ' + JSON.stringify(error) + '\\nBackend output:\\n' + childOutput);
+  }
+  assert.equal(successfulRetry.status, 'MATCH');
+  assert.equal(successfulRetry.supported, true);
+  assert.equal(successfulRetry.payment.state, 'VERIFIED');
+  assert.equal(successfulRetry.invariants.passed, true);
+  assert.equal(successfulRetry.decision.targetState, 'VERIFIED');
+  assert.equal(providerCalls.success, 1, 'successful result replay must not query the provider twice');
+
+  const successfulPaymentAfterRetry = await store.getPayment(tenantA.chatId, paymentSuccessA.id);
+  assert.equal(successfulPaymentAfterRetry.state, 'VERIFIED');
+  const successfulLedger = await store.listPaymentLedger(tenantA.chatId, paymentSuccessA.id);
+  assert.deepEqual(successfulLedger.map(entry => entry.entryType), ['CREATED', 'VERIFIED'],
+    'successful status-query replay must not duplicate financial ledger entries');
+  const successfulEvidence = await store.listPaymentEvidence(tenantA.chatId, paymentSuccessA.id);
+  const successfulVerifications = await store.listPaymentVerifications(tenantA.chatId, paymentSuccessA.id);
+  const successfulDecisions = await store.listPaymentDecisions(tenantA.chatId, paymentSuccessA.id);
+  assert.equal(successfulEvidence.length, 1, 'replay must not duplicate provider evidence');
+  assert.equal(successfulVerifications.length, 1, 'replay must not duplicate verification');
+  assert.equal(successfulDecisions.length, 1, 'replay must not duplicate the authoritative decision');
+
+  const successCommandRows = db.prepare(
+    'SELECT status, payment_id FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).all(successIdempotencyKey);
+  assert.equal(successCommandRows.length, 1);
+  assert.equal(successCommandRows[0].status, 'SUCCEEDED');
+  assert.equal(successCommandRows[0].payment_id, paymentSuccessA.id);
+
+  // A determinate provider failure must commit its MISMATCH outcome even when
+  // the payment began UNPAID. A lost response then recovers that non-success
+  // decision from canonical lineage without repeating the provider query.
+  const mismatchRecoveryKey = 'pf-http-mismatch-recovery-' + randomUUID();
+  db.exec(`CREATE TRIGGER test_fail_mismatch_status_query_completion
+    BEFORE UPDATE ON payment_status_query_commands
+    WHEN NEW.idempotency_key = '${mismatchRecoveryKey}' AND NEW.status = 'SUCCEEDED'
+    BEGIN SELECT RAISE(ABORT, 'simulated MISMATCH result persistence crash'); END;`);
+  await assert.rejects(
+    () => queryPaymentStatus(
+      paymentMismatchA.id,
+      { query: { statusPath: '/mismatch' } },
+      { idempotencyKey: mismatchRecoveryKey },
+    ),
+    error => error?.status === 500 || error?.code === 'HTTP_500',
+    'MISMATCH query should fail when result persistence fails after the canonical transition',
+  );
+  assert.equal((await store.getPayment(tenantA.chatId, paymentMismatchA.id)).state, 'MISMATCH',
+    'a determinate mismatch must not remain UNPAID');
+  assert.equal(db.prepare(
+    'SELECT status FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(mismatchRecoveryKey).status, 'IN_PROGRESS',
+  'failed result persistence leaves a recoverable MISMATCH command claim');
+  db.exec('DROP TRIGGER test_fail_mismatch_status_query_completion');
+  const recoveredMismatch = await queryPaymentStatus(
+    paymentMismatchA.id,
+    { query: { statusPath: '/mismatch' } },
+    { idempotencyKey: mismatchRecoveryKey },
+  );
+  assert.equal(recoveredMismatch.status, 'MISMATCH');
+  assert.equal(recoveredMismatch.payment.state, 'MISMATCH');
+  assert.equal(recoveredMismatch.decision.targetState, 'MISMATCH');
+  assert.equal(providerCalls.mismatch, 1, 'MISMATCH recovery must not query the provider again');
+  assert.deepEqual(
+    (await store.listPaymentLedger(tenantA.chatId, paymentMismatchA.id)).map(entry => entry.entryType),
+    ['CREATED', 'MISMATCH'],
+    'MISMATCH recovery must not duplicate the committed ledger transition',
+  );
+  assert.equal((await store.listPaymentEvidence(tenantA.chatId, paymentMismatchA.id)).length, 1);
+  assert.equal((await store.listPaymentVerifications(tenantA.chatId, paymentMismatchA.id)).length, 1);
+  assert.equal((await store.listPaymentDecisions(tenantA.chatId, paymentMismatchA.id)).length, 1);
+  assert.equal(db.prepare(
+    'SELECT status FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(mismatchRecoveryKey).status, 'SUCCEEDED');
+
+  // Simulate a real SQLite failure after the canonical financial transaction
+  // commits but before the status-query command can persist its result. The
+  // first HTTP request must fail without undoing the financial transaction;
+  // a same-key retry must reconstruct the result from canonical persisted
+  // decision/evidence lineage and must not call the provider or write ledger
+  // entries a second time.
+  const committedRecoveryKey = 'pf-http-commit-before-result-' + randomUUID();
+  db.exec(`CREATE TRIGGER test_fail_status_query_completion
+    BEFORE UPDATE ON payment_status_query_commands
+    WHEN NEW.idempotency_key = '${committedRecoveryKey}' AND NEW.status = 'SUCCEEDED'
+    BEGIN SELECT RAISE(ABORT, 'simulated result persistence crash'); END;`);
+  await assert.rejects(
+    () => queryPaymentStatus(
+      paymentRecoveryA.id,
+      { query: { statusPath: '/recovery' } },
+      { idempotencyKey: committedRecoveryKey },
+    ),
+    error => error?.status === 500 || error?.code === 'HTTP_500',
+    'HTTP request should fail when status-query result persistence fails after financial commit',
+  );
+  const paymentAfterResultWriteFailure = await store.getPayment(tenantA.chatId, paymentRecoveryA.id);
+  assert.equal(paymentAfterResultWriteFailure.state, 'VERIFIED',
+    'canonical financial decision must remain committed when command result persistence fails');
+  assert.deepEqual(
+    (await store.listPaymentLedger(tenantA.chatId, paymentRecoveryA.id)).map(entry => entry.entryType),
+    ['CREATED', 'VERIFIED'],
+  );
+  assert.equal((await store.listPaymentEvidence(tenantA.chatId, paymentRecoveryA.id)).length, 1);
+  assert.equal((await store.listPaymentVerifications(tenantA.chatId, paymentRecoveryA.id)).length, 1);
+  assert.equal((await store.listPaymentDecisions(tenantA.chatId, paymentRecoveryA.id)).length, 1);
+  assert.equal(providerCalls.recovery, 1);
+  assert.equal(db.prepare(
+    'SELECT status FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(committedRecoveryKey).status, 'IN_PROGRESS',
+  'failed completion write leaves a recoverable command claim');
+
+  db.exec('DROP TRIGGER test_fail_status_query_completion');
+  const recoveredCommittedResult = await queryPaymentStatus(
+    paymentRecoveryA.id,
+    { query: { statusPath: '/recovery' } },
+    { idempotencyKey: committedRecoveryKey },
+  );
+  assert.equal(recoveredCommittedResult.status, 'MATCH');
+  assert.equal(recoveredCommittedResult.payment.state, 'VERIFIED');
+  assert.equal(recoveredCommittedResult.decision.targetState, 'VERIFIED');
+  assert.equal(providerCalls.recovery, 1, 'recovery must not repeat the provider call');
+  assert.deepEqual(
+    (await store.listPaymentLedger(tenantA.chatId, paymentRecoveryA.id)).map(entry => entry.entryType),
+    ['CREATED', 'VERIFIED'],
+    'recovery must not duplicate the committed ledger transition',
+  );
+  assert.equal((await store.listPaymentEvidence(tenantA.chatId, paymentRecoveryA.id)).length, 1);
+  assert.equal((await store.listPaymentVerifications(tenantA.chatId, paymentRecoveryA.id)).length, 1);
+  assert.equal((await store.listPaymentDecisions(tenantA.chatId, paymentRecoveryA.id)).length, 1);
+  assert.equal(db.prepare(
+    'SELECT status FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(committedRecoveryKey).status, 'SUCCEEDED',
+  'successful recovery persists the reconstructed command result');
+
+  // Exercise the same boundary across an actual backend process death. A
+  // completion trigger forces the HTTP request to fail after recovery has read
+  // the canonical committed decision; the parent then kills the backend before
+  // removing the trigger and starting a fresh process against the same SQLite DB.
+  const processCrashRecoveryKey = 'pf-http-process-crash-after-commit-' + randomUUID();
+  db.exec(`CREATE TRIGGER test_fail_process_crash_query_completion
+    BEFORE UPDATE ON payment_status_query_commands
+    WHEN NEW.idempotency_key = '${processCrashRecoveryKey}' AND NEW.status = 'SUCCEEDED'
+    BEGIN SELECT RAISE(ABORT, 'simulated process crash after canonical decision'); END;`);
+  const processCrashFirstResponse = await originalFetch(baseUrl + recoveryStatusPath, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + sessionA.token,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': processCrashRecoveryKey,
+    },
+    body: JSON.stringify({ query: { statusPath: '/recovery' } }),
+  });
+  assert.equal(processCrashFirstResponse.status, 500,
+    'completion persistence failure must fail the HTTP request after canonical outcome recovery');
+  const providerCallsBeforeProcessCrashRetry = providerCalls.recovery;
+  const ledgerBeforeProcessCrashRetry = (await store.listPaymentLedger(tenantA.chatId, paymentRecoveryA.id)).map(entry => entry.entryType);
+  const evidenceCountBeforeProcessCrashRetry = (await store.listPaymentEvidence(tenantA.chatId, paymentRecoveryA.id)).length;
+  const verificationCountBeforeProcessCrashRetry = (await store.listPaymentVerifications(tenantA.chatId, paymentRecoveryA.id)).length;
+  const decisionCountBeforeProcessCrashRetry = (await store.listPaymentDecisions(tenantA.chatId, paymentRecoveryA.id)).length;
+  assert.equal((await store.getPayment(tenantA.chatId, paymentRecoveryA.id)).state, 'VERIFIED');
+  child.kill('SIGKILL');
+  await new Promise(resolve => {
+    if (child.exitCode !== null) return resolve();
+    child.once('exit', resolve);
+  });
+  db.exec('DROP TRIGGER test_fail_process_crash_query_completion');
+
+  childOutput = '';
+  child = spawn(process.execPath, ['backend/server.js'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      PORT: String(port),
+      SELLIFY_DATA_DIR: tempDir,
+      SELLIFY_DB_PATH: dbPath,
+      NODE_ENV: 'test',
+      SERVE_STATIC: 'false',
+      SELLIFY_TELEBIRR_BASE_URL: providerBaseUrl,
+      SELLIFY_TELEBIRR_API_KEY: 'pf-http-test-provider-key',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  child.stdout.on('data', chunk => { childOutput += chunk.toString(); });
+  child.stderr.on('data', chunk => { childOutput += chunk.toString(); });
+  await waitForHealth(baseUrl, child);
+  const processCrashRetry = await originalFetch(baseUrl + recoveryStatusPath, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + sessionA.token,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': processCrashRecoveryKey,
+    },
+    body: JSON.stringify({ query: { statusPath: '/recovery' } }),
+  });
+  assert.equal(processCrashRetry.status, 200,
+    'restarted backend must reconstruct the result from canonical persisted state');
+  const processCrashRetryBody = await processCrashRetry.json();
+  assert.equal(processCrashRetryBody.status, 'MATCH');
+  assert.equal(processCrashRetryBody.payment?.state, 'VERIFIED');
+  assert.equal(providerCalls.recovery, providerCallsBeforeProcessCrashRetry,
+    'process-crash recovery must not repeat provider work');
+  assert.deepEqual(
+    (await store.listPaymentLedger(tenantA.chatId, paymentRecoveryA.id)).map(entry => entry.entryType),
+    ledgerBeforeProcessCrashRetry,
+    'process-crash recovery must not duplicate financial ledger writes',
+  );
+  assert.equal((await store.listPaymentEvidence(tenantA.chatId, paymentRecoveryA.id)).length, evidenceCountBeforeProcessCrashRetry);
+  assert.equal((await store.listPaymentVerifications(tenantA.chatId, paymentRecoveryA.id)).length, verificationCountBeforeProcessCrashRetry);
+  assert.equal((await store.listPaymentDecisions(tenantA.chatId, paymentRecoveryA.id)).length, decisionCountBeforeProcessCrashRetry);
+  assert.equal(db.prepare(
+    'SELECT status FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(processCrashRecoveryKey).status, 'SUCCEEDED');
+
+  // Provider network errors are retryable only before evidence persistence.
+  // A same-key retry should reclaim that known-safe failed attempt, then become
+  // a durable successful command once the provider responds.
+  const retryableProviderKey = 'pf-http-provider-retry-' + randomUUID();
+  await assert.rejects(
+    () => queryPaymentStatus(paymentRetryA.id, { query: { statusPath: '/flaky' } }, { idempotencyKey: retryableProviderKey }),
+    error => error.status === 502 && error.retryable === true,
+    'provider network failure should surface as a retryable error',
+  );
+  const failedProviderCommand = db.prepare(
+    'SELECT status, error_json FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(retryableProviderKey);
+  assert.equal(failedProviderCommand.status, 'FAILED');
+  const persistedProviderError = JSON.parse(failedProviderCommand.error_json);
+  assert.equal(persistedProviderError.retryable, true);
+  assert.equal(persistedProviderError.code, 'PAYMENT_PROVIDER_NETWORK_ERROR');
+  const failedProviderCallCount = providerCalls.flaky;
+  assert.ok(failedProviderCallCount >= 1);
+
+  flakyMode = 'success';
+  const recoveredProviderRetry = await queryPaymentStatus(
+    paymentRetryA.id,
+    { query: { statusPath: '/flaky' } },
+    { idempotencyKey: retryableProviderKey },
+  );
+  assert.equal(recoveredProviderRetry.status, 'MATCH');
+  assert.equal(recoveredProviderRetry.payment.state, 'VERIFIED');
+  assert.equal(providerCalls.flaky, failedProviderCallCount + 1,
+    'safe same-key retry should perform one new provider request after the failed attempt');
+  const successfulProviderCallCount = providerCalls.flaky;
+  const finalProviderReplay = await queryPaymentStatus(
+    paymentRetryA.id,
+    { query: { statusPath: '/flaky' } },
+    { idempotencyKey: retryableProviderKey },
+  );
+  assert.equal(finalProviderReplay.payment.state, 'VERIFIED');
+  assert.equal(providerCalls.flaky, successfulProviderCallCount,
+    'a completed successful retry must replay without another provider request');
+  assert.deepEqual(
+    (await store.listPaymentLedger(tenantA.chatId, paymentRetryA.id)).map(entry => entry.entryType),
+    ['CREATED', 'VERIFIED'],
+  );
+  assert.equal((await store.listPaymentEvidence(tenantA.chatId, paymentRetryA.id)).length, 1);
+  assert.equal((await store.listPaymentVerifications(tenantA.chatId, paymentRetryA.id)).length, 1);
+  assert.equal((await store.listPaymentDecisions(tenantA.chatId, paymentRetryA.id)).length, 1);
+  const completedProviderCommand = db.prepare(
+    'SELECT status, error_json FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(retryableProviderKey);
+  assert.equal(completedProviderCommand.status, 'SUCCEEDED');
+  assert.equal(completedProviderCommand.error_json, null);
+
+  const crossTenantKey = 'pf-http-cross-tenant-' + randomUUID();
+  const crossTenantResponse = await originalFetch(
+    baseUrl + '/tenants/' + encodeURIComponent(tenantB.chatId) +
+      '/payments/' + encodeURIComponent(paymentB.id) + '/status',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + sessionA.token,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': crossTenantKey,
+      },
+      body: JSON.stringify({}),
+    },
+  );
+  assert.ok([401, 403].includes(crossTenantResponse.status),
+    'a session from tenant A must not query tenant B payment status');
+  const crossTenantCommands = db.prepare(
+    'SELECT COUNT(*) AS count FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(crossTenantKey);
+  assert.equal(Number(crossTenantCommands.count), 0, 'unauthorized cross-tenant requests must not claim commands');
+  assert.equal((await store.getPayment(tenantB.chatId, paymentB.id)).state, 'UNPAID');
+  assert.equal((await store.listPaymentLedger(tenantB.chatId, paymentB.id)).length, 1);
+
+  // GAP-1.24 complementary process-crash boundary: a worker that dies after
+  // durable claim acquisition but before provider-start may be recovered after
+  // the lease expires. This uses a separate Node process, not a production hook.
+  const preProviderCrashKey = 'pf-http-crash-before-provider-' + randomUUID();
+  const preProviderCrashHash = 'pf-http-crash-before-provider-request-' + randomUUID();
+  const claimWorkerScript = [
+    "import { beginPaymentStatusQuery } from './backend/lib/store-sqlite.js';",
+    "const claim = await beginPaymentStatusQuery(process.env.PF_CHAT_ID, {",
+    "  paymentId: process.env.PF_PAYMENT_ID,",
+    "  idempotencyKey: process.env.PF_IDEMPOTENCY_KEY,",
+    "  requestHash: process.env.PF_REQUEST_HASH,",
+    "});",
+    "console.log(JSON.stringify(claim));",
+    "await new Promise(() => {});",
+  ].join('\n');
+  const claimWorker = spawn(process.execPath, ['--input-type=module', '-e', claimWorkerScript], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      SELLIFY_DATA_DIR: tempDir,
+      SELLIFY_DB_PATH: dbPath,
+      PF_CHAT_ID: tenantA.chatId,
+      PF_PAYMENT_ID: paymentRecoveryA.id,
+      PF_IDEMPOTENCY_KEY: preProviderCrashKey,
+      PF_REQUEST_HASH: preProviderCrashHash,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let claimWorkerOutput = '';
+  claimWorker.stdout.on('data', chunk => { claimWorkerOutput += chunk.toString(); });
+  claimWorker.stderr.on('data', chunk => { claimWorkerOutput += chunk.toString(); });
+  let claimWorkerClaim = null;
+  for (let attempt = 0; attempt < 100 && !claimWorkerClaim; attempt += 1) {
+    const line = claimWorkerOutput.split('\n').find(value => value.startsWith('{'));
+    if (line) {
+      try { claimWorkerClaim = JSON.parse(line); } catch {}
+    }
+    if (claimWorker.exitCode !== null) break;
+    if (!claimWorkerClaim) await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  assert.ok(claimWorkerClaim, 'separate worker must persist a claim before simulated process death; output: ' + claimWorkerOutput);
+  assert.equal(claimWorkerClaim.phase, 'CLAIMED');
+  assert.equal(claimWorkerClaim.claimGeneration, 1);
+  claimWorker.kill('SIGKILL');
+  await new Promise(resolve => {
+    if (claimWorker.exitCode !== null) return resolve();
+    claimWorker.once('exit', resolve);
+  });
+  const preProviderCrashRow = db.prepare(
+    'SELECT status, phase, claim_generation, claim_token FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(preProviderCrashKey);
+  assert.equal(preProviderCrashRow.status, 'IN_PROGRESS');
+  assert.equal(preProviderCrashRow.phase, 'CLAIMED',
+    'process death before provider-start must leave a recoverable unstarted claim');
+  assert.equal(Number(preProviderCrashRow.claim_generation), 1);
+  db.prepare('UPDATE payment_status_query_commands SET lease_expires_at = ? WHERE idempotency_key = ?')
+    .run('2000-01-01T00:00:00.000Z', preProviderCrashKey);
+  const afterPreProviderCrash = await store.beginPaymentStatusQuery(tenantA.chatId, {
+    paymentId: paymentRecoveryA.id,
+    idempotencyKey: preProviderCrashKey,
+    requestHash: preProviderCrashHash,
+  });
+  assert.equal(afterPreProviderCrash.duplicate, false);
+  assert.equal(afterPreProviderCrash.recovered, true);
+  assert.equal(afterPreProviderCrash.phase, 'CLAIMED');
+  assert.equal(afterPreProviderCrash.claimGeneration, 2);
+  assert.notEqual(afterPreProviderCrash.claimToken, claimWorkerClaim.claimToken);
+  await assert.rejects(
+    () => store.markPaymentStatusQueryProviderStarted(tenantA.chatId, {
+      idempotencyKey: preProviderCrashKey,
+      requestHash: preProviderCrashHash,
+      claimToken: claimWorkerClaim.claimToken,
+      claimGeneration: claimWorkerClaim.claimGeneration,
+    }),
+    error => error?.code === 'PAYMENT_STATUS_QUERY_CLAIM_FENCED',
+    'crashed worker claim must remain fenced after recovery',
+  );
+  await store.completePaymentStatusQuery(tenantA.chatId, {
+    idempotencyKey: preProviderCrashKey,
+    requestHash: preProviderCrashHash,
+    claimToken: afterPreProviderCrash.claimToken,
+    status: 'FAILED',
+    error: { code: 'TEST_CLEANUP' },
+  });
+
+  // GAP-1.24 process-crash boundary: once the external provider request has
+  // begun, a backend restart must not auto-reclaim the uncertain operation.
+  const crashKey = 'pf-http-crash-provider-in-flight-' + randomUUID();
+  const crashStatusPath = '/tenants/' + encodeURIComponent(tenantA.chatId) +
+    '/payments/' + encodeURIComponent(paymentRecoveryA.id) + '/status';
+  const interruptedRequest = originalFetch(baseUrl + crashStatusPath, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + sessionA.token,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': crashKey,
+    },
+    body: JSON.stringify({ query: { statusPath: '/crash-inflight' } }),
+  }).catch(error => ({ interrupted: true, error }));
+  await Promise.race([
+    crashInFlightObserved,
+    new Promise((_, reject) => setTimeout(() => reject(
+      new Error('Provider request was not reached before crash-boundary timeout'),
+    ), 5000)),
+  ]);
+  assert.equal(providerCalls.crashInFlight, 1);
+  child.kill('SIGKILL');
+  await new Promise(resolve => {
+    if (child.exitCode !== null) return resolve();
+    child.once('exit', resolve);
+  });
+  await interruptedRequest;
+
+  const inFlightAfterCrash = db.prepare(
+    'SELECT status, phase, claim_generation FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(crashKey);
+  assert.equal(inFlightAfterCrash.status, 'IN_PROGRESS');
+  assert.equal(inFlightAfterCrash.phase, 'PROVIDER_IN_FLIGHT',
+    'crash after provider invocation must retain the conservative in-flight phase');
+  assert.equal(Number(inFlightAfterCrash.claim_generation), 1);
+
+  // Restart the actual HTTP process against the same SQLite database and retry
+  // the same command. It must remain unresolved and must not call the provider
+  // a second time merely because the previous worker disappeared.
+  childOutput = '';
+  child = spawn(process.execPath, ['backend/server.js'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      PORT: String(port),
+      SELLIFY_DATA_DIR: tempDir,
+      SELLIFY_DB_PATH: dbPath,
+      NODE_ENV: 'test',
+      SERVE_STATIC: 'false',
+      SELLIFY_TELEBIRR_BASE_URL: providerBaseUrl,
+      SELLIFY_TELEBIRR_API_KEY: 'pf-http-test-provider-key',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  child.stdout.on('data', chunk => { childOutput += chunk.toString(); });
+  child.stderr.on('data', chunk => { childOutput += chunk.toString(); });
+  await waitForHealth(baseUrl, child);
+  const afterRestart = await originalFetch(baseUrl + crashStatusPath, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + sessionA.token,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': crashKey,
+    },
+    body: JSON.stringify({ query: { statusPath: '/crash-inflight' } }),
+  });
+  assert.equal(afterRestart.status, 409,
+    'restart retry must report unresolved in-flight work instead of reclaiming it');
+  const afterRestartBody = await afterRestart.json();
+  assert.match(afterRestartBody.error?.message || '', /unresolved or already in progress/i,
+    'restart retry must expose the existing unresolved-command response without leaking internal state');
+  assert.equal(providerCalls.crashInFlight, 1,
+    'backend restart must not repeat uncertain provider I/O');
+  const persistedAfterRestart = db.prepare(
+    'SELECT status, phase, claim_generation FROM payment_status_query_commands WHERE idempotency_key = ?'
+  ).get(crashKey);
+  assert.equal(persistedAfterRestart.status, 'IN_PROGRESS');
+  assert.equal(persistedAfterRestart.phase, 'PROVIDER_IN_FLIGHT');
+  assert.equal(Number(persistedAfterRestart.claim_generation), 1);
+
+  console.log('PASS PF-1 HTTP + real frontend client + SQLite lost-response retry');
+  console.log('PASS unavailable provider outcome remains UNKNOWN and causes no financial transition');
+  console.log('PASS successful MATCH -> VERIFIED -> ledger transition and lost-response replay');
+  console.log('PASS HTTP + SQLite recovery after financial commit but failed query-result persistence');
+  console.log('PASS evidence, verification, decision, and ledger are not duplicated on replay');
+  console.log('PASS retryable provider network failure can retry safely with the same key');
+  console.log('PASS durable status-query command replays through the actual HTTP route');
+  console.log('PASS cross-tenant session is rejected before command claim');
+  console.log('PASS process crash before provider execution safely recovers expired CLAIMED work and fences stale worker');
+  console.log('PASS process crash after provider invocation preserves unresolved PROVIDER_IN_FLIGHT claim across backend restart');
+} catch (error) {
+  globalThis.fetch = originalFetch;
+  throw error;
+} finally {
+  globalThis.fetch = originalFetch;
+  if (db) db.close();
+  if (providerServer?.listening) {
+    await new Promise(resolve => providerServer.close(() => resolve()));
+  }
+  if (child && child.exitCode === null) {
+    child.kill('SIGTERM');
+    await new Promise(resolve => {
+      const timer = setTimeout(resolve, 2000);
+      child.once('exit', () => { clearTimeout(timer); resolve(); });
+    });
+  }
+  if (originalWindow === undefined) delete globalThis.window;
+  else globalThis.window = originalWindow;
+  if (originalLocalStorage === undefined) delete globalThis.localStorage;
+  else globalThis.localStorage = originalLocalStorage;
+  if (originalDocument === undefined) delete globalThis.document;
+  else globalThis.document = originalDocument;
+  if (originalGetComputedStyle === undefined) delete globalThis.getComputedStyle;
+  else globalThis.getComputedStyle = originalGetComputedStyle;
+  await rm(tempDir, { recursive: true, force: true });
+}

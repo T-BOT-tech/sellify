@@ -16,8 +16,11 @@ const commitStart = store.indexOf('export async function commitPaymentDecision')
 const commitEnd = store.indexOf('const PAYMENT_STATES', commitStart);
 assert.ok(commitStart >= 0 && commitEnd > commitStart);
 const commitSection = store.slice(commitStart, commitEnd);
-assert.ok(commitSection.indexOf('evidenceRow') < commitSection.indexOf('payment_verifications'));
-assert.ok(commitSection.includes('existingVerification'));
+assert.ok(commitSection.indexOf('persistedVerificationRow') < commitSection.indexOf('evidenceRow'), 'decision must load the persisted verification before validating its linked evidence');
+assert.ok(commitSection.includes('PAYMENT_VERIFICATION_NOT_PERSISTED'));
+assert.ok(commitSection.includes('SELECT * FROM payment_verifications WHERE id = ? AND organization_id = ?'));
+assert.ok(!commitSection.includes('INSERT INTO payment_verifications'), 'financial decision must not create verification records');
+assert.ok(commitSection.includes('paymentVerificationFromRow(persistedVerificationRow)'), 'decision must use the canonical persisted verification');
 
 const queryStart = core.indexOf('const persistedVerificationResult = await this.store.insertPaymentVerification');
 assert.ok(queryStart >= 0);

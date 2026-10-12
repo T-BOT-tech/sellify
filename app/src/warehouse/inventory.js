@@ -13,8 +13,30 @@ export function isWarehouseEnabled() {
 }
 
 function hasCanonicalInventory(productId) {
-  return inventoryBalances.some(row => String(row.productId) === String(productId))
-    || inventoryMovements.some(row => String(row.productId) === String(productId));
+  const tenantChatId = String(config.chatId || '');
+  const organizationId = String(config.organizationId || '');
+  const locationId = String(config.locationId || '');
+  const matchesLocation = row => !locationId || String(row.locationId || '') === locationId;
+  const hasScopedBalance = inventoryBalances.some(row =>
+    String(row.productId) === String(productId)
+    && (!tenantChatId || String(row.tenantChatId || '') === tenantChatId)
+    && matchesLocation(row)
+  );
+
+  // Movement history may contain legacy rows without tenantChatId. In an
+  // authenticated context, only accept explicitly matching tenant rows, or
+  // legacy rows whose organization matches the active organization. A row
+  // carrying a different tenant must never be accepted through organization
+  // fallback. Unscoped legacy rows are usable only before tenant auth.
+  const hasScopedMovement = inventoryMovements.some(row => {
+    if (String(row.productId) !== String(productId) || !matchesLocation(row)) return false;
+    if (!tenantChatId) return true;
+    const rowTenant = String(row.tenantChatId || '');
+    if (rowTenant) return rowTenant === tenantChatId;
+    return Boolean(organizationId && String(row.organizationId || '') === organizationId);
+  });
+
+  return hasScopedBalance || hasScopedMovement;
 }
 
 export function isStockTracked(p) {

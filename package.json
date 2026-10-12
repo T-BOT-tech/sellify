@@ -98,6 +98,8 @@
     "test:phase13.11.8": "node phase0/phase13.11.8-restaurant-warehouse-logistics-regression.mjs",
     "test:phase13.11.9": "node phase0/phase13.11.9-unified-fulfillment-regression.mjs",
     "test:phase13.11.10": "node phase0/phase13.11.10-event-boundary-regression.mjs",
+    "test:outbox-tenant-scope": "node phase0/event-outbox-tenant-scope-regression.mjs",
+    "test:order-sync-idempotency": "node phase0/order-sync-idempotency-regression.mjs",
     "test:phase13.11.11": "node phase0/phase13.11.11-idempotency-replay-regression.mjs",
     "test:phase13.11.12": "node phase0/phase13.11.12-failure-isolation-regression.mjs",
     "test:phase13.11.13": "node phase0/phase13.11.13-cancellation-returns-regression.mjs",
@@ -320,6 +322,7 @@
     "gap-1:provider-confirmation-finalization-test": "node phase0/gap-1-provider-confirmation-finalization-regression.mjs",
     "gap-1.18:provider-batch-verification-test": "node phase0/gap-1.18H-provider-batch-verification-regression.mjs",
     "gap-1.18:provider-verification-persistence-test": "node phase0/gap-1.18I-provider-verification-persistence-regression.mjs",
+    "gap-1.18:provider-verification-migration-test": "node phase0/gap-1.18I-migration-independence-regression.mjs",
     "gap-1.18:verification-decision-binding-test": "node phase0/gap-1.18J-verification-decision-binding-regression.mjs",
     "gap-1.18:verification-freshness-test": "node phase0/gap-1.18K-verification-freshness-regression.mjs",
     "gap-1.18:payment-financial-invariant-binding-test": "node phase0/gap-1.18L-payment-financial-invariant-binding-regression.mjs",
@@ -340,6 +343,7 @@
     "test:gap-2-production-readiness": "node phase0/gap-2-production-readiness-regression.mjs",
     "test:pf-1-final-certification": "node phase0/gap-pf-1J-final-certification.mjs",
     "test:pf-1k-frontend-payment-lifecycle": "node phase0/gap-pf-1K-frontend-payment-lifecycle.mjs",
+    "test:pf-1-payment-frontend-http-sqlite-e2e": "node phase0/gap-pf-1L-payment-frontend-http-sqlite-e2e-regression.mjs",
     "test:phase13.10.17": "node phase0/phase13.10.17-logistics-pack-productization-regression.mjs",
     "test:phase13.10.18": "node phase0/phase13.10.18-logistics-workspace-composition-regression.mjs",
     "test:phase13.10.19": "node phase0/phase13.10.19-logistics-movement-shipment-regression.mjs",
@@ -407,7 +411,12 @@
     "test:logistics-l8-l21": "node phase0/logistics-l8-l21-cumulative-exit-gate.mjs",
     "test:logistics-l8-l21-certification": "node phase0/logistics-l8-l21-final-certification.mjs",
     "test:logistics-master-exit": "node phase0/logistics-master-specification-exit-audit.mjs",
-    "test:gap-5-iam": "node phase0/gap-5-iam-membership-contextual-role-regression.mjs"
+    "test:gap-5-iam": "node phase0/gap-5-iam-membership-contextual-role-regression.mjs",
+    "test:backup-collision": "node phase0/database-backup-collision-regression.mjs",
+    "test:backup-restore": "node phase0/database-backup-restore-regression.mjs",
+    "test:payment-lineage-append-only": "node phase0/payment-lineage-append-only-regression.mjs",
+    "gap-1.18:decision-idempotency-test": "node phase0/gap-1.18Q-payment-decision-idempotency-regression.mjs",
+    "gap-1.18:financial-transition-idempotency-test": "node phase0/gap-1.18U-financial-transition-idempotency-regression.mjs"
   },
   "engines": {
     "node": ">=24"

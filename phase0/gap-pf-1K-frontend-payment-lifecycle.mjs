@@ -20,6 +20,9 @@ assert.match(projection, /paymentCommandKey\\('create-order', serverOrderId\\)/)
 assert.match(projection, /refreshCanonicalPaymentStatus\\(payment\\.id, \\{\\}, \\{ idempotencyKey: queryKey \\}\\)/);
 assert.match(projection, /queryPaymentStatus\\(id, body, \\{ idempotencyKey: queryKey \\}\\)/);
 assert.match(projection, /paymentCommandKey\\('status',/);
+assert.match(projection, /const paymentEnsureInFlight = new Map\(\)/);
+assert.match(projection, /if \(statusQueryKey\) return ensurePaymentForSyncedOrderOnce\(order, \{ statusQueryKey \}\)/);
+assert.match(projection, /paymentEnsureInFlight\.delete\(serverOrderId\)/);
 
 assert.match(client, /method: 'POST'/);
 assert.match(client, /\\/status/);

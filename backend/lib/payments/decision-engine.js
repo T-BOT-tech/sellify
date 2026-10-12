@@ -50,10 +50,15 @@ export class PaymentDecisionEngine {
       decision = 'MARK_PARTIAL';
       targetState = 'PARTIAL';
       reasons.push('PARTIAL_PAYMENT');
-    } else if (has(reasons, 'RECEIVER_MISMATCH') || has(reasons, 'RECEIVER_UNAVAILABLE') ||
-               has(reasons, 'CURRENCY_MISMATCH') || has(reasons, 'AMOUNT_MISMATCH') ||
-               has(reasons, 'REFERENCE_MISMATCH') || has(reasons, 'TRANSACTION_MISMATCH') ||
-               has(reasons, 'TRANSACTION_ID_MISSING')) {
+    } else if (['MATCH', 'MISMATCH'].includes(String(verification?.result).toUpperCase()) &&
+               (has(reasons, 'RECEIVER_MISMATCH') || has(reasons, 'RECEIVER_UNAVAILABLE') ||
+                has(reasons, 'CURRENCY_MISMATCH') || has(reasons, 'AMOUNT_MISMATCH') ||
+                has(reasons, 'REFERENCE_MISMATCH') || has(reasons, 'TRANSACTION_MISMATCH') ||
+                has(reasons, 'TRANSACTION_ID_MISSING'))) {
+      // Missing/mismatched fields cannot turn an UNKNOWN provider outcome into
+      // a financial rejection. Only classify mismatch when the provider returned
+      // a determinate match/mismatch observation; structural security failures
+      // remain handled by the higher-precedence checks above.
       decision = 'MARK_MISMATCH';
       targetState = 'MISMATCH';
     } else if (String(verification?.result).toUpperCase() === 'MATCH' && invariants?.passed) {
