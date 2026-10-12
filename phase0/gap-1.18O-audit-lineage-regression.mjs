@@ -8,12 +8,12 @@ import { randomUUID } from 'node:crypto';
 
 const source = readFileSync(new URL('../backend/lib/store-sqlite.js', import.meta.url), 'utf8');
 
-assert.match(source, /GAP-1\\.18O add tamper-evident audit chain|if \\(!applied\\.includes\\(57\\)\\)/);
+assert.match(source, /GAP-1\.18O add tamper-evident audit chain|if \(!applied\.includes\(57\)\)/);
 assert.match(source, /ALTER TABLE audit_events ADD COLUMN previous_hash/);
 assert.match(source, /ALTER TABLE audit_events ADD COLUMN event_hash/);
 assert.match(source, /ALTER TABLE audit_events ADD COLUMN lineage_type/);
 assert.match(source, /ALTER TABLE audit_events ADD COLUMN lineage_id/);
-assert.match(source, /crypto\\.createHash\\('sha256'\\)/);
+assert.match(source, /crypto\.createHash\('sha256'\)/);
 assert.match(source, /export async function verifyAuditEventChain/);
 
 // Use a fresh, durable SQLite database and exercise the existing payment
