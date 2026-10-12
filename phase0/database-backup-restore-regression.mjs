@@ -52,7 +52,7 @@ try {
     assert.ok(organization?.id, 'fixture must have a tenant organization');
     sourceDbHandle.prepare(
       'INSERT INTO payments (id, organization_id, provider_id, channel, amount_minor, currency, state, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(paymentId, organization.id, 'restore-test-provider', 'api', 12500, 'ETB', 'UNPAID', timestamp, timestamp);
+    ).run(paymentId, organization.id, 'restore-test-provider', 'api', 12500, 'ETB', 'VERIFIED', timestamp, timestamp);
     sourceDbHandle.prepare(
       'INSERT INTO payment_evidence (id, organization_id, payment_id, provider_id, channel, evidence_type, fingerprint, received_at, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(evidenceId, organization.id, paymentId, 'restore-test-provider', 'api', 'PROVIDER_STATUS', 'restore-evidence-' + crypto.randomUUID(), timestamp, 'VERIFIED', timestamp, timestamp);
@@ -61,10 +61,10 @@ try {
     ).run(verificationId, organization.id, paymentId, evidenceId, 'restore-test-provider', 'MATCH', 'restore-regression-verifier', timestamp);
     sourceDbHandle.prepare(
       'INSERT INTO payment_decisions (id, organization_id, payment_id, evidence_id, verification_id, decision, target_state, reason_codes_json, invariant_results_json, decision_source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(decisionId, organization.id, paymentId, evidenceId, verificationId, 'ACCEPT', 'PAID', '[]', '{}', 'PAYMENT_CORE', timestamp);
+    ).run(decisionId, organization.id, paymentId, evidenceId, verificationId, 'ACCEPT', 'VERIFIED', '[]', '{"passed":true}', 'PAYMENT_CORE', timestamp);
     sourceDbHandle.prepare(
       'INSERT INTO payment_ledger_entries (id, payment_id, organization_id, entry_type, amount_minor, currency, from_state, to_state, reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(ledgerEntryId, paymentId, organization.id, 'CREATED', 12500, 'ETB', null, 'UNPAID', 'backup restore regression fixture', timestamp);
+    ).run(ledgerEntryId, paymentId, organization.id, 'VERIFIED', 12500, 'ETB', 'UNPAID', 'VERIFIED', 'backup restore regression fixture', timestamp);
     sourceDbHandle.prepare(
       'INSERT INTO payment_status_query_commands (id, organization_id, payment_id, idempotency_key, request_hash, status, response_json, error_json, created_at, updated_at, claim_generation, claim_token, phase, lease_expires_at) VALUES (?, ?, ?, ?, ?, \'IN_PROGRESS\', NULL, NULL, ?, ?, 1, ?, \'PROVIDER_IN_FLIGHT\', NULL)'
     ).run(statusCommandId, organization.id, paymentId, statusIdempotencyKey, 'restore-fixture-request-hash', timestamp, timestamp, statusClaimToken);
@@ -105,13 +105,14 @@ try {
     assert.equal(restoredVerification.evidence_id, evidenceId, 'verification must remain linked to evidence');
     assert.equal(restoredVerification.payment_id, paymentId, 'verification must remain linked to payment');
     assert.equal(restoredVerification.result, 'MATCH');
-    const restoredDecision = check.prepare('SELECT payment_id, evidence_id, verification_id, decision, target_state FROM payment_decisions WHERE id = ?').get(decisionId);
+    const restoredDecision = check.prepare('SELECT payment_id, evidence_id, verification_id, decision, target_state, invariant_results_json FROM payment_decisions WHERE id = ?').get(decisionId);
     assert.ok(restoredDecision, 'restored database must preserve Payment Core decision');
     assert.equal(restoredDecision.payment_id, paymentId);
     assert.equal(restoredDecision.evidence_id, evidenceId);
     assert.equal(restoredDecision.verification_id, verificationId);
     assert.equal(restoredDecision.decision, 'ACCEPT');
-    assert.equal(restoredDecision.target_state, 'PAID');
+    assert.equal(restoredDecision.target_state, 'VERIFIED');
+    assert.equal(JSON.parse(restoredDecision.invariant_results_json).passed, true);
     assert.equal(check.prepare('SELECT COUNT(*) AS count FROM payment_ledger_entries WHERE id = ? AND payment_id = ?').get(ledgerEntryId, paymentId).count, 1,
       'restored database must preserve the linked financial ledger entry');
     const restoredCommand = check.prepare(
