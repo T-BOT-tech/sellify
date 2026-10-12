@@ -127,7 +127,7 @@ try {
 
   const directDb = new DatabaseSync(process.env.SELLIFY_DB_PATH);
   try {
-    const organizationId = String(tenant.organizationId);
+    const organizationId = String(payment.organizationId);
     const evidenceRow = directDb.prepare(
       'SELECT id, payment_id, organization_id FROM payment_evidence WHERE id = ? AND organization_id = ?',
     ).get(evidence.id, organizationId);
