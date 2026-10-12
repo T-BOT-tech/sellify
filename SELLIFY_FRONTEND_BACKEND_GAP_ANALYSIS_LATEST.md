@@ -230,6 +230,19 @@ These tests establish recovery behavior for a crashed unstarted claim and conser
 **Mixed-version deployment decision:** compatibility between old and new status-query workers is **not certified and must not be assumed**. An older worker may not enforce the generation/token fence even though migration 67 has added the columns. Until an explicit compatibility test and protocol are implemented, deploy this change with a drain-and-switch procedure: stop/drain all old backend workers before the new version begins handling payment status queries; take and verify a database backup; apply/start the candidate on the migrated database; run the status-query smoke/regression checks; and do not roll back by simply restarting an old binary against the migrated live database. If rollback is needed, stop the candidate and follow a rehearsed database restore/recovery procedure. Keep any persisted `PROVIDER_IN_FLIGHT` command unresolved pending authoritative reconciliation. This is a rollout constraint, not a claim of mixed-version compatibility.
 
 GAP-1.24 therefore remains **IMPLEMENTED ON CANDIDATE / PRE-PROVIDER RECOVERY AND PROVIDER-IN-FLIGHT CRASH-RECOVERY REGRESSIONS PASS / OPERATIONAL CERTIFICATION PENDING**. The conservative unresolved behavior for a command whose provider call may have started remains intentional; do not automatically reclaim that uncertain provider-in-flight work.
+
+### GAP-1.24 operational certification gate (next required evidence)
+
+Do not mark GAP-1.24 fully certified from CI alone. Before production rollout, record the following evidence against the actual deployment environment:
+
+1. **Backup and restore rehearsal:** create a pre-deploy backup; run SQLite integrity checks on both backup and restored copy; restore into an isolated environment; verify migration 67 and critical payment/order/inventory reads.
+2. **Drain-and-switch rehearsal:** stop and drain all old backend workers before the candidate handles status queries; verify no old worker remains able to claim or complete commands.
+3. **Post-deploy smoke test:** exercise one successful status query, one unresolved provider outcome, and one same-key replay; confirm no duplicate evidence, verification, decision, or ledger rows.
+4. **Rollback rehearsal:** prove the documented restore path before rollout. Do not start an old binary against the migrated live database as a shortcut rollback.
+5. **Uncertain provider outcome:** confirm operational staff can identify and leave `PROVIDER_IN_FLIGHT` commands unresolved until authoritative reconciliation; do not blindly reissue provider work.
+
+Record environment, database snapshot identifier, migration result, start/end times, command IDs, row-count checks, restore result, and operator sign-off. If these observations have not been performed, leave the gate **PENDING**. No production environment or production-like restore rehearsal was available in this repository-only review, so no such operational result is claimed.
+
 ## 11. Recommended sequence
 
 1. PF-1L — completed and CI-certified on candidate branch; success, unresolved outcome, lost-response replay, safe same-key retry after transient provider network failure, no-duplicate effects, and tenant isolation pass.
