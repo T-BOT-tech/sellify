@@ -13,6 +13,7 @@
     "backup": "npm --prefix backend run backup",
     "phase0:baseline": "bash scripts/phase0-baseline.sh",
     "phase0:test": "node phase0/golden-regression.mjs",
+    "first-product-empty-state:test": "node phase0/first-product-empty-state-regression.mjs",
     "phase0:release-check": "bash scripts/phase0-release-check.sh",
     "phase10.7:compliance-test": "node phase0/phase10.7-compliance-regression.mjs",
     "phase11.1:money-test": "node phase0/phase11.1-money-regression.mjs",
