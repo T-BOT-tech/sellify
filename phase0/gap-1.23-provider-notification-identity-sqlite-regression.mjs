@@ -115,6 +115,50 @@ try {
     inspect.close();
   }
 
+  // Payment Core must stop at the store conflict boundary before any
+  // confirmation attempt or financial decision is attempted.
+  const { PaymentCore } = await import('../backend/lib/payments/payment-core.js');
+  let confirmationAttemptCalls = 0;
+  let financialDecisionCalls = 0;
+  const conflict = Object.assign(new Error('Provider notification identity conflict'), {
+    statusCode: 409,
+    code: 'PAYMENT_NOTIFICATION_IDENTITY_CONFLICT',
+  });
+  const core = new PaymentCore({
+    store: {
+      insertProviderNotificationEvidence: async () => { throw conflict; },
+      createPaymentConfirmationAttempt: async () => { confirmationAttemptCalls += 1; },
+      commitPaymentDecision: async () => { financialDecisionCalls += 1; },
+    },
+    providerRegistry: {
+      requirePaymentProvider: () => ({
+        id: 'mpesa',
+        capabilities: { authenticateNotification: true },
+        authenticateNotification: async raw => ({
+          authenticated: true,
+          providerId: 'mpesa',
+          accountIdentifier: '600001',
+          notificationId: raw.body.notificationId,
+          signatureVersion: 'v1',
+          receivedAt: '2026-10-12T00:00:00.000Z',
+        }),
+        parseEvidence: async () => ({
+          evidenceType: 'PROVIDER_NOTIFICATION',
+          providerTransactionId: 'TX-200',
+        }),
+      }),
+    },
+  });
+  await assert.rejects(
+    core.ingestProviderNotification({
+      providerId: 'mpesa',
+      rawRequest: { body: { notificationId: 'notif-conflict' } },
+    }),
+    error => error?.code === 'PAYMENT_NOTIFICATION_IDENTITY_CONFLICT',
+  );
+  assert.equal(confirmationAttemptCalls, 0, 'identity conflict must stop before confirmation attempt creation');
+  assert.equal(financialDecisionCalls, 0, 'identity conflict must stop before financial decision');
+
   console.log('GAP-1.23 provider notification identity SQLite regression: PASS');
 } finally {
   await rm(dataDir, { recursive: true, force: true });
