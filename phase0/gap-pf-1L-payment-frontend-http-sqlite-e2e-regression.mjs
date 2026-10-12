@@ -364,8 +364,8 @@ try {
   assert.equal(changedRequestResponse.status, 409,
     'same key with a different status-query request must be rejected');
   const changedRequestBody = await changedRequestResponse.json();
-  assert.equal(changedRequestBody.error?.code, 'IDEMPOTENCY_KEY_REUSE',
-    'request-key conflict should return the canonical idempotency error');
+  assert.match(changedRequestBody.error?.message || '', /idempotency key.*different status-query request/i,
+    'request-key conflict should explain that the key is bound to a different request');
   assert.equal(providerCalls.unknown, 1,
     'request-key conflict must not repeat the original provider query');
   assert.equal(providerCalls.success, 0,
