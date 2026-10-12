@@ -30,6 +30,7 @@ export default {
     catalogNav: "Catalog",
     noProducts: "No products yet. Add some in the Catalog tab.",
     noProductsCatalog: "No products yet — add your first one above.",
+    addFirstProduct: "Add your first product",
     custNamePlaceholder: "Customer name (optional)",
     custPhonePlaceholder: "Phone (optional)",
     total: "Total",
