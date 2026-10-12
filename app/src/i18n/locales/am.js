@@ -4,6 +4,8 @@
 export default {
     brandName: "የሱቅ መዝገብ",
     setupBusiness: "ንግድዎን ያዋቅሩ",
+    firstSaleAddProduct: "ሽያጭ ለመጀመር ምርት ያክሉ",
+    catalogReady: "ካታሎግ ዝግጁ ነው",
     online: "ኦንላይን",
     offline: "ኦፍላይን",
     toSync: "ለማመሳሰል",
