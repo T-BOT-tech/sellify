@@ -14,6 +14,7 @@ export default {
     catalogNav: "Katalogi",
     noProducts: "Bado hakuna bidhaa. Ongeza kwenye tab ya Katalogi.",
     noProductsCatalog: "Bado hakuna bidhaa — ongeza ya kwanza hapo juu.",
+    addFirstProduct: "Ongeza bidhaa yako ya kwanza",
     custNamePlaceholder: "Jina la mteja (hiari)",
     custPhonePlaceholder: "Simu (hiari)",
     total: "Jumla",
