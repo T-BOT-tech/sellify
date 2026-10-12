@@ -137,6 +137,9 @@ try {
     const decisionRow = directDb.prepare(
       'SELECT id, payment_id, evidence_id, verification_id, organization_id FROM payment_decisions WHERE payment_id = ? AND organization_id = ? ORDER BY created_at DESC LIMIT 1',
     ).get(payment.id, organizationId);
+    const transitionLedger = directDb.prepare(
+      "SELECT id, from_state, to_state, decision_id FROM payment_ledger_entries WHERE payment_id = ? AND from_state = 'UNPAID' AND to_state = 'VERIFIED' ORDER BY created_at DESC LIMIT 1",
+    ).get(payment.id);
 
     assert.ok(evidenceRow, 'real payment evidence must be persisted');
     assert.ok(verificationRow, 'real payment verification must be persisted');
@@ -147,6 +150,11 @@ try {
     assert.equal(decisionRow.payment_id, payment.id);
     assert.equal(decisionRow.evidence_id, evidence.id);
     assert.equal(decisionRow.verification_id, verification.id);
+    assert.ok(transitionLedger, 'canonical state transition must have a ledger entry');
+    assert.equal(transitionLedger.from_state, 'UNPAID');
+    assert.equal(transitionLedger.to_state, 'VERIFIED');
+    assert.equal(transitionLedger.decision_id, decisionRow.id,
+      'transition ledger must directly reference the exact persisted decision');
 
     const lineageEvents = directDb.prepare(
       `SELECT action, entity_type, entity_id, lineage_type, lineage_id, organization_id, chat_id
