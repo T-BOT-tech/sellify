@@ -4,7 +4,8 @@ export const ADD_MENU_ACTIONS = Object.freeze([
   Object.freeze({ id: 'take-order', destination: 'order' }),
   Object.freeze({ id: 'add-product', destination: 'catalog' }),
   Object.freeze({ id: 'discover-marketplace', destination: 'marketplace' }),
-  Object.freeze({ id: 'configure-packs-and-channels', destination: 'settings', target: 'packReadinessPanel' }),
+  Object.freeze({ id: 'configure-packs', destination: 'settings', target: 'packReadinessPanel' }),
+  Object.freeze({ id: 'connect-sales-channels', destination: 'settings', target: 'sellerStorefrontChannelsPanel' }),
   Object.freeze({ id: 'business-setup', destination: 'settings', target: 'setBusinessModel' }),
 ]);
 
@@ -48,8 +49,15 @@ export function openAddSettings(section = 'packs-and-channels') {
   const button = typeof document === 'undefined' ? null : document.getElementById('gearSettingsBtn');
   if (!button) return false;
 
-  const targetId = section === 'business-setup' ? 'setBusinessModel' : 'packReadinessPanel';
+  const targetIds = {
+    'configure-packs': 'packReadinessPanel',
+    'connect-sales-channels': 'sellerStorefrontChannelsPanel',
+    'business-setup': 'setBusinessModel',
+  };
+  const targetId = targetIds[section];
+  if (!targetId) return false;
   const target = document.getElementById(targetId);
+  if (!target) return false;
   button.click();
 
   if (target && typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
