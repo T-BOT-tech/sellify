@@ -2,9 +2,9 @@ name: Sellify CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, fix/gap-1-18-migration63-recovery]
   pull_request:
-    branches: [main]
+    branches: [main, ux/ecosystem-add-action-menu]
 
 permissions:
   contents: read
