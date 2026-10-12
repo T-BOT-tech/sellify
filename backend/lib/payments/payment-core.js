@@ -1360,6 +1360,20 @@ export class PaymentCore {
       };
     }
 
+    // Verification must be persisted before the financial decision consumes it.
+    const persistedVerificationResult = await this.store.insertPaymentVerification(requestedChatId, {
+      paymentId,
+      paymentIntentId: intent.id,
+      evidenceId: evidence.id,
+      providerId: payment.providerId,
+      ...verification,
+      result: verification.result,
+      reasonCodes: decision.reasonCodes,
+      verifier: 'payment-core.provider-notification',
+      verifierVersion: '1',
+    }, command.actor || null);
+    const persistedVerification = persistedVerificationResult.verification || persistedVerificationResult;
+
     const committed = await this.store.commitPaymentDecision(requestedChatId, {
       paymentId,
       expectedState: payment.state,
@@ -1369,14 +1383,7 @@ export class PaymentCore {
         command.idempotency_key ||
         `provider-confirmation:${attempt.id}`
       ).trim(),
-      verification: {
-        paymentIntentId: intent.id,
-        evidenceId: evidence.id,
-        providerId: payment.providerId,
-        ...verification,
-        verifier: 'payment-core.provider-notification',
-        verifierVersion: '1',
-      },
+      verification: persistedVerification,
       decision: {
         paymentIntentId: intent.id,
         evidenceId: evidence.id,
