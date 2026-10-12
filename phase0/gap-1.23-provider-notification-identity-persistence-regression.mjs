@@ -81,6 +81,39 @@ try {
     'store-level identity conflicts must not create confirmation attempts');
   assert.equal(Number(db.prepare('SELECT COUNT(*) AS n FROM payment_ledger_entries').get().n), ledgerBefore,
     'store-level identity conflicts must not mutate the payment ledger');
+
+  const concurrentContext = { ...authenticatedContext, notificationId: 'NOTIF-CONCURRENT-1' };
+  const concurrentA = store.insertProviderNotificationEvidence({
+    authenticatedContext: concurrentContext,
+    evidence: {
+      evidenceType: 'PROVIDER_NOTIFICATION',
+      providerTransactionId: 'TX-GAP123-CONCURRENT-A',
+      externalReference: 'ORDER-GAP123-CONCURRENT',
+      normalizedPayload: { amountMinor: 111, currency: 'ETB', status: 'SUCCESS' },
+    },
+  });
+  const concurrentB = store.insertProviderNotificationEvidence({
+    authenticatedContext: concurrentContext,
+    evidence: {
+      evidenceType: 'PROVIDER_NOTIFICATION',
+      providerTransactionId: 'TX-GAP123-CONCURRENT-B',
+      externalReference: 'ORDER-GAP123-CONCURRENT',
+      normalizedPayload: { amountMinor: 222, currency: 'ETB', status: 'SUCCESS' },
+    },
+  });
+  const concurrentResults = await Promise.allSettled([concurrentA, concurrentB]);
+  assert.equal(concurrentResults.filter(result => result.status === 'fulfilled').length, 1,
+    'concurrent competing payloads must persist at most one notification identity');
+  const concurrentFailure = concurrentResults.find(result => result.status === 'rejected');
+  assert.equal(concurrentFailure?.reason?.code, 'PAYMENT_NOTIFICATION_IDENTITY_CONFLICT',
+    'losing concurrent payload must be classified as identity conflict');
+  assert.equal(Number(db.prepare(
+    'SELECT COUNT(*) AS n FROM payment_evidence WHERE organization_id = ? AND provider_notification_id = ?'
+  ).get(first.evidence.organizationId, concurrentContext.notificationId).n), 1);
+  assert.equal(Number(db.prepare('SELECT COUNT(*) AS n FROM payment_confirmation_attempts').get().n), attemptsBefore,
+    'identity conflicts must not create confirmation attempts');
+  assert.equal(Number(db.prepare('SELECT COUNT(*) AS n FROM payment_ledger_entries').get().n), ledgerBefore,
+    'identity conflicts must not mutate the payment ledger');
   db.close();
   console.log('GAP-1.23 provider notification identity persistence regression: PASS');
 } finally {
