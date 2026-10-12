@@ -101,13 +101,43 @@ try {
     error => error?.statusCode === 409 && error?.code === 'PAYMENT_NOTIFICATION_IDENTITY_CONFLICT',
   );
 
+  // Force the async-resolution race: both calls pass the initial identity
+  // preflight before either reaches persistence. Reusing the transaction ID
+  // must still classify the changed notification as a conflict.
+  const concurrent = await Promise.allSettled([
+    ingest('notif-concurrent', evidence({
+      externalReference: 'ORDER-CONCURRENT-A',
+      providerTransactionId: 'TX-CONCURRENT',
+      normalizedPayload: {
+        externalReference: 'ORDER-CONCURRENT-A',
+        providerTransactionId: 'TX-CONCURRENT',
+        result: 'received',
+      },
+    })),
+    ingest('notif-concurrent', evidence({
+      externalReference: 'ORDER-CONCURRENT-B',
+      providerTransactionId: 'TX-CONCURRENT',
+      normalizedPayload: {
+        externalReference: 'ORDER-CONCURRENT-B',
+        providerTransactionId: 'TX-CONCURRENT',
+        result: 'received',
+      },
+    })),
+  ]);
+  assert.equal(concurrent.filter(result => result.status === 'fulfilled').length, 1);
+  assert.equal(concurrent.filter(result =>
+    result.status === 'rejected' &&
+    result.reason?.statusCode === 409 &&
+    result.reason?.code === 'PAYMENT_NOTIFICATION_IDENTITY_CONFLICT'
+  ).length, 1, 'concurrent changed replay must not be accepted as transaction duplicate');
+
   const inspect = new DatabaseSync(dbPath);
   try {
     const evidenceCount = Number(inspect.prepare('SELECT COUNT(*) AS n FROM payment_evidence').get().n);
     const paymentCount = Number(inspect.prepare('SELECT COUNT(*) AS n FROM payments').get().n);
     const attemptCount = Number(inspect.prepare('SELECT COUNT(*) AS n FROM payment_confirmation_attempts').get().n);
     const ledgerCount = Number(inspect.prepare('SELECT COUNT(*) AS n FROM payment_ledger_entries').get().n);
-    assert.equal(evidenceCount, 2, 'replays/conflicts must not add evidence rows');
+    assert.equal(evidenceCount, 3, 'replays/conflicts must not add evidence rows; only the winning concurrent delivery is added');
     assert.equal(paymentCount, 0, 'notification conflicts must not create payments');
     assert.equal(attemptCount, 0, 'notification conflicts must not create confirmation attempts');
     assert.equal(ledgerCount, 0, 'notification conflicts must not create ledger entries');
