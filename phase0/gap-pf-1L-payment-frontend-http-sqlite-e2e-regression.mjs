@@ -349,6 +349,28 @@ try {
   assert.equal(commandRows[0].payment_id, paymentA.id);
   assert.equal(providerCalls.unknown, 1, 'replay must not query the provider again');
 
+  // A durable idempotency key is bound to the full canonical request. Reusing
+  // the completed key with a different provider query must be rejected before
+  // provider I/O, not replay the first result as if the requests were equal.
+  const changedRequestResponse = await originalFetch(baseUrl + statusPath, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + sessionA.token,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({ query: { statusPath: '/success' } }),
+  });
+  assert.equal(changedRequestResponse.status, 409,
+    'same key with a different status-query request must be rejected');
+  const changedRequestBody = await changedRequestResponse.json();
+  assert.equal(changedRequestBody.error?.code, 'IDEMPOTENCY_KEY_REUSE',
+    'request-key conflict should return the canonical idempotency error');
+  assert.equal(providerCalls.unknown, 1,
+    'request-key conflict must not repeat the original provider query');
+  assert.equal(providerCalls.success, 0,
+    'request-key conflict must not execute the changed provider query');
+
   // GAP-1.24: only an expired, provably unstarted claim may be taken over.
   // The previous owner must be fenced before provider work or financial commit.
   const fencedPaymentKey = 'pf-http-fenced-claim-' + randomUUID();
