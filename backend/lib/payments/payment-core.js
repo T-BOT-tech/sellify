@@ -24,6 +24,12 @@ export class PaymentCore {
 
   async resolveRouting(command = {}) {
     this.#authorize(command, 'payments:route');
+    return this.#resolveRouting(command);
+  }
+
+  // Automatic routing is an internal step of an already-authorized payment
+  // creation. Keep explicit routing access separately permission-gated.
+  async #resolveRouting(command = {}) {
     const chatId = String(command.chatId || '').trim();
     const channel = String(command.channel || '').trim().toLowerCase();
     const currency = String(command.currency || '').trim().toUpperCase();
@@ -73,7 +79,7 @@ export class PaymentCore {
 
     let routedCommand = { ...command };
     if (!routedCommand.providerId && !routedCommand.provider_id) {
-      const route = await this.resolveRouting({ ...command, actor: command.actor });
+      const route = await this.#resolveRouting({ ...command, actor: command.actor });
       if (route.status !== 'ROUTED') {
         throw Object.assign(new Error('No eligible payment route'), { statusCode: 409, code: 'NO_ELIGIBLE_PAYMENT_ROUTE', reasonCodes: route.reasonCodes });
       }
