@@ -41,9 +41,9 @@ const syncResult = await saveQueuedOrders(chatId, [{
   id: 'local-fux42-1',
   items: [
     // A client cannot relabel a physical catalog item as a service to bypass stock.
-    { item_id: 'product-1', name: 'Test item', qty: 1, price: 500, type: 'service' },
+    { id: 'product-1', name: 'Test item', qty: 1, price: 500, type: 'service' },
     // Nor can a client-supplied physical type turn a canonical service into stock.
-    { item_id: 'service-1', name: 'Consultation', qty: 1, price: 700, type: 'product' },
+    { id: 'service-1', name: 'Consultation', qty: 1, price: 700, type: 'product' },
   ],
   fulfillment_type: 'delivery',
   delivery_address: 'Jimma',
