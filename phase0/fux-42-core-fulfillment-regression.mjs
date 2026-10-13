@@ -86,6 +86,28 @@ assert.equal(productBalance?.quantity, 4);
 assert.equal(balances.find((row) => row.productId === 'service-1'), undefined);
 assert.deepEqual(fulfillment.proof, { type: 'photo', ref: 'proof-fux42' });
 
+// Duplicate physical item lines must be aggregated into one full-quantity sale.
+const duplicateSync = await saveQueuedOrders(chatId, [{
+  id: 'local-fux42-duplicate-lines',
+  items: [
+    { id: 'product-1', name: 'Test item', qty: 1, price: 500 },
+    { id: 'product-1', name: 'Test item', qty: 1, price: 500 },
+  ],
+  fulfillment_type: 'delivery',
+  delivery_address: 'Jimma',
+}]);
+assert.equal(duplicateSync[0].status, 'synced');
+const duplicateOrderId = duplicateSync[0].order_id;
+await transitionOrderFulfillment(chatId, duplicateOrderId, 'out_for_delivery', actor, {
+  idempotencyKey: 'fux42-duplicate-lines-out',
+});
+await transitionOrderFulfillment(chatId, duplicateOrderId, 'delivered', actor, {
+  idempotencyKey: 'fux42-duplicate-lines-delivered',
+});
+const duplicateBalances = await (await import('../backend/lib/store-sqlite.js')).getInventoryBalances(chatId);
+assert.equal(duplicateBalances.find((row) => row.productId === 'product-1')?.quantity, 2,
+  'two duplicate quantity-1 lines must deduct two units, not one');
+
 await assert.rejects(
   transitionOrderFulfillment(chatId, orderId, 'pending', actor, { idempotencyKey: 'fux42-invalid' }),
   (error) => error?.code === 'INVALID_FULFILLMENT_TRANSITION' && error?.statusCode === 409,
