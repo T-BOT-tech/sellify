@@ -21,7 +21,7 @@ const {
 const chatId = 'fux42-chat';
 const tenant = await getOrCreateTenant(chatId);
 await saveCatalog(chatId, [
-  { id: 'product-1', name: 'Test item', price: 500, stock: 5 },
+  { id: 'product-1', name: 'Test item', price: 500, stock: 0 },
   { id: 'service-1', name: 'Consultation', price: 700, type: 'service' },
 ]);
 await assert.rejects(
@@ -35,6 +35,8 @@ const canonicalCatalog = await getCatalog(chatId);
 assert.equal(canonicalCatalog.products.find((item) => item.id === 'product-1')?.type, 'product');
 assert.equal(canonicalCatalog.products.find((item) => item.id === 'service-1')?.type, 'service');
 await appendInventoryMovement(chatId, { productId: 'product-1', quantity: 5, movementType: 'PURCHASE', eventId: 'fux42-opening-purchase' });
+const openingBalances = await (await import('../backend/lib/store-sqlite.js')).getInventoryBalances(chatId);
+assert.equal(openingBalances.find((row) => row.productId === 'product-1')?.quantity, 5);
 const syncResult = await saveQueuedOrders(chatId, [{
   id: 'local-fux42-1',
   items: [
@@ -80,7 +82,7 @@ fulfillment = await transitionOrderFulfillment(chatId, orderId, 'delivered', act
 assert.equal(fulfillment.status, 'delivered');
 const balances = await (await import('../backend/lib/store-sqlite.js')).getInventoryBalances(chatId);
 const productBalance = balances.find((row) => row.productId === 'product-1');
-assert.equal(productBalance?.quantity, 9);
+assert.equal(productBalance?.quantity, 4);
 assert.equal(balances.find((row) => row.productId === 'service-1'), undefined);
 assert.deepEqual(fulfillment.proof, { type: 'photo', ref: 'proof-fux42' });
 
