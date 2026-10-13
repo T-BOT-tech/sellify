@@ -173,6 +173,7 @@ function queueFulfillmentCommand(order, next, reason = 'offline') {
   });
   if (command) {
     order.fulfillment_sync_status = 'queued';
+    order.fulfillment_sync_target = next;
     order.fulfillment_sync_reason = reason;
     saveJSON(STORAGE_KEYS.orders, orders);
     renderLogistics();
@@ -221,7 +222,15 @@ export async function reconcileQueuedFulfillments() {
       );
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data?.fulfillment?.status) continue;
+      // A GET of the current canonical state is not proof that the queued
+      // transition succeeded. Only clear the local queued marker when the
+      // canonical state has reached the requested target; otherwise the
+      // durable command must remain visibly pending for retry/recovery.
+      const expectedStatus = String(order.fulfillment_sync_target || nextFulfillmentStatus(order) || '').toLowerCase();
+      const canonicalStatus = String(data.fulfillment.status || '').toLowerCase();
+      if (!expectedStatus || canonicalStatus !== expectedStatus) continue;
       canonicalFulfillmentPatch(order, data.fulfillment);
+      delete order.fulfillment_sync_target;
       delete order.fulfillment_sync_reason;
     } catch {
       // Keep QUEUED/UNKNOWN until a later reconciliation succeeds.
