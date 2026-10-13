@@ -6,6 +6,7 @@ const html = read('../app/index.html');
 const catalog = read('../app/src/products/catalog.js');
 const sync = read('../app/src/sync/catalog.js');
 const inventory = read('../app/src/warehouse/inventory.js');
+const productRenderer = read('../app/src/products/render.js');
 const state = read('../app/src/state.js');
 
 assert.match(html, /<select id="newProdType"[^>]*>[\s\S]*?<option value="product">Physical product<\/option>[\s\S]*?<option value="service">Service<\/option>/,
@@ -28,6 +29,10 @@ assert.match(inventory, /export function getLowStockProducts\(\) \{[\s\S]{0,500}
   'service records are excluded from low-stock alerts');
 assert.match(inventory, /export function getOutOfStockProducts\(\) \{[\s\S]{0,500}p\?\.type === 'service'\) return false;/,
   'service records are excluded from out-of-stock alerts');
+assert.equal((productRenderer.match(/p\.type === 'service' \? '<span class="prod-badge unit">Service<\\/span>' : ''/g) || []).length, 2,
+  'service identity is visibly labeled in both grid and list order-picker views');
+assert.equal((productRenderer.match(/onclick="changeQty\('\$\{p\.id\}', 1\)"/g) || []).length, 2,
+  'services remain selectable as order lines in both grid and list views');
 
 console.log('FUX-58 First-Service Catalog Identity Source Regression: PASS');
 console.log('Catalog create/save -> remote sanitize/hydrate -> stock-alert boundary: PASS');
