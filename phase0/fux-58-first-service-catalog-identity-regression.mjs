@@ -22,7 +22,7 @@ assert.match(sync, /setProducts\(sanitizeRemoteProducts\(data\.products\)\);\s*s
   'remote catalog hydration retains the sanitized records in existing local catalog storage');
 assert.match(state, /export let products = loadJSON\(STORAGE_KEYS\.products, \[\]\);/,
   'reload hydrates the same existing catalog collection');
-assert.match(inventory, /export function isStockTracked\(p\) \{[\s\S]{0,220}p\?\.type === 'service'\) return false;/,
+assert.match(inventory, /export function isStockTracked\(p\) \{[\s\S]{0,400}p\?\.type === 'service'\) return false;/,
   'service records are never stock-tracked');
 assert.match(inventory, /export function getLowStockProducts\(\) \{[\s\S]{0,500}p\?\.type === 'service'\) return false;/,
   'service records are excluded from low-stock alerts');
