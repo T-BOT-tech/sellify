@@ -8164,7 +8164,6 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
   const items = Array.isArray(orderJson?.items) ? orderJson.items : [];
   const defaultLocation = db.prepare("SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1").get(String(fulfillmentRow.organization_id));
   const locationId = String(fulfillmentRow.location_id || defaultLocation?.id || '');
-  if (!locationId) throw Object.assign(new Error('Fulfillment inventory location is required'), { statusCode: 409, code: 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED' });
   const movements = [];
   for (const item of items) {
     const productId = String(item?.product_id ?? item?.productId ?? item?.item_id ?? item?.id ?? '').trim();
@@ -8175,6 +8174,7 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
     // The persisted catalog type is authoritative. An order line's client-supplied
     // type must never let a physical product bypass its inventory consequence.
     if (parseJSON(productRow.product_json, {}).type === 'service') continue;
+    if (!locationId) throw Object.assign(new Error('Fulfillment inventory location is required'), { statusCode: 409, code: 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED' });
     const balance = Number(db.prepare('SELECT COALESCE(SUM(quantity), 0) AS quantity FROM inventory_movements WHERE organization_id = ? AND location_id = ? AND product_id = ?').get(String(fulfillmentRow.organization_id), locationId, productId)?.quantity || 0);
     if (balance < quantity) throw Object.assign(new Error('Insufficient inventory for fulfillment'), { statusCode: 409, code: 'FULFILLMENT_INSUFFICIENT_INVENTORY', productId, available: balance, requested: quantity });
     const eventId = `fulfillment-sale:${fulfillmentRow.id}:${productId}`;
