@@ -112,7 +112,7 @@ export function renderCatalog() {
     if (p.unit) badges.push(`<span class="prod-badge unit">${escapeHtml(p.unit)}</span>`);
     if (Array.isArray(p.tags)) p.tags.forEach(tag => badges.push(`<span class="prod-badge tag">${escapeHtml(tag)}</span>`));
     if (Array.isArray(p.modifiers)) p.modifiers.forEach(mod => badges.push(`<span class="prod-badge tag"><svg class="icon icon-sm"><use href="#i-edit"/></svg> ${escapeHtml(mod)}</span>`));
-    if (p.marketplace_listed) badges.push(`<span class="prod-badge cat"><svg class="icon icon-sm"><use href="#i-store"/></svg> ${escapeHtml(t('marketListedBadge'))}</span>`);
+    if (p.marketplace_listed && p.type !== 'service') badges.push(`<span class="prod-badge cat"><svg class="icon icon-sm"><use href="#i-store"/></svg> ${escapeHtml(t('marketListedBadge'))}</span>`);
     const badgesHtml = badges.length ? `<div class="prod-badges">${badges.join('')}</div>` : '';
 
     const canEdit = hasPermission(currentStaff ? currentStaff.role : 'owner', 'inventory:edit');
