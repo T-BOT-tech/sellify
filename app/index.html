@@ -388,11 +388,13 @@
         <button class="btn-secondary" id="addProdBtn" style="width:auto; margin:0; padding:10px 14px;" onclick="addProduct()" data-i18n="add">Add</button>
       </div>
       <div class="catalog-form-row2">
-        <label for="newProdType" data-i18n="catalogItemType">Item type</label>
-        <select id="newProdType" onchange="onNewProdTypeChange()">
-          <option value="product" data-i18n="physicalProduct">Physical product</option>
-          <option value="service" data-i18n="service">Service</option>
-        </select>
+        <div style="flex:1; min-width:0;">
+          <label for="newProdType" data-i18n="catalogItemType" style="display:block; font-size:11px; margin-bottom:3px;">Item type</label>
+          <select id="newProdType" onchange="onNewProdTypeChange()" style="width:100%;">
+            <option value="product" data-i18n="physicalProduct">Physical product</option>
+            <option value="service" data-i18n="service">Service</option>
+          </select>
+        </div>
         <select id="newProdCategory" onchange="onNewProdCategoryChange()"></select>
         <select id="newProdUnit"></select>
       </div>
