@@ -20,7 +20,8 @@ import { formatMoney } from '../utils/money.js';
 import { isRestaurant } from '../config/niche.js';
 import { escapeHtml, escapeAttr } from '../utils/index.js';
 import { STORAGE_KEYS } from '../constants.js';
-import { products, currentOrder, orderViewMode, setOrderViewModeValue } from '../state.js';
+import { products, currentOrder, currentStaff, orderViewMode, setOrderViewModeValue } from '../state.js';
+import { hasPermission } from '../auth/permissions.js';
 import { saveJSON } from '../storage/json.js';
 // Phase 8 fix (see modularization plan §5, Phase 8): these used to come
 // from '../main.js', which only re-exported them from their real owning
@@ -70,7 +71,11 @@ export function renderProducts() {
   }
 
   if (products.length === 0) {
-    list.innerHTML = `<div class="empty">${t('noProducts')}</div>`;
+    const canAddProduct = hasPermission(currentStaff ? currentStaff.role : 'owner', 'inventory:add');
+    const addProductAction = canAddProduct
+      ? `<div class="empty-state-actions"><button type="button" class="btn btn-primary" onclick="switchTab('catalog')">${t('addFirstProduct')}</button></div>`
+      : '';
+    list.innerHTML = `<div class="empty">${t('noProducts')}</div>${addProductAction}`;
     updateOrderSummary();
     return;
   }

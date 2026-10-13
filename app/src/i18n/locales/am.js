@@ -14,6 +14,7 @@ export default {
     catalogNav: "ካታሎግ",
     noProducts: "ምንም ምርቶች የሉም። በካታሎግ ትር ውስጥ ያክሉ።",
     noProductsCatalog: "ምንም ምርቶች የሉም — የመጀመሪያዎን ከላይ ያክሉ።",
+    addFirstProduct: "የመጀመሪያዎን ንጥል ያክሉ",
     custNamePlaceholder: "የደንበኛ ስም (አማራጭ)",
     custPhonePlaceholder: "ስልክ (አማራጭ)",
     total: "ድምር",

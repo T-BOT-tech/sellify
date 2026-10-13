@@ -14,6 +14,7 @@ export default {
     catalogNav: "Kutaaleen",
     noProducts: "Oomishni hin jiru. Kutaaleen keessatti dabalaa.",
     noProductsCatalog: "Oomishni hin jiru — jalqabaa gubbaatti dabalaa.",
+    addFirstProduct: "Wanta keessan isa jalqabaa dabalaa",
     custNamePlaceholder: "Maqaa maamilaa (filannoo)",
     custPhonePlaceholder: "Lakkoofsa bilbilaa (filannoo)",
     total: "Ida'ama",

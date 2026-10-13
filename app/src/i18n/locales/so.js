@@ -14,6 +14,7 @@ export default {
     catalogNav: "Kataloog",
     noProducts: "Alaab wali ma jirto. Wax ku dar Kataloogga.",
     noProductsCatalog: "Alaab wali ma jirto — kii ugu horreeyay sare ku dar.",
+    addFirstProduct: "Ku dar shaygaaga ugu horreeya",
     custNamePlaceholder: "Magaca macmiilka (ikhtiyaar)",
     custPhonePlaceholder: "Taleefanka (ikhtiyaar)",
     total: "Warta noqonaya",
