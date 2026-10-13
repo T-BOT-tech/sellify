@@ -14,7 +14,7 @@ export default {
     catalogNav: "कैटलॉग",
     noProducts: "अभी कोई उत्पाद नहीं हैं। कैटलॉग टैब में जोड़ें।",
     noProductsCatalog: "अभी कोई उत्पाद नहीं हैं — पहला ऊपर जोड़ें।",
-    addFirstProduct: "अपना पहला उत्पाद जोड़ें",
+    addFirstProduct: "अपना पहला आइटम जोड़ें",
     custNamePlaceholder: "ग्राहक का नाम (वैकल्पिक)",
     custPhonePlaceholder: "फोन नंबर (वैकल्पिक)",
     total: "कुल योग",
