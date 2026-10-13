@@ -29,7 +29,7 @@ assert.match(inventory, /export function getLowStockProducts\(\) \{[\s\S]{0,500}
   'service records are excluded from low-stock alerts');
 assert.match(inventory, /export function getOutOfStockProducts\(\) \{[\s\S]{0,500}p\?\.type === 'service'\) return false;/,
   'service records are excluded from out-of-stock alerts');
-assert.equal((productRenderer.match(/p\.type === 'service' \? '<span class="prod-badge unit">Service<\\/span>' : ''/g) || []).length, 2,
+assert.equal(productRenderer.split("p.type === 'service' ? '<span class=\"prod-badge unit\">Service</span>' : ''").length - 1, 2,
   'service identity is visibly labeled in both grid and list order-picker views');
 assert.equal((productRenderer.match(/onclick="changeQty\('\$\{p\.id\}', 1\)"/g) || []).length, 2,
   'services remain selectable as order lines in both grid and list views');
