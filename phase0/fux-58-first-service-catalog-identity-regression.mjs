@@ -24,15 +24,15 @@ for (const key of ['catalogItemType', 'physicalProduct', 'service', 'marketplace
       `translation key ${key} exists in supported locale index ${index}`);
   }
 }
-assert.match(html, /<label for="newProdType" data-i18n="catalogItemType">Item type<\\/label>/,
+assert.ok(html.includes('<label for="newProdType" data-i18n="catalogItemType">Item type</label>'),
   'item type selector has a visible translated accessible label');
-assert.match(html, /<option value="product" data-i18n="physicalProduct">Physical product<\\/option>/,
+assert.ok(html.includes('<option value="product" data-i18n="physicalProduct">Physical product</option>'),
   'physical product option uses existing i18n updater');
-assert.match(html, /<option value="service" data-i18n="service">Service<\\/option>/,
+assert.ok(html.includes('<option value="service" data-i18n="service">Service</option>'),
   'service option uses existing i18n updater');
-assert.match(catalog, /escapeHtml\\(t\\('service'\\)\\)/,
+assert.ok(catalog.includes("escapeHtml(t('service'))"),
   'catalog service badge is localized');
-assert.match(catalog, /t\\('marketplaceServiceUnsupported'\\)/,
+assert.ok(catalog.includes("t('marketplaceServiceUnsupported')"),
   'marketplace restriction tooltip is localized');
 
 assert.match(html, /<select id="newProdType"[^>]*>[\s\S]*?<option value="product" data-i18n="physicalProduct">Physical product<\/option>[\s\S]*?<option value="service" data-i18n="service">Service<\/option>/,
