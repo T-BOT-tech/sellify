@@ -6,7 +6,7 @@ const queue = fs.readFileSync('app/src/orders/queue.js', 'utf8');
 // Canonical summary refresh invalidates stale order-level financial data before
 // requesting Payment Core. On failure, the UI must not keep a cached PAID/etc summary.
 assert.match(queue, /invalidateOrderPaymentSummaryCache\(id\);[\s\S]*?refreshCanonicalOrderPaymentSummary\(id\)/);
-assert.match(queue, /catch\(\)\s*\{[\s\S]*?renderQueue\(\);[\s\S]*?return null;/);
+assert.match(queue, /\.catch\(\(\)\s*=>\s*\{[\s\S]*?renderQueue\(\);[\s\S]*?return null;/);
 
 // The per-payment projection may remain in memory after a refresh failure.
 // Do not render that state unless a current canonical order summary is available.
