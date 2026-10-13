@@ -203,4 +203,8 @@ export default {
     packLocalizationAuthority: 'Localization authority',
     packAccessibilityAuthority: 'Accessibility foundation',
     packAccessibilityBoundary: 'Language selection does not change authorization. Screen semantics do not grant permissions; server-side authorization remains authoritative.',
+    catalogItemType: "Item type",
+    physicalProduct: "Physical product",
+    service: "Service",
+    marketplaceServiceUnsupported: "Marketplace checkout for services is not supported yet",
 };
