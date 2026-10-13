@@ -88,4 +88,8 @@ export default {
     packLocalizationAuthority: 'Localization authority',
     packAccessibilityAuthority: 'Accessibility foundation',
     packAccessibilityBoundary: 'Language selection does not change authorization. Screen semantics do not grant permissions; server-side authorization remains authoritative.',
+    catalogItemType: "Tipo de artículo",
+    physicalProduct: "Producto físico",
+    service: "Servicio",
+    marketplaceServiceUnsupported: "La compra de servicios en el mercado aún no está disponible",
 };
