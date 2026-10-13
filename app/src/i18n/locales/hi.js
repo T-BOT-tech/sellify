@@ -88,4 +88,8 @@ export default {
     packLocalizationAuthority: 'Localization authority',
     packAccessibilityAuthority: 'Accessibility foundation',
     packAccessibilityBoundary: 'Language selection does not change authorization. Screen semantics do not grant permissions; server-side authorization remains authoritative.',
+    catalogItemType: "आइटम का प्रकार",
+    physicalProduct: "भौतिक उत्पाद",
+    service: "सेवा",
+    marketplaceServiceUnsupported: "मार्केटप्लेस पर सेवाओं की खरीद अभी उपलब्ध नहीं है",
 };
