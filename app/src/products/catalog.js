@@ -229,6 +229,7 @@ export function renderProductFormSelects() {
   const unitOptions = ['<option value="">No unit</option>']
     .concat(unitList.map(u => `<option value="${escapeAttr(u)}">${escapeHtml(u)}</option>`));
   unitSel.innerHTML = unitOptions.join('');
+  onNewProdTypeChange();
 
   if (tagsBox) {
     if (!preset || !preset.tags || preset.tags.length === 0) {
@@ -280,6 +281,20 @@ export function onNewProdCategoryChange() {
   }
 }
 
+export function onNewProdTypeChange() {
+  const typeSel = document.getElementById('newProdType');
+  const marketListedBox = document.getElementById('newProdMarketListed');
+  if (!typeSel || !marketListedBox) return;
+  const isService = typeSel.value === 'service';
+  if (isService) marketListedBox.checked = false;
+  marketListedBox.disabled = isService;
+  const marketLabel = marketListedBox.closest('label');
+  if (marketLabel) {
+    marketLabel.title = isService ? 'Marketplace service checkout is not supported yet' : '';
+    marketLabel.style.opacity = isService ? '0.55' : '';
+  }
+}
+
 export function addProduct() {
   // Phase 3 fix (see modularization plan §5, Phase 3): same gap as
   // saveProductEdit/removeProduct — the form itself was hidden for roles
@@ -299,6 +314,8 @@ export function addProduct() {
   const price = toMinorUnits(priceMajor);
   const category = (catSel && catSel.value && catSel.value !== '__custom__') ? catSel.value : '';
   const unit = unitSel ? unitSel.value : '';
+  const typeSel = document.getElementById('newProdType');
+  const type = typeSel && typeSel.value === 'service' ? 'service' : 'product';
   const modInput = document.getElementById('newProdModifiers');
   const modifiers = (isRestaurant() && modInput && modInput.value.trim())
     ? modInput.value.split(',').map(m => m.trim()).filter(Boolean)
@@ -313,9 +330,10 @@ export function addProduct() {
     unit: unit || undefined,
     tags: pendingNewProdTags.length ? [...pendingNewProdTags] : undefined,
     modifiers,
+    type,
     image: pendingNewProdImage || undefined,
     image_url: pendingNewProdImage || undefined,
-    marketplace_listed: marketListedBox ? marketListedBox.checked : false,
+    marketplace_listed: type === 'service' ? false : (marketListedBox ? marketListedBox.checked : false),
     updated_at: Date.now()
   };
   products.push(newProd);
@@ -324,7 +342,12 @@ export function addProduct() {
 
   nameInput.value = ''; priceInput.value = '';
   if (modInput) modInput.value = '';
-  if (marketListedBox) marketListedBox.checked = false;
+  if (marketListedBox) {
+    marketListedBox.checked = false;
+    marketListedBox.disabled = false;
+  }
+  if (typeSel) typeSel.value = 'product';
+  onNewProdTypeChange();
   pendingNewProdImage = null;
   pendingNewProdTags = [];
   const previewBox = document.getElementById('newProdImgPreview');
