@@ -54,6 +54,7 @@ export function projectedStock(p, locationId = config.locationId || '') {
 
 export function getLowStockProducts() {
   return products.filter(p => {
+    if (p?.type === 'service') return false;
     const stock = projectedStock(p);
     return stock !== null && stock > 0 && stock <= (p.reorder_point || 0);
   });
@@ -61,6 +62,7 @@ export function getLowStockProducts() {
 
 export function getOutOfStockProducts() {
   return products.filter(p => {
+    if (p?.type === 'service') return false;
     const stock = projectedStock(p);
     return stock !== null && stock <= 0;
   });
