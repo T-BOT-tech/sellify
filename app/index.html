@@ -286,6 +286,12 @@
       <option value="sw">🇰🇪 Swahili</option>
       <option value="es">🇪🇸 Español</option>
       <option value="hi">🇮🇳 हिन्दी</option>
+      <option value="fr">🇫🇷 Français</option>
+      <option value="ar">🇸🇦 العربية</option>
+      <option value="ha">🇳🇬 Hausa</option>
+      <option value="yo">🇳🇬 Yorùbá</option>
+      <option value="ru">🇷🇺 Русский</option>
+      <option value="pt">🇵🇹 Português</option>
     </select>
     <div class="status-pill offline" id="statusPill">
       <span class="dot"></span><span id="statusText">Offline</span>
@@ -382,9 +388,10 @@
         <button class="btn-secondary" id="addProdBtn" style="width:auto; margin:0; padding:10px 14px;" onclick="addProduct()" data-i18n="add">Add</button>
       </div>
       <div class="catalog-form-row2">
-        <select id="newProdType" aria-label="Item type" onchange="onNewProdTypeChange()">
-          <option value="product">Physical product</option>
-          <option value="service">Service</option>
+        <label for="newProdType" data-i18n="catalogItemType">Item type</label>
+        <select id="newProdType" onchange="onNewProdTypeChange()">
+          <option value="product" data-i18n="physicalProduct">Physical product</option>
+          <option value="service" data-i18n="service">Service</option>
         </select>
         <select id="newProdCategory" onchange="onNewProdCategoryChange()"></select>
         <select id="newProdUnit"></select>
@@ -964,6 +971,12 @@
       <option value="sw">Kiswahili (Swahili)</option>
       <option value="es">Español (Spanish)</option>
       <option value="hi">हिन्दी (Hindi)</option>
+      <option value="fr">Français (French)</option>
+      <option value="ar">العربية (Arabic)</option>
+      <option value="ha">Hausa</option>
+      <option value="yo">Yorùbá</option>
+      <option value="ru">Русский (Russian)</option>
+      <option value="pt">Português (Portuguese)</option>
     </select>
     <label data-i18n="businessModel">What kind of business is this?</label>
     <select id="setBusinessModel" onchange="onBusinessModelChange(this.value)" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background: var(--surface); margin-bottom:4px;">
