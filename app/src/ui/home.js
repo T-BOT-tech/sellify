@@ -18,11 +18,14 @@ export function renderSellerHome() {
   const todays = todayOrders();
   const sales = todays.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
   const queued = todays.filter(o => o.status !== 'synced').length;
+  // Service catalog items are sellable but do not represent physical stock.
+  // Ignore stale legacy stock values so the home summary matches inventory rules.
   const lowStock = products.filter(p => {
+    if (p?.type === 'service') return false;
     const n = Number(p.stock);
     return Number.isFinite(n) && n >= 0 && n <= 5;
   }).length;
-  const outOfStock = products.filter(p => Number(p.stock) === 0).length;
+  const outOfStock = products.filter(p => p?.type !== 'service' && Number(p.stock) === 0).length;
   const business = escapeHtml(config.sellerName || t('setupBusiness'));
 
   el.innerHTML = `
