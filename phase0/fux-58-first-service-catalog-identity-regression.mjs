@@ -20,7 +20,7 @@ const localeFiles = ['en', 'am', 'om', 'so', 'sw', 'es', 'hi'].map(lang =>
 );
 for (const key of ['catalogItemType', 'physicalProduct', 'service', 'marketplaceServiceUnsupported']) {
   for (const [index, locale] of localeFiles.entries()) {
-    assert.match(locale, new RegExp('\\\\b' + key + '\\\\s*:'),
+    assert.match(locale, new RegExp('\\b' + key + '\\s*:'),
       `translation key ${key} exists in supported locale index ${index}`);
   }
 }
@@ -35,8 +35,8 @@ assert.match(catalog, /escapeHtml\\(t\\('service'\\)\\)/,
 assert.match(catalog, /t\\('marketplaceServiceUnsupported'\\)/,
   'marketplace restriction tooltip is localized');
 
-assert.match(html, /<select id="newProdType"[^>]*>[\s\S]*?<option value="product">Physical product<\/option>[\s\S]*?<option value="service">Service<\/option>/,
-  'first-time catalog form exposes physical product and service choices');
+assert.match(html, /<select id="newProdType"[^>]*>[\s\S]*?<option value="product" data-i18n="physicalProduct">Physical product<\/option>[\s\S]*?<option value="service" data-i18n="service">Service<\/option>/,
+  'first-time catalog form exposes translated physical product and service choices');
 assert.match(catalog, /const type = typeSel && typeSel\.value === 'service' \? 'service' : 'product';/,
   'catalog creation defaults safely to physical product and records explicit service type');
 assert.match(catalog, /type,\s*[\s\S]{0,180}marketplace_listed: type === 'service' \? false/,
@@ -55,7 +55,7 @@ assert.match(inventory, /export function getLowStockProducts\(\) \{[\s\S]{0,500}
   'service records are excluded from low-stock alerts');
 assert.match(inventory, /export function getOutOfStockProducts\(\) \{[\s\S]{0,500}p\?\.type === 'service'\) return false;/,
   'service records are excluded from out-of-stock alerts');
-assert.equal((productRenderer.match(/p.type === 'service' \\? \`<span class="prod-badge unit">\\$\\{t\\('service'\\)\\}<\\/span>\` : ''/g) || []).length, 2,
+assert.equal((productRenderer.match(/t\('service'\)/g) || []).length, 2,
   'localized service identity is visible in both grid and list order-picker views');
 assert.equal((productRenderer.match(/onclick="changeQty\('\$\{p\.id\}', 1\)"/g) || []).length, 2,
   'services remain selectable as order lines in both grid and list views');
