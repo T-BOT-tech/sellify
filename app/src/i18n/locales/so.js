@@ -87,4 +87,8 @@ export default {
     packLocalizationAuthority: 'Localization authority',
     packAccessibilityAuthority: 'Accessibility foundation',
     packAccessibilityBoundary: 'Language selection does not change authorization. Screen semantics do not grant permissions; server-side authorization remains authoritative.',
+    catalogItemType: "Nooca shayga",
+    physicalProduct: "Badeecad jireed",
+    service: "Adeeg",
+    marketplaceServiceUnsupported: "Iibsashada adeegyada suuqa weli lama taageero",
 };
