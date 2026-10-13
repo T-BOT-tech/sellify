@@ -7,6 +7,13 @@ const catalog = read('../app/src/products/catalog.js');
 const sync = read('../app/src/sync/catalog.js');
 const inventory = read('../app/src/warehouse/inventory.js');
 const productRenderer = read('../app/src/products/render.js');
+
+const checkout = read('../app/src/orders/checkout.js');
+assert.match(checkout, /return \{ id: p\.id, name: note \? .*qty, price: effectiveUnitPrice\(p, qty\) \};/,
+  'checkout lines retain the persisted catalog item identifier');
+assert.doesNotMatch(checkout.slice(checkout.indexOf('export function checkoutTelegramWebApp()'), checkout.indexOf('export function recordTelegramSentOrder')),
+  /type\s*:\s*p\.type/,
+  'checkout does not turn client-supplied item type into fulfillment authority');
 const state = read('../app/src/state.js');
 
 assert.match(html, /<select id="newProdType"[^>]*>[\s\S]*?<option value="product">Physical product<\/option>[\s\S]*?<option value="service">Service<\/option>/,
