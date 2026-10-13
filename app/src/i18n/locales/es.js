@@ -4,6 +4,8 @@
 export default {
     brandName: "LIBRO DE VENTAS",
     setupBusiness: "Configura tu negocio",
+    firstSaleAddProduct: "Añade un producto para empezar a vender",
+    catalogReady: "El catálogo está listo",
     online: "En línea",
     offline: "Sin conexión",
     toSync: "por sincronizar",

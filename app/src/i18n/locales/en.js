@@ -20,6 +20,8 @@ export default {
     customersNav: "Customers",
     sourcingNav: "Sourcing",
     setupBusiness: "Set up your business",
+    firstSaleAddProduct: "Add a product to start selling",
+    catalogReady: "Catalog ready",
     online: "Online",
     offline: "Offline",
     toSync: "to sync",

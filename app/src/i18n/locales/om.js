@@ -4,6 +4,8 @@
 export default {
     brandName: "GALAABA SUUQII",
     setupBusiness: "Dhaabbata keessan qindeessaa",
+    firstSaleAddProduct: "Gurgurtaa jalqabuuf oomisha dabalaa",
+    catalogReady: "Galmeen oomishaa qophaa'eera",
     online: "Ijaarratamaa",
     offline: "Oflayinii",
     toSync: "sinkii gochuuf",
