@@ -87,4 +87,8 @@ export default {
     packLocalizationAuthority: 'Localization authority',
     packAccessibilityAuthority: 'Accessibility foundation',
     packAccessibilityBoundary: 'Language selection does not change authorization. Screen semantics do not grant permissions; server-side authorization remains authoritative.',
+    catalogItemType: "Gosa meeshaa",
+    physicalProduct: "Oomisha qaamaa",
+    service: "Tajaajila",
+    marketplaceServiceUnsupported: "Bittaa tajaajilaa gabaa irratti ammaaf hin deeggaramu",
 };
