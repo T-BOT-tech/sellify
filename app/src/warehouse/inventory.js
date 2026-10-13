@@ -40,6 +40,10 @@ function hasCanonicalInventory(productId) {
 }
 
 export function isStockTracked(p) {
+  // Services are sellable catalog items, not physical inventory. Keep them
+  // out of stock badges and stock-control UI even if legacy payloads include
+  // a numeric stock field or a stale canonical inventory row.
+  if (p?.type === 'service') return false;
   return typeof p.stock === 'number' || hasCanonicalInventory(p.id);
 }
 
