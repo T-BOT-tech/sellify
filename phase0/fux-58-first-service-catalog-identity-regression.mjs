@@ -16,8 +16,8 @@ assert.doesNotMatch(checkout.slice(checkout.indexOf('export function checkoutTel
   'checkout does not turn client-supplied item type into fulfillment authority');
 const state = read('../app/src/state.js');
 
-assert.match(html, /<select id="newProdType"[^>]*>[\s\S]*?<option value="product">Physical product<\/option>[\s\S]*?<option value="service">Service<\/option>/,
-  'first-time catalog form exposes physical product and service choices');
+assert.match(html, /<label for="newProdType" data-i18n="catalogItemType">Item type<\/label>[\s\S]*?<select id="newProdType"[^>]*>[\s\S]*?<option value="product" data-i18n="physicalProduct">Physical product<\/option>[\s\S]*?<option value="service" data-i18n="service">Service<\/option>/,
+  'first-time catalog form exposes accessible, translatable physical product and service choices');
 assert.match(catalog, /const type = typeSel && typeSel\.value === 'service' \? 'service' : 'product';/,
   'catalog creation defaults safely to physical product and records explicit service type');
 assert.match(catalog, /type,\s*[\s\S]{0,180}marketplace_listed: type === 'service' \? false/,
@@ -36,10 +36,29 @@ assert.match(inventory, /export function getLowStockProducts\(\) \{[\s\S]{0,500}
   'service records are excluded from low-stock alerts');
 assert.match(inventory, /export function getOutOfStockProducts\(\) \{[\s\S]{0,500}p\?\.type === 'service'\) return false;/,
   'service records are excluded from out-of-stock alerts');
-assert.equal(productRenderer.split("p.type === 'service' ? '<span class=\"prod-badge unit\">Service</span>' : ''").length - 1, 2,
-  'service identity is visibly labeled in both grid and list order-picker views');
+assert.equal((productRenderer.match(/p\.type === 'service' \? \`<span class="prod-badge unit">\$\{escapeHtml\(t\('service'\)\)\}<\/span>\` : ''/g) || []).length, 2,
+  'service identity is visibly labeled through the active locale in both grid and list order-picker views');
+assert.match(catalog, /marketLabel\.title = isService \? t\('marketplaceServiceUnsupported'\) : '';/,
+  'marketplace service restriction tooltip uses the shared translation contract');
 assert.equal((productRenderer.match(/onclick="changeQty\('\$\{p\.id\}', 1\)"/g) || []).length, 2,
   'services remain selectable as order lines in both grid and list views');
 
+
+const translations = read('../app/src/i18n/translations.js');
+const i18n = read('../app/src/ui/i18n.js');
+const locales = ['en', 'am', 'om', 'so', 'sw', 'es', 'hi', 'fr', 'ar', 'ha', 'yo', 'ru', 'pt'];
+const localeKeys = ['catalogItemType', 'physicalProduct', 'service', 'marketplaceServiceUnsupported'];
+for (const locale of locales) {
+  const localeSource = read(\`../app/src/i18n/locales/\${locale}.js\`);
+  for (const key of localeKeys) {
+    assert.ok(new RegExp('\\\\b' + key + '\\\\s*:').test(localeSource), \`\${locale} locale defines \${key}\`);
+  }
+  assert.ok(translations.includes(\`import \${locale} from './locales/\${locale}.js'\`), \`\${locale} locale is registered\`);
+  assert.ok(html.includes(\`<option value="\${locale}">\`), \`\${locale} appears in language selectors\`);
+}
+assert.match(translations, /TRANSLATIONS = \{[^}]*fr[^}]*ar[^}]*ha[^}]*yo[^}]*ru[^}]*pt[^}]*\}/,
+  'all six requested locales are included in the shared translation registry');
+assert.match(i18n, /document\.documentElement\.dir = lang === 'ar' \? 'rtl' : 'ltr';/,
+  'Arabic enables right-to-left document direction while other locales remain left-to-right');
 console.log('FUX-58 First-Service Catalog Identity Source Regression: PASS');
 console.log('Catalog create/save -> remote sanitize/hydrate -> stock-alert boundary: PASS');
