@@ -20,6 +20,17 @@ const {
 
 const chatId = 'fux42-chat';
 const tenant = await getOrCreateTenant(chatId);
+
+// Unsupported item types and marketplace service listings fail closed at the
+// backend boundary; UI restrictions alone are not the contract.
+await assert.rejects(
+  saveCatalog(chatId, [{ id: 'invalid-type', name: 'Invalid', price: 100, type: 'digital' }]),
+  (error) => error?.code === 'INVALID_CATALOG_ITEM_TYPE' && error?.statusCode === 400,
+);
+await assert.rejects(
+  saveCatalog(chatId, [{ id: 'service-marketplace', name: 'Remote service', price: 100, type: 'service', marketplace_listed: true }]),
+  (error) => error?.code === 'SERVICE_MARKETPLACE_UNSUPPORTED' && error?.statusCode === 409,
+);
 await saveCatalog(chatId, [
   { id: 'product-1', name: 'Test item', price: 500, stock: 0 },
   { id: 'service-1', name: 'Consultation', price: 700, type: 'service' },
