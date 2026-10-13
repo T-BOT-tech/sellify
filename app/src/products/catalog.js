@@ -107,7 +107,7 @@ export function renderCatalog() {
       : `<div class="cat-thumb-placeholder"><svg class="icon icon-muted"><use href="#i-camera"/></svg></div>`;
 
     const badges = [];
-    if (p.type === 'service') badges.push('<span class="prod-badge unit">Service</span>');
+    if (p.type === 'service') badges.push(`<span class="prod-badge unit">${escapeHtml(t('service'))}</span>`);
     if (p.category) badges.push(`<span class="prod-badge cat"><svg class="icon icon-sm"><use href="#i-tag"/></svg> ${escapeHtml(p.category)}</span>`);
     if (p.unit) badges.push(`<span class="prod-badge unit">${escapeHtml(p.unit)}</span>`);
     if (Array.isArray(p.tags)) p.tags.forEach(tag => badges.push(`<span class="prod-badge tag">${escapeHtml(tag)}</span>`));
@@ -294,7 +294,7 @@ export function onNewProdTypeChange() {
   marketListedBox.disabled = isService;
   const marketLabel = marketListedBox.closest('label');
   if (marketLabel) {
-    marketLabel.title = isService ? 'Marketplace service checkout is not supported yet' : '';
+    marketLabel.title = isService ? t('marketplaceServiceUnsupported') : '';
     marketLabel.style.opacity = isService ? '0.55' : '';
   }
 }
