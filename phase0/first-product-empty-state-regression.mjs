@@ -31,7 +31,7 @@ for (const localeFile of localeFiles) {
 }
 assert.match(
   await readFile(new URL('en.js', localeDirectory), 'utf8'),
-  /addFirstProduct: "Add your first product"/
+  /addFirstProduct: "Add your first item"/
 );
 
 console.log('First Product Empty State Regression: PASS');
