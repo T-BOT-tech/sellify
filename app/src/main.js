@@ -126,7 +126,7 @@ import {
 } from './products/modifiers.js';
 import {
   renderCatalog, startProductEdit, cancelProductEdit, saveProductEdit,
-  renderProductFormSelects, toggleNewProdTag, onNewProdCategoryChange,
+  renderProductFormSelects, toggleNewProdTag, onNewProdCategoryChange, onNewProdTypeChange,
   addProduct, removeProduct
 } from './products/catalog.js';
 import {
@@ -156,7 +156,7 @@ export {
   handleNewProdImageSelect, handleEditProdImageSelect,
   openModifierNoteModal, closeModifierNoteModal, saveModifierNote, modifierNoteMarkup,
   renderCatalog, startProductEdit, cancelProductEdit, saveProductEdit,
-  renderProductFormSelects, toggleNewProdTag, onNewProdCategoryChange,
+  renderProductFormSelects, toggleNewProdTag, onNewProdCategoryChange, onNewProdTypeChange,
   addProduct, removeProduct,
   setCashTendered, updateCartStickyBar, scrollToOrderSummary, onCashInput,
   updateChangeDisplay, changeQty, updateOrderSummary,

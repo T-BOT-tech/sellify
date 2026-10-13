@@ -5610,7 +5610,27 @@ export async function saveCatalog(chatId, incomingProducts) {
     const current = new Map(db.prepare('SELECT * FROM catalog_products WHERE chat_id = ?').all(key).map(row => [String(row.product_id), row]));
     for (const product of products) {
       const row = current.get(String(product.id));
-      if (!row) { product.stock_revision = 0; continue; }
+      const requestedType = product.type == null || product.type === '' ? null : String(product.type).trim().toLowerCase();
+      if (requestedType && !['product', 'service'].includes(requestedType)) {
+        throw Object.assign(new Error('Catalog item type must be product or service'), { statusCode: 400, code: 'INVALID_CATALOG_ITEM_TYPE' });
+      }
+      if (!row) {
+        product.type = requestedType || 'product';
+        if (product.type === 'service' && product.marketplace_listed) {
+          throw Object.assign(new Error('Marketplace checkout does not support service items yet'), { statusCode: 409, code: 'SERVICE_MARKETPLACE_UNSUPPORTED' });
+        }
+        product.stock_revision = 0;
+        continue;
+      }
+      const storedProduct = parseJSON(row.product_json, {});
+      const currentType = storedProduct.type === 'service' ? 'service' : 'product';
+      product.type = requestedType || currentType;
+      if (product.type !== currentType) {
+        throw Object.assign(new Error('Catalog item type is immutable; create a new item to change between product and service'), { statusCode: 409, code: 'CATALOG_ITEM_TYPE_CONFLICT' });
+      }
+      if (product.type === 'service' && product.marketplace_listed) {
+        throw Object.assign(new Error('Marketplace checkout does not support service items yet'), { statusCode: 409, code: 'SERVICE_MARKETPLACE_UNSUPPORTED' });
+      }
       const currentRevision = Number.isInteger(row.stock_revision) ? row.stock_revision : 0;
       const incomingRevision = Number.isInteger(product.stock_revision) ? product.stock_revision : null;
       if (incomingRevision === null) {
@@ -8144,14 +8164,23 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
   const items = Array.isArray(orderJson?.items) ? orderJson.items : [];
   const defaultLocation = db.prepare("SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1").get(String(fulfillmentRow.organization_id));
   const locationId = String(fulfillmentRow.location_id || defaultLocation?.id || '');
-  if (!locationId) throw Object.assign(new Error('Fulfillment inventory location is required'), { statusCode: 409, code: 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED' });
   const movements = [];
+  // One fulfillment creates at most one SALE movement per canonical catalog item.
+  // Aggregate duplicate order lines so stock checks and movements use the full quantity.
+  const quantitiesByProduct = new Map();
   for (const item of items) {
     const productId = String(item?.product_id ?? item?.productId ?? item?.item_id ?? item?.id ?? '').trim();
     const quantity = Number(item?.qty ?? item?.quantity ?? 0);
     if (!productId || !Number.isFinite(quantity) || quantity <= 0) continue;
-    const product = db.prepare('SELECT product_id FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
-    if (!product) throw Object.assign(new Error('Fulfillment product not found'), { statusCode: 409, code: 'FULFILLMENT_PRODUCT_NOT_FOUND', productId });
+    quantitiesByProduct.set(productId, (quantitiesByProduct.get(productId) || 0) + quantity);
+  }
+  for (const [productId, quantity] of quantitiesByProduct) {
+    const productRow = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
+    if (!productRow) throw Object.assign(new Error('Fulfillment product not found'), { statusCode: 409, code: 'FULFILLMENT_PRODUCT_NOT_FOUND', productId });
+    // The persisted catalog type is authoritative. An order line's client-supplied
+    // type must never let a physical product bypass its inventory consequence.
+    if (parseJSON(productRow.product_json, {}).type === 'service') continue;
+    if (!locationId) throw Object.assign(new Error('Fulfillment inventory location is required'), { statusCode: 409, code: 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED' });
     const balance = Number(db.prepare('SELECT COALESCE(SUM(quantity), 0) AS quantity FROM inventory_movements WHERE organization_id = ? AND location_id = ? AND product_id = ?').get(String(fulfillmentRow.organization_id), locationId, productId)?.quantity || 0);
     if (balance < quantity) throw Object.assign(new Error('Insufficient inventory for fulfillment'), { statusCode: 409, code: 'FULFILLMENT_INSUFFICIENT_INVENTORY', productId, available: balance, requested: quantity });
     const eventId = `fulfillment-sale:${fulfillmentRow.id}:${productId}`;
@@ -9501,6 +9530,9 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
         const row = db.prepare('SELECT * FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(sellerId, itemId);
         if (!row) throw Object.assign(new Error(`Item no longer listed: ${itemId}`), { statusCode: 409 });
         const product = productFromRow(row);
+        if (product.type === 'service') {
+          throw Object.assign(new Error('Marketplace checkout does not support service items yet'), { statusCode: 409, code: 'SERVICE_MARKETPLACE_UNSUPPORTED' });
+        }
         if (!product.marketplace_listed) {
           throw Object.assign(new Error(`Item no longer listed: ${itemId}`), { statusCode: 409 });
         }

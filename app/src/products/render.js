@@ -111,6 +111,7 @@ export function renderProducts() {
           <div class="grid-prod-body">
             <div>
               <div class="grid-prod-name" title="${escapeAttr(p.name)}">${escapeHtml(p.name)}</div>
+              ${p.type === 'service' ? '<span class="prod-badge unit">Service</span>' : ''}
               <div class="grid-prod-price">${priceHtml}${p.unit ? `<span style="opacity:0.6;"> / ${escapeHtml(p.unit)}</span>` : ''}</div>
               ${modifierHtml}
             </div>
@@ -138,6 +139,7 @@ export function renderProducts() {
             ${imgHtml}
             <div class="info">
               <div class="pname">${escapeHtml(p.name)}</div>
+              ${p.type === 'service' ? '<span class="prod-badge unit">Service</span>' : ''}
               <div class="pprice">${priceHtml}${p.unit ? ` / ${escapeHtml(p.unit)}` : ''}${stockBadgeMarkup(p, 'text')}</div>
               ${modifierHtml}
             </div>

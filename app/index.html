@@ -382,6 +382,10 @@
         <button class="btn-secondary" id="addProdBtn" style="width:auto; margin:0; padding:10px 14px;" onclick="addProduct()" data-i18n="add">Add</button>
       </div>
       <div class="catalog-form-row2">
+        <select id="newProdType" aria-label="Item type" onchange="onNewProdTypeChange()">
+          <option value="product">Physical product</option>
+          <option value="service">Service</option>
+        </select>
         <select id="newProdCategory" onchange="onNewProdCategoryChange()"></select>
         <select id="newProdUnit"></select>
       </div>
