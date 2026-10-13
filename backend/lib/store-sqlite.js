@@ -8165,10 +8165,16 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
   const defaultLocation = db.prepare("SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1").get(String(fulfillmentRow.organization_id));
   const locationId = String(fulfillmentRow.location_id || defaultLocation?.id || '');
   const movements = [];
+  // One fulfillment creates at most one SALE movement per canonical catalog item.
+  // Aggregate duplicate order lines so stock checks and movements use the full quantity.
+  const quantitiesByProduct = new Map();
   for (const item of items) {
     const productId = String(item?.product_id ?? item?.productId ?? item?.item_id ?? item?.id ?? '').trim();
     const quantity = Number(item?.qty ?? item?.quantity ?? 0);
     if (!productId || !Number.isFinite(quantity) || quantity <= 0) continue;
+    quantitiesByProduct.set(productId, (quantitiesByProduct.get(productId) || 0) + quantity);
+  }
+  for (const [productId, quantity] of quantitiesByProduct) {
     const productRow = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
     if (!productRow) throw Object.assign(new Error('Fulfillment product not found'), { statusCode: 409, code: 'FULFILLMENT_PRODUCT_NOT_FOUND', productId });
     // The persisted catalog type is authoritative. An order line's client-supplied
@@ -8181,7 +8187,7 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
     const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
     if (existing) { movements.push(inventoryMovementFromRow(existing)); continue; }
     const id = crypto.randomUUID(); const now = nowIso();
-    db.prepare('INSERT INTO inventory_movements (id,event_id,organization_id,location_id,product_id,quantity,movement_type,reference_type,reference_id,actor_id,device_id,occurred_at,reason,metadata_json,created_at) VALUES (?,?,?,?,?,?,\'SALE\',\'fulfillment\',?,?,?,?,?,?,?)').run(id,eventId,String(fulfillmentRow.organization_id),locationId,productId,-quantity,String(fulfillmentRow.id),actor?.userId || null,actor?.deviceId || null,now,'Core fulfillment terminal inventory consequence',json({orderId:String(fulfillmentRow.server_order_id),fulfillmentId:String(fulfillmentRow.id)}),now);
+    db.prepare('INSERT INTO inventory_movements (id,event_id,organization_id,location_id,product_id,quantity,movement_type,reference_type,reference_id,actor_id,device_id,occurred_at,reason,metadata_json,created_at) VALUES (?,?,?,?,?,?,\\'SALE\\',\\'fulfillment\\',?,?,?,?,?,?,?)').run(id,eventId,String(fulfillmentRow.organization_id),locationId,productId,-quantity,String(fulfillmentRow.id),actor?.userId || null,actor?.deviceId || null,now,'Core fulfillment terminal inventory consequence',json({orderId:String(fulfillmentRow.server_order_id),fulfillmentId:String(fulfillmentRow.id)}),now);
     movements.push(inventoryMovementFromRow(db.prepare('SELECT * FROM inventory_movements WHERE id = ?').get(id)));
   }
   return movements;
