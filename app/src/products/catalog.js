@@ -94,7 +94,7 @@ export function renderCatalog() {
           <button class="save-edit" onclick="saveProductEdit('${p.id}')">${t('save')}</button>
           <button class="cancel-edit" onclick="cancelProductEdit()">${t('cancel')}</button>
           <label class="niche-tag-check" style="margin-top:8px; display:inline-flex;">
-            <input type="checkbox" id="editMarketListed-${p.id}" ${p.marketplace_listed ? 'checked' : ''}>
+            <input type="checkbox" id="editMarketListed-${p.id}" ${p.marketplace_listed && p.type !== 'service' ? 'checked' : ''} ${p.type === 'service' ? 'disabled' : ''}>
             <span>${t('listOnMarketplace')}</span>
           </label>
           ${editTagsHtml}
@@ -179,7 +179,10 @@ export function saveProductEdit(id) {
   const modInput = document.getElementById(`editModifiers-${id}`);
   const modifiers = modInput ? modInput.value.split(',').map(m => m.trim()).filter(Boolean) : undefined;
   const marketListedBox = document.getElementById(`editMarketListed-${id}`);
-  const marketplace_listed = marketListedBox ? marketListedBox.checked : undefined;
+  const existingProduct = products.find(p => p.id === id);
+  // Marketplace service checkout has no canonical contract yet. Keep the UI
+  // aligned with the backend fail-closed rule, including edits to old records.
+  const marketplace_listed = existingProduct?.type === 'service' ? false : (marketListedBox ? marketListedBox.checked : undefined);
 
   const newImg = editingProdImages[id];
   setProducts(products.map(p => {
