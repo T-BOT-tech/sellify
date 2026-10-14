@@ -34,6 +34,8 @@ await assert.rejects(
 await saveCatalog(chatId, [
   { id: 'product-1', name: 'Test item', price: 500, stock: 0 },
   { id: 'service-1', name: 'Consultation', price: 700, type: 'service' },
+  // Even if a legacy/untrusted service payload includes stock, it must not seed inventory.
+  { id: 'service-2', name: 'Stock-shaped service', price: 900, type: 'service', stock: 9 },
 ]);
 await assert.rejects(
   saveCatalog(chatId, [
@@ -45,6 +47,10 @@ await assert.rejects(
 const canonicalCatalog = await getCatalog(chatId);
 assert.equal(canonicalCatalog.products.find((item) => item.id === 'product-1')?.type, 'product');
 assert.equal(canonicalCatalog.products.find((item) => item.id === 'service-1')?.type, 'service');
+assert.equal(canonicalCatalog.products.find((item) => item.id === 'service-2')?.type, 'service');
+const balancesAfterCatalogSave = await (await import('../backend/lib/store-sqlite.js')).getInventoryBalances(chatId);
+assert.equal(balancesAfterCatalogSave.find((row) => row.productId === 'service-2'), undefined,
+  'service records with a legacy stock field must not seed canonical opening-balance movements');
 await appendInventoryMovement(chatId, { productId: 'product-1', quantity: 5, movementType: 'PURCHASE', eventId: 'fux42-opening-purchase' });
 const openingBalances = await (await import('../backend/lib/store-sqlite.js')).getInventoryBalances(chatId);
 assert.equal(openingBalances.find((row) => row.productId === 'product-1')?.quantity, 5);
