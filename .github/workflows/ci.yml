@@ -91,6 +91,8 @@ jobs:
         run: npm run test:fux-42
       - name: FUX-58 first-service catalog identity regression
         run: npm run test:fux-58
+      - name: FUX-59 connected first-sale integration regression
+        run: npm run test:fux-59
       - name: FUX-44 frontend fulfillment authority regression
         run: npm run test:fux-44
       - name: FUX-46 canonical inventory mutation regression
