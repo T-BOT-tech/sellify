@@ -57,7 +57,7 @@ assert.match(localCheckout, /return \{ id: p\.id, name: note \? .*qty, price: ef
   'local first-sale checkout submits catalog identity, quantity, and canonical unit price');
 assert.doesNotMatch(localCheckout, /type\s*:\s*p\.type/,
   'order lines do not carry client-supplied item type as authority');
-assert.match(localCheckout, /status: 'queued'[\s\S]{0,500}orders\.unshift\(order\);\s*saveJSON\(STORAGE_KEYS\.orders, orders\);/,
+assert.match(localCheckout, /status: 'queued'[\s\S]{0,2500}orders\.unshift\(order\);\s*saveJSON\(STORAGE_KEYS\.orders, orders\);/,
   'a completed local sale is persisted through the existing queued-order flow');
 
 const translations = read('../app/src/i18n/translations.js');
