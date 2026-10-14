@@ -129,6 +129,22 @@ try {
   assert.ok(retryAcks.every(result => result.payment_id === acknowledgement.payment_id),
     'retries reuse the same canonical payment identity');
 
+  const conflictingRetry = await fetch(baseUrl + '/sync/' + encodeURIComponent(tenant.chatId), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...auth },
+    body: JSON.stringify({ orders: [{
+      ...localOrder,
+      items: [...localOrder.items, { id: 'fux60-physical', name: 'Coffee beans', qty: 1, price: 120 }],
+    }] }),
+  });
+  assert.equal(conflictingRetry.status, 200, 'order identity conflict is reported in the sync result');
+  const conflictingPayload = await conflictingRetry.json();
+  const conflictingAck = (conflictingPayload.results || []).find(result => result.local_id === localId);
+  assert.equal(conflictingAck?.status, 'rejected',
+    'reusing a local order identity with changed contents is rejected');
+  assert.equal(conflictingAck?.code, 'ORDER_IDEMPOTENCY_CONFLICT',
+    'changed order retry receives the stable idempotency conflict code');
+
   const persistedOrders = await store.getOrders(tenant.chatId);
   const persistedOrder = persistedOrders.find(order => order.server_order_id === acknowledgement.order_id);
   assert.ok(persistedOrder, 'HTTP-submitted order is persisted in canonical SQLite storage');
