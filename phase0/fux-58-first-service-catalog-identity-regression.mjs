@@ -71,8 +71,8 @@ assert.ok(orderSync.includes("if (!config.syncUrl || !config.chatId || !config.s
 
 assert.match(orderSync, /const queued = orders\.filter\(o => o\.status === 'queued'\);[\s\S]{0,700}method: 'POST'[\s\S]{0,350}body: JSON\.stringify\(\{ orders: queued \}\)/,
   'the existing order sync sends the saved queue to the canonical backend sync endpoint without rebuilding item lines');
-assert.match(orderSync, /result\.status === 'synced'[\s\S]{0,240}server_order_id: result\.order_id/,
-  'sync acknowledgement attaches canonical server order identity to the local sale');
+assert.match(orderSync, /result\.status === 'synced'[\s\S]{0,900}server_order_id: result\.order_id/,
+  'sync acknowledgement attaches canonical server order identity to the local sale, even when linkage metadata is handled nearby');
 
 assert.match(catalog, /catalogChangesWaitingToSync/);
 assert.match(catalog, /catalogSyncedStatus/);
