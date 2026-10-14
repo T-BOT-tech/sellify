@@ -73,10 +73,12 @@ assert.match(orderSync, /const queued = orders\.filter\(o => o\.status === 'queu
 assert.match(orderSync, /result\.status === 'synced'[\s\S]{0,240}server_order_id: result\.order_id/,
   'sync acknowledgement attaches canonical server order identity to the local sale');
 
+assert.match(catalog, /catalogChangesWaitingToSync/);
+assert.match(catalog, /catalogSyncedStatus/);
 const translations = read('../app/src/i18n/translations.js');
 const i18n = read('../app/src/ui/i18n.js');
 const locales = ['en', 'am', 'om', 'so', 'sw', 'es', 'hi', 'fr', 'ar', 'ha', 'yo', 'ru', 'pt'];
-const localeKeys = ['catalogItemType', 'physicalProduct', 'service', 'marketplaceServiceUnsupported'];
+const localeKeys = ['catalogItemType', 'physicalProduct', 'service', 'marketplaceServiceUnsupported', 'catalogChangesWaitingToSync', 'catalogSyncedStatus'];
 for (const locale of locales) {
   const localeSource = read('../app/src/i18n/locales/' + locale + '.js');
   for (const key of localeKeys) {
