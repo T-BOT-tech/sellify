@@ -25,9 +25,11 @@ const noop = () => {};
 const fakeElement = {
   style: { setProperty: noop, removeProperty: noop, getPropertyValue: () => '' },
   classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
-  setAttribute: noop, getAttribute: () => null, appendChild: noop,
-  addEventListener: noop, removeEventListener: noop, dataset: {}, children: [],
-  options: [], value: '',
+  setAttribute: noop, getAttribute: () => null, appendChild: noop, insertBefore: noop,
+  addEventListener: noop, removeEventListener: noop, querySelector: () => null,
+  querySelectorAll: () => [], remove: noop, focus: noop, click: noop, closest: () => null,
+  dataset: {}, children: [], options: [], value: '', firstElementChild: null,
+  firstChild: null, parentNode: null, contains: () => false, replaceChildren: noop,
 };
 
 globalThis.localStorage = {
@@ -38,8 +40,7 @@ globalThis.localStorage = {
 };
 globalThis.document = new Proxy({
   documentElement: fakeElement, head: fakeElement, body: fakeElement,
-  querySelector: () => null, querySelectorAll: () => [],
-  getElementById: id => ['brandName', 'statusPill', 'statusText', 'queueBadge'].includes(id) ? fakeElement : null,
+  querySelector: () => null, querySelectorAll: () => [], getElementById: () => fakeElement,
   createElement: () => ({ ...fakeElement, style: { ...fakeElement.style }, classList: { ...fakeElement.classList } }),
 }, { get(target, key) { return key in target ? target[key] : noop; } });
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => '' });
