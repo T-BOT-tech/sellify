@@ -93,6 +93,8 @@ jobs:
         run: npm run test:fux-58
       - name: FUX-59 connected first-sale integration regression
         run: npm run test:fux-59
+      - name: FUX-60 PWA first-sale HTTP/SQLite integration regression
+        run: node phase0/fux-60-pwa-first-sale-http-sqlite-integration-regression.mjs
       - name: FUX-44 frontend fulfillment authority regression
         run: npm run test:fux-44
       - name: FUX-46 canonical inventory mutation regression
