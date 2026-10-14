@@ -5423,7 +5423,7 @@ function ensureInventoryOpeningBalances(chatId) {
   ).get(String(tenant.organization_id));
   if (!location) return;
   const products = db.prepare(
-    'SELECT product_id, stock FROM catalog_products WHERE chat_id = ? AND stock IS NOT NULL'
+    'SELECT product_id, stock, product_json FROM catalog_products WHERE chat_id = ? AND stock IS NOT NULL'
   ).all(String(chatId));
   const insert = db.prepare(`
     INSERT OR IGNORE INTO inventory_movements
@@ -5432,6 +5432,9 @@ function ensureInventoryOpeningBalances(chatId) {
     VALUES (?, ?, ?, ?, ?, ?, 'OPENING_BALANCE', 'migration', ?, NULL, NULL, ?, ?, ?, ?)
   `);
   for (const product of products) {
+    // A legacy or untrusted payload may attach stock to a service. Catalog
+    // identity is authoritative, so never create an inventory movement for it.
+    if (parseJSON(product.product_json, {}).type === 'service') continue;
     const eventId = `inventory-opening:${chatId}:${product.product_id}`;
     const occurredAt = tenant.created_at || nowIso();
     insert.run(
