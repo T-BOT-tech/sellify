@@ -5,4 +5,6 @@ export default {
     physicalProduct: "Kayan zahiri",
     service: "Sabis",
     marketplaceServiceUnsupported: "Ba a tallafa sayen ayyuka a kasuwa tukuna ba",
+    catalogChangesWaitingToSync: "Canje-canjen da ke jiran daidaitawa",
+    catalogSyncedStatus: "An daidaita kundin kaya",
 };
