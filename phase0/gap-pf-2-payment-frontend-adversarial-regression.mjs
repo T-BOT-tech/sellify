@@ -296,6 +296,14 @@ assert.match(orderQueue, /orderPaymentSummary\.verifiedMinor/);
 assert.match(orderQueue, /orderPaymentSummary\.outstandingMinor/);
 assert.match(orderQueue, /ORDER_PAYMENT_SUMMARY_TTL_MS/);
 assert.match(orderQueue, /orderPaymentSummaryInFlight/);
+// A failed canonical summary fetch must not leave stale PAID/PARTIAL/UNPAID
+// text in the ticket or an endless "checking…" state. The unavailable marker
+// suppresses immediate request loops and permits retry after the short TTL.
+assert.match(orderQueue, /orderPaymentSummaryErrors\.set\(key, Date\.now\(\)\)/);
+assert.match(orderQueue, /getOrderPaymentSummaryError\(o\.server_order_id\)/);
+assert.match(orderQueue, /Order payment: status unavailable · will retry/);
+assert.match(orderQueue, /Date\.now\(\) - failedAt >= ORDER_PAYMENT_SUMMARY_TTL_MS/);
+assert.match(orderQueue, /orderPaymentSummaryErrors\.clear\(\)/);
 
 // Frontend canonical snapshot certification:
 // a successful tenant-scoped payment list replaces the projection snapshot;
