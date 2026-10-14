@@ -38,7 +38,14 @@ import { getPaymentForOrder, refreshCanonicalOrderPaymentSummary } from '../paym
 const orderPaymentSummaryCache = new Map();
 const orderPaymentSummaryErrors = new Map();
 const orderPaymentSummaryInFlight = new Map();
+const orderPaymentSummaryGeneration = new Map();
 const ORDER_PAYMENT_SUMMARY_TTL_MS = 10000;
+
+function bumpOrderPaymentSummaryGeneration(key) {
+  const generation = (orderPaymentSummaryGeneration.get(key) || 0) + 1;
+  orderPaymentSummaryGeneration.set(key, generation);
+  return generation;
+}
 
 function getOrderPaymentSummaryError(orderId) {
   const key = orderPaymentSummaryKey(orderId);
@@ -70,11 +77,17 @@ export function invalidateOrderPaymentSummaryCache(orderId) {
   const id = String(orderId || '').trim();
   if (!id) return;
   const key = orderPaymentSummaryKey(id);
+  bumpOrderPaymentSummaryGeneration(key);
   orderPaymentSummaryCache.delete(key);
   orderPaymentSummaryErrors.delete(key);
 }
 
 export function invalidateAllOrderPaymentSummaryCache() {
+  for (const key of new Set([
+    ...orderPaymentSummaryCache.keys(),
+    ...orderPaymentSummaryErrors.keys(),
+    ...orderPaymentSummaryInFlight.keys(),
+  ])) bumpOrderPaymentSummaryGeneration(key);
   orderPaymentSummaryCache.clear();
   orderPaymentSummaryErrors.clear();
 }
@@ -88,14 +101,19 @@ function refreshOrderPaymentSummary(orderId) {
   // refresh is in flight. Failure must render as unavailable/checking rather
   // than silently presenting an old PAID/PARTIAL/UNPAID decision.
   invalidateOrderPaymentSummaryCache(id);
+  const requestGeneration = orderPaymentSummaryGeneration.get(key) || 0;
   const promise = refreshCanonicalOrderPaymentSummary(id)
     .then(summary => {
+      // A payment event/cache invalidation may happen while this request is
+      // in flight. Never let that older response repopulate the cache.
+      if ((orderPaymentSummaryGeneration.get(key) || 0) !== requestGeneration) return null;
       orderPaymentSummaryErrors.delete(key);
       orderPaymentSummaryCache.set(key, { summary, receivedAt: Date.now() });
       renderQueue();
       return summary;
     })
     .catch(() => {
+      if ((orderPaymentSummaryGeneration.get(key) || 0) !== requestGeneration) return null;
       // Never leave the queue stuck on "checking…" after a failed request.
       // Mark the summary unavailable for one short retry window so repainting
       // does not immediately create a request loop. A later queue render can
@@ -104,7 +122,10 @@ function refreshOrderPaymentSummary(orderId) {
       renderQueue();
       return null;
     })
-    .finally(() => orderPaymentSummaryInFlight.delete(key));
+    .finally(() => {
+      orderPaymentSummaryInFlight.delete(key);
+      if ((orderPaymentSummaryGeneration.get(key) || 0) !== requestGeneration) renderQueue();
+    });
   orderPaymentSummaryInFlight.set(key, promise);
 }
 
