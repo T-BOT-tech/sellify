@@ -76,6 +76,7 @@ export function invalidateOrderPaymentSummaryCache(orderId) {
 
 export function invalidateAllOrderPaymentSummaryCache() {
   orderPaymentSummaryCache.clear();
+  orderPaymentSummaryErrors.clear();
 }
 
 function refreshOrderPaymentSummary(orderId) {
