@@ -38,7 +38,8 @@ globalThis.localStorage = {
 };
 globalThis.document = new Proxy({
   documentElement: fakeElement, head: fakeElement, body: fakeElement,
-  querySelector: () => null, querySelectorAll: () => [], getElementById: () => null,
+  querySelector: () => null, querySelectorAll: () => [],
+  getElementById: id => ['brandName', 'statusPill', 'statusText', 'queueBadge'].includes(id) ? fakeElement : null,
   createElement: () => ({ ...fakeElement, style: { ...fakeElement.style }, classList: { ...fakeElement.classList } }),
 }, { get(target, key) { return key in target ? target[key] : noop; } });
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => '' });
