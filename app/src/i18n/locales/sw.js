@@ -91,4 +91,6 @@ export default {
     physicalProduct: "Bidhaa halisi",
     service: "Huduma",
     marketplaceServiceUnsupported: "Ununuzi wa huduma sokoni bado hautumiki",
+    catalogChangesWaitingToSync: "Mabadiliko yanayosubiri kusawazishwa",
+    catalogSyncedStatus: "Katalogi imesawazishwa",
 };
