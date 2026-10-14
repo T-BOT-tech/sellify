@@ -4,7 +4,7 @@
 import { STORAGE_KEYS } from '../constants.js';
 import { config, orders, setOrders } from '../state.js';
 import { saveJSON } from '../storage/json.js';
-import { authHeaders as tenantAuthHeaders } from '../auth/tenant.js';
+import { authHeaders } from '../auth/tenant.js';
 // Phase 8 fix (see modularization plan §5, Phase 8): these used to come
 // from '../main.js', which only re-exported them from their real owning
 // module. That made main.js and every feature file that needed a toast,
