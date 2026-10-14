@@ -7,6 +7,15 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sellify-fux42-'));
 process.env.SELLIFY_DATA_DIR = dataDir;
 process.env.SELLIFY_DB_PATH = path.join(dataDir, 'sellify.sqlite');
 
+// Seed legacy catalog data before SQLite initialization so the opening-balance
+// migration is exercised against both a physical product and a stock-shaped service.
+fs.writeFileSync(path.join(dataDir, 'catalogs.json'), JSON.stringify({
+  'fux42-chat': { products: [
+    { id: 'legacy-physical', name: 'Legacy physical item', price: 100, stock: 4 },
+    { id: 'legacy-service', name: 'Legacy service with stale stock', price: 200, type: 'service', stock: 9 },
+  ] },
+}));
+
 const {
   getOrCreateTenant,
   saveQueuedOrders,
@@ -20,6 +29,12 @@ const {
 
 const chatId = 'fux42-chat';
 const tenant = await getOrCreateTenant(chatId);
+
+const legacyBalances = await (await import('../backend/lib/store-sqlite.js')).getInventoryBalances(chatId);
+assert.equal(legacyBalances.find((row) => row.productId === 'legacy-physical')?.quantity, 4,
+  'legacy physical stock still seeds its canonical opening balance');
+assert.equal(legacyBalances.find((row) => row.productId === 'legacy-service'), undefined,
+  'legacy service stock never seeds a canonical opening-balance movement');
 
 // Unsupported item types and marketplace service listings fail closed at the
 // backend boundary; UI restrictions alone are not the contract.
