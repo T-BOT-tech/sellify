@@ -72,6 +72,9 @@ async function pullNewOrders() {
 }
 
 export async function syncOrders() {
+  // Offline/local-first orders stay queued until an authenticated sync session is ready.
+  // Do not count a missing configuration as a failed network attempt.
+  if (!config.syncUrl || !config.chatId || !config.sessionToken) return null;
   const queued = orders.filter(o => o.status === 'queued');
   if (queued.length === 0) {
     await pullServerOrders();
