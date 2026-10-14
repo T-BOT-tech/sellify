@@ -5,4 +5,6 @@ export default {
     physicalProduct: "Produit physique",
     service: "Service",
     marketplaceServiceUnsupported: "L’achat de services sur la place de marché n’est pas encore pris en charge",
+    catalogChangesWaitingToSync: "Modifications en attente de synchronisation",
+    catalogSyncedStatus: "Catalogue synchronisé",
 };
