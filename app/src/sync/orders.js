@@ -71,6 +71,47 @@ async function pullNewOrders() {
   }
 }
 
+async function ensureAndPersistPaymentLinkage(order) {
+  try {
+    const result = await ensurePaymentForSyncedOrder(order);
+    const payment = result && result.payment;
+    const paymentId = String((payment && (payment.id || payment.paymentId || payment.payment_id)) || '').trim();
+    if (!paymentId) return result;
+    const intentId = String((payment && (payment.paymentIntentId || payment.payment_intent_id || payment.intentId)) || '').trim() || null;
+    const localId = String(order && order.id != null ? order.id : '');
+    const serverOrderId = String((order && (order.server_order_id || order.serverOrderId)) || '');
+    let changed = false;
+    setOrders(orders.map(current => {
+      const matches = (localId && String(current && current.id != null ? current.id : '') === localId)
+        || (serverOrderId && String((current && (current.server_order_id || current.serverOrderId)) || '') === serverOrderId);
+      if (!matches) return current;
+      const existing = current.payment_linkage || {};
+      if (String(existing.payment_id || '') === paymentId
+          && String(existing.payment_intent_id || '') === String(intentId || '')
+          && String(existing.status || '').toUpperCase() === 'LINKED') return current;
+      changed = true;
+      return { ...current, payment_linkage: { status: 'LINKED', payment_id: paymentId, payment_intent_id: intentId } };
+    }));
+    if (changed) {
+      saveJSON(STORAGE_KEYS.orders, orders);
+      renderAll();
+    }
+    return result;
+  } catch (error) {
+    // Retry linkage/status recovery on a later sync; local proof never establishes financial state.
+    console.warn('[Payment] Canonical payment/linkage recovery deferred:', error && (error.code || error.message) || error);
+    return null;
+  }
+}
+
+async function retryMissingPaymentLinkages() {
+  const candidates = orders.filter(order => order && order.status === 'synced'
+    && (order.server_order_id || order.serverOrderId)
+    && (String((order.payment_linkage && order.payment_linkage.status) || '').toUpperCase() !== 'LINKED'
+      || !String((order.payment_linkage && order.payment_linkage.payment_id) || '').trim()));
+  for (const order of candidates) await ensureAndPersistPaymentLinkage(order);
+}
+
 export async function syncOrders() {
   // Offline/local-first orders stay queued until an authenticated sync session is ready.
   // Do not count a missing configuration as a failed network attempt.
@@ -79,6 +120,8 @@ export async function syncOrders() {
   if (queued.length === 0) {
     await pullServerOrders();
     await pullNewOrders();
+    // Recover accepted orders whose canonical payment linkage was deferred.
+    await retryMissingPaymentLinkages();
     return null;
   }
 
@@ -137,20 +180,10 @@ export async function syncOrders() {
     saveJSON(STORAGE_KEYS.orders, orders);
     renderAll();
     const syncedOrders = orders.filter(o => resultMap[o.id]?.status === 'synced' && o.server_order_id);
-    for (const order of syncedOrders) {
-      try {
-        // PF-1K: the sync acknowledgement establishes the canonical order
-        // identity; ensurePaymentForSyncedOrder() then resolves the
-        // canonical Payment and refreshes provider status through
-        // PaymentCore. Status-query failures are operationally non-fatal:
-        // local proof/order sync must never manufacture financial state.
-        await ensurePaymentForSyncedOrder(order);
-      } catch (error) {
-        console.warn('[Payment] Canonical payment/status refresh deferred:', error?.code || error?.message || error);
-      }
-    }
+    for (const order of syncedOrders) await ensureAndPersistPaymentLinkage(order);
     await pullServerOrders();
     await pullNewOrders();
+    await retryMissingPaymentLinkages();
     const count = (data && data.results && Array.isArray(data.results)) ? data.results.length : 0;
     return `${count} ${t('orderSyncedMsg')}`;
   } catch (e) {
