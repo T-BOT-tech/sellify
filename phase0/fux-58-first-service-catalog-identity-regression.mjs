@@ -52,6 +52,14 @@ assert.match(catalog, /marketLabel\.title = isService \? t\('marketplaceServiceU
 assert.equal((productRenderer.match(/onclick="changeQty\('\$\{p\.id\}', 1\)"/g) || []).length, 2,
   'services remain selectable as order lines in both grid and list views');
 
+const localCheckout = checkout.slice(checkout.indexOf('export function saveOrder('));
+assert.match(localCheckout, /return \{ id: p\.id, name: note \? .*qty, price: effectiveUnitPrice\(p, qty\) \};/,
+  'local first-sale checkout submits catalog identity, quantity, and canonical unit price');
+assert.doesNotMatch(localCheckout.slice(0, localCheckout.indexOf('export function saveOrder(') + 1), /type\s*:\s*p\.type/,
+  'order lines do not carry client-supplied item type as authority');
+assert.match(localCheckout, /status: 'queued'[\s\S]{0,500}orders\.unshift\(order\);\s*saveJSON\(STORAGE_KEYS\.orders, orders\);/,
+  'a completed local sale is persisted through the existing queued-order flow');
+
 const translations = read('../app/src/i18n/translations.js');
 const i18n = read('../app/src/ui/i18n.js');
 const locales = ['en', 'am', 'om', 'so', 'sw', 'es', 'hi', 'fr', 'ar', 'ha', 'yo', 'ru', 'pt'];
