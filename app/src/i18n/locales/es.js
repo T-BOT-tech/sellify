@@ -92,4 +92,6 @@ export default {
     physicalProduct: "Producto físico",
     service: "Servicio",
     marketplaceServiceUnsupported: "La compra de servicios en el mercado aún no está disponible",
+    catalogChangesWaitingToSync: "Cambios pendientes de sincronización",
+    catalogSyncedStatus: "Catálogo sincronizado",
 };
