@@ -55,7 +55,7 @@ assert.equal((productRenderer.match(/onclick="changeQty\('\$\{p\.id\}', 1\)"/g) 
 const localCheckout = checkout.slice(checkout.indexOf('export function saveOrder('));
 assert.match(localCheckout, /return \{ id: p\.id, name: note \? .*qty, price: effectiveUnitPrice\(p, qty\) \};/,
   'local first-sale checkout submits catalog identity, quantity, and canonical unit price');
-assert.doesNotMatch(localCheckout.slice(0, localCheckout.indexOf('export function saveOrder(') + 1), /type\s*:\s*p\.type/,
+assert.doesNotMatch(localCheckout, /type\s*:\s*p\.type/,
   'order lines do not carry client-supplied item type as authority');
 assert.match(localCheckout, /status: 'queued'[\s\S]{0,500}orders\.unshift\(order\);\s*saveJSON\(STORAGE_KEYS\.orders, orders\);/,
   'a completed local sale is persisted through the existing queued-order flow');
