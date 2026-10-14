@@ -20,14 +20,14 @@ assert.match(html, /<label for="newProdType" data-i18n="catalogItemType"[^>]*>It
   'first-time catalog form exposes accessible, translatable physical product and service choices');
 assert.match(catalog, /const type = typeSel && typeSel\.value === 'service' \? 'service' : 'product';/,
   'catalog creation defaults safely to physical product and records explicit service type');
-assert.match(html, /id="onboardingProdType"[\\s\\S]*?value="product"[\\s\\S]*?value="service"/,
+assert.match(html, /id="onboardingProdType"[\s\S]*?value="product"[\s\S]*?value="service"/,
   'first-time onboarding lets merchants choose a physical product or service');
-assert.match(html, /id="onboardingProdStockWrap"[\\s\\S]*?id="onboardingProdStock"/,
+assert.match(html, /id="onboardingProdStockWrap"[\s\S]*?id="onboardingProdStock"/,
   'onboarding stock entry is grouped so it can be hidden for services');
 const onboarding = read('../app/src/auth/tenant.js');
-assert.match(onboarding, /function onboardingProdTypeChange\(\)[\\s\\S]{0,260}type === 'service' \? 'none' : ''/,
+assert.match(onboarding, /function onboardingProdTypeChange\(\)[\s\S]{0,260}type === 'service' \? 'none' : ''/,
   'onboarding hides stock entry when the merchant selects a service');
-assert.match(onboarding, /const type = typeInput\?\.value === 'service' \? 'service' : 'product';[\\s\\S]{0,500}type,[\\s\\S]{0,180}marketplace_listed: false/,
+assert.match(onboarding, /const type = typeInput\?\.value === 'service' \? 'service' : 'product';[\s\S]{0,500}type,[\s\S]{0,180}marketplace_listed: false/,
   'onboarding persists service identity without adding stock or enabling marketplace listing');
 assert.match(catalog, /type,\s*[\s\S]{0,180}marketplace_listed: type === 'service' \? false/,
   'service creation persists its type and cannot enable unsupported marketplace listing');
