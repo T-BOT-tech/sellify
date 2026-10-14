@@ -107,6 +107,28 @@ try {
   assert.equal(acknowledgement?.status, 'synced', 'server acknowledges the local order');
   assert.ok(acknowledgement?.order_id, 'acknowledgement returns canonical server order ID');
 
+  // Lost acknowledgements and concurrent client retries must reuse the same
+  // canonical order/payment identities rather than create another payment shell.
+  const retryResponses = await Promise.all(Array.from({ length: 5 }, () => fetch(
+    baseUrl + '/sync/' + encodeURIComponent(tenant.chatId),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...auth },
+      body: JSON.stringify({ orders: [localOrder] }),
+    },
+  )));
+  assert.ok(retryResponses.every(response => response.status === 200),
+    'concurrent identical order-sync retries are accepted idempotently');
+  const retryPayloads = await Promise.all(retryResponses.map(response => response.json()));
+  const retryAcks = retryPayloads.map(payload =>
+    (payload.results || []).find(result => result.local_id === localId));
+  assert.ok(retryAcks.every(result => result?.status === 'synced'),
+    'each retry receives a successful sync acknowledgement');
+  assert.ok(retryAcks.every(result => result.order_id === acknowledgement.order_id),
+    'retries reuse the same canonical server order ID');
+  assert.ok(retryAcks.every(result => result.payment_id === acknowledgement.payment_id),
+    'retries reuse the same canonical payment identity');
+
   const persistedOrders = await store.getOrders(tenant.chatId);
   const persistedOrder = persistedOrders.find(order => order.server_order_id === acknowledgement.order_id);
   assert.ok(persistedOrder, 'HTTP-submitted order is persisted in canonical SQLite storage');
@@ -118,6 +140,8 @@ try {
   // the authority for order-level PAID/PARTIAL/UNPAID.
   const canonicalPayments = await store.listPayments(tenant.chatId, { orderId: acknowledgement.order_id, limit: 10 });
   assert.ok(canonicalPayments.length >= 1, 'sync establishes canonical payment identity for the accepted order');
+  assert.equal(canonicalPayments.length, 1,
+    'repeated sync retries do not create duplicate initial canonical payment shells');
   assert.ok(canonicalPayments.every(payment => payment.state === 'UNPAID'),
     'untrusted client payment claims do not mark canonical payments paid');
   const canonicalSummary = await store.getOrderPaymentSummary(tenant.chatId, acknowledgement.order_id);
