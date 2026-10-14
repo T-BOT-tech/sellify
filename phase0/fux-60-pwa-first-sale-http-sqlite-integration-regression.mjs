@@ -87,6 +87,9 @@ try {
   const localId = 'fux60-local-' + randomUUID();
   const localOrder = {
     id: localId, currency: 'ETB', customer_name: 'First Sale Buyer',
+    // Client claims are deliberately untrusted: the canonical order/payment
+    // boundary must not treat these as evidence of a completed payment.
+    payment_state: 'PAID', paid: true, payment_proof: { status: 'VERIFIED' },
     items: [
       { id: 'fux60-physical', name: 'Coffee beans', qty: 2, price: 120, type: 'service' },
       { id: 'fux60-service', name: 'Barista training', qty: 1, price: 900, type: 'product' },
@@ -109,6 +112,19 @@ try {
   assert.ok(persistedOrder, 'HTTP-submitted order is persisted in canonical SQLite storage');
   assert.equal(persistedOrder.items.length, 2);
   assert.equal(persistedOrder.total, 1140);
+
+  // Order sync may establish canonical payment identity, but client-supplied
+  // payment claims/proof cannot advance financial state. Payment Core remains
+  // the authority for order-level PAID/PARTIAL/UNPAID.
+  const canonicalPayments = await store.listPayments(tenant.chatId, { orderId: acknowledgement.order_id, limit: 10 });
+  assert.ok(canonicalPayments.length >= 1, 'sync establishes canonical payment identity for the accepted order');
+  assert.ok(canonicalPayments.every(payment => payment.state === 'UNPAID'),
+    'untrusted client payment claims do not mark canonical payments paid');
+  const canonicalSummary = await store.getOrderPaymentSummary(tenant.chatId, acknowledgement.order_id);
+  assert.equal(canonicalSummary.status, 'UNPAID',
+    'order-level financial status stays unpaid until Payment Core verifies payment');
+  assert.equal(canonicalSummary.verifiedMinor, 0);
+  assert.equal(canonicalSummary.outstandingMinor, 1140);
 
   // Verify the actual PWA client source uses the same authenticated HTTP contract.
   const catalogClient = await readFile('app/src/sync/catalog.js', 'utf8');
