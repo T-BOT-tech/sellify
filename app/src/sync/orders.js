@@ -98,7 +98,22 @@ export async function syncOrders() {
     setOrders(orders.map(o => {
       const result = resultMap[o.id];
       if (result && result.status === 'synced') {
-        return { ...o, status: 'synced', server_order_id: result.order_id };
+        // The authenticated sync acknowledgement is the canonical linkage
+        // boundary. Persist identity only; payment_state in this response is
+        // not cached as financial truth and remains Payment Core-owned.
+        const paymentLinkage = result.payment_id
+          ? {
+              status: 'LINKED',
+              payment_id: String(result.payment_id),
+              payment_intent_id: result.payment_intent_id ? String(result.payment_intent_id) : null,
+            }
+          : o.payment_linkage;
+        return {
+          ...o,
+          status: 'synced',
+          server_order_id: result.order_id,
+          ...(paymentLinkage ? { payment_linkage: paymentLinkage } : {}),
+        };
       }
       // Phase 4: the backend now validates each order's line items before
       // accepting it (see saveQueuedOrders in backend/lib/store.js) and
