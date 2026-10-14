@@ -5,6 +5,7 @@ const read = (file) => fs.readFileSync(new URL(file, import.meta.url), 'utf8');
 const html = read('../app/index.html');
 const catalog = read('../app/src/products/catalog.js');
 const sync = read('../app/src/sync/catalog.js');
+const orderSync = read('../app/src/sync/orders.js');
 const inventory = read('../app/src/warehouse/inventory.js');
 const productRenderer = read('../app/src/products/render.js');
 const checkout = read('../app/src/orders/checkout.js');
@@ -64,6 +65,10 @@ assert.doesNotMatch(localCheckout, /type\s*:\s*p\.type/,
   'order lines do not carry client-supplied item type as authority');
 assert.match(localCheckout, /status: 'queued'[\s\S]{0,2500}orders\.unshift\(order\);\s*saveJSON\(STORAGE_KEYS\.orders, orders\);/,
   'a completed local sale is persisted through the existing queued-order flow');
+assert.match(orderSync, /const queued = orders\.filter\(o => o\.status === 'queued'\);[\s\S]{0,700}method: 'POST'[\s\S]{0,350}body: JSON\.stringify\(\{ orders: queued \}\)/,
+  'the existing order sync sends the saved queue to the canonical backend sync endpoint without rebuilding item lines');
+assert.match(orderSync, /result\.status === 'synced'[\s\S]{0,240}server_order_id: result\.order_id/,
+  'sync acknowledgement attaches canonical server order identity to the local sale');
 
 const translations = read('../app/src/i18n/translations.js');
 const i18n = read('../app/src/ui/i18n.js');
