@@ -48,6 +48,15 @@ assert.doesNotMatch(client, /providerToken|botToken|secret|credential/i);
 // create ledger entries or call PaymentCore directly.
 assert.match(projection, /listPayments/);
 assert.match(projection, /refreshCanonicalPaymentStatus/);
+const orderPaymentEnsureStart = projection.indexOf('async function ensurePaymentForSyncedOrderOnce');
+assert.notEqual(orderPaymentEnsureStart, -1, 'order-sync payment creation helper exists');
+const orderPaymentEnsureBlock = projection.slice(orderPaymentEnsureStart, orderPaymentEnsureStart + 3600);
+assert.match(orderPaymentEnsureBlock, /paymentCommandKey\('create-order', serverOrderId\)/,
+  'payment creation idempotency is bound to canonical server order identity');
+assert.match(orderPaymentEnsureBlock, /source: 'SELLIFY_FRONTEND_ORDER_SYNC'/,
+  'order-sync payment creation retains stable provenance metadata');
+assert.doesNotMatch(orderPaymentEnsureBlock, /localOrderId/,
+  'device-local IDs cannot make retries for the same canonical order conflict on idempotency hash');
 assert.doesNotMatch(checkout, /payment_ledger_entries|payments\/ledger|createPayment\(/);
 
 // The public frontend contract exposes only bounded HTTP error semantics.
