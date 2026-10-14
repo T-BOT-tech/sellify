@@ -92,4 +92,6 @@ export default {
     physicalProduct: "भौतिक उत्पाद",
     service: "सेवा",
     marketplaceServiceUnsupported: "मार्केटप्लेस पर सेवाओं की खरीद अभी उपलब्ध नहीं है",
+    catalogChangesWaitingToSync: "सिंक होने की प्रतीक्षा में बदलाव",
+    catalogSyncedStatus: "कैटलॉग सिंक हो गया",
 };
