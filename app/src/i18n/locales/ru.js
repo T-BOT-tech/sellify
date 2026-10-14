@@ -5,4 +5,6 @@ export default {
     physicalProduct: "Физический товар",
     service: "Услуга",
     marketplaceServiceUnsupported: "Покупка услуг на маркетплейсе пока не поддерживается",
+    catalogChangesWaitingToSync: "Изменения ожидают синхронизации",
+    catalogSyncedStatus: "Каталог синхронизирован",
 };
