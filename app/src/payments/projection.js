@@ -79,9 +79,11 @@ async function ensurePaymentForSyncedOrderOnce(order, { statusQueryKey = null } 
       channel: route.channel || 'manual',
       methodId: order?.payment_method_id || null,
       methodName: order?.payment_method_name || null,
+      // Idempotency is keyed by canonical server order identity. Do not
+      // include a device-local order ID here: another device may retry the
+      // same canonical create command with a different local identifier.
       metadata: {
         source: 'SELLIFY_FRONTEND_ORDER_SYNC',
-        localOrderId: order?.id || null,
       },
     }, { idempotencyKey: paymentCommandKey('create-order', serverOrderId) });
 
