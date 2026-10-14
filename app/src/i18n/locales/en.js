@@ -207,4 +207,6 @@ export default {
     physicalProduct: "Physical product",
     service: "Service",
     marketplaceServiceUnsupported: "Marketplace checkout for services is not supported yet",
+    catalogChangesWaitingToSync: "Changes waiting to sync",
+    catalogSyncedStatus: "Catalog synced",
 };
