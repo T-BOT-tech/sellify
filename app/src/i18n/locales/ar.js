@@ -5,4 +5,6 @@ export default {
     physicalProduct: "منتج مادي",
     service: "خدمة",
     marketplaceServiceUnsupported: "لا يدعم السوق شراء الخدمات حتى الآن",
+    catalogChangesWaitingToSync: "تغييرات بانتظار المزامنة",
+    catalogSyncedStatus: "تمت مزامنة الكتالوج",
 };
