@@ -105,8 +105,9 @@ async function ensureAndPersistPaymentLinkage(order) {
 }
 
 async function retryMissingPaymentLinkages() {
-  const candidates = orders.filter(order => order && order.status === 'synced'
+  const candidates = orders.filter(order => order
     && (order.server_order_id || order.serverOrderId)
+    && order.status !== 'queued' && order.status !== 'sync_rejected'
     && (String((order.payment_linkage && order.payment_linkage.status) || '').toUpperCase() !== 'LINKED'
       || !String((order.payment_linkage && order.payment_linkage.payment_id) || '').trim()));
   for (const order of candidates) await ensureAndPersistPaymentLinkage(order);
