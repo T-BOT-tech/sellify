@@ -6072,6 +6072,7 @@ export async function createPaymentWithIntent(chatId, input = {}, actor = null) 
         ), 0) AS amount_minor
         FROM payments
         WHERE organization_id = ? AND order_id = ?
+          AND COALESCE(json_extract(metadata_json, '$.canonicalLinkageOnly'), 0) != 1
           AND state IN ('UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','PARTIAL')
       `).get(organizationId, String(orderId));
       const reservedMinor = Number(reserved?.amount_minor || 0);
@@ -7891,6 +7892,7 @@ export async function getOrderPaymentSummary(chatId, orderId) {
            ), 0) AS amount_minor
     FROM payments p
     WHERE p.organization_id = ? AND p.order_id = ?
+      AND COALESCE(json_extract(p.metadata_json, '$.canonicalLinkageOnly'), 0) != 1
     GROUP BY p.state
   `).all(organizationId, id);
 
