@@ -91,4 +91,6 @@ export default {
     physicalProduct: "Oomisha qaamaa",
     service: "Tajaajila",
     marketplaceServiceUnsupported: "Bittaa tajaajilaa gabaa irratti ammaaf hin deeggaramu",
+    catalogChangesWaitingToSync: "Jijjiiramni walsimsiisuuf eegaa jiru",
+    catalogSyncedStatus: "Galmeen meeshaalee walsimsiifameera",
 };
