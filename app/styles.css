@@ -586,7 +586,7 @@
      ink-soft, i.e. quieter than the name, which is backwards for the
      most-scanned field on the row. */
   .product-row .pprice { font-family: var(--mono); font-weight: 800; font-size: 16px; color: var(--teal); margin-top: 2px; }
-  .product-row .pstock { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; font-family: var(--mono); font-weight: 700; font-size: 10px; padding: 1px 6px; border-radius: var(--r-full); vertical-align: middle; }
+  .product-row .pstock { display: inline-flex; align-items: center; gap: 3px; margin-inline-start: 8px; font-family: var(--mono); font-weight: 700; font-size: 10px; padding: 1px 6px; border-radius: var(--r-full); vertical-align: middle; }
   .product-row .pstock.low { background: var(--warn-bg); color: var(--warn); }
   .product-row .pstock.out { background: var(--danger-bg); color: var(--danger); }
   .stepper { display: flex; align-items: center; gap: 10px; }
@@ -1112,7 +1112,7 @@
     padding: 10px 0; border-bottom: 1px solid var(--paper-dim); gap: 8px;
   }
   .catalog-row .remove { color: var(--brick); background: none; border: none; cursor: pointer; font-size: 13px; }
-  .catalog-row .edit { color: var(--ink-soft); background: none; border: none; cursor: pointer; font-size: 13px; margin-right: 12px; }
+  .catalog-row .edit { color: var(--ink-soft); background: none; border: none; cursor: pointer; font-size: 13px; margin-inline-end: 12px; }
   .catalog-row-edit {
     display: flex; gap: 6px; align-items: center; padding: 8px 0;
     border-bottom: 1px solid var(--paper-dim); flex-wrap: wrap;
