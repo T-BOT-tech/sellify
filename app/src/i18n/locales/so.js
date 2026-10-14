@@ -91,4 +91,6 @@ export default {
     physicalProduct: "Badeecad jireed",
     service: "Adeeg",
     marketplaceServiceUnsupported: "Iibsashada adeegyada suuqa weli lama taageero",
+    catalogChangesWaitingToSync: "Isbeddellada sugaya isku-dubaridka",
+    catalogSyncedStatus: "Liiska alaabta waa la isku-dubariday",
 };
