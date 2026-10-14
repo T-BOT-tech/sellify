@@ -133,6 +133,12 @@ try {
   assert.match(catalogClient, /\/catalog\/\$\{config\.chatId\}/, 'catalog client calls canonical catalog route');
   assert.match(orderClient, /authHeaders\(\)/, 'order client attaches tenant session headers');
   assert.match(orderClient, /\/sync\/\$\{config\.chatId\}/, 'order client calls canonical sync route');
+  assert.match(orderClient, /result\.payment_id/, 'PWA persists canonical payment identity from sync acknowledgement');
+  assert.match(orderClient, /status: 'LINKED'/, 'PWA marks only canonical identity linkage, not payment verification');
+  assert.match(orderClient, /payment_intent_id: result\.payment_intent_id \? String\(result\.payment_intent_id\) : null/,
+    'PWA retains optional canonical payment-intent identity');
+  assert.doesNotMatch(orderClient, /payment_state:\s*result\.payment_state/,
+    'sync acknowledgement payment status is not cached as financial truth');
 
   const unauthorized = await fetch(baseUrl + '/catalog/' + encodeURIComponent(tenant.chatId), {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
