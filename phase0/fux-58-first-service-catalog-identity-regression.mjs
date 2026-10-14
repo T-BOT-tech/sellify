@@ -29,6 +29,9 @@ assert.match(onboarding, /function onboardingProdTypeChange\(\)[\s\S]{0,260}type
   'onboarding hides stock entry when the merchant selects a service');
 assert.match(onboarding, /const type = typeInput\?\.value === 'service' \? 'service' : 'product';[\s\S]{0,500}type,[\s\S]{0,180}marketplace_listed: false/,
   'onboarding persists service identity without adding stock or enabling marketplace listing');
+const onboardingWrite = onboarding.slice(onboarding.indexOf('export function addOnboardingProduct()'), onboarding.indexOf('export function skipOnboardingProduct()'));
+assert.match(onboardingWrite, /setProducts\(\[\.\.\.products, newProd\]\);\s*saveJSON\(STORAGE_KEYS\.products, products\);\s*markCatalogDirty\(\);/,
+  'the first onboarding item is written to the existing local catalog and marked for sync');
 assert.match(catalog, /type,\s*[\s\S]{0,180}marketplace_listed: type === 'service' \? false/,
   'service creation persists its type and cannot enable unsupported marketplace listing');
 assert.match(catalog, /products\.push\(newProd\);\s*saveJSON\(STORAGE_KEYS\.products, products\);/,
@@ -37,6 +40,8 @@ assert.match(sync, /return \{\s*\.\.\.p,\s*id: sanitizeId\(p\.id\)/,
   'remote catalog sanitizer preserves the canonical type field rather than rebuilding a parallel model');
 assert.match(sync, /setProducts\(sanitizeRemoteProducts\(data\.products\)\);\s*saveJSON\(STORAGE_KEYS\.products, products\);/,
   'remote catalog hydration retains the sanitized records in existing local catalog storage');
+assert.match(sync, /export async function syncCatalog\(\)[\s\S]{0,900}method: 'POST'[\s\S]{0,500}body: JSON\.stringify\(\{ products \}\)/,
+  'the existing catalog sync pushes the same catalog collection to the backend');
 assert.match(state, /export let products = loadJSON\(STORAGE_KEYS\.products, \[\]\);/,
   'reload hydrates the same existing catalog collection');
 assert.match(inventory, /export function isStockTracked\(p\) \{[\s\S]{0,400}p\?\.type === 'service'\) return false;/,
