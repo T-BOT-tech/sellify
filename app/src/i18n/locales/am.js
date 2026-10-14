@@ -92,4 +92,6 @@ export default {
     physicalProduct: "አካላዊ ምርት",
     service: "አገልግሎት",
     marketplaceServiceUnsupported: "ለአገልግሎቶች በገበያ ቦታው በኩል ግዢ መፈጸም ገና አይደገፍም",
+    catalogChangesWaitingToSync: "ለማመሳሰል የሚጠብቁ ለውጦች",
+    catalogSyncedStatus: "ካታሎግ ተመሳስሏል",
 };
