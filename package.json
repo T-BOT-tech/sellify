@@ -418,7 +418,8 @@
     "test:backup-restore": "node phase0/database-backup-restore-regression.mjs",
     "test:payment-lineage-append-only": "node phase0/payment-lineage-append-only-regression.mjs",
     "gap-1.18:decision-idempotency-test": "node phase0/gap-1.18Q-payment-decision-idempotency-regression.mjs",
-    "gap-1.18:financial-transition-idempotency-test": "node phase0/gap-1.18U-financial-transition-idempotency-regression.mjs"
+    "gap-1.18:financial-transition-idempotency-test": "node phase0/gap-1.18U-financial-transition-idempotency-regression.mjs",
+    "test:fux-59": "node phase0/fux-59-first-sale-connected-integration-regression.mjs"
   },
   "engines": {
     "node": ">=24"
