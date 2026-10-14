@@ -65,6 +65,9 @@ assert.doesNotMatch(localCheckout, /type\s*:\s*p\.type/,
   'order lines do not carry client-supplied item type as authority');
 assert.match(localCheckout, /status: 'queued'[\s\S]{0,2500}orders\.unshift\(order\);\s*saveJSON\(STORAGE_KEYS\.orders, orders\);/,
   'a completed local sale is persisted through the existing queued-order flow');
+assert.match(orderSync, /export async function syncOrders\(\) \{\\s*\/\/ Offline\/local-first orders stay queued until an authenticated sync session is ready\.[\\s\\S]{0,180}if \(!config\.syncUrl \|\| !config\.chatId \|\| !config\.sessionToken\) return null;/,
+  'order sync skips without a configured authenticated session instead of recording a false retry');
+
 assert.match(orderSync, /const queued = orders\.filter\(o => o\.status === 'queued'\);[\s\S]{0,700}method: 'POST'[\s\S]{0,350}body: JSON\.stringify\(\{ orders: queued \}\)/,
   'the existing order sync sends the saved queue to the canonical backend sync endpoint without rebuilding item lines');
 assert.match(orderSync, /result\.status === 'synced'[\s\S]{0,240}server_order_id: result\.order_id/,
