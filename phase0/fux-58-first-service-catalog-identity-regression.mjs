@@ -4,6 +4,7 @@ import fs from 'node:fs';
 const read = (file) => fs.readFileSync(new URL(file, import.meta.url), 'utf8');
 const html = read('../app/index.html');
 const catalog = read('../app/src/products/catalog.js');
+const styles = read('../app/styles.css');
 const sync = read('../app/src/sync/catalog.js');
 const orderSync = read('../app/src/sync/orders.js');
 const inventory = read('../app/src/warehouse/inventory.js');
@@ -91,6 +92,11 @@ assert.ok(translations.includes('TRANSLATIONS = { en, am, om, so, sw, es, hi, fr
   'all six requested locales are included in the shared translation registry');
 assert.ok(i18n.includes("document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';"),
   'Arabic enables right-to-left document direction while other locales remain left-to-right');
+
+assert.match(styles, /\.product-row \.pstock \{[^}]*margin-inline-start: 8px;/,
+  'catalog stock badge spacing follows text direction in RTL and LTR layouts');
+assert.match(styles, /\.catalog-row \.edit \{[^}]*margin-inline-end: 12px;/,
+  'catalog edit action spacing follows text direction in RTL and LTR layouts');
 
 console.log('FUX-58 First-Service Catalog Identity Source Regression: PASS');
 console.log('Catalog create/save -> remote sanitize/hydrate -> stock-alert boundary: PASS');
