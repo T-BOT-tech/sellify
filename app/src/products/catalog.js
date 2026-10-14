@@ -42,7 +42,7 @@ export function renderCatalogSyncStatus() {
   const el = document.getElementById('catalogSyncStatus');
   if (!el) return;
   el.className = `catalog-sync-status ${catalogDirty ? 'dirty' : 'synced'}`;
-  el.textContent = catalogDirty ? '● Changes waiting to sync' : '✓ Catalog synced';
+  el.textContent = catalogDirty ? `● ${t('catalogChangesWaitingToSync')}` : `✓ ${t('catalogSyncedStatus')}`;
 }
 export let pendingNewProdImage = null;
 export function setPendingNewProdImage(next) { pendingNewProdImage = next; }
