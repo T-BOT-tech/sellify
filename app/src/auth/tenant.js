@@ -217,27 +217,39 @@ function showFirstProductStep(sellerName) {
   if (heading) heading.textContent = sellerName || '';
   const status = document.getElementById('onboardingStatus');
   if (status) status.textContent = '';
+  onboardingProdTypeChange();
+}
+
+// Services are not stock-tracked; only physical products need a stock field.
+export function onboardingProdTypeChange() {
+  const type = document.getElementById('onboardingProdType')?.value;
+  const stockWrap = document.getElementById('onboardingProdStockWrap');
+  if (stockWrap) stockWrap.style.display = type === 'service' ? 'none' : '';
 }
 
 export function addOnboardingProduct() {
   const nameInput = document.getElementById('onboardingProdName');
   const priceInput = document.getElementById('onboardingProdPrice');
   const stockInput = document.getElementById('onboardingProdStock');
+  const typeInput = document.getElementById('onboardingProdType');
   const status = document.getElementById('onboardingStatus');
   const name = nameInput?.value.trim();
   const priceMajor = parseFloat(priceInput?.value);
   if (!name || !Number.isFinite(priceMajor) || priceMajor < 0) {
-    if (status) status.textContent = 'Enter a product name and a valid price.';
+    if (status) status.textContent = 'Enter an item name and a valid price.';
     return;
   }
-  const stockRaw = stockInput?.value.trim();
+  const type = typeInput?.value === 'service' ? 'service' : 'product';
+  const stockRaw = type === 'product' ? stockInput?.value.trim() : '';
   const stock = stockRaw ? Math.max(0, parseInt(stockRaw, 10) || 0) : undefined;
   const newProd = {
     id: uid(),
     name,
     price: toMinorUnits(priceMajor, config.currencyCode),
     _priceMinor: true,
-    stock,
+    type,
+    ...(type === 'product' && stock !== undefined ? { stock } : {}),
+    marketplace_listed: false,
     updated_at: Date.now(),
   };
   setProducts([...products, newProd]);
