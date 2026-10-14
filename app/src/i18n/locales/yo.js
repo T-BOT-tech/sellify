@@ -5,4 +5,6 @@ export default {
     physicalProduct: "Ọjà gidi",
     service: "Iṣẹ́",
     marketplaceServiceUnsupported: "A kò tíì ṣe àtìlẹ́yìn fún rírà iṣẹ́ ní ọjà",
+    catalogChangesWaitingToSync: "Àwọn àyípadà tó ń dúró de ìmúṣiṣẹpọ̀",
+    catalogSyncedStatus: "A ti mú àkójọ ọjà ṣiṣẹpọ̀",
 };
