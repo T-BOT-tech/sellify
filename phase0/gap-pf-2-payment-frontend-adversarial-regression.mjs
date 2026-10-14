@@ -304,6 +304,13 @@ assert.match(orderQueue, /getOrderPaymentSummaryError\(o\.server_order_id\)/);
 assert.match(orderQueue, /Order payment: status unavailable · will retry/);
 assert.match(orderQueue, /Date\.now\(\) - failedAt >= ORDER_PAYMENT_SUMMARY_TTL_MS/);
 assert.match(orderQueue, /orderPaymentSummaryErrors\.clear\(\)/);
+// In-flight order-level summaries are generation-bound: invalidation while a
+// request is pending must prevent its stale response from repopulating cache.
+assert.match(orderQueue, /orderPaymentSummaryGeneration = new Map\(\)/);
+assert.match(orderQueue, /bumpOrderPaymentSummaryGeneration\(key\)/);
+assert.match(orderQueue, /const requestGeneration = orderPaymentSummaryGeneration\.get\(key\) \|\| 0/);
+assert.match(orderQueue, /orderPaymentSummaryGeneration\.get\(key\) \|\| 0\) !== requestGeneration/);
+assert.match(orderQueue, /if \(\(orderPaymentSummaryGeneration\.get\(key\) \|\| 0\) !== requestGeneration\) renderQueue\(\)/);
 
 // Frontend canonical snapshot certification:
 // a successful tenant-scoped payment list replaces the projection snapshot;
