@@ -36,8 +36,20 @@ import { getPaymentForOrder, refreshCanonicalOrderPaymentSummary } from '../paym
 // from the local payment projection. Keep a short-lived UI cache so rendering
 // the queue does not issue a network request for every paint.
 const orderPaymentSummaryCache = new Map();
+const orderPaymentSummaryErrors = new Map();
 const orderPaymentSummaryInFlight = new Map();
 const ORDER_PAYMENT_SUMMARY_TTL_MS = 10000;
+
+function getOrderPaymentSummaryError(orderId) {
+  const key = orderPaymentSummaryKey(orderId);
+  const failedAt = orderPaymentSummaryErrors.get(key);
+  if (!failedAt) return false;
+  if (Date.now() - failedAt >= ORDER_PAYMENT_SUMMARY_TTL_MS) {
+    orderPaymentSummaryErrors.delete(key);
+    return false;
+  }
+  return true;
+}
 
 function orderPaymentSummaryKey(orderId) {
   return `${String(config.chatId || '').trim()}:${String(orderId || '').trim()}`;
@@ -47,14 +59,19 @@ function getCachedOrderPaymentSummary(orderId) {
   const key = orderPaymentSummaryKey(orderId);
   const cached = orderPaymentSummaryCache.get(key);
   if (!cached) return null;
-  if (Date.now() - cached.receivedAt > ORDER_PAYMENT_SUMMARY_TTL_MS) return null;
+  if (Date.now() - cached.receivedAt > ORDER_PAYMENT_SUMMARY_TTL_MS) {
+    orderPaymentSummaryCache.delete(key);
+    return null;
+  }
   return cached.summary;
 }
 
 export function invalidateOrderPaymentSummaryCache(orderId) {
   const id = String(orderId || '').trim();
   if (!id) return;
-  orderPaymentSummaryCache.delete(orderPaymentSummaryKey(id));
+  const key = orderPaymentSummaryKey(id);
+  orderPaymentSummaryCache.delete(key);
+  orderPaymentSummaryErrors.delete(key);
 }
 
 export function invalidateAllOrderPaymentSummaryCache() {
@@ -65,20 +82,24 @@ function refreshOrderPaymentSummary(orderId) {
   const id = String(orderId || '').trim();
   if (!id || !config.chatId || orderPaymentSummaryInFlight.has(orderPaymentSummaryKey(id))) return;
   const key = orderPaymentSummaryKey(id);
+  if (getOrderPaymentSummaryError(id)) return;
   // Never retain an expired/stale financial projection while a canonical
   // refresh is in flight. Failure must render as unavailable/checking rather
   // than silently presenting an old PAID/PARTIAL/UNPAID decision.
   invalidateOrderPaymentSummaryCache(id);
   const promise = refreshCanonicalOrderPaymentSummary(id)
     .then(summary => {
+      orderPaymentSummaryErrors.delete(key);
       orderPaymentSummaryCache.set(key, { summary, receivedAt: Date.now() });
       renderQueue();
       return summary;
     })
     .catch(() => {
-      // The canonical result is unavailable. Keep the cache empty and repaint
-      // immediately so an older PAID/PARTIAL/UNPAID DOM projection cannot
-      // remain visible after a failed refresh.
+      // Never leave the queue stuck on "checking…" after a failed request.
+      // Mark the summary unavailable for one short retry window so repainting
+      // does not immediately create a request loop. A later queue render can
+      // retry after the TTL expires.
+      orderPaymentSummaryErrors.set(key, Date.now());
       renderQueue();
       return null;
     })
@@ -157,12 +178,15 @@ export function ticketInnerHtml(o) {
     ? `<div class="ticket-customer">${t('cashTendered')}: ${CS()}${formatMoney(o.cash_tendered)} · ${t('changeDue')}: ${CS()}${formatMoney(o.change_due || 0)}</div>` : '';
   const payment = o.server_order_id ? getPaymentForOrder(o.server_order_id) : null;
   const orderPaymentSummary = o.server_order_id ? getCachedOrderPaymentSummary(o.server_order_id) : null;
-  if (o.server_order_id && !orderPaymentSummary) refreshOrderPaymentSummary(o.server_order_id);
+  const orderPaymentSummaryUnavailable = o.server_order_id && getOrderPaymentSummaryError(o.server_order_id);
+  if (o.server_order_id && !orderPaymentSummary && !orderPaymentSummaryUnavailable) refreshOrderPaymentSummary(o.server_order_id);
   const paymentStateLine = payment?.state
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Payment Core: ${escapeHtml(String(payment.state).replaceAll('_', ' '))}</div>` : '';
   const orderPaymentLine = orderPaymentSummary
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: ${escapeHtml(String(orderPaymentSummary.status || 'UNPAID'))} · ${CS()}${formatMoney(orderPaymentSummary.verifiedMinor || 0)} paid · ${CS()}${formatMoney(orderPaymentSummary.outstandingMinor || 0)} outstanding</div>`
-    : (o.server_order_id ? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: checking…</div>' : '');
+    : (orderPaymentSummaryUnavailable
+      ? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: status unavailable · will retry</div>'
+      : (o.server_order_id ? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: checking…</div>' : ''));
   const payMethodLine = o.payment_method_name
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> ${escapeHtml(o.payment_method_name)}${o.payment_proof ? ' · <svg class="icon icon-sm"><use href="#i-paperclip"/></svg> proof attached' : ''}</div>` : '';
   const staffLine = o.created_by_role
