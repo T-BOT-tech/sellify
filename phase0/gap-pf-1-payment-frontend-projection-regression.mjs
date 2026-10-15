@@ -33,6 +33,8 @@ assert.match(state, /In-memory frontend projection only/);
 assert.doesNotMatch(queue, /getPaymentForOrder/);
 assert.match(queue, /getCachedOrderPaymentSummary/);
 assert.match(queue, /Order payment:/);
+assert.match(queue, /orderPaymentSummary\.status \|\| 'status unavailable'/,
+  'a missing canonical status is not guessed to mean UNPAID');
 assert.match(queue, /outstanding/);
 assert.doesNotMatch(queue, /paymentStateLine|Payment Core:.*payment\\.state/);
 assert.match(sync, /refreshPaymentProjection/);
