@@ -5481,7 +5481,10 @@ function productFromRow(row) {
 
 function orderFromRow(row) {
   const order = parseJSON(row.order_json, {});
-  if (order && typeof order === 'object') delete order._sellifyCustomerIdProvided;
+  if (order && typeof order === 'object') {
+    delete order._sellifyCustomerIdProvided;
+    delete order._sellifyIncomingOrderIdentityHash;
+  }
   return order;
 }
 
@@ -9310,7 +9313,7 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         const currencyMismatch = order.currency != null
           && normaliseCurrency(order.currency, expectedCurrency) !== expectedCurrency;
         const identityMismatch = currencyMismatch
-          || queuedOrderIdentityHash(order, expectedCurrency) !== queuedOrderIdentityHash(storedOrder, expectedCurrency, true);
+          || queuedOrderIdentityHash(order, expectedCurrency) !== (storedOrder._sellifyIncomingOrderIdentityHash || queuedOrderIdentityHash(storedOrder, expectedCurrency, true));
         if (identityMismatch) {
           results.push({
             local_id: order.id,
@@ -9404,6 +9407,9 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         // order reads. It distinguishes an explicit customer binding from a
         // canonical ID inferred from name/phone during first synchronization.
         _sellifyCustomerIdProvided: Boolean(order.customer_id ?? order.customerId ?? order.customer?.id),
+        // Keep a private fingerprint of the original client command so an
+        // unchanged offline retry remains idempotent after canonicalization.
+        _sellifyIncomingOrderIdentityHash: queuedOrderIdentityHash(order, expectedCurrency),
         items,
         total,
         currency: expectedCurrency,
