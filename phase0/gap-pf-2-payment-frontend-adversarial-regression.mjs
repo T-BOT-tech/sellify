@@ -502,7 +502,7 @@ assert.match(commitBlock, /VERIFICATION_CONTEXT_MISMATCH/);
 // Receipts are order documents, not canonical payment confirmations. They must
 // not imply payment acceptance merely because a local order or tender exists.
 assert.match(receipts, /ORDER TOTAL:/);
-assert.match(translations, /receiptPaymentDisclaimer: "Payment status is not verified by this receipt\\."/,
+assert.match(translations, /receiptPaymentDisclaimer = "Payment status is not verified by this receipt\\."/,
   'missing locale-specific disclaimer translations must fall back to a safe English statement');
 assert.ok((receipts.match(/t\('receiptPaymentDisclaimer'\)/g) || []).length >= 3,
   'plain-text, printed, and canvas receipts must clearly disclaim payment confirmation');
