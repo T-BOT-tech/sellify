@@ -9340,11 +9340,45 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         results.push({ local_id: order.id, status: 'rejected', error: 'Order currency does not match the organization currency' });
         continue;
       }
-      const { items, total } = validateAndTotalOrderItems(order.items, expectedCurrency);
-      if (!items.length) {
+      const validated = validateAndTotalOrderItems(order.items, expectedCurrency);
+      if (!validated.items.length) {
         results.push({ local_id: order.id, status: 'rejected', error: 'No valid line items' });
         continue;
       }
+      // Offline clients submit a command, not authoritative product or pricing
+      // facts. Resolve each line against this tenant's canonical catalog before
+      // creating the order/payment. In particular, never accept a client price,
+      // display name, or product/service type as canonical truth.
+      const items = [];
+      let catalogLineError = null;
+      for (const item of validated.items) {
+        const itemId = item.item_id ?? item.product_id ?? item.id;
+        if (itemId == null || String(itemId).trim() === '') {
+          catalogLineError = { code: 'CATALOG_ITEM_ID_REQUIRED', error: 'Every order line must reference a catalog item' };
+          break;
+        }
+        const row = db.prepare('SELECT * FROM catalog_products WHERE chat_id = ? AND product_id = ?')
+          .get(key, String(itemId));
+        if (!row) {
+          catalogLineError = { code: 'CATALOG_ITEM_NOT_FOUND', error: `Catalog item not found: ${String(itemId)}` };
+          break;
+        }
+        const product = productFromRow(row);
+        items.push({
+          ...item,
+          id: product.id,
+          product_id: product.id,
+          name: product.name,
+          price: product.price,
+          currency: expectedCurrency,
+          type: product.type === 'service' ? 'service' : 'product',
+        });
+      }
+      if (catalogLineError) {
+        results.push({ local_id: order.id, status: 'rejected', ...catalogLineError });
+        continue;
+      }
+      const total = items.reduce((sum, item) => sum + item.qty * item.price, 0);
       let customerId = order.customer_id ? String(order.customer_id) : null;
       if (order.customer && typeof order.customer === 'object') {
         const customer = upsertCustomerSync(key, order.customer);
