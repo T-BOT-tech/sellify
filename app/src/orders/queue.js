@@ -207,7 +207,7 @@ export function ticketInnerHtml(o) {
       ? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: status unavailable · will retry</div>'
       : (o.server_order_id ? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: checking…</div>' : ''));
   const payMethodLine = o.payment_method_name
-    ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> ${escapeHtml(o.payment_method_name)}${o.payment_proof ? ' · <svg class="icon icon-sm"><use href="#i-paperclip"/></svg> proof attached' : ''}</div>` : '';
+    ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> ${escapeHtml(o.payment_method_name)}${o.payment_proof ? ' · <svg class="icon icon-sm"><use href="#i-paperclip"/></svg> evidence attached' : ''}</div>` : '';
   const staffLine = o.created_by_role
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-user"/></svg> Staff: ${escapeHtml(o.created_by_user || 'Staff')} (${escapeHtml((o.created_by_role || '').toUpperCase())})</div>` : '';
   const b2bLine = o.b2b_account_name
