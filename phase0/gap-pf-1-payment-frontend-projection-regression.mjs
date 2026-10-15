@@ -17,7 +17,7 @@ assert.match(projection, /statusQueried: false/);
 assert.match(projection, /resolvePaymentRouting/);
 assert.match(projection, /paymentCommandKey\('create-order'/);
 assert.match(projection, /export function isCanonicalLinkageOnlyPayment\(payment\)/);
-assert.match(projection, /listedPayments\.find\(candidate => !isCanonicalLinkageOnlyPayment\(candidate\)\)/);
+assert.match(projection, /listedForOrder\.find\(item => item\?\.id && !isCanonicalLinkageOnlyPayment\(item\)\)/);
 assert.match(projection, /&& !isCanonicalLinkageOnlyPayment\(payment\)/);
 assert.match(sync, /canonical_linkage_only/);
 assert.match(sync, /Boolean\(order\.payment_linkage && order\.payment_linkage\.canonical_linkage_only\)/);
