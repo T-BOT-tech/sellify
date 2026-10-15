@@ -50,6 +50,22 @@ await saveCatalog(chatId, [
   { id: 'product-1', name: 'Test item', price: 500, stock: 0 },
   { id: 'service-1', name: 'Consultation', price: 700, type: 'service' },
 ]);
+// Invalid replacement payloads must fail before DELETE/reinsert, preserving the
+// last known-good catalog instead of accidentally clearing it.
+await assert.rejects(
+  saveCatalog(chatId, null),
+  (error) => error?.code === 'INVALID_CATALOG_PAYLOAD' && error?.statusCode === 400,
+);
+await assert.rejects(
+  saveCatalog(chatId, [{ id: 'valid-looking', name: 'Valid', price: 100 }, null]),
+  (error) => error?.code === 'INVALID_CATALOG_ITEM' && error?.statusCode === 400,
+);
+await assert.rejects(
+  saveCatalog(chatId, [{ name: 'Missing identity', price: 100 }]),
+  (error) => error?.code === 'INVALID_CATALOG_ITEM' && error?.statusCode === 400,
+);
+assert.deepEqual((await getCatalog(chatId)).products.map(item => item.id).sort(), ['product-1', 'service-1'],
+  'malformed replacement payloads cannot delete or partially replace the existing catalog');
 await assert.rejects(
   saveCatalog(chatId, [
     { id: 'product-1', name: 'Test item', price: 500, stock: 5, type: 'service' },
