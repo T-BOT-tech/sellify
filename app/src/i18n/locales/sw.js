@@ -66,7 +66,7 @@ export default {
     orderDeleted: "Oda imefutwa",
     orderServed: "Oda imehudumiwa",
     undo: "Tendua",
-    todaySales: "Mauzo ya Leo",
+    todaySales: "Thamani ya Oda za Leo",
     totalOrders: "Oda",
     avgOrderVal: "Wastani wa Oda",
     receiptHeader: "STAKABADHI",
