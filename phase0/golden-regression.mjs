@@ -103,11 +103,13 @@ try {
     r=await request('GET',`/catalog/${created.chatId}`); assert.equal(r.response.status,200); assert.equal(r.json.products[0].id,'p1');
   });
   await test('catalog stock revision conflict', async () => {
-    const current=(await store.getCatalog(created.chatId)).products.find(p=>p.id==='p1');
+    const catalog=(await store.getCatalog(created.chatId)).products;
+    const current=catalog.find(p=>p.id==='p1');
+    const unchangedTea=catalog.find(p=>p.id==='p2');
     const advanced={...current,stock:9,stock_revision:current.stock_revision};
-    await request('POST',`/catalog/${created.chatId}`,{products:[advanced]},auth);
+    await request('POST',`/catalog/${created.chatId}`,{products:[advanced,unchangedTea]},auth);
     const stale={...advanced,stock:8,stock_revision:current.stock_revision};
-    const r=await request('POST',`/catalog/${created.chatId}`,{products:[stale]},auth); assert.equal(r.response.status,409); assert.equal(r.json.error.code,'CATALOG_STOCK_CONFLICT');
+    const r=await request('POST',`/catalog/${created.chatId}`,{products:[stale,unchangedTea]},auth); assert.equal(r.response.status,409); assert.equal(r.json.error.code,'CATALOG_STOCK_CONFLICT');
   });
   await test('order sync recomputes total server-side and is idempotent', async () => {
     const order={id:'local-1',items:[{id:'p1',qty:2,price:9999},{id:'p2',qty:1,price:100}],total:1};
