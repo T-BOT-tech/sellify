@@ -240,6 +240,10 @@ try {
     WHERE event_id = ?
   `).get(`marketplace-cancel:${master.id}:${seller.chatId}:integrity-item`).c, 1);
 
+  await assert.rejects(
+    () => store.retryMarketplaceRefund(seller.chatId, marketplaceRefund.id),
+    error => error?.code === 'MARKETPLACE_REFUND_NOT_RETRYABLE'
+  );
   // A definitive failure is retained as history and can be retried safely.
   const failedRefund = await store.finalizePaymentRefund(seller.chatId, canonicalRefund.id, {
     status: 'FAILED',
@@ -249,10 +253,6 @@ try {
   });
   assert.equal(failedRefund.status, 'FAILED');
   assert.equal(db.prepare('SELECT status FROM marketplace_refunds WHERE id = ?').get(marketplaceRefund.id).status, 'REJECTED');
-  await assert.rejects(
-    () => store.retryMarketplaceRefund(seller.chatId, marketplaceRefund.id),
-    error => error?.code === 'MARKETPLACE_REFUND_NOT_RETRYABLE' || error?.code === 'MARKETPLACE_REFUND_NOT_FOUND'
-  );
   const failedInventory = (await store.getCatalog(seller.chatId)).products.find(p => p.id === 'integrity-item');
   assert.equal(failedInventory.stock, 5);
   assert.equal(db.prepare('SELECT COUNT(*) AS c FROM inventory_movements WHERE event_id = ?')
