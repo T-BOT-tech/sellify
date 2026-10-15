@@ -28,7 +28,13 @@ assert.match(sync, /canonical_linkage_only/);
 assert.match(sync, /Boolean\(order\.payment_linkage && order\.payment_linkage\.canonical_linkage_only\)/);
 assert.match(sync, /ensurePaymentForSyncedOrder/);
 assert.match(state, /In-memory frontend projection only/);
-assert.match(queue, /getPaymentForOrder/);
+// The order queue must use the canonical order-level Payment Core summary;
+// an individual payment's state is not a substitute for the order aggregate.
+assert.doesNotMatch(queue, /getPaymentForOrder/);
+assert.match(queue, /getCachedOrderPaymentSummary/);
+assert.match(queue, /Order payment:/);
+assert.match(queue, /outstanding/);
+assert.doesNotMatch(queue, /paymentStateLine|Payment Core:.*payment\\.state/);
 assert.match(sync, /refreshPaymentProjection/);
 assert.doesNotMatch(projection, /saveJSON|localStorage|STORAGE_KEYS/);
 
