@@ -40,7 +40,11 @@ export function sanitizeId(raw) {
   return cleaned || uid();
 }
 export function sanitizeRemoteProducts(rawList) {
-  return (Array.isArray(rawList) ? rawList : []).map(p => {
+  // Remote payloads may contain nulls, primitives, or arrays. Ignore malformed
+  // entries rather than letting one bad row abort the entire catalog refresh.
+  return (Array.isArray(rawList) ? rawList : [])
+    .filter(p => p && typeof p === 'object' && !Array.isArray(p))
+    .map(p => {
     const numericPrice = Number(p.price);
     return {
       ...p,
@@ -64,7 +68,11 @@ export function sanitizeRemoteProducts(rawList) {
   });
 }
 export function sanitizeRemoteListings(rawList) {
-  return (Array.isArray(rawList) ? rawList : []).map(l => {
+  // Treat marketplace feeds as untrusted too; a malformed row must not block
+  // otherwise valid listings from rendering.
+  return (Array.isArray(rawList) ? rawList : [])
+    .filter(l => l && typeof l === 'object' && !Array.isArray(l))
+    .map(l => {
     const numericPrice = Number(l.price);
     return {
       ...l,
