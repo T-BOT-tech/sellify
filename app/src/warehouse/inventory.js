@@ -48,6 +48,9 @@ export function isStockTracked(p) {
 }
 
 export function projectedStock(p, locationId = config.locationId || '') {
+  // Keep the type boundary here too: callers that ask directly for a
+  // projection must not see legacy or canonical stock for a service.
+  if (!p || p.type === 'service') return null;
   if (hasCanonicalInventory(p.id)) return getInventoryBalance(p.id, locationId);
   return typeof p.stock === 'number' ? p.stock : null;
 }
