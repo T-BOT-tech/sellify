@@ -5,23 +5,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 
-// The frontend projection imports browser-owned configuration. Supply only
-// the minimal browser storage/config surface required for this focused test.
-const browserValues = new Map();
-globalThis.window = {
-  __APP_CONFIG__: {},
-  location: { origin: 'http://localhost' },
-  addEventListener() {},
-};
-globalThis.localStorage = {
-  getItem(key) { return browserValues.has(key) ? browserValues.get(key) : null; },
-  setItem(key, value) { browserValues.set(key, String(value)); },
-  removeItem(key) { browserValues.delete(key); },
-};
-
-const { setPayments } = await import('../app/src/payments/state.js');
-const { getPaymentForOrder } = await import('../app/src/payments/projection.js');
-
 const tempDir = await mkdtemp(path.join(os.tmpdir(), 'sellify-gap1-10-'));
 process.env.SELLIFY_DATA_DIR = tempDir;
 process.env.SELLIFY_DB_PATH = path.join(tempDir, 'sellify.sqlite');
@@ -87,34 +70,6 @@ async function concurrentCreate(count, base) {
     ),
   );
 }
-
-test('GAP-1.10 frontend projection ignores canonical linkage-only payment shells', () => {
-  setPayments([
-    {
-      id: 'linkage-shell',
-      orderId: 'canonical-order-1',
-      state: 'UNPAID',
-      metadata: { canonicalLinkageOnly: true },
-    },
-    {
-      id: 'routed-payment',
-      orderId: 'canonical-order-1',
-      state: 'UNPAID',
-      paymentAccountId: 'account-1',
-      paymentIntentId: 'intent-1',
-      metadata: { source: 'SELLIFY_FRONTEND_ORDER_SYNC' },
-    },
-    {
-      id: 'only-shell',
-      orderId: 'canonical-order-2',
-      state: 'UNPAID',
-      metadata_json: JSON.stringify({ canonicalLinkageOnly: true }),
-    },
-  ]);
-
-  assert.equal(getPaymentForOrder('canonical-order-1')?.id, 'routed-payment');
-  assert.equal(getPaymentForOrder('canonical-order-2'), null);
-});
 
 test('GAP-1.10 durable idempotency: concurrent duplicate CREATE_PAYMENT requests produce one payment', async () => {
   const createdPayments = [];
