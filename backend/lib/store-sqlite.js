@@ -5607,7 +5607,16 @@ export async function getCatalog(chatId) {
 export async function saveCatalog(chatId, incomingProducts) {
   ensureDatabase();
   const key = String(chatId);
-  const products = (Array.isArray(incomingProducts) ? incomingProducts : []).filter(p => p && p.id != null).map(normaliseProduct);
+  // Catalog replacement is destructive by design. Do not silently turn a
+  // malformed request into an empty/partial catalog and delete valid records.
+  if (!Array.isArray(incomingProducts)) {
+    throw Object.assign(new Error('Catalog products must be an array'), { statusCode: 400, code: 'INVALID_CATALOG_PAYLOAD' });
+  }
+  if (incomingProducts.some(product => !product || typeof product !== 'object' || Array.isArray(product)
+    || product.id == null || String(product.id).trim() === '')) {
+    throw Object.assign(new Error('Every catalog item must be an object with a non-empty id'), { statusCode: 400, code: 'INVALID_CATALOG_ITEM' });
+  }
+  const products = incomingProducts.map(normaliseProduct);
   db.exec('BEGIN IMMEDIATE');
   try {
     const current = new Map(db.prepare('SELECT * FROM catalog_products WHERE chat_id = ?').all(key).map(row => [String(row.product_id), row]));
