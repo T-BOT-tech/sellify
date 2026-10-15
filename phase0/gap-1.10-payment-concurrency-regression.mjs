@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { setPayments } from '../app/src/payments/state.js';
+import { getPaymentForOrder } from '../app/src/payments/projection.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -70,6 +72,34 @@ async function concurrentCreate(count, base) {
     ),
   );
 }
+
+test('GAP-1.10 frontend projection ignores canonical linkage-only payment shells', () => {
+  setPayments([
+    {
+      id: 'linkage-shell',
+      orderId: 'canonical-order-1',
+      state: 'UNPAID',
+      metadata: { canonicalLinkageOnly: true },
+    },
+    {
+      id: 'routed-payment',
+      orderId: 'canonical-order-1',
+      state: 'UNPAID',
+      paymentAccountId: 'account-1',
+      paymentIntentId: 'intent-1',
+      metadata: { source: 'SELLIFY_FRONTEND_ORDER_SYNC' },
+    },
+    {
+      id: 'only-shell',
+      orderId: 'canonical-order-2',
+      state: 'UNPAID',
+      metadata_json: JSON.stringify({ canonicalLinkageOnly: true }),
+    },
+  ]);
+
+  assert.equal(getPaymentForOrder('canonical-order-1')?.id, 'routed-payment');
+  assert.equal(getPaymentForOrder('canonical-order-2'), null);
+});
 
 test('GAP-1.10 durable idempotency: concurrent duplicate CREATE_PAYMENT requests produce one payment', async () => {
   const createdPayments = [];
