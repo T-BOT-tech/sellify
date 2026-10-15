@@ -8,6 +8,7 @@ const state = fs.readFileSync('app/src/payments/state.js', 'utf8');
 const projection = fs.readFileSync('app/src/payments/projection.js', 'utf8');
 const checkout = fs.readFileSync('app/src/orders/checkout.js', 'utf8');
 const orderQueue = fs.readFileSync('app/src/orders/queue.js', 'utf8');
+const receipts = fs.readFileSync('app/src/orders/receipts.js', 'utf8');
 const core = fs.readFileSync('backend/lib/payments/payment-core.js', 'utf8');
 const storeSource = fs.readFileSync('backend/lib/store-sqlite.js', 'utf8');
 
@@ -43,6 +44,13 @@ assert.match(client, /requiredIdempotencyKey\(idempotencyKey\)/);
 assert.match(state, /In-memory frontend projection only/);
 assert.doesNotMatch(state, /localStorage|saveJSON|STORAGE_KEYS/);
 assert.doesNotMatch(client, /providerToken|botToken|secret|credential/i);
+
+// Receipts may display the selected payment method, but must not infer a
+// canonical payment outcome from local order metadata.
+assert.match(receipts, /Payment method: \$\{o\.payment_method_name\}/);
+assert.match(receipts, /escapeHtml\(o\.payment_method_name\)/);
+assert.match(receipts, /ctx\.fillText\('Payment method'/);
+assert.doesNotMatch(receipts, /o\.payment_status|o\.payment_state|o\.state\s*===\s*['\"](?:PAID|VERIFIED|PARTIAL)['\"]/);
 
 // Payment projection may query and render canonical state, but checkout must not
 // create ledger entries or call PaymentCore directly.
