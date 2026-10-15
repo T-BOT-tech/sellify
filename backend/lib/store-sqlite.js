@@ -9998,6 +9998,10 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
           LEFT JOIN payments p ON p.id = a.payment_id
           WHERE a.seller_order_id = ? AND a.status IN ('ALLOCATED','PARTIAL')
         `).all(canonicalSeller.id);
+        // Settlement reversal is a financial outcome, not a side effect of
+        // cancelling the order. Keep the seller settlement on hold while any
+        // verified payment refund is awaiting provider confirmation.
+        let refundPending = false;
         for (const allocation of allocations) {
           const paidAndVerified = ['VERIFIED', 'RECONCILED'].includes(String(allocation.payment_state || '').toUpperCase());
           if (!paidAndVerified || Number(allocation.amount_minor) <= 0 || !allocation.payment_id) continue;
@@ -10020,13 +10024,14 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
             allocation.payment_id, allocation.organization_id, allocation.amount_minor,
             allocation.currency, 'Marketplace order cancellation', nowIso()
           );
+          refundPending = true;
         }
 
         db.prepare(`
           UPDATE marketplace_settlements
-          SET status = 'REVERSED'
+          SET status = ?
           WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')
-        `).run(canonicalSeller.id);
+        `).run(refundPending ? 'HELD' : 'REVERSED', canonicalSeller.id);
 
         db.prepare(`
           UPDATE marketplace_fulfillments
