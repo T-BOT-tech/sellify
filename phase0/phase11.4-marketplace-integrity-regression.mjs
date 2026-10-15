@@ -206,7 +206,7 @@ try {
     { status: 'cancelled' },
     auth,
   );
-  assert.equal(cancelled.response.status, 200);
+  assert.equal(cancelled.response.status, 200, cancelled.text);
 
   const restored = (await store.getCatalog(seller.chatId)).products.find(p => p.id === 'integrity-item');
   assert.equal(restored.stock, 5);
