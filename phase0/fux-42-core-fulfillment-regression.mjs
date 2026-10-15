@@ -92,7 +92,36 @@ const syncResult = await saveQueuedOrders(chatId, [{
   scheduled_time: '2026-09-24T12:00:00Z',
 }]);
 assert.equal(syncResult[0].status, 'synced');
+const canonicalizedOrder = (await (await import('../backend/lib/store-sqlite.js')).getOrders(chatId))
+  .find(order => order.server_order_id === syncResult[0].order_id);
+assert.equal(canonicalizedOrder.items[0].type, 'product',
+  'the canonical catalog prevents a client from relabeling a physical item as a service');
+assert.equal(canonicalizedOrder.items[1].type, 'service',
+  'the canonical catalog prevents a client from relabeling a service as a physical product');
+assert.equal(canonicalizedOrder.total, 1200,
+  'order totals use canonical catalog prices rather than client-supplied prices');
+assert.equal(canonicalizedOrder.items[0].name, 'Test item',
+  'order line names are resolved from the canonical catalog');
 const orderId = syncResult[0].order_id;
+
+// Unknown IDs and client-invented prices must not create orders or canonical
+// payment records. Known IDs are canonicalized, so the spoofed price above is
+// harmless even though it was deliberately submitted by the client.
+const spoofedPriceSync = await saveQueuedOrders(chatId, [{
+  id: 'local-fux42-spoofed-price',
+  items: [{ id: 'product-1', name: 'Cheap item', qty: 1, price: 1, type: 'service' }],
+}]);
+assert.equal(spoofedPriceSync[0].status, 'synced');
+const spoofedPriceOrder = (await (await import('../backend/lib/store-sqlite.js')).getOrders(chatId))
+  .find(order => order.server_order_id === spoofedPriceSync[0].order_id);
+assert.equal(spoofedPriceOrder.total, 500);
+const unknownCatalogSync = await saveQueuedOrders(chatId, [{
+  id: 'local-fux42-unknown-catalog-item',
+  items: [{ id: 'client-invented-item', name: 'Invented', qty: 1, price: 1 }],
+}]);
+assert.equal(unknownCatalogSync[0].status, 'rejected');
+assert.equal(unknownCatalogSync[0].code, 'CATALOG_ITEM_NOT_FOUND');
+
 
 let fulfillment = await getOrderFulfillment(chatId, orderId);
 assert.equal(fulfillment, null);
