@@ -40,7 +40,7 @@ export function formatReceiptText(o) {
   });
   text += `------------------------\n`;
   text += `ORDER TOTAL: ${CS()}${formatMoney(o.total)}\n`;
-  text += `Payment status is not verified by this receipt.\n`;
+  text += `${t('receiptPaymentDisclaimer')}\n`;
   if (o.payment_method_name) text += `Payment method: ${o.payment_method_name}\n`;
   if (o.cash_tendered !== null && o.cash_tendered !== undefined) {
     text += `${t('cashTendered')}: ${CS()}${formatMoney(o.cash_tendered)}\n`;
@@ -145,7 +145,7 @@ export function printReceipt(id) {
     </div>
     ${paymentMethodHtml}
     ${cashHtml}
-    <div style="margin-top:6px; font-size:10px; text-align:center;">Payment status is not verified by this receipt.</div>
+    <div style="margin-top:6px; font-size:10px; text-align:center;">${t('receiptPaymentDisclaimer')}</div>
     <div style="border-top:1px dashed #000; margin-top:8px; padding-top:8px; text-align:center; font-size:11px;">
       ${t('thankYou')}
     </div>
@@ -268,7 +268,7 @@ export function drawCanvasReceipt(o) {
   ctx.textAlign = 'center';
   ctx.font = '11px monospace';
   ctx.fillStyle = '#6e6d6a';
-  ctx.fillText('Payment status is not verified by this receipt.', width / 2, y);
+  ctx.fillText(t('receiptPaymentDisclaimer'), width / 2, y);
   y += 18;
   drawDashedLine(y);
 
