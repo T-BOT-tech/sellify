@@ -45,6 +45,11 @@ export function sanitizeRemoteProducts(rawList) {
     return {
       ...p,
       id: sanitizeId(p.id),
+      // Remote catalog data is untrusted. Keep item identity within the
+      // supported domain and fail closed for marketplace services, even when
+      // a stale or manually edited server record carries marketplace_listed.
+      type: p.type === 'service' ? 'service' : 'product',
+      marketplace_listed: p.type === 'service' ? false : Boolean(p.marketplace_listed),
       // Coerced to a real number: besides keeping totals/arithmetic sane if a
       // synced catalog sends a malformed price, an unescaped non-numeric price
       // would otherwise be inserted as raw text content wherever it's displayed.
