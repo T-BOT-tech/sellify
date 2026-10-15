@@ -321,6 +321,13 @@ assert.doesNotMatch(orderQueue, /Payment Core:.*payment\.state/);
 // An attached image is supporting evidence only, not a verified payment claim.
 assert.match(orderQueue, /evidence attached/);
 assert.doesNotMatch(orderQueue, /proof attached/);
+const checkoutHtml = fs.readFileSync('app/index.html', 'utf8');
+const englishLocale = fs.readFileSync('app/src/i18n/locales/en.js', 'utf8');
+assert.match(checkoutHtml, /data-i18n="paymentEvidenceNotice"/);
+assert.match(checkoutHtml, /Payment evidence image \(optional\)/);
+assert.match(englishLocale, /confirmPayment: "Payment details"/);
+assert.match(englishLocale, /captureProof: "Payment evidence image \(optional\)"/);
+assert.match(englishLocale, /paymentEvidenceNotice: "An uploaded image is supporting evidence only; it does not confirm that payment was received\."/);
 assert.match(orderQueue, /ORDER_PAYMENT_SUMMARY_TTL_MS/);
 assert.match(orderQueue, /orderPaymentSummaryInFlight/);
 // A failed canonical summary fetch must not leave stale PAID/PARTIAL/UNPAID
