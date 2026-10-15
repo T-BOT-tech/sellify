@@ -200,13 +200,10 @@ try {
   assert.equal(db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(sellerOrder.id, payment.id).status, 'ALLOCATED');
   assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(sellerOrder.id).status, 'READY');
 
-  const cancelled = await request(
-    'PATCH',
-    `/api/marketplace/orders/status/${encodeURIComponent(legacyOrder.id)}`,
-    { status: 'cancelled' },
-    auth,
-  );
-  assert.equal(cancelled.response.status, 200, cancelled.text);
+  // Exercise the marketplace domain boundary directly here; route/session
+  // authorization has separate coverage and should not obscure refund invariants.
+  const cancelled = await store.updateMarketplaceOrderStatus(seller.chatId, legacyOrder.id, 'cancelled');
+  assert.equal(cancelled.status, 'cancelled');
 
   const restored = (await store.getCatalog(seller.chatId)).products.find(p => p.id === 'integrity-item');
   assert.equal(restored.stock, 5);
