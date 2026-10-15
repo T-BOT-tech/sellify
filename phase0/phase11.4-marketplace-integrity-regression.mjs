@@ -268,6 +268,44 @@ try {
   const splitSeller = db.prepare('SELECT id FROM marketplace_seller_orders WHERE marketplace_order_id = ?').get(splitOrder.json.marketplace_order_id);
   assert.equal(db.prepare('SELECT COUNT(*) AS c FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id IS NOT NULL').get(splitSeller.id).c, 2);
   assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(splitSeller.id).status, 'READY');
+
+  // Refunding one split payment must update only that payment's allocation,
+  // and must not reverse settlement while the sibling allocation remains active.
+  const splitRefundRequest = await store.createPaymentRefundRequest(seller.chatId, {
+    paymentId: p1.id,
+    amountMinor: 400,
+    currency: 'ETB',
+    idempotencyKey: 'phase11-4-split-refund-p1',
+    reason: 'Regression: seller allocation isolation',
+  });
+  const splitRefund = splitRefundRequest.refund;
+  db.prepare(`
+    INSERT INTO marketplace_refunds
+      (id, marketplace_order_id, seller_order_id, payment_id, organization_id,
+       amount_minor, currency, reason, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTED', ?)
+  `).run(
+    splitRefund.id, splitOrder.json.marketplace_order_id, splitSeller.id, p1.id,
+    sellerSession.organizationId, 400, 'ETB', 'Regression: seller allocation isolation',
+    new Date().toISOString()
+  );
+  await store.finalizePaymentRefund(seller.chatId, splitRefund.id, {
+    status: 'SUCCEEDED',
+    providerRefundId: 'phase11-4-split-refund-p1-confirmed',
+    providerTransactionId: 'phase11-4-split-refund-p1-tx',
+    providerResult: { simulated: true },
+    evidence: { source: 'phase11.4 regression split allocation' },
+  });
+  assert.equal(
+    db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(splitSeller.id, p1.id).status,
+    'REFUNDED'
+  );
+  assert.equal(
+    db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(splitSeller.id, p2.id).status,
+    'ALLOCATED'
+  );
+  assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(splitSeller.id).status, 'READY');
+
   await assert.rejects(
     () => store.createPayment(seller.chatId, {
       orderId: splitServerOrder, amountMinor: 1, currency: 'ETB', state: 'UNPAID',
