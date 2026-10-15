@@ -40,6 +40,10 @@ assert.match(catalog, /products\.push\(newProd\);\s*saveJSON\(STORAGE_KEYS\.prod
   'new catalog item is saved through the existing catalog storage key');
 assert.match(sync, /return \{\s*\.\.\.p,\s*id: sanitizeId\(p\.id\),[\s\S]{0,300}type: p\.type === 'service' \? 'service' : 'product',[\s\S]{0,180}marketplace_listed: p\.type === 'service' \? false : Boolean\(p\.marketplace_listed\)/,
   'remote catalog sanitizer normalizes supported item identity and fails closed for service marketplace listings');
+assert.match(sync, /sanitizeRemoteProducts\(rawList\)[\s\S]{0,260}\.filter\(p => p && typeof p === 'object' && !Array\.isArray\(p\)\)/,
+  'malformed remote catalog rows are ignored instead of aborting the entire catalog refresh');
+assert.match(sync, /sanitizeRemoteListings\(rawList\)[\s\S]{0,240}\.filter\(l => l && typeof l === 'object' && !Array\.isArray\(l\)\)/,
+  'malformed marketplace listing rows are ignored instead of aborting valid listing hydration');
 assert.match(sync, /setProducts\(sanitizeRemoteProducts\(data\.products\)\);\s*saveJSON\(STORAGE_KEYS\.products, products\);/,
   'remote catalog hydration retains the sanitized records in existing local catalog storage');
 assert.match(sync, /export async function syncCatalog\(\)[\s\S]{0,900}method: 'POST'[\s\S]{0,500}body: JSON\.stringify\(\{ products \}\)/,
