@@ -7782,6 +7782,86 @@ export async function createPaymentRefundRequest(chatId, input = {}, actor = nul
   return { refund: normalizePaymentRefund(refund), duplicate: false };
 }
 
+/**
+ * Retry a marketplace refund only after Payment Core has definitively marked
+ * the prior attempt FAILED. UNKNOWN/PROCESSING outcomes are deliberately not
+ * retryable because the provider may already have moved the money.
+ *
+ * This creates a new durable Payment Core refund attempt while retaining the
+ * failed marketplace_refunds row as history. It never touches inventory.
+ */
+export async function retryMarketplaceRefund(chatId, marketplaceRefundId, actor = null) {
+  const db = ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const prior = db.prepare(`
+      SELECT mr.*, pr.status AS payment_refund_status
+      FROM marketplace_refunds mr
+      JOIN payment_refunds pr ON pr.id = mr.id AND pr.organization_id = mr.organization_id
+      WHERE mr.id = ? AND mr.organization_id = ?
+    `).get(String(marketplaceRefundId), tenant.organizationId);
+    if (!prior) throw Object.assign(new Error('Marketplace refund not found'), { statusCode: 404, code: 'MARKETPLACE_REFUND_NOT_FOUND' });
+    if (prior.status !== 'REJECTED' || prior.payment_refund_status !== 'FAILED') {
+      throw Object.assign(
+        new Error('Only definitively failed marketplace refunds can be retried'),
+        { statusCode: 409, code: 'MARKETPLACE_REFUND_NOT_RETRYABLE' }
+      );
+    }
+
+    const attempts = Number(db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM marketplace_refunds
+      WHERE seller_order_id = ? AND payment_id = ? AND reason = ?
+    `).get(prior.seller_order_id, prior.payment_id, prior.reason).count || 0);
+    const request = await createPaymentRefundRequest(chatId, {
+      paymentId: prior.payment_id,
+      amountMinor: Number(prior.amount_minor),
+      currency: prior.currency,
+      idempotencyKey: `marketplace-refund-retry:${prior.id}:${attempts}`,
+      reason: prior.reason || 'Marketplace refund retry',
+    }, actor);
+    if (request.duplicate) {
+      const linked = db.prepare('SELECT * FROM marketplace_refunds WHERE id = ? AND organization_id = ?')
+        .get(request.refund.id, tenant.organizationId);
+      if (linked) {
+        db.exec('COMMIT');
+        return { refund: linked, duplicate: true };
+      }
+      throw Object.assign(new Error('Refund retry idempotency key already exists without marketplace linkage'), {
+        statusCode: 409, code: 'MARKETPLACE_REFUND_RETRY_LINK_MISSING',
+      });
+    }
+
+    const retry = {
+      ...prior,
+      id: request.refund.id,
+      status: 'REQUESTED',
+      created_at: nowIso(),
+      processed_at: null,
+    };
+    db.prepare(`
+      INSERT INTO marketplace_refunds
+        (id, marketplace_order_id, seller_order_id, payment_id, organization_id,
+         amount_minor, currency, reason, status, created_at, processed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTED', ?, NULL)
+    `).run(
+      retry.id, retry.marketplace_order_id, retry.seller_order_id, retry.payment_id,
+      retry.organization_id, retry.amount_minor, retry.currency, retry.reason, retry.created_at
+    );
+    audit(String(chatId), 'marketplace.refund.retry_requested', retry.payment_id, actor?.userId || actor?.user_id || null, {
+      priorRefundId: prior.id, refundId: retry.id, attempt: attempts,
+    });
+    db.exec('COMMIT');
+    return { refund: db.prepare('SELECT * FROM marketplace_refunds WHERE id = ?').get(retry.id), duplicate: false };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
 export async function finalizePaymentRefund(chatId, refundId, input = {}, actor = null) {
   const db = ensureDatabase();
   const tenant = getTenantByChatId(chatId);
