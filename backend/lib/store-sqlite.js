@@ -7831,17 +7831,38 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
     );
     if (fullRefund) {
       db.prepare('UPDATE payments SET state = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND state IN (\'VERIFIED\',\'RECONCILED\')').run('REFUNDED', now, payment.id, tenant.organizationId);
-      const marketplaceAllocation = db.prepare(`
-        SELECT a.id, a.seller_order_id
-        FROM marketplace_payment_allocations a
-        WHERE a.payment_id = ? AND a.organization_id = ?
-        LIMIT 1
-      `).get(payment.id, tenant.organizationId);
-      if (marketplaceAllocation) {
-        db.prepare("UPDATE marketplace_payment_allocations SET status = 'REFUNDED', updated_at = ? WHERE id = ?")
-          .run(now, marketplaceAllocation.id);
-        db.prepare("UPDATE marketplace_settlements SET status = 'REVERSED' WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')")
-          .run(marketplaceAllocation.seller_order_id);
+      // A Payment Core payment can have more than one marketplace allocation.
+      // Resolve the allocation through this refund's seller-order association;
+      // never choose an arbitrary allocation by payment_id alone.
+      const marketplaceRefund = db.prepare(`
+        SELECT seller_order_id
+        FROM marketplace_refunds
+        WHERE id = ? AND payment_id = ? AND organization_id = ?
+      `).get(refund.id, payment.id, tenant.organizationId);
+      if (marketplaceRefund?.seller_order_id) {
+        const marketplaceAllocation = db.prepare(`
+          SELECT id, seller_order_id
+          FROM marketplace_payment_allocations
+          WHERE payment_id = ? AND seller_order_id = ? AND organization_id = ?
+          LIMIT 1
+        `).get(payment.id, marketplaceRefund.seller_order_id, tenant.organizationId);
+        if (marketplaceAllocation) {
+          db.prepare("UPDATE marketplace_payment_allocations SET status = 'REFUNDED', updated_at = ? WHERE id = ?")
+            .run(now, marketplaceAllocation.id);
+          // A split payment can fund one seller order through multiple payment
+          // allocations. Do not reverse settlement while any allocation for
+          // that seller order remains active.
+          const activeAllocations = Number(db.prepare(`
+            SELECT COUNT(*) AS count
+            FROM marketplace_payment_allocations
+            WHERE seller_order_id = ? AND organization_id = ?
+              AND status NOT IN ('REFUNDED', 'REJECTED', 'CANCELLED')
+          `).get(marketplaceAllocation.seller_order_id, tenant.organizationId).count || 0);
+          if (activeAllocations === 0) {
+            db.prepare("UPDATE marketplace_settlements SET status = 'REVERSED' WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')")
+              .run(marketplaceAllocation.seller_order_id);
+          }
+        }
       }
     }
     db.prepare('UPDATE marketplace_refunds SET status = \'PROCESSED\', processed_at = ? WHERE id = ? AND organization_id = ?')
