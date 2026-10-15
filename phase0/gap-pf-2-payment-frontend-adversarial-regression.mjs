@@ -506,6 +506,13 @@ assert.ok((receipts.match(/Payment status is not verified by this receipt\./g) |
 assert.match(receipts, /Order total/);
 assert.match(receipts, /ctx\.fillText\('Payment status is not verified by this receipt\.'/);
 
+// The selected payment method is descriptive order metadata, not proof of
+// payment acceptance; keep it consistent across text, print, and image receipts.
+assert.match(receipts, /if \(o\.payment_method_name\) text \+= `Payment method:/);
+assert.match(receipts, /const paymentMethodHtml = o\.payment_method_name/);
+assert.match(receipts, /ctx\.fillText\('Payment method'/);
+assert.match(receipts, /paymentMethodHeight/);
+
 // Daily queue metrics describe order value, not confirmed financial receipts.
 // Canonical payment acceptance is fetched separately from Payment Core.
 assert.match(orderQueue, /const totalOrderValue = todaysOrders\.reduce/);
