@@ -66,7 +66,7 @@ export default {
     orderDeleted: "Ajajni haqameera",
     orderServed: "Ajajni tajaajilameera",
     undo: "Deebisi",
-    todaySales: "Gurgurtaa Har'aa",
+    todaySales: "Gatii Ajajoota Har'aa",
     totalOrders: "Ajajoota",
     avgOrderVal: "Gatii Avireejii",
     receiptHeader: "NAGAHEE",
