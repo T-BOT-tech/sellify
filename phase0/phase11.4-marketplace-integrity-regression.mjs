@@ -261,7 +261,7 @@ try {
   assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(splitSeller.id).status, 'READY');
   await assert.rejects(
     () => store.createPayment(seller.chatId, {
-      orderId: splitServerOrder, amountMinor: 1, currency: 'ETB', state: 'RECEIVED',
+      orderId: splitServerOrder, amountMinor: 1, currency: 'ETB', state: 'UNPAID',
       providerId: 'manual', channel: 'manual',
     }, { userId: sellerUser.id, deviceId: sellerSession.deviceId }),
     error => error?.code === 'MARKETPLACE_PAYMENT_ALLOCATION_EXCEEDED'
