@@ -117,6 +117,7 @@ export default {
     confirmPayment: "Payment details",
     paymentMethod: "Payment method",
     captureProof: "Payment evidence image (optional)",
+    paymentEvidenceNotice: "An uploaded image is supporting evidence only; it does not confirm that payment was received.",
     completeSale: "Complete sale",
     accountsNav: "Accounts",
     addAccount: "+ Add account",
