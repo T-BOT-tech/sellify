@@ -7936,7 +7936,7 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
             SELECT COUNT(*) AS count
             FROM marketplace_payment_allocations
             WHERE seller_order_id = ? AND organization_id = ?
-              AND status NOT IN ('REFUNDED', 'REJECTED', 'CANCELLED')
+              AND status NOT IN ('REFUNDED', 'REJECTED', 'REVERSED')
           `).get(marketplaceAllocation.seller_order_id, tenant.organizationId).count || 0);
           if (activeAllocations === 0) {
             db.prepare("UPDATE marketplace_settlements SET status = 'REVERSED' WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')")
@@ -9998,6 +9998,14 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
           LEFT JOIN payments p ON p.id = a.payment_id
           WHERE a.seller_order_id = ? AND a.status IN ('ALLOCATED','PARTIAL')
         `).all(canonicalSeller.id);
+        // Unpaid allocations have no money to refund; close them as reversed.
+        // Paid allocations remain allocated while their canonical refund is pending.
+        db.prepare(`
+          UPDATE marketplace_payment_allocations
+          SET status = 'REVERSED', updated_at = ?
+          WHERE seller_order_id = ? AND status = 'UNPAID'
+        `).run(nowIso(), canonicalSeller.id);
+
         // Settlement reversal is a financial outcome, not a side effect of
         // cancelling the order. Keep the seller settlement on hold while any
         // verified payment refund is awaiting provider confirmation.
