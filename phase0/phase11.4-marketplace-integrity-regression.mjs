@@ -269,6 +269,14 @@ try {
   assert.equal(db.prepare('SELECT COUNT(*) AS c FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id IS NOT NULL').get(splitSeller.id).c, 2);
   assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(splitSeller.id).status, 'READY');
 
+  await assert.rejects(
+    () => store.createPayment(seller.chatId, {
+      orderId: splitServerOrder, amountMinor: 1, currency: 'ETB', state: 'UNPAID',
+      providerId: 'manual', channel: 'manual',
+    }, { userId: sellerUser.id, deviceId: sellerSession.deviceId }),
+    error => error?.code === 'MARKETPLACE_PAYMENT_ALLOCATION_EXCEEDED'
+  );
+
   // Refunding one split payment must update only that payment's allocation,
   // and must not reverse settlement while the sibling allocation remains active.
   const splitRefundRequest = await store.createPaymentRefundRequest(seller.chatId, {
@@ -305,14 +313,6 @@ try {
     'ALLOCATED'
   );
   assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(splitSeller.id).status, 'READY');
-
-  await assert.rejects(
-    () => store.createPayment(seller.chatId, {
-      orderId: splitServerOrder, amountMinor: 1, currency: 'ETB', state: 'UNPAID',
-      providerId: 'manual', channel: 'manual',
-    }, { userId: sellerUser.id, deviceId: sellerSession.deviceId }),
-    error => error?.code === 'MARKETPLACE_PAYMENT_ALLOCATION_EXCEEDED'
-  );
 
   db.close();
 
