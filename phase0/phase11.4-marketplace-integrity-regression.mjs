@@ -200,6 +200,15 @@ try {
   assert.equal(db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(sellerOrder.id, payment.id).status, 'ALLOCATED');
   assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(sellerOrder.id).status, 'READY');
 
+  // A normal cancellation must not undo an order after courier handoff.
+  db.prepare("UPDATE marketplace_fulfillments SET status = 'picked_up' WHERE seller_order_id = ?").run(sellerOrder.id);
+  await assert.rejects(
+    () => store.updateMarketplaceOrderStatus(seller.chatId, legacyOrder.id, 'cancelled'),
+    error => error?.code === 'MARKETPLACE_FULFILLMENT_ALREADY_HANDED_OFF'
+  );
+  assert.equal(db.prepare('SELECT status FROM orders WHERE chat_id = ? AND local_id = ?').get(seller.chatId, legacyOrder.id).status, 'queued');
+  db.prepare("UPDATE marketplace_fulfillments SET status = 'pending' WHERE seller_order_id = ?").run(sellerOrder.id);
+
   // Exercise the marketplace domain boundary directly here; route/session
   // authorization has separate coverage and should not obscure refund invariants.
   const cancelled = await store.updateMarketplaceOrderStatus(seller.chatId, legacyOrder.id, 'cancelled');
