@@ -14,9 +14,14 @@ assert.match(inventory, /Legacy product\.stock remains only as a compatibility f
 assert.match(ui, /projectedStock\(p, config\.locationId/);
 assert.match(ui, /projectedStock\(product, config\.locationId/);
 assert.doesNotMatch(ui, /\? p\.stock/);
+
+// A direct stock projection is a public boundary too: service records must
+// not expose stale legacy stock or canonical inventory balances to callers.
+assert.match(inventory, /export function projectedStock\(p, locationId = config\.locationId \|\| ''\) \{\s*\/\/ Keep the type boundary here too:[\s\S]{0,180}if \(!p \|\| p\.type === 'service'\) return null;\s*if \(hasCanonicalInventory\(p\.id\)\)/);
+
 // Services must never appear in low/out-of-stock exception lists, even if a
 // stale legacy payload still carries a numeric stock field.
 assert.match(inventory, /getLowStockProducts\(\)\s*\{\s*return products\.filter\(p => \{\s*if \(p\?\.type === 'service'\) return false;/);
 assert.match(inventory, /getOutOfStockProducts\(\)\s*\{\s*return products\.filter\(p => \{\s*if \(p\?\.type === 'service'\) return false;/);
 
-console.log('FUX-47 canonical inventory projection regression: 9 PASS');
+console.log('FUX-47 canonical inventory projection regression: 10 PASS');
