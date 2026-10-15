@@ -92,6 +92,18 @@ export function invalidateAllOrderPaymentSummaryCache() {
   orderPaymentSummaryErrors.clear();
 }
 
+function isUsableOrderPaymentSummary(summary) {
+  return Boolean(
+    summary &&
+    typeof summary.status === 'string' &&
+    summary.status.trim() &&
+    Number.isSafeInteger(summary.verifiedMinor) &&
+    summary.verifiedMinor >= 0 &&
+    Number.isSafeInteger(summary.outstandingMinor) &&
+    summary.outstandingMinor >= 0
+  );
+}
+
 function refreshOrderPaymentSummary(orderId) {
   const id = String(orderId || '').trim();
   if (!id || !config.chatId || orderPaymentSummaryInFlight.has(orderPaymentSummaryKey(id))) return;
@@ -203,10 +215,10 @@ export function ticketInnerHtml(o) {
   const orderPaymentSummary = o.server_order_id ? getCachedOrderPaymentSummary(o.server_order_id) : null;
   const orderPaymentSummaryUnavailable = o.server_order_id && getOrderPaymentSummaryError(o.server_order_id);
   if (o.server_order_id && !orderPaymentSummary && !orderPaymentSummaryUnavailable) refreshOrderPaymentSummary(o.server_order_id);
-  const orderPaymentLine = orderPaymentSummary
-    ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: ${escapeHtml(String(orderPaymentSummary.status || 'status unavailable'))} · ${CS()}${formatMoney(orderPaymentSummary.verifiedMinor || 0)} paid · ${CS()}${formatMoney(orderPaymentSummary.outstandingMinor || 0)} outstanding</div>`
-    : (orderPaymentSummaryUnavailable
-      ? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: status unavailable · will retry</div>'
+  const orderPaymentLine = isUsableOrderPaymentSummary(orderPaymentSummary)
+    ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: ${escapeHtml(orderPaymentSummary.status)} · ${CS()}${formatMoney(orderPaymentSummary.verifiedMinor)} paid · ${CS()}${formatMoney(orderPaymentSummary.outstandingMinor)} outstanding</div>`
+    : (orderPaymentSummaryUnavailable || orderPaymentSummary
+      ? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: status or amounts unavailable · will retry</div>'
       : (o.server_order_id ? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: checking…</div>' : ''));
   const payMethodLine = o.payment_method_name
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> ${escapeHtml(o.payment_method_name)}${o.payment_proof ? ' · <svg class="icon icon-sm"><use href="#i-paperclip"/></svg> evidence attached' : ''}</div>` : '';
