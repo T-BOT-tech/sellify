@@ -41,7 +41,7 @@ export function formatReceiptText(o) {
   text += `------------------------\n`;
   text += `ORDER TOTAL: ${CS()}${formatMoney(o.total)}\n`;
   text += `${t('receiptPaymentDisclaimer')}\n`;
-  if (o.payment_method_name) text += `${t('paymentMethod')}: ${o.payment_method_name}\\n`;
+  if (o.payment_method_name) text += `${t('paymentMethod')}: ${o.payment_method_name}\n`;
   if (o.cash_tendered !== null && o.cash_tendered !== undefined) {
     text += `${t('cashTendered')}: ${CS()}${formatMoney(o.cash_tendered)}\n`;
     text += `${t('changeDue')}: ${CS()}${formatMoney(o.change_due || 0)}\n`;
