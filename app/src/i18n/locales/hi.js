@@ -66,7 +66,7 @@ export default {
     orderDeleted: "ऑर्डर हटा दिया गया",
     orderServed: "ऑर्डर परोसा गया",
     undo: "पूर्ववत करें",
-    todaySales: "आज की बिक्री",
+    todaySales: "आज के ऑर्डर का मूल्य",
     totalOrders: "ऑर्डर",
     avgOrderVal: "औसत मूल्य",
     receiptHeader: "रसीद",
