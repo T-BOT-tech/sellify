@@ -104,7 +104,7 @@ console.log('PASS PF-1 runtime status-query client authentication/idempotency co
     metadata: { source: 'SELLIFY_FRONTEND_ORDER_SYNC' },
   };
   try {
-    globalThis.window = { location: { origin: 'http://sellify.test' }, addEventListener() {} };
+    globalThis.window = { location: { origin: 'http://sellify.test' }, addEventListener() {}, dispatchEvent() { return true; } };
     globalThis.fetch = async (url, options = {}) => {
       const requestUrl = String(url);
       requests.push({ url: requestUrl, options });
