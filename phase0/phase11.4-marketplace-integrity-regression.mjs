@@ -73,6 +73,79 @@ try {
   });
   const sellerSession = await store.createSession({ userId: sellerUser.id, chatId: seller.chatId, deviceName: 'Phase 11.4 Seller Device' });
   const auth = { Authorization: `Bearer ${sellerSession.token}` };
+  const paymentAccount = await store.createPaymentAccount(seller.chatId, {
+    providerId: 'telebirr',
+    accountIdentifier: `251900${String(Math.floor(Math.random() * 1000000)).padStart(6, '0')}`,
+    phone: '251900000001',
+  });
+
+  async function createVerifiedPayment(orderId, amountMinor, label) {
+    const created = await store.createPaymentWithIntent(seller.chatId, {
+      organizationId: sellerSession.organizationId,
+      paymentAccountId: paymentAccount.id,
+      providerId: 'telebirr',
+      channel: 'manual',
+      amountMinor,
+      currency: 'ETB',
+      orderId,
+      idempotencyKey: `phase11-4-${label}-${crypto.randomUUID()}`,
+    });
+    const payment = created.payment;
+    const intent = await store.getPaymentIntent(seller.chatId, payment.paymentIntentId);
+    const reference = `PHASE11-4-REF-${payment.id}`;
+    const transactionId = `PHASE11-4-TX-${payment.id}`;
+    const evidenceResult = await store.insertPaymentEvidence(seller.chatId, {
+      paymentId: payment.id,
+      paymentIntentId: intent.id,
+      providerId: 'telebirr',
+      channel: 'manual',
+      evidenceType: 'PROVIDER_STATUS',
+      externalReference: reference,
+      providerTransactionId: transactionId,
+      rawPayload: { status: 'COMPLETED', amountMinor, currency: 'ETB', receiverAccount: paymentAccount.accountIdentifier, reference, transactionId },
+      normalizedPayload: { result: 'MATCH', observedAmountMinor: amountMinor, observedCurrency: 'ETB', observedReceiverAccount: paymentAccount.accountIdentifier, observedReference: reference, observedTransactionId: transactionId },
+      source: 'phase11.4-test',
+    });
+    const verificationResult = await store.insertPaymentVerification(seller.chatId, {
+      paymentId: payment.id,
+      paymentIntentId: intent.id,
+      evidenceId: evidenceResult.evidence.id,
+      providerId: 'telebirr',
+      result: 'MATCH',
+      observedAmountMinor: amountMinor,
+      observedCurrency: 'ETB',
+      observedReceiverAccount: paymentAccount.accountIdentifier,
+      observedReference: reference,
+      observedTransactionId: transactionId,
+      observedAt: new Date().toISOString(),
+      reasonCodes: [],
+      rawResult: { status: 'COMPLETED' },
+      verifier: 'payment-core.phase11.4-test',
+      verifierVersion: '1',
+    });
+    await store.commitPaymentDecision(seller.chatId, {
+      paymentId: payment.id,
+      expectedState: 'UNPAID',
+      targetState: 'VERIFIED',
+      idempotencyKey: `phase11-4-verify-${payment.id}`,
+      verification: {
+        ...verificationResult.verification,
+        evidenceId: evidenceResult.evidence.id,
+        paymentIntentId: intent.id,
+        providerId: 'telebirr',
+        result: 'MATCH',
+      },
+      decision: {
+        decision: 'ACCEPT',
+        targetState: 'VERIFIED',
+        reasonCodes: [],
+        invariantResults: { passed: true },
+        decisionSource: 'PAYMENT_CORE',
+        entryType: 'VERIFIED',
+      },
+    });
+    return payment;
+  }
 
   await store.saveCatalog(seller.chatId, [{
       id: 'integrity-item',
@@ -122,16 +195,8 @@ try {
   assert.ok(legacyOrder);
   const legacyRow = db.prepare('SELECT server_order_id FROM orders WHERE chat_id = ? AND marketplace_order_id = ? LIMIT 1').get(seller.chatId, master.id);
   assert.ok(legacyRow?.server_order_id);
-  const payment = await store.createPayment(seller.chatId, {
-    orderId: legacyRow.server_order_id,
-    amountMinor: 2000,
-    currency: 'ETB',
-    state: 'RECEIVED',
-    providerId: 'manual',
-    channel: 'manual',
-  }, { userId: sellerUser.id, deviceId: sellerSession.deviceId });
+  const payment = await createVerifiedPayment(legacyRow.server_order_id, 2000, 'full-order');
   assert.equal(payment.amountMinor, 2000);
-  await store.transitionPayment(seller.chatId, payment.id, 'VERIFIED', { userId: sellerUser.id, deviceId: sellerSession.deviceId });
   assert.equal(db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(sellerOrder.id, payment.id).status, 'ALLOCATED');
   assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(sellerOrder.id).status, 'READY');
 
@@ -192,16 +257,8 @@ try {
   const splitLegacy = (await store.getOrders(seller.chatId)).find(o => o.marketplace_order_id === splitOrder.json.marketplace_order_id);
   const splitServerOrder = db.prepare('SELECT server_order_id FROM orders WHERE chat_id = ? AND marketplace_order_id = ? LIMIT 1')
     .get(seller.chatId, splitOrder.json.marketplace_order_id).server_order_id;
-  const p1 = await store.createPayment(seller.chatId, {
-    orderId: splitServerOrder, amountMinor: 400, currency: 'ETB', state: 'RECEIVED',
-    providerId: 'manual', channel: 'manual',
-  }, { userId: sellerUser.id, deviceId: sellerSession.deviceId });
-  const p2 = await store.createPayment(seller.chatId, {
-    orderId: splitServerOrder, amountMinor: 600, currency: 'ETB', state: 'RECEIVED',
-    providerId: 'manual', channel: 'manual',
-  }, { userId: sellerUser.id, deviceId: sellerSession.deviceId });
-  await store.transitionPayment(seller.chatId, p1.id, 'VERIFIED', { userId: sellerUser.id, deviceId: sellerSession.deviceId });
-  await store.transitionPayment(seller.chatId, p2.id, 'VERIFIED', { userId: sellerUser.id, deviceId: sellerSession.deviceId });
+  const p1 = await createVerifiedPayment(splitServerOrder, 400, 'split-a');
+  const p2 = await createVerifiedPayment(splitServerOrder, 600, 'split-b');
   const splitSeller = db.prepare('SELECT id FROM marketplace_seller_orders WHERE marketplace_order_id = ?').get(splitOrder.json.marketplace_order_id);
   assert.equal(db.prepare('SELECT COUNT(*) AS c FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id IS NOT NULL').get(splitSeller.id).c, 2);
   assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(splitSeller.id).status, 'READY');
