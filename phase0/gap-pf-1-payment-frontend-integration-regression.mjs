@@ -93,6 +93,16 @@ console.log('PASS PF-1 runtime status-query client authentication/idempotency co
     metadata: { canonicalLinkageOnly: true },
   };
   const requests = [];
+  let routingAvailable = false;
+  const routedPayment = {
+    id: 'routed-payment-runtime',
+    orderId: 'canonical-order-runtime',
+    state: 'UNPAID',
+    amountMinor: 1000,
+    paymentAccountId: 'account-runtime',
+    paymentIntentId: 'intent-runtime',
+    metadata: { source: 'SELLIFY_FRONTEND_ORDER_SYNC' },
+  };
   try {
     globalThis.window = { location: { origin: 'http://sellify.test' }, addEventListener() {} };
     globalThis.fetch = async (url, options = {}) => {
@@ -102,7 +112,18 @@ console.log('PASS PF-1 runtime status-query client authentication/idempotency co
         return { ok: true, status: 200, json: async () => ({ payments: [shell] }) };
       }
       if (requestUrl.endsWith('/routing/resolve')) {
-        return { ok: true, status: 200, json: async () => ({ status: 'NO_ROUTE' }) };
+        return {
+          ok: true, status: 200,
+          json: async () => routingAvailable
+            ? { status: 'ROUTED', providerId: 'telebirr', paymentAccountId: 'account-runtime', channel: 'manual' }
+            : { status: 'NO_ROUTE' },
+        };
+      }
+      if (requestUrl.endsWith('/tenants/tenant-runtime/payments') && options.method === 'POST') {
+        return { ok: true, status: 201, json: async () => ({ payment: routedPayment }) };
+      }
+      if (requestUrl.endsWith('/payments/routed-payment-runtime/status')) {
+        return { ok: true, status: 200, json: async () => ({ payment: routedPayment }) };
       }
       throw new Error('Unexpected request while checking linkage-only shell: ' + requestUrl);
     };
@@ -127,6 +148,23 @@ console.log('PASS PF-1 runtime status-query client authentication/idempotency co
     await projection.refreshPaymentProjection();
     assert.equal(paymentState.getPayments().some(payment => payment.id === 'linkage-shell-runtime'), false,
       'linkage-only shells are excluded from the operational payment projection');
+
+    // When routing becomes available, the same shell must not suppress a real
+    // Payment Core create command; only the real payment is status-queried.
+    paymentState.setPayments([shell]);
+    routingAvailable = true;
+    requests.length = 0;
+    const routed = await projection.ensurePaymentForSyncedOrder({
+      server_order_id: 'canonical-order-runtime',
+      total: 1000,
+    });
+    assert.equal(routed.status, 'CREATED');
+    assert.equal(routed.payment.id, 'routed-payment-runtime');
+    assert.equal(routed.statusQueried, true);
+    assert.ok(requests.some(request => request.url.endsWith('/tenants/tenant-runtime/payments')
+      && request.options.method === 'POST'), 'eligible route creates a real payment');
+    assert.ok(requests.some(request => request.url.endsWith('/payments/routed-payment-runtime/status')),
+      'only the routed payment receives a provider status query');
   } finally {
     globalThis.fetch = originalFetch;
     if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;
