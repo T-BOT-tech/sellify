@@ -112,7 +112,7 @@ export function printReceipt(id) {
   ).join('');
 
   const paymentMethodHtml = o.payment_method_name
-    ? `<div style="display:flex; justify-content:space-between; margin-top:4px;"><span>Payment method</span><span>${escapeHtml(o.payment_method_name)}</span></div>`
+    ? `<div style="display:flex; justify-content:space-between; margin-top:4px;"><span>${escapeHtml(t('paymentMethod'))}</span><span>${escapeHtml(o.payment_method_name)}</span></div>`
     : '';
 
   const cashHtml = (o.cash_tendered !== null && o.cash_tendered !== undefined)
@@ -140,7 +140,7 @@ export function printReceipt(id) {
       ${itemsHtml}
     </div>
     <div style="border-top:1px dashed #000; padding-top:6px; font-weight:bold; display:flex; justify-content:space-between;">
-      <span>Order total</span>
+      <span>${escapeHtml(t('total'))}</span>
       <span>${CS()}${formatMoney(o.total)}</span>
     </div>
     ${paymentMethodHtml}
@@ -243,7 +243,7 @@ export function drawCanvasReceipt(o) {
     ctx.font = '14px monospace';
     ctx.fillStyle = '#6e6d6a';
     ctx.textAlign = 'left';
-    ctx.fillText('Payment method', padding, y);
+    ctx.fillText(t('paymentMethod'), padding, y);
     ctx.textAlign = 'right';
     ctx.fillText(String(o.payment_method_name).slice(0, 32), width - padding, y);
   }
