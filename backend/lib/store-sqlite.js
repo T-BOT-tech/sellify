@@ -7807,6 +7807,11 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
         input.evidence == null ? null : json(input.evidence),
         input.failureCode || input.failure_code || null, now, now, refund.id, tenant.organizationId
       );
+      const marketplaceRefundStatus = ['FAILED', 'REJECTED'].includes(status) ? 'REJECTED' : null;
+      if (marketplaceRefundStatus) {
+        db.prepare('UPDATE marketplace_refunds SET status = ?, processed_at = ? WHERE id = ? AND organization_id = ?')
+          .run(marketplaceRefundStatus, now, refund.id, tenant.organizationId);
+      }
       audit(String(chatId), 'payment.refund.result', payment.id, actor?.userId || null, { refundId: refund.id, status: status || 'UNKNOWN' });
       db.exec('COMMIT');
       return normalizePaymentRefund(db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(refund.id));
@@ -7826,7 +7831,21 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
     );
     if (fullRefund) {
       db.prepare('UPDATE payments SET state = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND state IN (\'VERIFIED\',\'RECONCILED\')').run('REFUNDED', now, payment.id, tenant.organizationId);
+      const marketplaceAllocation = db.prepare(`
+        SELECT a.id, a.seller_order_id
+        FROM marketplace_payment_allocations a
+        WHERE a.payment_id = ? AND a.organization_id = ?
+        LIMIT 1
+      `).get(payment.id, tenant.organizationId);
+      if (marketplaceAllocation) {
+        db.prepare("UPDATE marketplace_payment_allocations SET status = 'REFUNDED', updated_at = ? WHERE id = ?")
+          .run(now, marketplaceAllocation.id);
+        db.prepare("UPDATE marketplace_settlements SET status = 'REVERSED' WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')")
+          .run(marketplaceAllocation.seller_order_id);
+      }
     }
+    db.prepare('UPDATE marketplace_refunds SET status = \'PROCESSED\', processed_at = ? WHERE id = ? AND organization_id = ?')
+      .run(now, refund.id, tenant.organizationId);
     db.prepare(`INSERT INTO payment_ledger_entries
       (id,payment_id,organization_id,entry_type,amount_minor,currency,from_state,to_state,actor_id,reason,metadata_json,created_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(
@@ -9858,20 +9877,25 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
         for (const allocation of allocations) {
           const paidAndVerified = ['VERIFIED', 'RECONCILED'].includes(String(allocation.payment_state || '').toUpperCase());
           if (!paidAndVerified || Number(allocation.amount_minor) <= 0 || !allocation.payment_id) continue;
+          // Request the refund through Payment Core. Marketplace cancellation is
+          // not proof that money was returned, so the allocation must remain
+          // ALLOCATED until the canonical refund lifecycle confirms success.
+          const refundRequest = await createPaymentRefundRequest(key, {
+            paymentId: allocation.payment_id,
+            amountMinor: Number(allocation.amount_minor),
+            currency: allocation.currency,
+            idempotencyKey: `marketplace-cancel:${order.marketplace_order_id}:${allocation.id}`,
+            reason: 'Marketplace order cancellation',
+          });
           db.prepare(`
             INSERT INTO marketplace_refunds
               (id, marketplace_order_id, seller_order_id, payment_id, organization_id, amount_minor, currency, reason, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTED', ?)
           `).run(
-            crypto.randomUUID(), allocation.marketplace_order_id, allocation.seller_order_id,
+            refundRequest.refund.id, allocation.marketplace_order_id, allocation.seller_order_id,
             allocation.payment_id, allocation.organization_id, allocation.amount_minor,
             allocation.currency, 'Marketplace order cancellation', nowIso()
           );
-          db.prepare(`
-            UPDATE marketplace_payment_allocations
-            SET status = 'REFUNDED', updated_at = ?
-            WHERE id = ?
-          `).run(nowIso(), allocation.id);
         }
 
         db.prepare(`
