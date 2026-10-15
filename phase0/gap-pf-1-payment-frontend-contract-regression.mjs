@@ -29,6 +29,42 @@ assert.match(server, /payments:accept/);
 assert.match(server, /payments:reconcile/);
 assert.match(server, /payments:manage/);
 
+// Canonical order summaries must fail closed if required amounts are absent
+// or malformed; the frontend must not display PAID with invented zero values.
+const { orderPaymentSummary } = await import('../app/src/payments/ui.js');
+const validOrderSummary = orderPaymentSummary({
+  orderId: 'order-1',
+  status: 'PAID',
+  verifiedMinor: 1200,
+  outstandingMinor: 0,
+  refundableMinor: 1200,
+});
+assert.equal(validOrderSummary.status, 'PAID');
+assert.equal(validOrderSummary.verifiedMinor, 1200);
+assert.equal(validOrderSummary.outstandingMinor, 0);
+
+const missingAmounts = orderPaymentSummary({ orderId: 'order-2', status: 'PAID' });
+assert.equal(missingAmounts.status, 'UNKNOWN');
+assert.equal(missingAmounts.statusLabel, 'Payment status unavailable');
+assert.equal(missingAmounts.verifiedMinor, null);
+assert.equal(missingAmounts.outstandingMinor, null);
+
+const stringAmounts = orderPaymentSummary({
+  status: 'PAID',
+  verifiedMinor: '1200',
+  outstandingMinor: '0',
+});
+assert.equal(stringAmounts.status, 'UNKNOWN');
+assert.equal(stringAmounts.verifiedMinor, null);
+
+const negativeAmounts = orderPaymentSummary({
+  status: 'PARTIAL',
+  verifiedMinor: -1,
+  outstandingMinor: 1200,
+});
+assert.equal(negativeAmounts.status, 'UNKNOWN');
+assert.equal(negativeAmounts.outstandingMinor, null);
+
 console.log('PASS GAP PF-1 payment frontend contract boundary regression');
 
 
