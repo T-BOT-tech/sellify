@@ -496,4 +496,24 @@ assert.match(commitBlock, /PROVIDER_TRANSACTION_DUPLICATE/);
 assert.match(commitBlock, /assertVerificationFreshness/);
 assert.match(commitBlock, /VERIFICATION_CONTEXT_MISMATCH/);
 
+// Daily queue metrics describe order value, not confirmed financial receipts.
+// Canonical payment acceptance is fetched separately from Payment Core.
+assert.match(orderQueue, /const totalOrderValue = todaysOrders\.reduce/);
+assert.doesNotMatch(orderQueue, /const totalRevenue\s*=/);
+assert.match(orderQueue, /t\('todaySales'\)/);
+const dailySummaryLocales = {
+  en: "Today's Order Value",
+  am: "የዛሬ የትዕዛዝ ዋጋ",
+  es: "Valor de Pedidos de Hoy",
+  hi: "आज के ऑर्डर का मूल्य",
+  om: "Gatii Ajajoota Har'aa",
+  so: "Qiimaha Dalabaadka Maanta",
+  sw: "Thamani ya Oda za Leo",
+};
+for (const [locale, label] of Object.entries(dailySummaryLocales)) {
+  const source = fs.readFileSync(`app/src/i18n/locales/${locale}.js`, 'utf8');
+  assert.ok(source.includes(`todaySales: ${JSON.stringify(label)}`),
+    `${locale} daily summary must say order value rather than imply confirmed sales`);
+}
+
 console.log('PASS PF-2 payment frontend adversarial boundary regression');
