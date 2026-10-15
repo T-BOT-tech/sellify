@@ -19,17 +19,6 @@ export async function refreshPaymentProjection() {
   }
 }
 
-function isCanonicalLinkageOnlyPayment(payment) {
-  let metadata = payment?.metadata ?? payment?.metadata_json ?? null;
-  if (typeof metadata === 'string') {
-    try { metadata = JSON.parse(metadata); } catch { metadata = null; }
-  }
-  return metadata?.canonicalLinkageOnly === true
-    || metadata?.canonicalLinkageOnly === 1
-    || metadata?.canonical_linkage_only === true
-    || metadata?.canonical_linkage_only === 1;
-}
-
 function notifyCanonicalPaymentUpdated(payment) {
   if (typeof window === 'undefined') return;
   const orderId = String(payment?.orderId || payment?.order_id || '').trim();
@@ -66,8 +55,14 @@ export async function ensurePaymentForSyncedOrder(order, options = {}) {
 }
 
 export function isCanonicalLinkageOnlyPayment(payment) {
-  return payment?.metadata?.canonicalLinkageOnly === true
-    || payment?.metadata?.canonical_linkage_only === true;
+  let metadata = payment?.metadata ?? payment?.metadata_json ?? null;
+  if (typeof metadata === 'string') {
+    try { metadata = JSON.parse(metadata); } catch { metadata = null; }
+  }
+  return metadata?.canonicalLinkageOnly === true
+    || metadata?.canonicalLinkageOnly === 1
+    || metadata?.canonical_linkage_only === true
+    || metadata?.canonical_linkage_only === 1;
 }
 
 async function ensurePaymentForSyncedOrderOnce(order, { statusQueryKey = null } = {}) {
@@ -75,11 +70,15 @@ async function ensurePaymentForSyncedOrderOnce(order, { statusQueryKey = null } 
   if (!serverOrderId) return { status: 'SKIPPED', reason: 'ORDER_NOT_SYNCED' };
 
   // Order sync may create a canonical identity shell before a financial
-  // payment is routed. That shell is not a usable payment and must not block
-  // creation of a Payment Core record with an eligible account/intent.
-  let payment = getPaymentForOrder(serverOrderId)
-    || (await listPayments({ orderId: serverOrderId, limit: 10 })).find(item => !isCanonicalLinkageOnlyPayment(item))
-    || null;
+  // payment is routed. Keep it available for identity linkage, but never
+  // treat it as a financial payment or query its provider status.
+  const cachedForOrder = getPayments().filter(item =>
+    String(item?.orderId || item?.order_id || '') === serverOrderId);
+  const listedForOrder = cachedForOrder.length
+    ? cachedForOrder
+    : await listPayments({ orderId: serverOrderId, limit: 10 });
+  let payment = listedForOrder.find(item => item?.id && !isCanonicalLinkageOnlyPayment(item)) || null;
+  const linkageOnlyPayment = listedForOrder.find(item => item?.id && isCanonicalLinkageOnlyPayment(item)) || null;
   let creationStatus = 'EXISTS';
 
   if (!payment) {
@@ -89,12 +88,12 @@ async function ensurePaymentForSyncedOrderOnce(order, { statusQueryKey = null } 
       requireAccount: true,
     });
     if (route.status !== 'ROUTED' || !route.providerId || !route.paymentAccountId) {
-      // Keep canonical order/payment identity linked for recovery, but never
-      // treat the linkage-only shell as an operational or financial payment.
+      // Preserve canonical identity linkage for recovery, without querying
+      // the shell or presenting it as a usable financial payment.
       return {
-        status: 'DEFERRED',
+        status: linkageOnlyPayment ? 'LINKED_ONLY' : 'DEFERRED',
         reason: 'NO_ELIGIBLE_PAYMENT_ROUTE',
-        ...(linkageOnlyPayment ? { payment: linkageOnlyPayment } : {}),
+        ...(linkageOnlyPayment ? { payment: linkageOnlyPayment, statusQueried: false } : {}),
       };
     }
 
