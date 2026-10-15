@@ -120,7 +120,8 @@ async function retryMissingPaymentLinkages() {
     && (order.server_order_id || order.serverOrderId)
     && order.status !== 'queued' && order.status !== 'sync_rejected'
     && (String((order.payment_linkage && order.payment_linkage.status) || '').toUpperCase() !== 'LINKED'
-      || !String((order.payment_linkage && order.payment_linkage.payment_id) || '').trim()));
+      || !String((order.payment_linkage && order.payment_linkage.payment_id) || '').trim()
+      || Boolean(order.payment_linkage && order.payment_linkage.canonical_linkage_only)));
   for (const order of candidates) await ensureAndPersistPaymentLinkage(order);
 }
 
