@@ -11,6 +11,11 @@ assert.match(projection, /setPayments/);
 assert.match(projection, /getPaymentForOrder/);
 assert.match(projection, /ensurePaymentForSyncedOrder/);
 assert.match(projection, /export function isCanonicalLinkageOnlyPayment/);
+assert.match(projection, /setPayments\(payments\.filter\(payment => !isCanonicalLinkageOnlyPayment\(payment\)\)\)/,
+  'linkage-only shells are excluded from the operational payment projection');
+assert.match(projection, /const listedForOrder = cachedUsablePayment[\s\S]*?await listPayments\(\{ orderId: serverOrderId, limit: 10 \}\)/,
+  'a cached linkage shell cannot suppress a fresh canonical payment lookup');
+
 assert.match(projection, /!isCanonicalLinkageOnlyPayment\(payment\)/);
 assert.match(projection, /status: linkageOnlyPayment \? 'LINKED_ONLY' : 'DEFERRED'/);
 assert.match(projection, /statusQueried: false/);
