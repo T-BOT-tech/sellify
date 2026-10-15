@@ -35,7 +35,7 @@ const cash = buildRestaurantPaymentIntent({
   payment_method_name: 'Cash',
 }, { organizationId: 'org-1', locationId: 'loc-1' });
 assert.equal(cash.amount_minor, 2000);
-assert.equal(cash.state, 'RECEIVED');
+assert.equal('state' in cash, false, 'compatibility payload must not derive financial state');
 assert.equal(cash.payment_authority, 'payments');
 
 const partial = buildRestaurantPaymentIntent({
@@ -43,7 +43,7 @@ const partial = buildRestaurantPaymentIntent({
   cash_tendered: 1000,
 }, { organizationId: 'org-1', locationId: 'loc-1' });
 assert.equal(partial.amount_minor, 1000);
-assert.equal(partial.state, 'PARTIAL');
+assert.equal('state' in partial, false, 'partial cash tender is input evidence, not canonical payment state');
 
 const proof = buildRestaurantPaymentIntent({
   ...order,
@@ -52,7 +52,7 @@ const proof = buildRestaurantPaymentIntent({
   payment_method_name: 'Telebirr',
 }, { organizationId: 'org-1', locationId: 'loc-1' });
 assert.equal(proof.amount_minor, 2000);
-assert.equal(proof.state, 'CLAIMED');
+assert.equal('state' in proof, false, 'attached proof does not locally transition Payment Core state');
 assert.equal(proof.metadata.payment_proof_attached, true);
 
 assert.throws(() => normalizeRestaurantOrder({ ...order, total: 1999 }, { organizationId: 'org-1', locationId: 'loc-1' }), /total does not match/);
