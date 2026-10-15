@@ -240,17 +240,45 @@ try {
     WHERE event_id = ?
   `).get(`marketplace-cancel:${master.id}:${seller.chatId}:integrity-item`).c, 1);
 
-  const completedRefund = await store.finalizePaymentRefund(seller.chatId, canonicalRefund.id, {
+  // A definitive failure is retained as history and can be retried safely.
+  const failedRefund = await store.finalizePaymentRefund(seller.chatId, canonicalRefund.id, {
+    status: 'FAILED',
+    failureCode: 'SIMULATED_PROVIDER_DECLINE',
+    providerResult: { simulated: true, status: 'DECLINED' },
+    evidence: { source: 'phase11.4 regression failure' },
+  });
+  assert.equal(failedRefund.status, 'FAILED');
+  assert.equal(db.prepare('SELECT status FROM marketplace_refunds WHERE id = ?').get(marketplaceRefund.id).status, 'REJECTED');
+  await assert.rejects(
+    () => store.retryMarketplaceRefund(seller.chatId, marketplaceRefund.id),
+    error => error?.code === 'MARKETPLACE_REFUND_NOT_RETRYABLE' || error?.code === 'MARKETPLACE_REFUND_NOT_FOUND'
+  );
+  const failedInventory = (await store.getCatalog(seller.chatId)).products.find(p => p.id === 'integrity-item');
+  assert.equal(failedInventory.stock, 5);
+  assert.equal(db.prepare('SELECT COUNT(*) AS c FROM inventory_movements WHERE event_id = ?')
+    .get(`marketplace-cancel:${master.id}:${seller.chatId}:integrity-item`).c, 1);
+
+  const retryResult = await store.retryMarketplaceRefund(seller.chatId, marketplaceRefund.id);
+  assert.equal(retryResult.duplicate, false);
+  const retriedMarketplaceRefund = retryResult.refund;
+  assert.notEqual(retriedMarketplaceRefund.id, marketplaceRefund.id);
+  assert.equal(retriedMarketplaceRefund.status, 'REQUESTED');
+  assert.equal(db.prepare('SELECT status FROM marketplace_refunds WHERE id = ?').get(marketplaceRefund.id).status, 'REJECTED');
+  assert.equal(db.prepare('SELECT COUNT(*) AS c FROM inventory_movements WHERE event_id = ?')
+    .get(`marketplace-cancel:${master.id}:${seller.chatId}:integrity-item`).c, 1);
+
+  const completedRefund = await store.finalizePaymentRefund(seller.chatId, retriedMarketplaceRefund.id, {
     status: 'SUCCEEDED',
     providerRefundId: 'phase11-4-refund-confirmed',
     providerTransactionId: 'phase11-4-refund-tx',
     providerResult: { simulated: true },
-    evidence: { source: 'phase11.4 regression' },
+    evidence: { source: 'phase11.4 regression retry success' },
   });
   assert.equal(completedRefund.status, 'SUCCEEDED');
   assert.equal(db.prepare('SELECT state FROM payments WHERE id = ?').get(payment.id).state, 'REFUNDED');
   assert.equal(db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(sellerOrder.id, payment.id).status, 'REFUNDED');
-  assert.equal(db.prepare('SELECT status FROM marketplace_refunds WHERE id = ?').get(marketplaceRefund.id).status, 'PROCESSED');
+  assert.equal(db.prepare('SELECT status FROM marketplace_refunds WHERE id = ?').get(marketplaceRefund.id).status, 'REJECTED');
+  assert.equal(db.prepare('SELECT status FROM marketplace_refunds WHERE id = ?').get(retriedMarketplaceRefund.id).status, 'PROCESSED');
 
   // Split-payment hardening: two payments may cover one seller allocation,
   // but verified value may never exceed the canonical seller-order amount.
