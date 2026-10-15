@@ -35,6 +35,12 @@ assert.match(queue, /getCachedOrderPaymentSummary/);
 assert.match(queue, /Order payment:/);
 assert.match(queue, /orderPaymentSummary\.status \|\| 'status unavailable'/,
   'a missing canonical status is not guessed to mean UNPAID');
+assert.match(queue, /function isUsableOrderPaymentSummary/);
+assert.match(queue, /Number\.isSafeInteger\(summary\.verifiedMinor\)/);
+assert.match(queue, /Number\.isSafeInteger\(summary\.outstandingMinor\)/);
+assert.doesNotMatch(queue, /formatMoney\(orderPaymentSummary\.verifiedMinor \|\| 0\)/);
+assert.doesNotMatch(queue, /formatMoney\(orderPaymentSummary\.outstandingMinor \|\| 0\)/);
+assert.match(queue, /status or amounts unavailable/);
 assert.match(queue, /outstanding/);
 assert.doesNotMatch(queue, /paymentStateLine|Payment Core:.*payment\\.state/);
 assert.match(sync, /refreshPaymentProjection/);
