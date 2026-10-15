@@ -40,6 +40,7 @@ export function formatReceiptText(o) {
   });
   text += `------------------------\n`;
   text += `${t('total').toUpperCase()}: ${CS()}${formatMoney(o.total)}\n`;
+  if (o.payment_method_name) text += `Payment method: ${o.payment_method_name}\n`;
   if (o.cash_tendered !== null && o.cash_tendered !== undefined) {
     text += `${t('cashTendered')}: ${CS()}${formatMoney(o.cash_tendered)}\n`;
     text += `${t('changeDue')}: ${CS()}${formatMoney(o.change_due || 0)}\n`;
@@ -109,6 +110,10 @@ export function printReceipt(id) {
     </div>`
   ).join('');
 
+  const paymentMethodHtml = o.payment_method_name
+    ? `<div style="display:flex; justify-content:space-between; margin-top:4px;"><span>Payment method</span><span>${escapeHtml(o.payment_method_name)}</span></div>`
+    : '';
+
   const cashHtml = (o.cash_tendered !== null && o.cash_tendered !== undefined)
     ? `<div style="display:flex; justify-content:space-between; margin-top:4px;">
         <span>${t('cashTendered')}</span><span>${CS()}${formatMoney(o.cash_tendered)}</span>
@@ -156,8 +161,9 @@ export function drawCanvasReceipt(o) {
   const baseHeight = 220;
   const itemHeight = ((o && o.items) ? o.items.length : 0) * 30;
   const cashHeight = (o && o.cash_tendered !== null && o.cash_tendered !== undefined) ? 60 : 0;
+  const paymentMethodHeight = (o && o.payment_method_name) ? 24 : 0;
   const custHeight = (o && (o.customer_name || o.customer_phone)) ? 40 : 0;
-  const height = baseHeight + itemHeight + cashHeight + custHeight;
+  const height = baseHeight + itemHeight + cashHeight + paymentMethodHeight + custHeight;
 
   canvas.width = width;
   canvas.height = height;
@@ -228,6 +234,16 @@ export function drawCanvasReceipt(o) {
   ctx.fillText(t('total').toUpperCase(), padding, y);
   ctx.textAlign = 'right';
   ctx.fillText(`${CS()}${formatMoney(o.total)}`, width - padding, y);
+
+  if (o.payment_method_name) {
+    y += 24;
+    ctx.font = '14px monospace';
+    ctx.fillStyle = '#6e6d6a';
+    ctx.textAlign = 'left';
+    ctx.fillText('Payment method', padding, y);
+    ctx.textAlign = 'right';
+    ctx.fillText(String(o.payment_method_name).slice(0, 32), width - padding, y);
+  }
 
   if (o.cash_tendered !== null && o.cash_tendered !== undefined) {
     y += 26;
