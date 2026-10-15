@@ -98,7 +98,7 @@ export default {
     orderDeleted: "Order deleted from queue",
     orderServed: "Order marked served",
     undo: "Undo",
-    todaySales: "Today's Sales",
+    todaySales: "Today's Order Value",
     totalOrders: "Orders",
     avgOrderVal: "Avg. Value",
     receiptHeader: "RECEIPT",
