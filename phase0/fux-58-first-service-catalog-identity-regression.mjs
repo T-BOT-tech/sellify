@@ -38,8 +38,8 @@ assert.match(catalog, /type,\s*[\s\S]{0,180}marketplace_listed: type === 'servic
   'service creation persists its type and cannot enable unsupported marketplace listing');
 assert.match(catalog, /products\.push\(newProd\);\s*saveJSON\(STORAGE_KEYS\.products, products\);/,
   'new catalog item is saved through the existing catalog storage key');
-assert.match(sync, /return \{\s*\.\.\.p,\s*id: sanitizeId\(p\.id\)/,
-  'remote catalog sanitizer preserves the canonical type field rather than rebuilding a parallel model');
+assert.match(sync, /return \{\s*\.\.\.p,\s*id: sanitizeId\(p\.id\),[\s\S]{0,300}type: p\.type === 'service' \? 'service' : 'product',[\s\S]{0,180}marketplace_listed: p\.type === 'service' \? false : Boolean\(p\.marketplace_listed\)/,
+  'remote catalog sanitizer normalizes supported item identity and fails closed for service marketplace listings');
 assert.match(sync, /setProducts\(sanitizeRemoteProducts\(data\.products\)\);\s*saveJSON\(STORAGE_KEYS\.products, products\);/,
   'remote catalog hydration retains the sanitized records in existing local catalog storage');
 assert.match(sync, /export async function syncCatalog\(\)[\s\S]{0,900}method: 'POST'[\s\S]{0,500}body: JSON\.stringify\(\{ products \}\)/,
