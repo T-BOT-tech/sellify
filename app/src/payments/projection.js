@@ -69,7 +69,12 @@ async function ensurePaymentForSyncedOrderOnce(order, { statusQueryKey = null } 
   const serverOrderId = String(order?.server_order_id || order?.serverOrderId || '').trim();
   if (!serverOrderId) return { status: 'SKIPPED', reason: 'ORDER_NOT_SYNCED' };
 
-  let payment = getPaymentForOrder(serverOrderId) || (await listPayments({ orderId: serverOrderId, limit: 10 }))[0] || null;
+  // Order sync may create a canonical identity shell before a financial
+  // payment is routed. That shell is not a usable payment and must not block
+  // creation of a Payment Core record with an eligible account/intent.
+  let payment = getPaymentForOrder(serverOrderId)
+    || (await listPayments({ orderId: serverOrderId, limit: 10 })).find(item => !isCanonicalLinkageOnlyPayment(item))
+    || null;
   let creationStatus = 'EXISTS';
 
   if (!payment) {
