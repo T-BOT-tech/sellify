@@ -1,11 +1,26 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { setPayments } from '../app/src/payments/state.js';
-import { getPaymentForOrder } from '../app/src/payments/projection.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
+
+// The frontend projection imports browser-owned configuration. Supply only
+// the minimal browser storage/config surface required for this focused test.
+const browserValues = new Map();
+globalThis.window = {
+  __APP_CONFIG__: {},
+  location: { origin: 'http://localhost' },
+  addEventListener() {},
+};
+globalThis.localStorage = {
+  getItem(key) { return browserValues.has(key) ? browserValues.get(key) : null; },
+  setItem(key, value) { browserValues.set(key, String(value)); },
+  removeItem(key) { browserValues.delete(key); },
+};
+
+const { setPayments } = await import('../app/src/payments/state.js');
+const { getPaymentForOrder } = await import('../app/src/payments/projection.js');
 
 const tempDir = await mkdtemp(path.join(os.tmpdir(), 'sellify-gap1-10-'));
 process.env.SELLIFY_DATA_DIR = tempDir;
