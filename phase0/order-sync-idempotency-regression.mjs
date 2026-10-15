@@ -17,6 +17,13 @@ try {
     timezone: 'Africa/Addis_Ababa',
   });
 
+  // Order synchronization now resolves all item identity and pricing
+  // from the tenant catalog, so seed canonical items for this regression.
+  await store.saveCatalog(tenant.chatId, [
+    { id: 'coffee', name: 'Coffee', price: 100, type: 'product' },
+    { id: 'tea', name: 'Tea', price: 125, type: 'product' },
+  ]);
+
   const original = {
     id: 'local-order-100',
     currency: 'ETB',
