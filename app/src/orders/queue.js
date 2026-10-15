@@ -30,7 +30,7 @@ import { isVolumeDiscountEnabled, getVolumeDiscountForQty } from '../b2b/pricing
 import { t } from '../ui/i18n.js';
 import { patchList, renderStatus } from '../ui/render.js';
 import { showUndoToast } from '../ui/toast.js';
-import { getPaymentForOrder, refreshCanonicalOrderPaymentSummary } from '../payments/projection.js';
+import { refreshCanonicalOrderPaymentSummary } from '../payments/projection.js';
 
 // Order-level financial truth is fetched from Payment Core, not reconstructed
 // from the local payment projection. Keep a short-lived UI cache so rendering
@@ -198,12 +198,9 @@ export function ticketInnerHtml(o) {
     ? `<div class="ticket-customer">${escapeHtml(o.customer_name || '')} ${escapeHtml(o.customer_phone || '')}</div>` : '';
   const cashLine = (o.cash_tendered !== null && o.cash_tendered !== undefined)
     ? `<div class="ticket-customer">${t('cashTendered')}: ${CS()}${formatMoney(o.cash_tendered)} · ${t('changeDue')}: ${CS()}${formatMoney(o.change_due || 0)}</div>` : '';
-  const payment = o.server_order_id ? getPaymentForOrder(o.server_order_id) : null;
   const orderPaymentSummary = o.server_order_id ? getCachedOrderPaymentSummary(o.server_order_id) : null;
   const orderPaymentSummaryUnavailable = o.server_order_id && getOrderPaymentSummaryError(o.server_order_id);
   if (o.server_order_id && !orderPaymentSummary && !orderPaymentSummaryUnavailable) refreshOrderPaymentSummary(o.server_order_id);
-  const paymentStateLine = payment?.state
-    ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Payment Core: ${escapeHtml(String(payment.state).replaceAll('_', ' '))}</div>` : '';
   const orderPaymentLine = orderPaymentSummary
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: ${escapeHtml(String(orderPaymentSummary.status || 'UNPAID'))} · ${CS()}${formatMoney(orderPaymentSummary.verifiedMinor || 0)} paid · ${CS()}${formatMoney(orderPaymentSummary.outstandingMinor || 0)} outstanding</div>`
     : (orderPaymentSummaryUnavailable
@@ -243,7 +240,6 @@ export function ticketInnerHtml(o) {
     <div class="ticket-total"><span>${t('total')}</span><span>${CS()}${formatMoney(o.total)}</span></div>
     ${payMethodLine}
     ${orderPaymentLine}
-    ${paymentStateLine}
     ${cashLine}
     ${customerLine}
     ${b2bLine}
