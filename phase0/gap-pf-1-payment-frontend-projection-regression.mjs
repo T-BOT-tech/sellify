@@ -33,8 +33,9 @@ assert.match(state, /In-memory frontend projection only/);
 assert.doesNotMatch(queue, /getPaymentForOrder/);
 assert.match(queue, /getCachedOrderPaymentSummary/);
 assert.match(queue, /Order payment:/);
-assert.match(queue, /orderPaymentSummary\.status \|\| 'status unavailable'/,
-  'a missing canonical status is not guessed to mean UNPAID');
+assert.match(queue, /Order payment: \$\{escapeHtml\(orderPaymentSummary\.status\)\}/,
+  'the queue renders only a validated canonical status rather than inventing a fallback');
+assert.doesNotMatch(queue, /orderPaymentSummary\.status \|\| ['\"]UNPAID['\"]/);
 assert.match(queue, /function isUsableOrderPaymentSummary/);
 assert.match(queue, /Number\.isSafeInteger\(summary\.verifiedMinor\)/);
 assert.match(queue, /Number\.isSafeInteger\(summary\.outstandingMinor\)/);
