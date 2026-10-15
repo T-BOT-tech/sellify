@@ -71,6 +71,72 @@ async function concurrentCreate(count, base) {
   );
 }
 
+test('GAP-1.10 canonical linkage shell does not reserve payment capacity or inflate summaries', async () => {
+  const base = await setup();
+  const localOrderId = `gap1-10-shell-${crypto.randomUUID()}`;
+  const [synced] = await store.saveQueuedOrders(base.chatId, [{
+    id: localOrderId,
+    currency: 'ETB',
+    items: [{ id: 'partial-item', name: 'Partial payment test item', qty: 1, price: 1000 }],
+  }]);
+
+  assert.equal(synced.status, 'synced');
+  assert.ok(synced.order_id);
+  assert.ok(synced.payment_id);
+
+  const shell = await store.getPayment(base.chatId, synced.payment_id);
+  assert.equal(shell.state, 'UNPAID');
+  assert.equal(shell.paymentAccountId, null);
+  assert.equal(shell.paymentIntentId, null);
+  assert.equal(shell.metadata?.canonicalLinkageOnly, true);
+
+  const first = await store.createPaymentWithIntent(base.chatId, {
+    organizationId: base.organizationId,
+    paymentAccountId: base.accountId,
+    providerId: 'telebirr',
+    channel: 'manual',
+    amountMinor: 400,
+    currency: 'ETB',
+    orderId: synced.order_id,
+    idempotencyKey: `gap1-10-shell-partial-a-${crypto.randomUUID()}`,
+  });
+  assert.equal(first.payment.amountMinor, 400);
+
+  const second = await store.createPaymentWithIntent(base.chatId, {
+    organizationId: base.organizationId,
+    paymentAccountId: base.accountId,
+    providerId: 'telebirr',
+    channel: 'manual',
+    amountMinor: 600,
+    currency: 'ETB',
+    orderId: synced.order_id,
+    idempotencyKey: `gap1-10-shell-partial-b-${crypto.randomUUID()}`,
+  });
+  assert.equal(second.payment.amountMinor, 600);
+
+  await assert.rejects(
+    () => store.createPaymentWithIntent(base.chatId, {
+      organizationId: base.organizationId,
+      paymentAccountId: base.accountId,
+      providerId: 'telebirr',
+      channel: 'manual',
+      amountMinor: 1,
+      currency: 'ETB',
+      orderId: synced.order_id,
+      idempotencyKey: `gap1-10-shell-overflow-${crypto.randomUUID()}`,
+    }),
+    error => error.code === 'PAYMENT_AMOUNT_EXCEEDS_ORDER_OUTSTANDING',
+  );
+
+  const summary = await store.getOrderPaymentSummary(base.chatId, synced.order_id);
+  assert.equal(summary.totalMinor, 1000);
+  assert.equal(summary.pendingMinor, 1000);
+  assert.equal(summary.verifiedMinor, 0);
+  assert.equal(summary.outstandingMinor, 1000);
+  assert.equal(summary.status, 'UNPAID');
+  assert.equal(summary.byState.UNPAID, 1000);
+});
+
 test('GAP-1.10 durable idempotency: concurrent duplicate CREATE_PAYMENT requests produce one payment', async () => {
   const createdPayments = [];
 
