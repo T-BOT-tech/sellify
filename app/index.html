@@ -1170,8 +1170,9 @@
     <select id="orderPayMethod" onchange="onOrderPayMethodChange()" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background: var(--surface); margin-bottom:8px;"></select>
     <div id="payMethodDetailsHint" class="hint" style="display:none;"></div>
     <div id="proofCaptureBlock" style="display:none; margin:10px 0;">
-      <label data-i18n="captureProof">Payment screenshot / receipt photo (optional)</label>
+      <label data-i18n="captureProof">Payment evidence image (optional)</label>
       <input type="file" id="proofCameraInput" accept="image/*" capture="environment" style="padding:8px;">
+      <div class="hint" data-i18n="paymentEvidenceNotice">An uploaded image is supporting evidence only; it does not confirm that payment was received.</div>
       <div id="proofPreviewWrap" style="display:none; margin-top:8px;">
         <img id="proofPreviewImg" style="max-width:100%; border-radius:8px; border:1px solid var(--line);">
       </div>
