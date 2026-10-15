@@ -14,7 +14,8 @@ import { authHeaders } from '../auth/tenant.js';
 import { applyStoreBranding } from '../ui/branding.js';
 import { t } from '../ui/i18n.js';
 import { renderAll } from '../ui/render.js';
-import { refreshPaymentProjection, ensurePaymentForSyncedOrder } from '../payments/projection.js';
+import { refreshPaymentProjection, ensurePaymentForSyncedOrder, isCanonicalLinkageOnlyPayment } from '../payments/projection.js';
+import { getPayments } from '../payments/state.js';
 
 // Seller sync is authenticated with a tenant-scoped device session.
 // Tenant-wide API keys are not sent by the PWA.
@@ -78,6 +79,7 @@ async function ensureAndPersistPaymentLinkage(order) {
     const paymentId = String((payment && (payment.id || payment.paymentId || payment.payment_id)) || '').trim();
     if (!paymentId) return result;
     const intentId = String((payment && (payment.paymentIntentId || payment.payment_intent_id || payment.intentId)) || '').trim() || null;
+    const linkageOnly = isCanonicalLinkageOnlyPayment(payment);
     const localId = String(order && order.id != null ? order.id : '');
     const serverOrderId = String((order && (order.server_order_id || order.serverOrderId)) || '');
     let changed = false;
@@ -88,9 +90,18 @@ async function ensureAndPersistPaymentLinkage(order) {
       const existing = current.payment_linkage || {};
       if (String(existing.payment_id || '') === paymentId
           && String(existing.payment_intent_id || '') === String(intentId || '')
-          && String(existing.status || '').toUpperCase() === 'LINKED') return current;
+          && String(existing.status || '').toUpperCase() === 'LINKED'
+          && Boolean(existing.canonical_linkage_only) === linkageOnly) return current;
       changed = true;
-      return { ...current, payment_linkage: { status: 'LINKED', payment_id: paymentId, payment_intent_id: intentId } };
+      return {
+        ...current,
+        payment_linkage: {
+          status: 'LINKED',
+          payment_id: paymentId,
+          payment_intent_id: intentId,
+          ...(linkageOnly ? { canonical_linkage_only: true } : {}),
+        },
+      };
     }));
     if (changed) {
       saveJSON(STORAGE_KEYS.orders, orders);
