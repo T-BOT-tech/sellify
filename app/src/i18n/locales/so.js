@@ -66,7 +66,7 @@ export default {
     orderDeleted: "Dalabkii waa la tirtiray",
     orderServed: "Dalabkii waa la gaarsiiyay",
     undo: "Soo celi",
-    todaySales: "Iibka Maanta",
+    todaySales: "Qiimaha Dalabaadka Maanta",
     totalOrders: "Dalabaadka",
     avgOrderVal: "Celcelis Dalab",
     receiptHeader: "RASIIDHKA",
