@@ -65,6 +65,11 @@ export async function ensurePaymentForSyncedOrder(order, options = {}) {
   }
 }
 
+export function isCanonicalLinkageOnlyPayment(payment) {
+  return payment?.metadata?.canonicalLinkageOnly === true
+    || payment?.metadata?.canonical_linkage_only === true;
+}
+
 async function ensurePaymentForSyncedOrderOnce(order, { statusQueryKey = null } = {}) {
   const serverOrderId = String(order?.server_order_id || order?.serverOrderId || '').trim();
   if (!serverOrderId) return { status: 'SKIPPED', reason: 'ORDER_NOT_SYNCED' };
@@ -84,7 +89,13 @@ async function ensurePaymentForSyncedOrderOnce(order, { statusQueryKey = null } 
       requireAccount: true,
     });
     if (route.status !== 'ROUTED' || !route.providerId || !route.paymentAccountId) {
-      return { status: 'DEFERRED', reason: 'NO_ELIGIBLE_PAYMENT_ROUTE' };
+      // Keep canonical order/payment identity linked for recovery, but never
+      // treat the linkage-only shell as an operational or financial payment.
+      return {
+        status: 'DEFERRED',
+        reason: 'NO_ELIGIBLE_PAYMENT_ROUTE',
+        ...(linkageOnlyPayment ? { payment: linkageOnlyPayment } : {}),
+      };
     }
 
     const result = await createPayment({
