@@ -129,6 +129,30 @@ const unknownCatalogSync = await saveQueuedOrders(chatId, [{
 assert.equal(unknownCatalogSync[0].status, 'rejected');
 assert.equal(unknownCatalogSync[0].code, 'CATALOG_ITEM_NOT_FOUND');
 
+const partialLineSync = await saveQueuedOrders(chatId, [{
+  id: 'local-fux42-partial-line',
+  items: [
+    { id: 'product-1', name: 'Test item', qty: 1, price: 500 },
+    null,
+  ],
+}]);
+assert.equal(partialLineSync[0].status, 'rejected');
+assert.equal(partialLineSync[0].code, 'INVALID_ORDER_ITEM',
+  'a malformed line rejects the whole order instead of silently creating a partial sale');
+assert.equal((await (await import('../backend/lib/store-sqlite.js')).getOrders(chatId))
+  .some(order => order.id === 'local-fux42-partial-line'), false);
+
+const canonicalPriceWithoutClientPrice = await saveQueuedOrders(chatId, [{
+  id: 'local-fux42-no-client-price',
+  items: [{ id: 'product-1', name: 'Forged name', qty: 1, price: 'not-a-price' }],
+}]);
+assert.equal(canonicalPriceWithoutClientPrice[0].status, 'synced',
+  'canonical price authority does not require a client-supplied price');
+const noPriceOrder = (await (await import('../backend/lib/store-sqlite.js')).getOrders(chatId))
+  .find(order => order.server_order_id === canonicalPriceWithoutClientPrice[0].order_id);
+assert.equal(noPriceOrder.total, 500);
+
+
 
 let fulfillment = await getOrderFulfillment(chatId, orderId);
 assert.equal(fulfillment, null);
