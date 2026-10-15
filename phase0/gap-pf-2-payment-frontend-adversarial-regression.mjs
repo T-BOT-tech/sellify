@@ -303,6 +303,13 @@ assert.match(orderQueue, /Order payment:/);
 assert.match(orderQueue, /orderPaymentSummary\.status/);
 assert.match(orderQueue, /orderPaymentSummary\.verifiedMinor/);
 assert.match(orderQueue, /orderPaymentSummary\.outstandingMinor/);
+assert.match(orderQueue, /Order payment:/);
+// Never render an arbitrary individual payment state beside the canonical
+// order aggregate: split tenders may have different states and the first
+// projected payment is not the order's financial status.
+assert.doesNotMatch(orderQueue, /getPaymentForOrder/);
+assert.doesNotMatch(orderQueue, /paymentStateLine/);
+assert.doesNotMatch(orderQueue, /Payment Core:.*payment\.state/);
 assert.match(orderQueue, /ORDER_PAYMENT_SUMMARY_TTL_MS/);
 assert.match(orderQueue, /orderPaymentSummaryInFlight/);
 // A failed canonical summary fetch must not leave stale PAID/PARTIAL/UNPAID
