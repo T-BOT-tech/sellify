@@ -9343,9 +9343,38 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         results.push({ local_id: order.id, status: 'rejected', error: 'Order currency does not match the organization currency' });
         continue;
       }
-      const validated = validateAndTotalOrderItems(order.items, expectedCurrency);
-      if (!validated.items.length) {
-        results.push({ local_id: order.id, status: 'rejected', error: 'No valid line items' });
+      if (!Array.isArray(order.items) || order.items.length === 0) {
+        results.push({ local_id: order.id, status: 'rejected', code: 'INVALID_ORDER_ITEMS', error: 'Order items must be a non-empty array' });
+        continue;
+      }
+      // Reject malformed lines instead of silently dropping them and creating
+      // a partial order. Price/name/type are deliberately not validated here:
+      // those are resolved from canonical catalog rows below.
+      const requestedItems = [];
+      let catalogLineError = null;
+      for (const rawItem of order.items) {
+        if (!rawItem || typeof rawItem !== 'object' || Array.isArray(rawItem)) {
+          catalogLineError = { code: 'INVALID_ORDER_ITEM', error: 'Every order line must be an object' };
+          break;
+        }
+        const itemId = rawItem.item_id ?? rawItem.product_id ?? rawItem.id;
+        const qty = Number(rawItem.qty ?? rawItem.quantity);
+        if (itemId == null || String(itemId).trim() === '') {
+          catalogLineError = { code: 'CATALOG_ITEM_ID_REQUIRED', error: 'Every order line must reference a catalog item' };
+          break;
+        }
+        if (!Number.isFinite(qty) || qty <= 0 || Math.floor(qty) < 1) {
+          catalogLineError = { code: 'INVALID_ORDER_ITEM_QUANTITY', error: 'Every order line must have a positive quantity' };
+          break;
+        }
+        if (rawItem.currency != null && normaliseCurrency(rawItem.currency, expectedCurrency) !== expectedCurrency) {
+          catalogLineError = { code: 'ORDER_ITEM_CURRENCY_MISMATCH', error: 'Order line currency does not match the organization currency' };
+          break;
+        }
+        requestedItems.push({ ...rawItem, qty: Math.floor(qty), id: String(itemId) });
+      }
+      if (catalogLineError) {
+        results.push({ local_id: order.id, status: 'rejected', ...catalogLineError });
         continue;
       }
       // Offline clients submit a command, not authoritative product or pricing
@@ -9353,13 +9382,8 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
       // creating the order/payment. In particular, never accept a client price,
       // display name, or product/service type as canonical truth.
       const items = [];
-      let catalogLineError = null;
-      for (const item of validated.items) {
+      for (const item of requestedItems) {
         const itemId = item.item_id ?? item.product_id ?? item.id;
-        if (itemId == null || String(itemId).trim() === '') {
-          catalogLineError = { code: 'CATALOG_ITEM_ID_REQUIRED', error: 'Every order line must reference a catalog item' };
-          break;
-        }
         const row = db.prepare('SELECT * FROM catalog_products WHERE chat_id = ? AND product_id = ?')
           .get(key, String(itemId));
         if (!row) {
