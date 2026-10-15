@@ -146,9 +146,15 @@ try {
   const restored = (await store.getCatalog(seller.chatId)).products.find(p => p.id === 'integrity-item');
   assert.equal(restored.stock, 5);
   assert.equal(db.prepare('SELECT status FROM marketplace_inventory_reservations WHERE seller_order_id = ?').get(sellerOrder.id).status, 'released');
-  assert.equal(db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(sellerOrder.id, payment.id).status, 'REFUNDED');
+  // Cancellation queues a canonical Payment Core refund request; it must
+  // not claim the allocation was refunded before provider confirmation.
+  assert.equal(db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(sellerOrder.id, payment.id).status, 'ALLOCATED');
   assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(sellerOrder.id).status, 'REVERSED');
-  assert.equal(db.prepare('SELECT status FROM marketplace_refunds WHERE seller_order_id = ?').get(sellerOrder.id).status, 'PENDING');
+  const marketplaceRefund = db.prepare('SELECT * FROM marketplace_refunds WHERE seller_order_id = ?').get(sellerOrder.id);
+  assert.equal(marketplaceRefund.status, 'REQUESTED');
+  const canonicalRefund = db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(marketplaceRefund.id);
+  assert.ok(canonicalRefund);
+  assert.equal(canonicalRefund.status, 'REQUESTED');
 
   const ledgerAfterCancellation = db.prepare(`
     SELECT COALESCE(SUM(quantity), 0) AS quantity
@@ -162,6 +168,18 @@ try {
     SELECT COUNT(*) AS c FROM inventory_movements
     WHERE event_id = ?
   `).get(`marketplace-cancel:${master.id}:${seller.chatId}:integrity-item`).c, 1);
+
+  const completedRefund = await store.finalizePaymentRefund(seller.chatId, canonicalRefund.id, {
+    status: 'SUCCEEDED',
+    providerRefundId: 'phase11-4-refund-confirmed',
+    providerTransactionId: 'phase11-4-refund-tx',
+    providerResult: { simulated: true },
+    evidence: { source: 'phase11.4 regression' },
+  });
+  assert.equal(completedRefund.status, 'SUCCEEDED');
+  assert.equal(db.prepare('SELECT state FROM payments WHERE id = ?').get(payment.id).state, 'REFUNDED');
+  assert.equal(db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(sellerOrder.id, payment.id).status, 'REFUNDED');
+  assert.equal(db.prepare('SELECT status FROM marketplace_refunds WHERE id = ?').get(marketplaceRefund.id).status, 'PROCESSED');
 
   // Split-payment hardening: two payments may cover one seller allocation,
   // but verified value may never exceed the canonical seller-order amount.
