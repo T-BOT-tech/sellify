@@ -22,9 +22,6 @@ import yo from './locales/yo.js';
 import ru from './locales/ru.js';
 import pt from './locales/pt.js';
 
-const enWithReceiptPaymentDisclaimer = {
-  ...en,
-  receiptPaymentDisclaimer: "Payment status is not verified by this receipt.",
-};
+en.receiptPaymentDisclaimer = "Payment status is not verified by this receipt.";
 
-export const TRANSLATIONS = { en: enWithReceiptPaymentDisclaimer, am, om, so, sw, es, hi, fr, ar, ha, yo, ru, pt };
+export const TRANSLATIONS = { en, am, om, so, sw, es, hi, fr, ar, ha, yo, ru, pt };
