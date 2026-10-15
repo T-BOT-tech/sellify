@@ -66,7 +66,7 @@ export default {
     orderDeleted: "Pedido eliminado de la cola",
     orderServed: "Pedido marcado como servido",
     undo: "Deshacer",
-    todaySales: "Ventas de Hoy",
+    todaySales: "Valor de Pedidos de Hoy",
     totalOrders: "Pedidos",
     avgOrderVal: "Valor Promed.",
     receiptHeader: "RECIBO",
