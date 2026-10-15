@@ -186,7 +186,9 @@ try {
   assert.match(orderClient, /payment_linkage:\s*\{\s*status:\s*'LINKED',\s*payment_id:\s*paymentId,\s*payment_intent_id:\s*intentId,/s,
     'recovered canonical payment identity is persisted locally for subsequent syncs');
   assert.match(orderClient, /String\(\(order\.payment_linkage && order\.payment_linkage\.status\) \|\| ''\)\.toUpperCase\(\) !== 'LINKED'/,
-    'recovery is limited to orders without an established canonical payment link');
+    'recovery still checks whether a canonical payment link exists');
+  assert.match(orderClient, /Boolean\(order\.payment_linkage && order\.payment_linkage\.canonical_linkage_only\)/,
+    'linkage-only identity shells remain eligible for recovery until a routed payment exists');
 
   const unauthorized = await fetch(baseUrl + '/catalog/' + encodeURIComponent(tenant.chatId), {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
