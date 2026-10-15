@@ -9,6 +9,7 @@ const projection = fs.readFileSync('app/src/payments/projection.js', 'utf8');
 const checkout = fs.readFileSync('app/src/orders/checkout.js', 'utf8');
 const orderQueue = fs.readFileSync('app/src/orders/queue.js', 'utf8');
 const receipts = fs.readFileSync('app/src/orders/receipts.js', 'utf8');
+const translations = fs.readFileSync('app/src/i18n/translations.js', 'utf8');
 const core = fs.readFileSync('backend/lib/payments/payment-core.js', 'utf8');
 const storeSource = fs.readFileSync('backend/lib/store-sqlite.js', 'utf8');
 
@@ -501,10 +502,12 @@ assert.match(commitBlock, /VERIFICATION_CONTEXT_MISMATCH/);
 // Receipts are order documents, not canonical payment confirmations. They must
 // not imply payment acceptance merely because a local order or tender exists.
 assert.match(receipts, /ORDER TOTAL:/);
-assert.ok((receipts.match(/Payment status is not verified by this receipt\./g) || []).length >= 3,
+assert.match(translations, /receiptPaymentDisclaimer: "Payment status is not verified by this receipt\\."/,
+  'missing locale-specific disclaimer translations must fall back to a safe English statement');
+assert.ok((receipts.match(/t\('receiptPaymentDisclaimer'\)/g) || []).length >= 3,
   'plain-text, printed, and canvas receipts must clearly disclaim payment confirmation');
 assert.match(receipts, /Order total/);
-assert.match(receipts, /ctx\.fillText\('Payment status is not verified by this receipt\.'/);
+assert.match(receipts, /ctx\.fillText\(t\('receiptPaymentDisclaimer'\)/);
 
 // The selected payment method is descriptive order metadata, not proof of
 // payment acceptance; keep it consistent across text, print, and image receipts.
