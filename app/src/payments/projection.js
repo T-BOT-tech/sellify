@@ -19,6 +19,17 @@ export async function refreshPaymentProjection() {
   }
 }
 
+function isCanonicalLinkageOnlyPayment(payment) {
+  let metadata = payment?.metadata ?? payment?.metadata_json ?? null;
+  if (typeof metadata === 'string') {
+    try { metadata = JSON.parse(metadata); } catch { metadata = null; }
+  }
+  return metadata?.canonicalLinkageOnly === true
+    || metadata?.canonicalLinkageOnly === 1
+    || metadata?.canonical_linkage_only === true
+    || metadata?.canonical_linkage_only === 1;
+}
+
 function notifyCanonicalPaymentUpdated(payment) {
   if (typeof window === 'undefined') return;
   const orderId = String(payment?.orderId || payment?.order_id || '').trim();
@@ -127,7 +138,10 @@ export async function refreshCanonicalOrderPaymentSummary(orderId) {
 export function getPaymentForOrder(orderId) {
   const id = String(orderId || '');
   if (!id) return null;
-  return getPayments().find(payment => String(payment?.orderId || payment?.order_id || '') === id) || null;
+  return getPayments().find(payment =>
+    String(payment?.orderId || payment?.order_id || '') === id
+      && !isCanonicalLinkageOnlyPayment(payment),
+  ) || null;
 }
 
 
