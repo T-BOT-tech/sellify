@@ -76,4 +76,59 @@ try {
   if(originalDocument===undefined) delete globalThis.document; else globalThis.document=originalDocument;
   if(originalGetComputedStyle===undefined) delete globalThis.getComputedStyle; else globalThis.getComputedStyle=originalGetComputedStyle;
 }
+
 console.log('PASS PF-1 runtime status-query client authentication/idempotency contract');
+
+// Runtime-check that canonical linkage shells remain identity-only and are
+// never queried as financial payments or exposed in the operational projection.
+{
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  const shell = {
+    id: 'linkage-shell-runtime',
+    orderId: 'canonical-order-runtime',
+    state: 'UNPAID',
+    paymentAccountId: null,
+    paymentIntentId: null,
+    metadata: { canonicalLinkageOnly: true },
+  };
+  const requests = [];
+  try {
+    globalThis.window = { location: { origin: 'http://sellify.test' }, addEventListener() {} };
+    globalThis.fetch = async (url, options = {}) => {
+      const requestUrl = String(url);
+      requests.push({ url: requestUrl, options });
+      if (requestUrl.includes('/payments?')) {
+        return { ok: true, status: 200, json: async () => ({ payments: [shell] }) };
+      }
+      if (requestUrl.endsWith('/routing/resolve')) {
+        return { ok: true, status: 200, json: async () => ({ status: 'NO_ROUTE' }) };
+      }
+      throw new Error('Unexpected request while checking linkage-only shell: ' + requestUrl);
+    };
+    const projection = await import('../app/src/payments/projection.js');
+    const paymentState = await import('../app/src/payments/state.js');
+    setConfig({ chatId: 'tenant-runtime', syncUrl: 'http://sellify.test', sessionToken: 'session-runtime' });
+    paymentState.setPayments([shell]);
+
+    assert.equal(projection.getPaymentForOrder('canonical-order-runtime'), null,
+      'a linkage-only shell is not returned as a financial payment');
+    const ensured = await projection.ensurePaymentForSyncedOrder({
+      server_order_id: 'canonical-order-runtime',
+      total: 1000,
+    });
+    assert.equal(ensured.status, 'LINKED_ONLY');
+    assert.equal(ensured.payment.id, 'linkage-shell-runtime');
+    assert.equal(ensured.statusQueried, false);
+    assert.equal(requests.some(request => request.url.endsWith('/status')), false,
+      'linkage-only shell must never trigger provider status query');
+
+    await projection.refreshPaymentProjection();
+    assert.equal(paymentState.getPayments().some(payment => payment.id === 'linkage-shell-runtime'), false,
+      'linkage-only shells are excluded from the operational payment projection');
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;
+  }
+}
+console.log('PASS PF-1 linkage-only shell runtime boundary');
