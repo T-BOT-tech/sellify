@@ -89,6 +89,8 @@ jobs:
         run: npm run test:fux-31-accessibility
       - name: FUX-42 core fulfillment regression
         run: npm run test:fux-42
+      - name: Marketplace checkout, cancellation, and Payment Core refund lifecycle regression
+        run: npm run phase11.4:marketplace-test
       - name: FUX-58 first-service catalog identity regression
         run: npm run test:fux-58
       - name: FUX-59 connected first-sale integration regression
