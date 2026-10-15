@@ -278,6 +278,7 @@
     "test:fux-31": "node phase0/fux-31-frontend-identity-regression.mjs",
     "test:fux-31-accessibility": "node phase0/fux-31-accessibility-regression.mjs",
     "test:fux-42": "node phase0/fux-42-core-fulfillment-regression.mjs",
+    "test:fux-58": "node phase0/fux-58-first-service-catalog-identity-regression.mjs",
     "test:fux-44": "node phase0/fux-44-fulfillment-frontend-authority-regression.mjs",
     "test:fux-46": "node phase0/fux-46-canonical-inventory-mutation-regression.mjs",
     "test:fux-47": "node phase0/fux-47-canonical-inventory-projection-regression.mjs",
@@ -417,7 +418,8 @@
     "test:backup-restore": "node phase0/database-backup-restore-regression.mjs",
     "test:payment-lineage-append-only": "node phase0/payment-lineage-append-only-regression.mjs",
     "gap-1.18:decision-idempotency-test": "node phase0/gap-1.18Q-payment-decision-idempotency-regression.mjs",
-    "gap-1.18:financial-transition-idempotency-test": "node phase0/gap-1.18U-financial-transition-idempotency-regression.mjs"
+    "gap-1.18:financial-transition-idempotency-test": "node phase0/gap-1.18U-financial-transition-idempotency-regression.mjs",
+    "test:fux-59": "node phase0/fux-59-first-sale-connected-integration-regression.mjs"
   },
   "engines": {
     "node": ">=24"

@@ -5423,7 +5423,7 @@ function ensureInventoryOpeningBalances(chatId) {
   ).get(String(tenant.organization_id));
   if (!location) return;
   const products = db.prepare(
-    'SELECT product_id, stock FROM catalog_products WHERE chat_id = ? AND stock IS NOT NULL'
+    'SELECT product_id, stock, product_json FROM catalog_products WHERE chat_id = ? AND stock IS NOT NULL'
   ).all(String(chatId));
   const insert = db.prepare(`
     INSERT OR IGNORE INTO inventory_movements
@@ -5432,6 +5432,9 @@ function ensureInventoryOpeningBalances(chatId) {
     VALUES (?, ?, ?, ?, ?, ?, 'OPENING_BALANCE', 'migration', ?, NULL, NULL, ?, ?, ?, ?)
   `);
   for (const product of products) {
+    // A legacy or untrusted payload may attach stock to a service. Persisted
+    // catalog identity is authoritative, so services never seed inventory.
+    if (parseJSON(product.product_json, {}).type === 'service') continue;
     const eventId = `inventory-opening:${chatId}:${product.product_id}`;
     const occurredAt = tenant.created_at || nowIso();
     insert.run(
@@ -5478,7 +5481,10 @@ function productFromRow(row) {
 
 function orderFromRow(row) {
   const order = parseJSON(row.order_json, {});
-  if (order && typeof order === 'object') delete order._sellifyCustomerIdProvided;
+  if (order && typeof order === 'object') {
+    delete order._sellifyCustomerIdProvided;
+    delete order._sellifyIncomingOrderIdentityHash;
+  }
   return order;
 }
 
@@ -5604,13 +5610,42 @@ export async function getCatalog(chatId) {
 export async function saveCatalog(chatId, incomingProducts) {
   ensureDatabase();
   const key = String(chatId);
-  const products = (Array.isArray(incomingProducts) ? incomingProducts : []).filter(p => p && p.id != null).map(normaliseProduct);
+  // Catalog replacement is destructive by design. Do not silently turn a
+  // malformed request into an empty/partial catalog and delete valid records.
+  if (!Array.isArray(incomingProducts)) {
+    throw Object.assign(new Error('Catalog products must be an array'), { statusCode: 400, code: 'INVALID_CATALOG_PAYLOAD' });
+  }
+  if (incomingProducts.some(product => !product || typeof product !== 'object' || Array.isArray(product)
+    || product.id == null || String(product.id).trim() === '')) {
+    throw Object.assign(new Error('Every catalog item must be an object with a non-empty id'), { statusCode: 400, code: 'INVALID_CATALOG_ITEM' });
+  }
+  const products = incomingProducts.map(normaliseProduct);
   db.exec('BEGIN IMMEDIATE');
   try {
     const current = new Map(db.prepare('SELECT * FROM catalog_products WHERE chat_id = ?').all(key).map(row => [String(row.product_id), row]));
     for (const product of products) {
       const row = current.get(String(product.id));
-      if (!row) { product.stock_revision = 0; continue; }
+      const requestedType = product.type == null || product.type === '' ? null : String(product.type).trim().toLowerCase();
+      if (requestedType && !['product', 'service'].includes(requestedType)) {
+        throw Object.assign(new Error('Catalog item type must be product or service'), { statusCode: 400, code: 'INVALID_CATALOG_ITEM_TYPE' });
+      }
+      if (!row) {
+        product.type = requestedType || 'product';
+        if (product.type === 'service' && product.marketplace_listed) {
+          throw Object.assign(new Error('Marketplace checkout does not support service items yet'), { statusCode: 409, code: 'SERVICE_MARKETPLACE_UNSUPPORTED' });
+        }
+        product.stock_revision = 0;
+        continue;
+      }
+      const storedProduct = parseJSON(row.product_json, {});
+      const currentType = storedProduct.type === 'service' ? 'service' : 'product';
+      product.type = requestedType || currentType;
+      if (product.type !== currentType) {
+        throw Object.assign(new Error('Catalog item type is immutable; create a new item to change between product and service'), { statusCode: 409, code: 'CATALOG_ITEM_TYPE_CONFLICT' });
+      }
+      if (product.type === 'service' && product.marketplace_listed) {
+        throw Object.assign(new Error('Marketplace checkout does not support service items yet'), { statusCode: 409, code: 'SERVICE_MARKETPLACE_UNSUPPORTED' });
+      }
       const currentRevision = Number.isInteger(row.stock_revision) ? row.stock_revision : 0;
       const incomingRevision = Number.isInteger(product.stock_revision) ? product.stock_revision : null;
       if (incomingRevision === null) {
@@ -6049,6 +6084,7 @@ export async function createPaymentWithIntent(chatId, input = {}, actor = null) 
         ), 0) AS amount_minor
         FROM payments
         WHERE organization_id = ? AND order_id = ?
+          AND COALESCE(json_extract(metadata_json, '$.canonicalLinkageOnly'), 0) != 1
           AND state IN ('UNPAID','CLAIMED','RECEIVED','VERIFIED','RECONCILED','PARTIAL')
       `).get(organizationId, String(orderId));
       const reservedMinor = Number(reserved?.amount_minor || 0);
@@ -7746,6 +7782,86 @@ export async function createPaymentRefundRequest(chatId, input = {}, actor = nul
   return { refund: normalizePaymentRefund(refund), duplicate: false };
 }
 
+/**
+ * Retry a marketplace refund only after Payment Core has definitively marked
+ * the prior attempt FAILED. UNKNOWN/PROCESSING outcomes are deliberately not
+ * retryable because the provider may already have moved the money.
+ *
+ * This creates a new durable Payment Core refund attempt while retaining the
+ * failed marketplace_refunds row as history. It never touches inventory.
+ */
+export async function retryMarketplaceRefund(chatId, marketplaceRefundId, actor = null) {
+  const db = ensureDatabase();
+  const tenant = getTenantByChatId(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const prior = db.prepare(`
+      SELECT mr.*, pr.status AS payment_refund_status
+      FROM marketplace_refunds mr
+      JOIN payment_refunds pr ON pr.id = mr.id AND pr.organization_id = mr.organization_id
+      WHERE mr.id = ? AND mr.organization_id = ?
+    `).get(String(marketplaceRefundId), tenant.organizationId);
+    if (!prior) throw Object.assign(new Error('Marketplace refund not found'), { statusCode: 404, code: 'MARKETPLACE_REFUND_NOT_FOUND' });
+    if (prior.status !== 'REJECTED' || prior.payment_refund_status !== 'FAILED') {
+      throw Object.assign(
+        new Error('Only definitively failed marketplace refunds can be retried'),
+        { statusCode: 409, code: 'MARKETPLACE_REFUND_NOT_RETRYABLE' }
+      );
+    }
+
+    const attempts = Number(db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM marketplace_refunds
+      WHERE seller_order_id = ? AND payment_id = ? AND reason = ?
+    `).get(prior.seller_order_id, prior.payment_id, prior.reason).count || 0);
+    const request = await createPaymentRefundRequest(chatId, {
+      paymentId: prior.payment_id,
+      amountMinor: Number(prior.amount_minor),
+      currency: prior.currency,
+      idempotencyKey: `marketplace-refund-retry:${prior.id}:${attempts}`,
+      reason: prior.reason || 'Marketplace refund retry',
+    }, actor);
+    if (request.duplicate) {
+      const linked = db.prepare('SELECT * FROM marketplace_refunds WHERE id = ? AND organization_id = ?')
+        .get(request.refund.id, tenant.organizationId);
+      if (linked) {
+        db.exec('COMMIT');
+        return { refund: linked, duplicate: true };
+      }
+      throw Object.assign(new Error('Refund retry idempotency key already exists without marketplace linkage'), {
+        statusCode: 409, code: 'MARKETPLACE_REFUND_RETRY_LINK_MISSING',
+      });
+    }
+
+    const retry = {
+      ...prior,
+      id: request.refund.id,
+      status: 'REQUESTED',
+      created_at: nowIso(),
+      processed_at: null,
+    };
+    db.prepare(`
+      INSERT INTO marketplace_refunds
+        (id, marketplace_order_id, seller_order_id, payment_id, organization_id,
+         amount_minor, currency, reason, status, created_at, processed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTED', ?, NULL)
+    `).run(
+      retry.id, retry.marketplace_order_id, retry.seller_order_id, retry.payment_id,
+      retry.organization_id, retry.amount_minor, retry.currency, retry.reason, retry.created_at
+    );
+    audit(String(chatId), 'marketplace.refund.retry_requested', retry.payment_id, actor?.userId || actor?.user_id || null, {
+      priorRefundId: prior.id, refundId: retry.id, attempt: attempts,
+    });
+    db.exec('COMMIT');
+    return { refund: db.prepare('SELECT * FROM marketplace_refunds WHERE id = ?').get(retry.id), duplicate: false };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
 export async function finalizePaymentRefund(chatId, refundId, input = {}, actor = null) {
   const db = ensureDatabase();
   const tenant = getTenantByChatId(chatId);
@@ -7771,6 +7887,11 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
         input.evidence == null ? null : json(input.evidence),
         input.failureCode || input.failure_code || null, now, now, refund.id, tenant.organizationId
       );
+      const marketplaceRefundStatus = ['FAILED', 'REJECTED'].includes(status) ? 'REJECTED' : null;
+      if (marketplaceRefundStatus) {
+        db.prepare('UPDATE marketplace_refunds SET status = ?, processed_at = ? WHERE id = ? AND organization_id = ?')
+          .run(marketplaceRefundStatus, now, refund.id, tenant.organizationId);
+      }
       audit(String(chatId), 'payment.refund.result', payment.id, actor?.userId || null, { refundId: refund.id, status: status || 'UNKNOWN' });
       db.exec('COMMIT');
       return normalizePaymentRefund(db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(refund.id));
@@ -7790,7 +7911,42 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
     );
     if (fullRefund) {
       db.prepare('UPDATE payments SET state = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND state IN (\'VERIFIED\',\'RECONCILED\')').run('REFUNDED', now, payment.id, tenant.organizationId);
+      // A Payment Core payment can have more than one marketplace allocation.
+      // Resolve the allocation through this refund's seller-order association;
+      // never choose an arbitrary allocation by payment_id alone.
+      const marketplaceRefund = db.prepare(`
+        SELECT seller_order_id
+        FROM marketplace_refunds
+        WHERE id = ? AND payment_id = ? AND organization_id = ?
+      `).get(refund.id, payment.id, tenant.organizationId);
+      if (marketplaceRefund?.seller_order_id) {
+        const marketplaceAllocation = db.prepare(`
+          SELECT id, seller_order_id
+          FROM marketplace_payment_allocations
+          WHERE payment_id = ? AND seller_order_id = ? AND organization_id = ?
+          LIMIT 1
+        `).get(payment.id, marketplaceRefund.seller_order_id, tenant.organizationId);
+        if (marketplaceAllocation) {
+          db.prepare("UPDATE marketplace_payment_allocations SET status = 'REFUNDED', updated_at = ? WHERE id = ?")
+            .run(now, marketplaceAllocation.id);
+          // A split payment can fund one seller order through multiple payment
+          // allocations. Do not reverse settlement while any allocation for
+          // that seller order remains active.
+          const activeAllocations = Number(db.prepare(`
+            SELECT COUNT(*) AS count
+            FROM marketplace_payment_allocations
+            WHERE seller_order_id = ? AND organization_id = ?
+              AND status NOT IN ('REFUNDED', 'REJECTED', 'REVERSED')
+          `).get(marketplaceAllocation.seller_order_id, tenant.organizationId).count || 0);
+          if (activeAllocations === 0) {
+            db.prepare("UPDATE marketplace_settlements SET status = 'REVERSED' WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')")
+              .run(marketplaceAllocation.seller_order_id);
+          }
+        }
+      }
     }
+    db.prepare('UPDATE marketplace_refunds SET status = \'PROCESSED\', processed_at = ? WHERE id = ? AND organization_id = ?')
+      .run(now, refund.id, tenant.organizationId);
     db.prepare(`INSERT INTO payment_ledger_entries
       (id,payment_id,organization_id,entry_type,amount_minor,currency,from_state,to_state,actor_id,reason,metadata_json,created_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(
@@ -7868,6 +8024,7 @@ export async function getOrderPaymentSummary(chatId, orderId) {
            ), 0) AS amount_minor
     FROM payments p
     WHERE p.organization_id = ? AND p.order_id = ?
+      AND COALESCE(json_extract(p.metadata_json, '$.canonicalLinkageOnly'), 0) != 1
     GROUP BY p.state
   `).all(organizationId, id);
 
@@ -8144,14 +8301,23 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
   const items = Array.isArray(orderJson?.items) ? orderJson.items : [];
   const defaultLocation = db.prepare("SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1").get(String(fulfillmentRow.organization_id));
   const locationId = String(fulfillmentRow.location_id || defaultLocation?.id || '');
-  if (!locationId) throw Object.assign(new Error('Fulfillment inventory location is required'), { statusCode: 409, code: 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED' });
   const movements = [];
+  // One fulfillment creates at most one SALE movement per canonical catalog item.
+  // Aggregate duplicate order lines so stock checks and movements use the full quantity.
+  const quantitiesByProduct = new Map();
   for (const item of items) {
     const productId = String(item?.product_id ?? item?.productId ?? item?.item_id ?? item?.id ?? '').trim();
     const quantity = Number(item?.qty ?? item?.quantity ?? 0);
     if (!productId || !Number.isFinite(quantity) || quantity <= 0) continue;
-    const product = db.prepare('SELECT product_id FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
-    if (!product) throw Object.assign(new Error('Fulfillment product not found'), { statusCode: 409, code: 'FULFILLMENT_PRODUCT_NOT_FOUND', productId });
+    quantitiesByProduct.set(productId, (quantitiesByProduct.get(productId) || 0) + quantity);
+  }
+  for (const [productId, quantity] of quantitiesByProduct) {
+    const productRow = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
+    if (!productRow) throw Object.assign(new Error('Fulfillment product not found'), { statusCode: 409, code: 'FULFILLMENT_PRODUCT_NOT_FOUND', productId });
+    // The persisted catalog type is authoritative. An order line's client-supplied
+    // type must never let a physical product bypass its inventory consequence.
+    if (parseJSON(productRow.product_json, {}).type === 'service') continue;
+    if (!locationId) throw Object.assign(new Error('Fulfillment inventory location is required'), { statusCode: 409, code: 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED' });
     const balance = Number(db.prepare('SELECT COALESCE(SUM(quantity), 0) AS quantity FROM inventory_movements WHERE organization_id = ? AND location_id = ? AND product_id = ?').get(String(fulfillmentRow.organization_id), locationId, productId)?.quantity || 0);
     if (balance < quantity) throw Object.assign(new Error('Insufficient inventory for fulfillment'), { statusCode: 409, code: 'FULFILLMENT_INSUFFICIENT_INVENTORY', productId, available: balance, requested: quantity });
     const eventId = `fulfillment-sale:${fulfillmentRow.id}:${productId}`;
@@ -9267,7 +9433,7 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         const currencyMismatch = order.currency != null
           && normaliseCurrency(order.currency, expectedCurrency) !== expectedCurrency;
         const identityMismatch = currencyMismatch
-          || queuedOrderIdentityHash(order, expectedCurrency) !== queuedOrderIdentityHash(storedOrder, expectedCurrency, true);
+          || queuedOrderIdentityHash(order, expectedCurrency) !== (storedOrder._sellifyIncomingOrderIdentityHash || queuedOrderIdentityHash(storedOrder, expectedCurrency, true));
         if (identityMismatch) {
           results.push({
             local_id: order.id,
@@ -9297,11 +9463,69 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         results.push({ local_id: order.id, status: 'rejected', error: 'Order currency does not match the organization currency' });
         continue;
       }
-      const { items, total } = validateAndTotalOrderItems(order.items, expectedCurrency);
-      if (!items.length) {
-        results.push({ local_id: order.id, status: 'rejected', error: 'No valid line items' });
+      if (!Array.isArray(order.items) || order.items.length === 0) {
+        results.push({ local_id: order.id, status: 'rejected', code: 'INVALID_ORDER_ITEMS', error: 'Order items must be a non-empty array' });
         continue;
       }
+      // Reject malformed lines instead of silently dropping them and creating
+      // a partial order. Price/name/type are deliberately not validated here:
+      // those are resolved from canonical catalog rows below.
+      const requestedItems = [];
+      let catalogLineError = null;
+      for (const rawItem of order.items) {
+        if (!rawItem || typeof rawItem !== 'object' || Array.isArray(rawItem)) {
+          catalogLineError = { code: 'INVALID_ORDER_ITEM', error: 'Every order line must be an object' };
+          break;
+        }
+        const itemId = rawItem.item_id ?? rawItem.product_id ?? rawItem.id;
+        const qty = Number(rawItem.qty ?? rawItem.quantity);
+        if (itemId == null || String(itemId).trim() === '') {
+          catalogLineError = { code: 'CATALOG_ITEM_ID_REQUIRED', error: 'Every order line must reference a catalog item' };
+          break;
+        }
+        if (!Number.isFinite(qty) || qty <= 0 || Math.floor(qty) < 1) {
+          catalogLineError = { code: 'INVALID_ORDER_ITEM_QUANTITY', error: 'Every order line must have a positive quantity' };
+          break;
+        }
+        if (rawItem.currency != null && normaliseCurrency(rawItem.currency, expectedCurrency) !== expectedCurrency) {
+          catalogLineError = { code: 'ORDER_ITEM_CURRENCY_MISMATCH', error: 'Order line currency does not match the organization currency' };
+          break;
+        }
+        requestedItems.push({ ...rawItem, qty: Math.floor(qty), id: String(itemId) });
+      }
+      if (catalogLineError) {
+        results.push({ local_id: order.id, status: 'rejected', ...catalogLineError });
+        continue;
+      }
+      // Offline clients submit a command, not authoritative product or pricing
+      // facts. Resolve each line against this tenant's canonical catalog before
+      // creating the order/payment. In particular, never accept a client price,
+      // display name, or product/service type as canonical truth.
+      const items = [];
+      for (const item of requestedItems) {
+        const itemId = item.item_id ?? item.product_id ?? item.id;
+        const row = db.prepare('SELECT * FROM catalog_products WHERE chat_id = ? AND product_id = ?')
+          .get(key, String(itemId));
+        if (!row) {
+          catalogLineError = { code: 'CATALOG_ITEM_NOT_FOUND', error: `Catalog item not found: ${String(itemId)}` };
+          break;
+        }
+        const product = productFromRow(row);
+        items.push({
+          ...item,
+          id: product.id,
+          product_id: product.id,
+          name: product.name,
+          price: product.price,
+          currency: expectedCurrency,
+          type: product.type === 'service' ? 'service' : 'product',
+        });
+      }
+      if (catalogLineError) {
+        results.push({ local_id: order.id, status: 'rejected', ...catalogLineError });
+        continue;
+      }
+      const total = items.reduce((sum, item) => sum + item.qty * item.price, 0);
       let customerId = order.customer_id ? String(order.customer_id) : null;
       if (order.customer && typeof order.customer === 'object') {
         const customer = upsertCustomerSync(key, order.customer);
@@ -9327,6 +9551,9 @@ export async function saveQueuedOrders(chatId, queuedOrders) {
         // order reads. It distinguishes an explicit customer binding from a
         // canonical ID inferred from name/phone during first synchronization.
         _sellifyCustomerIdProvided: Boolean(order.customer_id ?? order.customerId ?? order.customer?.id),
+        // Keep a private fingerprint of the original client command so an
+        // unchanged offline retry remains idempotent after canonicalization.
+        _sellifyIncomingOrderIdentityHash: queuedOrderIdentityHash(order, expectedCurrency),
         items,
         total,
         currency: expectedCurrency,
@@ -9501,6 +9728,9 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
         const row = db.prepare('SELECT * FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(sellerId, itemId);
         if (!row) throw Object.assign(new Error(`Item no longer listed: ${itemId}`), { statusCode: 409 });
         const product = productFromRow(row);
+        if (product.type === 'service') {
+          throw Object.assign(new Error('Marketplace checkout does not support service items yet'), { statusCode: 409, code: 'SERVICE_MARKETPLACE_UNSUPPORTED' });
+        }
         if (!product.marketplace_listed) {
           throw Object.assign(new Error(`Item no longer listed: ${itemId}`), { statusCode: 409 });
         }
@@ -9696,6 +9926,29 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
     ).get(id);
 
     if (target === 'cancelled') {
+      // Cancellation is only safe before physical handoff and before funds have
+      // been settled to the seller. Those cases require an explicit return or
+      // settlement-reversal workflow, not a normal order-status transition.
+      if (canonicalSeller) {
+        const fulfillment = db.prepare(
+          'SELECT status FROM marketplace_fulfillments WHERE seller_order_id = ?'
+        ).get(canonicalSeller.id);
+        if (['picked_up', 'delivered'].includes(String(fulfillment?.status || '').toLowerCase())) {
+          throw Object.assign(
+            new Error('Marketplace order cannot be cancelled after courier pickup or delivery; use the return workflow'),
+            { statusCode: 409, code: 'MARKETPLACE_FULFILLMENT_ALREADY_HANDED_OFF' }
+          );
+        }
+        const settled = db.prepare(
+          "SELECT 1 AS found FROM marketplace_settlements WHERE seller_order_id = ? AND status = 'SETTLED' LIMIT 1"
+        ).get(canonicalSeller.id);
+        if (settled) {
+          throw Object.assign(
+            new Error('Marketplace order cannot be cancelled after seller settlement; use the refund and settlement adjustment workflow'),
+            { statusCode: 409, code: 'MARKETPLACE_SETTLEMENT_ALREADY_COMPLETED' }
+          );
+        }
+      }
       for (const item of Array.isArray(order.items) ? order.items : []) {
         const itemId = String(item?.item_id || '').trim();
         const qty = Math.floor(Number(item?.qty));
@@ -9745,30 +9998,48 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
           LEFT JOIN payments p ON p.id = a.payment_id
           WHERE a.seller_order_id = ? AND a.status IN ('ALLOCATED','PARTIAL')
         `).all(canonicalSeller.id);
+        // Unpaid allocations have no money to refund; close them as reversed.
+        // Paid allocations remain allocated while their canonical refund is pending.
+        db.prepare(`
+          UPDATE marketplace_payment_allocations
+          SET status = 'REVERSED', updated_at = ?
+          WHERE seller_order_id = ? AND status = 'UNPAID'
+        `).run(nowIso(), canonicalSeller.id);
+
+        // Settlement reversal is a financial outcome, not a side effect of
+        // cancelling the order. Keep the seller settlement on hold while any
+        // verified payment refund is awaiting provider confirmation.
+        let refundPending = false;
         for (const allocation of allocations) {
           const paidAndVerified = ['VERIFIED', 'RECONCILED'].includes(String(allocation.payment_state || '').toUpperCase());
           if (!paidAndVerified || Number(allocation.amount_minor) <= 0 || !allocation.payment_id) continue;
+          // Request the refund through Payment Core. Marketplace cancellation is
+          // not proof that money was returned, so the allocation must remain
+          // ALLOCATED until the canonical refund lifecycle confirms success.
+          const refundRequest = await createPaymentRefundRequest(key, {
+            paymentId: allocation.payment_id,
+            amountMinor: Number(allocation.amount_minor),
+            currency: allocation.currency,
+            idempotencyKey: `marketplace-cancel:${order.marketplace_order_id}:${allocation.id}`,
+            reason: 'Marketplace order cancellation',
+          });
           db.prepare(`
             INSERT INTO marketplace_refunds
               (id, marketplace_order_id, seller_order_id, payment_id, organization_id, amount_minor, currency, reason, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTED', ?)
           `).run(
-            crypto.randomUUID(), allocation.marketplace_order_id, allocation.seller_order_id,
+            refundRequest.refund.id, allocation.marketplace_order_id, allocation.seller_order_id,
             allocation.payment_id, allocation.organization_id, allocation.amount_minor,
             allocation.currency, 'Marketplace order cancellation', nowIso()
           );
-          db.prepare(`
-            UPDATE marketplace_payment_allocations
-            SET status = 'REFUNDED', updated_at = ?
-            WHERE id = ?
-          `).run(nowIso(), allocation.id);
+          refundPending = true;
         }
 
         db.prepare(`
           UPDATE marketplace_settlements
-          SET status = 'REVERSED'
+          SET status = ?
           WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')
-        `).run(canonicalSeller.id);
+        `).run(refundPending ? 'HELD' : 'REVERSED', canonicalSeller.id);
 
         db.prepare(`
           UPDATE marketplace_fulfillments
@@ -9836,10 +10107,18 @@ export async function getMarketplaceOrderTracking(marketplaceOrderId, trackingTo
     return a.length === b.length && crypto.timingSafeEqual(a, b);
   });
   if (!authorised) throw Object.assign(new Error('Invalid tracking token'), { statusCode: 404 });
+  const sellerStatuses = rows.map(row => String(row.status || orderFromRow(row).status || 'queued').toLowerCase());
+  const activeStatuses = sellerStatuses.filter(status => status !== 'cancelled');
+  let overallStatus = 'queued';
+  if (activeStatuses.length === 0) overallStatus = 'cancelled';
+  else if (activeStatuses.every(status => status === 'completed')) overallStatus = 'completed';
+  else if (activeStatuses.includes('ready')) overallStatus = 'in_progress';
+  else if (activeStatuses.includes('preparing')) overallStatus = 'in_progress';
+  else if (activeStatuses.every(status => ['confirmed', 'completed'].includes(status))) overallStatus = 'confirmed';
   return {
     marketplace_order_id: id,
     created_at: Math.min(...rows.map(r => Number(r.created_at) || Date.now())),
-    status: rows.some(r => String(r.status) === 'cancelled') ? 'cancelled' : rows.every(r => String(r.status) === 'completed') ? 'completed' : rows.some(r => ['preparing','ready'].includes(String(r.status))) ? 'in_progress' : rows.every(r => String(r.status) === 'confirmed' || String(r.status) === 'completed') ? 'confirmed' : 'queued',
+    status: overallStatus,
     sellers: rows.map(row => {
       const order = orderFromRow(row);
       return { seller_name: getTenant(row.chat_id)?.sellerName || 'Seller', status: order.status || row.status || 'queued', item_count: Array.isArray(order.items) ? order.items.reduce((n, item) => n + Number(item.qty || 0), 0) : 0, total: order.total || 0, currency: normaliseCurrency(row.currency || order.currency || parseJSON(db.prepare('SELECT branding_json FROM tenants WHERE chat_id = ?').get(row.chat_id)?.branding_json, {})?.currency, 'ETB') };

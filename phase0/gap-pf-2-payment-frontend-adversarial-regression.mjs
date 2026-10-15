@@ -8,6 +8,8 @@ const state = fs.readFileSync('app/src/payments/state.js', 'utf8');
 const projection = fs.readFileSync('app/src/payments/projection.js', 'utf8');
 const checkout = fs.readFileSync('app/src/orders/checkout.js', 'utf8');
 const orderQueue = fs.readFileSync('app/src/orders/queue.js', 'utf8');
+const receipts = fs.readFileSync('app/src/orders/receipts.js', 'utf8');
+const translations = fs.readFileSync('app/src/i18n/translations.js', 'utf8');
 const core = fs.readFileSync('backend/lib/payments/payment-core.js', 'utf8');
 const storeSource = fs.readFileSync('backend/lib/store-sqlite.js', 'utf8');
 
@@ -44,10 +46,28 @@ assert.match(state, /In-memory frontend projection only/);
 assert.doesNotMatch(state, /localStorage|saveJSON|STORAGE_KEYS/);
 assert.doesNotMatch(client, /providerToken|botToken|secret|credential/i);
 
+// Receipts may display the selected payment method, but must not infer a
+// canonical payment outcome from local order metadata.
+assert.match(receipts, /t\('paymentMethod'\).*o\.payment_method_name/);
+assert.match(receipts, /escapeHtml\(o\.payment_method_name\)/);
+assert.match(receipts, /\$\{paymentMethodHtml\}/,
+  'printed receipts must include the escaped selected payment method when available');
+assert.match(receipts, /ctx\.fillText\(t\('paymentMethod'\)/);
+assert.doesNotMatch(receipts, /o\.payment_status|o\.payment_state|o\.state\s*===\s*['\"](?:PAID|VERIFIED|PARTIAL)['\"]/);
+
 // Payment projection may query and render canonical state, but checkout must not
 // create ledger entries or call PaymentCore directly.
 assert.match(projection, /listPayments/);
 assert.match(projection, /refreshCanonicalPaymentStatus/);
+const orderPaymentEnsureStart = projection.indexOf('async function ensurePaymentForSyncedOrderOnce');
+assert.notEqual(orderPaymentEnsureStart, -1, 'order-sync payment creation helper exists');
+const orderPaymentEnsureBlock = projection.slice(orderPaymentEnsureStart, orderPaymentEnsureStart + 3600);
+assert.match(orderPaymentEnsureBlock, /paymentCommandKey\('create-order', serverOrderId\)/,
+  'payment creation idempotency is bound to canonical server order identity');
+assert.match(orderPaymentEnsureBlock, /source: 'SELLIFY_FRONTEND_ORDER_SYNC'/,
+  'order-sync payment creation retains stable provenance metadata');
+assert.doesNotMatch(orderPaymentEnsureBlock, /localOrderId/,
+  'device-local IDs cannot make retries for the same canonical order conflict on idempotency hash');
 assert.doesNotMatch(checkout, /payment_ledger_entries|payments\/ledger|createPayment\(/);
 
 // The public frontend contract exposes only bounded HTTP error semantics.
@@ -294,8 +314,40 @@ assert.match(orderQueue, /Order payment:/);
 assert.match(orderQueue, /orderPaymentSummary\.status/);
 assert.match(orderQueue, /orderPaymentSummary\.verifiedMinor/);
 assert.match(orderQueue, /orderPaymentSummary\.outstandingMinor/);
+assert.match(orderQueue, /Order payment:/);
+// Never render an arbitrary individual payment state beside the canonical
+// order aggregate: split tenders may have different states and the first
+// projected payment is not the order's financial status.
+assert.doesNotMatch(orderQueue, /getPaymentForOrder/);
+assert.doesNotMatch(orderQueue, /paymentStateLine/);
+assert.doesNotMatch(orderQueue, /Payment Core:.*payment\.state/);
+// An attached image is supporting evidence only, not a verified payment claim.
+assert.match(orderQueue, /evidence attached/);
+assert.doesNotMatch(orderQueue, /proof attached/);
+const checkoutHtml = fs.readFileSync('app/index.html', 'utf8');
+const englishLocale = fs.readFileSync('app/src/i18n/locales/en.js', 'utf8');
+assert.match(checkoutHtml, /data-i18n="paymentEvidenceNotice"/);
+assert.match(checkoutHtml, /Payment evidence image \(optional\)/);
+assert.match(englishLocale, /confirmPayment: "Payment details"/);
+assert.match(englishLocale, /captureProof: "Payment evidence image \(optional\)"/);
+assert.match(englishLocale, /paymentEvidenceNotice: "An uploaded image is supporting evidence only; it does not confirm that payment was received\."/);
 assert.match(orderQueue, /ORDER_PAYMENT_SUMMARY_TTL_MS/);
 assert.match(orderQueue, /orderPaymentSummaryInFlight/);
+// A failed canonical summary fetch must not leave stale PAID/PARTIAL/UNPAID
+// text in the ticket or an endless "checking…" state. The unavailable marker
+// suppresses immediate request loops and permits retry after the short TTL.
+assert.match(orderQueue, /orderPaymentSummaryErrors\.set\(key, Date\.now\(\)\)/);
+assert.match(orderQueue, /getOrderPaymentSummaryError\(o\.server_order_id\)/);
+assert.match(orderQueue, /Order payment: status or amounts unavailable · will retry/);
+assert.match(orderQueue, /Date\.now\(\) - failedAt >= ORDER_PAYMENT_SUMMARY_TTL_MS/);
+assert.match(orderQueue, /orderPaymentSummaryErrors\.clear\(\)/);
+// In-flight order-level summaries are generation-bound: invalidation while a
+// request is pending must prevent its stale response from repopulating cache.
+assert.match(orderQueue, /orderPaymentSummaryGeneration = new Map\(\)/);
+assert.match(orderQueue, /bumpOrderPaymentSummaryGeneration\(key\)/);
+assert.match(orderQueue, /const requestGeneration = orderPaymentSummaryGeneration\.get\(key\) \|\| 0/);
+assert.match(orderQueue, /orderPaymentSummaryGeneration\.get\(key\) \|\| 0\) !== requestGeneration/);
+assert.match(orderQueue, /if \(\(orderPaymentSummaryGeneration\.get\(key\) \|\| 0\) !== requestGeneration\) renderQueue\(\)/);
 
 // Frontend canonical snapshot certification:
 // a successful tenant-scoped payment list replaces the projection snapshot;
@@ -446,5 +498,42 @@ assert.match(commitBlock, /provider_transaction_id/);
 assert.match(commitBlock, /PROVIDER_TRANSACTION_DUPLICATE/);
 assert.match(commitBlock, /assertVerificationFreshness/);
 assert.match(commitBlock, /VERIFICATION_CONTEXT_MISMATCH/);
+
+// Receipts are order documents, not canonical payment confirmations. They must
+// not imply payment acceptance merely because a local order or tender exists.
+assert.match(receipts, /ORDER TOTAL:/);
+assert.match(translations, /receiptPaymentDisclaimer = "Payment status is not verified by this receipt[.]"/,
+  'missing locale-specific disclaimer translations must fall back to a safe English statement');
+assert.ok((receipts.match(/t\('receiptPaymentDisclaimer'\)/g) || []).length >= 3,
+  'plain-text, printed, and canvas receipts must clearly disclaim payment confirmation');
+assert.match(receipts, /escapeHtml\(t\('total'\)\)/);
+assert.match(receipts, /ctx\.fillText\(t\('receiptPaymentDisclaimer'\)/);
+
+// The selected payment method is descriptive order metadata, not proof of
+// payment acceptance; keep it consistent across text, print, and image receipts.
+assert.match(receipts, /t\('paymentMethod'\).*o\.payment_method_name/);
+assert.match(receipts, /const paymentMethodHtml = o\.payment_method_name/);
+assert.match(receipts, /ctx\.fillText\(t\('paymentMethod'\)/);
+assert.match(receipts, /paymentMethodHeight/);
+
+// Daily queue metrics describe order value, not confirmed financial receipts.
+// Canonical payment acceptance is fetched separately from Payment Core.
+assert.match(orderQueue, /const totalOrderValue = todaysOrders\.reduce/);
+assert.doesNotMatch(orderQueue, /const totalRevenue\s*=/);
+assert.match(orderQueue, /t\('todaySales'\)/);
+const dailySummaryLocales = {
+  en: "Today's Order Value",
+  am: "የዛሬ የትዕዛዝ ዋጋ",
+  es: "Valor de Pedidos de Hoy",
+  hi: "आज के ऑर्डर का मूल्य",
+  om: "Gatii Ajajoota Har'aa",
+  so: "Qiimaha Dalabaadka Maanta",
+  sw: "Thamani ya Oda za Leo",
+};
+for (const [locale, label] of Object.entries(dailySummaryLocales)) {
+  const source = fs.readFileSync(`app/src/i18n/locales/${locale}.js`, 'utf8');
+  assert.ok(source.includes(`todaySales: ${JSON.stringify(label)}`),
+    `${locale} daily summary must say order value rather than imply confirmed sales`);
+}
 
 console.log('PASS PF-2 payment frontend adversarial boundary regression');

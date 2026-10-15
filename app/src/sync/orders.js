@@ -4,7 +4,7 @@
 import { STORAGE_KEYS } from '../constants.js';
 import { config, orders, setOrders } from '../state.js';
 import { saveJSON } from '../storage/json.js';
-import { authHeaders as tenantAuthHeaders } from '../auth/tenant.js';
+import { authHeaders } from '../auth/tenant.js';
 // Phase 8 fix (see modularization plan §5, Phase 8): these used to come
 // from '../main.js', which only re-exported them from their real owning
 // module. That made main.js and every feature file that needed a toast,
@@ -14,7 +14,8 @@ import { authHeaders as tenantAuthHeaders } from '../auth/tenant.js';
 import { applyStoreBranding } from '../ui/branding.js';
 import { t } from '../ui/i18n.js';
 import { renderAll } from '../ui/render.js';
-import { refreshPaymentProjection, ensurePaymentForSyncedOrder } from '../payments/projection.js';
+import { refreshPaymentProjection, ensurePaymentForSyncedOrder, isCanonicalLinkageOnlyPayment } from '../payments/projection.js';
+import { getPayments } from '../payments/state.js';
 
 // Seller sync is authenticated with a tenant-scoped device session.
 // Tenant-wide API keys are not sent by the PWA.
@@ -71,11 +72,69 @@ async function pullNewOrders() {
   }
 }
 
+async function ensureAndPersistPaymentLinkage(order) {
+  try {
+    const result = await ensurePaymentForSyncedOrder(order);
+    const payment = result && result.payment;
+    const paymentId = String((payment && (payment.id || payment.paymentId || payment.payment_id)) || '').trim();
+    if (!paymentId) return result;
+    const intentId = String((payment && (payment.paymentIntentId || payment.payment_intent_id || payment.intentId)) || '').trim() || null;
+    const linkageOnly = isCanonicalLinkageOnlyPayment(payment);
+    const localId = String(order && order.id != null ? order.id : '');
+    const serverOrderId = String((order && (order.server_order_id || order.serverOrderId)) || '');
+    let changed = false;
+    setOrders(orders.map(current => {
+      const matches = (localId && String(current && current.id != null ? current.id : '') === localId)
+        || (serverOrderId && String((current && (current.server_order_id || current.serverOrderId)) || '') === serverOrderId);
+      if (!matches) return current;
+      const existing = current.payment_linkage || {};
+      if (String(existing.payment_id || '') === paymentId
+          && String(existing.payment_intent_id || '') === String(intentId || '')
+          && String(existing.status || '').toUpperCase() === 'LINKED'
+          && Boolean(existing.canonical_linkage_only) === linkageOnly) return current;
+      changed = true;
+      return {
+        ...current,
+        payment_linkage: {
+          status: 'LINKED',
+          payment_id: paymentId,
+          payment_intent_id: intentId,
+          ...(linkageOnly ? { canonical_linkage_only: true } : {}),
+        },
+      };
+    }));
+    if (changed) {
+      saveJSON(STORAGE_KEYS.orders, orders);
+      renderAll();
+    }
+    return result;
+  } catch (error) {
+    // Retry linkage/status recovery on a later sync; local proof never establishes financial state.
+    console.warn('[Payment] Canonical payment/linkage recovery deferred:', error && (error.code || error.message) || error);
+    return null;
+  }
+}
+
+async function retryMissingPaymentLinkages() {
+  const candidates = orders.filter(order => order
+    && (order.server_order_id || order.serverOrderId)
+    && order.status !== 'queued' && order.status !== 'sync_rejected'
+    && (String((order.payment_linkage && order.payment_linkage.status) || '').toUpperCase() !== 'LINKED'
+      || !String((order.payment_linkage && order.payment_linkage.payment_id) || '').trim()
+      || Boolean(order.payment_linkage && order.payment_linkage.canonical_linkage_only)));
+  for (const order of candidates) await ensureAndPersistPaymentLinkage(order);
+}
+
 export async function syncOrders() {
+  // Offline/local-first orders stay queued until an authenticated sync session is ready.
+  // Do not count a missing configuration as a failed network attempt.
+  if (!config.syncUrl || !config.chatId || !config.sessionToken) return null;
   const queued = orders.filter(o => o.status === 'queued');
   if (queued.length === 0) {
     await pullServerOrders();
     await pullNewOrders();
+    // Recover accepted orders whose canonical payment linkage was deferred.
+    await retryMissingPaymentLinkages();
     return null;
   }
 
@@ -95,7 +154,22 @@ export async function syncOrders() {
     setOrders(orders.map(o => {
       const result = resultMap[o.id];
       if (result && result.status === 'synced') {
-        return { ...o, status: 'synced', server_order_id: result.order_id };
+        // The authenticated sync acknowledgement is the canonical linkage
+        // boundary. Persist identity only; payment_state in this response is
+        // not cached as financial truth and remains Payment Core-owned.
+        const paymentLinkage = result.payment_id
+          ? {
+              status: 'LINKED',
+              payment_id: String(result.payment_id),
+              payment_intent_id: result.payment_intent_id ? String(result.payment_intent_id) : null,
+            }
+          : o.payment_linkage;
+        return {
+          ...o,
+          status: 'synced',
+          server_order_id: result.order_id,
+          ...(paymentLinkage ? { payment_linkage: paymentLinkage } : {}),
+        };
       }
       // Phase 4: the backend now validates each order's line items before
       // accepting it (see saveQueuedOrders in backend/lib/store.js) and
@@ -119,20 +193,10 @@ export async function syncOrders() {
     saveJSON(STORAGE_KEYS.orders, orders);
     renderAll();
     const syncedOrders = orders.filter(o => resultMap[o.id]?.status === 'synced' && o.server_order_id);
-    for (const order of syncedOrders) {
-      try {
-        // PF-1K: the sync acknowledgement establishes the canonical order
-        // identity; ensurePaymentForSyncedOrder() then resolves the
-        // canonical Payment and refreshes provider status through
-        // PaymentCore. Status-query failures are operationally non-fatal:
-        // local proof/order sync must never manufacture financial state.
-        await ensurePaymentForSyncedOrder(order);
-      } catch (error) {
-        console.warn('[Payment] Canonical payment/status refresh deferred:', error?.code || error?.message || error);
-      }
-    }
+    for (const order of syncedOrders) await ensureAndPersistPaymentLinkage(order);
     await pullServerOrders();
     await pullNewOrders();
+    await retryMissingPaymentLinkages();
     const count = (data && data.results && Array.isArray(data.results)) ? data.results.length : 0;
     return `${count} ${t('orderSyncedMsg')}`;
   } catch (e) {

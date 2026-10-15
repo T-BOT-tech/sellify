@@ -35,6 +35,7 @@ export function changeLanguage(lang) {
 export function updateI18n() {
   const lang = getLang();
   document.documentElement.lang = lang;
+  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
     el.textContent = t(key);

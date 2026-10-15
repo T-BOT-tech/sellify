@@ -39,7 +39,9 @@ export function formatReceiptText(o) {
     text += `${i.qty} x ${i.name} = ${CS()}${formatMoney(i.qty * i.price)}\n`;
   });
   text += `------------------------\n`;
-  text += `${t('total').toUpperCase()}: ${CS()}${formatMoney(o.total)}\n`;
+  text += `ORDER TOTAL: ${CS()}${formatMoney(o.total)}\n`;
+  text += `${t('receiptPaymentDisclaimer')}\n`;
+  if (o.payment_method_name) text += `${t('paymentMethod')}: ${o.payment_method_name}\n`;
   if (o.cash_tendered !== null && o.cash_tendered !== undefined) {
     text += `${t('cashTendered')}: ${CS()}${formatMoney(o.cash_tendered)}\n`;
     text += `${t('changeDue')}: ${CS()}${formatMoney(o.change_due || 0)}\n`;
@@ -109,6 +111,10 @@ export function printReceipt(id) {
     </div>`
   ).join('');
 
+  const paymentMethodHtml = o.payment_method_name
+    ? `<div style="display:flex; justify-content:space-between; margin-top:4px;"><span>${escapeHtml(t('paymentMethod'))}</span><span>${escapeHtml(o.payment_method_name)}</span></div>`
+    : '';
+
   const cashHtml = (o.cash_tendered !== null && o.cash_tendered !== undefined)
     ? `<div style="display:flex; justify-content:space-between; margin-top:4px;">
         <span>${t('cashTendered')}</span><span>${CS()}${formatMoney(o.cash_tendered)}</span>
@@ -134,10 +140,12 @@ export function printReceipt(id) {
       ${itemsHtml}
     </div>
     <div style="border-top:1px dashed #000; padding-top:6px; font-weight:bold; display:flex; justify-content:space-between;">
-      <span>${t('total')}</span>
+      <span>${escapeHtml(t('total'))}</span>
       <span>${CS()}${formatMoney(o.total)}</span>
     </div>
+    ${paymentMethodHtml}
     ${cashHtml}
+    <div style="margin-top:6px; font-size:10px; text-align:center;">${t('receiptPaymentDisclaimer')}</div>
     <div style="border-top:1px dashed #000; margin-top:8px; padding-top:8px; text-align:center; font-size:11px;">
       ${t('thankYou')}
     </div>
@@ -153,11 +161,12 @@ export function drawCanvasReceipt(o) {
   const storeName = (config.sellerName || 'STALL LEDGER').toUpperCase();
   const dateStr = new Date(o.created_at || Date.now()).toLocaleString();
 
-  const baseHeight = 220;
+  const baseHeight = 244;
   const itemHeight = ((o && o.items) ? o.items.length : 0) * 30;
   const cashHeight = (o && o.cash_tendered !== null && o.cash_tendered !== undefined) ? 60 : 0;
+  const paymentMethodHeight = (o && o.payment_method_name) ? 24 : 0;
   const custHeight = (o && (o.customer_name || o.customer_phone)) ? 40 : 0;
-  const height = baseHeight + itemHeight + cashHeight + custHeight;
+  const height = baseHeight + itemHeight + cashHeight + paymentMethodHeight + custHeight;
 
   canvas.width = width;
   canvas.height = height;
@@ -229,6 +238,16 @@ export function drawCanvasReceipt(o) {
   ctx.textAlign = 'right';
   ctx.fillText(`${CS()}${formatMoney(o.total)}`, width - padding, y);
 
+  if (o.payment_method_name) {
+    y += 24;
+    ctx.font = '14px monospace';
+    ctx.fillStyle = '#6e6d6a';
+    ctx.textAlign = 'left';
+    ctx.fillText(t('paymentMethod'), padding, y);
+    ctx.textAlign = 'right';
+    ctx.fillText(String(o.payment_method_name).slice(0, 32), width - padding, y);
+  }
+
   if (o.cash_tendered !== null && o.cash_tendered !== undefined) {
     y += 26;
     ctx.font = '14px monospace';
@@ -246,6 +265,11 @@ export function drawCanvasReceipt(o) {
   }
 
   y += 20;
+  ctx.textAlign = 'center';
+  ctx.font = '11px monospace';
+  ctx.fillStyle = '#6e6d6a';
+  ctx.fillText(t('receiptPaymentDisclaimer'), width / 2, y);
+  y += 18;
   drawDashedLine(y);
 
   y += 32;

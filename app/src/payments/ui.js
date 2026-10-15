@@ -46,15 +46,24 @@ export function orderPaymentSummary(summary) {
     });
   }
   const rawStatus = String(summary.status || summary.payment_status || '').toUpperCase();
-  const status = Object.prototype.hasOwnProperty.call(ORDER_PAYMENT_STATUS_LABELS, rawStatus)
-    ? rawStatus : 'UNKNOWN';
+  const verifiedMinor = summary.verifiedMinor ?? summary.verified_minor ?? null;
+  const outstandingMinor = summary.outstandingMinor ?? summary.outstanding_minor ?? null;
+  const refundableMinor = summary.refundableMinor ?? summary.refundable_minor ?? null;
+  const hasUsableAmounts = Number.isSafeInteger(verifiedMinor) && verifiedMinor >= 0
+    && Number.isSafeInteger(outstandingMinor) && outstandingMinor >= 0;
+  // A status without its canonical order-level amounts is not a usable
+  // financial summary. Fail closed rather than showing "Paid" beside missing,
+  // string-coerced, negative, or otherwise malformed amounts.
+  const hasKnownStatus = Object.prototype.hasOwnProperty.call(ORDER_PAYMENT_STATUS_LABELS, rawStatus)
+    && rawStatus !== 'UNKNOWN';
+  const status = hasUsableAmounts && hasKnownStatus ? rawStatus : 'UNKNOWN';
   return Object.freeze({
     orderId:summary.orderId ?? summary.order_id ?? null,
     status,
     statusLabel:ORDER_PAYMENT_STATUS_LABELS[status],
-    verifiedMinor:summary.verifiedMinor ?? summary.verified_minor ?? null,
-    outstandingMinor:summary.outstandingMinor ?? summary.outstanding_minor ?? null,
-    refundableMinor:summary.refundableMinor ?? summary.refundable_minor ?? null,
+    verifiedMinor:hasUsableAmounts ? verifiedMinor : null,
+    outstandingMinor:hasUsableAmounts ? outstandingMinor : null,
+    refundableMinor:Number.isSafeInteger(refundableMinor) && refundableMinor >= 0 ? refundableMinor : null,
     currency:summary.currency || null,
   });
 }

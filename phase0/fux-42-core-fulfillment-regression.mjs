@@ -7,10 +7,20 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sellify-fux42-'));
 process.env.SELLIFY_DATA_DIR = dataDir;
 process.env.SELLIFY_DB_PATH = path.join(dataDir, 'sellify.sqlite');
 
+// Seed legacy catalog data before SQLite initialization so the opening-balance
+// migration is exercised against both a physical product and a stock-shaped service.
+fs.writeFileSync(path.join(dataDir, 'catalogs.json'), JSON.stringify({
+  'fux42-chat': { products: [
+    { id: 'legacy-physical', name: 'Legacy physical item', price: 100, stock: 4 },
+    { id: 'legacy-service', name: 'Legacy service with stale stock', price: 200, type: 'service', stock: 9 },
+  ] },
+}));
+
 const {
   getOrCreateTenant,
   saveQueuedOrders,
   saveCatalog,
+  getCatalog,
   getOrderFulfillment,
   appendInventoryMovement,
   transitionOrderFulfillment,
@@ -19,17 +29,130 @@ const {
 
 const chatId = 'fux42-chat';
 const tenant = await getOrCreateTenant(chatId);
-await saveCatalog(chatId, [{ id: 'product-1', name: 'Test item', price: 500, stock: 5 }]);
+
+const legacyBalances = await (await import('../backend/lib/store-sqlite.js')).getInventoryBalances(chatId);
+assert.equal(legacyBalances.find((row) => row.productId === 'legacy-physical')?.quantity, 4,
+  'legacy physical stock still seeds its canonical opening balance');
+assert.equal(legacyBalances.find((row) => row.productId === 'legacy-service'), undefined,
+  'legacy service stock never seeds a canonical opening-balance movement');
+
+// Unsupported item types and marketplace service listings fail closed at the
+// backend boundary; UI restrictions alone are not the contract.
+await assert.rejects(
+  saveCatalog(chatId, [{ id: 'invalid-type', name: 'Invalid', price: 100, type: 'digital' }]),
+  (error) => error?.code === 'INVALID_CATALOG_ITEM_TYPE' && error?.statusCode === 400,
+);
+await assert.rejects(
+  saveCatalog(chatId, [{ id: 'service-marketplace', name: 'Remote service', price: 100, type: 'service', marketplace_listed: true }]),
+  (error) => error?.code === 'SERVICE_MARKETPLACE_UNSUPPORTED' && error?.statusCode === 409,
+);
+await saveCatalog(chatId, [
+  { id: 'product-1', name: 'Test item', price: 500, stock: 0 },
+  { id: 'service-1', name: 'Consultation', price: 700, type: 'service' },
+]);
+// Invalid replacement payloads must fail before DELETE/reinsert, preserving the
+// last known-good catalog instead of accidentally clearing it.
+await assert.rejects(
+  saveCatalog(chatId, null),
+  (error) => error?.code === 'INVALID_CATALOG_PAYLOAD' && error?.statusCode === 400,
+);
+await assert.rejects(
+  saveCatalog(chatId, [{ id: 'valid-looking', name: 'Valid', price: 100 }, null]),
+  (error) => error?.code === 'INVALID_CATALOG_ITEM' && error?.statusCode === 400,
+);
+await assert.rejects(
+  saveCatalog(chatId, [{ name: 'Missing identity', price: 100 }]),
+  (error) => error?.code === 'INVALID_CATALOG_ITEM' && error?.statusCode === 400,
+);
+assert.deepEqual((await getCatalog(chatId)).products.map(item => item.id).sort(), ['product-1', 'service-1'],
+  'malformed replacement payloads cannot delete or partially replace the existing catalog');
+await assert.rejects(
+  saveCatalog(chatId, [
+    { id: 'product-1', name: 'Test item', price: 500, stock: 5, type: 'service' },
+    { id: 'service-1', name: 'Consultation', price: 700, type: 'service' },
+  ]),
+  (error) => error?.code === 'CATALOG_ITEM_TYPE_CONFLICT' && error?.statusCode === 409,
+);
+const canonicalCatalog = await getCatalog(chatId);
+assert.equal(canonicalCatalog.products.find((item) => item.id === 'product-1')?.type, 'product');
+assert.equal(canonicalCatalog.products.find((item) => item.id === 'service-1')?.type, 'service');
 await appendInventoryMovement(chatId, { productId: 'product-1', quantity: 5, movementType: 'PURCHASE', eventId: 'fux42-opening-purchase' });
+const openingBalances = await (await import('../backend/lib/store-sqlite.js')).getInventoryBalances(chatId);
+assert.equal(openingBalances.find((row) => row.productId === 'product-1')?.quantity, 5);
 const syncResult = await saveQueuedOrders(chatId, [{
   id: 'local-fux42-1',
-  items: [{ item_id: 'product-1', name: 'Test item', qty: 1, price: 500 }],
+  items: [
+    // A client cannot relabel a physical catalog item as a service to bypass stock.
+    { id: 'product-1', name: 'Test item', qty: 1, price: 500, type: 'service' },
+    // Nor can a client-supplied physical type turn a canonical service into stock.
+    { id: 'service-1', name: 'Consultation', qty: 1, price: 700, type: 'product' },
+  ],
   fulfillment_type: 'delivery',
   delivery_address: 'Jimma',
   scheduled_time: '2026-09-24T12:00:00Z',
 }]);
 assert.equal(syncResult[0].status, 'synced');
+const canonicalizedOrder = (await (await import('../backend/lib/store-sqlite.js')).getOrders(chatId))
+  .find(order => order.server_order_id === syncResult[0].order_id);
+assert.equal(canonicalizedOrder.items[0].type, 'product',
+  'the canonical catalog prevents a client from relabeling a physical item as a service');
+assert.equal(canonicalizedOrder.items[1].type, 'service',
+  'the canonical catalog prevents a client from relabeling a service as a physical product');
+assert.equal(canonicalizedOrder.total, 1200,
+  'order totals use canonical catalog prices rather than client-supplied prices');
+assert.equal(canonicalizedOrder.items[0].name, 'Test item',
+  'order line names are resolved from the canonical catalog');
 const orderId = syncResult[0].order_id;
+
+// Unknown IDs and client-invented prices must not create orders or canonical
+// payment records. Known IDs are canonicalized, so the spoofed price above is
+// harmless even though it was deliberately submitted by the client.
+const spoofedPriceSync = await saveQueuedOrders(chatId, [{
+  id: 'local-fux42-spoofed-price',
+  items: [{ id: 'product-1', name: 'Cheap item', qty: 1, price: 1, type: 'service' }],
+}]);
+assert.equal(spoofedPriceSync[0].status, 'synced');
+const spoofedPriceOrder = (await (await import('../backend/lib/store-sqlite.js')).getOrders(chatId))
+  .find(order => order.server_order_id === spoofedPriceSync[0].order_id);
+assert.equal(spoofedPriceOrder.total, 500);
+const spoofedPriceRetry = await saveQueuedOrders(chatId, [{
+  id: 'local-fux42-spoofed-price',
+  items: [{ id: 'product-1', name: 'Cheap item', qty: 1, price: 1, type: 'service' }],
+}]);
+assert.equal(spoofedPriceRetry[0].status, 'synced',
+  'an unchanged offline retry remains idempotent after canonical price resolution');
+assert.equal(spoofedPriceRetry[0].order_id, spoofedPriceSync[0].order_id);
+const unknownCatalogSync = await saveQueuedOrders(chatId, [{
+  id: 'local-fux42-unknown-catalog-item',
+  items: [{ id: 'client-invented-item', name: 'Invented', qty: 1, price: 1 }],
+}]);
+assert.equal(unknownCatalogSync[0].status, 'rejected');
+assert.equal(unknownCatalogSync[0].code, 'CATALOG_ITEM_NOT_FOUND');
+
+const partialLineSync = await saveQueuedOrders(chatId, [{
+  id: 'local-fux42-partial-line',
+  items: [
+    { id: 'product-1', name: 'Test item', qty: 1, price: 500 },
+    null,
+  ],
+}]);
+assert.equal(partialLineSync[0].status, 'rejected');
+assert.equal(partialLineSync[0].code, 'INVALID_ORDER_ITEM',
+  'a malformed line rejects the whole order instead of silently creating a partial sale');
+assert.equal((await (await import('../backend/lib/store-sqlite.js')).getOrders(chatId))
+  .some(order => order.id === 'local-fux42-partial-line'), false);
+
+const canonicalPriceWithoutClientPrice = await saveQueuedOrders(chatId, [{
+  id: 'local-fux42-no-client-price',
+  items: [{ id: 'product-1', name: 'Forged name', qty: 1, price: 'not-a-price' }],
+}]);
+assert.equal(canonicalPriceWithoutClientPrice[0].status, 'synced',
+  'canonical price authority does not require a client-supplied price');
+const noPriceOrder = (await (await import('../backend/lib/store-sqlite.js')).getOrders(chatId))
+  .find(order => order.server_order_id === canonicalPriceWithoutClientPrice[0].order_id);
+assert.equal(noPriceOrder.total, 500);
+
+
 
 let fulfillment = await getOrderFulfillment(chatId, orderId);
 assert.equal(fulfillment, null);
@@ -61,8 +184,31 @@ fulfillment = await transitionOrderFulfillment(chatId, orderId, 'delivered', act
 assert.equal(fulfillment.status, 'delivered');
 const balances = await (await import('../backend/lib/store-sqlite.js')).getInventoryBalances(chatId);
 const productBalance = balances.find((row) => row.productId === 'product-1');
-assert.equal(productBalance?.quantity, 9);
+assert.equal(productBalance?.quantity, 4);
+assert.equal(balances.find((row) => row.productId === 'service-1'), undefined);
 assert.deepEqual(fulfillment.proof, { type: 'photo', ref: 'proof-fux42' });
+
+// Duplicate physical item lines must be aggregated into one full-quantity sale.
+const duplicateSync = await saveQueuedOrders(chatId, [{
+  id: 'local-fux42-duplicate-lines',
+  items: [
+    { id: 'product-1', name: 'Test item', qty: 1, price: 500 },
+    { id: 'product-1', name: 'Test item', qty: 1, price: 500 },
+  ],
+  fulfillment_type: 'delivery',
+  delivery_address: 'Jimma',
+}]);
+assert.equal(duplicateSync[0].status, 'synced');
+const duplicateOrderId = duplicateSync[0].order_id;
+await transitionOrderFulfillment(chatId, duplicateOrderId, 'out_for_delivery', actor, {
+  idempotencyKey: 'fux42-duplicate-lines-out',
+});
+await transitionOrderFulfillment(chatId, duplicateOrderId, 'delivered', actor, {
+  idempotencyKey: 'fux42-duplicate-lines-delivered',
+});
+const duplicateBalances = await (await import('../backend/lib/store-sqlite.js')).getInventoryBalances(chatId);
+assert.equal(duplicateBalances.find((row) => row.productId === 'product-1')?.quantity, 2,
+  'two duplicate quantity-1 lines must deduct two units, not one');
 
 await assert.rejects(
   transitionOrderFulfillment(chatId, orderId, 'pending', actor, { idempotencyKey: 'fux42-invalid' }),

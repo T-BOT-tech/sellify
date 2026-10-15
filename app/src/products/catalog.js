@@ -42,7 +42,7 @@ export function renderCatalogSyncStatus() {
   const el = document.getElementById('catalogSyncStatus');
   if (!el) return;
   el.className = `catalog-sync-status ${catalogDirty ? 'dirty' : 'synced'}`;
-  el.textContent = catalogDirty ? '● Changes waiting to sync' : '✓ Catalog synced';
+  el.textContent = catalogDirty ? `● ${t('catalogChangesWaitingToSync')}` : `✓ ${t('catalogSyncedStatus')}`;
 }
 export let pendingNewProdImage = null;
 export function setPendingNewProdImage(next) { pendingNewProdImage = next; }
@@ -94,7 +94,7 @@ export function renderCatalog() {
           <button class="save-edit" onclick="saveProductEdit('${p.id}')">${t('save')}</button>
           <button class="cancel-edit" onclick="cancelProductEdit()">${t('cancel')}</button>
           <label class="niche-tag-check" style="margin-top:8px; display:inline-flex;">
-            <input type="checkbox" id="editMarketListed-${p.id}" ${p.marketplace_listed ? 'checked' : ''}>
+            <input type="checkbox" id="editMarketListed-${p.id}" ${p.marketplace_listed && p.type !== 'service' ? 'checked' : ''} ${p.type === 'service' ? 'disabled' : ''}>
             <span>${t('listOnMarketplace')}</span>
           </label>
           ${editTagsHtml}
@@ -107,11 +107,12 @@ export function renderCatalog() {
       : `<div class="cat-thumb-placeholder"><svg class="icon icon-muted"><use href="#i-camera"/></svg></div>`;
 
     const badges = [];
+    if (p.type === 'service') badges.push(`<span class="prod-badge unit">${escapeHtml(t('service'))}</span>`);
     if (p.category) badges.push(`<span class="prod-badge cat"><svg class="icon icon-sm"><use href="#i-tag"/></svg> ${escapeHtml(p.category)}</span>`);
     if (p.unit) badges.push(`<span class="prod-badge unit">${escapeHtml(p.unit)}</span>`);
     if (Array.isArray(p.tags)) p.tags.forEach(tag => badges.push(`<span class="prod-badge tag">${escapeHtml(tag)}</span>`));
     if (Array.isArray(p.modifiers)) p.modifiers.forEach(mod => badges.push(`<span class="prod-badge tag"><svg class="icon icon-sm"><use href="#i-edit"/></svg> ${escapeHtml(mod)}</span>`));
-    if (p.marketplace_listed) badges.push(`<span class="prod-badge cat"><svg class="icon icon-sm"><use href="#i-store"/></svg> ${escapeHtml(t('marketListedBadge'))}</span>`);
+    if (p.marketplace_listed && p.type !== 'service') badges.push(`<span class="prod-badge cat"><svg class="icon icon-sm"><use href="#i-store"/></svg> ${escapeHtml(t('marketListedBadge'))}</span>`);
     const badgesHtml = badges.length ? `<div class="prod-badges">${badges.join('')}</div>` : '';
 
     const canEdit = hasPermission(currentStaff ? currentStaff.role : 'owner', 'inventory:edit');
@@ -178,7 +179,10 @@ export function saveProductEdit(id) {
   const modInput = document.getElementById(`editModifiers-${id}`);
   const modifiers = modInput ? modInput.value.split(',').map(m => m.trim()).filter(Boolean) : undefined;
   const marketListedBox = document.getElementById(`editMarketListed-${id}`);
-  const marketplace_listed = marketListedBox ? marketListedBox.checked : undefined;
+  const existingProduct = products.find(p => p.id === id);
+  // Marketplace service checkout has no canonical contract yet. Keep the UI
+  // aligned with the backend fail-closed rule, including edits to old records.
+  const marketplace_listed = existingProduct?.type === 'service' ? false : (marketListedBox ? marketListedBox.checked : undefined);
 
   const newImg = editingProdImages[id];
   setProducts(products.map(p => {
@@ -229,6 +233,7 @@ export function renderProductFormSelects() {
   const unitOptions = ['<option value="">No unit</option>']
     .concat(unitList.map(u => `<option value="${escapeAttr(u)}">${escapeHtml(u)}</option>`));
   unitSel.innerHTML = unitOptions.join('');
+  onNewProdTypeChange();
 
   if (tagsBox) {
     if (!preset || !preset.tags || preset.tags.length === 0) {
@@ -280,6 +285,20 @@ export function onNewProdCategoryChange() {
   }
 }
 
+export function onNewProdTypeChange() {
+  const typeSel = document.getElementById('newProdType');
+  const marketListedBox = document.getElementById('newProdMarketListed');
+  if (!typeSel || !marketListedBox) return;
+  const isService = typeSel.value === 'service';
+  if (isService) marketListedBox.checked = false;
+  marketListedBox.disabled = isService;
+  const marketLabel = marketListedBox.closest('label');
+  if (marketLabel) {
+    marketLabel.title = isService ? t('marketplaceServiceUnsupported') : '';
+    marketLabel.style.opacity = isService ? '0.55' : '';
+  }
+}
+
 export function addProduct() {
   // Phase 3 fix (see modularization plan §5, Phase 3): same gap as
   // saveProductEdit/removeProduct — the form itself was hidden for roles
@@ -299,6 +318,8 @@ export function addProduct() {
   const price = toMinorUnits(priceMajor);
   const category = (catSel && catSel.value && catSel.value !== '__custom__') ? catSel.value : '';
   const unit = unitSel ? unitSel.value : '';
+  const typeSel = document.getElementById('newProdType');
+  const type = typeSel && typeSel.value === 'service' ? 'service' : 'product';
   const modInput = document.getElementById('newProdModifiers');
   const modifiers = (isRestaurant() && modInput && modInput.value.trim())
     ? modInput.value.split(',').map(m => m.trim()).filter(Boolean)
@@ -313,9 +334,10 @@ export function addProduct() {
     unit: unit || undefined,
     tags: pendingNewProdTags.length ? [...pendingNewProdTags] : undefined,
     modifiers,
+    type,
     image: pendingNewProdImage || undefined,
     image_url: pendingNewProdImage || undefined,
-    marketplace_listed: marketListedBox ? marketListedBox.checked : false,
+    marketplace_listed: type === 'service' ? false : (marketListedBox ? marketListedBox.checked : false),
     updated_at: Date.now()
   };
   products.push(newProd);
@@ -324,7 +346,12 @@ export function addProduct() {
 
   nameInput.value = ''; priceInput.value = '';
   if (modInput) modInput.value = '';
-  if (marketListedBox) marketListedBox.checked = false;
+  if (marketListedBox) {
+    marketListedBox.checked = false;
+    marketListedBox.disabled = false;
+  }
+  if (typeSel) typeSel.value = 'product';
+  onNewProdTypeChange();
   pendingNewProdImage = null;
   pendingNewProdTags = [];
   const previewBox = document.getElementById('newProdImgPreview');

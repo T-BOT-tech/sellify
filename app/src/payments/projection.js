@@ -9,9 +9,11 @@ export async function refreshPaymentProjection() {
   try {
     const payments = await listPayments({ limit: 500 });
     if (sequence !== projectionRefreshSequence) return getPayments();
-    setPayments(payments);
+    // Linkage-only shells establish identity, not a financial payment.
+    // Keep them out of the operational payment projection and payment UI.
+    setPayments(payments.filter(payment => !isCanonicalLinkageOnlyPayment(payment)));
     setPaymentError(null);
-    return payments;
+    return getPayments();
   } catch (error) {
     if (sequence !== projectionRefreshSequence) return getPayments();
     setPaymentError(error);
@@ -54,11 +56,38 @@ export async function ensurePaymentForSyncedOrder(order, options = {}) {
   }
 }
 
+export function isCanonicalLinkageOnlyPayment(payment) {
+  let metadata = payment?.metadata ?? payment?.metadata_json ?? null;
+  if (typeof metadata === 'string') {
+    try { metadata = JSON.parse(metadata); } catch { metadata = null; }
+  }
+  return metadata?.canonicalLinkageOnly === true
+    || metadata?.canonicalLinkageOnly === 1
+    || metadata?.canonical_linkage_only === true
+    || metadata?.canonical_linkage_only === 1;
+}
+
 async function ensurePaymentForSyncedOrderOnce(order, { statusQueryKey = null } = {}) {
   const serverOrderId = String(order?.server_order_id || order?.serverOrderId || '').trim();
   if (!serverOrderId) return { status: 'SKIPPED', reason: 'ORDER_NOT_SYNCED' };
 
-  let payment = getPaymentForOrder(serverOrderId) || (await listPayments({ orderId: serverOrderId, limit: 10 }))[0] || null;
+  // Order sync may create a canonical identity shell before a financial
+  // payment is routed. Keep it available for identity linkage, but never
+  // treat it as a financial payment or query its provider status.
+  const cachedForOrder = getPayments().filter(item =>
+    String(item?.orderId || item?.order_id || '') === serverOrderId);
+  const cachedUsablePayment = cachedForOrder.find(item => item?.id && !isCanonicalLinkageOnlyPayment(item)) || null;
+  // If cache has only a linkage shell (or nothing), read Payment Core again:
+  // a routed payment may have been created since the last projection refresh.
+  const listedForOrder = cachedUsablePayment
+    ? cachedForOrder
+    : await listPayments({ orderId: serverOrderId, limit: 10 });
+  let payment = cachedUsablePayment
+    || listedForOrder.find(item => item?.id && !isCanonicalLinkageOnlyPayment(item))
+    || null;
+  const linkageOnlyPayment = listedForOrder.find(item => item?.id && isCanonicalLinkageOnlyPayment(item))
+    || cachedForOrder.find(item => item?.id && isCanonicalLinkageOnlyPayment(item))
+    || null;
   let creationStatus = 'EXISTS';
 
   if (!payment) {
@@ -68,7 +97,13 @@ async function ensurePaymentForSyncedOrderOnce(order, { statusQueryKey = null } 
       requireAccount: true,
     });
     if (route.status !== 'ROUTED' || !route.providerId || !route.paymentAccountId) {
-      return { status: 'DEFERRED', reason: 'NO_ELIGIBLE_PAYMENT_ROUTE' };
+      // Preserve canonical identity linkage for recovery, without querying
+      // the shell or presenting it as a usable financial payment.
+      return {
+        status: linkageOnlyPayment ? 'LINKED_ONLY' : 'DEFERRED',
+        reason: 'NO_ELIGIBLE_PAYMENT_ROUTE',
+        ...(linkageOnlyPayment ? { payment: linkageOnlyPayment, statusQueried: false } : {}),
+      };
     }
 
     const result = await createPayment({
@@ -79,9 +114,11 @@ async function ensurePaymentForSyncedOrderOnce(order, { statusQueryKey = null } 
       channel: route.channel || 'manual',
       methodId: order?.payment_method_id || null,
       methodName: order?.payment_method_name || null,
+      // Idempotency is keyed by canonical server order identity. Do not
+      // include a device-local order ID here: another device may retry the
+      // same canonical create command with a different local identifier.
       metadata: {
         source: 'SELLIFY_FRONTEND_ORDER_SYNC',
-        localOrderId: order?.id || null,
       },
     }, { idempotencyKey: paymentCommandKey('create-order', serverOrderId) });
 
@@ -125,7 +162,10 @@ export async function refreshCanonicalOrderPaymentSummary(orderId) {
 export function getPaymentForOrder(orderId) {
   const id = String(orderId || '');
   if (!id) return null;
-  return getPayments().find(payment => String(payment?.orderId || payment?.order_id || '') === id) || null;
+  return getPayments().find(payment =>
+    String(payment?.orderId || payment?.order_id || '') === id
+      && !isCanonicalLinkageOnlyPayment(payment),
+  ) || null;
 }
 
 

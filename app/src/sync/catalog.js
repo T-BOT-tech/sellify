@@ -40,11 +40,20 @@ export function sanitizeId(raw) {
   return cleaned || uid();
 }
 export function sanitizeRemoteProducts(rawList) {
-  return (Array.isArray(rawList) ? rawList : []).map(p => {
+  // Remote payloads may contain nulls, primitives, or arrays. Ignore malformed
+  // entries rather than letting one bad row abort the entire catalog refresh.
+  return (Array.isArray(rawList) ? rawList : [])
+    .filter(p => p && typeof p === 'object' && !Array.isArray(p))
+    .map(p => {
     const numericPrice = Number(p.price);
     return {
       ...p,
       id: sanitizeId(p.id),
+      // Remote catalog data is untrusted. Keep item identity within the
+      // supported domain and fail closed for marketplace services, even when
+      // a stale or manually edited server record carries marketplace_listed.
+      type: p.type === 'service' ? 'service' : 'product',
+      marketplace_listed: p.type === 'service' ? false : Boolean(p.marketplace_listed),
       // Coerced to a real number: besides keeping totals/arithmetic sane if a
       // synced catalog sends a malformed price, an unescaped non-numeric price
       // would otherwise be inserted as raw text content wherever it's displayed.
@@ -59,7 +68,11 @@ export function sanitizeRemoteProducts(rawList) {
   });
 }
 export function sanitizeRemoteListings(rawList) {
-  return (Array.isArray(rawList) ? rawList : []).map(l => {
+  // Treat marketplace feeds as untrusted too; a malformed row must not block
+  // otherwise valid listings from rendering.
+  return (Array.isArray(rawList) ? rawList : [])
+    .filter(l => l && typeof l === 'object' && !Array.isArray(l))
+    .map(l => {
     const numericPrice = Number(l.price);
     return {
       ...l,
