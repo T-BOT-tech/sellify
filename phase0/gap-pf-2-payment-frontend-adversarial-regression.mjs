@@ -318,6 +318,9 @@ assert.match(orderQueue, /Order payment:/);
 assert.doesNotMatch(orderQueue, /getPaymentForOrder/);
 assert.doesNotMatch(orderQueue, /paymentStateLine/);
 assert.doesNotMatch(orderQueue, /Payment Core:.*payment\.state/);
+// An attached image is supporting evidence only, not a verified payment claim.
+assert.match(orderQueue, /evidence attached/);
+assert.doesNotMatch(orderQueue, /proof attached/);
 assert.match(orderQueue, /ORDER_PAYMENT_SUMMARY_TTL_MS/);
 assert.match(orderQueue, /orderPaymentSummaryInFlight/);
 // A failed canonical summary fetch must not leave stale PAID/PARTIAL/UNPAID
