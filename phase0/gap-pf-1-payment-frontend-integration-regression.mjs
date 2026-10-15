@@ -108,6 +108,7 @@ console.log('PASS PF-1 runtime status-query client authentication/idempotency co
     };
     const projection = await import('../app/src/payments/projection.js');
     const paymentState = await import('../app/src/payments/state.js');
+    const { setConfig } = await import('../app/src/state.js');
     setConfig({ chatId: 'tenant-runtime', syncUrl: 'http://sellify.test', sessionToken: 'session-runtime' });
     paymentState.setPayments([shell]);
 
