@@ -73,6 +73,15 @@ async function concurrentCreate(count, base) {
 
 test('GAP-1.10 canonical linkage shell does not reserve payment capacity or inflate summaries', async () => {
   const base = await setup();
+  // Order sync now resolves line identity and price from the canonical catalog.
+  // Seed the test product instead of relying on client-supplied item details.
+  await store.saveCatalog(base.chatId, [{
+    id: 'partial-item',
+    name: 'Partial payment test item',
+    price: 1000,
+    currency: 'ETB',
+    type: 'product',
+  }]);
   const localOrderId = `gap1-10-shell-${crypto.randomUUID()}`;
   const [synced] = await store.saveQueuedOrders(base.chatId, [{
     id: localOrderId,
