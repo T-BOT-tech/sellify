@@ -220,7 +220,9 @@ try {
   // Cancellation queues a canonical Payment Core refund request; it must
   // not claim the allocation was refunded before provider confirmation.
   assert.equal(db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(sellerOrder.id, payment.id).status, 'ALLOCATED');
-  assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(sellerOrder.id).status, 'REVERSED');
+  // Operational cancellation releases stock immediately, but financial
+  // settlement remains held until the canonical refund is confirmed.
+  assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(sellerOrder.id).status, 'HELD');
   const marketplaceRefund = db.prepare('SELECT * FROM marketplace_refunds WHERE seller_order_id = ?').get(sellerOrder.id);
   assert.equal(marketplaceRefund.status, 'REQUESTED');
   const canonicalRefund = db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(marketplaceRefund.id);
@@ -253,6 +255,7 @@ try {
   });
   assert.equal(failedRefund.status, 'FAILED');
   assert.equal(db.prepare('SELECT status FROM marketplace_refunds WHERE id = ?').get(marketplaceRefund.id).status, 'REJECTED');
+  assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(sellerOrder.id).status, 'HELD');
   const failedInventory = (await store.getCatalog(seller.chatId)).products.find(p => p.id === 'integrity-item');
   assert.equal(failedInventory.stock, 5);
   assert.equal(db.prepare('SELECT COUNT(*) AS c FROM inventory_movements WHERE event_id = ?')
@@ -264,6 +267,7 @@ try {
   assert.notEqual(retriedMarketplaceRefund.id, marketplaceRefund.id);
   assert.equal(retriedMarketplaceRefund.status, 'REQUESTED');
   assert.equal(db.prepare('SELECT status FROM marketplace_refunds WHERE id = ?').get(marketplaceRefund.id).status, 'REJECTED');
+  assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(sellerOrder.id).status, 'HELD');
   assert.equal(db.prepare('SELECT COUNT(*) AS c FROM inventory_movements WHERE event_id = ?')
     .get(`marketplace-cancel:${master.id}:${seller.chatId}:integrity-item`).c, 1);
 
@@ -279,6 +283,7 @@ try {
   assert.equal(db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(sellerOrder.id, payment.id).status, 'REFUNDED');
   assert.equal(db.prepare('SELECT status FROM marketplace_refunds WHERE id = ?').get(marketplaceRefund.id).status, 'REJECTED');
   assert.equal(db.prepare('SELECT status FROM marketplace_refunds WHERE id = ?').get(retriedMarketplaceRefund.id).status, 'PROCESSED');
+  assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(sellerOrder.id).status, 'REVERSED');
 
   // Split-payment hardening: two payments may cover one seller allocation,
   // but verified value may never exceed the canonical seller-order amount.
