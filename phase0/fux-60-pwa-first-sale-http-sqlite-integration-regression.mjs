@@ -183,7 +183,7 @@ try {
     'later sync cycles retry canonical payment linkage when the original attempt was deferred');
   assert.match(orderClient, /await retryMissingPaymentLinkages\(\)/,
     'the no-queued-orders sync path still recovers missing canonical payment links');
-  assert.match(orderClient, /payment_linkage: \{ status: 'LINKED', payment_id: paymentId, payment_intent_id: intentId \}/,
+  assert.match(orderClient, /payment_linkage:\s*\{\s*status:\s*'LINKED',\s*payment_id:\s*paymentId,\s*payment_intent_id:\s*intentId,/s,
     'recovered canonical payment identity is persisted locally for subsequent syncs');
   assert.match(orderClient, /String\(\(order\.payment_linkage && order\.payment_linkage\.status\) \|\| ''\)\.toUpperCase\(\) !== 'LINKED'/,
     'recovery is limited to orders without an established canonical payment link');
