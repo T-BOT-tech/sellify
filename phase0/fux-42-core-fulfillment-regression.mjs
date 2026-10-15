@@ -115,6 +115,13 @@ assert.equal(spoofedPriceSync[0].status, 'synced');
 const spoofedPriceOrder = (await (await import('../backend/lib/store-sqlite.js')).getOrders(chatId))
   .find(order => order.server_order_id === spoofedPriceSync[0].order_id);
 assert.equal(spoofedPriceOrder.total, 500);
+const spoofedPriceRetry = await saveQueuedOrders(chatId, [{
+  id: 'local-fux42-spoofed-price',
+  items: [{ id: 'product-1', name: 'Cheap item', qty: 1, price: 1, type: 'service' }],
+}]);
+assert.equal(spoofedPriceRetry[0].status, 'synced',
+  'an unchanged offline retry remains idempotent after canonical price resolution');
+assert.equal(spoofedPriceRetry[0].order_id, spoofedPriceSync[0].order_id);
 const unknownCatalogSync = await saveQueuedOrders(chatId, [{
   id: 'local-fux42-unknown-catalog-item',
   items: [{ id: 'client-invented-item', name: 'Invented', qty: 1, price: 1 }],
