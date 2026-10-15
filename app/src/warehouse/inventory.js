@@ -89,6 +89,13 @@ export function applyStockChange(productId, delta, type, meta) {
   if (!hasPermission(currentStaff ? currentStaff.role : 'owner', 'inventory:edit')) return null;
   const product = products.find(p => p.id === productId);
   if (!product) return null;
+  // A service is sellable but has no physical stock. Reject legacy mutation
+  // rather than accidentally creating a stock field or stock transaction.
+  if (product.type === 'service') {
+    throw Object.assign(new Error('Services are not stock-tracked inventory items.'), {
+      code: 'SERVICE_STOCK_NOT_TRACKED',
+    });
+  }
   const before = isStockTracked(product) ? projectedStock(product) : 0;
   product.stock = Math.max(0, before + delta);
   if (meta && meta.batch_number) product.batch_number = meta.batch_number;
