@@ -9,9 +9,11 @@ export async function refreshPaymentProjection() {
   try {
     const payments = await listPayments({ limit: 500 });
     if (sequence !== projectionRefreshSequence) return getPayments();
-    setPayments(payments);
+    // Linkage-only shells establish identity, not a financial payment.
+    // Keep them out of the operational payment projection and payment UI.
+    setPayments(payments.filter(payment => !isCanonicalLinkageOnlyPayment(payment)));
     setPaymentError(null);
-    return payments;
+    return getPayments();
   } catch (error) {
     if (sequence !== projectionRefreshSequence) return getPayments();
     setPaymentError(error);
@@ -74,11 +76,18 @@ async function ensurePaymentForSyncedOrderOnce(order, { statusQueryKey = null } 
   // treat it as a financial payment or query its provider status.
   const cachedForOrder = getPayments().filter(item =>
     String(item?.orderId || item?.order_id || '') === serverOrderId);
-  const listedForOrder = cachedForOrder.length
+  const cachedUsablePayment = cachedForOrder.find(item => item?.id && !isCanonicalLinkageOnlyPayment(item)) || null;
+  // If cache has only a linkage shell (or nothing), read Payment Core again:
+  // a routed payment may have been created since the last projection refresh.
+  const listedForOrder = cachedUsablePayment
     ? cachedForOrder
     : await listPayments({ orderId: serverOrderId, limit: 10 });
-  let payment = listedForOrder.find(item => item?.id && !isCanonicalLinkageOnlyPayment(item)) || null;
-  const linkageOnlyPayment = listedForOrder.find(item => item?.id && isCanonicalLinkageOnlyPayment(item)) || null;
+  let payment = cachedUsablePayment
+    || listedForOrder.find(item => item?.id && !isCanonicalLinkageOnlyPayment(item))
+    || null;
+  const linkageOnlyPayment = listedForOrder.find(item => item?.id && isCanonicalLinkageOnlyPayment(item))
+    || cachedForOrder.find(item => item?.id && isCanonicalLinkageOnlyPayment(item))
+    || null;
   let creationStatus = 'EXISTS';
 
   if (!payment) {
