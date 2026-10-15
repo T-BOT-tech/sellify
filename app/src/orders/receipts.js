@@ -143,6 +143,7 @@ export function printReceipt(id) {
       <span>Order total</span>
       <span>${CS()}${formatMoney(o.total)}</span>
     </div>
+    ${paymentMethodHtml}
     ${cashHtml}
     <div style="margin-top:6px; font-size:10px; text-align:center;">Payment status is not verified by this receipt.</div>
     <div style="border-top:1px dashed #000; margin-top:8px; padding-top:8px; text-align:center; font-size:11px;">
