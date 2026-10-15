@@ -49,6 +49,8 @@ assert.doesNotMatch(client, /providerToken|botToken|secret|credential/i);
 // canonical payment outcome from local order metadata.
 assert.match(receipts, /Payment method: \$\{o\.payment_method_name\}/);
 assert.match(receipts, /escapeHtml\(o\.payment_method_name\)/);
+assert.match(receipts, /\$\{paymentMethodHtml\}/,
+  'printed receipts must include the escaped selected payment method when available');
 assert.match(receipts, /ctx\.fillText\('Payment method'/);
 assert.doesNotMatch(receipts, /o\.payment_status|o\.payment_state|o\.state\s*===\s*['\"](?:PAID|VERIFIED|PARTIAL)['\"]/);
 
