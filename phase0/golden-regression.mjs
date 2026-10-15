@@ -112,7 +112,7 @@ try {
   await test('order sync recomputes total server-side and is idempotent', async () => {
     const order={id:'local-1',items:[{id:'p1',qty:2,price:9999},{id:'p2',qty:1,price:100}],total:1};
     let r=await request('POST',`/sync/${created.chatId}`,{orders:[order]},auth); assert.equal(r.response.status,200); assert.equal(r.json.results[0].status,'synced');
-    const orders=await store.getOrders(created.chatId); assert.equal(orders.length,1); assert.equal(orders[0].total,20098);
+    const orders=await store.getOrders(created.chatId); assert.equal(orders.length,1); assert.equal(orders[0].total,600); // canonical catalog prices override client-supplied prices
     r=await request('POST',`/sync/${created.chatId}`,{orders:[order]},auth); assert.equal(r.response.status,200); assert.equal(r.json.results[0].status,'synced'); assert.equal((await store.getOrders(created.chatId)).length,1);
   });
   await test('customer domain creates, deduplicates, lists, and links customers to orders', async () => {
