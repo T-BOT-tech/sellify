@@ -335,7 +335,7 @@ assert.match(orderQueue, /orderPaymentSummaryInFlight/);
 // suppresses immediate request loops and permits retry after the short TTL.
 assert.match(orderQueue, /orderPaymentSummaryErrors\.set\(key, Date\.now\(\)\)/);
 assert.match(orderQueue, /getOrderPaymentSummaryError\(o\.server_order_id\)/);
-assert.match(orderQueue, /Order payment: status unavailable · will retry/);
+assert.match(orderQueue, /Order payment: status or amounts unavailable · will retry/);
 assert.match(orderQueue, /Date\.now\(\) - failedAt >= ORDER_PAYMENT_SUMMARY_TTL_MS/);
 assert.match(orderQueue, /orderPaymentSummaryErrors\.clear\(\)/);
 // In-flight order-level summaries are generation-bound: invalidation while a
