@@ -9825,6 +9825,29 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
     ).get(id);
 
     if (target === 'cancelled') {
+      // Cancellation is only safe before physical handoff and before funds have
+      // been settled to the seller. Those cases require an explicit return or
+      // settlement-reversal workflow, not a normal order-status transition.
+      if (canonicalSeller) {
+        const fulfillment = db.prepare(
+          'SELECT status FROM marketplace_fulfillments WHERE seller_order_id = ?'
+        ).get(canonicalSeller.id);
+        if (['picked_up', 'delivered'].includes(String(fulfillment?.status || '').toLowerCase())) {
+          throw Object.assign(
+            new Error('Marketplace order cannot be cancelled after courier pickup or delivery; use the return workflow'),
+            { statusCode: 409, code: 'MARKETPLACE_FULFILLMENT_ALREADY_HANDED_OFF' }
+          );
+        }
+        const settled = db.prepare(
+          "SELECT 1 AS found FROM marketplace_settlements WHERE seller_order_id = ? AND status = 'SETTLED' LIMIT 1"
+        ).get(canonicalSeller.id);
+        if (settled) {
+          throw Object.assign(
+            new Error('Marketplace order cannot be cancelled after seller settlement; use the refund and settlement adjustment workflow'),
+            { statusCode: 409, code: 'MARKETPLACE_SETTLEMENT_ALREADY_COMPLETED' }
+          );
+        }
+      }
       for (const item of Array.isArray(order.items) ? order.items : []) {
         const itemId = String(item?.item_id || '').trim();
         const qty = Math.floor(Number(item?.qty));
@@ -9970,10 +9993,18 @@ export async function getMarketplaceOrderTracking(marketplaceOrderId, trackingTo
     return a.length === b.length && crypto.timingSafeEqual(a, b);
   });
   if (!authorised) throw Object.assign(new Error('Invalid tracking token'), { statusCode: 404 });
+  const sellerStatuses = rows.map(row => String(row.status || orderFromRow(row).status || 'queued').toLowerCase());
+  const activeStatuses = sellerStatuses.filter(status => status !== 'cancelled');
+  let overallStatus = 'queued';
+  if (activeStatuses.length === 0) overallStatus = 'cancelled';
+  else if (activeStatuses.every(status => status === 'completed')) overallStatus = 'completed';
+  else if (activeStatuses.includes('ready')) overallStatus = 'in_progress';
+  else if (activeStatuses.includes('preparing')) overallStatus = 'in_progress';
+  else if (activeStatuses.every(status => ['confirmed', 'completed'].includes(status))) overallStatus = 'confirmed';
   return {
     marketplace_order_id: id,
     created_at: Math.min(...rows.map(r => Number(r.created_at) || Date.now())),
-    status: rows.some(r => String(r.status) === 'cancelled') ? 'cancelled' : rows.every(r => String(r.status) === 'completed') ? 'completed' : rows.some(r => ['preparing','ready'].includes(String(r.status))) ? 'in_progress' : rows.every(r => String(r.status) === 'confirmed' || String(r.status) === 'completed') ? 'confirmed' : 'queued',
+    status: overallStatus,
     sellers: rows.map(row => {
       const order = orderFromRow(row);
       return { seller_name: getTenant(row.chat_id)?.sellerName || 'Seller', status: order.status || row.status || 'queued', item_count: Array.isArray(order.items) ? order.items.reduce((n, item) => n + Number(item.qty || 0), 0) : 0, total: order.total || 0, currency: normaliseCurrency(row.currency || order.currency || parseJSON(db.prepare('SELECT branding_json FROM tenants WHERE chat_id = ?').get(row.chat_id)?.branding_json, {})?.currency, 'ETB') };
