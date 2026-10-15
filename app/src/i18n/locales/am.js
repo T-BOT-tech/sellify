@@ -66,7 +66,7 @@ export default {
     orderDeleted: "ትዕዛዙ ተሰርዟል",
     orderServed: "ትዕዛዙ ደርሷል",
     undo: "መልስ",
-    todaySales: "የዛሬ ሽያጭ",
+    todaySales: "የዛሬ የትዕዛዝ ዋጋ",
     totalOrders: "ትዕዛዞች",
     avgOrderVal: "አማካይ ዋጋ",
     receiptHeader: "ደረሰኝ",
