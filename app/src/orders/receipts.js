@@ -39,7 +39,8 @@ export function formatReceiptText(o) {
     text += `${i.qty} x ${i.name} = ${CS()}${formatMoney(i.qty * i.price)}\n`;
   });
   text += `------------------------\n`;
-  text += `${t('total').toUpperCase()}: ${CS()}${formatMoney(o.total)}\n`;
+  text += `ORDER TOTAL: ${CS()}${formatMoney(o.total)}\n`;
+  text += `Payment status is not verified by this receipt.\n`;
   if (o.payment_method_name) text += `Payment method: ${o.payment_method_name}\n`;
   if (o.cash_tendered !== null && o.cash_tendered !== undefined) {
     text += `${t('cashTendered')}: ${CS()}${formatMoney(o.cash_tendered)}\n`;
@@ -139,10 +140,11 @@ export function printReceipt(id) {
       ${itemsHtml}
     </div>
     <div style="border-top:1px dashed #000; padding-top:6px; font-weight:bold; display:flex; justify-content:space-between;">
-      <span>${t('total')}</span>
+      <span>Order total</span>
       <span>${CS()}${formatMoney(o.total)}</span>
     </div>
     ${cashHtml}
+    <div style="margin-top:6px; font-size:10px; text-align:center;">Payment status is not verified by this receipt.</div>
     <div style="border-top:1px dashed #000; margin-top:8px; padding-top:8px; text-align:center; font-size:11px;">
       ${t('thankYou')}
     </div>
@@ -158,7 +160,7 @@ export function drawCanvasReceipt(o) {
   const storeName = (config.sellerName || 'STALL LEDGER').toUpperCase();
   const dateStr = new Date(o.created_at || Date.now()).toLocaleString();
 
-  const baseHeight = 220;
+  const baseHeight = 244;
   const itemHeight = ((o && o.items) ? o.items.length : 0) * 30;
   const cashHeight = (o && o.cash_tendered !== null && o.cash_tendered !== undefined) ? 60 : 0;
   const paymentMethodHeight = (o && o.payment_method_name) ? 24 : 0;
@@ -262,6 +264,11 @@ export function drawCanvasReceipt(o) {
   }
 
   y += 20;
+  ctx.textAlign = 'center';
+  ctx.font = '11px monospace';
+  ctx.fillStyle = '#6e6d6a';
+  ctx.fillText('Payment status is not verified by this receipt.', width / 2, y);
+  y += 18;
   drawDashedLine(y);
 
   y += 32;
