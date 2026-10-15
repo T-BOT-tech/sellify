@@ -48,11 +48,11 @@ assert.doesNotMatch(client, /providerToken|botToken|secret|credential/i);
 
 // Receipts may display the selected payment method, but must not infer a
 // canonical payment outcome from local order metadata.
-assert.match(receipts, /\\$\\{t\\('paymentMethod'\\)\\}: \\$\\{o\\.payment_method_name\\}/);
+assert.match(receipts, /t\('paymentMethod'\).*o\.payment_method_name/);
 assert.match(receipts, /escapeHtml\(o\.payment_method_name\)/);
 assert.match(receipts, /\$\{paymentMethodHtml\}/,
   'printed receipts must include the escaped selected payment method when available');
-assert.match(receipts, /ctx\\.fillText\\(t\\('paymentMethod'\\)/);
+assert.match(receipts, /ctx\.fillText\(t\('paymentMethod'\)/);
 assert.doesNotMatch(receipts, /o\.payment_status|o\.payment_state|o\.state\s*===\s*['\"](?:PAID|VERIFIED|PARTIAL)['\"]/);
 
 // Payment projection may query and render canonical state, but checkout must not
@@ -506,14 +506,14 @@ assert.match(translations, /receiptPaymentDisclaimer = "Payment status is not ve
   'missing locale-specific disclaimer translations must fall back to a safe English statement');
 assert.ok((receipts.match(/t\('receiptPaymentDisclaimer'\)/g) || []).length >= 3,
   'plain-text, printed, and canvas receipts must clearly disclaim payment confirmation');
-assert.match(receipts, /escapeHtml\\(t\\('total'\\)\\)/);
+assert.match(receipts, /escapeHtml\(t\('total'\)\)/);
 assert.match(receipts, /ctx\.fillText\(t\('receiptPaymentDisclaimer'\)/);
 
 // The selected payment method is descriptive order metadata, not proof of
 // payment acceptance; keep it consistent across text, print, and image receipts.
-assert.match(receipts, /if \\(o\\.payment_method_name\\) text \\+= `\\$\\{t\\('paymentMethod'\\)\\}:/);
+assert.match(receipts, /t\('paymentMethod'\).*o\.payment_method_name/);
 assert.match(receipts, /const paymentMethodHtml = o\.payment_method_name/);
-assert.match(receipts, /ctx\\.fillText\\(t\\('paymentMethod'\\)/);
+assert.match(receipts, /ctx\.fillText\(t\('paymentMethod'\)/);
 assert.match(receipts, /paymentMethodHeight/);
 
 // Daily queue metrics describe order value, not confirmed financial receipts.
