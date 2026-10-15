@@ -185,6 +185,8 @@ try {
     'the no-queued-orders sync path still recovers missing canonical payment links');
   assert.match(orderClient, /payment_linkage:\s*\{\s*status:\s*'LINKED',\s*payment_id:\s*paymentId,\s*payment_intent_id:\s*intentId,/s,
     'recovered canonical payment identity is persisted locally for subsequent syncs');
+  assert.match(orderClient, /canonical_linkage_only:\s*true/,
+    'linkage-only shells remain explicitly marked until a routed financial payment exists');
   assert.match(orderClient, /String\(\(order\.payment_linkage && order\.payment_linkage\.status\) \|\| ''\)\.toUpperCase\(\) !== 'LINKED'/,
     'recovery still checks whether a canonical payment link exists');
   assert.match(orderClient, /Boolean\(order\.payment_linkage && order\.payment_linkage\.canonical_linkage_only\)/,
