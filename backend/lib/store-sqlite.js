@@ -9998,6 +9998,7 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
           LEFT JOIN payments p ON p.id = a.payment_id
           WHERE a.seller_order_id = ? AND a.status IN ('ALLOCATED','PARTIAL')
         `).all(canonicalSeller.id);
+        let refundPending = false;
         for (const allocation of allocations) {
           const paidAndVerified = ['VERIFIED', 'RECONCILED'].includes(String(allocation.payment_state || '').toUpperCase());
           if (!paidAndVerified || Number(allocation.amount_minor) <= 0 || !allocation.payment_id) continue;
@@ -10020,13 +10021,19 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
             allocation.payment_id, allocation.organization_id, allocation.amount_minor,
             allocation.currency, 'Marketplace order cancellation', nowIso()
           );
+          refundPending = true;
         }
 
+        // A cancellation is operational, not financial confirmation. Hold a
+        // paid order's settlement while its Payment Core refund is pending;
+        // only finalizePaymentRefund() may mark it REVERSED after confirmed
+        // refunds have closed every active allocation. Unpaid cancellations
+        // have no refund outstanding and can be reversed immediately.
         db.prepare(`
           UPDATE marketplace_settlements
-          SET status = 'REVERSED'
+          SET status = ?
           WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')
-        `).run(canonicalSeller.id);
+        `).run(refundPending ? 'HELD' : 'REVERSED', canonicalSeller.id);
 
         db.prepare(`
           UPDATE marketplace_fulfillments
