@@ -202,7 +202,7 @@ export function ticketInnerHtml(o) {
   const orderPaymentSummaryUnavailable = o.server_order_id && getOrderPaymentSummaryError(o.server_order_id);
   if (o.server_order_id && !orderPaymentSummary && !orderPaymentSummaryUnavailable) refreshOrderPaymentSummary(o.server_order_id);
   const orderPaymentLine = orderPaymentSummary
-    ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: ${escapeHtml(String(orderPaymentSummary.status || 'UNPAID'))} · ${CS()}${formatMoney(orderPaymentSummary.verifiedMinor || 0)} paid · ${CS()}${formatMoney(orderPaymentSummary.outstandingMinor || 0)} outstanding</div>`
+    ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: ${escapeHtml(String(orderPaymentSummary.status || 'status unavailable'))} · ${CS()}${formatMoney(orderPaymentSummary.verifiedMinor || 0)} paid · ${CS()}${formatMoney(orderPaymentSummary.outstandingMinor || 0)} outstanding</div>`
     : (orderPaymentSummaryUnavailable
       ? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: status unavailable · will retry</div>'
       : (o.server_order_id ? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: checking…</div>' : ''));
