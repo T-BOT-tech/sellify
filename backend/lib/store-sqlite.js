@@ -106,6 +106,7 @@ function normaliseProduct(product) {
   const value = product && typeof product === 'object' ? { ...product } : {};
   value.name = typeof value.name === 'string' ? value.name.trim().slice(0, 200) : '';
   value.price = normalisePrice(value.price);
+  value.item_type = String(value.item_type || 'product').trim().toLowerCase() === 'service' ? 'service' : 'product';
   value.currency = normaliseCurrency(value.currency, 'ETB');
   if (value.stock !== undefined && value.stock !== null) {
     const stock = Number(value.stock);
@@ -8150,8 +8151,11 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
     const productId = String(item?.product_id ?? item?.productId ?? item?.item_id ?? item?.id ?? '').trim();
     const quantity = Number(item?.qty ?? item?.quantity ?? 0);
     if (!productId || !Number.isFinite(quantity) || quantity <= 0) continue;
-    const product = db.prepare('SELECT product_id FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
+    const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
     if (!product) throw Object.assign(new Error('Fulfillment product not found'), { statusCode: 409, code: 'FULFILLMENT_PRODUCT_NOT_FOUND', productId });
+    // Catalog type is server-owned authority. A service fulfills the order
+    // without decrementing physical inventory, regardless of client line metadata.
+    if (parseJSON(product.product_json, {}).item_type === 'service') continue;
     const balance = Number(db.prepare('SELECT COALESCE(SUM(quantity), 0) AS quantity FROM inventory_movements WHERE organization_id = ? AND location_id = ? AND product_id = ?').get(String(fulfillmentRow.organization_id), locationId, productId)?.quantity || 0);
     if (balance < quantity) throw Object.assign(new Error('Insufficient inventory for fulfillment'), { statusCode: 409, code: 'FULFILLMENT_INSUFFICIENT_INVENTORY', productId, available: balance, requested: quantity });
     const eventId = `fulfillment-sale:${fulfillmentRow.id}:${productId}`;
