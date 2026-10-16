@@ -9,7 +9,8 @@ const modalEnd = html.indexOf('</div>\n\n<div class="modal-backdrop" id="tableEd
 assert.ok(modalEnd > modalStart, 'checkout payment modal boundary must be identifiable');
 const modal = html.slice(modalStart, modalEnd);
 
-assert.match(modal, /<h3>Review payment method<\/h3>/);
+assert.match(modal, /role="dialog" aria-modal="true" aria-labelledby="checkoutPaymentTitle" aria-describedby="checkoutPaymentStateHint"/);
+assert.match(modal, /<h3 id="checkoutPaymentTitle">Review payment method<\/h3>/);
 assert.match(modal, /Saving creates an order in the queue/);
 assert.match(modal, /Order total/);
 assert.match(modal, /id="checkoutPaymentOrderTotal"/);
