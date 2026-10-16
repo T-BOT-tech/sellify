@@ -35,6 +35,15 @@ try {
   assert.match(inventorySource, /if \(p\?\.item_type === 'service'\) return false/);
   const catalogSource = await readFile(new URL('../app/src/products/catalog.js', import.meta.url), 'utf8');
   assert.match(catalogSource, /const item_type = typeSel && typeSel\.value === 'service' \? 'service' : 'product'/);
+  const appHtml = await readFile(new URL('../app/index.html', import.meta.url), 'utf8');
+  assert.match(appHtml, /<label for="newProdType" data-i18n="catalogItemType">/);
+  assert.match(appHtml, /<option value="service" data-i18n="service">Service<\/option>/);
+  const renderSource = await readFile(new URL('../app/src/products/render.js', import.meta.url), 'utf8');
+  assert.match(renderSource, /function serviceBadgeMarkup\(p\)/);
+  assert.match(renderSource, /serviceBadgeMarkup\(p\)/);
+  const englishLocale = await readFile(new URL('../app/src/i18n/locales/en.js', import.meta.url), 'utf8');
+  assert.match(englishLocale, /catalogItemType: "Item type"/);
+  assert.match(englishLocale, /service: "Service"/);
 
   // Exercise the real canonical order -> fulfillment -> inventory path, not
   // only source guards. The service line must not produce a physical stock sale.
