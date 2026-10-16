@@ -26,7 +26,7 @@ const confirmStart = paymentProof.indexOf('export async function confirmOrderWit
 const confirmEnd = paymentProof.indexOf('\nexport function compressImage', confirmStart);
 assert.ok(confirmStart >= 0 && confirmEnd > confirmStart, 'proof confirmation flow must be identifiable');
 const confirmFlow = paymentProof.slice(confirmStart, confirmEnd);
-assert.match(confirmFlow, /showToast\('Receipt could not be saved\. Retry, or close this dialog to cancel\.'\);\s*return;/);
+assert.match(confirmFlow, /showToast\('Receipt could not be saved\. Retry, or close this dialog to return to checkout\.'\);\s*return;/);
 assert.match(confirmFlow, /catch \(e\) \{[\s\S]*?return;\s*\}\s*\}\s*closePaymentProofModal\(\);/);
 
 assert.match(modal, /does not confirm payment/);
