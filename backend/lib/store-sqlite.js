@@ -5615,6 +5615,17 @@ export async function saveCatalog(chatId, incomingProducts) {
     for (const product of products) {
       const row = current.get(String(product.id));
       if (!row) { product.stock_revision = 0; continue; }
+      const previousType = parseJSON(row.product_json, {}).item_type === 'service' ? 'service' : 'product';
+      const nextType = product.item_type === 'service' ? 'service' : 'product';
+      if (previousType !== nextType) {
+        const tenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(key);
+        const hasInventoryHistory = tenant?.organization_id && db.prepare(
+          'SELECT 1 FROM inventory_movements WHERE organization_id = ? AND product_id = ? LIMIT 1'
+        ).get(String(tenant.organization_id), String(product.id));
+        if (hasInventoryHistory) {
+          throw Object.assign(new Error('Catalog item type cannot change after physical inventory history exists'), { statusCode: 409, code: 'CATALOG_ITEM_TYPE_LOCKED' });
+        }
+      }
       const currentRevision = Number.isInteger(row.stock_revision) ? row.stock_revision : 0;
       const incomingRevision = Number.isInteger(product.stock_revision) ? product.stock_revision : null;
       if (incomingRevision === null) {
