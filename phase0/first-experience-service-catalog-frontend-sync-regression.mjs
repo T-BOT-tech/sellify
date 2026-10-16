@@ -35,6 +35,63 @@ assert.match(ordersSource, /if \(result && result\.status === 'rejected'\) \{[\s
 assert.match(tenantAuthSource, /export function authHeaders\(/);
 
 
+// Exercise the real catalog creation handler so item_type is not only
+// present in markup/source: selecting Service must persist a service locally
+// before the existing catalog sync sends it to the backend.
+const catalogExecutableSource = catalogSource
+  .replace(/^import[\\s\\S]*?from ['"][^'"]+['"];\\s*/gm, '')
+  .replace(/^export /gm, '')
+  + '\\nglobalThis.__addProduct = addProduct;';
+const catalogInputs = {
+  newProdName: { value: 'Consultation' },
+  newProdPrice: { value: '250.00' },
+  newProdCategory: { value: '' },
+  newProdUnit: { value: '' },
+  newProdType: { value: 'service' },
+  newProdModifiers: { value: '' },
+  newProdMarketListed: { checked: false },
+  newProdImgPreview: { innerHTML: '' },
+  newProdImgInput: { value: '' },
+};
+const locallySavedCatalogs = [];
+const runtimeCatalog = [];
+const catalogContext = {
+  CS: () => 'ETB ',
+  toMinorUnits: value => Math.round(Number(value) * 100),
+  fromMinorUnits: value => value / 100,
+  formatMoney: value => String(value),
+  getNichePreset: () => null,
+  isRestaurant: () => false,
+  escapeHtml: value => String(value),
+  escapeAttr: value => String(value),
+  uid: () => 'service-created-in-ui',
+  STORAGE_KEYS: { products: 'products' },
+  RESTAURANT_COURSES: [],
+  products: runtimeCatalog,
+  currentOrder: {},
+  currentOrderNotes: {},
+  currentStaff: { role: 'owner' },
+  saveJSON: (key, value) => { if (key === 'products') locallySavedCatalogs.push(structuredClone(value)); },
+  hasPermission: () => true,
+  t: key => key,
+  renderAll() {},
+  showToast() {},
+  markCatalogDirty() {},
+  document: { getElementById: id => catalogInputs[id] || null },
+  prompt: () => '',
+  confirm: () => true,
+};
+vm.runInNewContext(catalogExecutableSource, catalogContext, { timeout: 1000 });
+catalogContext.__addProduct();
+assert.equal(runtimeCatalog.length, 1);
+assert.equal(runtimeCatalog[0].id, 'service-created-in-ui');
+assert.equal(runtimeCatalog[0].item_type, 'service');
+assert.equal(runtimeCatalog[0].price, 25000);
+assert.equal(locallySavedCatalogs.at(-1)[0].item_type, 'service',
+  'service type must be saved locally before catalog sync');
+assert.equal(catalogInputs.newProdType.value, 'product',
+  'new-item form resets to the safe physical-product default after save');
+
 // Exercise the actual syncOrders implementation with a small isolated browser
 // boundary. The first POST represents a server commit whose response is lost;
 // the second POST returns the idempotent canonical acknowledgement.
