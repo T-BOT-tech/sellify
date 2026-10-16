@@ -160,8 +160,12 @@ export function ticketInnerHtml(o) {
   if (o.server_order_id && !orderPaymentSummary) refreshOrderPaymentSummary(o.server_order_id);
   const paymentStateLine = payment?.state
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Payment Core: ${escapeHtml(String(payment.state).replaceAll('_', ' '))}</div>` : '';
+  const orderPaymentStatus = String(orderPaymentSummary?.status || orderPaymentSummary?.payment_status || '').toUpperCase();
+  const orderPaymentStatusLabel = ['UNPAID', 'PARTIAL', 'PAID', 'OVERPAID', 'REFUNDED', 'REVERSED'].includes(orderPaymentStatus)
+    ? orderPaymentStatus
+    : 'Payment status unavailable';
   const orderPaymentLine = orderPaymentSummary
-    ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: ${escapeHtml(String(orderPaymentSummary.status || 'UNPAID'))} · ${CS()}${formatMoney(orderPaymentSummary.verifiedMinor || 0)} paid · ${CS()}${formatMoney(orderPaymentSummary.outstandingMinor || 0)} outstanding</div>`
+    ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: ${escapeHtml(orderPaymentStatusLabel)} · ${CS()}${formatMoney(orderPaymentSummary.verifiedMinor ?? orderPaymentSummary.verified_minor ?? 0)} paid · ${CS()}${formatMoney(orderPaymentSummary.outstandingMinor ?? orderPaymentSummary.outstanding_minor ?? 0)} outstanding</div>`
     : (o.server_order_id ? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: checking…</div>' : '');
   const payMethodLine = o.payment_method_name
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> ${escapeHtml(o.payment_method_name)}${o.payment_proof ? ' · <svg class="icon icon-sm"><use href="#i-paperclip"/></svg> receipt attached (evidence only)' : ''}</div>` : '';
