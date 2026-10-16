@@ -73,7 +73,6 @@ function refreshOrderPaymentSummary(orderId) {
   if (!id || !config.chatId || orderPaymentSummaryInFlight.has(orderPaymentSummaryKey(id))) return;
   const key = orderPaymentSummaryKey(id);
   const globalVersion = orderPaymentSummaryGlobalVersion;
-  const keyVersion = orderPaymentSummaryVersions.get(key) || 0;
   // Never retain an expired/stale financial projection while a canonical
   // refresh is in flight. Failure must render as unavailable/checking rather
   // than silently presenting an old PAID/PARTIAL/UNPAID decision.
