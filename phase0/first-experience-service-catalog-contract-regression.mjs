@@ -38,6 +38,10 @@ try {
   assert.match(inventorySource, /return stock !== null && stock <= 0;/, 'untracked items and services must not be listed as out of stock');
   const catalogSource = await readFile(new URL('../app/src/products/catalog.js', import.meta.url), 'utf8');
   assert.equal(catalogSource.includes('id="editItemType-${p.id}"'), true, 'existing catalog items expose their canonical type in edit mode');
+  assert.match(catalogSource, /class="editName" id="editName-\\${p\.id}" aria-label="\\${escapeAttr\(t\('catalogNameLabel'\)/, 'catalog edit name field must have an accessible localized name');
+  assert.match(catalogSource, /class="editPrice" id="editPrice-\\${p\.id}" aria-label="\\${escapeAttr\(t\('catalogPriceLabel'\)/, 'catalog edit price field must have an accessible localized name');
+  assert.match(catalogSource, /class="editCategory" id="editCategory-\\${p\.id}" aria-label="\\${escapeAttr\(t\('catalogCategoryLabel'\)/, 'catalog edit category field must have an accessible localized name');
+  assert.match(catalogSource, /class="editUnit" id="editUnit-\\${p\.id}" aria-label="\\${escapeAttr\(t\('catalogUnitLabel'\)/, 'catalog edit unit field must have an accessible localized name');
   assert.match(catalogSource, /const itemTypeSel = document.getElementById/);
   assert.match(catalogSource, /_priceMinor: true, item_type,/, 'saving an edited catalog item persists its selected type');
   assert.match(catalogSource, /const item_type = typeSel && typeSel\.value === 'service' \? 'service' : 'product'/);
