@@ -4811,8 +4811,11 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
     if (already + quantity > ordered) throw Object.assign(new Error(`Receipt item ${index + 1} would exceed ordered quantity`), { statusCode: 409, code: 'OVER_RECEIPT' });
     const productId = String(poItem.product_id || '').trim();
     if (!productId) throw Object.assign(new Error('Procurement purchase-order items must reference catalog products before receiving'), { statusCode: 409, code: 'RECEIPT_PRODUCT_REQUIRED' });
-    const product = db.prepare('SELECT product_id FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
+    const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
     if (!product) throw Object.assign(new Error('Purchase-order product is not present in the buyer catalog'), { statusCode: 409, code: 'RECEIPT_PRODUCT_NOT_FOUND' });
+    if (parseJSON(product.product_json, {}).item_type === 'service') {
+      throw Object.assign(new Error('Service catalog items cannot be received into physical inventory'), { statusCode: 422, code: 'SERVICE_HAS_NO_INVENTORY' });
+    }
     return { purchaseOrderItemId: itemId, productId, receivedQuantity: quantity, notes: String(x.notes || '').trim().slice(0, 1000) };
   });
 
