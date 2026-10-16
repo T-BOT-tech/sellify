@@ -29,6 +29,7 @@ try {
   assert(fulfillmentStart >= 0 && fulfillmentEnd > fulfillmentStart, 'fulfillment inventory consequence source must exist');
   const fulfillmentSource = storeSource.slice(fulfillmentStart, fulfillmentEnd);
   assert.match(fulfillmentSource, /parseJSON\(product\.product_json, \{\}\)\.item_type === 'service'\) continue/);
+  assert(fulfillmentSource.indexOf("item_type === 'service') continue") < fulfillmentSource.indexOf("if (!locationId) throw"), 'service fulfillment must bypass physical inventory-location requirements');
 
   const inventorySource = await readFile(new URL('../app/src/warehouse/inventory.js', import.meta.url), 'utf8');
   assert.match(inventorySource, /if \(p\?\.item_type === 'service'\) return false/);
