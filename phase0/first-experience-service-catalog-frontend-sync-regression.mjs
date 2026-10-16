@@ -39,9 +39,9 @@ assert.match(tenantAuthSource, /export function authHeaders\(/);
 // present in markup/source: selecting Service must persist a service locally
 // before the existing catalog sync sends it to the backend.
 const catalogExecutableSource = catalogSource
-  .replace(/^import[^\\n]*\\n/gm, '')
+  .replace(/^import.*;$/gm, '')
   .replace(/^export /gm, '')
-  + '\\nglobalThis.__addProduct = addProduct;';
+  + '\nglobalThis.__addProduct = addProduct;';
 const catalogInputs = {
   newProdName: { value: 'Consultation' },
   newProdPrice: { value: '250.00' },
@@ -96,7 +96,7 @@ assert.equal(catalogInputs.newProdType.value, 'product',
 // boundary. The first POST represents a server commit whose response is lost;
 // the second POST returns the idempotent canonical acknowledgement.
 const executableOrdersSource = ordersSource
-  .replace(/^import[\s\S]*?from ['"][^'"]+['"];\s*/gm, '')
+  .replace(/^import.*;$/gm, '')
   .replace('export async function syncOrders()', 'async function syncOrders()')
   + '\nglobalThis.__syncOrders = syncOrders;';
 
