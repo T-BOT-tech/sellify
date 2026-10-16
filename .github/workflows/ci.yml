@@ -57,6 +57,8 @@ jobs:
         run: npm run test:outbox-tenant-scope
       - name: Order sync idempotency regression
         run: npm run test:order-sync-idempotency
+      - name: Restaurant payment intent authority regression
+        run: npm run phase13.8.6:restaurant-order-payment-test
 
       - name: GAP-1.18I payment verification migration independence regression
         run: npm run gap-1.18:provider-verification-migration-test
