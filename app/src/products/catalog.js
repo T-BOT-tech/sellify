@@ -107,6 +107,7 @@ export function renderCatalog() {
       : `<div class="cat-thumb-placeholder"><svg class="icon icon-muted"><use href="#i-camera"/></svg></div>`;
 
     const badges = [];
+    if (p.item_type === 'service') badges.push(`<span class="prod-badge unit">${escapeHtml(t('service') || 'Service')}</span>`);
     if (p.category) badges.push(`<span class="prod-badge cat"><svg class="icon icon-sm"><use href="#i-tag"/></svg> ${escapeHtml(p.category)}</span>`);
     if (p.unit) badges.push(`<span class="prod-badge unit">${escapeHtml(p.unit)}</span>`);
     if (Array.isArray(p.tags)) p.tags.forEach(tag => badges.push(`<span class="prod-badge tag">${escapeHtml(tag)}</span>`));
@@ -299,6 +300,8 @@ export function addProduct() {
   const price = toMinorUnits(priceMajor);
   const category = (catSel && catSel.value && catSel.value !== '__custom__') ? catSel.value : '';
   const unit = unitSel ? unitSel.value : '';
+  const typeSel = document.getElementById('newProdType');
+  const item_type = typeSel && typeSel.value === 'service' ? 'service' : 'product';
   const modInput = document.getElementById('newProdModifiers');
   const modifiers = (isRestaurant() && modInput && modInput.value.trim())
     ? modInput.value.split(',').map(m => m.trim()).filter(Boolean)
@@ -308,6 +311,7 @@ export function addProduct() {
     id: uid(),
     name,
     price,
+    item_type,
     _priceMinor: true,
     category: category || undefined,
     unit: unit || undefined,
@@ -323,6 +327,7 @@ export function addProduct() {
   markCatalogDirty();
 
   nameInput.value = ''; priceInput.value = '';
+  if (typeSel) typeSel.value = 'product';
   if (modInput) modInput.value = '';
   if (marketListedBox) marketListedBox.checked = false;
   pendingNewProdImage = null;
