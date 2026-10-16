@@ -9626,6 +9626,9 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
       `).run(crypto.randomUUID(), sellerOrderCanonicalId, nowIso(), nowIso());
 
       for (const item of sellerItems) {
+        // This ledger represents physical inventory only; a service line has
+        // no stock to reserve or consume.
+        if (item.item_type === 'service') continue;
         db.prepare(`
           INSERT INTO marketplace_inventory_reservations
             (id, marketplace_order_id, seller_order_id, seller_id, product_id, quantity, status, created_at, updated_at)
