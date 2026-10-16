@@ -79,6 +79,73 @@ try {
   ).get().count, 0, 'service order cancellation must not create physical inventory movements');
   cancellationDb.close();
 
+  // A mixed marketplace order must release only the physical product's stock
+  // on cancellation; the service must never gain a synthetic RETURN movement
+  // or inventory reservation.
+  await store.saveCatalog(marketplaceSeller.chatId, [
+    {
+      id: 'marketplace-consultation',
+      name: 'Marketplace Consultation',
+      price: 18000,
+      item_type: 'service',
+      marketplace_listed: true,
+    },
+    {
+      id: 'marketplace-soap',
+      name: 'Marketplace Soap',
+      price: 5000,
+      item_type: 'product',
+      stock: 5,
+      marketplace_listed: true,
+    },
+  ]);
+  await store.appendInventoryMovement(marketplaceSeller.chatId, {
+    productId: 'marketplace-soap',
+    quantity: 5,
+    movementType: 'PURCHASE',
+    eventId: 'marketplace-mixed-opening-stock-' + Date.now(),
+  });
+  const mixedMarketplaceOrder = await store.createMarketplaceOrder({
+    buyer_id: 'service-marketplace-mixed-buyer',
+    customer_name: 'Mixed Marketplace Buyer',
+    items: [
+      { seller_id: marketplaceSeller.chatId, item_id: 'marketplace-consultation', qty: 1 },
+      { seller_id: marketplaceSeller.chatId, item_id: 'marketplace-soap', qty: 2 },
+    ],
+    idempotency_key: 'service-marketplace-mixed-checkout-' + Date.now(),
+  });
+  assert.ok(mixedMarketplaceOrder.marketplace_order_id);
+  const mixedSellerOrders = await store.getOrders(marketplaceSeller.chatId);
+  const mixedSellerOrder = mixedSellerOrders.find(order =>
+    order.is_marketplace &&
+    order.marketplace_order_id === mixedMarketplaceOrder.marketplace_order_id
+  );
+  assert.ok(mixedSellerOrder, 'mixed marketplace checkout should persist its canonical seller order');
+  const beforeMixedCancel = (await store.getInventoryBalances(marketplaceSeller.chatId))
+    .find(row => row.productId === 'marketplace-soap')?.quantity;
+  assert.equal(beforeMixedCancel, 3, 'checkout should consume two units of physical stock');
+  await store.updateMarketplaceOrderStatus(marketplaceSeller.chatId, mixedSellerOrder.id, 'cancelled');
+  const afterMixedCancel = (await store.getInventoryBalances(marketplaceSeller.chatId))
+    .find(row => row.productId === 'marketplace-soap')?.quantity;
+  assert.equal(afterMixedCancel, 5, 'cancellation should restore the physical product quantity exactly');
+  const mixedMarketplaceDb = new DatabaseSync(path.join(tempDir, 'sellify.sqlite'));
+  assert.equal(mixedMarketplaceDb.prepare(
+    "SELECT COUNT(*) AS count FROM inventory_movements WHERE product_id = 'marketplace-consultation'"
+  ).get().count, 0, 'mixed-order cancellation must not create physical movements for the service');
+  assert.equal(mixedMarketplaceDb.prepare(
+    "SELECT COUNT(*) AS count FROM inventory_movements WHERE product_id = 'marketplace-soap' AND movement_type = 'RETURN' AND reference_id = ?"
+  ).get(mixedMarketplaceOrder.marketplace_order_id).count, 1,
+  'physical stock must be restored with one canonical return movement');
+  assert.equal(mixedMarketplaceDb.prepare(
+    "SELECT COUNT(*) AS count FROM marketplace_inventory_reservations WHERE seller_order_id = ? AND product_id = 'marketplace-consultation'"
+  ).get(mixedSellerOrder.server_order_id || mixedSellerOrder.id).count, 0,
+  'service lines must not create physical inventory reservations');
+  assert.equal(mixedMarketplaceDb.prepare(
+    "SELECT COUNT(*) AS count FROM marketplace_inventory_reservations WHERE marketplace_order_id = ? AND product_id = 'marketplace-soap' AND status = 'released'"
+  ).get(mixedMarketplaceOrder.marketplace_order_id).count, 1,
+  'cancellation must release the physical product reservation');
+  mixedMarketplaceDb.close();
+
   await assert.rejects(
     store.saveCatalog(chatId, [
       { id: 'consultation', name: 'Consultation', price: 25000, item_type: 'service' },
