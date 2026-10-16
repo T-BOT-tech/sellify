@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import { readFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { createServer as createNetServer } from 'node:net';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -149,7 +151,81 @@ try {
   assert.equal(canonicalPayments.filter(item => item.id === firstBody.results[0].payment_id).length, 1,
     'HTTP retries must not create duplicate canonical payments');
 
-  console.log('PASS: service catalog HTTP write/readback and idempotent order sync');
+  // End-to-end client recovery: run the real syncOrders implementation
+  // against this live backend. The first POST is committed and its response
+  // is deliberately discarded; retry must recover the same order/payment IDs.
+  const ordersSource = await readFile(new URL('../app/src/sync/orders.js', import.meta.url), 'utf8');
+  const executableOrdersSource = ordersSource
+    .replace(/^import.*;$/gm, '')
+    .replace('export async function syncOrders()', 'async function syncOrders()')
+    + '\\nglobalThis.__syncOrders = syncOrders;';
+
+  const lostResponseOrder = {
+    id: 'service-http-lost-response-order',
+    status: 'queued',
+    currency: 'ETB',
+    items: [{ id: 'consultation-http', name: 'Consultation', price: 25000, qty: 1, currency: 'ETB', item_type: 'service' }],
+  };
+  let runtimeOrders = [lostResponseOrder];
+  const persistedOrders = [];
+  let postAttempts = 0;
+  let firstCommittedIdentity = null;
+  const runtimeContext = {
+    STORAGE_KEYS: { orders: 'orders' },
+    config: { syncUrl: baseUrl, chatId: tenant.chatId, sessionToken: session.token },
+    get orders() { return runtimeOrders; },
+    set orders(next) { runtimeOrders = next; },
+    setOrders(next) { runtimeOrders = next; },
+    saveJSON(key, value) { if (key === 'orders') persistedOrders.push(structuredClone(value)); },
+    tenantAuthHeaders() { return authHeaders; },
+    applyStoreBranding() {},
+    t(key) { return key; },
+    renderAll() {},
+    refreshPaymentProjection: async () => {},
+    ensurePaymentForSyncedOrder: async () => {},
+    console: { error() {}, warn() {}, log() {} },
+    Date,
+    fetch: async (url, options = {}) => {
+      if (options.method === 'POST') {
+        postAttempts += 1;
+        const response = await fetch(url, options);
+        if (!response.ok) throw new Error('Unexpected HTTP failure: ' + response.status);
+        const body = await response.json();
+        if (postAttempts === 1) {
+          // The backend has committed and returned canonical identities, but
+          // the client loses the response before syncOrders can consume it.
+          firstCommittedIdentity = body.results[0];
+          throw new Error('simulated connection loss after committed HTTP response');
+        }
+        return { ok: true, json: async () => body };
+      }
+      // Pulls are not part of this focused push/recovery assertion.
+      return { ok: true, json: async () => url.includes('/orders/') ? { orders: [] } : { new_orders: [] } };
+    },
+  };
+  vm.runInNewContext(executableOrdersSource, runtimeContext, { timeout: 1000 });
+  const syncOrdersRuntime = runtimeContext.__syncOrders;
+  assert.equal(await syncOrdersRuntime(), 'orderSyncFailed');
+  assert.equal(runtimeOrders[0].status, 'queued', 'lost response must leave local order retryable');
+  assert.equal(runtimeOrders[0].sync_attempts, 1);
+  assert.equal(persistedOrders.at(-1)[0].status, 'queued');
+  assert.equal(firstCommittedIdentity?.status, 'synced', 'first server request must really commit');
+  assert.ok(firstCommittedIdentity?.order_id);
+  assert.ok(firstCommittedIdentity?.payment_id);
+
+  assert.match(await syncOrdersRuntime(), /orderSyncedMsg/);
+  assert.equal(postAttempts, 2);
+  assert.equal(runtimeOrders[0].status, 'synced');
+  assert.equal(runtimeOrders[0].server_order_id, firstCommittedIdentity.order_id);
+  assert.equal(persistedOrders.at(-1)[0].status, 'synced');
+  const recoveredPayment = (await store.listPayments(tenant.chatId))
+    .filter(payment => payment.id === firstCommittedIdentity.payment_id);
+  assert.equal(recoveredPayment.length, 1, 'response-loss retry must not duplicate canonical payment');
+  assert.equal((await store.getOrders(tenant.chatId))
+    .filter(item => item.id === lostResponseOrder.id).length, 1,
+  'response-loss retry must not duplicate canonical order');
+
+  console.log('PASS: service catalog HTTP journey, actual frontend sync response-loss recovery, and idempotent order sync');
 } catch (error) {
   console.error(error);
   if (childOutput) console.error('Backend output:\n' + childOutput);
