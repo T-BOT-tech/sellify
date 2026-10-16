@@ -5424,8 +5424,8 @@ function ensureInventoryOpeningBalances(chatId) {
   ).get(String(tenant.organization_id));
   if (!location) return;
   const products = db.prepare(
-    'SELECT product_id, stock FROM catalog_products WHERE chat_id = ? AND stock IS NOT NULL'
-  ).all(String(chatId));
+    'SELECT product_id, stock, product_json FROM catalog_products WHERE chat_id = ? AND stock IS NOT NULL'
+  ).all(String(chatId)).filter(product => parseJSON(product.product_json, {}).item_type !== 'service');
   const insert = db.prepare(`
     INSERT OR IGNORE INTO inventory_movements
       (id, event_id, organization_id, location_id, product_id, quantity, movement_type,
