@@ -66,4 +66,7 @@ assert.match(checkout, /payment_id: null/);
 assert.match(queue, /receipt attached \(evidence only\)/);
 assert.match(queue, /Payment tracking: Not yet linked to Payment Core/);
 assert.match(queue, /!o\.server_order_id && o\.payment_linkage\?\.status === 'UNLINKED'/);
+assert.match(queue, /Payment status unavailable/);
+assert.doesNotMatch(queue, /orderPaymentSummary\.status \|\| 'UNPAID'/);
+assert.match(queue, /verifiedMinor \?\? orderPaymentSummary\.verified_minor \?\? 0/);
 console.log('Checkout payment-state clarity and order-total regression: PASS');
