@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -109,6 +110,66 @@ try {
   const afterMixedRetry = (await store.getInventoryBalances(integrationChatId))
     .find(row => row.productId === 'soap-e2e')?.quantity;
   assert.equal(afterMixedRetry, afterMixed, 'exact fulfillment retry must not duplicate inventory deduction');
+
+  // Prove the service exception against a tenant with no physical locations
+  // in the database, not merely an actor whose locationId is null.
+  const locationlessChatId = 'service-locationless-' + Date.now();
+  await store.getOrCreateTenant(locationlessChatId);
+  await store.saveCatalog(locationlessChatId, [
+    { id: 'remote-consultation', name: 'Remote consultation', price: 15000, item_type: 'service' },
+    { id: 'physical-item-no-location', name: 'Physical item', price: 3000, item_type: 'product' },
+  ]);
+  const fixtureDb = new DatabaseSync(process.env.SELLIFY_DB_PATH);
+  try {
+    const tenantRow = fixtureDb.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(locationlessChatId);
+    assert(tenantRow?.organization_id, 'locationless fixture tenant must have canonical organization identity');
+    assert.equal(
+      fixtureDb.prepare('SELECT COUNT(*) AS count FROM inventory_movements WHERE organization_id = ?').get(tenantRow.organization_id).count,
+      0,
+      'locationless fixture must not have inventory movements referencing its default location'
+    );
+    fixtureDb.prepare("DELETE FROM locations WHERE organization_id = ?").run(tenantRow.organization_id);
+    assert.equal(
+      fixtureDb.prepare('SELECT COUNT(*) AS count FROM locations WHERE organization_id = ?').get(tenantRow.organization_id).count,
+      0,
+      'fixture must have no physical locations'
+    );
+  } finally {
+    fixtureDb.close();
+  }
+
+  const locationlessService = await store.saveQueuedOrders(locationlessChatId, [{
+    id: 'locationless-service-order',
+    items: [{ item_id: 'remote-consultation', name: 'Remote consultation', qty: 1, price: 15000 }],
+    fulfillment_type: 'delivery',
+    delivery_address: 'Remote',
+  }]);
+  const locationlessServiceOrderId = locationlessService[0].order_id;
+  await store.transitionOrderFulfillment(locationlessChatId, locationlessServiceOrderId, 'out_for_delivery', actor, {
+    idempotencyKey: 'locationless-service-start',
+  });
+  const locationlessCompleted = await store.transitionOrderFulfillment(locationlessChatId, locationlessServiceOrderId, 'delivered', actor, {
+    idempotencyKey: 'locationless-service-delivered',
+  });
+  assert.equal(locationlessCompleted.status, 'delivered', 'service fulfillment must complete with zero physical locations');
+
+  const locationlessPhysical = await store.saveQueuedOrders(locationlessChatId, [{
+    id: 'locationless-physical-order',
+    items: [{ item_id: 'physical-item-no-location', name: 'Physical item', qty: 1, price: 3000 }],
+    fulfillment_type: 'delivery',
+    delivery_address: 'Remote',
+  }]);
+  const locationlessPhysicalOrderId = locationlessPhysical[0].order_id;
+  await store.transitionOrderFulfillment(locationlessChatId, locationlessPhysicalOrderId, 'out_for_delivery', actor, {
+    idempotencyKey: 'locationless-physical-start',
+  });
+  await assert.rejects(
+    store.transitionOrderFulfillment(locationlessChatId, locationlessPhysicalOrderId, 'delivered', actor, {
+      idempotencyKey: 'locationless-physical-delivered',
+    }),
+    error => error?.code === 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED',
+    'physical-item fulfillment must still require a physical inventory location'
+  );
 
   console.log('First-experience service catalog contract regression: PASS');
 } finally {
