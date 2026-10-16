@@ -88,4 +88,5 @@ export default {
     packLocalizationAuthority: 'Localization authority',
     packAccessibilityAuthority: 'Accessibility foundation',
     packAccessibilityBoundary: 'Language selection does not change authorization. Screen semantics do not grant permissions; server-side authorization remains authoritative.',
+    checkoutPaymentStateHint: "Al completar este paso, el pedido se guardará en la cola. La foto del recibo es solo evidencia de apoyo; no confirma que se haya recibido el pago.",
 };

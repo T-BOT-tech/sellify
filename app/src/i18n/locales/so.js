@@ -87,4 +87,5 @@ export default {
     packLocalizationAuthority: 'Localization authority',
     packAccessibilityAuthority: 'Accessibility foundation',
     packAccessibilityBoundary: 'Language selection does not change authorization. Screen semantics do not grant permissions; server-side authorization remains authoritative.',
+    checkoutPaymentStateHint: "Markaad tallaabadan dhammayso, dalabka waxaa lagu kaydinayaa safkaaga. Sawirka rasiidku waa caddayn taageero oo keliya; ma xaqiijinayo in lacag la helay.",
 };

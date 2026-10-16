@@ -88,4 +88,5 @@ export default {
     packLocalizationAuthority: 'Localization authority',
     packAccessibilityAuthority: 'Accessibility foundation',
     packAccessibilityBoundary: 'Language selection does not change authorization. Screen semantics do not grant permissions; server-side authorization remains authoritative.',
+    checkoutPaymentStateHint: "इस चरण को पूरा करने पर ऑर्डर आपकी कतार में सहेजा जाएगा। रसीद की तस्वीर केवल सहायक प्रमाण है; यह भुगतान प्राप्त होने की पुष्टि नहीं करती।",
 };
