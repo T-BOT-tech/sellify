@@ -158,7 +158,7 @@ try {
   const executableOrdersSource = ordersSource
     .replace(/^import.*;$/gm, '')
     .replace('export async function syncOrders()', 'async function syncOrders()')
-    + '\\nglobalThis.__syncOrders = syncOrders;';
+    + '\nglobalThis.__syncOrders = syncOrders;';
 
   const lostResponseOrder = {
     id: 'service-http-lost-response-order',
