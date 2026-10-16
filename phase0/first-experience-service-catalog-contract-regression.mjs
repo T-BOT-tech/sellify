@@ -62,6 +62,26 @@ try {
       assert(source.includes(`${key}: ${JSON.stringify(label)}`), `${locale} must translate ${key}`);
     }
   }
+  const addedLocales = {
+    fr: ['Type d’article', 'Produit', 'Service'],
+    ar: ['نوع العنصر', 'منتج', 'خدمة'],
+    ha: ['Nau’in abu', 'Kaya', 'Sabis'],
+    yo: ['Irú ohun', 'Ọjà', 'Iṣẹ́'],
+    ru: ['Тип позиции', 'Товар', 'Услуга'],
+    pt: ['Tipo de item', 'Produto', 'Serviço'],
+  };
+  const translationsRegistry = await readFile(new URL('../app/src/i18n/translations.js', import.meta.url), 'utf8');
+  for (const [locale, labels] of Object.entries(addedLocales)) {
+    const source = await readFile(new URL(`../app/src/i18n/locales/${locale}.js`, import.meta.url), 'utf8');
+    assert(translationsRegistry.includes(`import ${locale} from './locales/${locale}.js';`), `${locale} must be registered`);
+    assert(translationsRegistry.includes(`${locale} }`) || /export const TRANSLATIONS = \\{[^}]*\\b${locale}\\b/.test(translationsRegistry), `${locale} must be in TRANSLATIONS`);
+    for (const [key, label] of [['catalogItemType', labels[0]], ['catalogProduct', labels[1]], ['service', labels[2]]) {
+      assert(source.includes(`${key}: ${JSON.stringify(label)}`), `${locale} must translate ${key}`);
+    }
+  }
+  for (const locale of Object.keys(addedLocales)) {
+    assert(appHtml.includes(`<option value="${locale}"`), `${locale} must be available in the language selectors`);
+  }
 
   // Exercise the real canonical order -> fulfillment -> inventory path, not
   // only source guards. The service line must not produce a physical stock sale.
