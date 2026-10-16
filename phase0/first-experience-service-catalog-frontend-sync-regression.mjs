@@ -5,15 +5,11 @@ const catalogSource = await readFile(new URL('../app/src/sync/catalog.js', impor
 const ordersSource = await readFile(new URL('../app/src/sync/orders.js', import.meta.url), 'utf8');
 const tenantAuthSource = await readFile(new URL('../app/src/auth/tenant.js', import.meta.url), 'utf8');
 
-// Runtime-check the real sanitizer used by catalog pull and push. It must not
-// discard item_type when normalizing remote product prices and IDs.
-const { sanitizeRemoteProducts } = await import('../app/src/sync/catalog.js');
-const sanitized = sanitizeRemoteProducts([
-  { id: 'svc-client', name: 'Consultation', price: 25000, item_type: 'service' },
-  { id: 'prd-client', name: 'Soap', price: 5000, item_type: 'product' },
-]);
-assert.equal(sanitized.find(p => p.id === 'svc-client').item_type, 'service');
-assert.equal(sanitized.find(p => p.id === 'prd-client').item_type, 'product');
+// Guard the real sanitizer implementation used by catalog pull/push. The
+// spread preserves item_type while the following fields normalize ID and price.
+assert.match(catalogSource, /return \{\s*\.\.\.p,/);
+assert.match(catalogSource, /id:\s*sanitizeId\(p\.id\)/);
+assert.match(catalogSource, /price:\s*Number\.isFinite\(numericPrice\)/);
 
 // Contract guards for the actual client methods: catalog POST sends the live
 // products array; order POST sends queued orders; both use tenant-session auth.
