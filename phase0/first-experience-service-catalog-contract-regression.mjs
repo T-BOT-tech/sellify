@@ -35,7 +35,7 @@ try {
   const inventorySource = await readFile(new URL('../app/src/warehouse/inventory.js', import.meta.url), 'utf8');
   assert.match(inventorySource, /if \(p\?\.item_type === 'service'\) return false/);
   const catalogSource = await readFile(new URL('../app/src/products/catalog.js', import.meta.url), 'utf8');
-  assert.match(catalogSource, /id="editItemType-\\${p.id}"/, 'existing catalog items expose their canonical type in edit mode');
+  assert.equal(catalogSource.includes('id="editItemType-${p.id}"'), true, 'existing catalog items expose their canonical type in edit mode');
   assert.match(catalogSource, /const itemTypeSel = document.getElementById/);
   assert.match(catalogSource, /_priceMinor: true, item_type,/, 'saving an edited catalog item persists its selected type');
   assert.match(catalogSource, /const item_type = typeSel && typeSel\.value === 'service' \? 'service' : 'product'/);
