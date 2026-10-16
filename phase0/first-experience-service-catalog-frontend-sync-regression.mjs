@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 const catalogSource = await readFile(new URL('../app/src/sync/catalog.js', import.meta.url), 'utf8');
 const ordersSource = await readFile(new URL('../app/src/sync/orders.js', import.meta.url), 'utf8');
 const tenantAuthSource = await readFile(new URL('../app/src/auth/tenant.js', import.meta.url), 'utf8');
+const checkoutSource = await readFile(new URL('../app/src/orders/checkout.js', import.meta.url), 'utf8');
 
 // Guard the real sanitizer implementation used by catalog pull/push. The
 // spread preserves item_type while the following fields normalize ID and price.
@@ -33,6 +34,15 @@ assert.match(ordersSource, /catch \(e\) \{[\s\S]*?setOrders\(orders\.map\(o => q
 assert.match(ordersSource, /if \(result && result\.status === 'synced'\) \{[\s\S]*?status: 'synced', server_order_id: result\.order_id/);
 assert.match(ordersSource, /if \(result && result\.status === 'rejected'\) \{[\s\S]*?status: 'sync_rejected'/);
 assert.match(tenantAuthSource, /export function authHeaders\(/);
+
+// Both the Telegram order payload and the local queued checkout derive their
+// line-item type from the local catalog. This is presentation/transport
+// metadata only; backend catalog data remains authoritative for stock effects.
+assert.equal(
+  (checkoutSource.match(/item_type: p\.item_type === 'service' \? 'service' : 'product'/g) || []).length,
+  2,
+  'Telegram checkout and local queued checkout must both preserve catalog item type'
+);
 
 
 // Exercise the actual syncOrders implementation with a small isolated browser
