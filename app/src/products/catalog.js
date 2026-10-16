@@ -87,14 +87,14 @@ export function renderCatalog() {
             <span id="editProdImgPreview-${p.id}">${imgSrc ? `<img src="${escapeAttr(imgSrc)}" class="thumb-img-sm" />` : '<svg class="icon icon-muted"><use href="#i-camera"/></svg>'}</span>
             <input type="file" id="editProdImgInput-${p.id}" accept="image/*" style="display:none;" onchange="handleEditProdImageSelect(event, '${p.id}')">
           </label>
-          <input type="text" class="editName" id="editName-${p.id}" value="${escapeAttr(p.name)}">
-          <input type="number" step="0.01" class="editPrice" id="editPrice-${p.id}" value="${fromMinorUnits(p.price)}">
+          <input type="text" class="editName" id="editName-${p.id}" aria-label="${escapeAttr(t('catalogNameLabel') || 'Name')}" value="${escapeAttr(p.name)}">
+          <input type="number" step="0.01" class="editPrice" id="editPrice-${p.id}" aria-label="${escapeAttr(t('catalogPriceLabel') || 'Price')}" value="${fromMinorUnits(p.price)}">
           <select class="editItemType" id="editItemType-${p.id}" aria-label="${escapeAttr(t('catalogItemType') || 'Item type')}">
             <option value="product" ${p.item_type !== 'service' ? 'selected' : ''}>${escapeHtml(t('catalogProduct') || 'Product')}</option>
             <option value="service" ${p.item_type === 'service' ? 'selected' : ''}>${escapeHtml(t('service') || 'Service')}</option>
           </select>
-          <select class="editCategory" id="editCategory-${p.id}">${catOptionsHtml}</select>
-          <select class="editUnit" id="editUnit-${p.id}">${unitOptionsHtml}</select>
+          <select class="editCategory" id="editCategory-${p.id}" aria-label="${escapeAttr(t('catalogCategoryLabel') || 'Category')}">${catOptionsHtml}</select>
+          <select class="editUnit" id="editUnit-${p.id}" aria-label="${escapeAttr(t('catalogUnitLabel') || 'Unit')}">${unitOptionsHtml}</select>
           <button class="save-edit" onclick="saveProductEdit('${p.id}')">${t('save')}</button>
           <button class="cancel-edit" onclick="cancelProductEdit()">${t('cancel')}</button>
           <label class="niche-tag-check" style="margin-top:8px; display:inline-flex;">
