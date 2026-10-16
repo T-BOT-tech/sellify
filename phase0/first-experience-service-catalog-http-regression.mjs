@@ -135,6 +135,13 @@ try {
   assert.equal(retryBody.results[0].payment_id, firstBody.results[0].payment_id,
     'exact retry must resolve to the same canonical payment');
 
+  const alteredOrder = { ...order, items: [{ id: 'consultation-http', name: 'Consultation', price: 25000, qty: 2, currency: 'ETB', item_type: 'service' }] };
+  const alteredResponse = await fetch(syncUrl, { method: 'POST', headers: authHeaders, body: JSON.stringify({ orders: [alteredOrder] }) });
+  assert.equal(alteredResponse.status, 200);
+  const alteredBody = await alteredResponse.json();
+  assert.equal(alteredBody.results[0].status, 'rejected');
+  assert.equal(alteredBody.results[0].code, 'ORDER_IDEMPOTENCY_CONFLICT');
+
   const canonicalOrders = await store.getOrders(tenant.chatId);
   assert.equal(canonicalOrders.filter(item => item.id === order.id).length, 1,
     'HTTP retries must not create duplicate canonical orders');
