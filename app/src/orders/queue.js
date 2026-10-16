@@ -106,17 +106,17 @@ export function renderDailySummary() {
   const startOfTodayMs = startOfToday.getTime();
   const todaysOrders = orders.filter(o => (o.created_at || 0) >= startOfTodayMs);
 
-  const totalRevenue = todaysOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+  const orderValueTotal = todaysOrders.reduce((sum, o) => sum + (o.total || 0), 0);
   const totalOrdersCount = todaysOrders.length;
-  const avgValue = totalOrdersCount > 0 ? (totalRevenue / totalOrdersCount) : 0;
+  const avgOrderValue = totalOrdersCount > 0 ? (orderValueTotal / totalOrdersCount) : 0;
   const queuedCount = todaysOrders.filter(o => o.status !== 'synced').length;
   const syncedCount = todaysOrders.filter(o => o.status === 'synced').length;
 
   container.innerHTML = `
     <div class="summary-grid">
       <div class="summary-card">
-        <div class="label">${t('todaySales')}</div>
-        <div class="val">${CS()}${formatMoney(totalRevenue)}</div>
+        <div class="label">${t('orderValue')}</div>
+        <div class="val">${CS()}${formatMoney(orderValueTotal)}</div>
       </div>
       <div class="summary-card">
         <div class="label">${t('totalOrders')}</div>
@@ -124,7 +124,7 @@ export function renderDailySummary() {
       </div>
       <div class="summary-card">
         <div class="label">${t('avgOrderVal')}</div>
-        <div class="val">${CS()}${formatMoney(avgValue)}</div>
+        <div class="val">${CS()}${formatMoney(avgOrderValue)}</div>
       </div>
       <div class="summary-card">
         <div class="label">${t('queued')} / ${t('synced')}</div>
