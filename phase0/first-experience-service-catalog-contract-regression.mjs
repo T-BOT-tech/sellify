@@ -48,6 +48,20 @@ try {
   const englishLocale = await readFile(new URL('../app/src/i18n/locales/en.js', import.meta.url), 'utf8');
   assert.match(englishLocale, /catalogItemType: "Item type"/);
   assert.match(englishLocale, /service: "Service"/);
+  const localizedServiceLabels = {
+    am: ['የንጥል አይነት', 'ምርት', 'አገልግሎት'],
+    om: ['Gosa meeshaa', 'Oomisha', 'Tajaajila'],
+    so: ['Nooca shayga', 'Badeecad', 'Adeeg'],
+    sw: ['Aina ya bidhaa', 'Bidhaa', 'Huduma'],
+    es: ['Tipo de artículo', 'Producto', 'Servicio'],
+    hi: ['आइटम का प्रकार', 'उत्पाद', 'सेवा'],
+  };
+  for (const [locale, labels] of Object.entries(localizedServiceLabels)) {
+    const source = await readFile(new URL(`../app/src/i18n/locales/${locale}.js`, import.meta.url), 'utf8');
+    for (const [key, label] of [['catalogItemType', labels[0]], ['catalogProduct', labels[1]], ['service', labels[2]]]) {
+      assert(source.includes(`${key}: ${JSON.stringify(label)}`), `${locale} must translate ${key}`);
+    }
+  }
 
   // Exercise the real canonical order -> fulfillment -> inventory path, not
   // only source guards. The service line must not produce a physical stock sale.
