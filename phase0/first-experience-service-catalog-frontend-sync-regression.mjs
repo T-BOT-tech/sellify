@@ -39,7 +39,7 @@ assert.match(tenantAuthSource, /export function authHeaders\(/);
 // present in markup/source: selecting Service must persist a service locally
 // before the existing catalog sync sends it to the backend.
 const catalogExecutableSource = catalogSource
-  .replace(/^import[\\s\\S]*?from ['"][^'"]+['"];\\s*/gm, '')
+  .replace(/^import[^\\n]*\\n/gm, '')
   .replace(/^export /gm, '')
   + '\\nglobalThis.__addProduct = addProduct;';
 const catalogInputs = {
