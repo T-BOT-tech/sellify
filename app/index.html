@@ -1139,7 +1139,8 @@
 
 <div class="modal-backdrop" id="paymentProofModal">
   <div class="modal" role="dialog" aria-modal="true">
-    <h3 data-i18n="confirmPayment">Confirm payment</h3>
+    <h3>Review payment method</h3>
+    <p id="checkoutPaymentStateHint" class="hint">Saving creates an order in the queue. Selecting a payment method or attaching a receipt does not confirm payment.</p>
     <label data-i18n="paymentMethod">Payment method</label>
     <select id="orderPayMethod" onchange="onOrderPayMethodChange()" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background: var(--surface); margin-bottom:8px;"></select>
     <div id="payMethodDetailsHint" class="hint" style="display:none;"></div>
@@ -1150,7 +1151,7 @@
         <img id="proofPreviewImg" style="max-width:100%; border-radius:8px; border:1px solid var(--line);">
       </div>
     </div>
-    <button class="btn-primary close-btn" onclick="confirmOrderWithProof()" data-i18n="completeSale">Complete sale</button>
+    <button class="btn-primary close-btn" onclick="confirmOrderWithProof()">Save order to queue</button>
     <button class="btn-secondary close-btn" onclick="closePaymentProofModal()" data-i18n="cancel">Cancel</button>
   </div>
 </div>
