@@ -20,6 +20,9 @@ const paymentProof = await readFile(new URL('../app/src/orders/payment-proof.js'
 assert.match(paymentProof, /items\.reduce\(\(sum, item\) => sum \+ item\.qty \* item\.price, 0\)/);
 assert.match(paymentProof, /formatMoney\(total, config\.currencyCode\)/);
 assert.match(paymentProof, /CS\(\)/);
+assert.match(modal, /id="checkoutSaveOrderButton"/);
+assert.match(paymentProof, /confirmButton\.disabled = enabledMethods\.length === 0/);
+assert.match(paymentProof, /No payment methods are enabled/);
 
 // If a merchant selected a receipt and saving it fails, checkout must remain
 // open for retry; it must not silently continue with an order lacking proof.
@@ -34,6 +37,8 @@ assert.match(confirmFlow, /catch \(e\) \{[\s\S]*?return;\s*\}\s*\}\s*closePaymen
 // taps create multiple local orders.
 assert.match(paymentProof, /let isConfirmingOrderWithProof = false/);
 assert.match(confirmFlow, /if \(isConfirmingOrderWithProof\) return/);
+assert.match(confirmFlow, /const selectedMethod = \(config\.paymentMethods \|\| \[\]\)\.find\(pm => pm\.id === payMethodId && pm\.enabled\)/);
+assert.match(confirmFlow, /if \(!selectedMethod\) \{[\s\S]*?return;/);
 assert.match(confirmFlow, /isConfirmingOrderWithProof = true/);
 assert.match(confirmFlow, /confirmButton\.disabled = true/);
 assert.match(confirmFlow, /confirmButton\.setAttribute\('aria-busy', 'true'\)/);
