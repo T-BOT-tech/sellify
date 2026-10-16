@@ -57,6 +57,8 @@ jobs:
         run: npm run test:outbox-tenant-scope
       - name: Order sync idempotency regression
         run: npm run test:order-sync-idempotency
+      - name: First-experience service catalog contract regression
+        run: npm run test:service-catalog-contract
 
       - name: GAP-1.18I payment verification migration independence regression
         run: npm run gap-1.18:provider-verification-migration-test
