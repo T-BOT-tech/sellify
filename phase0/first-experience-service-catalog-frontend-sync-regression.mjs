@@ -30,7 +30,7 @@ globalThis.localStorage = {
 globalThis.document = new Proxy({
   documentElement: fakeElement, head: fakeElement, body: fakeElement,
   querySelector: () => null, querySelectorAll: () => [],
-  getElementById: () => null,
+  getElementById: () => ({ ...fakeElement, style: { ...fakeElement.style }, classList: { ...fakeElement.classList } }),
   createElement: () => ({ ...fakeElement, style: { ...fakeElement.style }, classList: { ...fakeElement.classList } }),
   addEventListener: noop,
 }, { get(target, key) { return key in target ? target[key] : noop; } });
