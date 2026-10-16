@@ -60,6 +60,12 @@ assert.doesNotMatch(modal, /Confirm payment|Complete sale/);
 assert.match(checkout, /status: 'queued'/);
 assert.match(checkout, /status: 'UNLINKED'/);
 assert.match(checkout, /payment_id: null/);
+const saveOrderStart = checkout.indexOf('export function saveOrder(payMethodId, proofMeta)');
+const saveOrderEnd = checkout.indexOf('\\nexport ', saveOrderStart + 1);
+const saveOrderFlow = checkout.slice(saveOrderStart, saveOrderEnd > saveOrderStart ? saveOrderEnd : undefined);
+assert.match(saveOrderFlow, /find\(pm => pm\.id === resolvedMethodId && pm\.enabled\)/);
+assert.match(saveOrderFlow, /if \(!methodMeta\) \{[\s\S]*?showToast\([\s\S]*?return;/);
+assert.doesNotMatch(saveOrderFlow, /payMethodId \|\| 'cash'/);
 
 // The order queue must distinguish a selected method/receipt from canonical
 // payment confirmation for locally queued orders.
