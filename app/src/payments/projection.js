@@ -136,7 +136,14 @@ export async function refreshCanonicalPaymentStatus(paymentId, body = {}, { idem
   const sequence = (paymentStatusSequences.get(id) || 0) + 1;
   paymentStatusSequences.set(id, sequence);
   const data = await queryPaymentStatus(id, body, { idempotencyKey: queryKey });
-  const payment = data?.payment || data;
+  const responsePayment = data?.payment || data;
+  // Payment Core adapters may expose the canonical identifier in camelCase
+  // or snake_case. Normalize identity before upsertPayment, whose state-store
+  // contract intentionally requires the canonical `id` field.
+  const responsePaymentId = responsePayment?.id ?? responsePayment?.paymentId ?? responsePayment?.payment_id;
+  const payment = responsePayment && typeof responsePayment === 'object' && responsePaymentId
+    ? { ...responsePayment, id: String(responsePaymentId) }
+    : responsePayment;
   const isLatest = sequence === paymentStatusSequences.get(id);
   if (isLatest &&
       payment && typeof payment === 'object' &&
