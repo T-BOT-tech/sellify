@@ -42,6 +42,8 @@ try {
   const appHtml = await readFile(new URL('../app/index.html', import.meta.url), 'utf8');
   assert.match(appHtml, /<label for="newProdType" data-i18n="catalogItemType">/);
   assert.match(appHtml, /<option value="service" data-i18n="service">Service<\/option>/);
+  const i18nSource = await readFile(new URL('../app/src/ui/i18n.js', import.meta.url), 'utf8');
+  assert.match(i18nSource, /document\.documentElement\.dir = lang === 'ar' \? 'rtl' : 'ltr'/, 'Arabic must enable RTL and switching to other languages must restore LTR');
   const renderSource = await readFile(new URL('../app/src/products/render.js', import.meta.url), 'utf8');
   assert.match(renderSource, /function serviceBadgeMarkup\(p\)/);
   assert.match(renderSource, /serviceBadgeMarkup\(p\)/);
