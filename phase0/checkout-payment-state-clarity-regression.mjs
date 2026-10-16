@@ -19,6 +19,16 @@ const paymentProof = await readFile(new URL('../app/src/orders/payment-proof.js'
 assert.match(paymentProof, /items\.reduce\(\(sum, item\) => sum \+ item\.qty \* item\.price, 0\)/);
 assert.match(paymentProof, /formatMoney\(total, config\.currencyCode\)/);
 assert.match(paymentProof, /CS\(\)/);
+
+// If a merchant selected a receipt and saving it fails, checkout must remain
+// open for retry; it must not silently continue with an order lacking proof.
+const confirmStart = paymentProof.indexOf('export async function confirmOrderWithProof()');
+const confirmEnd = paymentProof.indexOf('\nexport function compressImage', confirmStart);
+assert.ok(confirmStart >= 0 && confirmEnd > confirmStart, 'proof confirmation flow must be identifiable');
+const confirmFlow = paymentProof.slice(confirmStart, confirmEnd);
+assert.match(confirmFlow, /showToast\('Receipt could not be saved\. Retry, or close this dialog to cancel\.'\);\s*return;/);
+assert.match(confirmFlow, /catch \(e\) \{[\s\S]*?return;\s*\}\s*\}\s*closePaymentProofModal\(\);/);
+
 assert.match(modal, /does not confirm payment/);
 assert.match(modal, /id="orderPayMethod"/);
 assert.match(modal, /Save order to queue/);
