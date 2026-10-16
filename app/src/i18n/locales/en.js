@@ -41,6 +41,8 @@ export default {
     catalogSyncNote: "Catalog syncs both ways with your bot when you tap \"Sync now\" in the Queue tab — price changes made here or on the server side both carry over.",
     prodNamePlaceholder: "Product name",
     catalogItemType: "Item type",
+    decreaseQuantity: "Decrease quantity",
+    increaseQuantity: "Increase quantity",
     catalogProduct: "Product",
     service: "Service",
     listOnMarketplace: "List on marketplace",
