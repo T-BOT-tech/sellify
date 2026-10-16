@@ -39,9 +39,9 @@ assert.match(tenantAuthSource, /export function authHeaders\(/);
 // boundary. The first POST represents a server commit whose response is lost;
 // the second POST returns the idempotent canonical acknowledgement.
 const executableOrdersSource = ordersSource
-  .replace(/^import[\\s\\S]*?from ['"][^'"]+['"];\\s*/gm, '')
+  .replace(/^import[\s\S]*?from ['"][^'"]+['"];\s*/gm, '')
   .replace('export async function syncOrders()', 'async function syncOrders()')
-  + '\\nglobalThis.__syncOrders = syncOrders;';
+  + '\nglobalThis.__syncOrders = syncOrders;';
 
 let runtimeOrders = [{
   id: 'local-order-response-loss',
