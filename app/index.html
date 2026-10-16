@@ -1138,8 +1138,8 @@
 </div>
 
 <div class="modal-backdrop" id="paymentProofModal">
-  <div class="modal" role="dialog" aria-modal="true">
-    <h3>Review payment method</h3>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="checkoutPaymentTitle" aria-describedby="checkoutPaymentStateHint">
+    <h3 id="checkoutPaymentTitle">Review payment method</h3>
     <p id="checkoutPaymentStateHint" class="hint">Saving creates an order in the queue. Selecting a payment method or attaching a receipt does not confirm payment.</p>
     <div class="checkout-payment-total" style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px; margin:12px 0; border:1px solid var(--line); border-radius:8px; font-weight:600;"><span>Order total</span><strong id="checkoutPaymentOrderTotal" aria-live="polite">—</strong></div>
     <label data-i18n="paymentMethod">Payment method</label>
