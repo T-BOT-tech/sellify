@@ -9535,46 +9535,51 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
         if (!product.marketplace_listed) {
           throw Object.assign(new Error(`Item no longer listed: ${itemId}`), { statusCode: 409 });
         }
-        const sellerOrg = tenant.organization_id;
-        const defaultLocation = db.prepare(
-          "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
-        ).get(String(sellerOrg));
-        if (!defaultLocation) {
-          throw Object.assign(new Error('Canonical inventory location is unavailable'), { statusCode: 409, code: 'INVENTORY_LOCATION_UNAVAILABLE' });
-        }
-        const canonicalBalance = Number(db.prepare(`
-          SELECT COALESCE(SUM(quantity), 0) AS quantity
-          FROM inventory_movements
-          WHERE organization_id = ? AND location_id = ? AND product_id = ?
-        `).get(String(sellerOrg), String(defaultLocation.id), String(itemId))?.quantity || 0);
-        if (canonicalBalance < qty) {
-          throw Object.assign(new Error(`Not enough stock for "${product.name}" (${canonicalBalance} left)`), { statusCode: 409 });
-        }
+        // Services are purchasable marketplace items but do not consume or
+        // require physical stock. Products continue through the canonical
+        // inventory movement authority below.
+        if (product.item_type !== 'service') {
+          const sellerOrg = tenant.organization_id;
+          const defaultLocation = db.prepare(
+            "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
+          ).get(String(sellerOrg));
+          if (!defaultLocation) {
+            throw Object.assign(new Error('Canonical inventory location is unavailable'), { statusCode: 409, code: 'INVENTORY_LOCATION_UNAVAILABLE' });
+          }
+          const canonicalBalance = Number(db.prepare(`
+            SELECT COALESCE(SUM(quantity), 0) AS quantity
+            FROM inventory_movements
+            WHERE organization_id = ? AND location_id = ? AND product_id = ?
+          `).get(String(sellerOrg), String(defaultLocation.id), String(itemId))?.quantity || 0);
+          if (canonicalBalance < qty) {
+            throw Object.assign(new Error(`Not enough stock for "${product.name}" (${canonicalBalance} left)`), { statusCode: 409 });
+          }
 
-        // inventory_movements is the physical stock authority. catalog_products.stock
-        // is retained only as a compatibility projection for older clients.
-        const movementEventId = `marketplace-sale:${marketplaceOrderId}:${sellerId}:${itemId}`;
-        await appendInventoryMovement(sellerId, {
-          productId: itemId,
-          locationId: String(defaultLocation.id),
-          quantity: -qty,
-          movementType: 'SALE',
-          referenceType: 'marketplace_order',
-          referenceId: marketplaceOrderId,
-          eventId: movementEventId,
-          occurredAt: nowIso(),
-          reason: 'Marketplace checkout',
-          metadata: { marketplaceOrderId, sellerId, quantity: qty },
-        });
-        product.stock = canonicalBalance - qty;
-        product.stock_revision = (Number.isInteger(row.stock_revision) ? row.stock_revision : 0) + 1;
-        insertProduct(sellerId, product);
+          // inventory_movements is the physical stock authority. catalog_products.stock
+          // is retained only as a compatibility projection for older clients.
+          const movementEventId = `marketplace-sale:${marketplaceOrderId}:${sellerId}:${itemId}`;
+          await appendInventoryMovement(sellerId, {
+            productId: itemId,
+            locationId: String(defaultLocation.id),
+            quantity: -qty,
+            movementType: 'SALE',
+            referenceType: 'marketplace_order',
+            referenceId: marketplaceOrderId,
+            eventId: movementEventId,
+            occurredAt: nowIso(),
+            reason: 'Marketplace checkout',
+            metadata: { marketplaceOrderId, sellerId, quantity: qty },
+          });
+          product.stock = canonicalBalance - qty;
+          product.stock_revision = (Number.isInteger(row.stock_revision) ? row.stock_revision : 0) + 1;
+          insertProduct(sellerId, product);
+        }
 
         const price = row.price_minor;
         const lineTotal = price * qty;
         subtotal += lineTotal;
         grandTotal += lineTotal;
-        sellerItems.push({ item_id: product.id, name: product.name, price, qty, total: lineTotal, currency: sellerCurrency, category: product.category });
+        sellerItems.push({ item_id: product.id, item_type: product.item_type === 'service' ? 'service' : 'product', name: product.name, price, qty, total: lineTotal, currency: sellerCurrency, category: product.category });
       }
 
       const orderId = `MPO_${marketplaceOrderId}_${sellerId}`;
