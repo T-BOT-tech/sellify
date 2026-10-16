@@ -99,12 +99,6 @@ try {
       marketplace_listed: true,
     },
   ]);
-  await store.appendInventoryMovement(marketplaceSeller.chatId, {
-    productId: 'marketplace-soap',
-    quantity: 5,
-    movementType: 'PURCHASE',
-    eventId: 'marketplace-mixed-opening-stock-' + Date.now(),
-  });
   const mixedMarketplaceOrder = await store.createMarketplaceOrder({
     buyer_id: 'service-marketplace-mixed-buyer',
     customer_name: 'Mixed Marketplace Buyer',
