@@ -3,6 +3,9 @@
 // (Phase 1 — pure data, zero dependencies).
 export default {
     brandName: "የሱቅ መዝገብ",
+    catalogItemType: "የንጥል አይነት",
+    catalogProduct: "ምርት",
+    service: "አገልግሎት",
     setupBusiness: "ንግድዎን ያዋቅሩ",
     online: "ኦንላይን",
     offline: "ኦፍላይን",
