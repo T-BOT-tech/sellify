@@ -29,6 +29,40 @@ try {
     'canonical inventory authority must reject physical stock movements for service catalog items',
   );
 
+  // Marketplace services must remain purchasable without physical inventory.
+  const marketplaceUser = await store.getOrCreateUserByTelegram('service-marketplace-' + Date.now(), 'Service Marketplace Seller');
+  const marketplaceSeller = await store.createTenantForUser({
+    userId: marketplaceUser.id,
+    sellerName: 'Service Seller',
+    businessType: 'services',
+    country: 'ET',
+    currency: 'ETB',
+    timezone: 'Africa/Addis_Ababa',
+  });
+  await store.saveCatalog(marketplaceSeller.chatId, [{
+    id: 'marketplace-consultation',
+    name: 'Marketplace Consultation',
+    price: 18000,
+    item_type: 'service',
+    marketplace_listed: true,
+  }]);
+  const marketplaceServiceOrder = await store.createMarketplaceOrder({
+    buyer_id: 'service-marketplace-buyer',
+    customer_name: 'Service Buyer',
+    items: [{ seller_id: marketplaceSeller.chatId, item_id: 'marketplace-consultation', qty: 1 }],
+    idempotency_key: 'service-marketplace-checkout-' + Date.now(),
+  });
+  assert.ok(marketplaceServiceOrder.marketplace_order_id, 'marketplace service checkout should create a canonical marketplace order');
+  assert.equal(marketplaceServiceOrder.sub_orders?.length, 1, 'marketplace service checkout should create one seller order');
+  assert.equal(marketplaceServiceOrder.sub_orders[0].items[0].item_type, 'service', 'seller order line must preserve canonical service type');
+  assert.equal((await store.getCatalog(marketplaceSeller.chatId)).products.find(item => item.id === 'marketplace-consultation').stock, undefined,
+    'marketplace service checkout must not create or decrement physical stock');
+  const serviceMarketplaceDb = new DatabaseSync(path.join(tempDir, 'sellify.sqlite'));
+  assert.equal(serviceMarketplaceDb.prepare(
+    "SELECT COUNT(*) AS count FROM inventory_movements WHERE product_id = 'marketplace-consultation'"
+  ).get().count, 0, 'marketplace service checkout must not append physical inventory movements');
+  serviceMarketplaceDb.close();
+
   await assert.rejects(
     store.saveCatalog(chatId, [
       { id: 'consultation', name: 'Consultation', price: 25000, item_type: 'service' },
