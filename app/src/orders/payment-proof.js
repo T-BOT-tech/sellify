@@ -187,6 +187,11 @@ export async function confirmOrderWithProof() {
     } catch (e) {
       console.error('Proof capture failed:', e);
       setPendingProofMeta(null);
+      // The merchant explicitly selected a receipt. Keep the checkout open
+      // and preserve the cart so they can retry instead of silently saving an
+      // order without the evidence they intended to attach.
+      showToast('Receipt could not be saved. Retry, or close this dialog to cancel.');
+      return;
     }
   }
 
