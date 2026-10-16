@@ -21,5 +21,15 @@ assert.match(ordersSource, /\.\.\.tenantAuthHeaders\(\)/);
 assert.doesNotMatch(ordersSource, /\bauthHeaders\(\)/,
   'extracted order sync must not call the undefined legacy authHeaders helper');
 assert.match(ordersSource, /server_order_id:\s*result\.order_id/);
+
+// Response-loss recovery contract: only a canonical "synced" acknowledgement
+// changes local status. A thrown fetch, non-2xx response, or unreadable JSON
+// falls into the catch path, where queued orders remain queued and are saved
+// with retry metadata so the next sync reuses the same local IDs.
+assert.match(ordersSource, /orders\.filter\(o => o\.status === 'queued'\)/);
+assert.match(ordersSource, /if \(!res\.ok\) throw new Error/);
+assert.match(ordersSource, /catch \(e\) \{[\s\S]*?setOrders\(orders\.map\(o => queued\.some\(q => q\.id === o\.id\)[\s\S]*?sync_attempts: \(o\.sync_attempts \|\| 0\) \+ 1[\s\S]*?saveJSON\(STORAGE_KEYS\.orders, orders\)/);
+assert.match(ordersSource, /if \(result && result\.status === 'synced'\) \{[\s\S]*?status: 'synced', server_order_id: result\.order_id/);
+assert.match(ordersSource, /if \(result && result\.status === 'rejected'\) \{[\s\S]*?status: 'sync_rejected'/);
 assert.match(tenantAuthSource, /export function authHeaders\(/);
-console.log('PASS: frontend catalog sanitizer and catalog/order sync contracts preserve item type and tenant auth');
+console.log('PASS: frontend catalog/order sync contracts preserve item type, tenant auth, and queued-order retry after response loss');
