@@ -383,18 +383,18 @@
           <span id="newProdImgPreview" class="img-preview-box"><svg class="icon icon-lg icon-muted"><use href="#i-camera"/></svg></span>
           <input type="file" id="newProdImgInput" accept="image/*" style="display:none;" onchange="handleNewProdImageSelect(event)">
         </label>
-        <input type="text" id="newProdName" data-i18n-placeholder="prodNamePlaceholder" placeholder="Product name">
-        <input type="number" id="newProdPrice" class="price" placeholder="₹">
+        <input type="text" id="newProdName" data-i18n-placeholder="prodNamePlaceholder" data-i18n-aria-label="catalogNameLabel" placeholder="Product name">
+        <input type="number" id="newProdPrice" class="price" data-i18n-aria-label="catalogPriceLabel" placeholder="₹">
         <button class="btn-secondary" id="addProdBtn" style="width:auto; margin:0; padding:10px 14px;" onclick="addProduct()" data-i18n="add">Add</button>
       </div>
       <div class="catalog-form-row2">
         <label for="newProdType" data-i18n="catalogItemType">Item type</label>
-        <select id="newProdType" aria-label="Item type">
+        <select id="newProdType" data-i18n-aria-label="catalogItemType">
           <option value="product" data-i18n="catalogProduct">Product</option>
           <option value="service" data-i18n="service">Service</option>
         </select>
-        <select id="newProdCategory" onchange="onNewProdCategoryChange()"></select>
-        <select id="newProdUnit"></select>
+        <select id="newProdCategory" data-i18n-aria-label="catalogCategoryLabel" onchange="onNewProdCategoryChange()"></select>
+        <select id="newProdUnit" data-i18n-aria-label="catalogUnitLabel"></select>
       </div>
       <label class="niche-tag-check" style="margin-top:8px; display:inline-flex;">
         <input type="checkbox" id="newProdMarketListed">
