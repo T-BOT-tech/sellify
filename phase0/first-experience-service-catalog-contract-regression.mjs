@@ -75,7 +75,7 @@ try {
     const source = await readFile(new URL(`../app/src/i18n/locales/${locale}.js`, import.meta.url), 'utf8');
     assert(translationsRegistry.includes(`import ${locale} from './locales/${locale}.js';`), `${locale} must be registered`);
     assert(translationsRegistry.includes(` ${locale},`) || translationsRegistry.includes(`, ${locale} }`) || translationsRegistry.includes(`, ${locale},`), `${locale} must be in TRANSLATIONS`);
-    for (const [key, label] of [['catalogItemType', labels[0]], ['catalogProduct', labels[1]], ['service', labels[2]]) {
+    for (const [key, label] of [['catalogItemType', labels[0]], ['catalogProduct', labels[1]], ['service', labels[2]]]) {
       assert(source.includes(`${key}: ${JSON.stringify(label)}`), `${locale} must translate ${key}`);
     }
   }
