@@ -117,9 +117,9 @@ export function renderProducts() {
               ${modifierHtml}
             </div>
             <div class="grid-prod-stepper">
-              <button type="button" onclick="changeQty('${p.id}', -1)" aria-label="Decrease quantity">−</button>
+              <button type="button" onclick="changeQty('${p.id}', -1)" aria-label="${escapeAttr(t('decreaseQuantity'))}">−</button>
               <span class="qty">${qty}</span>
-              <button type="button" onclick="changeQty('${p.id}', 1)" aria-label="Increase quantity">+</button>
+              <button type="button" onclick="changeQty('${p.id}', 1)" aria-label="${escapeAttr(t('increaseQuantity'))}">+</button>
             </div>
           </div>
         </div>`;
@@ -147,9 +147,9 @@ export function renderProducts() {
             </div>
           </div>
           <div class="stepper">
-            <button onclick="changeQty('${p.id}', -1)">−</button>
+            <button type="button" onclick="changeQty('${p.id}', -1)" aria-label="${escapeAttr(t('decreaseQuantity'))}">−</button>
             <span class="qty">${qty}</span>
-            <button onclick="changeQty('${p.id}', 1)">+</button>
+            <button type="button" onclick="changeQty('${p.id}', 1)" aria-label="${escapeAttr(t('increaseQuantity'))}">+</button>
           </div>
         </div>`;
     }).join('');
