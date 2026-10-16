@@ -137,8 +137,8 @@ try {
   ).get(mixedMarketplaceOrder.marketplace_order_id).count, 1,
   'physical stock must be restored with one canonical return movement');
   assert.equal(mixedMarketplaceDb.prepare(
-    "SELECT COUNT(*) AS count FROM marketplace_inventory_reservations WHERE seller_order_id = ? AND product_id = 'marketplace-consultation'"
-  ).get(mixedSellerOrder.server_order_id || mixedSellerOrder.id).count, 0,
+    "SELECT COUNT(*) AS count FROM marketplace_inventory_reservations WHERE marketplace_order_id = ? AND product_id = 'marketplace-consultation'"
+  ).get(mixedMarketplaceOrder.marketplace_order_id).count, 0,
   'service lines must not create physical inventory reservations');
   assert.equal(mixedMarketplaceDb.prepare(
     "SELECT COUNT(*) AS count FROM marketplace_inventory_reservations WHERE marketplace_order_id = ? AND product_id = 'marketplace-soap' AND status = 'released'"
