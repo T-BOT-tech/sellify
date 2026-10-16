@@ -72,14 +72,17 @@ export function buildRestaurantPaymentIntent(order, { organizationId, locationId
   const tendered = order.cash_tendered == null ? null : minor(order.cash_tendered, 'cash_tendered');
   const proofAttached = Boolean(order.payment_proof);
 
+  // These are caller-reported inputs, not a canonical Payment Core decision.
+  // Deliberately do not emit a payment state: only the canonical payment lifecycle
+  // may decide whether funds are RECEIVED, PARTIAL, CLAIMED, or otherwise.
   let amountMinor = 0;
-  let state = 'UNPAID';
+  let evidenceKind = 'NONE';
   if (tendered != null && tendered > 0) {
     amountMinor = Math.min(tendered, normalized.total_minor);
-    state = tendered >= normalized.total_minor ? 'RECEIVED' : 'PARTIAL';
+    evidenceKind = 'CASH_TENDER_REPORTED';
   } else if (proofAttached) {
     amountMinor = normalized.total_minor;
-    state = 'CLAIMED';
+    evidenceKind = 'PAYMENT_PROOF_ATTACHED';
   }
 
   return Object.freeze({
@@ -90,7 +93,7 @@ export function buildRestaurantPaymentIntent(order, { organizationId, locationId
     currency: normalized.currency,
     method_id: methodId,
     method_name: methodName,
-    state,
+    evidence_kind: evidenceKind,
     customer_id: normalized.customer_id,
     provider_id: method.provider_id || 'manual',
     channel: method.channel || 'manual',
