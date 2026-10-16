@@ -87,4 +87,5 @@ export default {
     packLocalizationAuthority: 'Localization authority',
     packAccessibilityAuthority: 'Accessibility foundation',
     packAccessibilityBoundary: 'Language selection does not change authorization. Screen semantics do not grant permissions; server-side authorization remains authoritative.',
+    checkoutPaymentStateHint: "Ukikamilisha hatua hii, agizo litahifadhiwa kwenye foleni yako. Picha ya risiti ni ushahidi wa kusaidia tu; haithibitishi kuwa malipo yamepokelewa.",
 };
