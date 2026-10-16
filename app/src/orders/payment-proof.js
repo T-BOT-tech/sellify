@@ -154,6 +154,14 @@ export function openPaymentProofModal() {
   // unchanged, so this was rendering it into an attribute completely
   // unescaped. escapeAttr closes that.
   sel.innerHTML = enabledMethods.map(pm => `<option value="${escapeAttr(pm.id)}">${escapeHtml(pm.name)}</option>`).join('');
+  const confirmButton = document.getElementById('checkoutSaveOrderButton');
+  const stateHint = document.getElementById('checkoutPaymentStateHint');
+  if (confirmButton) confirmButton.disabled = enabledMethods.length === 0;
+  if (stateHint && enabledMethods.length === 0) {
+    stateHint.textContent = 'No payment methods are enabled. Cancel checkout and enable a payment method in Settings before saving this order.';
+  } else if (stateHint) {
+    stateHint.textContent = 'Saving creates an order in the queue. Selecting a payment method or attaching a receipt does not confirm payment.';
+  }
   pendingProofFile = null;
   pendingProofMeta = null;
   document.getElementById('proofCameraInput').value = '';
@@ -193,7 +201,12 @@ export async function confirmOrderWithProof() {
 
   try {
     const sel = document.getElementById('orderPayMethod');
-    const payMethodId = sel ? sel.value : 'cash';
+    const payMethodId = sel?.value || '';
+    const selectedMethod = (config.paymentMethods || []).find(pm => pm.id === payMethodId && pm.enabled);
+    if (!selectedMethod) {
+      showToast('No enabled payment method is selected. Enable a payment method in Settings and try again.');
+      return;
+    }
 
     if (pendingProofFile) {
       try {
