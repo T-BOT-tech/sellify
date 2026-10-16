@@ -9741,6 +9741,10 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
         if (!itemId || !Number.isFinite(qty) || qty <= 0) continue;
         const productRow = db.prepare('SELECT * FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(key, itemId);
         if (!productRow) continue;
+        // Marketplace cancellation restores physical stock only. Services
+        // never had a physical deduction, so they must not create a return
+        // movement (which the canonical inventory authority correctly rejects).
+        if (parseJSON(productRow.product_json, {}).item_type === 'service') continue;
         const tenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(key);
         const defaultLocation = tenant?.organization_id
           ? db.prepare("SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1").get(String(tenant.organization_id))
