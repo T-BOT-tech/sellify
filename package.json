@@ -419,7 +419,8 @@
     "test:payment-lineage-append-only": "node phase0/payment-lineage-append-only-regression.mjs",
     "gap-1.18:decision-idempotency-test": "node phase0/gap-1.18Q-payment-decision-idempotency-regression.mjs",
     "gap-1.18:financial-transition-idempotency-test": "node phase0/gap-1.18U-financial-transition-idempotency-regression.mjs",
-    "test:service-catalog-http": "node phase0/first-experience-service-catalog-http-regression.mjs"
+    "test:service-catalog-http": "node phase0/first-experience-service-catalog-http-regression.mjs",
+    "test:service-catalog-frontend-sync": "node phase0/first-experience-service-catalog-frontend-sync-regression.mjs"
   },
   "engines": {
     "node": ">=24"
