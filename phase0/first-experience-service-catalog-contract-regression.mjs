@@ -34,6 +34,8 @@ try {
 
   const inventorySource = await readFile(new URL('../app/src/warehouse/inventory.js', import.meta.url), 'utf8');
   assert.match(inventorySource, /if \(p\?\.item_type === 'service'\) return false/);
+  assert.match(inventorySource, /export function projectedStock\(p, locationId = config\.locationId \|\| ''\) \{\s*if \(p\?\.item_type === 'service'\) return null;/);
+  assert.match(inventorySource, /return stock !== null && stock <= 0;/, 'untracked items and services must not be listed as out of stock');
   const catalogSource = await readFile(new URL('../app/src/products/catalog.js', import.meta.url), 'utf8');
   assert.equal(catalogSource.includes('id="editItemType-${p.id}"'), true, 'existing catalog items expose their canonical type in edit mode');
   assert.match(catalogSource, /const itemTypeSel = document.getElementById/);
