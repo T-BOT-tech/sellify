@@ -49,6 +49,10 @@ export function updateI18n() {
     const key = el.getAttribute('data-i18n-title');
     el.title = t(key);
   });
+  document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+    const key = el.getAttribute('data-i18n-aria-label');
+    el.setAttribute('aria-label', t(key));
+  });
   const headerSelect = document.getElementById('headerLangSelect');
   if (headerSelect) headerSelect.value = lang;
   const setSelect = document.getElementById('setLang');
