@@ -29,6 +29,16 @@ const confirmFlow = paymentProof.slice(confirmStart, confirmEnd);
 assert.match(confirmFlow, /showToast\('Receipt could not be saved\. Retry, or close this dialog to return to checkout\.'\);\s*return;/);
 assert.match(confirmFlow, /catch \(e\) \{[\s\S]*?return;\s*\}\s*\}\s*closePaymentProofModal\(\);/);
 
+// A slow receipt compression/storage operation must not let rapid repeated
+// taps create multiple local orders.
+assert.match(paymentProof, /let isConfirmingOrderWithProof = false/);
+assert.match(confirmFlow, /if \(isConfirmingOrderWithProof\) return/);
+assert.match(confirmFlow, /isConfirmingOrderWithProof = true/);
+assert.match(confirmFlow, /confirmButton\.disabled = true/);
+assert.match(confirmFlow, /confirmButton\.setAttribute\('aria-busy', 'true'\)/);
+assert.match(confirmFlow, /finally \{[\s\S]*?isConfirmingOrderWithProof = false/);
+assert.match(confirmFlow, /confirmButton\.disabled = wasDisabled/);
+
 assert.match(modal, /does not confirm payment/);
 assert.match(modal, /id="orderPayMethod"/);
 assert.match(modal, /Save order to queue/);
