@@ -54,13 +54,20 @@ try {
   });
   assert.ok(marketplaceServiceOrder.marketplace_order_id, 'marketplace service checkout should create a canonical marketplace order');
   assert.equal(marketplaceServiceOrder.sub_orders?.length, 1, 'marketplace service checkout should create one seller order');
-  assert.equal(marketplaceServiceOrder.sub_orders[0].items[0].item_type, 'service', 'seller order line must preserve canonical service type');
+  const sellerOrders = await store.getOrders(marketplaceSeller.chatId);
+  const serviceSellerOrder = sellerOrders.find(order => order.is_marketplace && order.items?.some(item => item.item_id === 'marketplace-consultation'));
+  assert.ok(serviceSellerOrder, 'canonical seller order should contain the marketplace service line');
+  assert.equal(serviceSellerOrder.items.find(item => item.item_id === 'marketplace-consultation').item_type, 'service',
+    'seller order line must preserve canonical service type');
   assert.equal((await store.getCatalog(marketplaceSeller.chatId)).products.find(item => item.id === 'marketplace-consultation').stock, undefined,
     'marketplace service checkout must not create or decrement physical stock');
   const serviceMarketplaceDb = new DatabaseSync(path.join(tempDir, 'sellify.sqlite'));
   assert.equal(serviceMarketplaceDb.prepare(
     "SELECT COUNT(*) AS count FROM inventory_movements WHERE product_id = 'marketplace-consultation'"
   ).get().count, 0, 'marketplace service checkout must not append physical inventory movements');
+  assert.equal(serviceMarketplaceDb.prepare(
+    "SELECT COUNT(*) AS count FROM marketplace_inventory_reservations WHERE product_id = 'marketplace-consultation'"
+  ).get().count, 0, 'marketplace service checkout must not create physical inventory reservations');
   serviceMarketplaceDb.close();
 
   await assert.rejects(
