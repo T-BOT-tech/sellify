@@ -72,6 +72,16 @@ try {
     assert.equal(synced.payment_state, 'UNPAID', restaurantCase.id + ' must not claim payment');
     assert.ok(synced.payment_id, restaurantCase.id + ' should link canonical payment');
     const canonicalPayment = await store.getPayment(tenant.chatId, synced.payment_id);
+    const storedRestaurantOrder = (await store.getOrders(tenant.chatId)).find(order => order.id === restaurantCase.id);
+    assert.ok(storedRestaurantOrder, restaurantCase.id + ' should remain retrievable after sync');
+    if (Object.hasOwn(restaurantCase, 'cash_tendered')) {
+      assert.equal(storedRestaurantOrder.cash_tendered, restaurantCase.cash_tendered,
+        restaurantCase.id + ' should preserve reported tender as order data');
+    }
+    if (Object.hasOwn(restaurantCase, 'payment_proof')) {
+      assert.deepEqual(storedRestaurantOrder.payment_proof, restaurantCase.payment_proof,
+        restaurantCase.id + ' should preserve proof evidence without treating it as confirmation');
+    }
     assert.equal(canonicalPayment.state, 'UNPAID', restaurantCase.id + ' must leave canonical state unpaid');
     assert.equal(canonicalPayment.metadata.financialStateAuthority, 'PAYMENT_CORE');
     assert.equal(
