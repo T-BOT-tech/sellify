@@ -352,7 +352,7 @@
        visible affordance: item count + total, tap to jump straight to
        the review/cash-calc section. Sits above the tab bar, only on the
        order tab, only once there's something in the cart. -->
-  <div class="cart-sticky-bar" id="cartStickyBar" style="display:none;" onclick="scrollToOrderSummary()">
+  <div class="cart-sticky-bar" id="cartStickyBar" role="button" tabindex="0" aria-label="Review order and total" style="display:none;" onclick="scrollToOrderSummary()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();scrollToOrderSummary();}">
     <svg class="icon icon-sm"><use href="#i-cart"/></svg>
     <span class="cart-sticky-count" id="cartStickyCount"></span>
     <span class="cart-sticky-total" id="cartStickyTotal"></span>
