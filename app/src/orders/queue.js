@@ -164,7 +164,12 @@ export function ticketInnerHtml(o) {
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: ${escapeHtml(String(orderPaymentSummary.status || 'UNPAID'))} · ${CS()}${formatMoney(orderPaymentSummary.verifiedMinor || 0)} paid · ${CS()}${formatMoney(orderPaymentSummary.outstandingMinor || 0)} outstanding</div>`
     : (o.server_order_id ? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: checking…</div>' : '');
   const payMethodLine = o.payment_method_name
-    ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> ${escapeHtml(o.payment_method_name)}${o.payment_proof ? ' · <svg class="icon icon-sm"><use href="#i-paperclip"/></svg> proof attached' : ''}</div>` : '';
+    ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> ${escapeHtml(o.payment_method_name)}${o.payment_proof ? ' · <svg class="icon icon-sm"><use href="#i-paperclip"/></svg> receipt attached (evidence only)' : ''}</div>` : '';
+  // A locally queued order has not yet been linked to canonical Payment Core.
+  // State this explicitly so the method name or receipt attachment cannot be
+  // mistaken for backend-confirmed payment.
+  const paymentLinkageLine = !o.server_order_id && o.payment_linkage?.status === 'UNLINKED'
+    ? '<div class="ticket-customer">Payment tracking: Not yet linked to Payment Core</div>' : '';
   const staffLine = o.created_by_role
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-user"/></svg> Staff: ${escapeHtml(o.created_by_user || 'Staff')} (${escapeHtml((o.created_by_role || '').toUpperCase())})</div>` : '';
   const b2bLine = o.b2b_account_name
@@ -196,6 +201,7 @@ export function ticketInnerHtml(o) {
     <div class="ticket-items">${itemsHtml}</div>
     <div class="ticket-total"><span>${t('total')}</span><span>${CS()}${formatMoney(o.total)}</span></div>
     ${payMethodLine}
+    ${paymentLinkageLine}
     ${orderPaymentLine}
     ${paymentStateLine}
     ${cashLine}
