@@ -36,6 +36,71 @@ try {
   const catalogSource = await readFile(new URL('../app/src/products/catalog.js', import.meta.url), 'utf8');
   assert.match(catalogSource, /const item_type = typeSel && typeSel\.value === 'service' \? 'service' : 'product'/);
 
+  // Exercise the real canonical order -> fulfillment -> inventory path, not
+  // only source guards. The service line must not produce a physical stock sale.
+  const integrationChatId = 'service-fulfillment-' + Date.now();
+  const integrationTenant = await store.getOrCreateTenant(integrationChatId);
+  await store.saveCatalog(integrationChatId, [
+    { id: 'consultation-e2e', name: 'Consultation', price: 25000, item_type: 'service' },
+    { id: 'soap-e2e', name: 'Soap', price: 5000, stock: 5, item_type: 'product' },
+  ]);
+  await store.appendInventoryMovement(integrationChatId, {
+    productId: 'soap-e2e', quantity: 5, movementType: 'PURCHASE',
+    eventId: 'service-fulfillment-opening-stock',
+  });
+  const actor = { userId: 'service-catalog-test-user', deviceId: 'service-catalog-test-device', locationId: null };
+
+  const serviceOrder = await store.saveQueuedOrders(integrationChatId, [{
+    id: 'local-service-only-order',
+    items: [{ item_id: 'consultation-e2e', name: 'Consultation', qty: 1, price: 25000, item_type: 'product' }],
+    fulfillment_type: 'delivery',
+    delivery_address: 'Test destination',
+  }]);
+  assert.equal(serviceOrder[0].status, 'synced');
+  const serviceOrderId = serviceOrder[0].order_id;
+  const beforeService = (await store.getInventoryBalances(integrationChatId))
+    .find(row => row.productId === 'soap-e2e')?.quantity;
+  await store.transitionOrderFulfillment(integrationChatId, serviceOrderId, 'out_for_delivery', actor, {
+    idempotencyKey: 'service-only-start',
+  });
+  const completedService = await store.transitionOrderFulfillment(integrationChatId, serviceOrderId, 'delivered', actor, {
+    idempotencyKey: 'service-only-delivered',
+  });
+  assert.equal(completedService.status, 'delivered');
+  const afterService = (await store.getInventoryBalances(integrationChatId))
+    .find(row => row.productId === 'soap-e2e')?.quantity;
+  assert.equal(afterService, beforeService, 'service-only fulfillment must not move unrelated physical stock');
+
+  const mixedOrder = await store.saveQueuedOrders(integrationChatId, [{
+    id: 'local-mixed-service-product-order',
+    items: [
+      { item_id: 'consultation-e2e', name: 'Consultation', qty: 1, price: 25000, item_type: 'product' },
+      { item_id: 'soap-e2e', name: 'Soap', qty: 2, price: 5000, item_type: 'service' },
+    ],
+    fulfillment_type: 'delivery',
+    delivery_address: 'Test destination',
+  }]);
+  assert.equal(mixedOrder[0].status, 'synced');
+  const mixedOrderId = mixedOrder[0].order_id;
+  const beforeMixed = (await store.getInventoryBalances(integrationChatId))
+    .find(row => row.productId === 'soap-e2e')?.quantity;
+  await store.transitionOrderFulfillment(integrationChatId, mixedOrderId, 'out_for_delivery', actor, {
+    idempotencyKey: 'mixed-order-start',
+  });
+  const completedMixed = await store.transitionOrderFulfillment(integrationChatId, mixedOrderId, 'delivered', actor, {
+    idempotencyKey: 'mixed-order-delivered',
+  });
+  assert.equal(completedMixed.status, 'delivered');
+  const afterMixed = (await store.getInventoryBalances(integrationChatId))
+    .find(row => row.productId === 'soap-e2e')?.quantity;
+  assert.equal(beforeMixed - afterMixed, 2, 'server catalog type, not client line metadata, determines stock deduction');
+  await store.transitionOrderFulfillment(integrationChatId, mixedOrderId, 'delivered', actor, {
+    idempotencyKey: 'mixed-order-delivered',
+  });
+  const afterMixedRetry = (await store.getInventoryBalances(integrationChatId))
+    .find(row => row.productId === 'soap-e2e')?.quantity;
+  assert.equal(afterMixedRetry, afterMixed, 'exact fulfillment retry must not duplicate inventory deduction');
+
   console.log('First-experience service catalog contract regression: PASS');
 } finally {
   await rm(tempDir, { recursive: true, force: true });
