@@ -32,6 +32,11 @@ try {
   assert.match(fulfillmentSource, /parseJSON\(product\.product_json, \{\}\)\.item_type === 'service'\) continue/);
   assert(fulfillmentSource.indexOf("item_type === 'service') continue") < fulfillmentSource.indexOf("if (!locationId) throw"), 'service fulfillment must bypass physical inventory-location requirements');
 
+  const warehouseUiSource = await readFile(new URL('../app/src/warehouse/ui.js', import.meta.url), 'utf8');
+  assert.match(warehouseUiSource, /const physicalProducts = products\.filter\(p => p\?\.item_type !== 'service'\)/, 'warehouse inventory list and total must count physical products only');
+  assert.match(warehouseUiSource, /list\.innerHTML = physicalProducts\.map\(p =>/, 'service items must not render stock adjustment/receiving actions');
+  assert.match(warehouseUiSource, /\.filter\(p => p\?\.item_type !== 'service'\)/, 'stock adjust and receive selectors must exclude services');
+
   const inventorySource = await readFile(new URL('../app/src/warehouse/inventory.js', import.meta.url), 'utf8');
   assert.match(inventorySource, /if \(p\?\.item_type === 'service'\) return false/);
   assert.match(inventorySource, /export function projectedStock\(p, locationId = config\.locationId \|\| ''\) \{\s*if \(p\?\.item_type === 'service'\) return null;/);
