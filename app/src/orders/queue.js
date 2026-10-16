@@ -37,6 +37,8 @@ import { getPaymentForOrder, refreshCanonicalOrderPaymentSummary } from '../paym
 // the queue does not issue a network request for every paint.
 const orderPaymentSummaryCache = new Map();
 const orderPaymentSummaryInFlight = new Map();
+const orderPaymentSummaryVersions = new Map();
+let orderPaymentSummaryGlobalVersion = 0;
 const ORDER_PAYMENT_SUMMARY_TTL_MS = 10000;
 
 function orderPaymentSummaryKey(orderId) {
@@ -54,10 +56,15 @@ function getCachedOrderPaymentSummary(orderId) {
 export function invalidateOrderPaymentSummaryCache(orderId) {
   const id = String(orderId || '').trim();
   if (!id) return;
-  orderPaymentSummaryCache.delete(orderPaymentSummaryKey(id));
+  const key = orderPaymentSummaryKey(id);
+  orderPaymentSummaryVersions.set(key, (orderPaymentSummaryVersions.get(key) || 0) + 1);
+  orderPaymentSummaryCache.delete(key);
 }
 
 export function invalidateAllOrderPaymentSummaryCache() {
+  // In-flight requests may resolve after a tenant switch or global refresh.
+  // A generation bump prevents those older responses from repopulating cache.
+  orderPaymentSummaryGlobalVersion += 1;
   orderPaymentSummaryCache.clear();
 }
 
@@ -65,15 +72,23 @@ function refreshOrderPaymentSummary(orderId) {
   const id = String(orderId || '').trim();
   if (!id || !config.chatId || orderPaymentSummaryInFlight.has(orderPaymentSummaryKey(id))) return;
   const key = orderPaymentSummaryKey(id);
+  const globalVersion = orderPaymentSummaryGlobalVersion;
+  const keyVersion = orderPaymentSummaryVersions.get(key) || 0;
   // Never retain an expired/stale financial projection while a canonical
   // refresh is in flight. Failure must render as unavailable/checking rather
   // than silently presenting an old PAID/PARTIAL/UNPAID decision.
   invalidateOrderPaymentSummaryCache(id);
+  const requestKeyVersion = orderPaymentSummaryVersions.get(key) || 0;
+  let wasInvalidated = false;
   const promise = refreshCanonicalOrderPaymentSummary(id)
     .then(summary => {
-      orderPaymentSummaryCache.set(key, { summary, receivedAt: Date.now() });
+      wasInvalidated = globalVersion !== orderPaymentSummaryGlobalVersion
+        || requestKeyVersion !== (orderPaymentSummaryVersions.get(key) || 0);
+      if (!wasInvalidated) {
+        orderPaymentSummaryCache.set(key, { summary, receivedAt: Date.now() });
+      }
       renderQueue();
-      return summary;
+      return wasInvalidated ? null : summary;
     })
     .catch(() => {
       // The canonical result is unavailable. Keep the cache empty and repaint
@@ -82,7 +97,16 @@ function refreshOrderPaymentSummary(orderId) {
       renderQueue();
       return null;
     })
-    .finally(() => orderPaymentSummaryInFlight.delete(key));
+    .finally(() => {
+      orderPaymentSummaryInFlight.delete(key);
+      // If an event invalidated this request while it was in flight, retry
+      // only after removing the old in-flight marker; its response is not
+      // allowed to become the displayed financial summary.
+      if (wasInvalidated || globalVersion !== orderPaymentSummaryGlobalVersion
+        || requestKeyVersion !== (orderPaymentSummaryVersions.get(key) || 0)) {
+        renderQueue();
+      }
+    });
   orderPaymentSummaryInFlight.set(key, promise);
 }
 
