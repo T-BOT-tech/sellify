@@ -89,6 +89,10 @@ export function renderCatalog() {
           </label>
           <input type="text" class="editName" id="editName-${p.id}" value="${escapeAttr(p.name)}">
           <input type="number" step="0.01" class="editPrice" id="editPrice-${p.id}" value="${fromMinorUnits(p.price)}">
+          <select class="editItemType" id="editItemType-${p.id}" aria-label="${escapeAttr(t('catalogItemType') || 'Item type')}">
+            <option value="product" ${p.item_type !== 'service' ? 'selected' : ''}>${escapeHtml(t('catalogProduct') || 'Product')}</option>
+            <option value="service" ${p.item_type === 'service' ? 'selected' : ''}>${escapeHtml(t('service') || 'Service')}</option>
+          </select>
           <select class="editCategory" id="editCategory-${p.id}">${catOptionsHtml}</select>
           <select class="editUnit" id="editUnit-${p.id}">${unitOptionsHtml}</select>
           <button class="save-edit" onclick="saveProductEdit('${p.id}')">${t('save')}</button>
@@ -170,6 +174,8 @@ export function saveProductEdit(id) {
     return;
   }
   const price = toMinorUnits(priceMajor);
+  const itemTypeSel = document.getElementById(`editItemType-${id}`);
+  const item_type = itemTypeSel && itemTypeSel.value === 'service' ? 'service' : 'product';
   const catSel = document.getElementById(`editCategory-${id}`);
   const unitSel = document.getElementById(`editUnit-${id}`);
   const category = catSel ? catSel.value : '';
@@ -184,7 +190,7 @@ export function saveProductEdit(id) {
   const newImg = editingProdImages[id];
   setProducts(products.map(p => {
     if (p.id === id) {
-      const updated = { ...p, name, price, _priceMinor: true, category: category || undefined, unit: unit || undefined, tags: (tags && tags.length) ? tags : undefined, modifiers: (modifiers && modifiers.length) ? modifiers : undefined, marketplace_listed, updated_at: Date.now() };
+      const updated = { ...p, name, price, _priceMinor: true, item_type, category: category || undefined, unit: unit || undefined, tags: (tags && tags.length) ? tags : undefined, modifiers: (modifiers && modifiers.length) ? modifiers : undefined, marketplace_listed, updated_at: Date.now() };
       if (newImg !== undefined) {
         updated.image = newImg;
         updated.image_url = newImg;
