@@ -1032,6 +1032,9 @@ async function handleCatalogPost(req, res, chatId) {
     if (!Number.isFinite(price) || price < 0 || price > 2147483647) {
       throw Object.assign(new Error('Each catalog product needs a valid non-negative price'), { statusCode: 400 });
     }
+    if (product.item_type !== undefined && !['product', 'service'].includes(String(product.item_type).trim().toLowerCase())) {
+      throw Object.assign(new Error('Catalog item_type must be product or service'), { statusCode: 400 });
+    }
     if (product.stock !== undefined && product.stock !== null) {
       const stock = Number(product.stock);
       if (!Number.isFinite(stock) || stock < 0 || stock > 1000000000) {
