@@ -291,9 +291,9 @@ assert.match(refundFinalBlock, /fullRefund/);
 assert.match(orderQueue, /refreshCanonicalOrderPaymentSummary/);
 assert.match(orderQueue, /getCachedOrderPaymentSummary/);
 assert.match(orderQueue, /Order payment:/);
-assert.match(orderQueue, /orderPaymentSummary\.status/);
-assert.match(orderQueue, /orderPaymentSummary\.verifiedMinor/);
-assert.match(orderQueue, /orderPaymentSummary\.outstandingMinor/);
+assert.match(orderQueue, /orderPaymentSummary\?\.status \|\| orderPaymentSummary\?\.payment_status/);
+assert.match(orderQueue, /verifiedMinor \?\? orderPaymentSummary\.verified_minor/);
+assert.match(orderQueue, /outstandingMinor \?\? orderPaymentSummary\.outstanding_minor/);
 assert.match(orderQueue, /ORDER_PAYMENT_SUMMARY_TTL_MS/);
 assert.match(orderQueue, /orderPaymentSummaryInFlight/);
 
