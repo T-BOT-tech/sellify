@@ -5812,8 +5812,9 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null) 
   if (!productId || !Number.isFinite(quantity) || quantity === 0 || !allowedTypes.has(movementType)) {
     throw Object.assign(new Error('Valid productId, non-zero quantity, and movementType are required'), { statusCode: 400 });
   }
-  const product = db.prepare('SELECT product_id FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
+  const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
   if (!product) throw Object.assign(new Error('Product not found'), { statusCode: 404 });
+  const isService = parseJSON(product.product_json, {}).item_type === 'service';
   const defaultLocation = db.prepare(
     "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
   ).get(String(tenant.organizationId));
@@ -5823,6 +5824,12 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null) 
   const eventId = String(input.eventId || crypto.randomUUID()).trim();
   const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
   if (existing) return inventoryMovementFromRow(existing);
+  if (isService) {
+    throw Object.assign(new Error('Service catalog items do not support physical inventory movements'), {
+      statusCode: 422,
+      code: 'SERVICE_HAS_NO_INVENTORY',
+    });
+  }
   const now = nowIso();
   const id = crypto.randomUUID();
   db.prepare(`
