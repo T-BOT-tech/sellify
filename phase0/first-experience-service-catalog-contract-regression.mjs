@@ -32,6 +32,7 @@ try {
   const storeSource = await readFile(new URL('../backend/lib/store-sqlite.js', import.meta.url), 'utf8');
   assert.match(storeSource, /if \(isService\) \{\s*throw Object\.assign\(new Error\('Service catalog items do not support physical inventory movements'\)/, 'server-side inventory authority must enforce service stock exclusion');
   assert(storeSource.includes('SELECT product_id, stock, product_json FROM catalog_products WHERE chat_id = ? AND stock IS NOT NULL') && storeSource.includes(".filter(product => parseJSON(product.product_json, {}).item_type !== 'service')"), 'legacy opening-balance migration must not create physical stock movements for services');
+  assert(storeSource.includes("if (parseJSON(product.product_json, {}).item_type === 'service') {\n      throw Object.assign(new Error('Service catalog items cannot be received into physical inventory')") && storeSource.includes("code: 'SERVICE_HAS_NO_INVENTORY'"), 'procurement receiving must reject service items before creating receipt records');
   const fulfillmentStart = storeSource.indexOf('function applyCoreFulfillmentInventoryConsequence');
   const fulfillmentEnd = storeSource.indexOf('\nexport async function selectDeliveryCourier', fulfillmentStart);
   assert(fulfillmentStart >= 0 && fulfillmentEnd > fulfillmentStart, 'fulfillment inventory consequence source must exist');
