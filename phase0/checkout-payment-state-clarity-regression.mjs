@@ -6,8 +6,8 @@ const checkout = await readFile(new URL('../app/src/orders/checkout.js', import.
 
 const modalStart = html.indexOf('id="paymentProofModal"');
 assert.ok(modalStart >= 0, 'checkout payment method modal must exist');
-const modalEnd = html.indexOf('</div>', modalStart);
-const modal = html.slice(modalStart, modalEnd > modalStart ? modalEnd : modalStart + 3000);
+const modalEnd = html.indexOf('id="tableEditModal"', modalStart);
+const modal = html.slice(modalStart, modalEnd > modalStart ? modalEnd : modalStart + 5000);
 assert.match(modal, /id="checkoutPaymentStateNotice"/);
 assert.match(modal, /Saving this sale adds the order to the queue\./);
 assert.match(modal, /receipt photo is not payment confirmation/);
