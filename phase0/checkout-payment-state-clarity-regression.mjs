@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 const html = await readFile(new URL('../app/index.html', import.meta.url), 'utf8');
 const checkout = await readFile(new URL('../app/src/orders/checkout.js', import.meta.url), 'utf8');
+const queue = await readFile(new URL('../app/src/orders/queue.js', import.meta.url), 'utf8');
 const modalStart = html.indexOf('<div class="modal-backdrop" id="paymentProofModal">');
 assert.ok(modalStart >= 0, 'checkout payment method modal must exist');
 const modalEnd = html.indexOf('</div>\n\n<div class="modal-backdrop" id="tableEditModal"', modalStart);
@@ -49,4 +50,10 @@ assert.doesNotMatch(modal, /Confirm payment|Complete sale/);
 assert.match(checkout, /status: 'queued'/);
 assert.match(checkout, /status: 'UNLINKED'/);
 assert.match(checkout, /payment_id: null/);
+
+// The order queue must distinguish a selected method/receipt from canonical
+// payment confirmation for locally queued orders.
+assert.match(queue, /receipt attached \(evidence only\)/);
+assert.match(queue, /Payment tracking: Not yet linked to Payment Core/);
+assert.match(queue, /!o\.server_order_id && o\.payment_linkage\?\.status === 'UNLINKED'/);
 console.log('Checkout payment-state clarity and order-total regression: PASS');
