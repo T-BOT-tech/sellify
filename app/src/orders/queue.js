@@ -93,14 +93,11 @@ export function renderDailySummary() {
     container.innerHTML = '';
     return;
   }
-  // Phase 4 (data integrity in reporting): this used to sum every order
-  // ever stored, regardless of when it was placed — so "Today's Sales"
-  // silently showed all-time revenue once the queue had more than one
-  // day's orders in it (confirmed bug, not theoretical: nothing here ever
-  // pruned or filtered by date). Filtered to created_at falling within the
-  // *device's local* calendar day — orders don't carry a timezone, and a
-  // seller reading this on their own device expects "today" to mean their
-  // own local today, not UTC's.
+  // Reporting semantics: order totals are not proof of collected revenue.
+  // This summary reports today's order value, not confirmed payments. The
+  // date filter also prevents older orders from inflating today's figures.
+  // Orders don't carry a timezone, so "today" follows the device's local
+  // calendar day rather than UTC.
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const startOfTodayMs = startOfToday.getTime();
