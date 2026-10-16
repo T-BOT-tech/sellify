@@ -295,6 +295,10 @@ assert.match(orderQueue, /orderPaymentSummary\?\.status \|\| orderPaymentSummary
 assert.match(orderQueue, /verifiedMinor \?\? orderPaymentSummary\.verified_minor/);
 assert.match(orderQueue, /outstandingMinor \?\? orderPaymentSummary\.outstanding_minor/);
 assert.match(orderQueue, /ORDER_PAYMENT_SUMMARY_TTL_MS/);
+assert.match(orderQueue, /cached\.unavailable \? \{ unavailable: true \}/);
+assert.match(orderQueue, /orderPaymentSummary\?\.unavailable/);
+assert.match(orderQueue, /Order payment: status unavailable · retry by refreshing/);
+assert.match(orderQueue, /orderPaymentSummaryCache\.set\(key, \{ unavailable: true, receivedAt: Date\.now\(\) \}\)/);
 assert.match(orderQueue, /orderPaymentSummaryInFlight/);
 assert.match(orderQueue, /orderPaymentSummaryVersions/);
 assert.match(orderQueue, /orderPaymentSummaryGlobalVersion/);
