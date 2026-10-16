@@ -69,6 +69,15 @@ try {
     "SELECT COUNT(*) AS count FROM marketplace_inventory_reservations WHERE product_id = 'marketplace-consultation'"
   ).get().count, 0, 'marketplace service checkout must not create physical inventory reservations');
   serviceMarketplaceDb.close();
+  const cancelledServiceOrder = await store.updateMarketplaceOrderStatus(
+    marketplaceSeller.chatId, serviceSellerOrder.id, 'cancelled'
+  );
+  assert.equal(cancelledServiceOrder.status, 'cancelled', 'cancelling a marketplace service order must not attempt a physical stock return');
+  const cancellationDb = new DatabaseSync(path.join(tempDir, 'sellify.sqlite'));
+  assert.equal(cancellationDb.prepare(
+    "SELECT COUNT(*) AS count FROM inventory_movements WHERE product_id = 'marketplace-consultation'"
+  ).get().count, 0, 'service order cancellation must not create physical inventory movements');
+  cancellationDb.close();
 
   await assert.rejects(
     store.saveCatalog(chatId, [
