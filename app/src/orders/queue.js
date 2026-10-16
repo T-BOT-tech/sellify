@@ -50,7 +50,7 @@ function getCachedOrderPaymentSummary(orderId) {
   const cached = orderPaymentSummaryCache.get(key);
   if (!cached) return null;
   if (Date.now() - cached.receivedAt > ORDER_PAYMENT_SUMMARY_TTL_MS) return null;
-  return cached.summary;
+  return cached.unavailable ? { unavailable: true } : cached.summary;
 }
 
 export function invalidateOrderPaymentSummaryCache(orderId) {
@@ -90,9 +90,14 @@ function refreshOrderPaymentSummary(orderId) {
       return wasInvalidated ? null : summary;
     })
     .catch(() => {
-      // The canonical result is unavailable. Keep the cache empty and repaint
-      // immediately so an older PAID/PARTIAL/UNPAID DOM projection cannot
-      // remain visible after a failed refresh.
+      // Cache an explicit unavailable result briefly to avoid leaving the UI
+      // stuck on "checking…" or creating an immediate retry/render loop.
+      // Never reuse an older financial decision after a canonical read fails.
+      const wasInvalidated = globalVersion !== orderPaymentSummaryGlobalVersion
+        || requestKeyVersion !== (orderPaymentSummaryVersions.get(key) || 0);
+      if (!wasInvalidated) {
+        orderPaymentSummaryCache.set(key, { unavailable: true, receivedAt: Date.now() });
+      }
       renderQueue();
       return null;
     })
@@ -187,9 +192,11 @@ export function ticketInnerHtml(o) {
   const orderPaymentStatusLabel = ['UNPAID', 'PARTIAL', 'PAID', 'OVERPAID', 'REFUNDED', 'REVERSED'].includes(orderPaymentStatus)
     ? orderPaymentStatus
     : 'Payment status unavailable';
-  const orderPaymentLine = orderPaymentSummary
-    ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: ${escapeHtml(orderPaymentStatusLabel)} · ${CS()}${formatMoney(orderPaymentSummary.verifiedMinor ?? orderPaymentSummary.verified_minor ?? 0)} paid · ${CS()}${formatMoney(orderPaymentSummary.outstandingMinor ?? orderPaymentSummary.outstanding_minor ?? 0)} outstanding</div>`
-    : (o.server_order_id ? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: checking…</div>' : '');
+  const orderPaymentLine = orderPaymentSummary?.unavailable
+    ? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: status unavailable · retry by refreshing</div>'
+    : orderPaymentSummary
+      ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: ${escapeHtml(orderPaymentStatusLabel)} · ${CS()}${formatMoney(orderPaymentSummary.verifiedMinor ?? orderPaymentSummary.verified_minor ?? 0)} paid · ${CS()}${formatMoney(orderPaymentSummary.outstandingMinor ?? orderPaymentSummary.outstanding_minor ?? 0)} outstanding</div>`
+      : (o.server_order_id ? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: checking…</div>' : '');
   const payMethodLine = o.payment_method_name
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> ${escapeHtml(o.payment_method_name)}${o.payment_proof ? ' · <svg class="icon icon-sm"><use href="#i-paperclip"/></svg> receipt attached (evidence only)' : ''}</div>` : '';
   // A locally queued order has not yet been linked to canonical Payment Core.
