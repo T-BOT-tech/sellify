@@ -23,8 +23,14 @@ try {
   const roundTrip = (await store.getCatalog(chatId)).products;
   assert.equal(roundTrip.find(item => item.id === 'consultation').item_type, 'service');
   assert.equal(roundTrip.find(item => item.id === 'soap').item_type, 'product');
+  await assert.rejects(
+    store.appendInventoryMovement(chatId, { productId: 'consultation', movementType: 'ADJUSTMENT', quantity: 1 }),
+    error => error?.code === 'SERVICE_HAS_NO_INVENTORY' && error?.statusCode === 422,
+    'canonical inventory authority must reject physical stock movements for service catalog items',
+  );
 
   const storeSource = await readFile(new URL('../backend/lib/store-sqlite.js', import.meta.url), 'utf8');
+  assert.match(storeSource, /if \(isService\) \{\s*throw Object\.assign\(new Error\('Service catalog items do not support physical inventory movements'\)/, 'server-side inventory authority must enforce service stock exclusion');
   const fulfillmentStart = storeSource.indexOf('function applyCoreFulfillmentInventoryConsequence');
   const fulfillmentEnd = storeSource.indexOf('\nexport async function selectDeliveryCourier', fulfillmentStart);
   assert(fulfillmentStart >= 0 && fulfillmentEnd > fulfillmentStart, 'fulfillment inventory consequence source must exist');
