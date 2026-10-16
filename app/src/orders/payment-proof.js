@@ -26,6 +26,8 @@ import { config, currentOrder, products } from '../state.js';
 // imported directly from source, so main.js only imports feature code —
 // nothing imports main.js back except window-bridge.js.
 import { effectiveUnitPrice } from '../b2b/pricing.js';
+import { formatMoney } from '../utils/money.js';
+import { CS } from '../config/currency.js';
 import { showToast } from '../ui/toast.js';
 import { getOrderById } from './queue.js';
 import { saveOrder } from './checkout.js';
@@ -139,6 +141,10 @@ export function openPaymentProofModal() {
     return p ? { name: p.name, qty, price: effectiveUnitPrice(p, qty) } : null;
   }).filter(Boolean);
   if (items.length === 0) return;
+
+  const total = items.reduce((sum, item) => sum + item.qty * item.price, 0);
+  const totalEl = document.getElementById('checkoutPaymentOrderTotal');
+  if (totalEl) totalEl.textContent = `${CS()}${formatMoney(total, config.currencyCode)}`;
 
   const sel = document.getElementById('orderPayMethod');
   const enabledMethods = (config.paymentMethods || []).filter(pm => pm.enabled);
