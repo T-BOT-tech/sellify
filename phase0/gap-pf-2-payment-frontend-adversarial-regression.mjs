@@ -296,6 +296,11 @@ assert.match(orderQueue, /verifiedMinor \?\? orderPaymentSummary\.verified_minor
 assert.match(orderQueue, /outstandingMinor \?\? orderPaymentSummary\.outstanding_minor/);
 assert.match(orderQueue, /ORDER_PAYMENT_SUMMARY_TTL_MS/);
 assert.match(orderQueue, /orderPaymentSummaryInFlight/);
+assert.match(orderQueue, /orderPaymentSummaryVersions/);
+assert.match(orderQueue, /orderPaymentSummaryGlobalVersion/);
+assert.match(orderQueue, /requestKeyVersion !== \(orderPaymentSummaryVersions\.get\(key\) \|\| 0\)/);
+assert.match(orderQueue, /if \(wasInvalidated \|\| globalVersion !== orderPaymentSummaryGlobalVersion[\s\S]*?renderQueue\(\);/);
+
 
 // Frontend canonical snapshot certification:
 // a successful tenant-scoped payment list replaces the projection snapshot;
