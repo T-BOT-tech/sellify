@@ -221,6 +221,15 @@ try {
   });
   assert.equal(locationlessCompleted.status, 'delivered', 'service fulfillment must complete with zero physical locations');
 
+  await assert.rejects(
+    store.saveCatalog(locationlessChatId, [
+      { id: 'remote-consultation', name: 'Remote consultation', price: 15000, item_type: 'product' },
+      { id: 'physical-item-no-location', name: 'Physical item', price: 3000, item_type: 'product' },
+    ]),
+    error => error?.code === 'CATALOG_ITEM_TYPE_LOCKED' && error?.statusCode === 409,
+    'catalog type must remain stable after an order references the item, even when it has no inventory movements',
+  );
+
   const locationlessPhysical = await store.saveQueuedOrders(locationlessChatId, [{
     id: 'locationless-physical-order',
     items: [{ item_id: 'physical-item-no-location', name: 'Physical item', qty: 1, price: 3000 }],
