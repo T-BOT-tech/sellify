@@ -5622,8 +5622,14 @@ export async function saveCatalog(chatId, incomingProducts) {
         const hasInventoryHistory = tenant?.organization_id && db.prepare(
           'SELECT 1 FROM inventory_movements WHERE organization_id = ? AND product_id = ? LIMIT 1'
         ).get(String(tenant.organization_id), String(product.id));
-        if (hasInventoryHistory) {
-          throw Object.assign(new Error('Catalog item type cannot change after physical inventory history exists'), { statusCode: 409, code: 'CATALOG_ITEM_TYPE_LOCKED' });
+        const hasOrderHistory = db.prepare('SELECT order_json FROM orders WHERE chat_id = ?').all(key).some(orderRow => {
+          const order = parseJSON(orderRow.order_json, {});
+          return (Array.isArray(order.items) ? order.items : []).some(item =>
+            String(item?.item_id ?? item?.product_id ?? item?.productId ?? item?.id ?? '') === String(product.id)
+          );
+        });
+        if (hasInventoryHistory || hasOrderHistory) {
+          throw Object.assign(new Error('Catalog item type cannot change after order or physical inventory history exists'), { statusCode: 409, code: 'CATALOG_ITEM_TYPE_LOCKED' });
         }
       }
       const currentRevision = Number.isInteger(row.stock_revision) ? row.stock_revision : 0;
