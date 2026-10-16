@@ -47,6 +47,8 @@ assert.doesNotMatch(client, /providerToken|botToken|secret|credential/i);
 // Payment projection may query and render canonical state, but checkout must not
 // create ledger entries or call PaymentCore directly.
 assert.match(projection, /listPayments/);
+assert.match(projection, /responsePayment\?\.id \?\? responsePayment\?\.paymentId \?\? responsePayment\?\.payment_id/);
+assert.match(projection, /\{ \.\.\.responsePayment, id: String\(responsePaymentId\) \}/);
 assert.match(projection, /refreshCanonicalPaymentStatus/);
 assert.doesNotMatch(checkout, /payment_ledger_entries|payments\/ledger|createPayment\(/);
 
