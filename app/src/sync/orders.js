@@ -22,7 +22,7 @@ async function pullServerOrders() {
   if (!config.syncUrl || !config.chatId || !config.sessionToken) return;
   try {
     const res = await fetch(`${config.syncUrl.replace(/\/$/, '')}/orders/${encodeURIComponent(config.chatId)}?limit=200`, {
-      headers: authHeaders(),
+      headers: tenantAuthHeaders(),
     });
     if (!res.ok) return;
     const data = await res.json();
@@ -54,7 +54,7 @@ async function pullNewOrders() {
   if (!config.syncUrl || !config.chatId || !config.sessionToken) return;
   try {
     const res = await fetch(`${config.syncUrl.replace(/\/$/, '')}/sync/${config.chatId}`, {
-      headers: authHeaders(),
+      headers: tenantAuthHeaders(),
     });
     if (!res.ok) return;
     const data = await res.json();
@@ -82,7 +82,7 @@ export async function syncOrders() {
   try {
     const res = await fetch(`${config.syncUrl.replace(/\/$/, '')}/sync/${config.chatId}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      headers: { 'Content-Type': 'application/json', ...tenantAuthHeaders() },
       body: JSON.stringify({ orders: queued }),
     });
     if (!res.ok) throw new Error(`Server responded ${res.status}`);
