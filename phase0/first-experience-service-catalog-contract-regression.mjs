@@ -5,6 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 
+const marketplaceListingsSource = await readFile(new URL('../app/src/marketplace/listings.js', import.meta.url), 'utf8');
+assert.match(marketplaceListingsSource, /item\.item_type === 'service'[\s\S]*?t\('service'\)/,
+  'marketplace listing UI must visibly identify service listings using the localized label');
+
 const tempDir = await mkdtemp(path.join(os.tmpdir(), 'sellify-service-catalog-'));
 process.env.SELLIFY_DATA_DIR = tempDir;
 process.env.SELLIFY_DB_PATH = path.join(tempDir, 'sellify.sqlite');
