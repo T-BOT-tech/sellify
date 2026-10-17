@@ -6,12 +6,17 @@ const catalogSource = await readFile(new URL('../app/src/sync/catalog.js', impor
 const ordersSource = await readFile(new URL('../app/src/sync/orders.js', import.meta.url), 'utf8');
 const tenantAuthSource = await readFile(new URL('../app/src/auth/tenant.js', import.meta.url), 'utf8');
 const checkoutSource = await readFile(new URL('../app/src/orders/checkout.js', import.meta.url), 'utf8');
+const marketplaceCheckoutSource = await readFile(new URL('../app/src/marketplace/checkout.js', import.meta.url), 'utf8');
 
 // Guard the real sanitizer implementation used by catalog pull/push. The
 // spread preserves item_type while the following fields normalize ID and price.
 assert.match(catalogSource, /return \{\s*\.\.\.p,/);
 assert.match(catalogSource, /id:\s*sanitizeId\(p\.id\)/);
 assert.match(catalogSource, /price:\s*Number\.isFinite\(numericPrice\)/);
+assert.match(catalogSource, /item_type:\s*String\(l\.item_type \|\| 'product'\)[\s\S]*?\? 'service' : 'product'/,
+  'cached and remote marketplace listings must normalize item_type with a legacy-safe product default');
+assert.match(marketplaceCheckoutSource, /item_type:\s*e\.listing\.item_type === 'service' \? 'service' : 'product'/,
+  'marketplace checkout transport payloads must preserve canonical listing type for Telegram/local-queue paths');
 
 // Contract guards for the actual client methods: catalog POST sends the live
 // products array; order POST sends queued orders; both use tenant-session auth.
