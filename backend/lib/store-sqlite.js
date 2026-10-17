@@ -9420,6 +9420,7 @@ export async function searchMarketplaceListings() {
       listing_id: `${row.chat_id}_${row.product_id}`,
       seller_id: row.chat_id,
       item_id: row.product_id,
+      item_type: product.item_type === 'service' ? 'service' : 'product',
       title: product.name,
       price: row.price_minor,
       currency: normaliseCurrency(row.currency || parseJSON(row.branding_json, {})?.currency, 'ETB'),
