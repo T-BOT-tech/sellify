@@ -20,7 +20,7 @@ assert.match(marketplaceCheckoutSource, /const listing = marketplaceListings\.fi
   'checkout must resolve the current listing after a marketplace refresh instead of trusting a stale cart snapshot');
 assert.match(marketplaceCheckoutSource, /item_type:\s*listing\.item_type === 'service' \? 'service' : 'product'/,
   'marketplace checkout transport payloads must preserve canonical listing type for Telegram/local-queue paths');
-assert.match(marketplaceCheckoutSource, /Idempotency-Key:\s*intent\.idempotencyKey/,
+assert.match(marketplaceCheckoutSource, /Idempotency-Key':\s*intent\.idempotencyKey/,
   'marketplace API checkout must send the durable intent idempotency key');
 assert.match(marketplaceCheckoutSource, /await writePendingMarketplaceIntent\(intent\)[\s\S]*?await postMarketplaceCheckoutIntent\(intent\)/,
   'checkout intent must be persisted before the API request');
