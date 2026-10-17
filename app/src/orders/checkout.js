@@ -56,7 +56,7 @@ export function checkoutTelegramWebApp() {
     const p = products.find(p => p.id === id);
     if (!p) return null;
     const note = currentOrderNotes[id];
-    return { id: p.id, name: note ? `${p.name} (${note})` : p.name, qty, price: effectiveUnitPrice(p, qty) };
+    return { id: p.id, name: note ? `${p.name} (${note})` : p.name, qty, price: effectiveUnitPrice(p, qty), item_type: p.item_type === 'service' ? 'service' : 'product' };
   }).filter(Boolean);
   if (items.length === 0) return;
 
@@ -132,7 +132,7 @@ export function saveOrder(payMethodId, proofMeta) {
     const p = products.find(p => p.id === id);
     if (!p) return null; // product may have been removed (e.g. by a catalog sync) since it was added to the cart
     const note = currentOrderNotes[id];
-    return { id: p.id, name: note ? `${p.name} (${note})` : p.name, qty, price: effectiveUnitPrice(p, qty) };
+    return { id: p.id, name: note ? `${p.name} (${note})` : p.name, qty, price: effectiveUnitPrice(p, qty), item_type: p.item_type === 'service' ? 'service' : 'product' };
   }).filter(Boolean);
   if (items.length === 0) return;
 

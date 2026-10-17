@@ -24,7 +24,8 @@ export const STORAGE_KEYS = {
   inventoryMovements: 'ledger_inventory_movements',
   organizationLocations: 'ledger_organization_locations',
   inventoryBalances: 'ledger_inventory_balances',
-  outboxEvents: 'ledger_outbox_events'
+  outboxEvents: 'ledger_outbox_events',
+  marketplaceCheckoutIntents: 'ledger_marketplace_checkout_intents'
 };
 
 // One-time localStorage -> IndexedDB migration flag key.

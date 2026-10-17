@@ -64,6 +64,9 @@ export function sanitizeRemoteListings(rawList) {
     return {
       ...l,
       listing_id: l.listing_id !== undefined ? sanitizeId(l.listing_id) : l.listing_id,
+      // Older caches may omit item_type; normalize them to the legacy-safe product default.
+      // The server catalog remains authoritative for checkout and inventory consequences.
+      item_type: String(l.item_type || 'product').trim().toLowerCase() === 'service' ? 'service' : 'product',
       price: Number.isFinite(numericPrice) ? Math.max(0, Math.round(numericPrice)) : 0
     };
   });

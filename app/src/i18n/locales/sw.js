@@ -3,6 +3,9 @@
 // (Phase 1 — pure data, zero dependencies).
 export default {
     brandName: "DAFTARI LA DUKA",
+    catalogItemType: "Aina ya bidhaa",
+    catalogProduct: "Bidhaa",
+    service: "Huduma",
     setupBusiness: "Weka mipangilio ya biashara",
     online: "Mtandaoni",
     offline: "Nje ya Mtandao",

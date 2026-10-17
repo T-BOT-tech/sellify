@@ -3,6 +3,9 @@
 // (Phase 1 — pure data, zero dependencies).
 export default {
     brandName: "स्टॉल लेजर",
+    catalogItemType: "आइटम का प्रकार",
+    catalogProduct: "उत्पाद",
+    service: "सेवा",
     setupBusiness: "अपना व्यवसाय सेटअप करें",
     online: "ऑनलाइन",
     offline: "ऑफ़लाइन",

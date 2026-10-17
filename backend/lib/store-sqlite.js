@@ -106,6 +106,7 @@ function normaliseProduct(product) {
   const value = product && typeof product === 'object' ? { ...product } : {};
   value.name = typeof value.name === 'string' ? value.name.trim().slice(0, 200) : '';
   value.price = normalisePrice(value.price);
+  value.item_type = String(value.item_type || 'product').trim().toLowerCase() === 'service' ? 'service' : 'product';
   value.currency = normaliseCurrency(value.currency, 'ETB');
   if (value.stock !== undefined && value.stock !== null) {
     const stock = Number(value.stock);
@@ -4810,8 +4811,11 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
     if (already + quantity > ordered) throw Object.assign(new Error(`Receipt item ${index + 1} would exceed ordered quantity`), { statusCode: 409, code: 'OVER_RECEIPT' });
     const productId = String(poItem.product_id || '').trim();
     if (!productId) throw Object.assign(new Error('Procurement purchase-order items must reference catalog products before receiving'), { statusCode: 409, code: 'RECEIPT_PRODUCT_REQUIRED' });
-    const product = db.prepare('SELECT product_id FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
+    const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
     if (!product) throw Object.assign(new Error('Purchase-order product is not present in the buyer catalog'), { statusCode: 409, code: 'RECEIPT_PRODUCT_NOT_FOUND' });
+    if (parseJSON(product.product_json, {}).item_type === 'service') {
+      throw Object.assign(new Error('Service catalog items cannot be received into physical inventory'), { statusCode: 422, code: 'SERVICE_HAS_NO_INVENTORY' });
+    }
     return { purchaseOrderItemId: itemId, productId, receivedQuantity: quantity, notes: String(x.notes || '').trim().slice(0, 1000) };
   });
 
@@ -5423,8 +5427,8 @@ function ensureInventoryOpeningBalances(chatId) {
   ).get(String(tenant.organization_id));
   if (!location) return;
   const products = db.prepare(
-    'SELECT product_id, stock FROM catalog_products WHERE chat_id = ? AND stock IS NOT NULL'
-  ).all(String(chatId));
+    'SELECT product_id, stock, product_json FROM catalog_products WHERE chat_id = ? AND stock IS NOT NULL'
+  ).all(String(chatId)).filter(product => parseJSON(product.product_json, {}).item_type !== 'service');
   const insert = db.prepare(`
     INSERT OR IGNORE INTO inventory_movements
       (id, event_id, organization_id, location_id, product_id, quantity, movement_type,
@@ -5611,6 +5615,23 @@ export async function saveCatalog(chatId, incomingProducts) {
     for (const product of products) {
       const row = current.get(String(product.id));
       if (!row) { product.stock_revision = 0; continue; }
+      const previousType = parseJSON(row.product_json, {}).item_type === 'service' ? 'service' : 'product';
+      const nextType = product.item_type === 'service' ? 'service' : 'product';
+      if (previousType !== nextType) {
+        const tenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(key);
+        const hasInventoryHistory = tenant?.organization_id && db.prepare(
+          'SELECT 1 FROM inventory_movements WHERE organization_id = ? AND product_id = ? LIMIT 1'
+        ).get(String(tenant.organization_id), String(product.id));
+        const hasOrderHistory = db.prepare('SELECT order_json FROM orders WHERE chat_id = ?').all(key).some(orderRow => {
+          const order = parseJSON(orderRow.order_json, {});
+          return (Array.isArray(order.items) ? order.items : []).some(item =>
+            String(item?.item_id ?? item?.product_id ?? item?.productId ?? item?.id ?? '') === String(product.id)
+          );
+        });
+        if (hasInventoryHistory || hasOrderHistory) {
+          throw Object.assign(new Error('Catalog item type cannot change after order or physical inventory history exists'), { statusCode: 409, code: 'CATALOG_ITEM_TYPE_LOCKED' });
+        }
+      }
       const currentRevision = Number.isInteger(row.stock_revision) ? row.stock_revision : 0;
       const incomingRevision = Number.isInteger(product.stock_revision) ? product.stock_revision : null;
       if (incomingRevision === null) {
@@ -5811,8 +5832,9 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null) 
   if (!productId || !Number.isFinite(quantity) || quantity === 0 || !allowedTypes.has(movementType)) {
     throw Object.assign(new Error('Valid productId, non-zero quantity, and movementType are required'), { statusCode: 400 });
   }
-  const product = db.prepare('SELECT product_id FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
+  const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
   if (!product) throw Object.assign(new Error('Product not found'), { statusCode: 404 });
+  const isService = parseJSON(product.product_json, {}).item_type === 'service';
   const defaultLocation = db.prepare(
     "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
   ).get(String(tenant.organizationId));
@@ -5822,6 +5844,12 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null) 
   const eventId = String(input.eventId || crypto.randomUUID()).trim();
   const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
   if (existing) return inventoryMovementFromRow(existing);
+  if (isService) {
+    throw Object.assign(new Error('Service catalog items do not support physical inventory movements'), {
+      statusCode: 422,
+      code: 'SERVICE_HAS_NO_INVENTORY',
+    });
+  }
   const now = nowIso();
   const id = crypto.randomUUID();
   db.prepare(`
@@ -8144,14 +8172,17 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
   const items = Array.isArray(orderJson?.items) ? orderJson.items : [];
   const defaultLocation = db.prepare("SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1").get(String(fulfillmentRow.organization_id));
   const locationId = String(fulfillmentRow.location_id || defaultLocation?.id || '');
-  if (!locationId) throw Object.assign(new Error('Fulfillment inventory location is required'), { statusCode: 409, code: 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED' });
   const movements = [];
   for (const item of items) {
     const productId = String(item?.product_id ?? item?.productId ?? item?.item_id ?? item?.id ?? '').trim();
     const quantity = Number(item?.qty ?? item?.quantity ?? 0);
     if (!productId || !Number.isFinite(quantity) || quantity <= 0) continue;
-    const product = db.prepare('SELECT product_id FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
+    const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
     if (!product) throw Object.assign(new Error('Fulfillment product not found'), { statusCode: 409, code: 'FULFILLMENT_PRODUCT_NOT_FOUND', productId });
+    // Catalog type is server-owned authority. A service fulfills the order
+    // without decrementing physical inventory, regardless of client line metadata.
+    if (parseJSON(product.product_json, {}).item_type === 'service') continue;
+    if (!locationId) throw Object.assign(new Error('Fulfillment inventory location is required'), { statusCode: 409, code: 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED' });
     const balance = Number(db.prepare('SELECT COALESCE(SUM(quantity), 0) AS quantity FROM inventory_movements WHERE organization_id = ? AND location_id = ? AND product_id = ?').get(String(fulfillmentRow.organization_id), locationId, productId)?.quantity || 0);
     if (balance < quantity) throw Object.assign(new Error('Insufficient inventory for fulfillment'), { statusCode: 409, code: 'FULFILLMENT_INSUFFICIENT_INVENTORY', productId, available: balance, requested: quantity });
     const eventId = `fulfillment-sale:${fulfillmentRow.id}:${productId}`;
@@ -9389,6 +9420,7 @@ export async function searchMarketplaceListings() {
       listing_id: `${row.chat_id}_${row.product_id}`,
       seller_id: row.chat_id,
       item_id: row.product_id,
+      item_type: product.item_type === 'service' ? 'service' : 'product',
       title: product.name,
       price: row.price_minor,
       currency: normaliseCurrency(row.currency || parseJSON(row.branding_json, {})?.currency, 'ETB'),
@@ -9504,46 +9536,51 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
         if (!product.marketplace_listed) {
           throw Object.assign(new Error(`Item no longer listed: ${itemId}`), { statusCode: 409 });
         }
-        const sellerOrg = tenant.organization_id;
-        const defaultLocation = db.prepare(
-          "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
-        ).get(String(sellerOrg));
-        if (!defaultLocation) {
-          throw Object.assign(new Error('Canonical inventory location is unavailable'), { statusCode: 409, code: 'INVENTORY_LOCATION_UNAVAILABLE' });
-        }
-        const canonicalBalance = Number(db.prepare(`
-          SELECT COALESCE(SUM(quantity), 0) AS quantity
-          FROM inventory_movements
-          WHERE organization_id = ? AND location_id = ? AND product_id = ?
-        `).get(String(sellerOrg), String(defaultLocation.id), String(itemId))?.quantity || 0);
-        if (canonicalBalance < qty) {
-          throw Object.assign(new Error(`Not enough stock for "${product.name}" (${canonicalBalance} left)`), { statusCode: 409 });
-        }
+        // Services are purchasable marketplace items but do not consume or
+        // require physical stock. Products continue through the canonical
+        // inventory movement authority below.
+        if (product.item_type !== 'service') {
+          const sellerOrg = tenant.organization_id;
+          const defaultLocation = db.prepare(
+            "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
+          ).get(String(sellerOrg));
+          if (!defaultLocation) {
+            throw Object.assign(new Error('Canonical inventory location is unavailable'), { statusCode: 409, code: 'INVENTORY_LOCATION_UNAVAILABLE' });
+          }
+          const canonicalBalance = Number(db.prepare(`
+            SELECT COALESCE(SUM(quantity), 0) AS quantity
+            FROM inventory_movements
+            WHERE organization_id = ? AND location_id = ? AND product_id = ?
+          `).get(String(sellerOrg), String(defaultLocation.id), String(itemId))?.quantity || 0);
+          if (canonicalBalance < qty) {
+            throw Object.assign(new Error(`Not enough stock for "${product.name}" (${canonicalBalance} left)`), { statusCode: 409 });
+          }
 
-        // inventory_movements is the physical stock authority. catalog_products.stock
-        // is retained only as a compatibility projection for older clients.
-        const movementEventId = `marketplace-sale:${marketplaceOrderId}:${sellerId}:${itemId}`;
-        await appendInventoryMovement(sellerId, {
-          productId: itemId,
-          locationId: String(defaultLocation.id),
-          quantity: -qty,
-          movementType: 'SALE',
-          referenceType: 'marketplace_order',
-          referenceId: marketplaceOrderId,
-          eventId: movementEventId,
-          occurredAt: nowIso(),
-          reason: 'Marketplace checkout',
-          metadata: { marketplaceOrderId, sellerId, quantity: qty },
-        });
-        product.stock = canonicalBalance - qty;
-        product.stock_revision = (Number.isInteger(row.stock_revision) ? row.stock_revision : 0) + 1;
-        insertProduct(sellerId, product);
+          // inventory_movements is the physical stock authority. catalog_products.stock
+          // is retained only as a compatibility projection for older clients.
+          const movementEventId = `marketplace-sale:${marketplaceOrderId}:${sellerId}:${itemId}`;
+          await appendInventoryMovement(sellerId, {
+            productId: itemId,
+            locationId: String(defaultLocation.id),
+            quantity: -qty,
+            movementType: 'SALE',
+            referenceType: 'marketplace_order',
+            referenceId: marketplaceOrderId,
+            eventId: movementEventId,
+            occurredAt: nowIso(),
+            reason: 'Marketplace checkout',
+            metadata: { marketplaceOrderId, sellerId, quantity: qty },
+          });
+          product.stock = canonicalBalance - qty;
+          product.stock_revision = (Number.isInteger(row.stock_revision) ? row.stock_revision : 0) + 1;
+          insertProduct(sellerId, product);
+        }
 
         const price = row.price_minor;
         const lineTotal = price * qty;
         subtotal += lineTotal;
         grandTotal += lineTotal;
-        sellerItems.push({ item_id: product.id, name: product.name, price, qty, total: lineTotal, currency: sellerCurrency, category: product.category });
+        sellerItems.push({ item_id: product.id, item_type: product.item_type === 'service' ? 'service' : 'product', name: product.name, price, qty, total: lineTotal, currency: sellerCurrency, category: product.category });
       }
 
       const orderId = `MPO_${marketplaceOrderId}_${sellerId}`;
@@ -9590,6 +9627,9 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
       `).run(crypto.randomUUID(), sellerOrderCanonicalId, nowIso(), nowIso());
 
       for (const item of sellerItems) {
+        // This ledger represents physical inventory only; a service line has
+        // no stock to reserve or consume.
+        if (item.item_type === 'service') continue;
         db.prepare(`
           INSERT INTO marketplace_inventory_reservations
             (id, marketplace_order_id, seller_order_id, seller_id, product_id, quantity, status, created_at, updated_at)
@@ -9702,6 +9742,10 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
         if (!itemId || !Number.isFinite(qty) || qty <= 0) continue;
         const productRow = db.prepare('SELECT * FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(key, itemId);
         if (!productRow) continue;
+        // Marketplace cancellation restores physical stock only. Services
+        // never had a physical deduction, so they must not create a return
+        // movement (which the canonical inventory authority correctly rejects).
+        if (parseJSON(productRow.product_json, {}).item_type === 'service') continue;
         const tenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(key);
         const defaultLocation = tenant?.organization_id
           ? db.prepare("SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1").get(String(tenant.organization_id))
