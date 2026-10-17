@@ -250,7 +250,8 @@ import {
 } from './marketplace/listings.js';
 import { updateMarketCartQty, updateMultiCartBar } from './marketplace/cart.js';
 import {
-  openMarketCheckoutModal, closeMarketCheckoutModal, submitMarketplaceOrder
+  openMarketCheckoutModal, closeMarketCheckoutModal, submitMarketplaceOrder,
+  retryPendingMarketplaceCheckouts
 } from './marketplace/checkout.js';
 export {
   isWholesaleEnabled, getB2BAccountById, saveB2BAccounts, selectedB2BAccountId, setSelectedB2BAccountId,
@@ -278,7 +279,8 @@ export {
   optimisticMarkServed, undoMarkServed, finalizeServed, setKitchenPriority, startKitchenTimer,
   stopKitchenTimer, fetchMarketplaceListings, onMarketSearchInput, clearMarketSearch,
   setMarketCategory, renderMarketplace, updateMarketCartQty, updateMultiCartBar,
-  openMarketCheckoutModal, closeMarketCheckoutModal, submitMarketplaceOrder
+  openMarketCheckoutModal, closeMarketCheckoutModal, submitMarketplaceOrder,
+  retryPendingMarketplaceCheckouts
 };
 
 // Phase 7 extraction (see modularization plan §5): the last of main.js's
@@ -425,6 +427,7 @@ Theme.apply();
 
 // ---------- Init ----------
 window.addEventListener('online', renderStatus);
+window.addEventListener('online', () => { retryPendingMarketplaceCheckouts(); });
 window.addEventListener('offline', renderStatus);
 
 // Platform bootstrap (see modularization plan §5, Phase 9): resolves the
@@ -433,6 +436,8 @@ window.addEventListener('offline', renderStatus);
 // theme ingestion, and buyer-profile extraction for Telegram; a no-op for
 // every other adapter until one of them gets a real implementation.
 initPlatform();
+// Recover marketplace checkout intents left unresolved by a lost response.
+retryPendingMarketplaceCheckouts();
 
 // Auto-detect seller parameter and deep-links from URL (?seller=SC9821, ?startapp=BUY_..., or ?chat_id=SC9821)
 try {
