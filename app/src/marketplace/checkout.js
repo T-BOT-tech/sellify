@@ -20,6 +20,7 @@ import { formatMoney } from '../utils/money.js';
 import { STORAGE_KEYS } from '../constants.js';
 import { config, currentStaff, orders } from '../state.js';
 import { saveJSON } from '../storage/json.js';
+import { idbGet, idbSet } from '../storage/idb.js';
 import { marketplaceCart, setMarketplaceCart } from './cart.js';
 import { marketplaceListings, renderMarketplace } from './listings.js';
 import { getActivePlatform } from '../platform/index.js';
@@ -93,106 +94,152 @@ export function closeMarketCheckoutModal() {
   document.getElementById('marketCheckoutModal').style.display = 'none';
 }
 
+const MARKETPLACE_INTENT_KEY = STORAGE_KEYS.marketplaceCheckoutIntents;
+
+async function readPendingMarketplaceIntent() {
+  try {
+    const stored = await idbGet(MARKETPLACE_INTENT_KEY);
+    if (stored) return stored;
+  } catch (error) {}
+  try { return JSON.parse(localStorage.getItem(MARKETPLACE_INTENT_KEY) || 'null'); }
+  catch (error) { return null; }
+}
+
+async function writePendingMarketplaceIntent(intent) {
+  try {
+    await idbSet(MARKETPLACE_INTENT_KEY, intent);
+    try { localStorage.removeItem(MARKETPLACE_INTENT_KEY); } catch (error) {}
+  } catch (error) {
+    localStorage.setItem(MARKETPLACE_INTENT_KEY, JSON.stringify(intent));
+  }
+}
+
+async function clearPendingMarketplaceIntent() {
+  try { await idbSet(MARKETPLACE_INTENT_KEY, null); } catch (error) {}
+  try { localStorage.removeItem(MARKETPLACE_INTENT_KEY); } catch (error) {}
+}
+
+function cartMatchesIntent(intent) {
+  if (!intent?.request || !Array.isArray(intent.request.items)) return false;
+  const entries = Object.values(marketplaceCart);
+  if (entries.length !== intent.request.items.length) return false;
+  const requested = new Map(intent.request.items.map(item => [String(item.listing_id), item]));
+  return entries.every(entry => {
+    const item = requested.get(String(entry.listing.listing_id));
+    return item && Number(item.qty) === Number(entry.qty);
+  });
+}
+
+async function postMarketplaceCheckoutIntent(intent) {
+  const syncBase = config.syncUrl || window.location.origin;
+  const response = await fetch(`${syncBase.replace(/\\/$/, '')}/api/marketplace/checkout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': intent.idempotencyKey },
+    body: JSON.stringify(intent.request),
+  });
+  if (!response.ok) {
+    // A definitive client error did not create a checkout. Preserve intent on
+    // timeouts/rate limits because the outcome may still be ambiguous.
+    if (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) {
+      await clearPendingMarketplaceIntent();
+    }
+    throw Object.assign(new Error(`Marketplace checkout responded ${response.status}`), { status: response.status });
+  }
+  const order = await response.json();
+  await clearPendingMarketplaceIntent();
+  return order;
+}
+
+/** Retry the exact unresolved checkout with its original idempotency key. */
+export async function retryPendingMarketplaceCheckouts() {
+  const intent = await readPendingMarketplaceIntent();
+  if (!intent?.idempotencyKey || !intent?.request) return null;
+  try {
+    const order = await postMarketplaceCheckoutIntent(intent);
+    if (cartMatchesIntent(intent)) {
+      setMarketplaceCart({});
+      renderMarketplace();
+    }
+    showToast(`Marketplace order #${order.marketplace_order_id} recovered successfully.`);
+    return order;
+  } catch (error) {
+    console.warn('Marketplace checkout recovery deferred:', error);
+    return null;
+  }
+}
+
 export async function submitMarketplaceOrder() {
   const entries = Object.values(marketplaceCart);
   if (entries.length === 0) return;
 
+  // Do not create a second order while a prior checkout has an ambiguous outcome.
+  if (await readPendingMarketplaceIntent()) {
+    await retryPendingMarketplaceCheckouts();
+    return;
+  }
+
   const custName = (document.getElementById('marketCustName').value || '').trim() || 'Telegram Buyer';
   const custPhone = (document.getElementById('marketCustPhone').value || '').trim();
-
   const items = entries.map(e => {
-    // Cart entries hold listing snapshots. Resolve the latest listing after a refresh.
     const listing = marketplaceListings.find(l => l.listing_id === e.listing.listing_id) || e.listing;
-    return ({
-    listing_id: listing.listing_id,
-    seller_id: listing.seller_id,
-    // Phase 2: item_id is what the backend's /api/marketplace/checkout
-    // actually looks products up by (seller_id + item_id against that
-    // seller's own catalog) — it was missing from this payload entirely,
-    // which would have made every real checkout fail once the backend
-    // stopped silently accepting whatever the client sent. price is still
-    // included for the Telegram/local-queue fallback paths below, which
-    // don't get server-side revalidation, but the direct-API path ignores
-    // it and recomputes from the seller's current catalog price instead.
-    item_id: listing.item_id,
-    vendor_code: listing.vendor_code,
-    name: listing.title,
-    price: listing.price,
-    qty: e.qty,
-    category: listing.category,
-    // Transport metadata for Telegram/local-queue paths; direct API checkout still trusts server catalog.
-    item_type: listing.item_type === 'service' ? 'service' : 'product'
-    });
+    return {
+      listing_id: listing.listing_id,
+      seller_id: listing.seller_id,
+      item_id: listing.item_id,
+      vendor_code: listing.vendor_code,
+      name: listing.title,
+      price: listing.price,
+      qty: e.qty,
+      category: listing.category,
+      // Transport metadata only; backend catalog is authoritative.
+      item_type: listing.item_type === 'service' ? 'service' : 'product',
+    };
   });
+  const request = {
+    buyer_id: currentStaff ? currentStaff.id : 'web_user',
+    customer_name: custName,
+    customer_phone: custPhone,
+    items,
+  };
+  const intent = { idempotencyKey: 'marketplace-' + uid(), request, createdAt: Date.now() };
 
-  const total = entries.reduce((s, e) => s + (e.qty * e.listing.price), 0);
-
-  // 1. If running in Telegram WebApp, sendData payload directly
+  // Telegram is a separate handoff. Never also POST via the API after sendData succeeds.
   const twaPayload = {
     type: 'marketplace',
     is_marketplace: true,
+    idempotency_key: intent.idempotencyKey,
     customer_name: custName,
     customer_phone: custPhone,
-    total: total,
-    items: items
+    total: items.reduce((sum, item) => sum + (item.qty * item.price), 0),
+    items,
   };
   const twaResult = getActivePlatform().submitOrder(twaPayload);
   if (twaResult && twaResult.ok) {
     setMarketplaceCart({});
     closeMarketCheckoutModal();
     renderMarketplace();
-    showToast('Dispatched multi-vendor order to Telegram! 🚀');
+    showToast('Marketplace order sent to Telegram for processing.');
     return;
   }
 
-  // 2. Direct API Checkout
-  const syncBase = config.syncUrl || window.location.origin;
+  // Persist the exact API request before the network side effect. If the
+  // response is lost, retries reuse this key and payload after reload/reconnect.
   try {
-    const res = await fetch(`${syncBase.replace(/\/$/, '')}/api/marketplace/checkout`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        buyer_id: currentStaff ? currentStaff.id : 'web_user',
-        customer_name: custName,
-        customer_phone: custPhone,
-        items: items
-      })
-    });
-
-    if (res.ok) {
-      const order = await res.json();
-      setMarketplaceCart({});
-      closeMarketCheckoutModal();
-      renderMarketplace();
-      showToast(`Master Order #${order.marketplace_order_id} split into ${order.sub_orders.length} tickets! ✅`);
-      switchTab('queue');
-      return;
-    }
-  } catch (e) {
-    console.warn('Network offline, queueing locally:', e);
+    await writePendingMarketplaceIntent(intent);
+  } catch (error) {
+    showToast('Could not save checkout for safe retry. Please check device storage and try again.');
+    return;
   }
 
-  // Fallback: save to local queue
-  const localOrder = {
-    id: 'MPO_' + uid(),
-    items: items,
-    total: total,
-    customer_name: custName,
-    customer_phone: custPhone,
-    status: 'queued',
-    created_at: Date.now(),
-    created_by_role: 'buyer',
-    created_by_user: custName,
-    // Phase 4: items/total here are already integer minor units (from
-    // e.listing.price, itself minor-unit per utils/money.js's convention).
-    _moneyMinor: true,
-  };
-  orders.unshift(localOrder);
-  saveJSON(STORAGE_KEYS.orders, orders);
-
-  setMarketplaceCart({});
-  closeMarketCheckoutModal();
-  renderMarketplace();
-  showToast('Multi-vendor order saved to local queue ✅');
-  switchTab('queue');
+  try {
+    const order = await postMarketplaceCheckoutIntent(intent);
+    setMarketplaceCart({});
+    closeMarketCheckoutModal();
+    renderMarketplace();
+    showToast(`Master Order #${order.marketplace_order_id} split into ${order.sub_orders.length} tickets! ✅`);
+    switchTab('queue');
+  } catch (error) {
+    console.warn('Marketplace checkout retained for safe retry:', error);
+    showToast('Checkout outcome is pending. Your order is saved and will retry safely when online.');
+  }
 }
