@@ -171,7 +171,13 @@ try {
   } finally {
     seedDb.close();
   }
-  assert.ok(defaultLocationId, 'tenant setup should create the canonical default inventory location');
+  if (!defaultLocationId) {
+    const createdLocation = await store.createOrganizationLocation(tenant.chatId, {
+      code: 'DEFAULT', name: 'Default Inventory Location', type: 'STORE',
+    });
+    defaultLocationId = createdLocation.id;
+  }
+  assert.ok(defaultLocationId, 'test fixture should provide the canonical default inventory location');
   await store.appendInventoryMovement(tenant.chatId, {
     productId: 'soap-http',
     locationId: String(defaultLocationId),
