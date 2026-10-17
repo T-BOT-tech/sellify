@@ -166,7 +166,7 @@ try {
   let defaultLocationId;
   try {
     defaultLocationId = seedDb.prepare(
-      "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
+      "SELECT id FROM locations WHERE organization_id = ? ORDER BY created_at, id LIMIT 1"
     ).get(String(tenant.organizationId))?.id;
   } finally {
     seedDb.close();
