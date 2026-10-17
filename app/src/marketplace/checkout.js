@@ -116,7 +116,9 @@ export async function submitMarketplaceOrder() {
     name: e.listing.title,
     price: e.listing.price,
     qty: e.qty,
-    category: e.listing.category
+    category: e.listing.category,
+    // Transport metadata for Telegram/local-queue paths; direct API checkout still trusts server catalog.
+    item_type: e.listing.item_type === 'service' ? 'service' : 'product'
   }));
 
   const total = entries.reduce((s, e) => s + (e.qty * e.listing.price), 0);
