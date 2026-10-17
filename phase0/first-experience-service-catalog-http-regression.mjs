@@ -6,6 +6,7 @@ import { createServer as createNetServer } from 'node:net';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 const tempDir = await mkdtemp(path.join(os.tmpdir(), 'sellify-service-catalog-http-'));
 const dbPath = path.join(tempDir, 'sellify.sqlite');
@@ -84,8 +85,8 @@ try {
     'Content-Type': 'application/json',
   };
   const products = [
-    { id: 'consultation-http', name: 'Consultation', price: 25000, currency: 'ETB', item_type: 'service' },
-    { id: 'soap-http', name: 'Soap', price: 5000, currency: 'ETB', stock: 8, item_type: 'product' },
+    { id: 'consultation-http', name: 'Consultation', price: 25000, currency: 'ETB', item_type: 'service', marketplace_listed: true },
+    { id: 'soap-http', name: 'Soap', price: 5000, currency: 'ETB', stock: 8, item_type: 'product', marketplace_listed: true },
   ];
 
   const writeResponse = await fetch(baseUrl + '/catalog/' + encodeURIComponent(tenant.chatId), {
@@ -105,6 +106,58 @@ try {
   const readBody = await readResponse.json();
   assert.equal(readBody.products.find(item => item.id === 'consultation-http')?.item_type, 'service');
   assert.equal(readBody.products.find(item => item.id === 'soap-http')?.item_type, 'product');
+
+  // Marketplace response-loss recovery: the first request commits, but the
+  // caller deliberately discards its response. An exact retry with the same
+  // idempotency key must replay the same canonical marketplace order.
+  const marketplaceRequest = {
+    buyer_id: 'service-marketplace-buyer-http',
+    customer_name: 'Marketplace Recovery Buyer',
+    items: [{ seller_id: tenant.chatId, item_id: 'consultation-http', qty: 1 }],
+  };
+  const marketplaceHeaders = {
+    'Content-Type': 'application/json',
+    'Idempotency-Key': 'service-marketplace-lost-response-http-1',
+  };
+  const checkoutUrl = baseUrl + '/api/marketplace/checkout';
+  const committedMarketplaceResponse = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: marketplaceHeaders,
+    body: JSON.stringify(marketplaceRequest),
+  });
+  assert.equal(committedMarketplaceResponse.status, 200, 'first marketplace checkout should commit');
+  const committedMarketplaceBody = await committedMarketplaceResponse.json();
+  assert.ok(committedMarketplaceBody.marketplace_order_id);
+  // Intentionally do not deliver committedMarketplaceBody to a client handler.
+  const replayResponse = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: marketplaceHeaders,
+    body: JSON.stringify(marketplaceRequest),
+  });
+  assert.equal(replayResponse.status, 200, 'retry after lost response should succeed');
+  const replayBody = await replayResponse.json();
+  assert.equal(replayBody.marketplace_order_id, committedMarketplaceBody.marketplace_order_id,
+    'marketplace checkout retry must return the same canonical marketplace order');
+  assert.deepEqual(replayBody.sub_orders, committedMarketplaceBody.sub_orders,
+    'marketplace checkout retry must replay the original seller-order identities');
+
+  const verificationDb = new DatabaseSync(dbPath, { readOnly: true });
+  try {
+    const marketplaceOrderId = committedMarketplaceBody.marketplace_order_id;
+    assert.equal(verificationDb.prepare('SELECT COUNT(*) AS n FROM marketplace_orders WHERE id = ?').get(marketplaceOrderId).n, 1);
+    assert.equal(verificationDb.prepare('SELECT COUNT(*) AS n FROM marketplace_seller_orders WHERE marketplace_order_id = ?').get(marketplaceOrderId).n, 1,
+      'retry must not duplicate canonical seller orders');
+    assert.equal(verificationDb.prepare('SELECT COUNT(*) AS n FROM marketplace_payment_allocations WHERE marketplace_order_id = ?').get(marketplaceOrderId).n, 1,
+      'retry must not duplicate payment allocations');
+    assert.equal(verificationDb.prepare('SELECT COUNT(*) AS n FROM marketplace_settlements WHERE marketplace_order_id = ?').get(marketplaceOrderId).n, 1,
+      'retry must not duplicate settlement records');
+    assert.equal(verificationDb.prepare('SELECT COUNT(*) AS n FROM marketplace_inventory_reservations WHERE marketplace_order_id = ?').get(marketplaceOrderId).n, 0,
+      'service checkout must not create physical inventory reservations');
+    assert.equal(verificationDb.prepare("SELECT COUNT(*) AS n FROM inventory_movements WHERE reference_type = 'marketplace_order' AND reference_id = ?").get(marketplaceOrderId).n, 0,
+      'service checkout must not create physical inventory movements');
+  } finally {
+    verificationDb.close();
+  }
 
   const order = {
     id: 'service-http-order-1',
