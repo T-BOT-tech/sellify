@@ -21,7 +21,7 @@ import { STORAGE_KEYS } from '../constants.js';
 import { config, currentStaff, orders } from '../state.js';
 import { saveJSON } from '../storage/json.js';
 import { marketplaceCart, setMarketplaceCart } from './cart.js';
-import { renderMarketplace } from './listings.js';
+import { marketplaceListings, renderMarketplace } from './listings.js';
 import { getActivePlatform } from '../platform/index.js';
 // Phase 8 fix (see modularization plan §5, Phase 8): these used to come
 // from '../main.js', which only re-exported them from their real owning
@@ -100,9 +100,12 @@ export async function submitMarketplaceOrder() {
   const custName = (document.getElementById('marketCustName').value || '').trim() || 'Telegram Buyer';
   const custPhone = (document.getElementById('marketCustPhone').value || '').trim();
 
-  const items = entries.map(e => ({
-    listing_id: e.listing.listing_id,
-    seller_id: e.listing.seller_id,
+  const items = entries.map(e => {
+    // Cart entries hold listing snapshots. Resolve the latest listing after a refresh.
+    const listing = marketplaceListings.find(l => l.listing_id === e.listing.listing_id) || e.listing;
+    return ({
+    listing_id: listing.listing_id,
+    seller_id: listing.seller_id,
     // Phase 2: item_id is what the backend's /api/marketplace/checkout
     // actually looks products up by (seller_id + item_id against that
     // seller's own catalog) — it was missing from this payload entirely,
@@ -111,15 +114,16 @@ export async function submitMarketplaceOrder() {
     // included for the Telegram/local-queue fallback paths below, which
     // don't get server-side revalidation, but the direct-API path ignores
     // it and recomputes from the seller's current catalog price instead.
-    item_id: e.listing.item_id,
-    vendor_code: e.listing.vendor_code,
-    name: e.listing.title,
-    price: e.listing.price,
+    item_id: listing.item_id,
+    vendor_code: listing.vendor_code,
+    name: listing.title,
+    price: listing.price,
     qty: e.qty,
-    category: e.listing.category,
+    category: listing.category,
     // Transport metadata for Telegram/local-queue paths; direct API checkout still trusts server catalog.
-    item_type: e.listing.item_type === 'service' ? 'service' : 'product'
-  }));
+    item_type: listing.item_type === 'service' ? 'service' : 'product'
+    });
+  });
 
   const total = entries.reduce((s, e) => s + (e.qty * e.listing.price), 0);
 
