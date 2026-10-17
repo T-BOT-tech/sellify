@@ -159,6 +159,96 @@ try {
     verificationDb.close();
   }
 
+  // Repeat the same committed-but-unacknowledged scenario with a physical
+  // product alongside a service. The canonical stock ledger must decrement
+  // once, and the service line must never create a physical movement/reservation.
+  const seedDb = new DatabaseSync(dbPath);
+  let defaultLocationId;
+  try {
+    defaultLocationId = seedDb.prepare(
+      "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
+    ).get(String(tenant.organizationId))?.id;
+  } finally {
+    seedDb.close();
+  }
+  assert.ok(defaultLocationId, 'tenant setup should create the canonical default inventory location');
+  await store.appendInventoryMovement(tenant.chatId, {
+    productId: 'soap-http',
+    locationId: String(defaultLocationId),
+    quantity: 8,
+    movementType: 'OPENING_BALANCE',
+    referenceType: 'service-catalog-http-test',
+    referenceId: 'soap-opening-stock',
+    eventId: 'service-catalog-http-soap-opening-stock',
+    reason: 'Seed marketplace checkout regression stock',
+  });
+
+  const mixedMarketplaceRequest = {
+    buyer_id: 'mixed-marketplace-recovery-buyer-http',
+    customer_name: 'Mixed Marketplace Recovery Buyer',
+    items: [
+      { seller_id: tenant.chatId, item_id: 'consultation-http', qty: 1 },
+      { seller_id: tenant.chatId, item_id: 'soap-http', qty: 2 },
+    ],
+  };
+  const mixedMarketplaceHeaders = {
+    'Content-Type': 'application/json',
+    'Idempotency-Key': 'mixed-marketplace-lost-response-http-1',
+  };
+  const mixedCommittedResponse = await fetch(checkoutUrl, {
+    method: 'POST', headers: mixedMarketplaceHeaders, body: JSON.stringify(mixedMarketplaceRequest),
+  });
+  assert.equal(mixedCommittedResponse.status, 200, 'mixed product/service checkout should commit');
+  const mixedCommittedBody = await mixedCommittedResponse.json();
+  assert.ok(mixedCommittedBody.marketplace_order_id);
+  // Simulate loss after commit: deliberately do not pass the first response to
+  // the checkout caller; retry the identical request with the same key.
+  const mixedReplayResponse = await fetch(checkoutUrl, {
+    method: 'POST', headers: mixedMarketplaceHeaders, body: JSON.stringify(mixedMarketplaceRequest),
+  });
+  assert.equal(mixedReplayResponse.status, 200);
+  const mixedReplayBody = await mixedReplayResponse.json();
+  assert.equal(mixedReplayBody.marketplace_order_id, mixedCommittedBody.marketplace_order_id,
+    'mixed checkout retry must replay the original canonical marketplace order');
+  assert.deepEqual(mixedReplayBody.sub_orders, mixedCommittedBody.sub_orders,
+    'mixed checkout retry must replay the original canonical seller-order identities');
+
+  const alteredMarketplaceRequest = {
+    ...mixedMarketplaceRequest,
+    items: mixedMarketplaceRequest.items.map(item => item.item_id === 'soap-http' ? { ...item, qty: 3 } : item),
+  };
+  const alteredMarketplaceResponse = await fetch(checkoutUrl, {
+    method: 'POST', headers: mixedMarketplaceHeaders, body: JSON.stringify(alteredMarketplaceRequest),
+  });
+  assert.equal(alteredMarketplaceResponse.status, 409, 'same key with changed intent must conflict');
+  const alteredMarketplaceBody = await alteredMarketplaceResponse.json();
+  assert.equal(alteredMarketplaceBody.error?.code, 'IDEMPOTENCY_KEY_REUSED');
+
+  const mixedVerificationDb = new DatabaseSync(dbPath, { readOnly: true });
+  try {
+    const mixedOrderId = mixedCommittedBody.marketplace_order_id;
+    assert.equal(mixedVerificationDb.prepare('SELECT COUNT(*) AS n FROM marketplace_orders WHERE id = ?').get(mixedOrderId).n, 1);
+    assert.equal(mixedVerificationDb.prepare('SELECT COUNT(*) AS n FROM marketplace_seller_orders WHERE marketplace_order_id = ?').get(mixedOrderId).n, 1,
+      'mixed checkout retry must not duplicate seller orders');
+    assert.equal(mixedVerificationDb.prepare('SELECT COUNT(*) AS n FROM marketplace_payment_allocations WHERE marketplace_order_id = ?').get(mixedOrderId).n, 1,
+      'mixed checkout retry must not duplicate payment allocations');
+    assert.equal(mixedVerificationDb.prepare('SELECT COUNT(*) AS n FROM marketplace_settlements WHERE marketplace_order_id = ?').get(mixedOrderId).n, 1,
+      'mixed checkout retry must not duplicate settlements');
+    assert.equal(mixedVerificationDb.prepare('SELECT COUNT(*) AS n FROM marketplace_inventory_reservations WHERE marketplace_order_id = ?').get(mixedOrderId).n, 1,
+      'only the product line should create a physical inventory reservation');
+    assert.equal(mixedVerificationDb.prepare("SELECT COUNT(*) AS n FROM inventory_movements WHERE reference_type = 'marketplace_order' AND reference_id = ?").get(mixedOrderId).n, 1,
+      'product stock should be decremented once despite retry');
+    const balance = mixedVerificationDb.prepare(`SELECT COALESCE(SUM(quantity), 0) AS quantity
+      FROM inventory_movements WHERE organization_id = ? AND location_id = ? AND product_id = ?`).get(
+      String(tenant.organizationId), String(defaultLocationId), 'soap-http');
+    assert.equal(Number(balance.quantity), 6, 'product stock should move from 8 to 6 exactly once');
+    const serviceReservation = mixedVerificationDb.prepare(`SELECT COUNT(*) AS n FROM marketplace_inventory_reservations
+      WHERE marketplace_order_id = ? AND product_id = ?`).get(mixedOrderId, 'consultation-http');
+    assert.equal(serviceReservation.n, 0, 'service line must not create a physical reservation');
+  } finally {
+    mixedVerificationDb.close();
+  }
+
   const order = {
     id: 'service-http-order-1',
     currency: 'ETB',
