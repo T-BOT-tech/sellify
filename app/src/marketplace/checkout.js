@@ -132,7 +132,7 @@ function cartMatchesIntent(intent) {
 
 async function postMarketplaceCheckoutIntent(intent) {
   const syncBase = config.syncUrl || window.location.origin;
-  const response = await fetch(`${syncBase.replace(/\\/$/, '')}/api/marketplace/checkout`, {
+  const response = await fetch(`${syncBase.replace(/\/$/, '')}/api/marketplace/checkout`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Idempotency-Key': intent.idempotencyKey },
     body: JSON.stringify(intent.request),
