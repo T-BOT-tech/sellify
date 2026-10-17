@@ -168,7 +168,7 @@ export async function retryPendingMarketplaceCheckouts() {
   }
 }
 
-export async function submitMarketplaceOrder() {
+async function submitMarketplaceOrderOnce() {
   const entries = Object.values(marketplaceCart);
   if (entries.length === 0) return;
 
@@ -239,7 +239,22 @@ export async function submitMarketplaceOrder() {
     showToast(`Master Order #${order.marketplace_order_id} split into ${order.sub_orders.length} tickets! ✅`);
     switchTab('queue');
   } catch (error) {
-    console.warn('Marketplace checkout retained for safe retry:', error);
+    console.warn('Marketplace checkout request did not complete:', error);
+    if (Number(error?.status) >= 400 && Number(error?.status) < 500 && error.status !== 408 && error.status !== 429) {
+      showToast(`Checkout was rejected (HTTP ${error.status}). Review your cart and try again.`);
+      return;
+    }
     showToast('Checkout outcome is pending. Your order is saved and will retry safely when online.');
   }
+}
+
+// Prevent rapid taps or concurrent UI events from creating separate intents
+// before the durable pending-intent write has completed.
+let marketplaceCheckoutSubmission = null;
+export function submitMarketplaceOrder() {
+  if (marketplaceCheckoutSubmission) return marketplaceCheckoutSubmission;
+  marketplaceCheckoutSubmission = submitMarketplaceOrderOnce().finally(() => {
+    marketplaceCheckoutSubmission = null;
+  });
+  return marketplaceCheckoutSubmission;
 }
