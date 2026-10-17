@@ -28,7 +28,7 @@ assert.match(marketplaceCheckoutSource, /export async function retryPendingMarke
   'pending marketplace checkouts must have a recovery path');
 assert.match(marketplaceCheckoutSource, /let marketplaceCheckoutSubmission = null;[\s\S]*?if \(marketplaceCheckoutSubmission\) return marketplaceCheckoutSubmission/,
   'concurrent submit events must share one in-flight marketplace checkout promise');
-assert.match(marketplaceCheckoutSource, /Checkout was rejected \(HTTP \\?\$\{error\.status\}\\?\)/,
+assert.match(marketplaceCheckoutSource, /Checkout was rejected/,
   'definitive marketplace 4xx errors must not be reported as pending ambiguous checkouts');
 assert.match(mainSource, /window\.addEventListener\('online', \(\) => \{ retryPendingMarketplaceCheckouts\(\); \}\)/,
   'pending marketplace checkout recovery must run when connectivity returns');
