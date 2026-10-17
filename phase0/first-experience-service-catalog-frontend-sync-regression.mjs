@@ -17,7 +17,7 @@ assert.match(catalogSource, /item_type:\s*String\(l\.item_type \|\| 'product'\)[
   'cached and remote marketplace listings must normalize item_type with a legacy-safe product default');
 assert.match(marketplaceCheckoutSource, /const listing = marketplaceListings\.find\(l => l\.listing_id === e\.listing\.listing_id\) \|\| e\.listing/,
   'checkout must resolve the current listing after a marketplace refresh instead of trusting a stale cart snapshot');
-assert.match(marketplaceCheckoutSource, /item_type:\s*e\.listing\.item_type === 'service' \? 'service' : 'product'/,
+assert.match(marketplaceCheckoutSource, /item_type:\s*listing\.item_type === 'service' \? 'service' : 'product'/,
   'marketplace checkout transport payloads must preserve canonical listing type for Telegram/local-queue paths');
 
 // Contract guards for the actual client methods: catalog POST sends the live
