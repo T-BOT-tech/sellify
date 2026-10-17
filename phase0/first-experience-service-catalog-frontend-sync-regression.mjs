@@ -26,6 +26,10 @@ assert.match(marketplaceCheckoutSource, /await writePendingMarketplaceIntent\(in
   'checkout intent must be persisted before the API request');
 assert.match(marketplaceCheckoutSource, /export async function retryPendingMarketplaceCheckouts\(/,
   'pending marketplace checkouts must have a recovery path');
+assert.match(marketplaceCheckoutSource, /let marketplaceCheckoutSubmission = null;[\s\S]*?if \(marketplaceCheckoutSubmission\) return marketplaceCheckoutSubmission/,
+  'concurrent submit events must share one in-flight marketplace checkout promise');
+assert.match(marketplaceCheckoutSource, /Checkout was rejected \(HTTP \\?\$\{error\.status\}\\?\)/,
+  'definitive marketplace 4xx errors must not be reported as pending ambiguous checkouts');
 assert.match(mainSource, /window\.addEventListener\('online', \(\) => \{ retryPendingMarketplaceCheckouts\(\); \}\)/,
   'pending marketplace checkout recovery must run when connectivity returns');
 
