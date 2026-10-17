@@ -46,6 +46,11 @@ try {
     item_type: 'service',
     marketplace_listed: true,
   }]);
+  const serviceListing = (await store.searchMarketplaceListings()).find(item =>
+    item.seller_id === marketplaceSeller.chatId && item.item_id === 'marketplace-consultation'
+  );
+  assert.ok(serviceListing, 'marketplace service should remain discoverable without physical stock');
+  assert.equal(serviceListing.item_type, 'service', 'marketplace listing contract must expose canonical item type');
   const marketplaceServiceOrder = await store.createMarketplaceOrder({
     buyer_id: 'service-marketplace-buyer',
     customer_name: 'Service Buyer',
