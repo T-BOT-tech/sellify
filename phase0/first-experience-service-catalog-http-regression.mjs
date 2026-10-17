@@ -162,15 +162,8 @@ try {
   // Repeat the same committed-but-unacknowledged scenario with a physical
   // product alongside a service. The canonical stock ledger must decrement
   // once, and the service line must never create a physical movement/reservation.
-  const seedDb = new DatabaseSync(dbPath);
-  let defaultLocationId;
-  try {
-    defaultLocationId = seedDb.prepare(
-      "SELECT id FROM locations WHERE organization_id = ? ORDER BY created_at, id LIMIT 1"
-    ).get(String(tenant.organizationId))?.id;
-  } finally {
-    seedDb.close();
-  }
+  const tenantLocations = await store.listOrganizationLocations(tenant.chatId);
+  let defaultLocationId = tenantLocations?.[0]?.id;
   if (!defaultLocationId) {
     const createdLocation = await store.createOrganizationLocation(tenant.chatId, {
       code: 'DEFAULT', name: 'Default Inventory Location', type: 'STORE',
