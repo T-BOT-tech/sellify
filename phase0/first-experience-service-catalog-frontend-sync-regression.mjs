@@ -7,6 +7,7 @@ const ordersSource = await readFile(new URL('../app/src/sync/orders.js', import.
 const tenantAuthSource = await readFile(new URL('../app/src/auth/tenant.js', import.meta.url), 'utf8');
 const checkoutSource = await readFile(new URL('../app/src/orders/checkout.js', import.meta.url), 'utf8');
 const marketplaceCheckoutSource = await readFile(new URL('../app/src/marketplace/checkout.js', import.meta.url), 'utf8');
+const mainSource = await readFile(new URL('../app/src/main.js', import.meta.url), 'utf8');
 
 // Guard the real sanitizer implementation used by catalog pull/push. The
 // spread preserves item_type while the following fields normalize ID and price.
@@ -19,6 +20,14 @@ assert.match(marketplaceCheckoutSource, /const listing = marketplaceListings\.fi
   'checkout must resolve the current listing after a marketplace refresh instead of trusting a stale cart snapshot');
 assert.match(marketplaceCheckoutSource, /item_type:\s*listing\.item_type === 'service' \? 'service' : 'product'/,
   'marketplace checkout transport payloads must preserve canonical listing type for Telegram/local-queue paths');
+assert.match(marketplaceCheckoutSource, /Idempotency-Key:\\s*intent\\.idempotencyKey/,
+  'marketplace API checkout must send the durable intent idempotency key');
+assert.match(marketplaceCheckoutSource, /await writePendingMarketplaceIntent\\(intent\\)[\\s\\S]*?await postMarketplaceCheckoutIntent\\(intent\\)/,
+  'checkout intent must be persisted before the API request');
+assert.match(marketplaceCheckoutSource, /export async function retryPendingMarketplaceCheckouts\\(/,
+  'pending marketplace checkouts must have a recovery path');
+assert.match(mainSource, /window\\.addEventListener\\('online', \\(\\) => \\{ retryPendingMarketplaceCheckouts\\(\\); \\}\\)/,
+  'pending marketplace checkout recovery must run when connectivity returns');
 
 // Contract guards for the actual client methods: catalog POST sends the live
 // products array; order POST sends queued orders; both use tenant-session auth.
