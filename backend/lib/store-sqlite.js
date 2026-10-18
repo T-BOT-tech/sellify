@@ -9568,6 +9568,7 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
       }
       marketplaceCurrency = sellerCurrency;
 
+      let serviceDeliveryRequest = null;
       for (const [itemId, qty] of sellerLines) {
         const row = db.prepare('SELECT * FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(sellerId, itemId);
         if (!row) throw Object.assign(new Error(`Item no longer listed: ${itemId}`), { statusCode: 409 });
@@ -9576,7 +9577,6 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
           throw Object.assign(new Error(`Item no longer listed: ${itemId}`), { statusCode: 409 });
         }
         const hasLogisticsModel = product.delivery_model !== undefined && product.delivery_model !== null && String(product.delivery_model).trim() !== '';
-        let serviceDeliveryRequest = null;
         if (hasLogisticsModel) {
           const logisticsContract = normalizeLogisticsServiceDelivery({
             item_type: product.item_type,
