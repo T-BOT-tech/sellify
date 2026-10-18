@@ -164,7 +164,7 @@ try {
   // product alongside a service. The canonical stock ledger must decrement
   // once, and the service line must never create a physical movement/reservation.
   const tenantLocations = await store.listOrganizationLocations(tenant.chatId);
-  let defaultLocationId = tenantLocations?.[0]?.id;
+  let defaultLocationId = tenantLocations?.find(location => location.code === 'DEFAULT')?.id;
   if (!defaultLocationId) {
     const createdLocation = await store.createOrganizationLocation(tenant.chatId, {
       code: 'DEFAULT', name: 'Default Inventory Location', type: 'STORE',
