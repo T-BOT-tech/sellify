@@ -417,6 +417,28 @@ try {
     'reusing an assignment key with a different courier must conflict'
   );
 
+  const transitionCommandKey = 'parcel-fulfillment-transition-idempotency';
+  const transitionedFulfillment = await store.transitionOrderFulfillment(
+    tenant.chatId, requestOrder.server_order_id, 'out_for_delivery', session,
+    { idempotencyKey: transitionCommandKey }
+  );
+  assert.equal(transitionedFulfillment.status, 'out_for_delivery',
+    'the first fulfillment command should apply its requested transition');
+  await assert.rejects(
+    () => store.transitionOrderFulfillment(
+      tenant.chatId, requestOrder.server_order_id, 'delivered', session,
+      { idempotencyKey: transitionCommandKey }
+    ),
+    error => error?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT' && error?.statusCode === 409,
+    'reusing a fulfillment command key with a different target status must conflict'
+  );
+  const transitionReplay = await store.transitionOrderFulfillment(
+    tenant.chatId, requestOrder.server_order_id, 'out_for_delivery', session,
+    { idempotencyKey: transitionCommandKey }
+  );
+  assert.equal(transitionReplay.status, 'out_for_delivery',
+    'an exact fulfillment command retry should return the canonical fulfillment');
+
   const assessmentRetry = await fetch(assessmentUrl, {
     method: 'POST',
     headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
