@@ -9502,6 +9502,43 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
     };
   }
 
+  // Preflight logistics intake before any inventory movement or order mutation.
+  // The catalog remains authoritative for item type, profile, and delivery model.
+  const catalogCandidates = normalizedItems.map(line => ({
+    line,
+    row: db.prepare('SELECT * FROM catalog_products WHERE chat_id = ? AND product_id = ?')
+      .get(line.seller_id, line.item_id),
+  }));
+  const logisticsCandidates = catalogCandidates.filter(({ row }) => {
+    if (!row) return false; // canonical checkout emits the existing missing-item error inside its transaction
+    const product = productFromRow(row);
+    return product.delivery_model !== undefined && product.delivery_model !== null
+      && String(product.delivery_model).trim() !== '';
+  });
+  if (logisticsCandidates.length > 0) {
+    if (!normalizedServiceDelivery) {
+      throw Object.assign(new Error('Pickup and destination details are required for this delivery service'), {
+        statusCode: 400, code: 'LOGISTICS_SERVICE_DELIVERY_DETAILS_REQUIRED',
+      });
+    }
+    if (normalizedItems.length !== 1 || bySeller.size !== 1 || Number(normalizedItems[0].qty) !== 1
+      || logisticsCandidates.length !== 1) {
+      throw Object.assign(new Error('A logistics delivery request must contain exactly one delivery service item'), {
+        statusCode: 400, code: 'LOGISTICS_SERVICE_DELIVERY_CART_INVALID',
+      });
+    }
+    const product = productFromRow(logisticsCandidates[0].row);
+    normalizeLogisticsServiceDelivery({
+      item_type: product.item_type,
+      service_profile: product.service_profile,
+      delivery_model: product.delivery_model,
+    });
+  } else if (normalizedServiceDelivery) {
+    throw Object.assign(new Error('service_delivery details require a logistics service catalog item'), {
+      statusCode: 400, code: 'LOGISTICS_SERVICE_DELIVERY_ITEM_REQUIRED',
+    });
+  }
+
   const requestHash = crypto.createHash('sha256').update(JSON.stringify({
     buyerIdentity,
     customerName: String(customer_name || '').trim(),
