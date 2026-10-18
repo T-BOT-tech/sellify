@@ -28,6 +28,7 @@ try {
   assert.equal(roundTrip.find(item => item.id === 'consultation').item_type, 'service');
   assert.equal(roundTrip.find(item => item.id === 'soap').item_type, 'product');
 
+  // Catalog persistence must round-trip the delivery choice without creating logistics work.
   // Logistics service delivery semantics are persisted only on service catalog
   // entries and survive a read-after-write; they do not create an order or assign a courier.
   const logisticsServices = await store.saveCatalog(chatId, [
