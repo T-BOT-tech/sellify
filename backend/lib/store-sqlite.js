@@ -5580,6 +5580,23 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
     const freshOrder = orderFromRow(freshRow);
     const request = freshOrder?.service_delivery_request;
     if (!request) throw Object.assign(new Error('Order is not a logistics service request'), { statusCode: 409, code: 'LOGISTICS_SERVICE_REQUEST_REQUIRED' });
+    // Revalidate mutable canonical context inside the write transaction. The
+    // preflight read is useful for early errors, but must not authorize against
+    // a location or delivery model that changed before this transaction began.
+    const freshCanonicalLocationId = freshRow.location_id ? String(freshRow.location_id) : null;
+    if (freshCanonicalLocationId && requestedLocationId
+      && String(requestedLocationId) !== freshCanonicalLocationId) {
+      throw Object.assign(new Error('Assessment location must match the canonical order location'), {
+        statusCode: 403, code: 'LOGISTICS_ASSESSMENT_LOCATION_MISMATCH',
+      });
+    }
+    const transactionLocationId = freshCanonicalLocationId || requestedLocationId || actor?.locationId || null;
+    assertLogisticsSchedulingAuthorization(actor, organizationId, transactionLocationId, 'logistics:scheduling:request');
+    if (String(request.delivery_model || '').trim().toLowerCase() !== deliveryModel) {
+      throw Object.assign(new Error('Service delivery model changed during assessment; retry with current order state'), {
+        statusCode: 409, code: 'LOGISTICS_ASSESSMENT_REQUEST_CHANGED',
+      });
+    }
     if (request.assessment?.command_key === commandKey) {
       if (request.assessment.command_fingerprint !== commandFingerprint) {
         throw Object.assign(new Error('Idempotency key was reused with different assessment data'), {
@@ -5625,7 +5642,7 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
       commandKey,
     }, {
       organizationId,
-      locationId: locationId ? String(locationId) : null,
+      locationId: transactionLocationId ? String(transactionLocationId) : null,
       actorId: actor?.userId || null,
       deviceId: actor?.deviceId || null,
     });
