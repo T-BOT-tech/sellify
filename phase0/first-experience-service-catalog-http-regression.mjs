@@ -249,6 +249,22 @@ try {
       evidence_reference: 'buyer-chat-confirmation-123',
     },
   };
+  const overlongEvidenceResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-overlong-evidence' },
+    body: JSON.stringify({
+      ...assessmentPayload,
+      customer_acceptance: {
+        ...assessmentPayload.customer_acceptance,
+        evidence_reference: 'x'.repeat(201),
+      },
+    }),
+  });
+  assert.equal(overlongEvidenceResponse.status, 400,
+    'overlong evidence references must be rejected rather than silently truncated');
+  assert.equal((await overlongEvidenceResponse.json()).error?.code,
+    'LOGISTICS_CUSTOMER_ACCEPTANCE_EVIDENCE_INVALID');
+
   const assessmentResponse = await fetch(assessmentUrl, {
     method: 'POST',
     headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
