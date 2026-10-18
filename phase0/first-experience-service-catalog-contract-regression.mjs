@@ -27,6 +27,33 @@ try {
   const roundTrip = (await store.getCatalog(chatId)).products;
   assert.equal(roundTrip.find(item => item.id === 'consultation').item_type, 'service');
   assert.equal(roundTrip.find(item => item.id === 'soap').item_type, 'product');
+
+  // Logistics service delivery semantics are persisted only on service catalog
+  // entries and survive a read-after-write; they do not create an order or assign a courier.
+  const logisticsServices = await store.saveCatalog(chatId, [
+    { id: 'parcel-instant', name: 'Parcel Delivery Now', price: 12000, item_type: 'service',
+      service_profile: 'B2C_DELIVERY', delivery_model: 'instant' },
+    { id: 'parcel-request', name: 'Scheduled Parcel Delivery', price: 10000, item_type: 'service',
+      service_profile: 'P2P_DELIVERY', delivery_model: 'request' },
+  ]);
+  assert.equal(logisticsServices.find(item => item.id === 'parcel-instant').delivery_model, 'instant');
+  assert.equal(logisticsServices.find(item => item.id === 'parcel-request').delivery_model, 'request');
+  const logisticsRoundTrip = (await store.getCatalog(chatId)).products;
+  assert.equal(logisticsRoundTrip.find(item => item.id === 'parcel-instant').service_profile, 'B2C_DELIVERY');
+  assert.equal(logisticsRoundTrip.find(item => item.id === 'parcel-instant').delivery_model, 'instant');
+  assert.equal(logisticsRoundTrip.find(item => item.id === 'parcel-request').delivery_model, 'request');
+  await assert.rejects(
+    store.saveCatalog(chatId, [{ id: 'bad-delivery', name: 'Bad', price: 1, item_type: 'product',
+      service_profile: 'B2C_DELIVERY', delivery_model: 'instant' }]),
+    error => error?.code === 'LOGISTICS_SERVICE_DELIVERY_REQUIRES_SERVICE',
+    'delivery models must not be attached to physical products',
+  );
+  await assert.rejects(
+    store.saveCatalog(chatId, [{ id: 'bad-model', name: 'Bad model', price: 1, item_type: 'service',
+      service_profile: 'B2C_DELIVERY', delivery_model: 'guaranteed' }]),
+    /delivery_model must be one of/,
+    'unsupported delivery model must be rejected by catalog authority',
+  );
   await assert.rejects(
     store.appendInventoryMovement(chatId, { productId: 'consultation', movementType: 'ADJUSTMENT', quantity: 1 }),
     error => error?.code === 'SERVICE_HAS_NO_INVENTORY' && error?.statusCode === 422,
