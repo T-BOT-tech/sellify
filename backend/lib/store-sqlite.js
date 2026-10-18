@@ -8450,6 +8450,23 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
       fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?')
         .get(String(serverOrderId), organizationId);
     }
+    // An existing canonical fulfillment is authoritative too: do not attach a
+    // courier using a newly inferred location if the persisted fulfillment was
+    // created for another location (or has lost its required location).
+    if (fulfillment) {
+      const fulfillmentOrganizationId = String(fulfillment.organization_id || '');
+      const fulfillmentLocationId = fulfillment.location_id ? String(fulfillment.location_id) : null;
+      if (fulfillmentOrganizationId !== organizationId) {
+        throw Object.assign(new Error('Existing fulfillment organization does not match the canonical order'), {
+          statusCode: 409, code: 'LOGISTICS_FULFILLMENT_ORGANIZATION_MISMATCH',
+        });
+      }
+      if (String(fulfillmentLocationId || '') !== String(locationId || '')) {
+        throw Object.assign(new Error('Existing fulfillment location does not match the canonical order location'), {
+          statusCode: 409, code: 'LOGISTICS_FULFILLMENT_LOCATION_MISMATCH',
+        });
+      }
+    }
     if (!selectedCourierUserId) {
       const selected = await selectDeliveryCourier(chatId, organizationId, locationId);
       selectedCourierUserId = String(selected.user_id);
