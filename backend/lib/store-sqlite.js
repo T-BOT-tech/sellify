@@ -2497,6 +2497,17 @@ if (!applied.includes(39)) {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(68, nowIso());
   }
 
+  // GAP-2: persist normalized command fingerprints for fulfillment retries.
+  if (!applied.includes(69)) {
+    const fulfillmentColumns = new Set(
+      db.prepare('PRAGMA table_info(fulfillments)').all().map(column => String(column.name)),
+    );
+    if (!fulfillmentColumns.has('last_command_fingerprint')) {
+      db.exec('ALTER TABLE fulfillments ADD COLUMN last_command_fingerprint TEXT');
+    }
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(69, nowIso());
+  }
+
   // GAP-1.24: fence status-query workers and permit takeover only before
   // provider I/O has been authorized. Legacy IN_PROGRESS commands are treated
   // as provider-in-flight because their execution phase cannot be proven.
@@ -9426,6 +9437,12 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
   const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
   if (!commandKey) throw Object.assign(new Error('Idempotency key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
   const target = normalizeCoreFulfillmentStatus(nextStatus);
+  const commandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+    fulfillment_type: normalizeCoreFulfillmentType(input.fulfillmentType || input.fulfillment_type || order.fulfillment_type || 'delivery'),
+    target_status: target,
+    tracking_reference: input.trackingReference || input.tracking_reference || null,
+    proof: input.proof === undefined ? null : input.proof,
+  })).digest('hex');
 
   const orderJson = orderFromRow(order);
   assertServiceDeliveryReadyForExecution(orderJson);
@@ -9499,6 +9516,18 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     }
 
     if (String(row.last_command_key || '') === commandKey) {
+      const storedFingerprint = String(row.last_command_fingerprint || '');
+      // Legacy commands predate fingerprints. Preserve replay compatibility only
+      // when the requested target is still the canonical state; new commands
+      // always require an exact normalized command match.
+      const compatible = storedFingerprint
+        ? storedFingerprint === commandFingerprint
+        : normalizeCoreFulfillmentStatus(row.status) === target;
+      if (!compatible) {
+        throw Object.assign(new Error('Idempotency key was already used for a different fulfillment command'), {
+          statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT',
+        });
+      }
       db.exec('COMMIT');
       return fulfillmentFromRow(row);
     }
@@ -9510,11 +9539,12 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
 
     db.prepare(`
       UPDATE fulfillments
-      SET status = ?, last_command_key = ?, updated_by_user_id = ?, updated_at = ?, version = version + 1,
+      SET status = ?, last_command_key = ?, last_command_fingerprint = ?,
+          updated_by_user_id = ?, updated_at = ?, version = version + 1,
           tracking_reference = COALESCE(?, tracking_reference), proof_json = COALESCE(?, proof_json)
       WHERE id = ?
     `).run(
-      target, commandKey, actorUserId, now,
+      target, commandKey, commandFingerprint, actorUserId, now,
       input.trackingReference || input.tracking_reference || null,
       input.proof === undefined ? null : json(input.proof),
       row.id,
