@@ -24,6 +24,8 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - name: Install root dependencies
         run: npm install --ignore-scripts
+      - name: Logistics service delivery-model contract regression
+        run: npm run test:logistics-service-delivery-model
       - name: Run L18 P2P Delivery product boundary regression
         run: npm run test:logistics-l18
 
