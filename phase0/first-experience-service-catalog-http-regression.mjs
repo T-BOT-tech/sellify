@@ -196,6 +196,26 @@ try {
   assert.equal(parcelStoredOrder.service_delivery_request?.destination_details, 'CMC, Addis Ababa');
   assert.equal(parcelStoredOrder.service_delivery_request?.assignment_status, 'NOT_ASSIGNED');
 
+  const requestedAssessmentResponse = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-request-model-http-1' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-request-buyer-http',
+      customer_name: 'Parcel Request Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-request-http', qty: 1 }],
+      service_delivery: {
+        pickup_details: 'Piassa, Addis Ababa',
+        destination_details: 'Sar Bet, Addis Ababa',
+      },
+    }),
+  });
+  assert.equal(requestedAssessmentResponse.status, 200);
+  const requestedAssessment = await requestedAssessmentResponse.json();
+  assert.equal(requestedAssessment.sub_orders[0]?.service_delivery?.delivery_model, 'request');
+  assert.equal(requestedAssessment.sub_orders[0]?.service_delivery?.assessment_status, 'ASSESSMENT_REQUIRED',
+    'request delivery model must require assessment before confirmation');
+  assert.equal(requestedAssessment.sub_orders[0]?.service_delivery?.assignment_status, 'NOT_ASSIGNED');
+
   const verificationDb = new DatabaseSync(dbPath, { readOnly: true });
   try {
     const marketplaceOrderId = committedMarketplaceBody.marketplace_order_id;
