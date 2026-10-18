@@ -241,6 +241,21 @@ try {
 
   const assessmentUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
     + '/orders/' + encodeURIComponent(requestOrder.server_order_id) + '/service-delivery-assessment';
+  if (requestOrder.location_id) {
+    const wrongLocationResponse = await fetch(assessmentUrl, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-wrong-location' },
+      body: JSON.stringify({
+        assessment_outcome: 'INELIGIBLE',
+        locationId: 'not-the-canonical-order-location',
+      }),
+    });
+    assert.equal(wrongLocationResponse.status, 403,
+      'assessment must not authorize against a caller-selected location different from the order location');
+    assert.equal((await wrongLocationResponse.json()).error?.code,
+      'LOGISTICS_ASSESSMENT_LOCATION_MISMATCH');
+  }
+
   const assessmentPayload = {
     assessment_outcome: 'ELIGIBLE',
     customer_acceptance: {
