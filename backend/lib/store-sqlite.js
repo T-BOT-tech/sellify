@@ -5543,9 +5543,6 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
   assertLogisticsSchedulingAuthorization(actor, organizationId, locationId, 'logistics:scheduling:request');
 
   const outcome = String(input.assessment_outcome || input.assessmentOutcome || '').trim().toUpperCase();
-  if (!['ELIGIBLE', 'INELIGIBLE'].includes(outcome)) {
-    throw Object.assign(new Error('Assessment outcome must be ELIGIBLE or INELIGIBLE'), { statusCode: 400, code: 'LOGISTICS_ASSESSMENT_OUTCOME_INVALID' });
-  }
   const orderJson = orderFromRow(orderRow);
   const currentRequest = orderJson?.service_delivery_request;
   if (!currentRequest) throw Object.assign(new Error('Order is not a logistics service request'), { statusCode: 409, code: 'LOGISTICS_SERVICE_REQUEST_REQUIRED' });
@@ -5557,11 +5554,6 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
   const deliveryModel = String(currentRequest.delivery_model || '').trim().toLowerCase();
   const availabilityConfirmed = input.availability_confirmed === true;
   const acceptedEvidenceTypes = new Set(['customer_message', 'telegram_confirmation', 'recorded_verbal_consent', 'signed_confirmation']);
-  if (evidenceReference.length > 200) {
-    throw Object.assign(new Error('Customer acceptance evidence reference must be 200 characters or fewer'), {
-      statusCode: 400, code: 'LOGISTICS_CUSTOMER_ACCEPTANCE_EVIDENCE_INVALID',
-    });
-  }
   // Fingerprint normalized, outcome-relevant input only; timestamps and actor context are server-derived.
   const commandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
     assessment_outcome: outcome,
@@ -5574,14 +5566,6 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
       },
     } : {}),
   })).digest('hex');
-  if (outcome === 'ELIGIBLE') {
-    if (!accepted || !acceptedEvidenceTypes.has(evidenceType) || evidenceReference.length < 3) {
-      throw Object.assign(new Error('Eligible service requests require recorded customer acceptance evidence'), { statusCode: 400, code: 'LOGISTICS_CUSTOMER_ACCEPTANCE_REQUIRED' });
-    }
-    if (deliveryModel === 'instant' && !availabilityConfirmed) {
-      throw Object.assign(new Error('Instant delivery requires explicit eligibility and availability confirmation'), { statusCode: 400, code: 'LOGISTICS_AVAILABILITY_CONFIRMATION_REQUIRED' });
-    }
-  }
 
   db.exec('BEGIN IMMEDIATE');
   try {
@@ -5620,6 +5604,24 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
     }
     if (request.assessment || String(request.assessment_status || '').toUpperCase() === 'READY_FOR_FULFILLMENT') {
       throw Object.assign(new Error('Logistics service request assessment is already recorded'), { statusCode: 409, code: 'LOGISTICS_ASSESSMENT_ALREADY_RECORDED' });
+    }
+    // Resolve a prior idempotency key before validating the new command payload.
+    // Reusing a key with a changed (even now-invalid) payload must consistently conflict.
+    if (!['ELIGIBLE', 'INELIGIBLE'].includes(outcome)) {
+      throw Object.assign(new Error('Assessment outcome must be ELIGIBLE or INELIGIBLE'), { statusCode: 400, code: 'LOGISTICS_ASSESSMENT_OUTCOME_INVALID' });
+    }
+    if (evidenceReference.length > 200) {
+      throw Object.assign(new Error('Customer acceptance evidence reference must be 200 characters or fewer'), {
+        statusCode: 400, code: 'LOGISTICS_CUSTOMER_ACCEPTANCE_EVIDENCE_INVALID',
+      });
+    }
+    if (outcome === 'ELIGIBLE') {
+      if (!accepted || !acceptedEvidenceTypes.has(evidenceType) || evidenceReference.length < 3) {
+        throw Object.assign(new Error('Eligible service requests require recorded customer acceptance evidence'), { statusCode: 400, code: 'LOGISTICS_CUSTOMER_ACCEPTANCE_REQUIRED' });
+      }
+      if (deliveryModel === 'instant' && !availabilityConfirmed) {
+        throw Object.assign(new Error('Instant delivery requires explicit eligibility and availability confirmation'), { statusCode: 400, code: 'LOGISTICS_AVAILABILITY_CONFIRMATION_REQUIRED' });
+      }
     }
     const now = nowIso();
     const ready = outcome === 'ELIGIBLE';
