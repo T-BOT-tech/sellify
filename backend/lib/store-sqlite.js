@@ -9478,6 +9478,21 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
       throw Object.assign(new Error('Order organization changed during fulfillment transition'), { statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH' });
     }
     const freshOrderJson = orderFromRow(freshOrderRow);
+    const freshCommandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+      fulfillment_type: effectiveType,
+      target_status: target,
+      destination: input.destination === undefined
+        ? ((effectiveType === 'delivery' ? freshOrderJson.delivery_address : freshOrderJson.pickup_location) ?? null)
+        : input.destination,
+      scheduled_at: input.scheduledAt || input.scheduled_at || freshOrderJson.scheduled_time || null,
+      tracking_reference: input.trackingReference || input.tracking_reference || freshOrderJson.tracking_reference || null,
+      proof: input.proof === undefined ? (freshOrderJson.fulfillment_proof ?? null) : input.proof,
+    })).digest('hex');
+    if (freshCommandFingerprint !== commandFingerprint) {
+      throw Object.assign(new Error('Canonical order fulfillment inputs changed during the command'), {
+        statusCode: 409, code: 'FULFILLMENT_ORDER_CHANGED',
+      });
+    }
     assertServiceDeliveryReadyForExecution(freshOrderJson);
     const freshCanonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
     if (freshCanonicalLocationId && requestedLocationId
@@ -9539,6 +9554,25 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     const current = normalizeCoreFulfillmentStatus(row.status);
     if (!CORE_FULFILLMENT_TRANSITIONS[type][current]?.has(target)) {
       throw Object.assign(new Error(`Cannot move fulfillment from ${current} to ${target}`), { statusCode: 409, code: 'INVALID_FULFILLMENT_TRANSITION' });
+    }
+    if (type === 'delivery' && target === 'delivered') {
+      const proofInput = input.proof === undefined
+        ? (parseJSON(row.proof_json, null) ?? freshOrderJson.fulfillment_proof ?? null)
+        : input.proof;
+      if (proofInput == null || (typeof proofInput === 'string' && !proofInput.trim())) {
+        throw Object.assign(new Error('Delivery proof is required before delivery completion'), {
+          statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED',
+        });
+      }
+      if (typeof proofInput === 'object' && !Array.isArray(proofInput)) {
+        const proofType = String(proofInput.type || proofInput.kind || '').trim().toLowerCase();
+        const proofReference = String(proofInput.reference || proofInput.referenceId || proofInput.reference_id || '').trim();
+        if (!proofType || !proofReference) {
+          throw Object.assign(new Error('Delivery proof type and reference are required'), {
+            statusCode: 400, code: 'DELIVERY_PROOF_INVALID',
+          });
+        }
+      }
     }
 
     db.prepare(`
