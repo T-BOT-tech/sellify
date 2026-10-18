@@ -8406,7 +8406,15 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
   assertServiceDeliveryReadyForExecution(orderFromRow(order));
   const organizationId = String(order.tenant_organization_id || '');
   if (organizationId !== String(tenant.organization_id)) throw Object.assign(new Error('Order organization mismatch'), { statusCode: 403 });
-  const locationId = input.locationId || input.location_id || order.location_id || null;
+  const requestedLocationId = input.locationId || input.location_id || null;
+  const canonicalOrderLocationId = order.location_id ? String(order.location_id) : null;
+  if (canonicalOrderLocationId && requestedLocationId
+    && String(requestedLocationId) !== canonicalOrderLocationId) {
+    throw Object.assign(new Error('Assignment location must match the canonical order location'), {
+      statusCode: 403, code: 'LOGISTICS_ASSIGNMENT_LOCATION_MISMATCH',
+    });
+  }
+  let locationId = canonicalOrderLocationId || requestedLocationId || actor?.locationId || null;
   const type = normalizeCoreFulfillmentType(order.fulfillment_type || 'delivery');
   if (type !== 'delivery') throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
   const actorUserId = actor?.userId ? String(actor.userId) : null;
@@ -8417,6 +8425,31 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
   if (!key) throw Object.assign(new Error('Assignment key is required'), { statusCode: 400 });
   db.exec('BEGIN IMMEDIATE');
   try {
+    const freshOrderRow = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?')
+      .get(String(chatId), String(serverOrderId));
+    if (!freshOrderRow) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    const freshOrganizationId = String(freshOrderRow.tenant_organization_id || '');
+    if (freshOrganizationId !== organizationId) {
+      throw Object.assign(new Error('Order organization changed during assignment'), { statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH' });
+    }
+    const freshOrder = orderFromRow(freshOrderRow);
+    assertServiceDeliveryReadyForExecution(freshOrder);
+    if (normalizeCoreFulfillmentType(freshOrderRow.fulfillment_type || 'delivery') !== 'delivery') {
+      throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
+    }
+    const freshCanonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
+    if (freshCanonicalLocationId && requestedLocationId
+      && String(requestedLocationId) !== freshCanonicalLocationId) {
+      throw Object.assign(new Error('Assignment location must match the canonical order location'), {
+        statusCode: 403, code: 'LOGISTICS_ASSIGNMENT_LOCATION_MISMATCH',
+      });
+    }
+    locationId = freshCanonicalLocationId || requestedLocationId || actor?.locationId || null;
+    assertLogisticsSchedulingAuthorization(actor, organizationId, locationId, 'logistics:scheduling:request');
+    if (!fulfillment) {
+      fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?')
+        .get(String(serverOrderId), organizationId);
+    }
     if (!selectedCourierUserId) {
       const selected = await selectDeliveryCourier(chatId, organizationId, locationId);
       selectedCourierUserId = String(selected.user_id);
@@ -8442,8 +8475,8 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
         VALUES (?, ?, ?, ?, 'delivery', 'pending', ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1)
       `).run(
         fulfillmentId, String(serverOrderId), organizationId, locationId ? String(locationId) : null,
-        json(order.delivery_address || null), order.scheduled_time || null, order.tracking_reference || null,
-        json(order.fulfillment_proof || null), actorUserId, actorUserId, now, now,
+        json(orderFromRow(freshOrderRow).delivery_address || null), freshOrder.scheduled_time || null, freshOrder.tracking_reference || null,
+        json(freshOrder.fulfillment_proof || null), actorUserId, actorUserId, now, now,
       );
       fulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(fulfillmentId);
     }
