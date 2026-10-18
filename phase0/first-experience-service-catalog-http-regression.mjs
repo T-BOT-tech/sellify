@@ -317,6 +317,46 @@ try {
   assert.equal(assessmentResult.service_delivery?.assessment?.customer_acceptance?.evidence_reference, 'buyer-chat-confirmation-123');
   assert.equal(assessmentResult.service_delivery?.assignment_status, 'NOT_ASSIGNED',
     'customer acceptance must not automatically assign a courier');
+
+  assert.ok(parcelStoredOrder.server_order_id,
+    'instant service request must retain its canonical server order identity');
+  const instantAssessmentUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(parcelStoredOrder.server_order_id) + '/service-delivery-assessment';
+  const instantAcceptance = {
+    accepted: true,
+    evidence_type: 'telegram_confirmation',
+    evidence_reference: 'instant-buyer-confirmation-123',
+  };
+  const instantMissingAvailabilityResponse = await fetch(instantAssessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-instant-assessment-missing-availability' },
+    body: JSON.stringify({
+      assessment_outcome: 'ELIGIBLE',
+      customer_acceptance: instantAcceptance,
+    }),
+  });
+  assert.equal(instantMissingAvailabilityResponse.status, 400,
+    'instant delivery cannot become ready without an explicit availability result');
+  assert.equal((await instantMissingAvailabilityResponse.json()).error?.code,
+    'LOGISTICS_AVAILABILITY_CONFIRMATION_REQUIRED');
+
+  const instantAssessmentResponse = await fetch(instantAssessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-instant-assessment-eligible' },
+    body: JSON.stringify({
+      assessment_outcome: 'ELIGIBLE',
+      availability_confirmed: true,
+      customer_acceptance: instantAcceptance,
+    }),
+  });
+  assert.equal(instantAssessmentResponse.status, 200,
+    'instant delivery can become ready after eligibility, availability, and acceptance are recorded');
+  const instantAssessmentResult = await instantAssessmentResponse.json();
+  assert.equal(instantAssessmentResult.service_delivery?.assessment_status, 'READY_FOR_FULFILLMENT');
+  assert.equal(instantAssessmentResult.service_delivery?.assessment?.availability_confirmed, true);
+  assert.equal(instantAssessmentResult.service_delivery?.assignment_status, 'NOT_ASSIGNED',
+    'instant eligibility must not automatically assign a courier');
+
   if (requestOrder.location_id) {
     await assert.rejects(
       () => store.assignDeliveryCourier(
