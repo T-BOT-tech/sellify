@@ -359,6 +359,55 @@ try {
   assert.equal(assessedStoredOrder.service_delivery_request.assessment_status, 'READY_FOR_FULFILLMENT',
     'the canonical seller order must persist the authoritative readiness state');
 
+  // A negative assessment must remain terminal for this lifecycle and must
+  // not permit fulfillment transitions or courier assignment.
+  const rejectedCheckoutResponse = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-request-rejected-http-1' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-request-rejected-buyer-http',
+      customer_name: 'Parcel Request Rejected Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-request-http', qty: 1 }],
+      service_delivery: {
+        pickup_details: 'Piassa, Addis Ababa',
+        destination_details: 'Sar Bet, Addis Ababa',
+      },
+    }),
+  });
+  assert.equal(rejectedCheckoutResponse.status, 200, 'second service request should be created for negative assessment coverage');
+  const rejectedCheckout = await rejectedCheckoutResponse.json();
+  const rejectedOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === rejectedCheckout.marketplace_order_id
+    || order.id === rejectedCheckout.sub_orders?.[0]?.seller_order_id);
+  assert.ok(rejectedOrder?.server_order_id, 'negative-assessment fixture must retain canonical order identity');
+  const rejectedAssessmentResponse = await fetch(
+    baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+      + '/orders/' + encodeURIComponent(rejectedOrder.server_order_id) + '/service-delivery-assessment',
+    {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-ineligible-1' },
+      body: JSON.stringify({ assessment_outcome: 'INELIGIBLE' }),
+    }
+  );
+  assert.equal(rejectedAssessmentResponse.status, 200, 'authorized negative assessment should be recorded');
+  const rejectedAssessment = await rejectedAssessmentResponse.json();
+  assert.equal(rejectedAssessment.service_delivery?.assessment_status, 'ASSESSMENT_REJECTED');
+  assert.equal(rejectedAssessment.service_delivery?.assignment_status, 'NOT_ASSIGNED');
+  await assert.rejects(
+    () => store.transitionOrderFulfillment(tenant.chatId, rejectedOrder.server_order_id, 'out_for_delivery', session, {
+      idempotencyKey: 'parcel-rejected-order-fulfillment-must-fail',
+    }),
+    error => error?.code === 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' && error?.statusCode === 409,
+    'rejected service requests must not enter canonical fulfillment'
+  );
+  await assert.rejects(
+    () => store.assignDeliveryCourier(tenant.chatId, rejectedOrder.server_order_id, '', session, {
+      assignmentKey: 'parcel-rejected-order-assignment-must-fail',
+    }),
+    error => error?.code === 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' && error?.statusCode === 409,
+    'rejected service requests must not be assigned to a courier'
+  );
+
   const verificationDb = new DatabaseSync(dbPath, { readOnly: true });
   try {
     const marketplaceOrderId = committedMarketplaceBody.marketplace_order_id;
