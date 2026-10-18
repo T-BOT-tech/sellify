@@ -9331,7 +9331,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
         FROM delivery_assignments da
         JOIN fulfillments f ON f.id = da.fulfillment_id
         WHERE da.organization_id = ? AND da.last_command_key = ?
-        ORDER BY da.updated_at DESC LIMIT 1
+        ORDER BY CASE WHEN da.status = 'ASSIGNED' THEN 0 ELSE 1 END, da.updated_at DESC LIMIT 1
       `).get(organizationId, commandKey);
       if (existingCommand) {
         if (String(existingCommand.assigned_server_order_id) !== String(serverOrderId)
@@ -9394,9 +9394,10 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     `).get(organizationId, commandKey);
     if (existingCommand) {
       const sameOrder = String(existingCommand.assigned_server_order_id) === String(serverOrderId);
-      const replayCompatible = sameOrder && (normalizedAction === 'REASSIGN_EXCEPTION'
-        ? String(existingCommand.status) === 'ASSIGNED'
-        : String(existingCommand.status) === normalizedAction);
+      const expectedReplayStatus = ['REASSIGNED', 'REASSIGN_EXCEPTION'].includes(normalizedAction)
+        ? 'ASSIGNED'
+        : normalizedAction;
+      const replayCompatible = sameOrder && String(existingCommand.status) === expectedReplayStatus;
       if (!replayCompatible) throw Object.assign(new Error('Idempotency key was already used for a different delivery command'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT' });
       db.exec('COMMIT');
       return existingCommand;
