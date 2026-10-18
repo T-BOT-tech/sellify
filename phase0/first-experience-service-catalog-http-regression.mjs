@@ -277,6 +277,11 @@ try {
       evidence_reference: 'buyer-chat-confirmation-123',
     },
   };
+  const serviceRequestBeforeInvalidAssessments = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  assert.ok(serviceRequestBeforeInvalidAssessments,
+    'canonical service request must exist before assessment attempts');
+
   const missingAcceptanceResponse = await fetch(assessmentUrl, {
     method: 'POST',
     headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-missing-acceptance' },
@@ -302,6 +307,11 @@ try {
     'overlong evidence references must be rejected rather than silently truncated');
   assert.equal((await overlongEvidenceResponse.json()).error?.code,
     'LOGISTICS_CUSTOMER_ACCEPTANCE_EVIDENCE_INVALID');
+
+  const serviceRequestAfterInvalidAssessments = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(serviceRequestAfterInvalidAssessments, serviceRequestBeforeInvalidAssessments,
+    'rejected assessment payloads must leave canonical service request state unchanged');
 
   const assessmentResponse = await fetch(assessmentUrl, {
     method: 'POST',
@@ -339,6 +349,12 @@ try {
     'instant delivery cannot become ready without an explicit availability result');
   assert.equal((await instantMissingAvailabilityResponse.json()).error?.code,
     'LOGISTICS_AVAILABILITY_CONFIRMATION_REQUIRED');
+  const instantRequestAfterMissingAvailability = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === parcelStoredOrder.server_order_id)?.service_delivery_request;
+  assert.equal(instantRequestAfterMissingAvailability?.assessment, undefined,
+    'failed instant availability checks must not persist an assessment');
+  assert.notEqual(instantRequestAfterMissingAvailability?.assessment_status, 'READY_FOR_FULFILLMENT',
+    'failed instant availability checks must not advance the request lifecycle');
 
   const instantAssessmentResponse = await fetch(instantAssessmentUrl, {
     method: 'POST',
