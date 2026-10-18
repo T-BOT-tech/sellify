@@ -543,6 +543,14 @@ try {
   assert.equal(rejectedAssessment.service_delivery?.assessment_status, 'ASSESSMENT_REJECTED');
   assert.equal(rejectedAssessment.service_delivery?.assignment_status, 'NOT_ASSIGNED');
   await assert.rejects(
+    () => store.transitionDeliveryAssignment(
+      tenant.chatId, rejectedOrder.server_order_id, 'OUT_FOR_DELIVERY', session,
+      { idempotencyKey: 'parcel-assignment-outbound-transition' }
+    ),
+    error => error?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT' && error?.statusCode === 409,
+    'an assignment idempotency key from another order must not replay across canonical orders'
+  );
+  await assert.rejects(
     () => store.transitionOrderFulfillment(tenant.chatId, rejectedOrder.server_order_id, 'out_for_delivery', session, {
       idempotencyKey: 'parcel-rejected-order-fulfillment-must-fail',
     }),
