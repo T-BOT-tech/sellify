@@ -241,6 +241,15 @@ try {
 
   const assessmentUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
     + '/orders/' + encodeURIComponent(requestOrder.server_order_id) + '/service-delivery-assessment';
+
+  const unauthenticatedAssessmentResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { 'Idempotency-Key': 'parcel-request-assessment-unauthenticated' },
+    body: JSON.stringify({ assessment_outcome: 'INELIGIBLE' }),
+  });
+  assert.equal(unauthenticatedAssessmentResponse.status, 401,
+    'assessment endpoint must reject requests without an authenticated session');
+
   if (requestOrder.location_id) {
     const wrongLocationResponse = await fetch(assessmentUrl, {
       method: 'POST',
@@ -258,6 +267,10 @@ try {
 
   const assessmentPayload = {
     assessment_outcome: 'ELIGIBLE',
+    // These client-supplied identity/authority claims must never override the authenticated session.
+    organization_id: 'attacker-controlled-organization',
+    actor_user_id: 'attacker-controlled-user',
+    assessed_by_user_id: 'attacker-controlled-user',
     customer_acceptance: {
       accepted: true,
       evidence_type: 'telegram_confirmation',
@@ -299,6 +312,8 @@ try {
   const assessmentResult = await assessmentResponse.json();
   assert.equal(assessmentResult.service_delivery?.assessment_status, 'READY_FOR_FULFILLMENT');
   assert.equal(assessmentResult.service_delivery?.assessment?.outcome, 'ELIGIBLE');
+  assert.equal(assessmentResult.service_delivery?.assessment?.assessed_by_user_id, String(user.id),
+    'recorded assessment actor must come from the authenticated session, not client-supplied identity fields');
   assert.equal(assessmentResult.service_delivery?.assessment?.customer_acceptance?.evidence_reference, 'buyer-chat-confirmation-123');
   assert.equal(assessmentResult.service_delivery?.assignment_status, 'NOT_ASSIGNED',
     'customer acceptance must not automatically assign a courier');
