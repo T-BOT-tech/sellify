@@ -5536,6 +5536,16 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
   const evidenceReference = String(acceptance.evidence_reference || acceptance.evidenceReference || '').trim().slice(0, 200);
   const accepted = acceptance.accepted === true;
   const acceptedEvidenceTypes = new Set(['customer_message', 'telegram_confirmation', 'recorded_verbal_consent', 'signed_confirmation']);
+  // Fingerprint only semantic command input; timestamps and actor context are server-derived.
+  const commandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+    assessment_outcome: outcome,
+    availability_confirmed: input.availability_confirmed === true,
+    customer_acceptance: {
+      accepted,
+      evidence_type: evidenceType,
+      evidence_reference: evidenceReference,
+    },
+  })).digest('hex');
   if (outcome === 'ELIGIBLE') {
     if (!accepted || !acceptedEvidenceTypes.has(evidenceType) || evidenceReference.length < 3) {
       throw Object.assign(new Error('Eligible service requests require recorded customer acceptance evidence'), { statusCode: 400, code: 'LOGISTICS_CUSTOMER_ACCEPTANCE_REQUIRED' });
@@ -5554,6 +5564,12 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
     const request = freshOrder?.service_delivery_request;
     if (!request) throw Object.assign(new Error('Order is not a logistics service request'), { statusCode: 409, code: 'LOGISTICS_SERVICE_REQUEST_REQUIRED' });
     if (request.assessment?.command_key === commandKey) {
+      if (request.assessment.command_fingerprint !== commandFingerprint) {
+        throw Object.assign(new Error('Idempotency key was reused with different assessment data'), {
+          statusCode: 409,
+          code: 'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT',
+        });
+      }
       db.exec('COMMIT');
       return { order: freshOrder, service_delivery: request, replayed: true };
     }
@@ -5578,6 +5594,7 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
         assessed_by_user_id: actor?.userId ? String(actor.userId) : null,
         assessed_at: now,
         command_key: commandKey,
+        command_fingerprint: commandFingerprint,
       },
     };
     const updatedOrder = { ...freshOrder, service_delivery_request: nextRequest };
