@@ -5500,6 +5500,17 @@ function orderFromRow(row) {
   return order;
 }
 
+function assertServiceDeliveryReadyForExecution(order) {
+  const request = order?.service_delivery_request;
+  if (!request) return;
+  if (String(request.assessment_status || '').toUpperCase() !== 'READY_FOR_FULFILLMENT') {
+    throw Object.assign(
+      new Error('Logistics service request must complete assessment and acceptance before fulfillment or courier assignment'),
+      { statusCode: 409, code: 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' }
+    );
+  }
+}
+
 function insertProduct(chatId, product) {
   if (!product || product.id == null) return;
   const normalized = normaliseProduct(product);
@@ -8249,6 +8260,7 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
   const tenant = await getTenant(chatId);
   if (!tenant?.organization_id) throw Object.assign(new Error('Order organization is required'), { statusCode: 409 });
   const order = await getCoreFulfillmentOrder(String(chatId), String(serverOrderId));
+  assertServiceDeliveryReadyForExecution(orderFromRow(order));
   const organizationId = String(order.tenant_organization_id || '');
   if (organizationId !== String(tenant.organization_id)) throw Object.assign(new Error('Order organization mismatch'), { statusCode: 403 });
   const locationId = input.locationId || input.location_id || order.location_id || null;
@@ -9199,6 +9211,7 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
   const target = normalizeCoreFulfillmentStatus(nextStatus);
 
   const orderJson = orderFromRow(order);
+  assertServiceDeliveryReadyForExecution(orderJson);
   const type = normalizeCoreFulfillmentType(input.fulfillmentType || input.fulfillment_type || orderJson.fulfillment_type || 'delivery');
   if (!CORE_FULFILLMENT_TRANSITIONS[type]) throw Object.assign(new Error('Unsupported fulfillment type'), { statusCode: 400 });
 
