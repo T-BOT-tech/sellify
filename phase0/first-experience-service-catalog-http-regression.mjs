@@ -86,6 +86,10 @@ try {
   };
   const products = [
     { id: 'consultation-http', name: 'Consultation', price: 25000, currency: 'ETB', item_type: 'service', marketplace_listed: true },
+    { id: 'parcel-instant-http', name: 'Instant Parcel Delivery', price: 12000, currency: 'ETB', item_type: 'service',
+      service_profile: 'B2C_DELIVERY', delivery_model: 'instant', marketplace_listed: true },
+    { id: 'parcel-request-http', name: 'Request Parcel Delivery', price: 10000, currency: 'ETB', item_type: 'service',
+      service_profile: 'P2P_DELIVERY', delivery_model: 'request', marketplace_listed: true },
     // Seed stock explicitly below so the catalog's legacy opening-balance migration cannot double-count it.
     { id: 'soap-http', name: 'Soap', price: 5000, currency: 'ETB', stock: null, item_type: 'product', marketplace_listed: true },
   ];
@@ -106,6 +110,8 @@ try {
   assert.equal(readResponse.status, 200);
   const readBody = await readResponse.json();
   assert.equal(readBody.products.find(item => item.id === 'consultation-http')?.item_type, 'service');
+  assert.equal(readBody.products.find(item => item.id === 'parcel-instant-http')?.delivery_model, 'instant');
+  assert.equal(readBody.products.find(item => item.id === 'parcel-request-http')?.delivery_model, 'request');
   assert.equal(readBody.products.find(item => item.id === 'soap-http')?.item_type, 'product');
 
   // Marketplace response-loss recovery: the first request commits, but the
@@ -141,6 +147,54 @@ try {
     'marketplace checkout retry must return the same canonical marketplace order');
   assert.deepEqual(replayBody.sub_orders, committedMarketplaceBody.sub_orders,
     'marketplace checkout retry must replay the original seller-order identities');
+
+  // Logistics service checkout requires customer pickup/destination details,
+  // stores only a truthful intake state, and never claims a courier assignment.
+  const missingDeliveryDetails = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-missing-details-http-1' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-buyer-http',
+      customer_name: 'Parcel Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-instant-http', qty: 1 }],
+    }),
+  });
+  assert.equal(missingDeliveryDetails.status, 400, 'logistics delivery service must reject missing pickup/destination');
+  const missingDeliveryBody = await missingDeliveryDetails.json();
+  assert.equal(missingDeliveryBody.error?.code, 'LOGISTICS_SERVICE_DELIVERY_DETAILS_REQUIRED');
+
+  const parcelRequest = {
+    buyer_id: 'parcel-buyer-http',
+    customer_name: 'Parcel Buyer',
+    customer_phone: '+251900000000',
+    items: [{ seller_id: tenant.chatId, item_id: 'parcel-instant-http', qty: 1 }],
+    service_delivery: {
+      pickup_details: 'Bole Medhanialem, Addis Ababa',
+      destination_details: 'CMC, Addis Ababa',
+      customer_note: 'Call on arrival',
+    },
+  };
+  const parcelHeaders = { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-intake-http-1' };
+  const parcelFirstResponse = await fetch(checkoutUrl, {
+    method: 'POST', headers: parcelHeaders, body: JSON.stringify(parcelRequest),
+  });
+  assert.equal(parcelFirstResponse.status, 200, 'valid logistics service request should create canonical marketplace order');
+  const parcelFirst = await parcelFirstResponse.json();
+  assert.equal(parcelFirst.sub_orders[0]?.service_delivery?.delivery_model, 'instant');
+  assert.equal(parcelFirst.sub_orders[0]?.service_delivery?.assessment_status, 'ELIGIBILITY_CHECK_REQUIRED');
+  assert.equal(parcelFirst.sub_orders[0]?.service_delivery?.assignment_status, 'NOT_ASSIGNED');
+  const parcelRetryResponse = await fetch(checkoutUrl, {
+    method: 'POST', headers: parcelHeaders, body: JSON.stringify(parcelRequest),
+  });
+  assert.equal(parcelRetryResponse.status, 200);
+  const parcelRetry = await parcelRetryResponse.json();
+  assert.equal(parcelRetry.marketplace_order_id, parcelFirst.marketplace_order_id,
+    'service request idempotent retry must replay same canonical marketplace order');
+  const parcelStoredOrder = (await store.getOrders(tenant.chatId)).find(order => order.id === parcelFirst.sub_orders[0].seller_order_id || order.marketplace_order_id === parcelFirst.marketplace_order_id);
+  assert.ok(parcelStoredOrder, 'canonical seller order should persist');
+  assert.equal(parcelStoredOrder.service_delivery_request?.pickup_details, 'Bole Medhanialem, Addis Ababa');
+  assert.equal(parcelStoredOrder.service_delivery_request?.destination_details, 'CMC, Addis Ababa');
+  assert.equal(parcelStoredOrder.service_delivery_request?.assignment_status, 'NOT_ASSIGNED');
 
   const verificationDb = new DatabaseSync(dbPath, { readOnly: true });
   try {
