@@ -425,6 +425,14 @@ try {
     error => error?.code === 'DELIVERY_ASSIGNMENT_LIFECYCLE_REQUIRED' && error?.statusCode === 409,
     'an active courier assignment must advance through its own lifecycle'
   );
+  await assert.rejects(
+    () => store.transitionDeliveryAssignment(
+      tenant.chatId, requestOrder.server_order_id, 'REASSIGNED', session,
+      { idempotencyKey: 'parcel-assignment-reassign-missing-target' }
+    ),
+    error => error?.code === 'REASSIGNMENT_TARGET_REQUIRED' && error?.statusCode === 400,
+    'reassignment without a target must return a validation error after loading the active assignment'
+  );
   const acceptedAssignment = await store.transitionDeliveryAssignment(
     tenant.chatId, requestOrder.server_order_id, 'ACCEPTED', session,
     { idempotencyKey: 'parcel-assignment-accept-transition' }
