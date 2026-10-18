@@ -486,6 +486,16 @@ try {
   assert.equal((await conflictingAssessmentResponse.json()).error?.code,
     'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT');
 
+  const conflictingInvalidAssessmentResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+    body: JSON.stringify({ assessment_outcome: 'NOT_A_VALID_OUTCOME' }),
+  });
+  assert.equal(conflictingInvalidAssessmentResponse.status, 409,
+    'reusing a recorded assessment key with an invalid changed payload must still conflict');
+  assert.equal((await conflictingInvalidAssessmentResponse.json()).error?.code,
+    'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT');
+
   const secondAssessmentResponse = await fetch(assessmentUrl, {
     method: 'POST',
     headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-second-distinct-command' },
