@@ -8446,6 +8446,30 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
     }
     locationId = freshCanonicalLocationId || requestedLocationId || actor?.locationId || null;
     assertLogisticsSchedulingAuthorization(actor, organizationId, locationId, 'logistics:scheduling:request');
+
+    // Treat the command key as an organization-scoped idempotency key, not
+    // merely a field on whichever assignment happens to be found for this order.
+    const priorCommand = db.prepare(`
+      SELECT da.*, f.server_order_id AS assigned_server_order_id
+      FROM delivery_assignments da
+      JOIN fulfillments f ON f.id = da.fulfillment_id
+      WHERE da.organization_id = ? AND da.last_command_key = ?
+      ORDER BY da.updated_at DESC LIMIT 1
+    `).get(organizationId, key);
+    if (priorCommand) {
+      const sameOrder = String(priorCommand.assigned_server_order_id) === String(serverOrderId);
+      const sameCourier = !selectedCourierUserId
+        || String(priorCommand.courier_user_id) === selectedCourierUserId;
+      const sameLocation = String(priorCommand.location_id || '') === String(locationId || '');
+      if (!sameOrder || !sameCourier || !sameLocation || String(priorCommand.status) !== 'ASSIGNED') {
+        throw Object.assign(new Error('Idempotency key was already used for a different delivery assignment'), {
+          statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT',
+        });
+      }
+      db.exec('COMMIT');
+      return priorCommand;
+    }
+
     if (!fulfillment) {
       fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?')
         .get(String(serverOrderId), organizationId);
