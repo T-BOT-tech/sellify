@@ -8465,6 +8465,13 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
     const freshOrderRow = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?')
       .get(String(chatId), String(serverOrderId));
     if (!freshOrderRow) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
+      .get(String(chatId));
+    if (String(freshTenantRow?.organization_id || '') !== organizationId) {
+      throw Object.assign(new Error('Tenant organization changed during assignment'), {
+        statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
+      });
+    }
     const freshOrganizationId = String(freshOrderRow.tenant_organization_id || '');
     if (freshOrganizationId !== organizationId) {
       throw Object.assign(new Error('Order organization changed during assignment'), { statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH' });
@@ -9352,6 +9359,16 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     if (!courier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
     db.exec('BEGIN IMMEDIATE');
     try {
+      const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
+        .get(String(chatId));
+      const freshOrderRow = db.prepare('SELECT tenant_organization_id FROM orders WHERE chat_id = ? AND server_order_id = ?')
+        .get(String(chatId), String(serverOrderId));
+      if (String(freshTenantRow?.organization_id || '') !== organizationId
+        || String(freshOrderRow?.tenant_organization_id || '') !== organizationId) {
+        throw Object.assign(new Error('Tenant or order organization changed during delivery exception resolution'), {
+          statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
+        });
+      }
       const existingCommand = db.prepare(`
         SELECT da.*, f.server_order_id AS assigned_server_order_id
         FROM delivery_assignments da
@@ -9405,6 +9422,16 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
 
   db.exec('BEGIN IMMEDIATE');
   try {
+    const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
+      .get(String(chatId));
+    const freshOrderRow = db.prepare('SELECT tenant_organization_id FROM orders WHERE chat_id = ? AND server_order_id = ?')
+      .get(String(chatId), String(serverOrderId));
+    if (String(freshTenantRow?.organization_id || '') !== organizationId
+      || String(freshOrderRow?.tenant_organization_id || '') !== organizationId) {
+      throw Object.assign(new Error('Tenant or order organization changed during delivery assignment transition'), {
+        statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
+      });
+    }
     const existingCommand = db.prepare(`
       SELECT da.*, f.server_order_id AS assigned_server_order_id
       FROM delivery_assignments da
@@ -9519,6 +9546,13 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     const freshOrderRow = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?')
       .get(key, String(serverOrderId));
     if (!freshOrderRow) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
+      .get(key);
+    if (String(freshTenantRow?.organization_id || '') !== organizationId) {
+      throw Object.assign(new Error('Tenant organization changed during fulfillment transition'), {
+        statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
+      });
+    }
     const freshOrganizationId = String(freshOrderRow.tenant_organization_id || '');
     if (freshOrganizationId !== organizationId) {
       throw Object.assign(new Error('Order organization changed during fulfillment transition'), { statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH' });
