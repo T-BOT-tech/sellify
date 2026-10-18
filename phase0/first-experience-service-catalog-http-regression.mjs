@@ -357,25 +357,65 @@ try {
     );
   }
 
-  // Assignment command keys are organization-scoped: an exact retry replays
-  // the original assignment, while reusing the key for another order conflicts.
-  const assignmentKeyOrder = await store.assignDeliveryCourier(
+  // Assignment command keys are organization-scoped. Seed a prior committed
+  // assignment to exercise retry behavior without depending on courier selection.
+  const assignmentReplayDb = new DatabaseSync(dbPath);
+  let seededAssignmentId;
+  try {
+    const matchingFulfillment = assignmentReplayDb.prepare(
+      'SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?'
+    ).get(String(requestOrder.server_order_id), String(session.organizationId));
+    if (matchingFulfillment) {
+      assignmentReplayDb.prepare('UPDATE fulfillments SET location_id = ? WHERE id = ?').run(
+        requestOrder.location_id ? String(requestOrder.location_id) : null, matchingFulfillment.id
+      );
+    } else {
+      const now = new Date().toISOString();
+      assignmentReplayDb.prepare(`
+        INSERT INTO fulfillments
+          (id, server_order_id, organization_id, location_id, fulfillment_type, status,
+           destination_json, scheduled_at, tracking_reference, proof_json, last_command_key,
+           created_by_user_id, updated_by_user_id, created_at, updated_at, version)
+        VALUES (?, ?, ?, ?, 'delivery', 'pending', NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?, 1)
+      `).run(
+        'test-assignment-replay-fulfillment', String(requestOrder.server_order_id),
+        String(session.organizationId), requestOrder.location_id ? String(requestOrder.location_id) : null,
+        String(user.id), String(user.id), now, now
+      );
+    }
+    const fulfillmentRow = assignmentReplayDb.prepare(
+      'SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?'
+    ).get(String(requestOrder.server_order_id), String(session.organizationId));
+    seededAssignmentId = 'test-assignment-replay-existing';
+    const now = new Date().toISOString();
+    assignmentReplayDb.prepare(`
+      INSERT INTO delivery_assignments
+        (id, fulfillment_id, organization_id, location_id, courier_user_id, status,
+         assignment_key, assigned_by_user_id, assigned_at, updated_at, version, last_command_key)
+      VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, ?, ?, 1, ?)
+    `).run(
+      seededAssignmentId, fulfillmentRow.id, String(session.organizationId),
+      requestOrder.location_id ? String(requestOrder.location_id) : null,
+      String(user.id), 'parcel-assignment-idempotency-key-replay',
+      String(user.id), now, now, 'parcel-assignment-idempotency-key-replay'
+    );
+  } finally {
+    assignmentReplayDb.close();
+  }
+  const replayedAssignment = await store.assignDeliveryCourier(
     tenant.chatId, requestOrder.server_order_id, String(user.id), session,
     { assignmentKey: 'parcel-assignment-idempotency-key-replay' }
-  ).catch(error => {
-    // The merchant session is not necessarily a courier-eligible assignment actor;
-    // the dedicated authorized assignment fixture below is exercised by the HTTP flow.
-    if (error?.code === 'COURIER_ROLE_REQUIRED') return null;
-    throw error;
-  });
-  if (assignmentKeyOrder) {
-    const replayedAssignment = await store.assignDeliveryCourier(
-      tenant.chatId, requestOrder.server_order_id, String(user.id), session,
+  );
+  assert.equal(replayedAssignment.id, seededAssignmentId,
+    'exact assignment retry must replay the original assignment');
+  await assert.rejects(
+    () => store.assignDeliveryCourier(
+      tenant.chatId, requestOrder.server_order_id, 'different-courier-user', session,
       { assignmentKey: 'parcel-assignment-idempotency-key-replay' }
-    );
-    assert.equal(replayedAssignment.id, assignmentKeyOrder.id,
-      'exact assignment retry must replay the original assignment');
-  }
+    ),
+    error => error?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT' && error?.statusCode === 409,
+    'reusing an assignment key with a different courier must conflict'
+  );
 
   const assessmentRetry = await fetch(assessmentUrl, {
     method: 'POST',
