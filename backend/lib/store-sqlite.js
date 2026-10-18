@@ -5511,6 +5511,98 @@ function assertServiceDeliveryReadyForExecution(order) {
   }
 }
 
+export async function recordServiceDeliveryAssessment(chatId, serverOrderId, input = {}, actor = null) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organization_id) throw Object.assign(new Error('Order organization is required'), { statusCode: 409, code: 'ORDER_ORGANIZATION_REQUIRED' });
+  const orderRow = await getCoreFulfillmentOrder(String(chatId), String(serverOrderId));
+  const organizationId = String(orderRow.tenant_organization_id || '');
+  if (organizationId !== String(tenant.organization_id)) throw Object.assign(new Error('Order organization mismatch'), { statusCode: 403, code: 'ORDER_ORGANIZATION_MISMATCH' });
+  const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  if (!commandKey) throw Object.assign(new Error('Idempotency key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
+  const locationId = input.locationId || input.location_id || orderRow.location_id || actor?.locationId || null;
+  assertLogisticsSchedulingAuthorization(actor, organizationId, locationId, 'logistics:scheduling:request');
+
+  const outcome = String(input.assessment_outcome || input.assessmentOutcome || '').trim().toUpperCase();
+  if (!['ELIGIBLE', 'INELIGIBLE'].includes(outcome)) {
+    throw Object.assign(new Error('Assessment outcome must be ELIGIBLE or INELIGIBLE'), { statusCode: 400, code: 'LOGISTICS_ASSESSMENT_OUTCOME_INVALID' });
+  }
+  const orderJson = orderFromRow(orderRow);
+  const currentRequest = orderJson?.service_delivery_request;
+  if (!currentRequest) throw Object.assign(new Error('Order is not a logistics service request'), { statusCode: 409, code: 'LOGISTICS_SERVICE_REQUEST_REQUIRED' });
+
+  const acceptance = input.customer_acceptance && typeof input.customer_acceptance === 'object' ? input.customer_acceptance : {};
+  const evidenceType = String(acceptance.evidence_type || acceptance.evidenceType || '').trim().toLowerCase();
+  const evidenceReference = String(acceptance.evidence_reference || acceptance.evidenceReference || '').trim().slice(0, 200);
+  const accepted = acceptance.accepted === true;
+  const acceptedEvidenceTypes = new Set(['customer_message', 'telegram_confirmation', 'recorded_verbal_consent', 'signed_confirmation']);
+  if (outcome === 'ELIGIBLE') {
+    if (!accepted || !acceptedEvidenceTypes.has(evidenceType) || evidenceReference.length < 3) {
+      throw Object.assign(new Error('Eligible service requests require recorded customer acceptance evidence'), { statusCode: 400, code: 'LOGISTICS_CUSTOMER_ACCEPTANCE_REQUIRED' });
+    }
+    if (String(currentRequest.delivery_model || '').toLowerCase() === 'instant' && input.availability_confirmed !== true) {
+      throw Object.assign(new Error('Instant delivery requires explicit eligibility and availability confirmation'), { statusCode: 400, code: 'LOGISTICS_AVAILABILITY_CONFIRMATION_REQUIRED' });
+    }
+  }
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const freshRow = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?')
+      .get(String(chatId), String(serverOrderId));
+    if (!freshRow) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    const freshOrder = orderFromRow(freshRow);
+    const request = freshOrder?.service_delivery_request;
+    if (!request) throw Object.assign(new Error('Order is not a logistics service request'), { statusCode: 409, code: 'LOGISTICS_SERVICE_REQUEST_REQUIRED' });
+    if (request.assessment?.command_key === commandKey) {
+      db.exec('COMMIT');
+      return { order: freshOrder, service_delivery: request, replayed: true };
+    }
+    if (request.assessment || String(request.assessment_status || '').toUpperCase() === 'READY_FOR_FULFILLMENT') {
+      throw Object.assign(new Error('Logistics service request assessment is already recorded'), { statusCode: 409, code: 'LOGISTICS_ASSESSMENT_ALREADY_RECORDED' });
+    }
+    const now = nowIso();
+    const ready = outcome === 'ELIGIBLE';
+    const nextRequest = {
+      ...request,
+      assessment_status: ready ? 'READY_FOR_FULFILLMENT' : 'ASSESSMENT_REJECTED',
+      assignment_status: 'NOT_ASSIGNED',
+      assessment: {
+        outcome,
+        availability_confirmed: String(request.delivery_model || '').toLowerCase() === 'instant' ? input.availability_confirmed === true : null,
+        customer_acceptance: ready ? {
+          accepted: true,
+          evidence_type: evidenceType,
+          evidence_reference: evidenceReference,
+          recorded_at: now,
+        } : null,
+        assessed_by_user_id: actor?.userId ? String(actor.userId) : null,
+        assessed_at: now,
+        command_key: commandKey,
+      },
+    };
+    const updatedOrder = { ...freshOrder, service_delivery_request: nextRequest };
+    db.prepare('UPDATE orders SET order_json = ? WHERE chat_id = ? AND server_order_id = ?')
+      .run(json(updatedOrder), String(chatId), String(serverOrderId));
+    audit(String(chatId), 'logistics.service_request.assessed', 'order', String(serverOrderId), {
+      outcome,
+      deliveryModel: request.delivery_model,
+      assessmentStatus: nextRequest.assessment_status,
+      customerAcceptanceRecorded: ready,
+      commandKey,
+    }, {
+      organizationId,
+      locationId: locationId ? String(locationId) : null,
+      actorId: actor?.userId || null,
+      deviceId: actor?.deviceId || null,
+    });
+    db.exec('COMMIT');
+    return { order: updatedOrder, service_delivery: nextRequest, replayed: false };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
 function insertProduct(chatId, product) {
   if (!product || product.id == null) return;
   const normalized = normaliseProduct(product);
