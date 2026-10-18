@@ -5533,24 +5533,33 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
 
   const acceptance = input.customer_acceptance && typeof input.customer_acceptance === 'object' ? input.customer_acceptance : {};
   const evidenceType = String(acceptance.evidence_type || acceptance.evidenceType || '').trim().toLowerCase();
-  const evidenceReference = String(acceptance.evidence_reference || acceptance.evidenceReference || '').trim().slice(0, 200);
+  const evidenceReference = String(acceptance.evidence_reference || acceptance.evidenceReference || '').trim();
   const accepted = acceptance.accepted === true;
+  const deliveryModel = String(currentRequest.delivery_model || '').trim().toLowerCase();
+  const availabilityConfirmed = input.availability_confirmed === true;
   const acceptedEvidenceTypes = new Set(['customer_message', 'telegram_confirmation', 'recorded_verbal_consent', 'signed_confirmation']);
-  // Fingerprint only semantic command input; timestamps and actor context are server-derived.
+  if (evidenceReference.length > 200) {
+    throw Object.assign(new Error('Customer acceptance evidence reference must be 200 characters or fewer'), {
+      statusCode: 400, code: 'LOGISTICS_CUSTOMER_ACCEPTANCE_EVIDENCE_INVALID',
+    });
+  }
+  // Fingerprint normalized, outcome-relevant input only; timestamps and actor context are server-derived.
   const commandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
     assessment_outcome: outcome,
-    availability_confirmed: input.availability_confirmed === true,
-    customer_acceptance: {
-      accepted,
-      evidence_type: evidenceType,
-      evidence_reference: evidenceReference,
-    },
+    ...(outcome === 'ELIGIBLE' ? {
+      availability_confirmed: deliveryModel === 'instant' ? availabilityConfirmed : null,
+      customer_acceptance: {
+        accepted,
+        evidence_type: evidenceType,
+        evidence_reference: evidenceReference,
+      },
+    } : {}),
   })).digest('hex');
   if (outcome === 'ELIGIBLE') {
     if (!accepted || !acceptedEvidenceTypes.has(evidenceType) || evidenceReference.length < 3) {
       throw Object.assign(new Error('Eligible service requests require recorded customer acceptance evidence'), { statusCode: 400, code: 'LOGISTICS_CUSTOMER_ACCEPTANCE_REQUIRED' });
     }
-    if (String(currentRequest.delivery_model || '').toLowerCase() === 'instant' && input.availability_confirmed !== true) {
+    if (deliveryModel === 'instant' && !availabilityConfirmed) {
       throw Object.assign(new Error('Instant delivery requires explicit eligibility and availability confirmation'), { statusCode: 400, code: 'LOGISTICS_AVAILABILITY_CONFIRMATION_REQUIRED' });
     }
   }
@@ -5584,7 +5593,7 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
       assignment_status: 'NOT_ASSIGNED',
       assessment: {
         outcome,
-        availability_confirmed: String(request.delivery_model || '').toLowerCase() === 'instant' ? input.availability_confirmed === true : null,
+        availability_confirmed: String(request.delivery_model || '').toLowerCase() === 'instant' ? availabilityConfirmed : null,
         customer_acceptance: ready ? {
           accepted: true,
           evidence_type: evidenceType,
