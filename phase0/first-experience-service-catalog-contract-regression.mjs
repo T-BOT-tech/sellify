@@ -31,6 +31,8 @@ try {
   // Logistics service delivery semantics are persisted only on service catalog
   // entries and survive a read-after-write; they do not create an order or assign a courier.
   const logisticsServices = await store.saveCatalog(chatId, [
+    { id: 'consultation', name: 'Consultation', price: 25000, item_type: 'service' },
+    { id: 'soap', name: 'Soap', price: 5000, stock: 12 },
     { id: 'parcel-instant', name: 'Parcel Delivery Now', price: 12000, item_type: 'service',
       service_profile: 'B2C_DELIVERY', delivery_model: 'instant' },
     { id: 'parcel-request', name: 'Scheduled Parcel Delivery', price: 10000, item_type: 'service',
