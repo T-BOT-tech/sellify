@@ -70,6 +70,26 @@ try {
     'seller order line must preserve canonical service type');
   assert.equal((await store.getCatalog(marketplaceSeller.chatId)).products.find(item => item.id === 'marketplace-consultation').stock, undefined,
     'marketplace service checkout must not create or decrement physical stock');
+
+  // Marketplace seller orders are also order history: a service must not be
+  // reclassified as a physical product after it has been purchased.
+  await assert.rejects(
+    store.saveCatalog(marketplaceSeller.chatId, [{
+      id: 'marketplace-consultation',
+      name: 'Marketplace Consultation',
+      price: 18000,
+      item_type: 'product',
+      stock: 0,
+      marketplace_listed: true,
+    }]),
+    error => error?.code === 'CATALOG_ITEM_TYPE_LOCKED' && error?.statusCode === 409,
+    'catalog type change after a marketplace service order must be rejected',
+  );
+  assert.equal(
+    (await store.getCatalog(marketplaceSeller.chatId)).products.find(item => item.id === 'marketplace-consultation').item_type,
+    'service',
+    'rejected marketplace type change must preserve the canonical service type',
+  );
   const serviceMarketplaceDb = new DatabaseSync(path.join(tempDir, 'sellify.sqlite'));
   assert.equal(serviceMarketplaceDb.prepare(
     "SELECT COUNT(*) AS count FROM inventory_movements WHERE product_id = 'marketplace-consultation'"
