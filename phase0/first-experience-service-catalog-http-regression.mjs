@@ -319,6 +319,44 @@ try {
     );
   }
 
+  // Existing fulfillment rows must not let courier assignment drift from
+  // the canonical order's location. Seed a deliberately inconsistent row and
+  // assert the service rejects it before validating/creating an assignment.
+  if (requestOrder.location_id) {
+    const seededFulfillmentDb = new DatabaseSync(dbPath);
+    try {
+      seededFulfillmentDb.prepare(`
+        INSERT INTO fulfillments
+          (id, server_order_id, organization_id, location_id, fulfillment_type, status,
+           destination_json, scheduled_at, tracking_reference, proof_json, last_command_key,
+           created_by_user_id, updated_by_user_id, created_at, updated_at, version)
+        VALUES (?, ?, ?, ?, 'delivery', 'pending', NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?, 1)
+      `).run(
+        'test-mismatched-fulfillment-location',
+        requestOrder.server_order_id,
+        String(session.organizationId),
+        'not-the-canonical-order-location',
+        String(user.id),
+        String(user.id),
+        new Date().toISOString(),
+        new Date().toISOString(),
+      );
+    } finally {
+      seededFulfillmentDb.close();
+    }
+    await assert.rejects(
+      () => store.assignDeliveryCourier(
+        tenant.chatId,
+        requestOrder.server_order_id,
+        'not-a-courier',
+        session,
+        { assignmentKey: 'parcel-request-assignment-existing-fulfillment-location-mismatch' }
+      ),
+      error => error?.code === 'LOGISTICS_FULFILLMENT_LOCATION_MISMATCH' && error?.statusCode === 409,
+      'assignment must reject an existing fulfillment whose location differs from the canonical order'
+    );
+  }
+
   const assessmentRetry = await fetch(assessmentUrl, {
     method: 'POST',
     headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
