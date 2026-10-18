@@ -9555,6 +9555,19 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     if (!CORE_FULFILLMENT_TRANSITIONS[type][current]?.has(target)) {
       throw Object.assign(new Error(`Cannot move fulfillment from ${current} to ${target}`), { statusCode: 409, code: 'INVALID_FULFILLMENT_TRANSITION' });
     }
+    if (type === 'delivery' && ['out_for_delivery', 'delivered'].includes(target)) {
+      const activeAssignment = db.prepare(`
+        SELECT id, status FROM delivery_assignments
+        WHERE fulfillment_id = ? AND organization_id = ?
+          AND status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY')
+        ORDER BY updated_at DESC LIMIT 1
+      `).get(row.id, organizationId);
+      if (activeAssignment) {
+        throw Object.assign(new Error('Delivery with an active courier assignment must advance through the assignment lifecycle'), {
+          statusCode: 409, code: 'DELIVERY_ASSIGNMENT_LIFECYCLE_REQUIRED',
+        });
+      }
+    }
     if (type === 'delivery' && target === 'delivered') {
       const proofInput = input.proof === undefined
         ? (parseJSON(row.proof_json, null) ?? freshOrderJson.fulfillment_proof ?? null)
