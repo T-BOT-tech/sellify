@@ -9432,8 +9432,16 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
   const type = normalizeCoreFulfillmentType(input.fulfillmentType || input.fulfillment_type || orderJson.fulfillment_type || 'delivery');
   if (!CORE_FULFILLMENT_TRANSITIONS[type]) throw Object.assign(new Error('Unsupported fulfillment type'), { statusCode: 400 });
 
+  const requestedLocationId = input.locationId || input.location_id || null;
+  const canonicalOrderLocationId = order.location_id ? String(order.location_id) : null;
+  if (canonicalOrderLocationId && requestedLocationId
+    && String(requestedLocationId) !== canonicalOrderLocationId) {
+    throw Object.assign(new Error('Fulfillment location must match the canonical order location'), {
+      statusCode: 403, code: 'FULFILLMENT_LOCATION_MISMATCH',
+    });
+  }
   const actorUserId = actor?.userId && db.prepare('SELECT id FROM users WHERE id = ?').get(String(actor.userId)) ? String(actor.userId) : null;
-  const locationId = input.locationId || input.location_id || actor?.locationId || null;
+  let locationId = canonicalOrderLocationId || requestedLocationId || actor?.locationId || null;
   if (locationId) {
     const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(String(locationId), organizationId);
     if (!location) throw Object.assign(new Error('Location does not belong to this organization'), { statusCode: 400, code: 'LOCATION_SCOPE_DENIED' });
@@ -9441,11 +9449,42 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
 
   db.exec('BEGIN IMMEDIATE');
   try {
+    const freshOrderRow = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?')
+      .get(key, String(serverOrderId));
+    if (!freshOrderRow) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    const freshOrganizationId = String(freshOrderRow.tenant_organization_id || '');
+    if (freshOrganizationId !== organizationId) {
+      throw Object.assign(new Error('Order organization changed during fulfillment transition'), { statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH' });
+    }
+    const freshOrderJson = orderFromRow(freshOrderRow);
+    assertServiceDeliveryReadyForExecution(freshOrderJson);
+    const freshCanonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
+    if (freshCanonicalLocationId && requestedLocationId
+      && String(requestedLocationId) !== freshCanonicalLocationId) {
+      throw Object.assign(new Error('Fulfillment location must match the canonical order location'), {
+        statusCode: 403, code: 'FULFILLMENT_LOCATION_MISMATCH',
+      });
+    }
+    locationId = freshCanonicalLocationId || requestedLocationId || actor?.locationId || null;
+    if (locationId) {
+      const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?')
+        .get(String(locationId), organizationId);
+      if (!location) throw Object.assign(new Error('Location does not belong to this organization'), { statusCode: 400, code: 'LOCATION_SCOPE_DENIED' });
+    }
+
     let row = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), organizationId);
+    if (row) {
+      const persistedLocationId = row.location_id ? String(row.location_id) : null;
+      if (String(persistedLocationId || '') !== String(locationId || '')) {
+        throw Object.assign(new Error('Existing fulfillment location does not match the canonical order location'), {
+          statusCode: 409, code: 'FULFILLMENT_LOCATION_MISMATCH',
+        });
+      }
+    }
     const now = nowIso();
     if (!row) {
       const fulfillmentId = crypto.randomUUID();
-      const destination = input.destination ?? (type === 'delivery' ? orderJson.delivery_address : orderJson.pickup_location) ?? null;
+      const destination = input.destination ?? (type === 'delivery' ? freshOrderJson.delivery_address : freshOrderJson.pickup_location) ?? null;
       const scheduledAt = input.scheduledAt || input.scheduled_at || orderJson.scheduled_time || null;
       db.prepare(`
         INSERT INTO fulfillments
@@ -9453,8 +9492,8 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1)
       `).run(
         fulfillmentId, String(serverOrderId), organizationId, locationId ? String(locationId) : null, type,
-        json(destination), scheduledAt, input.trackingReference || input.tracking_reference || orderJson.tracking_reference || null,
-        json(input.proof ?? orderJson.fulfillment_proof ?? null), actorUserId, actorUserId, now, now,
+        json(destination), scheduledAt, input.trackingReference || input.tracking_reference || freshOrderJson.tracking_reference || null,
+        json(input.proof ?? freshOrderJson.fulfillment_proof ?? null), actorUserId, actorUserId, now, now,
       );
       row = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(fulfillmentId);
     }
