@@ -9376,13 +9376,6 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     }
   }
 
-  if (normalizedAction === 'REASSIGNED') {
-    if (!targetCourierId || targetCourierId === String(active.courier_user_id)) throw Object.assign(new Error('A different courier is required for reassignment'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
-    const courier = db.prepare(`SELECT m.user_id, mr.scope_type, mr.scope_id FROM memberships m JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active' WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active' AND mr.role_id = 'logistics_courier'`).get(targetCourierId, String(chatId));
-    if (!courier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
-    const locationId = input.locationId || input.location_id || active.location_id || order.location_id || null;
-    if (courier.scope_type === 'LOCATION' && String(courier.scope_id || '') !== String(locationId || '')) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
-  }
   db.exec('BEGIN IMMEDIATE');
   try {
     const existingCommand = db.prepare(`
@@ -9390,7 +9383,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
       FROM delivery_assignments da
       JOIN fulfillments f ON f.id = da.fulfillment_id
       WHERE da.organization_id = ? AND da.last_command_key = ?
-      ORDER BY da.updated_at DESC LIMIT 1
+      ORDER BY CASE WHEN da.status = 'ASSIGNED' THEN 0 ELSE 1 END, da.updated_at DESC LIMIT 1
     `).get(organizationId, commandKey);
     if (existingCommand) {
       const sameOrder = String(existingCommand.assigned_server_order_id) === String(serverOrderId);
@@ -9406,6 +9399,14 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     if (!active) throw Object.assign(new Error('No active courier assignment exists'), { statusCode: 409, code: 'ASSIGNMENT_REQUIRED' });
     const current = String(active.status);
     if (!transitions[current]?.has(normalizedAction)) throw Object.assign(new Error('Cannot move assignment from ' + current + ' to ' + normalizedAction), { statusCode: 409, code: 'INVALID_ASSIGNMENT_TRANSITION' });
+
+    if (normalizedAction === 'REASSIGNED') {
+      if (!targetCourierId || targetCourierId === String(active.courier_user_id)) throw Object.assign(new Error('A different courier is required for reassignment'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
+      const courier = db.prepare(`SELECT m.user_id, mr.scope_type, mr.scope_id FROM memberships m JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active' WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active' AND mr.role_id = 'logistics_courier'`).get(targetCourierId, String(chatId));
+      if (!courier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
+      const locationId = input.locationId || input.location_id || active.location_id || order.location_id || null;
+      if (courier.scope_type === 'LOCATION' && String(courier.scope_id || '') !== String(locationId || '')) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
+    }
     const now = nowIso();
     const fulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ? AND organization_id = ?').get(active.fulfillment_id, organizationId);
     if (!fulfillment) throw Object.assign(new Error('Fulfillment not found'), { statusCode: 404, code: 'FULFILLMENT_NOT_FOUND' });
