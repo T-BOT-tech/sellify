@@ -433,11 +433,11 @@ try {
     'courier assignment should accept before dispatch');
   await assert.rejects(
     () => store.transitionDeliveryAssignment(
-      tenant.chatId, requestOrder.server_order_id, 'OUT_FOR_DELIVERY', session,
-      { idempotencyKey: 'parcel-assignment-outbound-reused-key' }
+      tenant.chatId, requestOrder.server_order_id, 'DELIVERED', session,
+      { idempotencyKey: 'parcel-assignment-delivered-without-proof' }
     ),
-    error => error?.code === 'INVALID_ASSIGNMENT_TRANSITION' && error?.statusCode === 409,
-    'assignment cannot skip required lifecycle transitions'
+    error => error?.code === 'DELIVERY_PROOF_REQUIRED' && error?.statusCode === 400,
+    'assignment cannot complete delivery without proof'
   );
   const outboundAssignment = await store.transitionDeliveryAssignment(
     tenant.chatId, requestOrder.server_order_id, 'OUT_FOR_DELIVERY', session,
@@ -445,7 +445,6 @@ try {
   );
   assert.equal(outboundAssignment.status, 'OUT_FOR_DELIVERY',
     'assignment and fulfillment should advance together through the canonical lifecycle');
-  const fulfillmentAfterDispatch = await store.getCoreFulfillment?.(tenant.chatId, requestOrder.server_order_id);
   assert.equal(
     (await store.transitionOrderFulfillment(
       tenant.chatId, requestOrder.server_order_id, 'delivered', session,
