@@ -314,7 +314,12 @@ function sendJSON(res, status, body, req) {
 function sendError(res, status, err, req) {
   const message = status >= 500 ? 'Internal error' : (err.message || 'Request error');
   if (status >= 500) console.error('[error]', err);
-  sendJSON(res, status, { error: { message, status } }, req);
+  // Keep stable, machine-readable domain codes on expected client errors.
+  // Never expose internal error codes for 5xx responses.
+  const code = status < 500 && typeof err?.code === 'string' && /^[A-Z][A-Z0-9_]{1,79}$/.test(err.code)
+    ? err.code
+    : undefined;
+  sendJSON(res, status, { error: { message, status, ...(code ? { code } : {}) } }, req);
 }
 
 function readRawBody(req) {
