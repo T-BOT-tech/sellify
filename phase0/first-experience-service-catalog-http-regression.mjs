@@ -239,6 +239,38 @@ try {
     'unassessed service requests must not be assigned to a courier'
   );
 
+  const assessmentUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(requestOrder.server_order_id) + '/service-delivery-assessment';
+  const assessmentPayload = {
+    assessment_outcome: 'ELIGIBLE',
+    customer_acceptance: {
+      accepted: true,
+      evidence_type: 'telegram_confirmation',
+      evidence_reference: 'buyer-chat-confirmation-123',
+    },
+  };
+  const assessmentResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+    body: JSON.stringify(assessmentPayload),
+  });
+  assert.equal(assessmentResponse.status, 200, 'authorized assessment and recorded customer acceptance should enable fulfillment');
+  const assessmentResult = await assessmentResponse.json();
+  assert.equal(assessmentResult.service_delivery?.assessment_status, 'READY_FOR_FULFILLMENT');
+  assert.equal(assessmentResult.service_delivery?.assessment?.outcome, 'ELIGIBLE');
+  assert.equal(assessmentResult.service_delivery?.assessment?.customer_acceptance?.evidence_reference, 'buyer-chat-confirmation-123');
+
+  const assessmentRetry = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+    body: JSON.stringify(assessmentPayload),
+  });
+  assert.equal(assessmentRetry.status, 200, 'assessment idempotent retry should succeed');
+  assert.equal((await assessmentRetry.json()).replayed, true, 'assessment retry should be reported as replayed');
+  const assessedStoredOrder = (await store.getOrders(tenant.chatId)).find(order => order.server_order_id === requestOrder.server_order_id);
+  assert.equal(assessedStoredOrder.service_delivery_request.assessment_status, 'READY_FOR_FULFILLMENT',
+    'the canonical seller order must persist the authoritative readiness state');
+
   const verificationDb = new DatabaseSync(dbPath, { readOnly: true });
   try {
     const marketplaceOrderId = committedMarketplaceBody.marketplace_order_id;
