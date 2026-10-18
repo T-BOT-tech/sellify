@@ -9437,14 +9437,18 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
   const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
   if (!commandKey) throw Object.assign(new Error('Idempotency key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
   const target = normalizeCoreFulfillmentStatus(nextStatus);
-  const commandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
-    fulfillment_type: normalizeCoreFulfillmentType(input.fulfillmentType || input.fulfillment_type || order.fulfillment_type || 'delivery'),
-    target_status: target,
-    tracking_reference: input.trackingReference || input.tracking_reference || null,
-    proof: input.proof === undefined ? null : input.proof,
-  })).digest('hex');
-
   const orderJson = orderFromRow(order);
+  const effectiveType = normalizeCoreFulfillmentType(input.fulfillmentType || input.fulfillment_type || orderJson.fulfillment_type || 'delivery');
+  const commandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+    fulfillment_type: effectiveType,
+    target_status: target,
+    destination: input.destination === undefined
+      ? ((effectiveType === 'delivery' ? orderJson.delivery_address : orderJson.pickup_location) ?? null)
+      : input.destination,
+    scheduled_at: input.scheduledAt || input.scheduled_at || orderJson.scheduled_time || null,
+    tracking_reference: input.trackingReference || input.tracking_reference || orderJson.tracking_reference || null,
+    proof: input.proof === undefined ? (orderJson.fulfillment_proof ?? null) : input.proof,
+  })).digest('hex');
   assertServiceDeliveryReadyForExecution(orderJson);
   const type = normalizeCoreFulfillmentType(input.fulfillmentType || input.fulfillment_type || orderJson.fulfillment_type || 'delivery');
   if (!CORE_FULFILLMENT_TRANSITIONS[type]) throw Object.assign(new Error('Unsupported fulfillment type'), { statusCode: 400 });
@@ -9502,7 +9506,7 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     if (!row) {
       const fulfillmentId = crypto.randomUUID();
       const destination = input.destination ?? (type === 'delivery' ? freshOrderJson.delivery_address : freshOrderJson.pickup_location) ?? null;
-      const scheduledAt = input.scheduledAt || input.scheduled_at || orderJson.scheduled_time || null;
+      const scheduledAt = input.scheduledAt || input.scheduled_at || freshOrderJson.scheduled_time || null;
       db.prepare(`
         INSERT INTO fulfillments
           (id, server_order_id, organization_id, location_id, fulfillment_type, status, destination_json, scheduled_at, tracking_reference, proof_json, last_command_key, created_by_user_id, updated_by_user_id, created_at, updated_at, version)
