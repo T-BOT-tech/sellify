@@ -5572,6 +5572,24 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
     const freshRow = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?')
       .get(String(chatId), String(serverOrderId));
     if (!freshRow) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    // Re-read both tenant and order organization bindings inside the write
+    // transaction. Preflight authorization alone can become stale before
+    // BEGIN IMMEDIATE, so neither the tenant-to-organization mapping nor the
+    // canonical order's organization may be trusted from the earlier read.
+    const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
+      .get(String(chatId));
+    const freshTenantOrganizationId = String(freshTenantRow?.organization_id || '');
+    if (freshTenantOrganizationId !== organizationId) {
+      throw Object.assign(new Error('Tenant organization changed during assessment'), {
+        statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
+      });
+    }
+    const freshOrderOrganizationId = String(freshRow.tenant_organization_id || '');
+    if (freshOrderOrganizationId !== organizationId) {
+      throw Object.assign(new Error('Order organization mismatch'), {
+        statusCode: 403, code: 'ORDER_ORGANIZATION_MISMATCH',
+      });
+    }
     const freshOrder = orderFromRow(freshRow);
     const request = freshOrder?.service_delivery_request;
     if (!request) throw Object.assign(new Error('Order is not a logistics service request'), { statusCode: 409, code: 'LOGISTICS_SERVICE_REQUEST_REQUIRED' });
