@@ -86,7 +86,8 @@ try {
   };
   const products = [
     { id: 'consultation-http', name: 'Consultation', price: 25000, currency: 'ETB', item_type: 'service', marketplace_listed: true },
-    { id: 'soap-http', name: 'Soap', price: 5000, currency: 'ETB', stock: 8, item_type: 'product', marketplace_listed: true },
+    // Seed stock explicitly below so the catalog's legacy opening-balance migration cannot double-count it.
+    { id: 'soap-http', name: 'Soap', price: 5000, currency: 'ETB', stock: null, item_type: 'product', marketplace_listed: true },
   ];
 
   const writeResponse = await fetch(baseUrl + '/catalog/' + encodeURIComponent(tenant.chatId), {
