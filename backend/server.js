@@ -113,7 +113,7 @@ import {
   listInventoryMovements, getInventoryBalances, appendInventoryMovement,
   createPairingChallenge, consumePairingChallenge,
   createInvite, listInvites, revokeInvite, consumeInvite, changeMembershipRole, assignMembershipContextualRole, revokeMembershipContextualRole,
-  listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment,
+  listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment, recordServiceDeliveryAssessment,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
   createComplianceRequest, getComplianceRequest, listComplianceRequests, resolveComplianceRequest, buildComplianceExport,
   listPaymentAccounts, createPaymentAccount, createPayment, getPayment, getPaymentIdempotency, getPaymentIntent, listPayments, listPaymentLedger, listPaymentEvidence, listPaymentVerifications, listPaymentDecisions, reconcilePayment, recordPaymentReconciliation, listPaymentReconciliations, insertPaymentEvidence, insertProviderNotificationEvidence, getPaymentAccountForProviderNotification, resolvePaymentIntentForProviderEvidence, createPaymentConfirmationAttempt, updatePaymentConfirmationAttempt, getPaymentConfirmationAttempt, getPaymentConfirmationAttemptByProviderTransaction, insertPaymentVerification, insertPaymentDecision, commitPaymentDecision, beginPaymentStatusQuery, markPaymentStatusQueryProviderStarted, completePaymentStatusQuery, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
@@ -2896,6 +2896,33 @@ async function handleDeliveryAssignment(req, res, chatId, serverOrderId) {
   return sendJSON(res, 200, { assignment }, req);
 }
 
+async function handleServiceDeliveryAssessment(req, res, chatId, serverOrderId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, chatId);
+  if (req.method !== 'POST') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+  const body = await readBody(req);
+  const locationId = body.locationId || body.location_id || session.locationId || null;
+  await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:request', {
+    location: locationId,
+    deniedMessage: 'Logistics service assessment permission required',
+  });
+  const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
+  if (!idempotencyKey) {
+    return sendJSON(res, 400, { error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' } }, req);
+  }
+  const result = await recordServiceDeliveryAssessment(chatId, serverOrderId, {
+    ...body,
+    locationId,
+    idempotencyKey,
+  }, session);
+  return sendJSON(res, 200, {
+    order_id: result.order.server_order_id,
+    service_delivery: result.service_delivery,
+    replayed: result.replayed,
+  }, req);
+}
+
 async function handleOrderFulfillment(req, res, chatId, serverOrderId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -2970,6 +2997,7 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/events\/([^/]+)$/, handler: (req, res, m) => handleSyncEvents(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/sync\/([^/]+)$/, handler: (req, res, m) => handleSyncPull(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/orders\/([^/]+)$/, handler: (req, res, m) => handleOrdersFeed(req, res, decodeURIComponent(m[1])) },
+  { method: 'POST', pattern: /^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/service-delivery-assessment$/, handler: (req, res, m) => handleServiceDeliveryAssessment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleOrderFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
