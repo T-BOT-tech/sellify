@@ -216,6 +216,22 @@ try {
     'request delivery model must require assessment before confirmation');
   assert.equal(requestedAssessment.sub_orders[0]?.service_delivery?.assignment_status, 'NOT_ASSIGNED');
 
+  // A visible assessment status is not sufficient on its own: canonical
+  // fulfillment transitions must reject the request until assessment and
+  // customer acceptance have explicitly moved it to READY_FOR_FULFILLMENT.
+  const requestOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === requestedAssessment.marketplace_order_id
+    || order.id === requestedAssessment.sub_orders[0]?.seller_order_id
+  );
+  assert.ok(requestOrder?.server_order_id, 'service request must retain its canonical server order identity');
+  await assert.rejects(
+    () => store.transitionOrderFulfillment(tenant.chatId, requestOrder.server_order_id, 'out_for_delivery', null, {
+      idempotencyKey: 'parcel-request-before-assessment',
+    }),
+    error => error?.code === 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' && error?.statusCode === 409,
+    'unassessed service requests must not enter canonical fulfillment'
+  );
+
   const verificationDb = new DatabaseSync(dbPath, { readOnly: true });
   try {
     const marketplaceOrderId = committedMarketplaceBody.marketplace_order_id;
