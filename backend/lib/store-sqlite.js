@@ -5632,6 +5632,12 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
       assessment: {
         outcome,
         availability_confirmed: String(request.delivery_model || '').toLowerCase() === 'instant' ? availabilityConfirmed : null,
+        availability_confirmation: ready && String(request.delivery_model || '').toLowerCase() === 'instant' ? {
+          result: 'CONFIRMED',
+          source: 'authorized_operator_recorded',
+          recorded_by_user_id: actor?.userId ? String(actor.userId) : null,
+          recorded_at: now,
+        } : null,
         customer_acceptance: ready ? {
           accepted: true,
           evidence_type: evidenceType,
