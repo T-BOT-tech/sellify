@@ -8210,7 +8210,7 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
   const type = normalizeCoreFulfillmentType(order.fulfillment_type || 'delivery');
   if (type !== 'delivery') throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
   const actorUserId = actor?.userId ? String(actor.userId) : null;
-  assertLogisticsSchedulingAuthorization(actor, organizationId, request.location_id, 'logistics:scheduling:request');
+  assertLogisticsSchedulingAuthorization(actor, organizationId, locationId, 'logistics:scheduling:request');
   let selectedCourierUserId = String(courierUserId || '').trim();
   const key = String(input.assignmentKey || input.assignment_key || `courier:auto:${serverOrderId}`).trim();
   let fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), organizationId);
