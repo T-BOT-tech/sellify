@@ -302,6 +302,22 @@ try {
   assert.equal(assessmentResult.service_delivery?.assessment?.customer_acceptance?.evidence_reference, 'buyer-chat-confirmation-123');
   assert.equal(assessmentResult.service_delivery?.assignment_status, 'NOT_ASSIGNED',
     'customer acceptance must not automatically assign a courier');
+  if (requestOrder.location_id) {
+    await assert.rejects(
+      () => store.assignDeliveryCourier(
+        tenant.chatId,
+        requestOrder.server_order_id,
+        'not-a-courier',
+        session,
+        {
+          locationId: 'not-the-canonical-order-location',
+          assignmentKey: 'parcel-request-assignment-wrong-location',
+        }
+      ),
+      error => error?.code === 'LOGISTICS_ASSIGNMENT_LOCATION_MISMATCH' && error?.statusCode === 403,
+      'courier assignment must not authorize against a caller-selected location different from the order location'
+    );
+  }
 
   const assessmentRetry = await fetch(assessmentUrl, {
     method: 'POST',
