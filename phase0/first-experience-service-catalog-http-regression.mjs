@@ -264,6 +264,16 @@ try {
       evidence_reference: 'buyer-chat-confirmation-123',
     },
   };
+  const missingAcceptanceResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-missing-acceptance' },
+    body: JSON.stringify({ assessment_outcome: 'ELIGIBLE' }),
+  });
+  assert.equal(missingAcceptanceResponse.status, 400,
+    'an eligible assessment must fail closed without explicit customer acceptance evidence');
+  assert.equal((await missingAcceptanceResponse.json()).error?.code,
+    'LOGISTICS_CUSTOMER_ACCEPTANCE_REQUIRED');
+
   const overlongEvidenceResponse = await fetch(assessmentUrl, {
     method: 'POST',
     headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-overlong-evidence' },
@@ -290,6 +300,8 @@ try {
   assert.equal(assessmentResult.service_delivery?.assessment_status, 'READY_FOR_FULFILLMENT');
   assert.equal(assessmentResult.service_delivery?.assessment?.outcome, 'ELIGIBLE');
   assert.equal(assessmentResult.service_delivery?.assessment?.customer_acceptance?.evidence_reference, 'buyer-chat-confirmation-123');
+  assert.equal(assessmentResult.service_delivery?.assignment_status, 'NOT_ASSIGNED',
+    'customer acceptance must not automatically assign a courier');
 
   const assessmentRetry = await fetch(assessmentUrl, {
     method: 'POST',
@@ -314,6 +326,18 @@ try {
     'reusing an assessment idempotency key with changed evidence must conflict');
   assert.equal((await conflictingAssessmentResponse.json()).error?.code,
     'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT');
+
+  const secondAssessmentResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-second-distinct-command' },
+    body: JSON.stringify({
+      assessment_outcome: 'INELIGIBLE',
+    }),
+  });
+  assert.equal(secondAssessmentResponse.status, 409,
+    'a distinct command must not overwrite an already recorded assessment');
+  assert.equal((await secondAssessmentResponse.json()).error?.code,
+    'LOGISTICS_ASSESSMENT_ALREADY_RECORDED');
 
   const assessedStoredOrder = (await store.getOrders(tenant.chatId)).find(order => order.server_order_id === requestOrder.server_order_id);
   assert.equal(assessedStoredOrder.service_delivery_request.assessment_status, 'READY_FOR_FULFILLMENT',
