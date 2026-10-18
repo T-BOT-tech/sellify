@@ -5520,7 +5520,15 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
   if (organizationId !== String(tenant.organization_id)) throw Object.assign(new Error('Order organization mismatch'), { statusCode: 403, code: 'ORDER_ORGANIZATION_MISMATCH' });
   const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
   if (!commandKey) throw Object.assign(new Error('Idempotency key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
-  const locationId = input.locationId || input.location_id || orderRow.location_id || actor?.locationId || null;
+  const requestedLocationId = input.locationId || input.location_id || null;
+  const canonicalOrderLocationId = orderRow.location_id ? String(orderRow.location_id) : null;
+  if (canonicalOrderLocationId && requestedLocationId
+    && String(requestedLocationId) !== canonicalOrderLocationId) {
+    throw Object.assign(new Error('Assessment location must match the canonical order location'), {
+      statusCode: 403, code: 'LOGISTICS_ASSESSMENT_LOCATION_MISMATCH',
+    });
+  }
+  const locationId = canonicalOrderLocationId || requestedLocationId || actor?.locationId || null;
   assertLogisticsSchedulingAuthorization(actor, organizationId, locationId, 'logistics:scheduling:request');
 
   const outcome = String(input.assessment_outcome || input.assessmentOutcome || '').trim().toUpperCase();
