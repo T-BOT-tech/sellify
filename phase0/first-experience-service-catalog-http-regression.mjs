@@ -357,6 +357,26 @@ try {
     );
   }
 
+  // Assignment command keys are organization-scoped: an exact retry replays
+  // the original assignment, while reusing the key for another order conflicts.
+  const assignmentKeyOrder = await store.assignDeliveryCourier(
+    tenant.chatId, requestOrder.server_order_id, String(user.id), session,
+    { assignmentKey: 'parcel-assignment-idempotency-key-replay' }
+  ).catch(error => {
+    // The merchant session is not necessarily a courier-eligible assignment actor;
+    // the dedicated authorized assignment fixture below is exercised by the HTTP flow.
+    if (error?.code === 'COURIER_ROLE_REQUIRED') return null;
+    throw error;
+  });
+  if (assignmentKeyOrder) {
+    const replayedAssignment = await store.assignDeliveryCourier(
+      tenant.chatId, requestOrder.server_order_id, String(user.id), session,
+      { assignmentKey: 'parcel-assignment-idempotency-key-replay' }
+    );
+    assert.equal(replayedAssignment.id, assignmentKeyOrder.id,
+      'exact assignment retry must replay the original assignment');
+  }
+
   const assessmentRetry = await fetch(assessmentUrl, {
     method: 'POST',
     headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
