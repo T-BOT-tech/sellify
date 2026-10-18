@@ -231,6 +231,13 @@ try {
     error => error?.code === 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' && error?.statusCode === 409,
     'unassessed service requests must not enter canonical fulfillment'
   );
+  await assert.rejects(
+    () => store.assignDeliveryCourier(tenant.chatId, requestOrder.server_order_id, '', null, {
+      assignmentKey: 'parcel-request-before-assessment',
+    }),
+    error => error?.code === 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' && error?.statusCode === 409,
+    'unassessed service requests must not be assigned to a courier'
+  );
 
   const verificationDb = new DatabaseSync(dbPath, { readOnly: true });
   try {
