@@ -457,6 +457,20 @@ try {
   assert.equal(assessedStoredOrder.service_delivery_request.assessment_status, 'READY_FOR_FULFILLMENT',
     'the canonical seller order must persist the authoritative readiness state');
 
+  if (requestOrder.location_id) {
+    await assert.rejects(
+      () => store.transitionOrderFulfillment(
+        tenant.chatId, requestOrder.server_order_id, 'out_for_delivery', session,
+        {
+          locationId: 'not-the-canonical-order-location',
+          idempotencyKey: 'parcel-fulfillment-wrong-location-must-fail',
+        }
+      ),
+      error => error?.code === 'FULFILLMENT_LOCATION_MISMATCH' && error?.statusCode === 403,
+      'fulfillment transition must reject a caller-selected location that differs from the canonical order'
+    );
+  }
+
   // A negative assessment must remain terminal for this lifecycle and must
   // not permit fulfillment transitions or courier assignment.
   const rejectedCheckoutResponse = await fetch(checkoutUrl, {
