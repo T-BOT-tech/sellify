@@ -267,6 +267,23 @@ try {
   });
   assert.equal(assessmentRetry.status, 200, 'assessment idempotent retry should succeed');
   assert.equal((await assessmentRetry.json()).replayed, true, 'assessment retry should be reported as replayed');
+
+  const conflictingAssessmentResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+    body: JSON.stringify({
+      ...assessmentPayload,
+      customer_acceptance: {
+        ...assessmentPayload.customer_acceptance,
+        evidence_reference: 'different-buyer-confirmation-456',
+      },
+    }),
+  });
+  assert.equal(conflictingAssessmentResponse.status, 409,
+    'reusing an assessment idempotency key with changed evidence must conflict');
+  assert.equal((await conflictingAssessmentResponse.json()).error?.code,
+    'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT');
+
   const assessedStoredOrder = (await store.getOrders(tenant.chatId)).find(order => order.server_order_id === requestOrder.server_order_id);
   assert.equal(assessedStoredOrder.service_delivery_request.assessment_status, 'READY_FOR_FULFILLMENT',
     'the canonical seller order must persist the authoritative readiness state');
