@@ -354,6 +354,11 @@ try {
   const instantAssessmentResult = await instantAssessmentResponse.json();
   assert.equal(instantAssessmentResult.service_delivery?.assessment_status, 'READY_FOR_FULFILLMENT');
   assert.equal(instantAssessmentResult.service_delivery?.assessment?.availability_confirmed, true);
+  assert.equal(instantAssessmentResult.service_delivery?.assessment?.availability_confirmation?.source,
+    'authorized_operator_recorded',
+    'recorded availability must not be represented as externally verified');
+  assert.equal(instantAssessmentResult.service_delivery?.assessment?.availability_confirmation?.recorded_by_user_id,
+    String(user.id));
   assert.equal(instantAssessmentResult.service_delivery?.assignment_status, 'NOT_ASSIGNED',
     'instant eligibility must not automatically assign a courier');
 
