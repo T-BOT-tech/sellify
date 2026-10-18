@@ -438,6 +438,14 @@ try {
   );
   assert.equal(transitionReplay.status, 'out_for_delivery',
     'an exact fulfillment command retry should return the canonical fulfillment');
+  await assert.rejects(
+    () => store.transitionOrderFulfillment(
+      tenant.chatId, requestOrder.server_order_id, 'delivered', session,
+      { idempotencyKey: 'parcel-fulfillment-delivered-without-proof' }
+    ),
+    error => error?.code === 'DELIVERY_PROOF_REQUIRED' && error?.statusCode === 400,
+    'direct fulfillment completion must reject missing delivery proof'
+  );
 
   const assessmentRetry = await fetch(assessmentUrl, {
     method: 'POST',
