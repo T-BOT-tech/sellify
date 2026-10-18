@@ -417,34 +417,42 @@ try {
     'reusing an assignment key with a different courier must conflict'
   );
 
-  const transitionCommandKey = 'parcel-fulfillment-transition-idempotency';
-  const transitionedFulfillment = await store.transitionOrderFulfillment(
-    tenant.chatId, requestOrder.server_order_id, 'out_for_delivery', session,
-    { idempotencyKey: transitionCommandKey }
-  );
-  assert.equal(transitionedFulfillment.status, 'out_for_delivery',
-    'the first fulfillment command should apply its requested transition');
   await assert.rejects(
     () => store.transitionOrderFulfillment(
-      tenant.chatId, requestOrder.server_order_id, 'delivered', session,
-      { idempotencyKey: transitionCommandKey }
+      tenant.chatId, requestOrder.server_order_id, 'out_for_delivery', session,
+      { idempotencyKey: 'parcel-direct-transition-bypasses-assignment' }
     ),
-    error => error?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT' && error?.statusCode === 409,
-    'reusing a fulfillment command key with a different target status must conflict'
+    error => error?.code === 'DELIVERY_ASSIGNMENT_LIFECYCLE_REQUIRED' && error?.statusCode === 409,
+    'an active courier assignment must advance through its own lifecycle'
   );
-  const transitionReplay = await store.transitionOrderFulfillment(
-    tenant.chatId, requestOrder.server_order_id, 'out_for_delivery', session,
-    { idempotencyKey: transitionCommandKey }
+  const acceptedAssignment = await store.transitionDeliveryAssignment(
+    tenant.chatId, requestOrder.server_order_id, 'ACCEPTED', session,
+    { idempotencyKey: 'parcel-assignment-accept-transition' }
   );
-  assert.equal(transitionReplay.status, 'out_for_delivery',
-    'an exact fulfillment command retry should return the canonical fulfillment');
+  assert.equal(acceptedAssignment.status, 'ACCEPTED',
+    'courier assignment should accept before dispatch');
   await assert.rejects(
-    () => store.transitionOrderFulfillment(
-      tenant.chatId, requestOrder.server_order_id, 'delivered', session,
-      { idempotencyKey: 'parcel-fulfillment-delivered-without-proof' }
+    () => store.transitionDeliveryAssignment(
+      tenant.chatId, requestOrder.server_order_id, 'OUT_FOR_DELIVERY', session,
+      { idempotencyKey: 'parcel-assignment-outbound-reused-key' }
     ),
-    error => error?.code === 'DELIVERY_PROOF_REQUIRED' && error?.statusCode === 400,
-    'direct fulfillment completion must reject missing delivery proof'
+    error => error?.code === 'INVALID_ASSIGNMENT_TRANSITION' && error?.statusCode === 409,
+    'assignment cannot skip required lifecycle transitions'
+  );
+  const outboundAssignment = await store.transitionDeliveryAssignment(
+    tenant.chatId, requestOrder.server_order_id, 'OUT_FOR_DELIVERY', session,
+    { idempotencyKey: 'parcel-assignment-outbound-transition' }
+  );
+  assert.equal(outboundAssignment.status, 'OUT_FOR_DELIVERY',
+    'assignment and fulfillment should advance together through the canonical lifecycle');
+  const fulfillmentAfterDispatch = await store.getCoreFulfillment?.(tenant.chatId, requestOrder.server_order_id);
+  assert.equal(
+    (await store.transitionOrderFulfillment(
+      tenant.chatId, requestOrder.server_order_id, 'delivered', session,
+      { idempotencyKey: 'parcel-direct-delivery-completion' }
+    ).catch(error => ({ error }))).error?.code,
+    'DELIVERY_ASSIGNMENT_LIFECYCLE_REQUIRED',
+    'direct completion must not bypass the active assignment lifecycle'
   );
 
   const assessmentRetry = await fetch(assessmentUrl, {
