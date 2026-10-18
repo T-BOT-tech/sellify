@@ -9326,9 +9326,16 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     if (!courier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
     db.exec('BEGIN IMMEDIATE');
     try {
-      const existingCommand = db.prepare('SELECT * FROM delivery_assignments WHERE organization_id = ? AND last_command_key = ? ORDER BY updated_at DESC LIMIT 1').get(organizationId, commandKey);
+      const existingCommand = db.prepare(`
+        SELECT da.*, f.server_order_id AS assigned_server_order_id
+        FROM delivery_assignments da
+        JOIN fulfillments f ON f.id = da.fulfillment_id
+        WHERE da.organization_id = ? AND da.last_command_key = ?
+        ORDER BY da.updated_at DESC LIMIT 1
+      `).get(organizationId, commandKey);
       if (existingCommand) {
-        if (String(existingCommand.status) !== 'ASSIGNED') {
+        if (String(existingCommand.assigned_server_order_id) !== String(serverOrderId)
+          || String(existingCommand.status) !== 'ASSIGNED') {
           throw Object.assign(new Error('Idempotency key was already used for a different delivery command'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT' });
         }
         db.exec('COMMIT');
@@ -9378,11 +9385,18 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
   }
   db.exec('BEGIN IMMEDIATE');
   try {
-    const existingCommand = db.prepare('SELECT * FROM delivery_assignments WHERE organization_id = ? AND last_command_key = ? ORDER BY updated_at DESC LIMIT 1').get(organizationId, commandKey);
+    const existingCommand = db.prepare(`
+      SELECT da.*, f.server_order_id AS assigned_server_order_id
+      FROM delivery_assignments da
+      JOIN fulfillments f ON f.id = da.fulfillment_id
+      WHERE da.organization_id = ? AND da.last_command_key = ?
+      ORDER BY da.updated_at DESC LIMIT 1
+    `).get(organizationId, commandKey);
     if (existingCommand) {
-      const replayCompatible = normalizedAction === 'REASSIGN_EXCEPTION'
+      const sameOrder = String(existingCommand.assigned_server_order_id) === String(serverOrderId);
+      const replayCompatible = sameOrder && (normalizedAction === 'REASSIGN_EXCEPTION'
         ? String(existingCommand.status) === 'ASSIGNED'
-        : String(existingCommand.status) === normalizedAction;
+        : String(existingCommand.status) === normalizedAction);
       if (!replayCompatible) throw Object.assign(new Error('Idempotency key was already used for a different delivery command'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT' });
       db.exec('COMMIT');
       return existingCommand;
