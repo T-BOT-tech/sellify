@@ -240,7 +240,7 @@ try {
       'product stock should be decremented once despite retry');
     const balance = mixedVerificationDb.prepare(`SELECT COALESCE(SUM(quantity), 0) AS quantity
       FROM inventory_movements WHERE organization_id = ? AND location_id = ? AND product_id = ?`).get(
-      String(tenant.organizationId), String(defaultLocationId), 'soap-http');
+      String(session.organizationId), String(defaultLocationId), 'soap-http');
     assert.equal(Number(balance.quantity), 6, 'product stock should move from 8 to 6 exactly once');
     const serviceReservation = mixedVerificationDb.prepare(`SELECT COUNT(*) AS n FROM marketplace_inventory_reservations
       WHERE marketplace_order_id = ? AND product_id = ?`).get(mixedOrderId, 'consultation-http');
