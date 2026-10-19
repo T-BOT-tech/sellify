@@ -956,6 +956,11 @@ try {
   );
   assert.ok(buyerFulfillmentExperience.fulfillments.length > 0,
     'Telegram buyer tracking should expose the canonical fulfillment');
+  const canonicalFulfillmentCount = trackingDb.prepare(
+    'SELECT COUNT(*) AS count FROM fulfillments WHERE server_order_id = ? AND organization_id = ?'
+  ).get(String(requestOrder.server_order_id), String(session.organizationId)).count;
+  assert.equal(buyerFulfillmentExperience.fulfillments.length, canonicalFulfillmentCount,
+    'canonical tracking must not multiply canonical fulfillments by joining legacy marketplace rows');
   assert.ok(buyerFulfillmentExperience.fulfillments.some(item =>
     item.status === 'DELIVERED'
       && item.proof?.type === 'photo'
