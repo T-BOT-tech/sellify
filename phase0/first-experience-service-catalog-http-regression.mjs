@@ -949,6 +949,28 @@ try {
   );
   assert.equal(deliveredAssignment.status, 'DELIVERED',
     'canonical delivery assignment should complete with valid evidence');
+  // Deliberately retain multiple legacy rows beside canonical fulfillment.
+  // They must not multiply the canonical tracking projection.
+  const canonicalProjectionDb = store.getDatabaseForTests();
+  const canonicalProjectionSellerOrder = canonicalProjectionDb.prepare(
+    'SELECT id FROM marketplace_seller_orders WHERE marketplace_order_id = ? AND seller_id = ?'
+  ).get(requestedAssessment.marketplace_order_id, String(tenant.chatId));
+  assert.ok(canonicalProjectionSellerOrder?.id,
+    'canonical tracking fixture should have a seller-order row');
+  const projectionLegacyNow = new Date().toISOString();
+  for (const suffix of ['a', 'b']) {
+    canonicalProjectionDb.prepare(
+      'INSERT INTO marketplace_fulfillments (id,seller_order_id,status,fulfillment_type,tracking_reference,created_at,updated_at) VALUES (?,?,?,?,?,?,?)'
+    ).run(
+      'stale-canonical-projection-' + suffix,
+      canonicalProjectionSellerOrder.id,
+      'out_for_delivery',
+      'delivery',
+      'STALE-CANONICAL-' + suffix,
+      projectionLegacyNow,
+      projectionLegacyNow,
+    );
+  }
   const buyerFulfillmentExperience = await store.getTelegramBuyerFulfillmentExperience(
     tenant.chatId,
     'parcel-request-buyer-http',
