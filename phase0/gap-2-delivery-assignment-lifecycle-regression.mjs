@@ -14,9 +14,9 @@ const fulfillmentEnd = store.indexOf('export function coreFulfillmentContract()'
 assert.ok(fulfillmentStart >= 0 && fulfillmentEnd > fulfillmentStart,
   'canonical fulfillment transition implementation must remain discoverable');
 const fulfillmentTransition = store.slice(fulfillmentStart, fulfillmentEnd);
-assert.match(fulfillmentTransition, /BEGIN IMMEDIATE[\\s\\S]*?SELECT \\* FROM orders WHERE chat_id = \\? AND server_order_id = \\?/,
+assert.match(fulfillmentTransition, /BEGIN IMMEDIATE[\s\S]*?SELECT \* FROM orders WHERE chat_id = \? AND server_order_id = \?/,
   'fulfillment transition must reload canonical order inside the write transaction');
-assert.match(fulfillmentTransition, /SELECT organization_id FROM tenants WHERE chat_id = \\?/,
+assert.match(fulfillmentTransition, /SELECT organization_id FROM tenants WHERE chat_id = \?/,
   'fulfillment transition must revalidate tenant organization inside the transaction');
 assert.match(fulfillmentTransition, /freshCommandFingerprint !== commandFingerprint/,
   'fulfillment transition must reject stale canonical order inputs');
