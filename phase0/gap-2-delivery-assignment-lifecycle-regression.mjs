@@ -80,6 +80,20 @@ assert.ok(
     && assignmentCreation.indexOf('const priorCommand = db.prepare') < assignmentCreation.indexOf('assertServiceDeliveryReadyForExecution(freshOrder)'),
   'initial assignment retries must replay durable command history before rechecking mutable service readiness',
 );
+assert.ok(
+  assignmentCreation.indexOf('const priorCommand = db.prepare') < assignmentCreation.indexOf("assertLogisticsSchedulingAuthorization(actor, organizationId, locationId, 'logistics:scheduling:request')"),
+  'initial assignment retries must replay before rechecking mutable caller authorization',
+);
+assert.ok(
+  assignmentCreation.indexOf('const priorCommand = db.prepare') < assignmentCreation.indexOf('LOGISTICS_ASSIGNMENT_LOCATION_MISMATCH'),
+  'initial assignment retries must replay before validating mutable canonical location against caller input',
+);
+const initialFingerprintStart = assignmentCreation.indexOf('let assignmentFingerprint = crypto.createHash');
+const initialFingerprintEnd = assignmentCreation.indexOf("db.exec('BEGIN IMMEDIATE')", initialFingerprintStart);
+assert.ok(initialFingerprintStart >= 0 && initialFingerprintEnd > initialFingerprintStart,
+  'initial assignment command fingerprint must remain explicit and testable');
+assert.doesNotMatch(assignmentCreation.slice(initialFingerprintStart, initialFingerprintEnd), /location_id/,
+  'initial assignment idempotency fingerprint must not depend on mutable canonical location');
 const assignmentTransitionStart = store.indexOf('export async function transitionDeliveryAssignment(');
 const assignmentTransitionEnd = store.indexOf('export async function ', assignmentTransitionStart + 30);
 assert.ok(assignmentTransitionStart >= 0 && assignmentTransitionEnd > assignmentTransitionStart,
