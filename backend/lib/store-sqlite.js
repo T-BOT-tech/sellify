@@ -5645,20 +5645,19 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
   const outcome = String(input.assessment_outcome || input.assessmentOutcome || '').trim().toUpperCase();
   const orderJson = orderFromRow(orderRow);
   const currentRequest = orderJson?.service_delivery_request;
-  if (!currentRequest) throw Object.assign(new Error('Order is not a logistics service request'), { statusCode: 409, code: 'LOGISTICS_SERVICE_REQUEST_REQUIRED' });
 
   const acceptance = input.customer_acceptance && typeof input.customer_acceptance === 'object' ? input.customer_acceptance : {};
   const evidenceType = String(acceptance.evidence_type || acceptance.evidenceType || '').trim().toLowerCase();
   const evidenceReference = String(acceptance.evidence_reference || acceptance.evidenceReference || '').trim();
   const accepted = acceptance.accepted === true;
-  const deliveryModel = String(currentRequest.delivery_model || '').trim().toLowerCase();
+  const deliveryModel = String(currentRequest?.delivery_model || '').trim().toLowerCase();
   const availabilityConfirmed = input.availability_confirmed === true;
   const acceptedEvidenceTypes = new Set(['customer_message', 'telegram_confirmation', 'recorded_verbal_consent', 'signed_confirmation']);
   // Fingerprint normalized, outcome-relevant input only; timestamps and actor context are server-derived.
   const commandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
     assessment_outcome: outcome,
     ...(outcome === 'ELIGIBLE' ? {
-      availability_confirmed: deliveryModel === 'instant' ? availabilityConfirmed : null,
+      availability_confirmed: availabilityConfirmed,
       customer_acceptance: {
         accepted,
         evidence_type: evidenceType,
@@ -5692,7 +5691,6 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
     }
     const freshOrder = orderFromRow(freshRow);
     const request = freshOrder?.service_delivery_request;
-    if (!request) throw Object.assign(new Error('Order is not a logistics service request'), { statusCode: 409, code: 'LOGISTICS_SERVICE_REQUEST_REQUIRED' });
     const priorAssessmentCommand = db.prepare(`
       SELECT * FROM service_delivery_assessment_commands
       WHERE organization_id = ? AND command_key = ?
@@ -5713,6 +5711,7 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
       db.exec('COMMIT');
       return { order: freshOrder, service_delivery: request, replayed: true };
     }
+    if (!request) throw Object.assign(new Error('Order is not a logistics service request'), { statusCode: 409, code: 'LOGISTICS_SERVICE_REQUEST_REQUIRED' });
     // Only new assessment commands validate mutable location and current
     // scheduling authorization. A committed retry must resolve from durable
     // command history before location changes can reject it.
