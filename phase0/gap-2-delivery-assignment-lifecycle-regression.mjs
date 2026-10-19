@@ -9,6 +9,20 @@ assert.match(store, /CREATE UNIQUE INDEX idx_delivery_assignments_active_fulfill
 assert.match(store, /last_command_key TEXT/);
 assert.match(store, /IDEMPOTENCY_KEY_REUSE_CONFLICT/);
 assert.match(store, /transitionDeliveryAssignment/);
+const fulfillmentStart = store.indexOf('function transitionOrderFulfillment(');
+const fulfillmentEnd = store.indexOf('export function coreFulfillmentContract()', fulfillmentStart);
+assert.ok(fulfillmentStart >= 0 && fulfillmentEnd > fulfillmentStart,
+  'canonical fulfillment transition implementation must remain discoverable');
+const fulfillmentTransition = store.slice(fulfillmentStart, fulfillmentEnd);
+assert.match(fulfillmentTransition, /BEGIN IMMEDIATE[\\s\\S]*?SELECT \\* FROM orders WHERE chat_id = \\? AND server_order_id = \\?/,
+  'fulfillment transition must reload canonical order inside the write transaction');
+assert.match(fulfillmentTransition, /SELECT organization_id FROM tenants WHERE chat_id = \\?/,
+  'fulfillment transition must revalidate tenant organization inside the transaction');
+assert.match(fulfillmentTransition, /freshCommandFingerprint !== commandFingerprint/,
+  'fulfillment transition must reject stale canonical order inputs');
+assert.match(fulfillmentTransition, /ROLLBACK/,
+  'failed fulfillment transitions must roll back the write transaction');
+
 assert.match(store, /ASSIGNED: new Set\(\['ACCEPTED','CANCELLED','FAILED','REASSIGNED'\]\)/);
 assert.match(store, /ACCEPTED: new Set\(\['OUT_FOR_DELIVERY','CANCELLED','FAILED','REASSIGNED'\]\)/);
 assert.match(store, /OUT_FOR_DELIVERY: new Set\(\['DELIVERED','CANCELLED','FAILED','REASSIGNED'\]\)/);
