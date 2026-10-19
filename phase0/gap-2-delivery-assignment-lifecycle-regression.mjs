@@ -59,6 +59,19 @@ const exceptionResolution = store.slice(exceptionResolutionStart, exceptionResol
 assert.match(exceptionResolution, /BEGIN IMMEDIATE[\s\S]*?const freshCourier = db\.prepare/,
   'exception reassignment must revalidate target courier authorization inside the write transaction');
 
+assert.match(store, /if \(!applied\.includes\(71\)\)\/, 'durable assignment command history must use an additive migration');
+assert.match(store, /CREATE TABLE IF NOT EXISTS delivery_assignment_commands/, 'assignment lifecycle commands must persist beyond last_command_key');
+const assignmentTransitionStart = store.indexOf('export async function transitionDeliveryAssignment(');
+const assignmentTransitionEnd = store.indexOf('\\nexport async function ', assignmentTransitionStart + 30);
+assert.ok(assignmentTransitionStart >= 0 && assignmentTransitionEnd > assignmentTransitionStart,
+  'canonical assignment lifecycle transition must remain discoverable');
+const assignmentTransition = store.slice(assignmentTransitionStart, assignmentTransitionEnd);
+assert.match(assignmentTransition, /FROM delivery_assignment_commands[\\s\\S]*?WHERE organization_id = \\? AND command_key = \\?/,
+  'assignment retries must consult durable command history');
+assert.match(assignmentTransition, /existingCommand\\.command_fingerprint\\) !== commandFingerprint/,
+  'historical assignment key reuse with different intent must conflict');
+assert.match(assignmentTransition, /INSERT INTO delivery_assignment_commands/g,
+  'successful assignment lifecycle commands must be recorded durably');
 assert.match(store, /delivery\.assignment\.delivered/);
 assert.match(store, /applyCoreFulfillmentInventoryConsequence/);
 
