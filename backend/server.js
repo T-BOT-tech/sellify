@@ -2902,16 +2902,26 @@ async function handleServiceDeliveryAssessment(req, res, chatId, serverOrderId) 
   const session = await requireSession(req, chatId);
   if (req.method !== 'POST') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
   const body = await readBody(req);
-  // Authorize using the caller's explicit scope (or authenticated session
-  // default), but persist against the order's canonical location. These are
-  // separate concerns: a session default must not rewrite an order's location.
+  // Authorization must use the canonical order location, not a caller-selected
+  // location or a session default. The isolation helper requires a location
+  // record (including its organization), not a bare location ID.
   const canonicalOrder = (await getOrders(chatId)).find(order =>
     String(order.server_order_id || '') === String(serverOrderId));
   const requestedLocationId = body.locationId || body.location_id || null;
-  const authorizationLocationId = requestedLocationId || session.locationId || null;
   const orderLocationId = requestedLocationId || canonicalOrder?.location_id || session.locationId || null;
+  let authorizationLocation = null;
+  if (canonicalOrder?.location_id) {
+    const locations = await listOrganizationLocations(chatId);
+    authorizationLocation = locations.find(location =>
+      String(location.id) === String(canonicalOrder.location_id)) || null;
+    if (!authorizationLocation) {
+      throw Object.assign(new Error('Canonical order location is not available in tenant scope'), {
+        statusCode: 403, code: 'LOCATION_SCOPE_DENIED',
+      });
+    }
+  }
   await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:request', {
-    location: authorizationLocationId,
+    location: authorizationLocation,
     deniedMessage: 'Logistics service assessment permission required',
   });
   const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
