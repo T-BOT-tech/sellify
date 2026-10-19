@@ -935,7 +935,39 @@ try {
     .filter(item => item.id === lostResponseOrder.id).length, 1,
   'response-loss retry must not duplicate canonical order');
 
-  console.log('PASS: service catalog HTTP journey, actual frontend sync response-loss recovery, and idempotent order sync');
+  // Complete the existing canonical delivery and prove Telegram buyer tracking
+  // projects that state instead of showing the stale marketplace fulfillment row.
+  const deliveredAssignment = await store.transitionDeliveryAssignment(
+    tenant.chatId,
+    requestOrder.server_order_id,
+    'DELIVERED',
+    session,
+    {
+      idempotencyKey: 'parcel-assignment-delivered-canonical-projection',
+      proof: { type: 'photo', reference: 'proof://parcel-request-delivered-1' },
+    },
+  );
+  assert.equal(deliveredAssignment.status, 'DELIVERED',
+    'canonical delivery assignment should complete with valid evidence');
+  const buyerFulfillmentExperience = await store.getTelegramBuyerFulfillmentExperience(
+    tenant.chatId,
+    'parcel-request-buyer-http',
+    requestedAssessment.marketplace_order_id,
+  );
+  assert.ok(buyerFulfillmentExperience.fulfillments.length > 0,
+    'Telegram buyer tracking should expose the canonical fulfillment');
+  assert.ok(buyerFulfillmentExperience.fulfillments.some(item =>
+    item.status === 'DELIVERED'
+      && item.proof?.type === 'photo'
+      && item.proof?.reference === 'proof://parcel-request-delivered-1'
+  ), 'Telegram buyer tracking must project canonical delivered status and completion proof');
+  assert.equal(
+    buyerFulfillmentExperience.authority.fulfillment,
+    'canonical_logistics_with_legacy_marketplace_fallback',
+    'buyer tracking must declare canonical Logistics as the operational authority',
+  );
+
+  console.log('PASS: service catalog HTTP journey, canonical Telegram fulfillment projection, frontend sync response-loss recovery, and idempotent order sync');
 } catch (error) {
   console.error(error);
   if (childOutput) console.error('Backend output:\n' + childOutput);
