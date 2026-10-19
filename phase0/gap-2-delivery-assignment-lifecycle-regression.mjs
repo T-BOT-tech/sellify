@@ -252,6 +252,20 @@ assert.match(assignmentTransition, /applyCoreFulfillmentInventoryConsequence\(St
   'delivery completion inventory consequences must use the freshly revalidated canonical order');
 
 
+const assessmentStart = store.indexOf('export async function recordServiceDeliveryAssessment(');
+const assessmentEnd = store.indexOf('export async function ', assessmentStart + 40);
+assert.ok(assessmentStart >= 0 && assessmentEnd > assessmentStart,
+  'canonical service-delivery assessment must remain discoverable');
+const assessmentTransition = store.slice(assessmentStart, assessmentEnd);
+const assessmentReplayLookup = assessmentTransition.indexOf('const priorAssessmentCommand = db.prepare');
+const assessmentLocationCheck = assessmentTransition.indexOf('LOGISTICS_ASSESSMENT_LOCATION_MISMATCH');
+assert.ok(assessmentReplayLookup >= 0 && assessmentLocationCheck > assessmentReplayLookup,
+  'durable assessment replay must be resolved before mutable canonical-location validation');
+assert.ok(
+  assessmentTransition.indexOf('if (priorAssessmentCommand)') < assessmentLocationCheck,
+  'a committed assessment retry must not be rejected because canonical order location changed later',
+);
+
 const fulfillmentTransitionStart = store.indexOf('export async function transitionOrderFulfillment(');
 const fulfillmentTransitionEnd = store.indexOf('export async function ', fulfillmentTransitionStart + 40);
 assert.ok(fulfillmentTransitionStart >= 0 && fulfillmentTransitionEnd > fulfillmentTransitionStart,
