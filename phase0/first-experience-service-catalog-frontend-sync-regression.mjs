@@ -9,6 +9,7 @@ const checkoutSource = await readFile(new URL('../app/src/orders/checkout.js', i
 const marketplaceCheckoutSource = await readFile(new URL('../app/src/marketplace/checkout.js', import.meta.url), 'utf8');
 const mainSource = await readFile(new URL('../app/src/main.js', import.meta.url), 'utf8');
 const appHtmlSource = await readFile(new URL('../app/index.html', import.meta.url), 'utf8');
+const storeSource = await readFile(new URL('../backend/lib/store-sqlite.js', import.meta.url), 'utf8');
 
 // Guard the real sanitizer implementation used by catalog pull/push. The
 // spread preserves item_type while the following fields normalize ID and price.
@@ -25,6 +26,11 @@ assert.match(marketplaceCheckoutSource, /item_type:\s*listing\.item_type === 'se
 // Parcel-service intake is collected in the existing marketplace checkout and
 // sent through the same idempotent canonical checkout request (including the
 // Telegram handoff); no second order or delivery authority is introduced.
+const marketplaceListingStart = storeSource.indexOf('export async function searchMarketplaceListings');
+const marketplaceListingEnd = storeSource.indexOf('export async function createMarketplaceOrder', marketplaceListingStart);
+const marketplaceListingSource = storeSource.slice(marketplaceListingStart, marketplaceListingEnd);
+assert.match(marketplaceListingSource, /service_profile: product\.service_profile \|\| null/);
+assert.match(marketplaceListingSource, /delivery_model: product\.delivery_model \|\| null/);
 assert.match(appHtmlSource, /id="marketServiceDeliveryFields"[^>]*style="display:none/);
 assert.match(appHtmlSource, /id="marketServicePickup"/);
 assert.match(appHtmlSource, /id="marketServiceDestination"/);
