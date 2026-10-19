@@ -346,6 +346,7 @@ try {
   assert.equal(beforeMixed - afterMixed, 2, 'server catalog type, not client line metadata, determines stock deduction');
   await store.transitionOrderFulfillment(integrationChatId, mixedOrderId, 'delivered', actor, {
     idempotencyKey: 'mixed-order-delivered',
+    proof: { type: 'merchant_confirmation', reference: 'mixed-order-proof-1' },
   });
   const afterMixedRetry = (await store.getInventoryBalances(integrationChatId))
     .find(row => row.productId === 'soap-e2e')?.quantity;
