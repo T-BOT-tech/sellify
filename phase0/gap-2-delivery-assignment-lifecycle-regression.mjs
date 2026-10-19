@@ -67,6 +67,20 @@ assert.ok(
   'durable assessment key reuse must be resolved before the embedded per-order replay check',
 );
 assert.ok(
+  serviceAssessment.indexOf("assertLogisticsSchedulingAuthorization(actor, organizationId, transactionLocationId, 'logistics:scheduling:request')")
+    < serviceAssessment.indexOf('const priorAssessmentCommand = db.prepare'),
+  'assessment replay must still require current server-side tenant/location scheduling authorization',
+);
+assert.ok(
+  serviceAssessment.indexOf("db.exec('BEGIN IMMEDIATE')")
+    < serviceAssessment.indexOf('const priorAssessmentCommand = db.prepare')
+    && serviceAssessment.indexOf("db.prepare('UPDATE orders SET order_json = ?")
+      < serviceAssessment.indexOf('INSERT INTO service_delivery_assessment_commands')
+    && serviceAssessment.indexOf('INSERT INTO service_delivery_assessment_commands')
+      < serviceAssessment.indexOf("db.exec('COMMIT')"),
+  'canonical assessment state and durable command identity must commit in the same transaction',
+);
+assert.ok(
   serviceAssessment.indexOf('assertLogisticsSchedulingAuthorization(actor, organizationId, locationId')
     < serviceAssessment.indexOf("db.exec('BEGIN IMMEDIATE')"),
   'assessment retries must not bypass current preflight authorization',
