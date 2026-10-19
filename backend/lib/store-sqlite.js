@@ -2535,6 +2535,24 @@ if (!applied.includes(39)) {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(70, nowIso());
   }
 
+  // GAP-2.3 — durable courier-assignment command identities across lifecycle changes.
+  if (!applied.includes(71)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS delivery_assignment_commands (
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        command_key TEXT NOT NULL,
+        server_order_id TEXT NOT NULL,
+        command_fingerprint TEXT NOT NULL,
+        result_assignment_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (organization_id, command_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_delivery_assignment_commands_order
+        ON delivery_assignment_commands(organization_id, server_order_id, created_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(71, nowIso());
+  }
+
   // GAP-1.24: fence status-query workers and permit takeover only before
   // provider I/O has been authorized. Legacy IN_PROGRESS commands are treated
   // as provider-in-flight because their execution phase cannot be proven.
@@ -9401,6 +9419,13 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
   const exceptionReason = String(input.reason || input.exceptionReason || input.exception_reason || '').trim().slice(0, 500);
   const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
   if (!commandKey) throw Object.assign(new Error('Idempotency key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
+  const commandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+    action: normalizedAction,
+    target_courier_id: targetCourierId || null,
+    reason: exceptionReason || null,
+    proof: input.proof === undefined ? null : input.proof,
+    location_id: input.locationId || input.location_id || order.location_id || null,
+  })).digest('hex');
   if (normalizedAction === 'REASSIGN_EXCEPTION') {
     if (!targetCourierId) throw Object.assign(new Error('A different courier is required to resolve a delivery exception'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
     db.exec('BEGIN IMMEDIATE');
@@ -9428,20 +9453,19 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
         statusCode: 403, code: 'COURIER_ROLE_REQUIRED',
       });
       const existingCommand = db.prepare(`
-        SELECT da.*, f.server_order_id AS assigned_server_order_id
-        FROM delivery_assignments da
-        JOIN fulfillments f ON f.id = da.fulfillment_id
-        WHERE da.organization_id = ? AND da.last_command_key = ?
-        ORDER BY CASE WHEN da.status = 'ASSIGNED' THEN 0 ELSE 1 END, da.updated_at DESC LIMIT 1
+        SELECT * FROM delivery_assignment_commands
+        WHERE organization_id = ? AND command_key = ?
       `).get(organizationId, commandKey);
       if (existingCommand) {
-        if (String(existingCommand.assigned_server_order_id) !== String(serverOrderId)
-          || String(existingCommand.status) !== 'ASSIGNED'
-          || String(existingCommand.courier_user_id) !== targetCourierId) {
+        if (String(existingCommand.server_order_id) !== String(serverOrderId)
+          || String(existingCommand.command_fingerprint) !== commandFingerprint) {
           throw Object.assign(new Error('Idempotency key was already used for a different delivery command'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT' });
         }
+        const replay = db.prepare('SELECT * FROM delivery_assignments WHERE id = ? AND organization_id = ?')
+          .get(existingCommand.result_assignment_id, organizationId);
+        if (!replay) throw Object.assign(new Error('Assignment result for prior command is missing'), { statusCode: 409, code: 'ASSIGNMENT_REPLAY_STATE_MISSING' });
         db.exec('COMMIT');
-        return existingCommand;
+        return replay;
       }
       const exception = db.prepare(`SELECT da.* FROM delivery_assignments da JOIN fulfillments f ON f.id = da.fulfillment_id WHERE f.server_order_id = ? AND da.organization_id = ? AND da.status IN ('CANCELLED','FAILED') ORDER BY da.updated_at DESC LIMIT 1`).get(String(serverOrderId), organizationId);
       if (!exception) throw Object.assign(new Error('No unresolved delivery exception exists'), { statusCode: 409, code: 'EXCEPTION_NOT_FOUND' });
@@ -9463,6 +9487,8 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
       db.prepare(`INSERT INTO delivery_assignments (id,fulfillment_id,organization_id,location_id,courier_user_id,status,assignment_key,assigned_by_user_id,assigned_at,updated_at,version,last_command_key) VALUES (?,?,?,?,?,'ASSIGNED',?,?,?,?,1,?)`).run(newId, exception.fulfillment_id, organizationId, locationId ? String(locationId) : null, targetCourierId, assignmentKey, actor?.userId || null, now, now, commandKey);
       const result = db.prepare('SELECT * FROM delivery_assignments WHERE id = ?').get(newId);
       audit(String(chatId), 'delivery.assignment.exception_resolved', 'delivery_assignment', newId, { orderId: String(serverOrderId), previousAssignmentId: exception.id, previousStatus: exception.status, previousCourierUserId: String(exception.courier_user_id), courierUserId: targetCourierId, commandKey, resolutionReason: exceptionReason }, { organizationId, locationId, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
+      db.prepare('INSERT INTO delivery_assignment_commands (organization_id, command_key, server_order_id, command_fingerprint, result_assignment_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(organizationId, commandKey, String(serverOrderId), commandFingerprint, newId, now);
       db.exec('COMMIT');
       return result;
     } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
@@ -9499,24 +9525,19 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
       });
     }
     const existingCommand = db.prepare(`
-      SELECT da.*, f.server_order_id AS assigned_server_order_id
-      FROM delivery_assignments da
-      JOIN fulfillments f ON f.id = da.fulfillment_id
-      WHERE da.organization_id = ? AND da.last_command_key = ?
-      ORDER BY CASE WHEN da.status = 'ASSIGNED' THEN 0 ELSE 1 END, da.updated_at DESC LIMIT 1
+    SELECT * FROM delivery_assignment_commands
+    WHERE organization_id = ? AND command_key = ?
     `).get(organizationId, commandKey);
     if (existingCommand) {
-      const sameOrder = String(existingCommand.assigned_server_order_id) === String(serverOrderId);
-      const expectedReplayStatus = ['REASSIGNED', 'REASSIGN_EXCEPTION'].includes(normalizedAction)
-        ? 'ASSIGNED'
-        : normalizedAction;
-      const reassignmentReplay = ['REASSIGNED', 'REASSIGN_EXCEPTION'].includes(normalizedAction);
-      const replayCompatible = sameOrder
-        && String(existingCommand.status) === expectedReplayStatus
-        && (!reassignmentReplay || String(existingCommand.courier_user_id) === targetCourierId);
-      if (!replayCompatible) throw Object.assign(new Error('Idempotency key was already used for a different delivery command'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT' });
-      db.exec('COMMIT');
-      return existingCommand;
+    if (String(existingCommand.server_order_id) !== String(serverOrderId)
+      || String(existingCommand.command_fingerprint) !== commandFingerprint) {
+      throw Object.assign(new Error('Idempotency key was already used for a different delivery command'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT' });
+    }
+    const replay = db.prepare('SELECT * FROM delivery_assignments WHERE id = ? AND organization_id = ?')
+      .get(existingCommand.result_assignment_id, organizationId);
+    if (!replay) throw Object.assign(new Error('Assignment result for prior command is missing'), { statusCode: 409, code: 'ASSIGNMENT_REPLAY_STATE_MISSING' });
+    db.exec('COMMIT');
+    return replay;
     }
     const active = db.prepare(`SELECT da.* FROM delivery_assignments da JOIN fulfillments f ON f.id = da.fulfillment_id WHERE f.server_order_id = ? AND da.organization_id = ? AND da.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY') ORDER BY da.updated_at DESC LIMIT 1`).get(String(serverOrderId), organizationId);
     if (!active) throw Object.assign(new Error('No active courier assignment exists'), { statusCode: 409, code: 'ASSIGNMENT_REQUIRED' });
@@ -9568,6 +9589,8 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     } else {
       audit(String(chatId), 'delivery.assignment.' + normalizedAction.toLowerCase(), 'delivery_assignment', active.id, { orderId: String(serverOrderId), from: current, to: normalizedAction, commandKey, ...(exceptionReason ? { exceptionReason } : {}) }, { organizationId, locationId: active.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
     }
+    db.prepare('INSERT INTO delivery_assignment_commands (organization_id, command_key, server_order_id, command_fingerprint, result_assignment_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(organizationId, commandKey, String(serverOrderId), commandFingerprint, result.id, now);
     db.exec('COMMIT');
     return result;
   } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
