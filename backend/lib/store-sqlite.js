@@ -9536,8 +9536,12 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     try {
       const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
         .get(String(chatId));
-      const freshOrderRow = db.prepare('SELECT server_order_id, location_id FROM orders WHERE chat_id = ? AND server_order_id = ?')
-        .get(String(chatId), String(serverOrderId));
+      const freshOrderRow = db.prepare(`SELECT o.server_order_id,
+        (SELECT f.location_id FROM fulfillments f
+         WHERE f.server_order_id = o.server_order_id AND f.organization_id = ?
+         ORDER BY f.created_at DESC LIMIT 1) AS location_id
+        FROM orders o WHERE o.chat_id = ? AND o.server_order_id = ?`)
+        .get(organizationId, String(chatId), String(serverOrderId));
       if (String(freshTenantRow?.organization_id || '') !== organizationId || !freshOrderRow) {
         throw Object.assign(new Error('Tenant or order organization changed during delivery exception resolution'), {
           statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
@@ -9619,8 +9623,12 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
   try {
     const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
       .get(String(chatId));
-    const freshOrderRow = db.prepare('SELECT server_order_id, location_id FROM orders WHERE chat_id = ? AND server_order_id = ?')
-      .get(String(chatId), String(serverOrderId));
+    const freshOrderRow = db.prepare(`SELECT o.server_order_id,
+      (SELECT f.location_id FROM fulfillments f
+       WHERE f.server_order_id = o.server_order_id AND f.organization_id = ?
+       ORDER BY f.created_at DESC LIMIT 1) AS location_id
+      FROM orders o WHERE o.chat_id = ? AND o.server_order_id = ?`)
+      .get(organizationId, String(chatId), String(serverOrderId));
     if (String(freshTenantRow?.organization_id || '') !== organizationId || !freshOrderRow) {
       throw Object.assign(new Error('Tenant or order organization changed during delivery assignment transition'), {
         statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
