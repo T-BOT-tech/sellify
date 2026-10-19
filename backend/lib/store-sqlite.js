@@ -8612,10 +8612,6 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
         statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
       });
     }
-    const freshOrganizationId = String(freshOrderRow.tenant_organization_id || '');
-    if (freshOrganizationId !== organizationId) {
-      throw Object.assign(new Error('Order organization changed during assignment'), { statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH' });
-    }
     const freshOrder = orderFromRow(freshOrderRow);
     if (normalizeCoreFulfillmentType(freshOrderRow.fulfillment_type || 'delivery') !== 'delivery') {
       throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
