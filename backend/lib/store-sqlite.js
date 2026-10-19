@@ -9647,6 +9647,39 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
 
     const active = db.prepare(`SELECT da.* FROM delivery_assignments da JOIN fulfillments f ON f.id = da.fulfillment_id WHERE f.server_order_id = ? AND da.organization_id = ? AND da.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY') ORDER BY da.updated_at DESC LIMIT 1`).get(String(serverOrderId), organizationId);
     if (!active) throw Object.assign(new Error('No active courier assignment exists'), { statusCode: 409, code: 'ASSIGNMENT_REQUIRED' });
+    // Courier ownership is revalidated under the same write lock as the
+    // lifecycle mutation. The HTTP handler performs an earlier authorization
+    // check, but that check alone is vulnerable to assignment/role changes
+    // between authorization and this transaction.
+    const actorRoles = Array.isArray(actor?.roles) ? actor.roles.map(role => String(role)) : [];
+    const courierActor = actorRoles.includes('logistics_courier') || String(actor?.role || '') === 'logistics_courier';
+    if (courierActor && ['ACCEPTED', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(normalizedAction)) {
+      const actorUserId = String(actor?.userId || '').trim();
+      const courierMembership = db.prepare(`
+        SELECT mr.scope_type, mr.scope_id
+        FROM memberships m
+        JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
+        WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
+          AND mr.role_id = 'logistics_courier'
+      `).get(actorUserId, String(chatId));
+      if (!actorUserId || !courierMembership) {
+        throw Object.assign(new Error('Active logistics courier role is required'), {
+          statusCode: 403, code: 'COURIER_ROLE_REQUIRED',
+        });
+      }
+      if (String(active.courier_user_id) !== actorUserId) {
+        throw Object.assign(new Error('Courier is not assigned to this delivery'), {
+          statusCode: 403, code: 'COURIER_ASSIGNMENT_REQUIRED',
+        });
+      }
+      const assignedLocationId = canonicalLocationId || (active.location_id ? String(active.location_id) : null);
+      if (courierMembership.scope_type === 'LOCATION'
+        && String(courierMembership.scope_id || '') !== String(assignedLocationId || '')) {
+        throw Object.assign(new Error('Courier role is outside the delivery location scope'), {
+          statusCode: 403, code: 'COURIER_SCOPE_DENIED',
+        });
+      }
+    }
     const current = String(active.status);
     if (!transitions[current]?.has(normalizedAction)) throw Object.assign(new Error('Cannot move assignment from ' + current + ' to ' + normalizedAction), { statusCode: 409, code: 'INVALID_ASSIGNMENT_TRANSITION' });
 
