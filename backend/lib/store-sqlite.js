@@ -8485,7 +8485,6 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
   const tenant = await getTenant(chatId);
   if (!tenant?.organization_id) throw Object.assign(new Error('Order organization is required'), { statusCode: 409 });
   const order = await getCoreFulfillmentOrder(String(chatId), String(serverOrderId));
-  assertServiceDeliveryReadyForExecution(orderFromRow(order));
   const organizationId = String(order.tenant_organization_id || '');
   if (organizationId !== String(tenant.organization_id)) throw Object.assign(new Error('Order organization mismatch'), { statusCode: 403 });
   const requestedLocationId = input.locationId || input.location_id || null;
@@ -8527,7 +8526,6 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
       throw Object.assign(new Error('Order organization changed during assignment'), { statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH' });
     }
     const freshOrder = orderFromRow(freshOrderRow);
-    assertServiceDeliveryReadyForExecution(freshOrder);
     if (normalizeCoreFulfillmentType(freshOrderRow.fulfillment_type || 'delivery') !== 'delivery') {
       throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
     }
@@ -8567,6 +8565,10 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
       db.exec('COMMIT');
       return replay;
     }
+
+    // A durable replay represents a command that already passed readiness.
+    // Enforce current readiness only for a new assignment, not for a retry.
+    assertServiceDeliveryReadyForExecution(freshOrder);
 
     if (!fulfillment) {
       fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?')
