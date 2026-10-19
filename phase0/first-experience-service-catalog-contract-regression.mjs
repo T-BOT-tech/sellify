@@ -338,6 +338,7 @@ try {
   });
   const completedMixed = await store.transitionOrderFulfillment(integrationChatId, mixedOrderId, 'delivered', actor, {
     idempotencyKey: 'mixed-order-delivered',
+    proof: { type: 'merchant_confirmation', reference: 'mixed-order-proof-1' },
   });
   assert.equal(completedMixed.status, 'delivered');
   const afterMixed = (await store.getInventoryBalances(integrationChatId))
@@ -389,6 +390,7 @@ try {
   });
   const locationlessCompleted = await store.transitionOrderFulfillment(locationlessChatId, locationlessServiceOrderId, 'delivered', actor, {
     idempotencyKey: 'locationless-service-delivered',
+    proof: { type: 'merchant_confirmation', reference: 'locationless-service-proof-1' },
   });
   assert.equal(locationlessCompleted.status, 'delivered', 'service fulfillment must complete with zero physical locations');
 
