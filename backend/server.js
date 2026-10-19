@@ -2911,9 +2911,10 @@ async function handleServiceDeliveryAssessment(req, res, chatId, serverOrderId) 
   const orderLocationId = requestedLocationId || canonicalOrder?.location_id || session.locationId || null;
   let authorizationLocation = null;
   if (canonicalOrder?.location_id) {
-    const locations = await listOrganizationLocations(chatId);
-    authorizationLocation = locations.find(location =>
-      String(location.id) === String(canonicalOrder.location_id)) || null;
+    // Historical orders can retain a location that is now inactive. Resolve
+    // the canonical record by tenant organization rather than the active-only
+    // location list; authorization is about tenant ownership, not active status.
+    authorizationLocation = await getOrganizationLocation(chatId, canonicalOrder.location_id);
     if (!authorizationLocation) {
       throw Object.assign(new Error('Canonical order location is not available in tenant scope'), {
         statusCode: 403, code: 'LOCATION_SCOPE_DENIED',
