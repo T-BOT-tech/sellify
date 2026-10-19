@@ -2902,14 +2902,16 @@ async function handleServiceDeliveryAssessment(req, res, chatId, serverOrderId) 
   const session = await requireSession(req, chatId);
   if (req.method !== 'POST') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
   const body = await readBody(req);
-  // Authorize against the order's canonical location when the caller did not
-  // explicitly select one. A session's default location is not a substitute
-  // for the location attached to this particular order.
+  // Authorize using the caller's explicit scope (or authenticated session
+  // default), but persist against the order's canonical location. These are
+  // separate concerns: a session default must not rewrite an order's location.
   const canonicalOrder = (await getOrders(chatId)).find(order =>
     String(order.server_order_id || '') === String(serverOrderId));
-  const locationId = body.locationId || body.location_id || canonicalOrder?.location_id || session.locationId || null;
+  const requestedLocationId = body.locationId || body.location_id || null;
+  const authorizationLocationId = requestedLocationId || session.locationId || null;
+  const orderLocationId = requestedLocationId || canonicalOrder?.location_id || session.locationId || null;
   await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:request', {
-    location: locationId,
+    location: authorizationLocationId,
     deniedMessage: 'Logistics service assessment permission required',
   });
   const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
@@ -2918,7 +2920,7 @@ async function handleServiceDeliveryAssessment(req, res, chatId, serverOrderId) 
   }
   const result = await recordServiceDeliveryAssessment(chatId, serverOrderId, {
     ...body,
-    locationId,
+    locationId: orderLocationId,
     idempotencyKey,
   }, session);
   return sendJSON(res, 200, {
