@@ -9453,18 +9453,10 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
           statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
         });
       }
-      // Revalidate target courier membership and role under the write lock so
-      // concurrent role revocation cannot authorize a stale reassignment.
-      const freshCourier = db.prepare(`
-        SELECT m.user_id, mr.scope_type, mr.scope_id
-        FROM memberships m
-        JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
-        WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
-          AND mr.role_id = 'logistics_courier'
-      `).get(targetCourierId, String(chatId));
-      if (!freshCourier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), {
-        statusCode: 403, code: 'COURIER_ROLE_REQUIRED',
-      });
+      // Replay an already-committed command before checking mutable courier
+      // membership. A role revoked after the original success must not turn a
+      // safe retry into a different outcome. Tenant/order scope and fingerprint
+      // are still revalidated before replay.
       const existingCommand = db.prepare(`
         SELECT * FROM delivery_assignment_commands
         WHERE organization_id = ? AND command_key = ?
@@ -9480,6 +9472,19 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
         db.exec('COMMIT');
         return replay;
       }
+      // For a new command, revalidate target courier membership and role under
+      // the write lock so concurrent role revocation cannot authorize a stale
+      // reassignment.
+      const freshCourier = db.prepare(`
+        SELECT m.user_id, mr.scope_type, mr.scope_id
+        FROM memberships m
+        JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
+        WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
+          AND mr.role_id = 'logistics_courier'
+      `).get(targetCourierId, String(chatId));
+      if (!freshCourier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), {
+        statusCode: 403, code: 'COURIER_ROLE_REQUIRED',
+      });
       const exception = db.prepare(`SELECT da.* FROM delivery_assignments da JOIN fulfillments f ON f.id = da.fulfillment_id WHERE f.server_order_id = ? AND da.organization_id = ? AND da.status IN ('CANCELLED','FAILED') ORDER BY da.updated_at DESC LIMIT 1`).get(String(serverOrderId), organizationId);
       if (!exception) throw Object.assign(new Error('No unresolved delivery exception exists'), { statusCode: 409, code: 'EXCEPTION_NOT_FOUND' });
       const canonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
