@@ -2902,7 +2902,12 @@ async function handleServiceDeliveryAssessment(req, res, chatId, serverOrderId) 
   const session = await requireSession(req, chatId);
   if (req.method !== 'POST') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
   const body = await readBody(req);
-  const locationId = body.locationId || body.location_id || session.locationId || null;
+  // Authorize against the order's canonical location when the caller did not
+  // explicitly select one. A session's default location is not a substitute
+  // for the location attached to this particular order.
+  const canonicalOrder = (await getOrders(chatId)).find(order =>
+    String(order.server_order_id || '') === String(serverOrderId));
+  const locationId = body.locationId || body.location_id || canonicalOrder?.location_id || session.locationId || null;
   await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:request', {
     location: locationId,
     deniedMessage: 'Logistics service assessment permission required',
