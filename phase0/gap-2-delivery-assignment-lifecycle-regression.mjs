@@ -279,6 +279,23 @@ assert.match(assignmentTransition, /const locationId = canonicalLocationId \|\| 
   'normal reassignment must not let request input override canonical order location');
 assert.match(assignmentTransition, /applyCoreFulfillmentInventoryConsequence\(String\(chatId\), updatedFulfillment, orderFromRow\(freshOrderRow\), actor\)/,
   'delivery completion inventory consequences must use the freshly revalidated canonical order');
+const activeAssignmentLookup = assignmentTransition.indexOf('const active = db.prepare');
+const deliveredTransactionStart = assignmentTransition.lastIndexOf("db.exec('BEGIN IMMEDIATE')", activeAssignmentLookup);
+const deliveredCommit = assignmentTransition.indexOf("db.exec('COMMIT')", activeAssignmentLookup);
+const deliveredRollback = assignmentTransition.indexOf("db.exec('ROLLBACK')", deliveredCommit);
+const inventoryConsequenceWrite = assignmentTransition.indexOf('applyCoreFulfillmentInventoryConsequence', activeAssignmentLookup);
+const deliveredAuditWrite = assignmentTransition.indexOf("delivery.assignment.delivered", activeAssignmentLookup);
+const commandHistoryWrite = assignmentTransition.indexOf('INSERT INTO delivery_assignment_commands', activeAssignmentLookup);
+assert.ok(
+  deliveredTransactionStart >= 0
+    && deliveredTransactionStart < activeAssignmentLookup
+    && inventoryConsequenceWrite > activeAssignmentLookup
+    && deliveredAuditWrite > inventoryConsequenceWrite
+    && commandHistoryWrite > deliveredAuditWrite
+    && deliveredCommit > commandHistoryWrite
+    && deliveredRollback > deliveredCommit,
+  'delivery state, inventory consequences, audit evidence and durable command history must remain inside one rollback-capable transaction',
+);
 
 
 const assessmentStart = store.indexOf('export async function recordServiceDeliveryAssessment(');
