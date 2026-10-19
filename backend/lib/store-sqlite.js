@@ -9455,6 +9455,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
           statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
         });
       }
+      const canonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
       // Replay an already-committed command before checking mutable courier
       // membership. A role revoked after the original success must not turn a
       // safe retry into a different outcome. Tenant/order scope and fingerprint
@@ -9489,7 +9490,6 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
       });
       const exception = db.prepare(`SELECT da.* FROM delivery_assignments da JOIN fulfillments f ON f.id = da.fulfillment_id WHERE f.server_order_id = ? AND da.organization_id = ? AND da.status IN ('CANCELLED','FAILED') ORDER BY da.updated_at DESC LIMIT 1`).get(String(serverOrderId), organizationId);
       if (!exception) throw Object.assign(new Error('No unresolved delivery exception exists'), { statusCode: 409, code: 'EXCEPTION_NOT_FOUND' });
-      const canonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
       const exceptionFulfillment = db.prepare('SELECT location_id FROM fulfillments WHERE id = ? AND organization_id = ?').get(exception.fulfillment_id, organizationId);
       if (canonicalLocationId && (String(exception.location_id || '') !== canonicalLocationId || String(exceptionFulfillment?.location_id || '') !== canonicalLocationId)) {
         throw Object.assign(new Error('Delivery exception location does not match the canonical order location'), { statusCode: 409, code: 'DELIVERY_ASSIGNMENT_LOCATION_MISMATCH' });
@@ -9533,6 +9533,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
         statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
       });
     }
+    const canonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
     const existingCommand = db.prepare(`
     SELECT * FROM delivery_assignment_commands
     WHERE organization_id = ? AND command_key = ?
@@ -9578,7 +9579,6 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     const now = nowIso();
     const fulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ? AND organization_id = ?').get(active.fulfillment_id, organizationId);
     if (!fulfillment) throw Object.assign(new Error('Fulfillment not found'), { statusCode: 404, code: 'FULFILLMENT_NOT_FOUND' });
-    const canonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
     if (canonicalLocationId && (String(active.location_id || '') !== canonicalLocationId || String(fulfillment.location_id || '') !== canonicalLocationId)) {
       throw Object.assign(new Error('Delivery assignment location does not match the canonical order location'), { statusCode: 409, code: 'DELIVERY_ASSIGNMENT_LOCATION_MISMATCH' });
     }
@@ -9601,14 +9601,14 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
 
     let result = db.prepare('SELECT * FROM delivery_assignments WHERE id = ?').get(active.id);
     if (normalizedAction === 'REASSIGNED') {
-      const locationId = input.locationId || input.location_id || active.location_id || order.location_id || null;
+      const locationId = canonicalLocationId || active.location_id || order.location_id || null;
       const assignmentKey = String(input.assignmentKey || input.assignment_key || ('reassign:' + serverOrderId + ':' + targetCourierId + ':' + commandKey)).trim();
       db.prepare(`INSERT INTO delivery_assignments (id,fulfillment_id,organization_id,location_id,courier_user_id,status,assignment_key,assigned_by_user_id,assigned_at,updated_at,version,last_command_key) VALUES (?,?,?,?,?,'ASSIGNED',?,?,?,?,1,?)`).run(crypto.randomUUID(), active.fulfillment_id, organizationId, locationId ? String(locationId) : null, targetCourierId, assignmentKey, actor?.userId || null, now, now, commandKey);
       result = db.prepare('SELECT * FROM delivery_assignments WHERE fulfillment_id = ? AND status = \'ASSIGNED\' ORDER BY updated_at DESC LIMIT 1').get(active.fulfillment_id);
       audit(String(chatId), 'delivery.assignment.reassigned', 'delivery_assignment', result.id, { orderId: String(serverOrderId), previousCourierUserId: String(active.courier_user_id), courierUserId: targetCourierId, commandKey }, { organizationId, locationId, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
     } else if (normalizedAction === 'DELIVERED') {
       const updatedFulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(fulfillment.id);
-      const inventoryMovements = applyCoreFulfillmentInventoryConsequence(String(chatId), updatedFulfillment, orderFromRow(order), actor);
+      const inventoryMovements = applyCoreFulfillmentInventoryConsequence(String(chatId), updatedFulfillment, orderFromRow(freshOrderRow), actor);
       audit(String(chatId), 'delivery.assignment.delivered', 'delivery_assignment', active.id, { orderId: String(serverOrderId), from: current, to: normalizedAction, commandKey, proofAttached: true, inventoryMovementIds: inventoryMovements.map(item => item.id) }, { organizationId, locationId: active.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
     } else {
       audit(String(chatId), 'delivery.assignment.' + normalizedAction.toLowerCase(), 'delivery_assignment', active.id, { orderId: String(serverOrderId), from: current, to: normalizedAction, commandKey, ...(exceptionReason ? { exceptionReason } : {}) }, { organizationId, locationId: active.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
