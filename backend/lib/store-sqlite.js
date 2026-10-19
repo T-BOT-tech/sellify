@@ -9900,9 +9900,9 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     }
     if (row.fulfillment_type !== type) throw Object.assign(new Error('Fulfillment type cannot change'), { statusCode: 409, code: 'FULFILLMENT_TYPE_IMMUTABLE' });
     const current = normalizeCoreFulfillmentStatus(row.status);
-    if (!CORE_FULFILLMENT_TRANSITIONS[type][current]?.has(target)) {
-      throw Object.assign(new Error(`Cannot move fulfillment from ${current} to ${target}`), { statusCode: 409, code: 'INVALID_FULFILLMENT_TRANSITION' });
-    }
+    // Assignment lifecycle owns progress whenever an active courier assignment
+    // exists. Check this invariant before generic transition validation so a
+    // direct transition cannot bypass the assignment workflow from any state.
     if (type === 'delivery' && ['out_for_delivery', 'delivered'].includes(target)) {
       const activeAssignment = db.prepare(`
         SELECT id, status FROM delivery_assignments
@@ -9915,6 +9915,9 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
           statusCode: 409, code: 'DELIVERY_ASSIGNMENT_LIFECYCLE_REQUIRED',
         });
       }
+    }
+    if (!CORE_FULFILLMENT_TRANSITIONS[type][current]?.has(target)) {
+      throw Object.assign(new Error(`Cannot move fulfillment from ${current} to ${target}`), { statusCode: 409, code: 'INVALID_FULFILLMENT_TRANSITION' });
     }
     if (type === 'delivery' && target === 'delivered') {
       const proofInput = input.proof === undefined
