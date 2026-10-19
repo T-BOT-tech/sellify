@@ -63,6 +63,14 @@ assert.ok(
     && exceptionResolution.indexOf('const freshCourier = db.prepare') > exceptionResolution.indexOf('const existingCommand = db.prepare'),
   'committed exception reassignment retries must replay durable command history before rechecking mutable courier role',
 );
+assert.ok(
+  exceptionResolution.indexOf('const existingCommand = db.prepare') < exceptionResolution.indexOf('if (!targetCourierId)'),
+  'exception reassignment retries must resolve key reuse before validating a missing target courier',
+);
+assert.ok(
+  exceptionResolution.indexOf('if (!targetCourierId)') < exceptionResolution.indexOf('const freshCourier = db.prepare'),
+  'new exception reassignment commands must require a target before checking its active courier role',
+);
 
 assert.match(store, /if \(!applied\.includes\(71\)\)/, 'durable assignment command history must use an additive migration');
 assert.match(store, /CREATE TABLE IF NOT EXISTS delivery_assignment_commands/, 'assignment lifecycle commands must persist beyond last_command_key');
