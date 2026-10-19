@@ -22,6 +22,8 @@ assert.match(fulfillmentTransition, /freshCommandFingerprint !== commandFingerpr
   'fulfillment transition must reject stale canonical order inputs');
 assert.match(fulfillmentTransition, /ROLLBACK/,
   'failed fulfillment transitions must roll back the write transaction');
+assert.match(fulfillmentTransition, /applyCoreFulfillmentInventoryConsequence\(key, updated, freshOrderJson, actor\)/,
+  'fulfillment inventory consequences must use the order re-read inside the write transaction');
 
 assert.match(store, /ASSIGNED: new Set\(\['ACCEPTED','CANCELLED','FAILED','REASSIGNED'\]\)/);
 assert.match(store, /ACCEPTED: new Set\(\['OUT_FOR_DELIVERY','CANCELLED','FAILED','REASSIGNED'\]\)/);
