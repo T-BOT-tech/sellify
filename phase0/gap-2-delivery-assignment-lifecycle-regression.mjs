@@ -61,6 +61,15 @@ assert.match(exceptionResolution, /BEGIN IMMEDIATE[\s\S]*?const freshCourier = d
 
 assert.match(store, /if \(!applied\.includes\(71\)\)/, 'durable assignment command history must use an additive migration');
 assert.match(store, /CREATE TABLE IF NOT EXISTS delivery_assignment_commands/, 'assignment lifecycle commands must persist beyond last_command_key');
+const assignmentStart = store.indexOf('export async function assignDeliveryCourier(');
+const assignmentEnd = store.indexOf('export async function ', assignmentStart + 30);
+assert.ok(assignmentStart >= 0 && assignmentEnd > assignmentStart,
+  'canonical courier assignment implementation must remain discoverable');
+const assignmentCreation = store.slice(assignmentStart, assignmentEnd);
+assert.match(assignmentCreation, /FROM delivery_assignment_commands[\s\S]*?WHERE organization_id = \? AND command_key = \?/,
+  'initial assignment retries must consult durable command history');
+assert.match(assignmentCreation, /INSERT INTO delivery_assignment_commands/,
+  'successful initial assignments must persist their command identity');
 const assignmentTransitionStart = store.indexOf('export async function transitionDeliveryAssignment(');
 const assignmentTransitionEnd = store.indexOf('export async function ', assignmentTransitionStart + 30);
 assert.ok(assignmentTransitionStart >= 0 && assignmentTransitionEnd > assignmentTransitionStart,
