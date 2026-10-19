@@ -339,6 +339,10 @@ assert.match(inventoryConsequence, /quantitiesByProduct\.set\(productId, \(quant
   'fulfillment inventory quantity must include every valid line for a product');
 assert.match(inventoryConsequence, /for \(const \[productId, quantity\] of quantitiesByProduct\)/,
   'inventory movement must be emitted once per fulfillment/product using the aggregated quantity');
+const inventoryEventReplayLookup = inventoryConsequence.indexOf("SELECT * FROM inventory_movements WHERE event_id = ?");
+const inventoryStockCheck = inventoryConsequence.indexOf("FULFILLMENT_INSUFFICIENT_INVENTORY");
+assert.ok(inventoryEventReplayLookup >= 0 && inventoryStockCheck > inventoryEventReplayLookup,
+  'existing fulfillment inventory events must replay before current stock checks can reject a retry');
 
 assert.match(server, /method: 'PATCH'.*delivery-assignment/);
 assert.match(server, /transitionDeliveryAssignment/);
