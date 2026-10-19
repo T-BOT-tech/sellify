@@ -550,13 +550,19 @@ try {
     'reusing an assignment key with a different courier must conflict'
   );
 
-  await assert.rejects(
-    () => store.transitionOrderFulfillment(
+  let directTransitionError = null;
+  try {
+    await store.transitionOrderFulfillment(
       tenant.chatId, requestOrder.server_order_id, 'out_for_delivery', session,
       { idempotencyKey: 'parcel-direct-transition-bypasses-assignment' }
-    ),
-    error => error?.code === 'DELIVERY_ASSIGNMENT_LIFECYCLE_REQUIRED' && error?.statusCode === 409,
-    'an active courier assignment must advance through its own lifecycle'
+    );
+  } catch (error) {
+    directTransitionError = error;
+  }
+  assert.ok(
+    directTransitionError?.code === 'DELIVERY_ASSIGNMENT_LIFECYCLE_REQUIRED'
+      && directTransitionError?.statusCode === 409,
+    `an active courier assignment must advance through its own lifecycle; got code=${directTransitionError?.code} status=${directTransitionError?.statusCode} message=${directTransitionError?.message}`
   );
   await assert.rejects(
     () => store.transitionDeliveryAssignment(
