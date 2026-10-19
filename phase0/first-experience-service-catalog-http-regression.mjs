@@ -231,6 +231,13 @@ try {
     error => error?.code === 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' && error?.statusCode === 409,
     'unassessed service requests must not enter canonical fulfillment'
   );
+  const logisticsActor = { userId: user.id, organizationId: tenant.organizationId || tenant.organization_id };
+  // Activate the canonical Logistics Pack through its lifecycle contract before
+  // assigning a logistics role; the role guard intentionally rejects inactive packs.
+  await store.transitionPackLifecycle(tenant.chatId, 'logistics', 'INSTALLED', logisticsActor);
+  await store.transitionPackLifecycle(tenant.chatId, 'logistics', 'ELIGIBLE', logisticsActor);
+  await store.transitionPackLifecycle(tenant.chatId, 'logistics', 'ACTIVE', logisticsActor);
+
   const tenantMemberships = await store.listTenantMemberships(tenant.chatId);
   const ownerMembership = tenantMemberships.find(membership => String(membership.user_id || membership.userId) === String(user.id));
   assert.ok(ownerMembership?.id, 'test owner membership must be available for scoped logistics role setup');
@@ -240,8 +247,6 @@ try {
     membershipId: ownerMembership.id,
     role: 'logistics_manager',
   });
-  const logisticsActor = { userId: user.id, organizationId: tenant.organizationId || tenant.organization_id };
-
   await assert.rejects(
     () => store.assignDeliveryCourier(tenant.chatId, requestOrder.server_order_id, '', logisticsActor, {
       assignmentKey: 'parcel-request-before-assessment',
