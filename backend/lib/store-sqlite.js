@@ -10743,7 +10743,8 @@ export async function getTelegramBuyerFulfillmentExperience(chatId, telegramUser
       ON o.chat_id = mso.seller_id AND o.local_id = mso.seller_order_id AND o.is_marketplace = 1
     LEFT JOIN fulfillments f
       ON f.server_order_id = o.server_order_id AND f.organization_id = mso.organization_id
-    LEFT JOIN marketplace_fulfillments mf ON mf.seller_order_id = mso.id
+    LEFT JOIN marketplace_fulfillments mf
+      ON mf.seller_order_id = mso.id AND f.id IS NULL
     WHERE mo.id = ? AND mo.buyer_identity = ? AND mso.seller_id = ?
     ORDER BY COALESCE(f.updated_at, mf.updated_at) DESC,
              COALESCE(f.created_at, mf.created_at) DESC
