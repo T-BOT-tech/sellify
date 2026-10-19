@@ -575,13 +575,19 @@ try {
       && directTransitionError?.statusCode === 409,
     `an active courier assignment must advance through its own lifecycle; got code=${directTransitionError?.code} status=${directTransitionError?.statusCode} message=${directTransitionError?.message}`
   );
-  await assert.rejects(
-    () => store.transitionDeliveryAssignment(
+  let missingReassignmentTargetError = null;
+  try {
+    await store.transitionDeliveryAssignment(
       tenant.chatId, requestOrder.server_order_id, 'REASSIGN_EXCEPTION', session,
       { idempotencyKey: 'parcel-assignment-reassign-missing-target' }
-    ),
-    error => error?.code === 'REASSIGNMENT_TARGET_REQUIRED' && error?.statusCode === 400,
-    'reassignment without a target must return a validation error after loading the active assignment'
+    );
+  } catch (error) {
+    missingReassignmentTargetError = error;
+  }
+  assert.ok(
+    missingReassignmentTargetError?.code === 'REASSIGNMENT_TARGET_REQUIRED'
+      && missingReassignmentTargetError?.statusCode === 400,
+    `reassignment without a target must return a validation error after loading the active assignment; got code=${missingReassignmentTargetError?.code} status=${missingReassignmentTargetError?.statusCode} message=${missingReassignmentTargetError?.message}`
   );
   // A stale or corrupted assignment location must not advance even when the
   // tenant and order still belong to the expected organization.
