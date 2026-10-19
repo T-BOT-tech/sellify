@@ -313,6 +313,7 @@ try {
   });
   const completedService = await store.transitionOrderFulfillment(integrationChatId, serviceOrderId, 'delivered', actor, {
     idempotencyKey: 'service-only-delivered',
+    proof: { type: 'merchant_confirmation', reference: 'service-only-proof-1' },
   });
   assert.equal(completedService.status, 'delivered');
   const afterService = (await store.getInventoryBalances(integrationChatId))
