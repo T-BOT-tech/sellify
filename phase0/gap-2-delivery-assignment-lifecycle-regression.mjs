@@ -91,9 +91,9 @@ assert.ok(
   'durable assessment key reuse must be resolved before the embedded per-order replay check',
 );
 assert.ok(
-  serviceAssessment.indexOf("assertLogisticsSchedulingAuthorization(actor, organizationId, transactionLocationId, 'logistics:scheduling:request')")
-    < serviceAssessment.indexOf('const priorAssessmentCommand = db.prepare'),
-  'assessment replay must still require current server-side tenant/location scheduling authorization',
+  serviceAssessment.indexOf('const priorAssessmentCommand = db.prepare')
+    < serviceAssessment.indexOf("assertLogisticsSchedulingAuthorization(actor, organizationId, transactionLocationId, 'logistics:scheduling:request')"),
+  'committed assessment retries must resolve durable command history before rechecking mutable caller authorization',
 );
 assert.ok(
   serviceAssessment.indexOf("db.exec('BEGIN IMMEDIATE')")
@@ -105,9 +105,11 @@ assert.ok(
   'canonical assessment state and durable command identity must commit in the same transaction',
 );
 assert.ok(
-  serviceAssessment.indexOf('assertLogisticsSchedulingAuthorization(actor, organizationId, locationId')
-    < serviceAssessment.indexOf("db.exec('BEGIN IMMEDIATE')"),
-  'assessment retries must not bypass current preflight authorization',
+  serviceAssessment.indexOf("db.exec('BEGIN IMMEDIATE')")
+    < serviceAssessment.indexOf('const priorAssessmentCommand = db.prepare')
+    && serviceAssessment.indexOf('const priorAssessmentCommand = db.prepare')
+      < serviceAssessment.indexOf("assertLogisticsSchedulingAuthorization(actor, organizationId, transactionLocationId, 'logistics:scheduling:request')"),
+  'assessment authorization must be rechecked inside the transaction for new commands, after durable replay lookup',
 );
 assert.ok(
   serviceAssessment.indexOf("db.exec('BEGIN IMMEDIATE')")
