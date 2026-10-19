@@ -513,15 +513,17 @@ try {
   // tenant and order still belong to the expected organization.
   const assignmentLocationGuardDb = new DatabaseSync(dbPath);
   let originalAssignmentLocationId;
+  let originalAssignmentUpdatedAt;
   try {
     const currentAssignment = assignmentLocationGuardDb.prepare(
-      "SELECT id, location_id FROM delivery_assignments WHERE id = ?"
+      "SELECT id, location_id, updated_at FROM delivery_assignments WHERE id = ?"
     ).get(seededAssignmentId);
     assert.ok(currentAssignment, 'seeded assignment should exist for location guard regression');
     originalAssignmentLocationId = currentAssignment.location_id;
+    originalAssignmentUpdatedAt = currentAssignment.updated_at;
     assignmentLocationGuardDb.prepare(
-      "UPDATE delivery_assignments SET location_id = ? WHERE id = ?"
-    ).run('stale-assignment-location', seededAssignmentId);
+      "UPDATE delivery_assignments SET location_id = ?, updated_at = ? WHERE id = ?"
+    ).run('stale-assignment-location', '9999-12-31T23:59:59.999Z', seededAssignmentId);
   } finally {
     assignmentLocationGuardDb.close();
   }
@@ -536,8 +538,8 @@ try {
   const restoreAssignmentLocationDb = new DatabaseSync(dbPath);
   try {
     restoreAssignmentLocationDb.prepare(
-      "UPDATE delivery_assignments SET location_id = ? WHERE id = ?"
-    ).run(originalAssignmentLocationId, seededAssignmentId);
+      "UPDATE delivery_assignments SET location_id = ?, updated_at = ? WHERE id = ?"
+    ).run(originalAssignmentLocationId, originalAssignmentUpdatedAt, seededAssignmentId);
   } finally {
     restoreAssignmentLocationDb.close();
   }
