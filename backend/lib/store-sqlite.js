@@ -8515,12 +8515,12 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
     // Catalog type is server-owned authority. A service fulfills the order
     // without decrementing physical inventory, regardless of client line metadata.
     if (parseJSON(product.product_json, {}).item_type === 'service') continue;
-    if (!locationId) throw Object.assign(new Error('Fulfillment inventory location is required'), { statusCode: 409, code: 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED' });
-    const balance = Number(db.prepare('SELECT COALESCE(SUM(quantity), 0) AS quantity FROM inventory_movements WHERE organization_id = ? AND location_id = ? AND product_id = ?').get(String(fulfillmentRow.organization_id), locationId, productId)?.quantity || 0);
-    if (balance < quantity) throw Object.assign(new Error('Insufficient inventory for fulfillment'), { statusCode: 409, code: 'FULFILLMENT_INSUFFICIENT_INVENTORY', productId, available: balance, requested: quantity });
     const eventId = `fulfillment-sale:${fulfillmentRow.id}:${productId}`;
     const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
     if (existing) { movements.push(inventoryMovementFromRow(existing)); continue; }
+    if (!locationId) throw Object.assign(new Error('Fulfillment inventory location is required'), { statusCode: 409, code: 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED' });
+    const balance = Number(db.prepare('SELECT COALESCE(SUM(quantity), 0) AS quantity FROM inventory_movements WHERE organization_id = ? AND location_id = ? AND product_id = ?').get(String(fulfillmentRow.organization_id), locationId, productId)?.quantity || 0);
+    if (balance < quantity) throw Object.assign(new Error('Insufficient inventory for fulfillment'), { statusCode: 409, code: 'FULFILLMENT_INSUFFICIENT_INVENTORY', productId, available: balance, requested: quantity });
     const id = crypto.randomUUID(); const now = nowIso();
     db.prepare('INSERT INTO inventory_movements (id,event_id,organization_id,location_id,product_id,quantity,movement_type,reference_type,reference_id,actor_id,device_id,occurred_at,reason,metadata_json,created_at) VALUES (?,?,?,?,?,?,\'SALE\',\'fulfillment\',?,?,?,?,?,?,?)').run(id,eventId,String(fulfillmentRow.organization_id),locationId,productId,-quantity,String(fulfillmentRow.id),actor?.userId || null,actor?.deviceId || null,now,'Core fulfillment terminal inventory consequence',json({orderId:String(fulfillmentRow.server_order_id),fulfillmentId:String(fulfillmentRow.id)}),now);
     movements.push(inventoryMovementFromRow(db.prepare('SELECT * FROM inventory_movements WHERE id = ?').get(id)));
