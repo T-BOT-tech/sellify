@@ -328,6 +328,21 @@ try {
   assert.equal(assessmentResult.service_delivery?.assignment_status, 'NOT_ASSIGNED',
     'customer acceptance must not automatically assign a courier');
 
+  // Assessment idempotency keys are organization-scoped, not merely embedded
+  // in one order's JSON. Reusing a committed key against another order must
+  // conflict before validating that second order's assessment payload.
+  const crossOrderAssessmentUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(parcelStoredOrder.server_order_id) + '/service-delivery-assessment';
+  const crossOrderAssessmentReplay = await fetch(crossOrderAssessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+    body: JSON.stringify(assessmentPayload),
+  });
+  assert.equal(crossOrderAssessmentReplay.status, 409,
+    'an assessment idempotency key must not be reused across canonical orders');
+  assert.equal((await crossOrderAssessmentReplay.json()).error?.code,
+    'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT');
+
   assert.ok(parcelStoredOrder.server_order_id,
     'instant service request must retain its canonical server order identity');
   const instantAssessmentUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
