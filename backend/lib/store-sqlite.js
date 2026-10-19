@@ -8499,13 +8499,17 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
     : fulfillmentRow.status === 'picked_up';
   if (!terminal) return [];
   const items = Array.isArray(orderJson?.items) ? orderJson.items : [];
-  const defaultLocation = db.prepare("SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1").get(String(fulfillmentRow.organization_id));
-  const locationId = String(fulfillmentRow.location_id || defaultLocation?.id || '');
-  const movements = [];
+  const quantitiesByProduct = new Map();
   for (const item of items) {
     const productId = String(item?.product_id ?? item?.productId ?? item?.item_id ?? item?.id ?? '').trim();
     const quantity = Number(item?.qty ?? item?.quantity ?? 0);
     if (!productId || !Number.isFinite(quantity) || quantity <= 0) continue;
+    quantitiesByProduct.set(productId, (quantitiesByProduct.get(productId) || 0) + quantity);
+  }
+  const defaultLocation = db.prepare("SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1").get(String(fulfillmentRow.organization_id));
+  const locationId = String(fulfillmentRow.location_id || defaultLocation?.id || '');
+  const movements = [];
+  for (const [productId, quantity] of quantitiesByProduct) {
     const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
     if (!product) throw Object.assign(new Error('Fulfillment product not found'), { statusCode: 409, code: 'FULFILLMENT_PRODUCT_NOT_FOUND', productId });
     // Catalog type is server-owned authority. A service fulfills the order
