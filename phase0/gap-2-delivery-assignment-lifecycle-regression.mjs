@@ -343,6 +343,14 @@ const inventoryEventReplayLookup = inventoryConsequence.indexOf("SELECT * FROM i
 const inventoryStockCheck = inventoryConsequence.indexOf("FULFILLMENT_INSUFFICIENT_INVENTORY");
 assert.ok(inventoryEventReplayLookup >= 0 && inventoryStockCheck > inventoryEventReplayLookup,
   'existing fulfillment inventory events must replay before current stock checks can reject a retry');
+assert.match(inventoryConsequence, /FULFILLMENT_INVENTORY_REPLAY_CONFLICT/,
+  'an existing event with a different canonical inventory intent must fail closed rather than silently replay');
+assert.match(inventoryConsequence, /Number\(existing\.quantity\) === -quantity/,
+  'inventory replay must verify the recorded movement quantity matches the aggregated order quantity');
+assert.match(inventoryConsequence, /String\(existing\.location_id\) === locationId/,
+  'inventory replay must verify the recorded location matches the canonical fulfillment location');
+assert.match(store, /event_id TEXT NOT NULL UNIQUE/,
+  'inventory event IDs must remain database-unique to prevent duplicate movements under retries');
 
 assert.match(server, /method: 'PATCH'.*delivery-assignment/);
 assert.match(server, /transitionDeliveryAssignment/);
