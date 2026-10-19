@@ -89,6 +89,12 @@ assert.match(assignmentTransition, /FROM delivery_assignment_commands[\s\S]*?WHE
   'assignment retries must consult durable command history');
 assert.match(assignmentTransition, /existingCommand\.command_fingerprint\) !== commandFingerprint/,
   'historical assignment key reuse with different intent must conflict');
+assert.ok(
+  assignmentTransition.indexOf('if (existingCommand)') >= 0
+    && assignmentTransition.indexOf('if (existingCommand)') < assignmentTransition.indexOf("EXCEPTION_REASON_REQUIRED")
+    && assignmentTransition.indexOf('if (existingCommand)') < assignmentTransition.indexOf("DELIVERY_PROOF_REQUIRED"),
+  'durable assignment command replay/conflict must be resolved before action-specific reason/proof validation',
+);
 assert.match(assignmentTransition, /INSERT INTO delivery_assignment_commands/g,
   'successful assignment lifecycle commands must be recorded durably');
 
