@@ -5702,8 +5702,8 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
           statusCode: 409, code: 'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT',
         });
       }
-      if (request.assessment?.command_key !== commandKey
-        || request.assessment?.command_fingerprint !== commandFingerprint) {
+      if (request?.assessment?.command_key !== commandKey
+        || request?.assessment?.command_fingerprint !== commandFingerprint) {
         throw Object.assign(new Error('Assessment result for prior command is missing from the canonical service request'), {
           statusCode: 409, code: 'LOGISTICS_ASSESSMENT_REPLAY_STATE_MISSING',
         });
