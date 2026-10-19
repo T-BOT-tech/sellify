@@ -2571,10 +2571,11 @@ if (!applied.includes(39)) {
     // by creation time so a legacy duplicate key deterministically keeps its
     // earliest recorded use.
     const legacyAssessmentRows = db.prepare(`
-      SELECT server_order_id, tenant_organization_id, order_json, created_at
-      FROM orders
-      WHERE tenant_organization_id IS NOT NULL
-      ORDER BY created_at ASC, server_order_id ASC
+      SELECT o.server_order_id, t.organization_id AS tenant_organization_id, o.order_json, o.created_at
+      FROM orders o
+      JOIN tenants t ON t.chat_id = o.chat_id
+      WHERE t.organization_id IS NOT NULL
+      ORDER BY o.created_at ASC, o.server_order_id ASC
     `).all();
     const insertLegacyAssessment = db.prepare(`
       INSERT OR IGNORE INTO service_delivery_assessment_commands
