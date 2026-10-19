@@ -9637,11 +9637,18 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     if (normalizedAction === 'DELIVERED' && (proofInput == null || (typeof proofInput === 'string' && !proofInput.trim()))) {
       throw Object.assign(new Error('Delivery proof is required before delivery completion'), { statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED' });
     }
-    if (normalizedAction === 'DELIVERED' && typeof proofInput === 'object' && !Array.isArray(proofInput)) {
-      const proofType = String(proofInput.type || proofInput.kind || '').trim().toLowerCase();
-      const proofReference = String(proofInput.reference || proofInput.referenceId || proofInput.reference_id || '').trim();
-      if (!proofType || !proofReference) {
-        throw Object.assign(new Error('Delivery proof type and reference are required'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
+    if (normalizedAction === 'DELIVERED') {
+      if (typeof proofInput === 'object') {
+        if (Array.isArray(proofInput)) {
+          throw Object.assign(new Error('Delivery proof must be a string or a proof object'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
+        }
+        const proofType = String(proofInput.type || proofInput.kind || '').trim().toLowerCase();
+        const proofReference = String(proofInput.reference || proofInput.referenceId || proofInput.reference_id || '').trim();
+        if (!proofType || !proofReference) {
+          throw Object.assign(new Error('Delivery proof type and reference are required'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
+        }
+      } else if (typeof proofInput !== 'string') {
+        throw Object.assign(new Error('Delivery proof must be a non-empty string or a proof object'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
       }
     }
 
