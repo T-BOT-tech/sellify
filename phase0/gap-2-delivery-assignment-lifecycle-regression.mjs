@@ -264,7 +264,7 @@ assert.ok(
   assignmentTransition.indexOf('const active = db.prepare') < courierMutationGuard
     && courierMutationGuard < assignmentTransition.indexOf('const current = String(active.status)'),
   'courier lifecycle mutations must revalidate current courier role and assignment ownership inside the write transaction');
-assert.match(assignmentTransition, /FROM memberships m[\\s\\S]*?mr\\.role_id = \'logistics_courier\'/,
+assert.match(assignmentTransition, /FROM memberships m[\s\S]*?mr\.role_id = 'logistics_courier'/,
   'courier lifecycle mutation must re-read active courier membership inside the transaction');
 assert.match(assignmentTransition, /String\(active\.courier_user_id\) !== actorUserId/,
   'courier lifecycle mutation must reject assignment ownership changes between route authorization and transaction');
