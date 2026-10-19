@@ -75,6 +75,11 @@ assert.match(assignmentCreation, /FROM delivery_assignment_commands[\s\S]*?WHERE
   'initial assignment retries must consult durable command history');
 assert.match(assignmentCreation, /INSERT INTO delivery_assignment_commands/,
   'successful initial assignments must persist their command identity');
+assert.ok(
+  assignmentCreation.indexOf('const priorCommand = db.prepare') >= 0
+    && assignmentCreation.indexOf('const priorCommand = db.prepare') < assignmentCreation.indexOf('assertServiceDeliveryReadyForExecution(freshOrder)'),
+  'initial assignment retries must replay durable command history before rechecking mutable service readiness',
+);
 const assignmentTransitionStart = store.indexOf('export async function transitionDeliveryAssignment(');
 const assignmentTransitionEnd = store.indexOf('export async function ', assignmentTransitionStart + 30);
 assert.ok(assignmentTransitionStart >= 0 && assignmentTransitionEnd > assignmentTransitionStart,
