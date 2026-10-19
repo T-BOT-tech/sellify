@@ -2508,6 +2508,33 @@ if (!applied.includes(39)) {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(69, nowIso());
   }
 
+  // GAP-2.2 — durable fulfillment command identities. Keep prior keys after later transitions.
+  if (!applied.includes(70)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS fulfillment_commands (
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        command_key TEXT NOT NULL,
+        server_order_id TEXT NOT NULL REFERENCES orders(server_order_id) ON DELETE CASCADE,
+        command_fingerprint TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (organization_id, command_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_fulfillment_commands_order
+        ON fulfillment_commands(organization_id, server_order_id, created_at DESC);
+    `);
+    const fulfillmentColumns = new Set(db.prepare('PRAGMA table_info(fulfillments)').all().map(column => String(column.name)));
+    if (fulfillmentColumns.has('last_command_fingerprint')) {
+      db.prepare(`
+        INSERT OR IGNORE INTO fulfillment_commands (organization_id, command_key, server_order_id, command_fingerprint, created_at)
+        SELECT organization_id, last_command_key, server_order_id, last_command_fingerprint, updated_at
+        FROM fulfillments
+        WHERE last_command_key IS NOT NULL AND trim(last_command_key) <> ''
+          AND last_command_fingerprint IS NOT NULL AND trim(last_command_fingerprint) <> ''
+      `).run();
+    }
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(70, nowIso());
+  }
+
   // GAP-1.24: fence status-query workers and permit takeover only before
   // provider I/O has been authorized. Legacy IN_PROGRESS commands are treated
   // as provider-in-flight because their execution phase cannot be proven.
@@ -9112,6 +9139,27 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
 
     assertLogisticsSchedulingAuthorization(actor, organizationId, row.location_id, schedulingAction);
 
+    const priorCommand = db.prepare(`
+      SELECT server_order_id, command_fingerprint
+      FROM fulfillment_commands
+      WHERE organization_id = ? AND command_key = ?
+    `).get(organizationId, commandKey);
+    if (priorCommand) {
+      if (String(priorCommand.server_order_id) !== String(serverOrderId)
+        || String(priorCommand.command_fingerprint) !== commandFingerprint) {
+        throw Object.assign(new Error('Idempotency key was already used for a different fulfillment command'), {
+          statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT',
+        });
+      }
+      const canonicalReplay = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?')
+        .get(String(serverOrderId), organizationId);
+      if (!canonicalReplay) throw Object.assign(new Error('Fulfillment not found for prior command'), {
+        statusCode: 409, code: 'FULFILLMENT_REPLAY_STATE_MISSING',
+      });
+      db.exec('COMMIT');
+      return fulfillmentFromRow(canonicalReplay);
+    }
+
     if (String(row.last_command_key || '') === commandKey) {
       const compatible = String(row.status) === target;
       if (!compatible) {
@@ -9706,6 +9754,10 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
       row.id,
     );
     const updated = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(row.id);
+    db.prepare(`
+      INSERT INTO fulfillment_commands (organization_id, command_key, server_order_id, command_fingerprint, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(organizationId, commandKey, String(serverOrderId), commandFingerprint, now);
     const inventoryMovements = applyCoreFulfillmentInventoryConsequence(key, updated, freshOrderJson, actor);
     audit(key, 'fulfillment.transitioned', 'fulfillment', row.id, {
       orderId: String(serverOrderId), from: current, to: target, commandKey,
