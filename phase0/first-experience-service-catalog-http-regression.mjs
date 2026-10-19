@@ -316,10 +316,10 @@ try {
     headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-missing-acceptance' },
     body: JSON.stringify({ assessment_outcome: 'ELIGIBLE' }),
   });
+  const missingAcceptanceBody = await missingAcceptanceResponse.json();
   assert.equal(missingAcceptanceResponse.status, 400,
-    'an eligible assessment must fail closed without explicit customer acceptance evidence');
-  assert.equal((await missingAcceptanceResponse.json()).error?.code,
-    'LOGISTICS_CUSTOMER_ACCEPTANCE_REQUIRED');
+    `an eligible assessment must fail closed without explicit customer acceptance evidence; got status=${missingAcceptanceResponse.status} body=${JSON.stringify(missingAcceptanceBody)}`);
+  assert.equal(missingAcceptanceBody.error?.code, 'LOGISTICS_CUSTOMER_ACCEPTANCE_REQUIRED');
 
   const overlongEvidenceResponse = await fetch(assessmentUrl, {
     method: 'POST',
