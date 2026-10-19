@@ -9536,10 +9536,9 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     try {
       const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
         .get(String(chatId));
-      const freshOrderRow = db.prepare('SELECT tenant_organization_id, location_id FROM orders WHERE chat_id = ? AND server_order_id = ?')
+      const freshOrderRow = db.prepare('SELECT server_order_id, location_id FROM orders WHERE chat_id = ? AND server_order_id = ?')
         .get(String(chatId), String(serverOrderId));
-      if (String(freshTenantRow?.organization_id || '') !== organizationId
-        || String(freshOrderRow?.tenant_organization_id || '') !== organizationId) {
+      if (String(freshTenantRow?.organization_id || '') !== organizationId || !freshOrderRow) {
         throw Object.assign(new Error('Tenant or order organization changed during delivery exception resolution'), {
           statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
         });
@@ -9620,10 +9619,9 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
   try {
     const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
       .get(String(chatId));
-    const freshOrderRow = db.prepare('SELECT tenant_organization_id, location_id FROM orders WHERE chat_id = ? AND server_order_id = ?')
+    const freshOrderRow = db.prepare('SELECT server_order_id, location_id FROM orders WHERE chat_id = ? AND server_order_id = ?')
       .get(String(chatId), String(serverOrderId));
-    if (String(freshTenantRow?.organization_id || '') !== organizationId
-      || String(freshOrderRow?.tenant_organization_id || '') !== organizationId) {
+    if (String(freshTenantRow?.organization_id || '') !== organizationId || !freshOrderRow) {
       throw Object.assign(new Error('Tenant or order organization changed during delivery assignment transition'), {
         statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
       });
