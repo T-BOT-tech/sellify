@@ -255,6 +255,17 @@ assert.ok(
 );
 assert.match(assignmentTransition, /INSERT INTO delivery_assignment_commands/g,
   'successful assignment lifecycle commands must be recorded durably');
+const courierMutationGuard = assignmentTransition.indexOf('const courierActor = actorRoles.includes(\'logistics_courier\')');
+assert.ok(
+  assignmentTransition.indexOf('const active = db.prepare') < courierMutationGuard
+    && courierMutationGuard < assignmentTransition.indexOf('const current = String(active.status)'),
+  'courier lifecycle mutations must revalidate current courier role and assignment ownership inside the write transaction');
+assert.match(assignmentTransition, /FROM memberships m[\\s\\S]*?mr\\.role_id = \'logistics_courier\'/,
+  'courier lifecycle mutation must re-read active courier membership inside the transaction');
+assert.match(assignmentTransition, /String\(active\.courier_user_id\) !== actorUserId/,
+  'courier lifecycle mutation must reject assignment ownership changes between route authorization and transaction');
+assert.match(assignmentTransition, /COURIER_SCOPE_DENIED/,
+  'courier lifecycle mutation must enforce current location-scoped courier role inside the transaction');
 assert.ok(
   assignmentTransition.indexOf('const canonicalLocationId = freshOrderRow.location_id')
     < assignmentTransition.indexOf("if (normalizedAction === 'REASSIGNED')"),
