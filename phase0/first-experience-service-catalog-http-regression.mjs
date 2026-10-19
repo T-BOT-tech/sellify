@@ -231,8 +231,19 @@ try {
     error => error?.code === 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' && error?.statusCode === 409,
     'unassessed service requests must not enter canonical fulfillment'
   );
+  const tenantMemberships = await store.listTenantMemberships(tenant.chatId);
+  const ownerMembership = tenantMemberships.find(membership => String(membership.user_id || membership.userId) === String(user.id));
+  assert.ok(ownerMembership?.id, 'test owner membership must be available for scoped logistics role setup');
+  await store.assignMembershipContextualRole({
+    actorUserId: user.id,
+    chatId: tenant.chatId,
+    membershipId: ownerMembership.id,
+    role: 'logistics_manager',
+  });
+  const logisticsActor = { userId: user.id, organizationId: tenant.organizationId || tenant.organization_id };
+
   await assert.rejects(
-    () => store.assignDeliveryCourier(tenant.chatId, requestOrder.server_order_id, '', null, {
+    () => store.assignDeliveryCourier(tenant.chatId, requestOrder.server_order_id, '', logisticsActor, {
       assignmentKey: 'parcel-request-before-assessment',
     }),
     error => error?.code === 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' && error?.statusCode === 409,
