@@ -10143,6 +10143,8 @@ export async function searchMarketplaceListings() {
       seller_id: row.chat_id,
       item_id: row.product_id,
       item_type: product.item_type === 'service' ? 'service' : 'product',
+      service_profile: product.service_profile || null,
+      delivery_model: product.delivery_model || null,
       title: product.name,
       price: row.price_minor,
       currency: normaliseCurrency(row.currency || parseJSON(row.branding_json, {})?.currency, 'ETB'),
