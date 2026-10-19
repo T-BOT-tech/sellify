@@ -9733,7 +9733,6 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     tracking_reference: input.trackingReference || input.tracking_reference || orderJson.tracking_reference || null,
     proof: input.proof === undefined ? (orderJson.fulfillment_proof ?? null) : input.proof,
   })).digest('hex');
-  assertServiceDeliveryReadyForExecution(orderJson);
   const type = normalizeCoreFulfillmentType(input.fulfillmentType || input.fulfillment_type || orderJson.fulfillment_type || 'delivery');
   if (!CORE_FULFILLMENT_TRANSITIONS[type]) throw Object.assign(new Error('Unsupported fulfillment type'), { statusCode: 400 });
 
@@ -9769,6 +9768,28 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
       throw Object.assign(new Error('Order organization changed during fulfillment transition'), { statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH' });
     }
     const freshOrderJson = orderFromRow(freshOrderRow);
+    // Durable command history must be checked before mutable order-input and
+    // lifecycle validation: a committed retry remains idempotent after later
+    // fulfillment transitions have advanced the current row.
+    const priorCommand = db.prepare(`
+      SELECT * FROM fulfillment_commands
+      WHERE organization_id = ? AND command_key = ?
+    `).get(organizationId, commandKey);
+    if (priorCommand) {
+      if (String(priorCommand.server_order_id) !== String(serverOrderId)
+        || String(priorCommand.command_fingerprint) !== commandFingerprint) {
+        throw Object.assign(new Error('Idempotency key was already used for a different fulfillment command'), {
+          statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT',
+        });
+      }
+      const replay = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?')
+        .get(String(serverOrderId), organizationId);
+      if (!replay) throw Object.assign(new Error('Fulfillment result for prior command is missing'), {
+        statusCode: 409, code: 'FULFILLMENT_REPLAY_STATE_MISSING',
+      });
+      db.exec('COMMIT');
+      return fulfillmentFromRow(replay);
+    }
     const freshCommandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
       fulfillment_type: effectiveType,
       target_status: target,
