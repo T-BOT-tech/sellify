@@ -97,6 +97,16 @@ assert.ok(
 );
 assert.match(assignmentTransition, /INSERT INTO delivery_assignment_commands/g,
   'successful assignment lifecycle commands must be recorded durably');
+assert.ok(
+  assignmentTransition.indexOf('const canonicalLocationId = freshOrderRow.location_id')
+    < assignmentTransition.indexOf("if (normalizedAction === 'REASSIGNED')"),
+  'canonical order location must be loaded before courier reassignment scope checks',
+);
+assert.match(assignmentTransition, /const locationId = canonicalLocationId \|\| active\.location_id \|\| order\.location_id \|\| null/,
+  'normal reassignment must not let request input override canonical order location');
+assert.match(assignmentTransition, /applyCoreFulfillmentInventoryConsequence\(String\(chatId\), updatedFulfillment, orderFromRow\(freshOrderRow\), actor\)/,
+  'delivery completion inventory consequences must use the freshly revalidated canonical order');
+
 
 assert.match(store, /delivery\.assignment\.delivered/);
 assert.match(store, /applyCoreFulfillmentInventoryConsequence/);
