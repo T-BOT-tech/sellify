@@ -27,6 +27,12 @@ assert.match(store, /No unresolved delivery exception exists/);
 assert.match(store, /UPDATE delivery_assignments SET status = \\'REASSIGNED\\'/);
 assert.match(store, /delivery\.assignment\.reassigned/);
 assert.match(store, /Target courier does not have an active logistics courier role/);
+const exceptionResolutionStart = store.indexOf("if (normalizedAction === 'REASSIGN_EXCEPTION')");
+const exceptionResolutionEnd = store.indexOf("  const transitions =", exceptionResolutionStart);
+const exceptionResolution = store.slice(exceptionResolutionStart, exceptionResolutionEnd);
+assert.match(exceptionResolution, /BEGIN IMMEDIATE[\\s\\S]*?const freshCourier = db\\.prepare/,
+  'exception reassignment must revalidate target courier authorization inside the write transaction');
+
 assert.match(store, /delivery\.assignment\.delivered/);
 assert.match(store, /applyCoreFulfillmentInventoryConsequence/);
 
