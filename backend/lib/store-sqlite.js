@@ -9355,8 +9355,6 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
   if (!commandKey) throw Object.assign(new Error('Idempotency key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
   if (normalizedAction === 'REASSIGN_EXCEPTION') {
     if (!targetCourierId) throw Object.assign(new Error('A different courier is required to resolve a delivery exception'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
-    const courier = db.prepare(`SELECT m.user_id, mr.scope_type, mr.scope_id FROM memberships m JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active' WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active' AND mr.role_id = 'logistics_courier'`).get(targetCourierId, String(chatId));
-    if (!courier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
     db.exec('BEGIN IMMEDIATE');
     try {
       const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
@@ -9369,6 +9367,18 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
           statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
         });
       }
+      // Revalidate target courier membership and role under the write lock so
+      // concurrent role revocation cannot authorize a stale reassignment.
+      const freshCourier = db.prepare(`
+        SELECT m.user_id, mr.scope_type, mr.scope_id
+        FROM memberships m
+        JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
+        WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
+          AND mr.role_id = 'logistics_courier'
+      `).get(targetCourierId, String(chatId));
+      if (!freshCourier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), {
+        statusCode: 403, code: 'COURIER_ROLE_REQUIRED',
+      });
       const existingCommand = db.prepare(`
         SELECT da.*, f.server_order_id AS assigned_server_order_id
         FROM delivery_assignments da
@@ -9397,7 +9407,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
       }
       if (String(targetCourierId) === String(exception.courier_user_id)) throw Object.assign(new Error('A different courier is required to resolve a delivery exception'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
       const locationId = canonicalLocationId || exception.location_id || order.location_id || input.locationId || input.location_id || null;
-      if (courier.scope_type === 'LOCATION' && String(courier.scope_id || '') !== String(locationId || '')) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
+      if (freshCourier.scope_type === 'LOCATION' && String(freshCourier.scope_id || '') !== String(locationId || '')) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
       const now = nowIso();
       db.prepare('UPDATE delivery_assignments SET status = \'REASSIGNED\', last_command_key = ?, updated_at = ?, version = version + 1 WHERE id = ?').run(commandKey, now, exception.id);
       const assignmentKey = String(input.assignmentKey || input.assignment_key || ('exception-reassign:' + serverOrderId + ':' + targetCourierId + ':' + commandKey)).trim();
