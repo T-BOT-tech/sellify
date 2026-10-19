@@ -7,6 +7,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { createHash } from 'node:crypto';
 
 const tempDir = await mkdtemp(path.join(os.tmpdir(), 'sellify-service-catalog-http-'));
 const dbPath = path.join(tempDir, 'sellify.sqlite');
@@ -518,6 +519,18 @@ try {
       requestOrder.location_id ? String(requestOrder.location_id) : null,
       String(user.id), 'parcel-assignment-idempotency-key-replay',
       String(user.id), now, now, 'parcel-assignment-idempotency-key-replay'
+    );
+    const assignmentFingerprint = createHash('sha256').update(JSON.stringify({
+      action: 'ASSIGN',
+      requested_courier_user_id: String(user.id),
+    })).digest('hex');
+    assignmentReplayDb.prepare(`
+      INSERT INTO delivery_assignment_commands
+        (organization_id, command_key, server_order_id, command_fingerprint, result_assignment_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      String(session.organizationId), 'parcel-assignment-idempotency-key-replay',
+      String(requestOrder.server_order_id), assignmentFingerprint, seededAssignmentId, now
     );
   } finally {
     assignmentReplayDb.close();
