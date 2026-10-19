@@ -92,6 +92,18 @@ assert.ok(
 );
 assert.ok(
   serviceAssessment.indexOf('const priorAssessmentCommand = db.prepare')
+    < serviceAssessment.indexOf("if (!request) throw Object.assign(new Error('Order is not a logistics service request')"),
+  'assessment retries must replay before rejecting mutable canonical service-request state',
+);
+assert.match(serviceAssessment, /availability_confirmed: availabilityConfirmed,/,
+  'assessment command identity must not change when the canonical delivery model changes after a committed command');
+assert.doesNotMatch(
+  serviceAssessment.slice(serviceAssessment.indexOf('const commandFingerprint ='), serviceAssessment.indexOf("db.exec('BEGIN IMMEDIATE')")),
+  /availability_confirmed: deliveryModel === 'instant'/,
+  'assessment replay fingerprint must not depend on mutable preflight delivery-model state',
+);
+assert.ok(
+  serviceAssessment.indexOf('const priorAssessmentCommand = db.prepare')
     < serviceAssessment.indexOf("assertLogisticsSchedulingAuthorization(actor, organizationId, transactionLocationId, 'logistics:scheduling:request')"),
   'committed assessment retries must resolve durable command history before rechecking mutable caller authorization',
 );
