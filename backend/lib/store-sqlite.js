@@ -9439,7 +9439,6 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     proof: input.proof === undefined ? null : input.proof,
   })).digest('hex');
   if (normalizedAction === 'REASSIGN_EXCEPTION') {
-    if (!targetCourierId) throw Object.assign(new Error('A different courier is required to resolve a delivery exception'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
     db.exec('BEGIN IMMEDIATE');
     try {
       const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
@@ -9472,6 +9471,12 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
         db.exec('COMMIT');
         return replay;
       }
+      // Resolve durable key reuse before validating the payload for a new command.
+      // A retry with a missing/changed target must conflict against the original
+      // fingerprint rather than return an unrelated target-required error.
+      if (!targetCourierId) throw Object.assign(new Error('A different courier is required to resolve a delivery exception'), {
+        statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED',
+      });
       // For a new command, revalidate target courier membership and role under
       // the write lock so concurrent role revocation cannot authorize a stale
       // reassignment.
