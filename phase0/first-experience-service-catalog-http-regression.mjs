@@ -601,9 +601,11 @@ try {
     assert.ok(currentAssignment, 'seeded assignment should exist for location guard regression');
     originalAssignmentLocationId = currentAssignment.location_id;
     originalAssignmentUpdatedAt = currentAssignment.updated_at;
+    // Use NULL to model a corrupted/missing assignment location without
+    // violating the locations foreign key; the canonical order still has one.
     assignmentLocationGuardDb.prepare(
       "UPDATE delivery_assignments SET location_id = ?, updated_at = ? WHERE id = ?"
-    ).run('stale-assignment-location', '9999-12-31T23:59:59.999Z', seededAssignmentId);
+    ).run(null, '9999-12-31T23:59:59.999Z', seededAssignmentId);
   } finally {
     assignmentLocationGuardDb.close();
   }
