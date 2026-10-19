@@ -2553,6 +2553,51 @@ if (!applied.includes(39)) {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(71, nowIso());
   }
 
+  // GAP-2.4 — durable service-delivery assessment command identities across orders.
+  if (!applied.includes(72)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS service_delivery_assessment_commands (
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        command_key TEXT NOT NULL,
+        server_order_id TEXT NOT NULL,
+        command_fingerprint TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (organization_id, command_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_service_delivery_assessment_commands_order
+        ON service_delivery_assessment_commands(organization_id, server_order_id, created_at DESC);
+    `);
+    // Preserve existing embedded assessment identities when upgrading. Order
+    // by creation time so a legacy duplicate key deterministically keeps its
+    // earliest recorded use.
+    const legacyAssessmentRows = db.prepare(`
+      SELECT server_order_id, tenant_organization_id, order_json, created_at
+      FROM orders
+      WHERE tenant_organization_id IS NOT NULL
+      ORDER BY created_at ASC, server_order_id ASC
+    `).all();
+    const insertLegacyAssessment = db.prepare(`
+      INSERT OR IGNORE INTO service_delivery_assessment_commands
+        (organization_id, command_key, server_order_id, command_fingerprint, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    for (const row of legacyAssessmentRows) {
+      const order = parseJSON(row.order_json, {});
+      const assessment = order?.service_delivery_request?.assessment;
+      const commandKey = String(assessment?.command_key || '').trim();
+      const fingerprint = String(assessment?.command_fingerprint || '').trim();
+      if (!commandKey || !fingerprint || !row.server_order_id) continue;
+      insertLegacyAssessment.run(
+        String(row.tenant_organization_id),
+        commandKey,
+        String(row.server_order_id),
+        fingerprint,
+        String(assessment.assessed_at || row.created_at || nowIso()),
+      );
+    }
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(72, nowIso());
+  }
+
   // GAP-1.24: fence status-query workers and permit takeover only before
   // provider I/O has been authorized. Legacy IN_PROGRESS commands are treated
   // as provider-in-flight because their execution phase cannot be proven.
@@ -5655,6 +5700,26 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
         statusCode: 409, code: 'LOGISTICS_ASSESSMENT_REQUEST_CHANGED',
       });
     }
+    const priorAssessmentCommand = db.prepare(`
+      SELECT * FROM service_delivery_assessment_commands
+      WHERE organization_id = ? AND command_key = ?
+    `).get(organizationId, commandKey);
+    if (priorAssessmentCommand) {
+      if (String(priorAssessmentCommand.server_order_id) !== String(serverOrderId)
+        || String(priorAssessmentCommand.command_fingerprint) !== commandFingerprint) {
+        throw Object.assign(new Error('Idempotency key was already used for a different service assessment'), {
+          statusCode: 409, code: 'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT',
+        });
+      }
+      if (request.assessment?.command_key !== commandKey
+        || request.assessment?.command_fingerprint !== commandFingerprint) {
+        throw Object.assign(new Error('Assessment result for prior command is missing from the canonical service request'), {
+          statusCode: 409, code: 'LOGISTICS_ASSESSMENT_REPLAY_STATE_MISSING',
+        });
+      }
+      db.exec('COMMIT');
+      return { order: freshOrder, service_delivery: request, replayed: true };
+    }
     if (request.assessment?.command_key === commandKey) {
       if (request.assessment.command_fingerprint !== commandFingerprint) {
         throw Object.assign(new Error('Idempotency key was reused with different assessment data'), {
@@ -5716,6 +5781,11 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
     const updatedOrder = { ...freshOrder, service_delivery_request: nextRequest };
     db.prepare('UPDATE orders SET order_json = ? WHERE chat_id = ? AND server_order_id = ?')
       .run(json(updatedOrder), String(chatId), String(serverOrderId));
+    db.prepare(`
+      INSERT INTO service_delivery_assessment_commands
+        (organization_id, command_key, server_order_id, command_fingerprint, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(organizationId, commandKey, String(serverOrderId), commandFingerprint, now);
     audit(String(chatId), 'logistics.service_request.assessed', 'order', String(serverOrderId), {
       outcome,
       deliveryModel: request.delivery_model,
