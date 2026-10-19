@@ -20,6 +20,16 @@ assert.match(fulfillment, /inventoryMovementIds/);
 assert.match(store, /cross_feature_boundary: 'delivery terminal transition may invoke existing inventory consequence only; payment and settlement remain read-only external authorities'/);
 assert.match(store, /payment_authority: 'unchanged; delivery does not mutate payment state or payment ledger'/);
 assert.match(store, /settlement_authority: 'unchanged; delivery does not create, settle, reverse, or mutate settlement records'/);
+const telegramProjectionStart = store.indexOf('export async function getTelegramBuyerFulfillmentExperience');
+const telegramProjectionEnd = store.indexOf('export async function listTelegramBuyerOrders', telegramProjectionStart);
+const telegramProjection = store.slice(telegramProjectionStart, telegramProjectionEnd);
+assert.ok(telegramProjectionStart >= 0 && telegramProjectionEnd > telegramProjectionStart,
+  'Telegram fulfillment projection must remain discoverable');
+assert.match(telegramProjection, /LEFT JOIN fulfillments f/);
+assert.match(telegramProjection, /f\.server_order_id = o\.server_order_id/);
+assert.match(telegramProjection, /CASE WHEN f\.id IS NOT NULL THEN f\.status ELSE mf\.status END/);
+assert.match(telegramProjection, /canonical_logistics_with_legacy_marketplace_fallback/);
+
 
 console.log('GAP-2.9 Cross-Feature Consistency Regression: PASS');
 console.log('Delivery -> fulfillment -> inventory remains the only terminal mutation path: PASS');
