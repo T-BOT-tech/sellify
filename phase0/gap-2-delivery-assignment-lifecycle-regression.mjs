@@ -120,6 +120,25 @@ assert.equal(
   2,
   'assignment fingerprint must not be rewritten after automatic courier selection; retries replay the original command intent',
 );
+const courierSelectionStart = store.indexOf('export async function selectDeliveryCourier(');
+const courierSelectionEnd = store.indexOf('export async function ', courierSelectionStart + 30);
+assert.ok(courierSelectionStart >= 0 && courierSelectionEnd > courierSelectionStart,
+  'canonical eligible-courier selection must remain explicit');
+const courierSelection = store.slice(courierSelectionStart, courierSelectionEnd);
+assert.match(courierSelection, /mr\.role_id = 'logistics_courier'/,
+  'automatic selection must only consider active logistics-courier roles');
+assert.match(courierSelection, /mr\.status = 'active'[\s\S]*?m\.status = 'active'/,
+  'automatic selection must exclude inactive memberships and role grants');
+assert.match(courierSelection, /da\.status IN \('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY'\)/,
+  'automatic selection workload must count only active delivery assignments');
+assert.match(courierSelection, /ORDER BY active_workload ASC, m\.user_id ASC/,
+  'automatic selection must use deterministic workload and user-id tie-breaking');
+assert.ok(
+  assignmentCreation.indexOf("db.exec('BEGIN IMMEDIATE')") >= 0
+    && assignmentCreation.indexOf("db.exec('BEGIN IMMEDIATE')") < assignmentCreation.indexOf('await selectDeliveryCourier'),
+  'automatic courier selection and assignment creation must share one immediate write transaction');
+assert.match(store, /CREATE UNIQUE INDEX idx_delivery_assignments_active_fulfillment[\s\S]*?WHERE status IN \('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY'\)/,
+  'database must prevent concurrent commands from creating multiple active courier assignments for one fulfillment');
 const assignmentTransitionStart = store.indexOf('export async function transitionDeliveryAssignment(');
 const assignmentTransitionEnd = store.indexOf('export async function ', assignmentTransitionStart + 30);
 assert.ok(assignmentTransitionStart >= 0 && assignmentTransitionEnd > assignmentTransitionStart,
