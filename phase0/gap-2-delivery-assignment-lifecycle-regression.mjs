@@ -89,6 +89,14 @@ assert.match(assignmentTransition, /FROM delivery_assignment_commands[\s\S]*?WHE
   'assignment retries must consult durable command history');
 assert.match(assignmentTransition, /existingCommand\.command_fingerprint\) !== commandFingerprint/,
   'historical assignment key reuse with different intent must conflict');
+const assignmentFingerprintStart = assignmentTransition.indexOf('const commandFingerprint = crypto.createHash');
+const assignmentFingerprintEnd = assignmentTransition.indexOf("if (normalizedAction === 'REASSIGN_EXCEPTION')", assignmentFingerprintStart);
+assert.ok(assignmentFingerprintStart >= 0 && assignmentFingerprintEnd > assignmentFingerprintStart,
+  'assignment command fingerprint must remain explicit and testable');
+const assignmentFingerprint = assignmentTransition.slice(assignmentFingerprintStart, assignmentFingerprintEnd);
+assert.doesNotMatch(assignmentFingerprint, /location_id/,
+  'assignment idempotency fingerprint must not depend on mutable or caller-overridden location state');
+
 assert.ok(
   assignmentTransition.indexOf('if (existingCommand)') >= 0
     && assignmentTransition.indexOf('if (existingCommand)') < assignmentTransition.indexOf("EXCEPTION_REASON_REQUIRED")
