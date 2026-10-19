@@ -40,6 +40,16 @@ export function openMarketCheckoutModal() {
   const container = document.getElementById('marketCartGroupedContainer');
   const totalDisplay = document.getElementById('marketModalTotal');
   const custInput = document.getElementById('marketCustName');
+  const parcelFields = document.getElementById('marketServiceDeliveryFields');
+  const needsParcelDetails = entries.some(entry => {
+    const listing = marketplaceListings.find(item => item.listing_id === entry.listing.listing_id) || entry.listing;
+    return isParcelDeliveryListing(listing);
+  });
+  if (parcelFields) parcelFields.style.display = needsParcelDetails ? 'block' : 'none';
+  for (const fieldId of ['marketServicePickup', 'marketServiceDestination']) {
+    const field = document.getElementById(fieldId);
+    if (field) field.required = needsParcelDetails;
+  }
 
   const profile = getActivePlatform().getCustomerProfile();
   if (profile && profile.name && custInput && !custInput.value) {
@@ -92,6 +102,11 @@ export function openMarketCheckoutModal() {
 
 export function closeMarketCheckoutModal() {
   document.getElementById('marketCheckoutModal').style.display = 'none';
+}
+
+function isParcelDeliveryListing(listing) {
+  const profile = String(listing?.service_profile || listing?.serviceProfile || '').trim().toUpperCase();
+  return listing?.item_type === 'service' && ['B2C_DELIVERY', 'P2P_DELIVERY'].includes(profile);
 }
 
 const MARKETPLACE_INTENT_KEY = STORAGE_KEYS.marketplaceCheckoutIntents;
@@ -195,11 +210,30 @@ async function submitMarketplaceOrderOnce() {
       item_type: listing.item_type === 'service' ? 'service' : 'product',
     };
   });
+  const parcelListing = entries
+    .map(entry => marketplaceListings.find(item => item.listing_id === entry.listing.listing_id) || entry.listing)
+    .find(isParcelDeliveryListing);
+  let serviceDelivery = null;
+  if (parcelListing) {
+    const pickupDetails = (document.getElementById('marketServicePickup')?.value || '').trim();
+    const destinationDetails = (document.getElementById('marketServiceDestination')?.value || '').trim();
+    const customerNote = (document.getElementById('marketServiceNote')?.value || '').trim();
+    if (!pickupDetails || !destinationDetails) {
+      showToast('Enter pickup and destination details for parcel delivery.');
+      return;
+    }
+    serviceDelivery = {
+      pickup_details: pickupDetails,
+      destination_details: destinationDetails,
+      ...(customerNote ? { customer_note: customerNote } : {}),
+    };
+  }
   const request = {
     buyer_id: currentStaff ? currentStaff.id : 'web_user',
     customer_name: custName,
     customer_phone: custPhone,
     items,
+    ...(serviceDelivery ? { service_delivery: serviceDelivery } : {}),
   };
   const intent = { idempotencyKey: 'marketplace-' + uid(), request, createdAt: Date.now() };
 
@@ -210,6 +244,7 @@ async function submitMarketplaceOrderOnce() {
     idempotency_key: intent.idempotencyKey,
     customer_name: custName,
     customer_phone: custPhone,
+    ...(serviceDelivery ? { service_delivery: serviceDelivery } : {}),
     total: items.reduce((sum, item) => sum + (item.qty * item.price), 0),
     items,
   };
