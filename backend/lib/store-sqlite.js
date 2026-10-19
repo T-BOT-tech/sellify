@@ -5604,9 +5604,28 @@ function orderFromRow(row) {
 function assertServiceDeliveryReadyForExecution(order) {
   const request = order?.service_delivery_request;
   if (!request) return;
-  if (String(request.assessment_status || '').toUpperCase() !== 'READY_FOR_FULFILLMENT') {
+  const assessment = request.assessment;
+  const evidenceType = String(assessment?.customer_acceptance?.evidence_type || '').trim().toLowerCase();
+  const evidenceReference = String(assessment?.customer_acceptance?.evidence_reference || '').trim();
+  const acceptedEvidenceTypes = new Set([
+    'customer_message',
+    'telegram_confirmation',
+    'recorded_verbal_consent',
+    'signed_confirmation',
+  ]);
+  const hasRecordedAcceptance = assessment?.customer_acceptance?.accepted === true
+    && acceptedEvidenceTypes.has(evidenceType)
+    && evidenceReference.length >= 3
+    && evidenceReference.length <= 200;
+  const instantAvailabilityConfirmed = String(request.delivery_model || '').trim().toLowerCase() !== 'instant'
+    || (assessment?.availability_confirmed === true
+      && assessment?.availability_confirmation?.result === 'CONFIRMED');
+  if (String(request.assessment_status || '').toUpperCase() !== 'READY_FOR_FULFILLMENT'
+    || String(assessment?.outcome || '').toUpperCase() !== 'ELIGIBLE'
+    || !hasRecordedAcceptance
+    || !instantAvailabilityConfirmed) {
     throw Object.assign(
-      new Error('Logistics service request must complete assessment and acceptance before fulfillment or courier assignment'),
+      new Error('Logistics service request must have an eligible assessment, recorded customer acceptance, and required availability confirmation before fulfillment or courier assignment'),
       { statusCode: 409, code: 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' }
     );
   }
