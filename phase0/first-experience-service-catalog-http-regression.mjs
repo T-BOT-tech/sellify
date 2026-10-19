@@ -571,7 +571,7 @@ try {
   );
   await assert.rejects(
     () => store.transitionDeliveryAssignment(
-      tenant.chatId, requestOrder.server_order_id, 'REASSIGNED', session,
+      tenant.chatId, requestOrder.server_order_id, 'REASSIGN_EXCEPTION', session,
       { idempotencyKey: 'parcel-assignment-reassign-missing-target' }
     ),
     error => error?.code === 'REASSIGNMENT_TARGET_REQUIRED' && error?.statusCode === 400,
