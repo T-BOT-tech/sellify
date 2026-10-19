@@ -5684,12 +5684,10 @@ export async function recordServiceDeliveryAssessment(chatId, serverOrderId, inp
         statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
       });
     }
-    const freshOrderOrganizationId = String(freshRow.tenant_organization_id || '');
-    if (freshOrderOrganizationId !== organizationId) {
-      throw Object.assign(new Error('Order organization mismatch'), {
-        statusCode: 403, code: 'ORDER_ORGANIZATION_MISMATCH',
-      });
-    }
+    // The orders row is tenant-scoped by (chat_id, server_order_id) and does
+    // not store tenant_organization_id. The tenant mapping checked above is
+    // the canonical organization binding; reading a nonexistent order column
+    // here incorrectly rejects every fresh assessment before validation.
     const freshOrder = orderFromRow(freshRow);
     const request = freshOrder?.service_delivery_request;
     const priorAssessmentCommand = db.prepare(`
