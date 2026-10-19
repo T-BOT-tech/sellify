@@ -9519,18 +9519,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     ACCEPTED: new Set(['OUT_FOR_DELIVERY','CANCELLED','FAILED','REASSIGNED']),
     OUT_FOR_DELIVERY: new Set(['DELIVERED','CANCELLED','FAILED','REASSIGNED']),
   };
-  if (['CANCELLED','FAILED'].includes(normalizedAction) && !exceptionReason) throw Object.assign(new Error('A reason is required when cancelling or failing a delivery assignment'), { statusCode: 400, code: 'EXCEPTION_REASON_REQUIRED' });
   const proofInput = input.proof;
-  if (normalizedAction === 'DELIVERED' && (proofInput == null || (typeof proofInput === 'string' && !proofInput.trim()))) {
-    throw Object.assign(new Error('Delivery proof is required before delivery completion'), { statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED' });
-  }
-  if (normalizedAction === 'DELIVERED' && typeof proofInput === 'object' && !Array.isArray(proofInput)) {
-    const proofType = String(proofInput.type || proofInput.kind || '').trim().toLowerCase();
-    const proofReference = String(proofInput.reference || proofInput.referenceId || proofInput.reference_id || '').trim();
-    if (!proofType || !proofReference) {
-      throw Object.assign(new Error('Delivery proof type and reference are required'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
-    }
-  }
 
   db.exec('BEGIN IMMEDIATE');
   try {
@@ -9559,6 +9548,21 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     db.exec('COMMIT');
     return replay;
     }
+    // Validate action-specific payload only after durable replay resolution.
+    // Reusing a key with changed/malformed intent must produce the idempotency
+    // conflict, not bypass the canonical command-history check.
+    if (['CANCELLED','FAILED'].includes(normalizedAction) && !exceptionReason) throw Object.assign(new Error('A reason is required when cancelling or failing a delivery assignment'), { statusCode: 400, code: 'EXCEPTION_REASON_REQUIRED' });
+    if (normalizedAction === 'DELIVERED' && (proofInput == null || (typeof proofInput === 'string' && !proofInput.trim()))) {
+      throw Object.assign(new Error('Delivery proof is required before delivery completion'), { statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED' });
+    }
+    if (normalizedAction === 'DELIVERED' && typeof proofInput === 'object' && !Array.isArray(proofInput)) {
+      const proofType = String(proofInput.type || proofInput.kind || '').trim().toLowerCase();
+      const proofReference = String(proofInput.reference || proofInput.referenceId || proofInput.reference_id || '').trim();
+      if (!proofType || !proofReference) {
+        throw Object.assign(new Error('Delivery proof type and reference are required'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
+      }
+    }
+
     const active = db.prepare(`SELECT da.* FROM delivery_assignments da JOIN fulfillments f ON f.id = da.fulfillment_id WHERE f.server_order_id = ? AND da.organization_id = ? AND da.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY') ORDER BY da.updated_at DESC LIMIT 1`).get(String(serverOrderId), organizationId);
     if (!active) throw Object.assign(new Error('No active courier assignment exists'), { statusCode: 409, code: 'ASSIGNMENT_REQUIRED' });
     const current = String(active.status);
