@@ -772,7 +772,12 @@ try {
     () => store.assignDeliveryCourier(tenant.chatId, rejectedOrder.server_order_id, '', session, {
       assignmentKey: 'parcel-rejected-order-assignment-must-fail',
     }),
-    error => error?.code === 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' && error?.statusCode === 409,
+    error => {
+      assert.equal(error?.code, 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED',
+        `rejected service requests must not be assigned to a courier; got code=${error?.code} status=${error?.statusCode} message=${error?.message}`);
+      assert.equal(error?.statusCode, 409);
+      return true;
+    },
     'rejected service requests must not be assigned to a courier'
   );
 
