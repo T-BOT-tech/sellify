@@ -58,6 +58,11 @@ const exceptionResolutionEnd = store.indexOf("  const transitions =", exceptionR
 const exceptionResolution = store.slice(exceptionResolutionStart, exceptionResolutionEnd);
 assert.match(exceptionResolution, /BEGIN IMMEDIATE[\s\S]*?const freshCourier = db\.prepare/,
   'exception reassignment must revalidate target courier authorization inside the write transaction');
+assert.ok(
+  exceptionResolution.indexOf('const existingCommand = db.prepare') >= 0
+    && exceptionResolution.indexOf('const freshCourier = db.prepare') > exceptionResolution.indexOf('const existingCommand = db.prepare'),
+  'committed exception reassignment retries must replay durable command history before rechecking mutable courier role',
+);
 
 assert.match(store, /if \(!applied\.includes\(71\)\)/, 'durable assignment command history must use an additive migration');
 assert.match(store, /CREATE TABLE IF NOT EXISTS delivery_assignment_commands/, 'assignment lifecycle commands must persist beyond last_command_key');
