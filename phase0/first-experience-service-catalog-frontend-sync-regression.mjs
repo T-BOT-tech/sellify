@@ -8,6 +8,7 @@ const tenantAuthSource = await readFile(new URL('../app/src/auth/tenant.js', imp
 const checkoutSource = await readFile(new URL('../app/src/orders/checkout.js', import.meta.url), 'utf8');
 const marketplaceCheckoutSource = await readFile(new URL('../app/src/marketplace/checkout.js', import.meta.url), 'utf8');
 const mainSource = await readFile(new URL('../app/src/main.js', import.meta.url), 'utf8');
+const appHtmlSource = await readFile(new URL('../app/index.html', import.meta.url), 'utf8');
 
 // Guard the real sanitizer implementation used by catalog pull/push. The
 // spread preserves item_type while the following fields normalize ID and price.
@@ -20,6 +21,20 @@ assert.match(marketplaceCheckoutSource, /const listing = marketplaceListings\.fi
   'checkout must resolve the current listing after a marketplace refresh instead of trusting a stale cart snapshot');
 assert.match(marketplaceCheckoutSource, /item_type:\s*listing\.item_type === 'service' \? 'service' : 'product'/,
   'marketplace checkout transport payloads must preserve canonical listing type for Telegram/local-queue paths');
+
+// Parcel-service intake is collected in the existing marketplace checkout and
+// sent through the same idempotent canonical checkout request (including the
+// Telegram handoff); no second order or delivery authority is introduced.
+assert.match(appHtmlSource, /id="marketServiceDeliveryFields"[^>]*style="display:none/);
+assert.match(appHtmlSource, /id="marketServicePickup"/);
+assert.match(appHtmlSource, /id="marketServiceDestination"/);
+assert.match(appHtmlSource, /id="marketServiceNote"/);
+assert.match(marketplaceCheckoutSource, /function isParcelDeliveryListing\(listing\)/);
+assert.match(marketplaceCheckoutSource, /\['B2C_DELIVERY', 'P2P_DELIVERY'\]\.includes\(profile\)/);
+assert.match(marketplaceCheckoutSource, /if \(!pickupDetails \|\| !destinationDetails\)/);
+assert.match(marketplaceCheckoutSource, /service_delivery: serviceDelivery/);
+assert.match(marketplaceCheckoutSource, /\? \{ service_delivery: serviceDelivery \} : \{\}/);
+
 assert.match(marketplaceCheckoutSource, /Idempotency-Key':\s*intent\.idempotencyKey/,
   'marketplace API checkout must send the durable intent idempotency key');
 assert.match(marketplaceCheckoutSource, /await writePendingMarketplaceIntent\(intent\)[\s\S]*?await postMarketplaceCheckoutIntent\(intent\)/,
