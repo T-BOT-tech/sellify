@@ -417,6 +417,7 @@ try {
   await assert.rejects(
     store.transitionOrderFulfillment(locationlessChatId, locationlessPhysicalOrderId, 'delivered', actor, {
       idempotencyKey: 'locationless-physical-delivered',
+      proof: { type: 'merchant_confirmation', reference: 'locationless-physical-proof-1' },
     }),
     error => error?.code === 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED',
     'physical-item fulfillment must still require a physical inventory location'
