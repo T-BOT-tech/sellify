@@ -546,13 +546,19 @@ try {
   );
   assert.equal(replayedAssignment.id, seededAssignmentId,
     'exact assignment retry must replay the original assignment');
-  await assert.rejects(
-    () => store.assignDeliveryCourier(
+  let assignmentKeyConflictError = null;
+  try {
+    await store.assignDeliveryCourier(
       tenant.chatId, requestOrder.server_order_id, 'different-courier-user', session,
       { assignmentKey: 'parcel-assignment-idempotency-key-replay' }
-    ),
-    error => error?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT' && error?.statusCode === 409,
-    'reusing an assignment key with a different courier must conflict'
+    );
+  } catch (error) {
+    assignmentKeyConflictError = error;
+  }
+  assert.ok(
+    assignmentKeyConflictError?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT'
+      && assignmentKeyConflictError?.statusCode === 409,
+    `reusing an assignment key with a different courier must conflict; got code=${assignmentKeyConflictError?.code} status=${assignmentKeyConflictError?.statusCode} message=${assignmentKeyConflictError?.message}`
   );
 
   let directTransitionError = null;
