@@ -9706,7 +9706,7 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
       row.id,
     );
     const updated = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(row.id);
-    const inventoryMovements = applyCoreFulfillmentInventoryConsequence(key, updated, orderJson, actor);
+    const inventoryMovements = applyCoreFulfillmentInventoryConsequence(key, updated, freshOrderJson, actor);
     audit(key, 'fulfillment.transitioned', 'fulfillment', row.id, {
       orderId: String(serverOrderId), from: current, to: target, commandKey,
       inventoryMovementIds: inventoryMovements.map(item => item.id),
