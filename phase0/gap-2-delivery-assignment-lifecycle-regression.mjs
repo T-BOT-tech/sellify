@@ -48,6 +48,24 @@ assert.match(store, /REASSIGN_EXCEPTION/);
 assert.match(store, /EXCEPTION_NOT_FOUND/);
 assert.match(store, /delivery\.assignment\.exception_resolved/);
 assert.match(store, /REASSIGNMENT_TARGET_REQUIRED/);
+assert.match(store, /if \(!applied\.includes\(72\)\)/,
+  'service-delivery assessment idempotency history must use an additive migration');
+assert.match(store, /CREATE TABLE IF NOT EXISTS service_delivery_assessment_commands/,
+  'assessment command keys must be unique within an organization across orders');
+const serviceAssessmentStart = store.indexOf('export async function recordServiceDeliveryAssessment(');
+const serviceAssessmentEnd = store.indexOf('function insertProduct(', serviceAssessmentStart);
+assert.ok(serviceAssessmentStart >= 0 && serviceAssessmentEnd > serviceAssessmentStart,
+  'canonical service-delivery assessment command must remain explicit');
+const serviceAssessment = store.slice(serviceAssessmentStart, serviceAssessmentEnd);
+assert.match(serviceAssessment, /FROM service_delivery_assessment_commands[\s\S]*?WHERE organization_id = \? AND command_key = \?/,
+  'assessment retries must check organization-scoped durable command history');
+assert.match(serviceAssessment, /INSERT INTO service_delivery_assessment_commands/,
+  'successful assessments must persist durable command identity');
+assert.ok(
+  serviceAssessment.indexOf('const priorAssessmentCommand = db.prepare')
+    < serviceAssessment.indexOf("if (request.assessment?.command_key === commandKey)"),
+  'durable assessment key reuse must be resolved before the embedded per-order replay check',
+);
 assert.match(store, /BEGIN IMMEDIATE/);
 assert.match(store, /No unresolved delivery exception exists/);
 assert.match(store, /UPDATE delivery_assignments SET status = \\'REASSIGNED\\'/);
