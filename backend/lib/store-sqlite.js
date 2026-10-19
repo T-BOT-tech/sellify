@@ -9806,10 +9806,9 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
         statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
       });
     }
-    const freshOrganizationId = String(freshOrderRow.tenant_organization_id || '');
-    if (freshOrganizationId !== organizationId) {
-      throw Object.assign(new Error('Order organization changed during fulfillment transition'), { statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH' });
-    }
+    // The orders table is keyed to the tenant through chat_id; it does not
+    // own a tenant_organization_id column. The tenant mapping above is the
+    // canonical organization binding for this scoped order row.
     const freshOrderJson = orderFromRow(freshOrderRow);
     // Durable command history must be checked before mutable order-input and
     // lifecycle validation: a committed retry remains idempotent after later
