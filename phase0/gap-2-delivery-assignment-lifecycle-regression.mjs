@@ -328,6 +328,17 @@ assert.ok(
 
 assert.match(store, /delivery\.assignment\.delivered/);
 assert.match(store, /applyCoreFulfillmentInventoryConsequence/);
+const inventoryConsequenceStart = store.indexOf('function applyCoreFulfillmentInventoryConsequence(');
+const inventoryConsequenceEnd = store.indexOf('export async function ', inventoryConsequenceStart + 30);
+assert.ok(inventoryConsequenceStart >= 0 && inventoryConsequenceEnd > inventoryConsequenceStart,
+  'canonical fulfillment inventory consequence helper must remain discoverable');
+const inventoryConsequence = store.slice(inventoryConsequenceStart, inventoryConsequenceEnd);
+assert.match(inventoryConsequence, /const quantitiesByProduct = new Map\(\)/,
+  'duplicate order lines for the same product must be aggregated before stock is decremented');
+assert.match(inventoryConsequence, /quantitiesByProduct\.set\(productId, \(quantitiesByProduct\.get\(productId\) \|\| 0\) \+ quantity\)/,
+  'fulfillment inventory quantity must include every valid line for a product');
+assert.match(inventoryConsequence, /for \(const \[productId, quantity\] of quantitiesByProduct\)/,
+  'inventory movement must be emitted once per fulfillment/product using the aggregated quantity');
 
 assert.match(server, /method: 'PATCH'.*delivery-assignment/);
 assert.match(server, /transitionDeliveryAssignment/);
