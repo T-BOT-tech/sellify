@@ -8589,8 +8589,6 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
   const requestedLocationId = input.locationId || input.location_id || null;
   const canonicalOrderLocationId = order.location_id ? String(order.location_id) : null;
   let locationId = canonicalOrderLocationId || requestedLocationId || actor?.locationId || null;
-  const type = normalizeCoreFulfillmentType(order.fulfillment_type || 'delivery');
-  if (type !== 'delivery') throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
   const actorUserId = actor?.userId ? String(actor.userId) : null;
   let selectedCourierUserId = String(courierUserId || '').trim();
   const key = String(input.assignmentKey || input.assignment_key || `courier:auto:${serverOrderId}`).trim();
@@ -8613,9 +8611,6 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
       });
     }
     const freshOrder = orderFromRow(freshOrderRow);
-    if (normalizeCoreFulfillmentType(freshOrderRow.fulfillment_type || 'delivery') !== 'delivery') {
-      throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
-    }
     const freshCanonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
     locationId = freshCanonicalLocationId || requestedLocationId || actor?.locationId || null;
     assignmentFingerprint = crypto.createHash('sha256').update(JSON.stringify({
@@ -8659,6 +8654,11 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
     // A durable replay represents a command that already passed readiness.
     // Enforce current readiness only for a new assignment, not for a retry.
     assertServiceDeliveryReadyForExecution(freshOrder);
+    // Service request readiness is the primary gate for parcel requests; once
+    // ready, retain the canonical delivery-type guard before mutating assignment.
+    if (normalizeCoreFulfillmentType(freshOrderRow.fulfillment_type || 'delivery') !== 'delivery') {
+      throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
+    }
 
     if (!fulfillment) {
       fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?')
