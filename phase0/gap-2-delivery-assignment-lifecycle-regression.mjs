@@ -66,6 +66,27 @@ assert.ok(
     < serviceAssessment.indexOf("if (request.assessment?.command_key === commandKey)"),
   'durable assessment key reuse must be resolved before the embedded per-order replay check',
 );
+assert.ok(
+  serviceAssessment.indexOf('assertLogisticsSchedulingAuthorization(actor, organizationId, locationId')
+    < serviceAssessment.indexOf("db.exec('BEGIN IMMEDIATE')"),
+  'assessment retries must not bypass current preflight authorization',
+);
+assert.ok(
+  serviceAssessment.indexOf("db.exec('BEGIN IMMEDIATE')")
+    < serviceAssessment.indexOf('const priorAssessmentCommand = db.prepare'),
+  'assessment command replay must be resolved inside the write transaction',
+);
+assert.ok(
+  serviceAssessment.indexOf('UPDATE orders SET order_json = ?')
+    < serviceAssessment.indexOf('INSERT INTO service_delivery_assessment_commands')
+    && serviceAssessment.indexOf('INSERT INTO service_delivery_assessment_commands')
+      < serviceAssessment.lastIndexOf("db.exec('COMMIT')"),
+  'canonical assessment state and durable command identity must commit atomically',
+);
+assert.ok(
+  serviceAssessment.includes('assertLogisticsSchedulingAuthorization(actor, organizationId, transactionLocationId'),
+  'assessment authorization must be rechecked against canonical location inside the transaction',
+);
 assert.match(store, /BEGIN IMMEDIATE/);
 assert.match(store, /No unresolved delivery exception exists/);
 assert.match(store, /UPDATE delivery_assignments SET status = \\'REASSIGNED\\'/);
