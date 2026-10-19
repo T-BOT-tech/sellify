@@ -8500,7 +8500,6 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
   let assignmentFingerprint = crypto.createHash('sha256').update(JSON.stringify({
     action: 'ASSIGN',
     requested_courier_user_id: selectedCourierUserId || null,
-    location_id: locationId ? String(locationId) : null,
   })).digest('hex');
   db.exec('BEGIN IMMEDIATE');
   try {
