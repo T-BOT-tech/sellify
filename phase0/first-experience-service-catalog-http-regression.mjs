@@ -251,7 +251,12 @@ try {
     () => store.assignDeliveryCourier(tenant.chatId, requestOrder.server_order_id, '', logisticsActor, {
       assignmentKey: 'parcel-request-before-assessment',
     }),
-    error => error?.code === 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' && error?.statusCode === 409,
+    error => {
+      assert.equal(error?.code, 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED',
+        `unexpected assignment rejection: code=${error?.code || 'none'} status=${error?.statusCode || 'none'} message=${error?.message || error}`);
+      assert.equal(error?.statusCode, 409);
+      return true;
+    },
     'unassessed service requests must not be assigned to a courier'
   );
 
