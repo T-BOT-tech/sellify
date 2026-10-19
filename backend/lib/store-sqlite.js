@@ -9434,12 +9434,14 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
   const exceptionReason = String(input.reason || input.exceptionReason || input.exception_reason || '').trim().slice(0, 500);
   const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
   if (!commandKey) throw Object.assign(new Error('Idempotency key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
+  // Fingerprint only the command's semantic intent. Location is canonical
+  // order state, not caller-controlled intent; including a mutable location
+  // would make a committed retry depend on stale pre-transaction order data.
   const commandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
     action: normalizedAction,
     target_courier_id: targetCourierId || null,
     reason: exceptionReason || null,
     proof: input.proof === undefined ? null : input.proof,
-    location_id: input.locationId || input.location_id || order.location_id || null,
   })).digest('hex');
   if (normalizedAction === 'REASSIGN_EXCEPTION') {
     if (!targetCourierId) throw Object.assign(new Error('A different courier is required to resolve a delivery exception'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
