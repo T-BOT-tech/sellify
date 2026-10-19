@@ -20,6 +20,16 @@ assert.match(fulfillmentTransition, /SELECT organization_id FROM tenants WHERE c
   'fulfillment transition must revalidate tenant organization inside the transaction');
 assert.match(fulfillmentTransition, /freshCommandFingerprint !== commandFingerprint/,
   'fulfillment transition must reject stale canonical order inputs');
+assert.match(store, /if \(!applied\.includes\(70\)\)/,
+  'durable fulfillment command history must be introduced through an additive migration');
+assert.match(store, /CREATE TABLE IF NOT EXISTS fulfillment_commands/,
+  'fulfillment idempotency keys must survive later transitions');
+assert.match(fulfillmentTransition, /FROM fulfillment_commands[\s\S]*?WHERE organization_id = \? AND command_key = \?/,
+  'fulfillment retries must consult durable command history rather than only the latest command key');
+assert.match(fulfillmentTransition, /priorCommand\.command_fingerprint\) !== commandFingerprint/,
+  'reusing a historical key with a different command fingerprint must conflict');
+assert.match(fulfillmentTransition, /INSERT INTO fulfillment_commands/,
+  'successful fulfillment commands must be recorded transactionally');
 assert.match(fulfillmentTransition, /ROLLBACK/,
   'failed fulfillment transitions must roll back the write transaction');
 assert.match(fulfillmentTransition, /applyCoreFulfillmentInventoryConsequence\(key, updated, freshOrderJson, actor\)/,
