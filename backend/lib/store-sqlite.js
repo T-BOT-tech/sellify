@@ -8489,17 +8489,10 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
   if (organizationId !== String(tenant.organization_id)) throw Object.assign(new Error('Order organization mismatch'), { statusCode: 403 });
   const requestedLocationId = input.locationId || input.location_id || null;
   const canonicalOrderLocationId = order.location_id ? String(order.location_id) : null;
-  if (canonicalOrderLocationId && requestedLocationId
-    && String(requestedLocationId) !== canonicalOrderLocationId) {
-    throw Object.assign(new Error('Assignment location must match the canonical order location'), {
-      statusCode: 403, code: 'LOGISTICS_ASSIGNMENT_LOCATION_MISMATCH',
-    });
-  }
   let locationId = canonicalOrderLocationId || requestedLocationId || actor?.locationId || null;
   const type = normalizeCoreFulfillmentType(order.fulfillment_type || 'delivery');
   if (type !== 'delivery') throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
   const actorUserId = actor?.userId ? String(actor.userId) : null;
-  assertLogisticsSchedulingAuthorization(actor, organizationId, locationId, 'logistics:scheduling:request');
   let selectedCourierUserId = String(courierUserId || '').trim();
   const key = String(input.assignmentKey || input.assignment_key || `courier:auto:${serverOrderId}`).trim();
   let fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), organizationId);
@@ -8530,19 +8523,11 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
       throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
     }
     const freshCanonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
-    if (freshCanonicalLocationId && requestedLocationId
-      && String(requestedLocationId) !== freshCanonicalLocationId) {
-      throw Object.assign(new Error('Assignment location must match the canonical order location'), {
-        statusCode: 403, code: 'LOGISTICS_ASSIGNMENT_LOCATION_MISMATCH',
-      });
-    }
     locationId = freshCanonicalLocationId || requestedLocationId || actor?.locationId || null;
     assignmentFingerprint = crypto.createHash('sha256').update(JSON.stringify({
       action: 'ASSIGN',
       requested_courier_user_id: selectedCourierUserId || null,
-      location_id: locationId ? String(locationId) : null,
     })).digest('hex');
-    assertLogisticsSchedulingAuthorization(actor, organizationId, locationId, 'logistics:scheduling:request');
 
     // Resolve assignment command keys from durable history, not only the
     // latest command stored on a mutable assignment row.
@@ -8565,6 +8550,17 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
       db.exec('COMMIT');
       return replay;
     }
+
+    // Location is canonical mutable order state, not caller-controlled command
+    // intent. Validate it for new commands only; a committed retry must replay
+    // even if the order's location or the caller's current authorization changed.
+    if (freshCanonicalLocationId && requestedLocationId
+      && String(requestedLocationId) !== freshCanonicalLocationId) {
+      throw Object.assign(new Error('Assignment location must match the canonical order location'), {
+        statusCode: 403, code: 'LOGISTICS_ASSIGNMENT_LOCATION_MISMATCH',
+      });
+    }
+    assertLogisticsSchedulingAuthorization(actor, organizationId, locationId, 'logistics:scheduling:request');
 
     // A durable replay represents a command that already passed readiness.
     // Enforce current readiness only for a new assignment, not for a retry.
