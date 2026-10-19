@@ -30,7 +30,7 @@ assert.match(store, /Target courier does not have an active logistics courier ro
 const exceptionResolutionStart = store.indexOf("if (normalizedAction === 'REASSIGN_EXCEPTION')");
 const exceptionResolutionEnd = store.indexOf("  const transitions =", exceptionResolutionStart);
 const exceptionResolution = store.slice(exceptionResolutionStart, exceptionResolutionEnd);
-assert.match(exceptionResolution, /BEGIN IMMEDIATE[\\s\\S]*?const freshCourier = db\\.prepare/,
+assert.match(exceptionResolution, /BEGIN IMMEDIATE[\s\S]*?const freshCourier = db\.prepare/,
   'exception reassignment must revalidate target courier authorization inside the write transaction');
 
 assert.match(store, /delivery\.assignment\.delivered/);
