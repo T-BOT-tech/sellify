@@ -967,7 +967,60 @@ try {
     'buyer tracking must declare canonical Logistics as the operational authority',
   );
 
-  console.log('PASS: service catalog HTTP journey, canonical Telegram fulfillment projection, frontend sync response-loss recovery, and idempotent order sync');
+  // Legacy compatibility: when this seller order has no canonical commerce
+  // fulfillment, the established marketplace fulfillment remains visible.
+  const legacyMarketplaceOrderId = 'legacy-tracking-' + Date.now().toString(36);
+  const legacySellerOrderRowId = 'legacy-seller-row-' + Date.now().toString(36);
+  const legacySellerOrderId = 'legacy-seller-order-' + Date.now().toString(36);
+  const legacyTrackingReference = 'LEGACY-TRACK-' + Date.now().toString(36);
+  const legacyProofReference = 'proof://legacy-tracking-' + Date.now().toString(36);
+  const legacyNow = new Date().toISOString();
+  const trackingDb = store.getDatabaseForTests();
+  trackingDb.prepare(
+    "INSERT INTO marketplace_orders (id,buyer_identity,customer_name,currency,total_minor,status,tracking_token_hash,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)"
+  ).run(legacyMarketplaceOrderId, 'parcel-request-buyer-http', 'Parcel Buyer', 'ETB', 10000,
+    'confirmed', 'legacy-tracking-hash', legacyNow, legacyNow);
+  trackingDb.prepare(
+    "INSERT INTO marketplace_seller_orders (id,marketplace_order_id,seller_id,seller_order_id,organization_id,currency,subtotal_minor,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)"
+  ).run(legacySellerOrderRowId, legacyMarketplaceOrderId, tenant.chatId, legacySellerOrderId,
+    String(session.organizationId), 'ETB', 10000, 'confirmed', legacyNow, legacyNow);
+  trackingDb.prepare(
+    "INSERT INTO marketplace_fulfillments (id,seller_order_id,status,fulfillment_type,tracking_reference,proof_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)"
+  ).run('legacy-fulfillment-' + Date.now().toString(36), legacySellerOrderRowId, 'out_for_delivery',
+    'delivery', legacyTrackingReference, JSON.stringify({ type: 'photo', ref: legacyProofReference }), legacyNow, legacyNow);
+
+  const legacyExperience = await store.getTelegramBuyerFulfillmentExperience(
+    tenant.chatId, 'parcel-request-buyer-http', legacyMarketplaceOrderId,
+  );
+  assert.equal(legacyExperience.fulfillments.length, 1,
+    'legacy order without canonical fulfillment should retain one marketplace fulfillment');
+  assert.equal(legacyExperience.fulfillments[0].status, 'out_for_delivery',
+    'legacy marketplace status should be used only when canonical fulfillment is absent');
+  assert.equal(legacyExperience.fulfillments[0].trackingReference, legacyTrackingReference);
+  assert.equal(legacyExperience.fulfillments[0].proof.ref, legacyProofReference);
+
+  // A different tenant/seller must not read the original seller's order even
+  // when the caller supplies a valid buyer identity and marketplace order ID.
+  const otherSeller = await store.getOrCreateUserByTelegram(
+    'tracking-isolation-' + Date.now().toString(36), 'Tracking Isolation Seller',
+  );
+  const otherTenant = await store.createTenantForUser({
+    userId: otherSeller.id,
+    sellerName: 'Tracking Isolation Store',
+    businessType: 'retail',
+    country: 'ET',
+    currency: 'ETB',
+    timezone: 'Africa/Addis_Ababa',
+  });
+  await assert.rejects(
+    () => store.getTelegramBuyerFulfillmentExperience(
+      otherTenant.chatId, 'parcel-request-buyer-http', requestedAssessment.marketplace_order_id,
+    ),
+    error => error?.code === 'ORDER_NOT_FOUND',
+    'cross-seller/tenant tracking access must fail closed',
+  );
+
+  console.log('PASS: canonical Telegram fulfillment projection, legacy fallback, tenant/seller isolation, service catalog HTTP journey, frontend sync recovery, and idempotent order sync');
 } catch (error) {
   console.error(error);
   if (childOutput) console.error('Backend output:\n' + childOutput);
