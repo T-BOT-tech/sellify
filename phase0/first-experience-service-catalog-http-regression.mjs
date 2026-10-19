@@ -987,7 +987,7 @@ try {
   trackingDb.prepare(
     "INSERT INTO marketplace_fulfillments (id,seller_order_id,status,fulfillment_type,tracking_reference,proof_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)"
   ).run('legacy-fulfillment-' + Date.now().toString(36), legacySellerOrderRowId, 'out_for_delivery',
-    'delivery', legacyTrackingReference, JSON.stringify({ type: 'photo', ref: legacyProofReference }), legacyNow, legacyNow);
+    'delivery', legacyTrackingReference, JSON.stringify({ type: 'photo', reference: legacyProofReference }), legacyNow, legacyNow);
 
   const legacyExperience = await store.getTelegramBuyerFulfillmentExperience(
     tenant.chatId, 'parcel-request-buyer-http', legacyMarketplaceOrderId,
@@ -997,7 +997,7 @@ try {
   assert.equal(legacyExperience.fulfillments[0].status, 'out_for_delivery',
     'legacy marketplace status should be used only when canonical fulfillment is absent');
   assert.equal(legacyExperience.fulfillments[0].trackingReference, legacyTrackingReference);
-  assert.equal(legacyExperience.fulfillments[0].proof.ref, legacyProofReference);
+  assert.equal(legacyExperience.fulfillments[0].proof.reference, legacyProofReference);
 
   // A different tenant/seller must not read the original seller's order even
   // when the caller supplies a valid buyer identity and marketplace order ID.
