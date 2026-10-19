@@ -9738,19 +9738,12 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
 
   const requestedLocationId = input.locationId || input.location_id || null;
   const canonicalOrderLocationId = order.location_id ? String(order.location_id) : null;
-  if (canonicalOrderLocationId && requestedLocationId
-    && String(requestedLocationId) !== canonicalOrderLocationId) {
-    throw Object.assign(new Error('Fulfillment location must match the canonical order location'), {
-      statusCode: 403, code: 'FULFILLMENT_LOCATION_MISMATCH',
-    });
-  }
   const actorUserId = actor?.userId && db.prepare('SELECT id FROM users WHERE id = ?').get(String(actor.userId)) ? String(actor.userId) : null;
   let locationId = canonicalOrderLocationId || requestedLocationId || actor?.locationId || null;
-  if (locationId) {
-    const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(String(locationId), organizationId);
-    if (!location) throw Object.assign(new Error('Location does not belong to this organization'), { statusCode: 400, code: 'LOCATION_SCOPE_DENIED' });
-  }
 
+  // Location is mutable canonical state, not fulfillment-command identity.
+  // Validate it for new commands inside the write transaction, after durable
+  // replay lookup, so a committed retry is not rejected by later location changes.
   db.exec('BEGIN IMMEDIATE');
   try {
     const freshOrderRow = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?')
