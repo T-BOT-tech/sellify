@@ -8505,6 +8505,11 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
   const key = String(input.assignmentKey || input.assignment_key || `courier:auto:${serverOrderId}`).trim();
   let fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), organizationId);
   if (!key) throw Object.assign(new Error('Assignment key is required'), { statusCode: 400 });
+  const assignmentFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+    action: 'ASSIGN',
+    requested_courier_user_id: selectedCourierUserId || null,
+    location_id: locationId ? String(locationId) : null,
+  })).digest('hex');
   db.exec('BEGIN IMMEDIATE');
   try {
     const freshOrderRow = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?')
@@ -8536,27 +8541,26 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
     locationId = freshCanonicalLocationId || requestedLocationId || actor?.locationId || null;
     assertLogisticsSchedulingAuthorization(actor, organizationId, locationId, 'logistics:scheduling:request');
 
-    // Treat the command key as an organization-scoped idempotency key, not
-    // merely a field on whichever assignment happens to be found for this order.
+    // Resolve assignment command keys from durable history, not only the
+    // latest command stored on a mutable assignment row.
     const priorCommand = db.prepare(`
-      SELECT da.*, f.server_order_id AS assigned_server_order_id
-      FROM delivery_assignments da
-      JOIN fulfillments f ON f.id = da.fulfillment_id
-      WHERE da.organization_id = ? AND da.last_command_key = ?
-      ORDER BY da.updated_at DESC LIMIT 1
+      SELECT * FROM delivery_assignment_commands
+      WHERE organization_id = ? AND command_key = ?
     `).get(organizationId, key);
     if (priorCommand) {
-      const sameOrder = String(priorCommand.assigned_server_order_id) === String(serverOrderId);
-      const sameCourier = !selectedCourierUserId
-        || String(priorCommand.courier_user_id) === selectedCourierUserId;
-      const sameLocation = String(priorCommand.location_id || '') === String(locationId || '');
-      if (!sameOrder || !sameCourier || !sameLocation || String(priorCommand.status) !== 'ASSIGNED') {
+      if (String(priorCommand.server_order_id) !== String(serverOrderId)
+        || String(priorCommand.command_fingerprint) !== assignmentFingerprint) {
         throw Object.assign(new Error('Idempotency key was already used for a different delivery assignment'), {
           statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT',
         });
       }
+      const replay = db.prepare('SELECT * FROM delivery_assignments WHERE id = ? AND organization_id = ?')
+        .get(priorCommand.result_assignment_id, organizationId);
+      if (!replay) throw Object.assign(new Error('Assignment result for prior command is missing'), {
+        statusCode: 409, code: 'ASSIGNMENT_REPLAY_STATE_MISSING',
+      });
       db.exec('COMMIT');
-      return priorCommand;
+      return replay;
     }
 
     if (!fulfillment) {
@@ -8613,6 +8617,8 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
     const existing = db.prepare('SELECT * FROM delivery_assignments WHERE fulfillment_id = ?').get(fulfillment.id);
     if (existing) {
       if (existing.courier_user_id !== selectedCourierUserId) throw Object.assign(new Error('Delivery is already assigned to another courier'), { statusCode: 409, code: 'ASSIGNMENT_CONFLICT' });
+      db.prepare('INSERT INTO delivery_assignment_commands (organization_id, command_key, server_order_id, command_fingerprint, result_assignment_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(organizationId, key, String(serverOrderId), assignmentFingerprint, existing.id, nowIso());
       db.exec('COMMIT');
       return existing;
     }
@@ -8627,6 +8633,8 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
     audit(String(chatId), 'delivery.assignment.created', 'delivery_assignment', id, {
       orderId: String(serverOrderId), courierUserId: selectedCourierUserId, locationId: locationId ? String(locationId) : null,
     }, { organizationId, locationId: locationId ? String(locationId) : null, actorId: actorUserId });
+    db.prepare('INSERT INTO delivery_assignment_commands (organization_id, command_key, server_order_id, command_fingerprint, result_assignment_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(organizationId, key, String(serverOrderId), assignmentFingerprint, id, now);
     db.exec('COMMIT');
     return row;
   } catch (error) {
