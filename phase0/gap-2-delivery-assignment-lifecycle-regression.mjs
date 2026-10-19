@@ -26,6 +26,15 @@ assert.match(store, /CREATE TABLE IF NOT EXISTS fulfillment_commands/,
   'fulfillment idempotency keys must survive later transitions');
 assert.match(fulfillmentTransition, /FROM fulfillment_commands[\s\S]*?WHERE organization_id = \? AND command_key = \?/,
   'fulfillment retries must consult durable command history rather than only the latest command key');
+const fulfillmentReplayLookup = fulfillmentTransition.indexOf('const priorCommand = db.prepare');
+assert.ok(fulfillmentReplayLookup >= 0
+    && fulfillmentReplayLookup < fulfillmentTransition.indexOf('const freshCommandFingerprint')
+    && fulfillmentReplayLookup < fulfillmentTransition.indexOf('assertServiceDeliveryReadyForExecution(freshOrderJson)'),
+  'durable fulfillment retries must replay before mutable order fingerprint and readiness validation');
+assert.match(fulfillmentTransition, /priorCommand\.server_order_id[\s\S]*?priorCommand\.command_fingerprint/,
+  'durable fulfillment replay must reject key reuse across orders or changed command intent');
+assert.match(fulfillmentTransition, /FULFILLMENT_REPLAY_STATE_MISSING/,
+  'durable fulfillment replay must fail closed if its canonical result row is missing');
 assert.match(fulfillmentTransition, /priorCommand\.command_fingerprint\) !== commandFingerprint/,
   'reusing a historical key with a different command fingerprint must conflict');
 assert.match(fulfillmentTransition, /INSERT INTO fulfillment_commands/,
