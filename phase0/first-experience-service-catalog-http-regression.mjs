@@ -486,9 +486,14 @@ try {
     const matchingFulfillment = assignmentReplayDb.prepare(
       'SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?'
     ).get(String(requestOrder.server_order_id), String(session.organizationId));
+    // Keep the seeded fulfillment consistent with the location resolution used
+    // by direct transitions when the order has no explicit location.
+    const replayLocationId = requestOrder.location_id
+      ? String(requestOrder.location_id)
+      : (session.locationId ? String(session.locationId) : null);
     if (matchingFulfillment) {
       assignmentReplayDb.prepare('UPDATE fulfillments SET location_id = ? WHERE id = ?').run(
-        requestOrder.location_id ? String(requestOrder.location_id) : null, matchingFulfillment.id
+        replayLocationId, matchingFulfillment.id
       );
     } else {
       const now = new Date().toISOString();
@@ -500,7 +505,7 @@ try {
         VALUES (?, ?, ?, ?, 'delivery', 'pending', NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?, 1)
       `).run(
         'test-assignment-replay-fulfillment', String(requestOrder.server_order_id),
-        String(session.organizationId), requestOrder.location_id ? String(requestOrder.location_id) : null,
+        String(session.organizationId), replayLocationId,
         String(user.id), String(user.id), now, now
       );
     }
@@ -516,7 +521,7 @@ try {
       VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, ?, ?, 1, ?)
     `).run(
       seededAssignmentId, fulfillmentRow.id, String(session.organizationId),
-      requestOrder.location_id ? String(requestOrder.location_id) : null,
+      replayLocationId,
       String(user.id), 'parcel-assignment-idempotency-key-replay',
       String(user.id), now, now, 'parcel-assignment-idempotency-key-replay'
     );
