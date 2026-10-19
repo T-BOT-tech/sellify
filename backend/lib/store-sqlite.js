@@ -8517,7 +8517,22 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
     if (parseJSON(product.product_json, {}).item_type === 'service') continue;
     const eventId = `fulfillment-sale:${fulfillmentRow.id}:${productId}`;
     const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
-    if (existing) { movements.push(inventoryMovementFromRow(existing)); continue; }
+    if (existing) {
+      const replayMatchesIntent = String(existing.organization_id) === String(fulfillmentRow.organization_id)
+        && String(existing.location_id) === locationId
+        && String(existing.product_id) === productId
+        && Number(existing.quantity) === -quantity
+        && String(existing.movement_type).toUpperCase() === 'SALE'
+        && String(existing.reference_type) === 'fulfillment'
+        && String(existing.reference_id) === String(fulfillmentRow.id);
+      if (!replayMatchesIntent) {
+        throw Object.assign(new Error('Existing fulfillment inventory event conflicts with the current canonical fulfillment intent'), {
+          statusCode: 409, code: 'FULFILLMENT_INVENTORY_REPLAY_CONFLICT', productId, fulfillmentId: String(fulfillmentRow.id),
+        });
+      }
+      movements.push(inventoryMovementFromRow(existing));
+      continue;
+    }
     if (!locationId) throw Object.assign(new Error('Fulfillment inventory location is required'), { statusCode: 409, code: 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED' });
     const balance = Number(db.prepare('SELECT COALESCE(SUM(quantity), 0) AS quantity FROM inventory_movements WHERE organization_id = ? AND location_id = ? AND product_id = ?').get(String(fulfillmentRow.organization_id), locationId, productId)?.quantity || 0);
     if (balance < quantity) throw Object.assign(new Error('Insufficient inventory for fulfillment'), { statusCode: 409, code: 'FULFILLMENT_INSUFFICIENT_INVENTORY', productId, available: balance, requested: quantity });
