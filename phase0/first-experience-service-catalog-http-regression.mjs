@@ -247,6 +247,14 @@ try {
     membershipId: ownerMembership.id,
     role: 'logistics_manager',
   });
+  // Session authorization claims are a snapshot. Reissue the test session
+  // after the contextual role change so the HTTP journey tests current scope.
+  const assessmentSession = await store.createSession({
+    userId: user.id,
+    chatId: tenant.chatId,
+    deviceName: 'Service Catalog HTTP assessment regression',
+  });
+  authHeaders.Authorization = 'Bearer ' + assessmentSession.token;
   await assert.rejects(
     () => store.assignDeliveryCourier(tenant.chatId, requestOrder.server_order_id, '', logisticsActor, {
       assignmentKey: 'parcel-request-before-assessment',
