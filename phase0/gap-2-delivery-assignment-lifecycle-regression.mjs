@@ -102,6 +102,24 @@ assert.ok(initialFingerprintStart >= 0 && initialFingerprintEnd > initialFingerp
   'initial assignment command fingerprint must remain explicit and testable');
 assert.doesNotMatch(assignmentCreation.slice(initialFingerprintStart, initialFingerprintEnd), /location_id/,
   'initial assignment idempotency fingerprint must not depend on mutable canonical location');
+assert.ok(
+  assignmentCreation.indexOf('const priorCommand = db.prepare') < assignmentCreation.indexOf('const selected = await selectDeliveryCourier'),
+  'automatic courier retries must resolve durable command history before selecting a currently eligible courier',
+);
+const autoSelectionStart = assignmentCreation.indexOf('if (!selectedCourierUserId)');
+const autoSelectionEnd = assignmentCreation.indexOf('const courier = db.prepare', autoSelectionStart);
+assert.ok(autoSelectionStart >= 0 && autoSelectionEnd > autoSelectionStart,
+  'automatic courier selection and subsequent role validation must remain explicit');
+assert.ok(
+  assignmentCreation.indexOf('requested_courier_user_id: selectedCourierUserId || null') < autoSelectionStart
+    && assignmentCreation.indexOf('assignmentFingerprint = crypto.createHash', assignmentCreation.indexOf('db.exec(\'BEGIN IMMEDIATE\')')) < autoSelectionStart,
+  'automatic assignment fingerprint must capture the caller intent before a courier is selected',
+);
+assert.equal(
+  (assignmentCreation.match(/assignmentFingerprint = crypto\.createHash/g) || []).length,
+  2,
+  'assignment fingerprint must not be rewritten after automatic courier selection; retries replay the original command intent',
+);
 const assignmentTransitionStart = store.indexOf('export async function transitionDeliveryAssignment(');
 const assignmentTransitionEnd = store.indexOf('export async function ', assignmentTransitionStart + 30);
 assert.ok(assignmentTransitionStart >= 0 && assignmentTransitionEnd > assignmentTransitionStart,
