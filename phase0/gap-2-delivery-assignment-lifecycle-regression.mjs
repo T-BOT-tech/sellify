@@ -49,6 +49,10 @@ assert.match(store, /ACCEPTED: new Set\(\['OUT_FOR_DELIVERY','CANCELLED','FAILED
 assert.match(store, /OUT_FOR_DELIVERY: new Set\(\['DELIVERED','CANCELLED','FAILED','REASSIGNED'\]\)/);
 assert.match(store, /DELIVERY_PROOF_REQUIRED/);
 assert.match(store, /DELIVERY_PROOF_INVALID/);
+assert.match(store, /Array\.isArray\(proofInput\)/,
+  'delivery completion must reject arrays instead of treating them as valid proof objects');
+assert.match(store, /typeof proofInput !== 'string'/,
+  'delivery completion must reject unsupported primitive proof values');
 assert.match(store, /DELIVERY_PROOF_IMMUTABLE/);
 assert.match(store, /proofReference/);
 assert.match(store, /existingProof/);
