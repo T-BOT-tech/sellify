@@ -509,6 +509,39 @@ try {
     error => error?.code === 'REASSIGNMENT_TARGET_REQUIRED' && error?.statusCode === 400,
     'reassignment without a target must return a validation error after loading the active assignment'
   );
+  // A stale or corrupted assignment location must not advance even when the
+  // tenant and order still belong to the expected organization.
+  const assignmentLocationGuardDb = new DatabaseSync(dbPath);
+  let originalAssignmentLocationId;
+  try {
+    const currentAssignment = assignmentLocationGuardDb.prepare(
+      "SELECT id, location_id FROM delivery_assignments WHERE id = ?"
+    ).get(seededAssignmentId);
+    assert.ok(currentAssignment, 'seeded assignment should exist for location guard regression');
+    originalAssignmentLocationId = currentAssignment.location_id;
+    assignmentLocationGuardDb.prepare(
+      "UPDATE delivery_assignments SET location_id = ? WHERE id = ?"
+    ).run('stale-assignment-location', seededAssignmentId);
+  } finally {
+    assignmentLocationGuardDb.close();
+  }
+  await assert.rejects(
+    () => store.transitionDeliveryAssignment(
+      tenant.chatId, requestOrder.server_order_id, 'ACCEPTED', session,
+      { idempotencyKey: 'parcel-assignment-stale-location-must-fail' }
+    ),
+    error => error?.code === 'DELIVERY_ASSIGNMENT_LOCATION_MISMATCH' && error?.statusCode === 409,
+    'assignment transition must reject a persisted location that differs from the canonical order'
+  );
+  const restoreAssignmentLocationDb = new DatabaseSync(dbPath);
+  try {
+    restoreAssignmentLocationDb.prepare(
+      "UPDATE delivery_assignments SET location_id = ? WHERE id = ?"
+    ).run(originalAssignmentLocationId, seededAssignmentId);
+  } finally {
+    restoreAssignmentLocationDb.close();
+  }
+
   const acceptedAssignment = await store.transitionDeliveryAssignment(
     tenant.chatId, requestOrder.server_order_id, 'ACCEPTED', session,
     { idempotencyKey: 'parcel-assignment-accept-transition' }
