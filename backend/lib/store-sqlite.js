@@ -10727,14 +10727,24 @@ export async function getTelegramBuyerFulfillmentExperience(chatId, telegramUser
   const rows = db.prepare(`
     SELECT mo.id AS marketplace_order_id, mo.status AS marketplace_status, mo.created_at,
            mso.seller_order_id, mso.status AS seller_status,
-           mf.id AS fulfillment_id, mf.status AS fulfillment_status,
-           mf.fulfillment_type, mf.tracking_reference, mf.proof_json,
-           mf.created_at AS fulfillment_created_at, mf.updated_at AS fulfillment_updated_at
+           o.server_order_id,
+           COALESCE(f.id, mf.id) AS fulfillment_id,
+           CASE WHEN f.id IS NOT NULL THEN f.status ELSE mf.status END AS fulfillment_status,
+           CASE WHEN f.id IS NOT NULL THEN f.fulfillment_type ELSE mf.fulfillment_type END AS fulfillment_type,
+           CASE WHEN f.id IS NOT NULL THEN f.tracking_reference ELSE mf.tracking_reference END AS tracking_reference,
+           CASE WHEN f.id IS NOT NULL THEN f.proof_json ELSE mf.proof_json END AS proof_json,
+           COALESCE(f.created_at, mf.created_at) AS fulfillment_created_at,
+           COALESCE(f.updated_at, mf.updated_at) AS fulfillment_updated_at
     FROM marketplace_orders mo
     JOIN marketplace_seller_orders mso ON mso.marketplace_order_id = mo.id
+    LEFT JOIN orders o
+      ON o.chat_id = mso.seller_id AND o.local_id = mso.seller_order_id AND o.is_marketplace = 1
+    LEFT JOIN fulfillments f
+      ON f.server_order_id = o.server_order_id AND f.organization_id = mso.organization_id
     LEFT JOIN marketplace_fulfillments mf ON mf.seller_order_id = mso.id
     WHERE mo.id = ? AND mo.buyer_identity = ? AND mso.seller_id = ?
-    ORDER BY mf.updated_at DESC, mf.created_at DESC
+    ORDER BY COALESCE(f.updated_at, mf.updated_at) DESC,
+             COALESCE(f.created_at, mf.created_at) DESC
   `).all(orderId, buyer, String(chatId));
   if (!rows.length) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
   const first = rows[0];
@@ -10755,7 +10765,7 @@ export async function getTelegramBuyerFulfillmentExperience(chatId, telegramUser
     sellerOrders: [...new Map(rows.map(r => [r.seller_order_id, { sellerOrderId: r.seller_order_id, status: r.seller_status }])).values()],
     fulfillments,
     returns: { supported: false, status: null, requestAction: 'existing_logistics_return_authority_required' },
-    authority: { order: 'commerce', fulfillment: 'existing_marketplace_fulfillment', logistics: 'logistics-pack', returns: 'logistics-pack' },
+    authority: { order: 'commerce', fulfillment: 'canonical_logistics_with_legacy_marketplace_fallback', logistics: 'logistics-pack', returns: 'logistics-pack' },
   };
 }
 
