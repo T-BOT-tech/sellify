@@ -8505,7 +8505,7 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
   const key = String(input.assignmentKey || input.assignment_key || `courier:auto:${serverOrderId}`).trim();
   let fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), organizationId);
   if (!key) throw Object.assign(new Error('Assignment key is required'), { statusCode: 400 });
-  const assignmentFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+  let assignmentFingerprint = crypto.createHash('sha256').update(JSON.stringify({
     action: 'ASSIGN',
     requested_courier_user_id: selectedCourierUserId || null,
     location_id: locationId ? String(locationId) : null,
@@ -8539,6 +8539,11 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
       });
     }
     locationId = freshCanonicalLocationId || requestedLocationId || actor?.locationId || null;
+    assignmentFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+      action: 'ASSIGN',
+      requested_courier_user_id: selectedCourierUserId || null,
+      location_id: locationId ? String(locationId) : null,
+    })).digest('hex');
     assertLogisticsSchedulingAuthorization(actor, organizationId, locationId, 'logistics:scheduling:request');
 
     // Resolve assignment command keys from durable history, not only the
