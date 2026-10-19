@@ -52,6 +52,21 @@ assert.match(store, /if \(!applied\.includes\(72\)\)/,
   'service-delivery assessment idempotency history must use an additive migration');
 assert.match(store, /CREATE TABLE IF NOT EXISTS service_delivery_assessment_commands/,
   'assessment command keys must be unique within an organization across orders');
+const readinessStart = store.indexOf('function assertServiceDeliveryReadyForExecution(order)');
+const readinessEnd = store.indexOf('export async function recordServiceDeliveryAssessment(', readinessStart);
+assert.ok(readinessStart >= 0 && readinessEnd > readinessStart,
+  'service-delivery execution readiness guard must remain explicit');
+const readinessGuard = store.slice(readinessStart, readinessEnd);
+assert.match(readinessGuard, /assessment\?\.outcome[\s\S]*?ELIGIBLE/,
+  'fulfillment and courier assignment must require a canonical ELIGIBLE assessment, not only a status flag');
+assert.match(readinessGuard, /customer_acceptance\?\.accepted === true/,
+  'execution readiness must verify recorded customer acceptance');
+assert.match(readinessGuard, /acceptedEvidenceTypes\.has\(evidenceType\)/,
+  'execution readiness must reject unsupported customer acceptance evidence types');
+assert.match(readinessGuard, /evidenceReference\.length >= 3[\s\S]*?evidenceReference\.length <= 200/,
+  'execution readiness must validate the persisted evidence reference');
+assert.match(readinessGuard, /delivery_model[\s\S]*?availability_confirmed === true[\s\S]*?availability_confirmation\?\.result === 'CONFIRMED'/,
+  'instant delivery execution must require the persisted availability confirmation');
 const serviceAssessmentStart = store.indexOf('export async function recordServiceDeliveryAssessment(');
 const serviceAssessmentEnd = store.indexOf('function insertProduct(', serviceAssessmentStart);
 assert.ok(serviceAssessmentStart >= 0 && serviceAssessmentEnd > serviceAssessmentStart,
