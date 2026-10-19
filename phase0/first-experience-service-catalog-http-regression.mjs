@@ -231,7 +231,7 @@ try {
     error => error?.code === 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' && error?.statusCode === 409,
     'unassessed service requests must not enter canonical fulfillment'
   );
-  const logisticsActor = { userId: user.id, organizationId: tenant.organizationId || tenant.organization_id, role: 'owner' };
+  const logisticsActor = { userId: user.id, organizationId: tenant.organization_id, role: 'owner' };
   // Activate the canonical Logistics Pack through its lifecycle contract before
   // assigning a logistics role; the role guard intentionally rejects inactive packs.
   await store.transitionPackLifecycle(tenant.chatId, 'logistics', 'INSTALLED', logisticsActor);
