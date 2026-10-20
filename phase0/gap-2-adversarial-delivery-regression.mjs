@@ -14,7 +14,7 @@ assert(activeRead > begin, 'active assignment state must be re-read inside lifec
 assert.match(lifecycle, /const current = String\(active\.status\);/);
 assert.match(lifecycle, /transitions\[current\]\?\.has\(normalizedAction\)/);
 assert.match(lifecycle, /IDEMPOTENCY_KEY_REUSE_CONFLICT/);
-assert.match(lifecycle, /db\.exec\('COMMIT'\);\n      return existingCommand/);
+assert.match(lifecycle, /db\.exec\('COMMIT'\);\s*return replay/);
 assert.match(lifecycle, /last_command_key = \?/);
 assert.match(lifecycle, /UPDATE delivery_assignments SET status = \?, last_command_key = \?/);
 assert.match(store, /CREATE UNIQUE INDEX idx_delivery_assignments_active_fulfillment/);
