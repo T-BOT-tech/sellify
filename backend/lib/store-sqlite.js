@@ -5692,7 +5692,7 @@ function bookingRequiredText(value, field, maxLength = 200) {
 }
 function bookingTimestamp(value, field) {
   const result = bookingRequiredText(value, field, 80);
-  if (!/(Z|[+-]\\d{2}:?\\d{2})$/i.test(result) || Number.isNaN(Date.parse(result))) {
+  if (!/(Z|[+-]\d{2}:?\d{2})$/i.test(result) || Number.isNaN(Date.parse(result))) {
     throw Object.assign(new Error(`${field} must be ISO-8601 with an explicit timezone`), { statusCode: 400, code: 'SERVICE_BOOKING_TIME_INVALID' });
   }
   return new Date(result).toISOString();
