@@ -4,4 +4,5 @@ export default {
     catalogItemType: "Irú ohun",
     catalogProduct: "Ọjà",
     service: "Iṣẹ́",
+    packAccessibilityLocalizationTitle: "Wíwọlé rọrùn àti ìtumọ̀ Pack",
 };

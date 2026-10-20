@@ -4,4 +4,5 @@ export default {
     catalogItemType: "Type d’article",
     catalogProduct: "Produit",
     service: "Service",
+    packAccessibilityLocalizationTitle: "Accessibilité et localisation des packs",
 };
