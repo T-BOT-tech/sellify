@@ -31,6 +31,8 @@ const schedulingRequest = {
   mode: 'SCHEDULED',
   requested_start: booking.requested_start,
   requested_end: booking.requested_end,
+  scheduled_start: booking.requested_start,
+  scheduled_end: booking.requested_end,
   related_order: { id: booking.order_id, authority: 'canonical_commerce_order' },
 };
 const candidate = normalizeLogisticsSchedulingRequest(schedulingRequest);
