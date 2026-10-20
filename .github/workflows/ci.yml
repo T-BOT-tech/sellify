@@ -60,6 +60,8 @@ jobs:
         run: npm run test:service-catalog-contract
       - name: Service booking lifecycle contract regression
         run: npm run test:service-booking-contract
+      - name: Service booking persistence regression
+        run: npm run test:service-booking-persistence
       - name: First-experience service catalog HTTP journey regression
         run: npm run test:service-catalog-http
       - name: First-experience service catalog frontend sync regression
