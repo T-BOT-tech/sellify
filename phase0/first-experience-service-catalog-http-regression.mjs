@@ -855,6 +855,59 @@ try {
   assert.deepEqual(crossOrderTargetAfter, crossOrderTargetBefore,
     'cross-order idempotency conflict must not mutate the target order');
 
+  // A valid session from another tenant must not assess this tenant's order,
+  // even when the URL contains the target tenant's identifier and order ID.
+  const foreignAssessmentUser = await store.getOrCreateUserByTelegram(
+    'foreign-assessment-' + Date.now().toString(36), 'Foreign Assessment Actor',
+  );
+  const foreignAssessmentTenant = await store.createTenantForUser({
+    userId: foreignAssessmentUser.id,
+    sellerName: 'Foreign Assessment Store',
+    businessType: 'retail',
+    country: 'ET',
+    currency: 'ETB',
+    timezone: 'Africa/Addis_Ababa',
+  });
+  const foreignAssessmentSession = await store.createSession({
+    userId: foreignAssessmentUser.id,
+    chatId: foreignAssessmentTenant.chatId,
+    deviceName: 'Foreign tenant assessment denial regression',
+  });
+  const assessmentTargetBeforeForeignAttempt = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  const assessmentCommandsBeforeForeignAttempt = assessmentReplayDb.prepare(
+    'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ?'
+  ).get(String(assessmentSession.organizationId)).count;
+  const foreignTenantAssessmentResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: {
+      ...authHeaders,
+      Authorization: 'Bearer ' + foreignAssessmentSession.token,
+      'Idempotency-Key': 'foreign-tenant-service-assessment-attempt',
+    },
+    body: JSON.stringify({
+      assessment_outcome: 'INELIGIBLE',
+      customer_acceptance: {
+        accepted: false,
+        evidence_type: 'telegram_confirmation',
+        evidence_reference: 'foreign-tenant-must-not-write',
+      },
+    }),
+  });
+  assert.ok([403, 404].includes(foreignTenantAssessmentResponse.status),
+    'a foreign tenant session must not assess an order outside its authenticated organization');
+  const assessmentTargetAfterForeignAttempt = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(assessmentTargetAfterForeignAttempt, assessmentTargetBeforeForeignAttempt,
+    'cross-tenant assessment denial must leave canonical service-delivery state unchanged');
+  assert.equal(
+    assessmentReplayDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ?'
+    ).get(String(assessmentSession.organizationId)).count,
+    assessmentCommandsBeforeForeignAttempt,
+    'cross-tenant assessment denial must not append a durable command to the target organization',
+  );
+
   assert.ok(parcelStoredOrder.server_order_id,
     'instant service request must retain its canonical server order identity');
   const instantAssessmentUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
