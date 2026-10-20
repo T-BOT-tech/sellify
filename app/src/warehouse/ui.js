@@ -69,9 +69,10 @@ export function renderWarehouseInventory() {
   const totalEl = document.getElementById('whStatTotal');
   const lowEl = document.getElementById('whStatLow');
   const outEl = document.getElementById('whStatOut');
+  const physicalProducts = products.filter(p => p?.item_type !== 'service');
   const low = getLowStockProducts();
   const out = getOutOfStockProducts();
-  if (totalEl) totalEl.textContent = products.length;
+  if (totalEl) totalEl.textContent = physicalProducts.length;
   if (lowEl) lowEl.textContent = low.length;
   if (outEl) outEl.textContent = out.length;
 
@@ -84,11 +85,11 @@ export function renderWarehouseInventory() {
   }
   const list = document.getElementById('warehouseInventoryList');
   if (!list) return;
-  if (products.length === 0) {
-    list.innerHTML = `<div class="empty">No products yet. Add some in the Catalog tab.</div>`;
+  if (physicalProducts.length === 0) {
+    list.innerHTML = `<div class="empty">No physical products to track yet. Add products in the Catalog tab; services do not require stock tracking.</div>`;
     return;
   }
-  list.innerHTML = products.map(p => {
+  list.innerHTML = physicalProducts.map(p => {
     const tracked = isStockTracked(p);
     const stock = tracked ? projectedStock(p, config.locationId || '') : null;
     let badgeClass = '';
@@ -218,7 +219,10 @@ export function renderWarehouseLocationsList() {
 }
 
 export function warehouseProductOptions(selectedId) {
-  return products.map(p => `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+  return products
+    .filter(p => p?.item_type !== 'service')
+    .map(p => `<option value="${escapeAttr(p.id)}" ${p.id === selectedId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`)
+    .join('');
 }
 
 // ---------- Warehouse: Adjust stock modal ----------

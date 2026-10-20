@@ -100,6 +100,7 @@
     "test:phase13.11.10": "node phase0/phase13.11.10-event-boundary-regression.mjs",
     "test:outbox-tenant-scope": "node phase0/event-outbox-tenant-scope-regression.mjs",
     "test:order-sync-idempotency": "node phase0/order-sync-idempotency-regression.mjs",
+    "test:service-catalog-contract": "node phase0/first-experience-service-catalog-contract-regression.mjs",
     "test:phase13.11.11": "node phase0/phase13.11.11-idempotency-replay-regression.mjs",
     "test:phase13.11.12": "node phase0/phase13.11.12-failure-isolation-regression.mjs",
     "test:phase13.11.13": "node phase0/phase13.11.13-cancellation-returns-regression.mjs",
@@ -417,7 +418,9 @@
     "test:backup-restore": "node phase0/database-backup-restore-regression.mjs",
     "test:payment-lineage-append-only": "node phase0/payment-lineage-append-only-regression.mjs",
     "gap-1.18:decision-idempotency-test": "node phase0/gap-1.18Q-payment-decision-idempotency-regression.mjs",
-    "gap-1.18:financial-transition-idempotency-test": "node phase0/gap-1.18U-financial-transition-idempotency-regression.mjs"
+    "gap-1.18:financial-transition-idempotency-test": "node phase0/gap-1.18U-financial-transition-idempotency-regression.mjs",
+    "test:service-catalog-http": "node phase0/first-experience-service-catalog-http-regression.mjs",
+    "test:service-catalog-frontend-sync": "node phase0/first-experience-service-catalog-frontend-sync-regression.mjs"
   },
   "engines": {
     "node": ">=24"

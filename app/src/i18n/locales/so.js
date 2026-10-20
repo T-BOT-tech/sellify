@@ -3,6 +3,9 @@
 // (Phase 1 — pure data, zero dependencies).
 export default {
     brandName: "DIIWAANKA DUKAANKA",
+    catalogItemType: "Nooca shayga",
+    catalogProduct: "Badeecad",
+    service: "Adeeg",
     setupBusiness: "Hagaaji ganacsigaaga",
     online: "Khadka",
     offline: "Off-line",

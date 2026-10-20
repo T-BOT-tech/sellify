@@ -87,10 +87,14 @@ export function renderCatalog() {
             <span id="editProdImgPreview-${p.id}">${imgSrc ? `<img src="${escapeAttr(imgSrc)}" class="thumb-img-sm" />` : '<svg class="icon icon-muted"><use href="#i-camera"/></svg>'}</span>
             <input type="file" id="editProdImgInput-${p.id}" accept="image/*" style="display:none;" onchange="handleEditProdImageSelect(event, '${p.id}')">
           </label>
-          <input type="text" class="editName" id="editName-${p.id}" value="${escapeAttr(p.name)}">
-          <input type="number" step="0.01" class="editPrice" id="editPrice-${p.id}" value="${fromMinorUnits(p.price)}">
-          <select class="editCategory" id="editCategory-${p.id}">${catOptionsHtml}</select>
-          <select class="editUnit" id="editUnit-${p.id}">${unitOptionsHtml}</select>
+          <input type="text" class="editName" id="editName-${p.id}" aria-label="${escapeAttr(t('catalogNameLabel') || 'Name')}" value="${escapeAttr(p.name)}">
+          <input type="number" step="0.01" class="editPrice" id="editPrice-${p.id}" aria-label="${escapeAttr(t('catalogPriceLabel') || 'Price')}" value="${fromMinorUnits(p.price)}">
+          <select class="editItemType" id="editItemType-${p.id}" aria-label="${escapeAttr(t('catalogItemType') || 'Item type')}">
+            <option value="product" ${p.item_type !== 'service' ? 'selected' : ''}>${escapeHtml(t('catalogProduct') || 'Product')}</option>
+            <option value="service" ${p.item_type === 'service' ? 'selected' : ''}>${escapeHtml(t('service') || 'Service')}</option>
+          </select>
+          <select class="editCategory" id="editCategory-${p.id}" aria-label="${escapeAttr(t('catalogCategoryLabel') || 'Category')}">${catOptionsHtml}</select>
+          <select class="editUnit" id="editUnit-${p.id}" aria-label="${escapeAttr(t('catalogUnitLabel') || 'Unit')}">${unitOptionsHtml}</select>
           <button class="save-edit" onclick="saveProductEdit('${p.id}')">${t('save')}</button>
           <button class="cancel-edit" onclick="cancelProductEdit()">${t('cancel')}</button>
           <label class="niche-tag-check" style="margin-top:8px; display:inline-flex;">
@@ -107,6 +111,7 @@ export function renderCatalog() {
       : `<div class="cat-thumb-placeholder"><svg class="icon icon-muted"><use href="#i-camera"/></svg></div>`;
 
     const badges = [];
+    if (p.item_type === 'service') badges.push(`<span class="prod-badge unit">${escapeHtml(t('service') || 'Service')}</span>`);
     if (p.category) badges.push(`<span class="prod-badge cat"><svg class="icon icon-sm"><use href="#i-tag"/></svg> ${escapeHtml(p.category)}</span>`);
     if (p.unit) badges.push(`<span class="prod-badge unit">${escapeHtml(p.unit)}</span>`);
     if (Array.isArray(p.tags)) p.tags.forEach(tag => badges.push(`<span class="prod-badge tag">${escapeHtml(tag)}</span>`));
@@ -169,6 +174,8 @@ export function saveProductEdit(id) {
     return;
   }
   const price = toMinorUnits(priceMajor);
+  const itemTypeSel = document.getElementById(`editItemType-${id}`);
+  const item_type = itemTypeSel && itemTypeSel.value === 'service' ? 'service' : 'product';
   const catSel = document.getElementById(`editCategory-${id}`);
   const unitSel = document.getElementById(`editUnit-${id}`);
   const category = catSel ? catSel.value : '';
@@ -183,7 +190,7 @@ export function saveProductEdit(id) {
   const newImg = editingProdImages[id];
   setProducts(products.map(p => {
     if (p.id === id) {
-      const updated = { ...p, name, price, _priceMinor: true, category: category || undefined, unit: unit || undefined, tags: (tags && tags.length) ? tags : undefined, modifiers: (modifiers && modifiers.length) ? modifiers : undefined, marketplace_listed, updated_at: Date.now() };
+      const updated = { ...p, name, price, _priceMinor: true, item_type, category: category || undefined, unit: unit || undefined, tags: (tags && tags.length) ? tags : undefined, modifiers: (modifiers && modifiers.length) ? modifiers : undefined, marketplace_listed, updated_at: Date.now() };
       if (newImg !== undefined) {
         updated.image = newImg;
         updated.image_url = newImg;
@@ -299,6 +306,8 @@ export function addProduct() {
   const price = toMinorUnits(priceMajor);
   const category = (catSel && catSel.value && catSel.value !== '__custom__') ? catSel.value : '';
   const unit = unitSel ? unitSel.value : '';
+  const typeSel = document.getElementById('newProdType');
+  const item_type = typeSel && typeSel.value === 'service' ? 'service' : 'product';
   const modInput = document.getElementById('newProdModifiers');
   const modifiers = (isRestaurant() && modInput && modInput.value.trim())
     ? modInput.value.split(',').map(m => m.trim()).filter(Boolean)
@@ -308,6 +317,7 @@ export function addProduct() {
     id: uid(),
     name,
     price,
+    item_type,
     _priceMinor: true,
     category: category || undefined,
     unit: unit || undefined,
@@ -323,6 +333,7 @@ export function addProduct() {
   markCatalogDirty();
 
   nameInput.value = ''; priceInput.value = '';
+  if (typeSel) typeSel.value = 'product';
   if (modInput) modInput.value = '';
   if (marketListedBox) marketListedBox.checked = false;
   pendingNewProdImage = null;

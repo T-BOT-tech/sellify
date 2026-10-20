@@ -3,6 +3,9 @@
 // (Phase 1 — pure data, zero dependencies).
 export default {
     brandName: "GALAABA SUUQII",
+    catalogItemType: "Gosa meeshaa",
+    catalogProduct: "Oomisha",
+    service: "Tajaajila",
     setupBusiness: "Dhaabbata keessan qindeessaa",
     online: "Ijaarratamaa",
     offline: "Oflayinii",

@@ -35,6 +35,8 @@ export function changeLanguage(lang) {
 export function updateI18n() {
   const lang = getLang();
   document.documentElement.lang = lang;
+  // Arabic is the only currently registered RTL locale; always reset direction when switching back.
+  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
     el.textContent = t(key);
@@ -46,6 +48,10 @@ export function updateI18n() {
   document.querySelectorAll('[data-i18n-title]').forEach(el => {
     const key = el.getAttribute('data-i18n-title');
     el.title = t(key);
+  });
+  document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+    const key = el.getAttribute('data-i18n-aria-label');
+    el.setAttribute('aria-label', t(key));
   });
   const headerSelect = document.getElementById('headerLangSelect');
   if (headerSelect) headerSelect.value = lang;

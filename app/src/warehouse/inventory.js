@@ -40,10 +40,14 @@ function hasCanonicalInventory(productId) {
 }
 
 export function isStockTracked(p) {
+  // Services are catalog items, not physical stock. Even if a legacy or
+  // stale inventory row exists for the same id, do not present them as stock-tracked.
+  if (p?.item_type === 'service') return false;
   return typeof p.stock === 'number' || hasCanonicalInventory(p.id);
 }
 
 export function projectedStock(p, locationId = config.locationId || '') {
+  if (p?.item_type === 'service') return null;
   if (hasCanonicalInventory(p.id)) return getInventoryBalance(p.id, locationId);
   return typeof p.stock === 'number' ? p.stock : null;
 }

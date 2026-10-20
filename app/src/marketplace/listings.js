@@ -17,6 +17,7 @@ import { escapeHtml, escapeAttr } from '../utils/index.js';
 import { formatMoney } from '../utils/money.js';
 import { loadJSON, saveJSON } from '../storage/json.js';
 import { sanitizeRemoteListings } from '../sync/catalog.js';
+import { t } from '../ui/i18n.js';
 import { marketplaceCart, updateMultiCartBar } from './cart.js';
 
 // Phase 4: seed/fallback prices below are in integer minor units (birr
@@ -136,6 +137,7 @@ export function renderMarketplace() {
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
           <div>
             <div style="font-weight:700; font-size:15px; color:var(--ink);">${escapeHtml(item.title)}</div>
+            ${item.item_type === 'service' ? `<span class="prod-badge unit">${escapeHtml(t('service'))}</span>` : ''}
             <div style="display:flex; align-items:center; gap:6px; margin-top:4px;">
               <span class="stall-badge"><svg class="icon icon-sm"><use href="#i-store"/></svg> ${escapeHtml(sName)} (${escapeHtml(vCode)})</span>
               <span style="font-size:11px; opacity:0.7;">${escapeHtml(item.category || 'General')}</span>

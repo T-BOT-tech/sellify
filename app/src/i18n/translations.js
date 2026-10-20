@@ -15,5 +15,11 @@ import so from './locales/so.js';
 import sw from './locales/sw.js';
 import es from './locales/es.js';
 import hi from './locales/hi.js';
+import fr from './locales/fr.js';
+import ar from './locales/ar.js';
+import ha from './locales/ha.js';
+import yo from './locales/yo.js';
+import ru from './locales/ru.js';
+import pt from './locales/pt.js';
 
-export const TRANSLATIONS = { en, am, om, so, sw, es, hi };
+export const TRANSLATIONS = { en, am, om, so, sw, es, hi, fr, ar, ha, yo, ru, pt };

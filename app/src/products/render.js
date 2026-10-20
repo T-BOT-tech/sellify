@@ -98,6 +98,7 @@ export function renderProducts() {
         : `<div class="grid-prod-img-placeholder"><svg class="icon icon-lg icon-muted"><use href="#i-box"/></svg></div>`;
       const qtyBadge = qty > 0 ? `<div class="grid-prod-badge-qty">${qty}</div>` : '';
       const stockBadge = stockBadgeMarkup(p, 'dot');
+      const itemTypeBadge = serviceBadgeMarkup(p);
       const modifierHtml = (restaurant && Array.isArray(p.modifiers) && p.modifiers.length) ? modifierNoteMarkup(p) : '';
       const priceHtml = productPriceMarkup(p, qty);
 
@@ -111,13 +112,14 @@ export function renderProducts() {
           <div class="grid-prod-body">
             <div>
               <div class="grid-prod-name" title="${escapeAttr(p.name)}">${escapeHtml(p.name)}</div>
+              ${itemTypeBadge}
               <div class="grid-prod-price">${priceHtml}${p.unit ? `<span style="opacity:0.6;"> / ${escapeHtml(p.unit)}</span>` : ''}</div>
               ${modifierHtml}
             </div>
             <div class="grid-prod-stepper">
-              <button type="button" onclick="changeQty('${p.id}', -1)" aria-label="Decrease quantity">−</button>
+              <button type="button" onclick="changeQty('${p.id}', -1)" aria-label="${escapeAttr(t('decreaseQuantity'))}">−</button>
               <span class="qty">${qty}</span>
-              <button type="button" onclick="changeQty('${p.id}', 1)" aria-label="Increase quantity">+</button>
+              <button type="button" onclick="changeQty('${p.id}', 1)" aria-label="${escapeAttr(t('increaseQuantity'))}">+</button>
             </div>
           </div>
         </div>`;
@@ -131,6 +133,7 @@ export function renderProducts() {
         : `<div class="prod-thumb-placeholder"><svg class="icon icon-muted"><use href="#i-box"/></svg></div>`;
       const modifierHtml = (restaurant && Array.isArray(p.modifiers) && p.modifiers.length) ? modifierNoteMarkup(p) : '';
       const priceHtml = productPriceMarkup(p, qty);
+      const itemTypeBadge = serviceBadgeMarkup(p);
 
       return `
         <div class="product-row" id="prodRow-${p.id}">
@@ -138,14 +141,15 @@ export function renderProducts() {
             ${imgHtml}
             <div class="info">
               <div class="pname">${escapeHtml(p.name)}</div>
+              ${itemTypeBadge}
               <div class="pprice">${priceHtml}${p.unit ? ` / ${escapeHtml(p.unit)}` : ''}${stockBadgeMarkup(p, 'text')}</div>
               ${modifierHtml}
             </div>
           </div>
           <div class="stepper">
-            <button onclick="changeQty('${p.id}', -1)">−</button>
+            <button type="button" onclick="changeQty('${p.id}', -1)" aria-label="${escapeAttr(t('decreaseQuantity'))}">−</button>
             <span class="qty">${qty}</span>
-            <button onclick="changeQty('${p.id}', 1)">+</button>
+            <button type="button" onclick="changeQty('${p.id}', 1)" aria-label="${escapeAttr(t('increaseQuantity'))}">+</button>
           </div>
         </div>`;
     }).join('');
@@ -157,6 +161,12 @@ export function productPriceMarkup(p, qty) {
   const effective = effectiveUnitPrice(p, qty);
   if (effective === p.price) return `${CS()}${formatMoney(p.price)}`;
   return `<span class="tier-price-orig">${CS()}${formatMoney(p.price)}</span>${CS()}${formatMoney(effective)}`;
+}
+
+export function serviceBadgeMarkup(p) {
+  return p?.item_type === 'service'
+    ? `<span class="prod-badge unit">${escapeHtml(t('service'))}</span>`
+    : '';
 }
 
 export function stockBadgeMarkup(p, kind) {

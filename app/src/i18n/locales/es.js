@@ -3,6 +3,9 @@
 // (Phase 1 — pure data, zero dependencies).
 export default {
     brandName: "LIBRO DE VENTAS",
+    catalogItemType: "Tipo de artículo",
+    catalogProduct: "Producto",
+    service: "Servicio",
     setupBusiness: "Configura tu negocio",
     online: "En línea",
     offline: "Sin conexión",

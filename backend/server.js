@@ -314,7 +314,12 @@ function sendJSON(res, status, body, req) {
 function sendError(res, status, err, req) {
   const message = status >= 500 ? 'Internal error' : (err.message || 'Request error');
   if (status >= 500) console.error('[error]', err);
-  sendJSON(res, status, { error: { message, status } }, req);
+  // Keep stable, machine-readable domain codes on expected client errors.
+  // Never expose internal error codes for 5xx responses.
+  const code = status < 500 && typeof err?.code === 'string' && /^[A-Z][A-Z0-9_]{1,79}$/.test(err.code)
+    ? err.code
+    : undefined;
+  sendJSON(res, status, { error: { message, status, ...(code ? { code } : {}) } }, req);
 }
 
 function readRawBody(req) {
@@ -1031,6 +1036,9 @@ async function handleCatalogPost(req, res, chatId) {
     const price = Number(product.price);
     if (!Number.isFinite(price) || price < 0 || price > 2147483647) {
       throw Object.assign(new Error('Each catalog product needs a valid non-negative price'), { statusCode: 400 });
+    }
+    if (product.item_type !== undefined && !['product', 'service'].includes(String(product.item_type).trim().toLowerCase())) {
+      throw Object.assign(new Error('Catalog item_type must be product or service'), { statusCode: 400 });
     }
     if (product.stock !== undefined && product.stock !== null) {
       const stock = Number(product.stock);
