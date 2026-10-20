@@ -4,4 +4,5 @@ export default {
     catalogItemType: "نوع العنصر",
     catalogProduct: "منتج",
     service: "خدمة",
+    packAccessibilityLocalizationTitle: "إمكانية الوصول وتعريب الحزم",
 };
