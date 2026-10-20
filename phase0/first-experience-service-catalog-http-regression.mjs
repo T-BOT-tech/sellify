@@ -73,6 +73,9 @@ try {
       SELLIFY_DATA_DIR: tempDir,
       SELLIFY_DB_PATH: dbPath,
       NODE_ENV: 'test',
+      // This is a long end-to-end regression with >60 legitimate writes;
+      // keep it focused on business boundaries rather than the IP rate limiter.
+      RATE_LIMIT_MAX_WRITES: '500',
       SERVE_STATIC: 'false',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -1438,7 +1441,7 @@ try {
   assert.equal(runtimeOrders[0].status, 'queued', 'lost response must leave local order retryable');
   assert.equal(runtimeOrders[0].sync_attempts, 1);
   assert.equal(persistedOrders.at(-1)[0].status, 'queued');
-  assert.equal(firstCommittedIdentity?.status, 'synced', 'first server request must really commit; returned result=' + JSON.stringify(firstCommittedIdentity) + '; backend output=' + childOutput);
+  assert.equal(firstCommittedIdentity?.status, 'synced', 'first server request must really commit');
   assert.ok(firstCommittedIdentity?.order_id);
   assert.ok(firstCommittedIdentity?.payment_id);
 
