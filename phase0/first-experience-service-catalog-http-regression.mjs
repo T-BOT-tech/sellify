@@ -411,6 +411,37 @@ try {
   assert.equal(stateAfterPermissionDenial.version, 2);
   assert.equal(staleAuditCount(), staleAuditBefore, 'permission denial must not append lifecycle audit evidence');
 
+  // A contextual manager role scoped to a different location must not become
+  // tenant-wide scheduling authority when the booking route resolves its
+  // canonical order location. Exercise the real session + HTTP authorization path.
+  const locationScopedMembership = await store.ensureMembership(staffUser.id, tenant.chatId, 'staff');
+  const wrongScopeLocation = await store.createOrganizationLocation(tenant.chatId, {
+    code: 'SERVICE-BOOKING-WRONG-SCOPE', name: 'Wrong Scope Location', type: 'STORE',
+  });
+  store.getDatabaseForTests().prepare(
+    "INSERT INTO membership_roles (id, membership_id, role_id, status, scope_type, scope_id, source, created_at) VALUES (?, ?, 'manager', 'active', 'LOCATION', ?, 'TEST_FIXTURE', ?)"
+  ).run('service-booking-wrong-location-manager', locationScopedMembership.id, String(wrongScopeLocation.id), new Date().toISOString());
+  const locationScopedSession = await store.createSession({
+    userId: staffUser.id, chatId: tenant.chatId, deviceName: 'Wrong-location service booking manager',
+  });
+  const wrongLocationScopedResponse = await fetch(bookingsUrl + '/' + encodeURIComponent(staleBooking.id), {
+    method: 'PATCH',
+    headers: {
+      Authorization: 'Bearer ' + locationScopedSession.token,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'service-booking-http-wrong-location-scope-1',
+    },
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+  });
+  assert.equal(wrongLocationScopedResponse.status, 403,
+    'manager authority scoped to another location must not authorize booking lifecycle changes');
+  const stateAfterWrongLocationDenial = (await (await fetch(bookingsUrl, { headers: authHeaders })).json()).bookings
+    .find(item => item.id === staleBooking.id);
+  assert.equal(stateAfterWrongLocationDenial.status, 'ACCEPTED');
+  assert.equal(stateAfterWrongLocationDenial.version, 2);
+  assert.equal(staleAuditCount(), staleAuditBefore,
+    'wrong-location scope denial must not mutate booking or append lifecycle audit evidence');
+
   // Idempotency keys are tenant-scoped across booking commands, not silently
   // reusable for another booking. A collision must not mutate the second row.
   const conflictScopeCreate = await fetch(bookingsUrl, {
