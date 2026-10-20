@@ -2569,6 +2569,7 @@ async function handleMarketplaceCheckout(req, res) {
     customer_name: body.customer_name,
     customer_phone: body.customer_phone,
     items: body.items,
+    service_delivery: body.service_delivery ?? null,
     idempotency_key: idempotencyKey || null,
   });
   if (telegramChatId) {

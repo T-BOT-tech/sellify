@@ -5500,6 +5500,17 @@ function orderFromRow(row) {
   return order;
 }
 
+function assertServiceDeliveryReadyForExecution(order) {
+  const request = order?.service_delivery_request;
+  if (!request) return;
+  if (String(request.assessment_status || '').toUpperCase() !== 'READY_FOR_FULFILLMENT') {
+    throw Object.assign(
+      new Error('Logistics service request must complete assessment and acceptance before fulfillment or courier assignment'),
+      { statusCode: 409, code: 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' }
+    );
+  }
+}
+
 function insertProduct(chatId, product) {
   if (!product || product.id == null) return;
   const normalized = normaliseProduct(product);
@@ -8249,13 +8260,14 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
   const tenant = await getTenant(chatId);
   if (!tenant?.organization_id) throw Object.assign(new Error('Order organization is required'), { statusCode: 409 });
   const order = await getCoreFulfillmentOrder(String(chatId), String(serverOrderId));
+  assertServiceDeliveryReadyForExecution(orderFromRow(order));
   const organizationId = String(order.tenant_organization_id || '');
   if (organizationId !== String(tenant.organization_id)) throw Object.assign(new Error('Order organization mismatch'), { statusCode: 403 });
   const locationId = input.locationId || input.location_id || order.location_id || null;
   const type = normalizeCoreFulfillmentType(order.fulfillment_type || 'delivery');
   if (type !== 'delivery') throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
   const actorUserId = actor?.userId ? String(actor.userId) : null;
-  assertLogisticsSchedulingAuthorization(actor, organizationId, request.location_id, 'logistics:scheduling:request');
+  assertLogisticsSchedulingAuthorization(actor, organizationId, locationId, 'logistics:scheduling:request');
   let selectedCourierUserId = String(courierUserId || '').trim();
   const key = String(input.assignmentKey || input.assignment_key || `courier:auto:${serverOrderId}`).trim();
   let fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), organizationId);
@@ -9199,6 +9211,7 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
   const target = normalizeCoreFulfillmentStatus(nextStatus);
 
   const orderJson = orderFromRow(order);
+  assertServiceDeliveryReadyForExecution(orderJson);
   const type = normalizeCoreFulfillmentType(input.fulfillmentType || input.fulfillment_type || orderJson.fulfillment_type || 'delivery');
   if (!CORE_FULFILLMENT_TRANSITIONS[type]) throw Object.assign(new Error('Unsupported fulfillment type'), { statusCode: 400 });
 
@@ -9446,7 +9459,7 @@ export async function searchMarketplaceListings() {
   });
 }
 
-export async function createMarketplaceOrder({ buyer_id, buyer_identity, customer_name, customer_phone, items, idempotency_key = null }) {
+export async function createMarketplaceOrder({ buyer_id, buyer_identity, customer_name, customer_phone, items, service_delivery = null, idempotency_key = null }) {
   ensureDatabase();
   if (!Array.isArray(items) || items.length === 0) {
     throw Object.assign(new Error('No items in order'), { statusCode: 400 });
@@ -9478,11 +9491,73 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
   }
   normalizedItems.sort((a, b) => `${a.seller_id}:${a.item_id}`.localeCompare(`${b.seller_id}:${b.item_id}`));
 
+  let normalizedServiceDelivery = null;
+  if (service_delivery !== null && service_delivery !== undefined) {
+    if (!service_delivery || typeof service_delivery !== 'object' || Array.isArray(service_delivery)) {
+      throw Object.assign(new Error('service_delivery must be an object'), { statusCode: 400, code: 'LOGISTICS_SERVICE_DELIVERY_INVALID' });
+    }
+    const pickupDetails = String(service_delivery.pickup_details || '').trim();
+    const destinationDetails = String(service_delivery.destination_details || '').trim();
+    const customerNote = String(service_delivery.customer_note || '').trim();
+    if (pickupDetails.length < 3 || pickupDetails.length > 500) {
+      throw Object.assign(new Error('service_delivery.pickup_details must be 3-500 characters'), { statusCode: 400, code: 'LOGISTICS_SERVICE_DELIVERY_DETAILS_INVALID' });
+    }
+    if (destinationDetails.length < 3 || destinationDetails.length > 500) {
+      throw Object.assign(new Error('service_delivery.destination_details must be 3-500 characters'), { statusCode: 400, code: 'LOGISTICS_SERVICE_DELIVERY_DETAILS_INVALID' });
+    }
+    if (customerNote.length > 1000) {
+      throw Object.assign(new Error('service_delivery.customer_note must be at most 1000 characters'), { statusCode: 400, code: 'LOGISTICS_SERVICE_DELIVERY_DETAILS_INVALID' });
+    }
+    normalizedServiceDelivery = {
+      pickup_details: pickupDetails,
+      destination_details: destinationDetails,
+      customer_note: customerNote,
+    };
+  }
+
+  // Preflight logistics intake before any inventory movement or order mutation.
+  // The catalog remains authoritative for item type, profile, and delivery model.
+  const catalogCandidates = normalizedItems.map(line => ({
+    line,
+    row: db.prepare('SELECT * FROM catalog_products WHERE chat_id = ? AND product_id = ?')
+      .get(line.seller_id, line.item_id),
+  }));
+  const logisticsCandidates = catalogCandidates.filter(({ row }) => {
+    if (!row) return false; // canonical checkout emits the existing missing-item error inside its transaction
+    const product = productFromRow(row);
+    return product.delivery_model !== undefined && product.delivery_model !== null
+      && String(product.delivery_model).trim() !== '';
+  });
+  if (logisticsCandidates.length > 0) {
+    if (!normalizedServiceDelivery) {
+      throw Object.assign(new Error('Pickup and destination details are required for this delivery service'), {
+        statusCode: 400, code: 'LOGISTICS_SERVICE_DELIVERY_DETAILS_REQUIRED',
+      });
+    }
+    if (normalizedItems.length !== 1 || bySeller.size !== 1 || Number(normalizedItems[0].qty) !== 1
+      || logisticsCandidates.length !== 1) {
+      throw Object.assign(new Error('A logistics delivery request must contain exactly one delivery service item'), {
+        statusCode: 400, code: 'LOGISTICS_SERVICE_DELIVERY_CART_INVALID',
+      });
+    }
+    const product = productFromRow(logisticsCandidates[0].row);
+    normalizeLogisticsServiceDelivery({
+      item_type: product.item_type,
+      service_profile: product.service_profile,
+      delivery_model: product.delivery_model,
+    });
+  } else if (normalizedServiceDelivery) {
+    throw Object.assign(new Error('service_delivery details require a logistics service catalog item'), {
+      statusCode: 400, code: 'LOGISTICS_SERVICE_DELIVERY_ITEM_REQUIRED',
+    });
+  }
+
   const requestHash = crypto.createHash('sha256').update(JSON.stringify({
     buyerIdentity,
     customerName: String(customer_name || '').trim(),
     customerPhone: String(customer_phone || '').trim(),
     items: normalizedItems,
+    serviceDelivery: normalizedServiceDelivery,
   })).digest('hex');
 
   const marketplaceOrderId = crypto.randomUUID();
@@ -9543,12 +9618,44 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
       }
       marketplaceCurrency = sellerCurrency;
 
+      let serviceDeliveryRequest = null;
       for (const [itemId, qty] of sellerLines) {
         const row = db.prepare('SELECT * FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(sellerId, itemId);
         if (!row) throw Object.assign(new Error(`Item no longer listed: ${itemId}`), { statusCode: 409 });
         const product = productFromRow(row);
         if (!product.marketplace_listed) {
           throw Object.assign(new Error(`Item no longer listed: ${itemId}`), { statusCode: 409 });
+        }
+        const hasLogisticsModel = product.delivery_model !== undefined && product.delivery_model !== null && String(product.delivery_model).trim() !== '';
+        if (hasLogisticsModel) {
+          const logisticsContract = normalizeLogisticsServiceDelivery({
+            item_type: product.item_type,
+            service_profile: product.service_profile,
+            delivery_model: product.delivery_model,
+          });
+          if (!normalizedServiceDelivery) {
+            throw Object.assign(new Error('Pickup and destination details are required for this delivery service'), {
+              statusCode: 400, code: 'LOGISTICS_SERVICE_DELIVERY_DETAILS_REQUIRED',
+            });
+          }
+          if (normalizedItems.length !== 1 || bySeller.size !== 1 || qty !== 1) {
+            throw Object.assign(new Error('A logistics delivery request must contain exactly one delivery service item'), {
+              statusCode: 400, code: 'LOGISTICS_SERVICE_DELIVERY_CART_INVALID',
+            });
+          }
+          serviceDeliveryRequest = {
+            service_profile: logisticsContract.service_profile,
+            delivery_model: logisticsContract.delivery_model,
+            pickup_details: normalizedServiceDelivery.pickup_details,
+            destination_details: normalizedServiceDelivery.destination_details,
+            customer_note: normalizedServiceDelivery.customer_note || '',
+            assessment_status: logisticsContract.delivery_model === 'request' ? 'ASSESSMENT_REQUIRED' : 'ELIGIBILITY_CHECK_REQUIRED',
+            assignment_status: 'NOT_ASSIGNED',
+          };
+        } else if (normalizedServiceDelivery) {
+          throw Object.assign(new Error('service_delivery details require a logistics service catalog item'), {
+            statusCode: 400, code: 'LOGISTICS_SERVICE_DELIVERY_ITEM_REQUIRED',
+          });
         }
         // Services are purchasable marketplace items but do not consume or
         // require physical stock. Products continue through the canonical
@@ -9610,6 +9717,7 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
         currency: sellerCurrency,
         customer_name: customer_name || 'Marketplace Buyer',
         customer_phone: customer_phone || '',
+        ...(serviceDeliveryRequest ? { service_delivery_request: serviceDeliveryRequest } : {}),
         buyer_id: buyer_id || buyerIdentity,
         buyer_identity: buyerIdentity,
         buyer_tracking_token_hash: trackingTokenHash,
@@ -9685,6 +9793,14 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
         currency: sellerCurrency,
         item_count: sellerItems.length,
         seller_order_id: sellerOrderCanonicalId,
+        ...(serviceDeliveryRequest ? {
+          service_delivery: {
+            service_profile: serviceDeliveryRequest.service_profile,
+            delivery_model: serviceDeliveryRequest.delivery_model,
+            assessment_status: serviceDeliveryRequest.assessment_status,
+            assignment_status: serviceDeliveryRequest.assignment_status,
+          },
+        } : {}),
       });
     }
 
