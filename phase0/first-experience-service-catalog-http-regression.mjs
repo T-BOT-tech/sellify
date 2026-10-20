@@ -1438,7 +1438,7 @@ try {
   assert.equal(runtimeOrders[0].status, 'queued', 'lost response must leave local order retryable');
   assert.equal(runtimeOrders[0].sync_attempts, 1);
   assert.equal(persistedOrders.at(-1)[0].status, 'queued');
-  assert.equal(firstCommittedIdentity?.status, 'synced', 'first server request must really commit');
+  assert.equal(firstCommittedIdentity?.status, 'synced', 'first server request must really commit; returned result=' + JSON.stringify(firstCommittedIdentity) + '; backend output=' + childOutput);
   assert.ok(firstCommittedIdentity?.order_id);
   assert.ok(firstCommittedIdentity?.payment_id);
 
