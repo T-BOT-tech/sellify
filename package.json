@@ -103,6 +103,7 @@
     "test:service-catalog-contract": "node phase0/first-experience-service-catalog-contract-regression.mjs",
     "test:service-booking-contract": "node phase0/service-booking-contract-regression.mjs",
     "test:service-booking-persistence": "node phase0/service-booking-persistence-regression.mjs",
+    "test:service-booking-scheduling-boundary": "node phase0/service-booking-scheduling-authority-boundary-regression.mjs",
     "test:phase13.11.11": "node phase0/phase13.11.11-idempotency-replay-regression.mjs",
     "test:phase13.11.12": "node phase0/phase13.11.12-failure-isolation-regression.mjs",
     "test:phase13.11.13": "node phase0/phase13.11.13-cancellation-returns-regression.mjs",
