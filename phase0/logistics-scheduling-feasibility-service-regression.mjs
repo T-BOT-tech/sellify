@@ -104,26 +104,35 @@ assert.equal(feasible.authorized, false);
 assert.equal(feasible.execution, false);
 assert.equal(feasible.externalEvaluation.authority, 'existing-capacity-authority');
 
-await assert.rejects(
-  () => transitionLogisticsSchedulingActivity(
-    chatId,
-    second.id,
-    'SCHEDULED',
-    actor,
-    {
-      idempotency_key: 'l11.7-untrusted-capacity-evidence',
-      expectedVersion: 1,
-      scheduled_start: '2026-10-10T09:30:00Z',
-      scheduled_end: '2026-10-10T10:30:00Z',
-      externalEvaluation: {
-        outcome: 'FEASIBLE',
-        authority: 'caller-invented-capacity-authority',
-        reference_id: 'caller-invented-capacity-check',
+for (const externalEvaluation of [
+  {
+    outcome: 'FEASIBLE',
+    authority: 'caller-invented-capacity-authority',
+    reference_id: 'caller-invented-capacity-check',
+  },
+  {
+    outcome: 'FEASIBLE',
+    authority: 'supplier_network',
+    reference_id: 'declared-only-supplier-network-capacity-signal',
+  },
+]) {
+  await assert.rejects(
+    () => transitionLogisticsSchedulingActivity(
+      chatId,
+      second.id,
+      'SCHEDULED',
+      actor,
+      {
+        idempotency_key: `l11.7-untrusted-capacity-evidence-${externalEvaluation.authority}`,
+        expectedVersion: 1,
+        scheduled_start: '2026-10-10T09:30:00Z',
+        scheduled_end: '2026-10-10T10:30:00Z',
+        externalEvaluation,
       },
-    },
-  ),
-  error => error?.code === 'SCHEDULING_FEASIBILITY_UNKNOWN',
-);
+    ),
+    error => error?.code === 'SCHEDULING_FEASIBILITY_UNKNOWN',
+  );
+}
 
 const before = db.prepare(
   'SELECT status, version, last_command_key FROM logistics_scheduling_activities WHERE id = ?'
