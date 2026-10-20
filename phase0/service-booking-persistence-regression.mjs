@@ -27,6 +27,12 @@ try {
   const order = (await store.getOrders(seller.chatId)).find(item =>
     item.is_marketplace && item.items?.some(line => line.item_id === 'consultation'));
   assert.ok(order?.server_order_id, 'service booking must link to the canonical seller order');
+  const canonicalOrderStateBefore = {
+    status: order.status ?? null,
+    payment_status: order.payment_status ?? null,
+    paymentStatus: order.paymentStatus ?? null,
+    fulfillment_status: order.fulfillment_status ?? null,
+  };
 
   const request = {
     service_item_id: 'consultation',
@@ -67,6 +73,24 @@ try {
     status: 'CONFIRMED', expected_version: 2, idempotency_key: 'booking-confirm-' + suffix,
   }, { userId: owner.id });
   assert.equal(confirmed.booking.version, 3);
+
+  // Booking lifecycle is not authority to mutate canonical order, payment, or
+  // fulfillment state, and must not manufacture a logistics activity.
+  const canonicalOrderAfterConfirmation = (await store.getOrders(seller.chatId)).find(item =>
+    String(item.server_order_id || '') === String(order.server_order_id));
+  assert.ok(canonicalOrderAfterConfirmation, 'canonical order must remain available after booking confirmation');
+  assert.deepEqual({
+    status: canonicalOrderAfterConfirmation.status ?? null,
+    payment_status: canonicalOrderAfterConfirmation.payment_status ?? null,
+    paymentStatus: canonicalOrderAfterConfirmation.paymentStatus ?? null,
+    fulfillment_status: canonicalOrderAfterConfirmation.fulfillment_status ?? null,
+  }, canonicalOrderStateBefore, 'booking confirmation must not mutate canonical order/payment/fulfillment lifecycle');
+
+  const schedulingRows = store.getDatabaseForTests().prepare(
+    'SELECT id FROM logistics_scheduling_activities WHERE organization_id = ? AND related_order_id = ?'
+  ).all(String(seller.organizationId), String(order.server_order_id));
+  assert.equal(schedulingRows.length, 0,
+    'service booking must not create a logistics scheduling activity without an applicable canonical logistics reference');
   await assert.rejects(
     store.transitionServiceBooking(seller.chatId, order.server_order_id, created.booking.id, {
       status: 'IN_PROGRESS', expected_version: 2, idempotency_key: 'booking-stale-' + suffix,
