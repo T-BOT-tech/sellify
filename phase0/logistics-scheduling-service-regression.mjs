@@ -87,6 +87,16 @@ const scheduledReplay = await transitionLogisticsSchedulingActivity(
 );
 assert.equal(scheduledReplay.idempotent, true);
 
+// A command key is bound to its original transition; it cannot be reused
+// for a different lifecycle action on the same scheduling activity.
+await assert.rejects(
+  () => transitionLogisticsSchedulingActivity(
+    chatId, created.id, 'CANCELLED', actor,
+    { idempotency_key: 'l11.4-command-1', expectedVersion: 2 }
+  ),
+  error => error?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT'
+);
+
 await assert.rejects(
   () => transitionLogisticsSchedulingActivity(
     chatId, created.id, 'CONFIRMED', actor,
