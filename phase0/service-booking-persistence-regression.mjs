@@ -126,6 +126,37 @@ try {
     'services.booking.requested', 'services.booking.accepted', 'services.booking.confirmed',
   ], 'booking mutations and audit evidence must be committed together');
 
+  const rejectionRequest = {
+    ...request,
+    requested_start: '2026-11-04T09:00:00+03:00',
+    requested_end: '2026-11-04T10:00:00+03:00',
+    idempotency_key: 'booking-create-rejection-' + suffix,
+  };
+  const rejectionBooking = await store.createServiceBooking(
+    seller.chatId, order.server_order_id, rejectionRequest, { userId: owner.id },
+  );
+  await assert.rejects(
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, rejectionBooking.booking.id, {
+      status: 'REJECTED', expected_version: 1, idempotency_key: 'booking-reject-missing-reason-' + suffix,
+    }, { userId: owner.id }),
+    error => error?.code === 'SERVICE_BOOKING_REASON_REQUIRED',
+    'rejecting a service booking must include an auditable reason',
+  );
+  const rejected = await store.transitionServiceBooking(
+    seller.chatId, order.server_order_id, rejectionBooking.booking.id, {
+      status: 'REJECTED', expected_version: 1, reason: 'Requested time is unavailable',
+      idempotency_key: 'booking-reject-with-reason-' + suffix,
+    }, { userId: owner.id },
+  );
+  assert.equal(rejected.booking.status, 'REJECTED');
+  const rejectionAudit = db.prepare(
+    "SELECT action,reason FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ? ORDER BY id"
+  ).all(rejectionBooking.booking.id);
+  assert.deepEqual(rejectionAudit.map(row => row.action), [
+    'services.booking.requested', 'services.booking.rejected',
+  ]);
+  assert.equal(rejectionAudit[1].reason, 'Requested time is unavailable');
+
   console.log('Service Booking Persistence Regression: PASS');
 } finally {
   await rm(tempDir, { recursive: true, force: true });
