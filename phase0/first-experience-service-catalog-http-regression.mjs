@@ -408,6 +408,33 @@ try {
   assert.equal(stateAfterPermissionDenial.version, 2);
   assert.equal(staleAuditCount(), staleAuditBefore, 'permission denial must not append lifecycle audit evidence');
 
+  // Idempotency keys are tenant-scoped across booking commands, not silently
+  // reusable for another booking. A collision must not mutate the second row.
+  const conflictScopeCreate = await fetch(bookingsUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-conflict-scope-create-1' },
+    body: JSON.stringify({ ...bookingRequest, requested_start: '2026-11-09T09:00:00+03:00', requested_end: '2026-11-09T10:00:00+03:00' }),
+  });
+  assert.equal(conflictScopeCreate.status, 201);
+  const conflictScopeBooking = (await conflictScopeCreate.json()).booking;
+  const conflictScopeAuditCount = () => store.getDatabaseForTests().prepare(
+    "SELECT COUNT(*) AS count FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ?"
+  ).get(conflictScopeBooking.id).count;
+  const conflictScopeAuditBefore = conflictScopeAuditCount();
+  const crossBookingKeyConflict = await fetch(bookingsUrl + '/' + encodeURIComponent(conflictScopeBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-stale-accept-1' },
+    body: JSON.stringify({ status: 'ACCEPTED', expected_version: 1 }),
+  });
+  assert.equal(crossBookingKeyConflict.status, 409, 'a tenant-scoped key cannot be reused for a different booking');
+  assert.equal((await crossBookingKeyConflict.json()).error?.code, 'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT');
+  const conflictScopeAfter = (await (await fetch(bookingsUrl, { headers: authHeaders })).json()).bookings
+    .find(item => item.id === conflictScopeBooking.id);
+  assert.equal(conflictScopeAfter.status, 'REQUESTED');
+  assert.equal(conflictScopeAfter.version, 1);
+  assert.equal(conflictScopeAuditCount(), conflictScopeAuditBefore,
+    'cross-booking idempotency conflict must not mutate booking or audit state');
+
   // Completion actor/timestamp are server-authored even when submitted at the
   // HTTP boundary; completion notes are the only caller-authored completion evidence.
   const completedBookingCreate = await fetch(bookingsUrl, {
