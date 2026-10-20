@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-import { createServer as createNetServer } from 'node:net';
+import { createConnection, createServer as createNetServer } from 'node:net';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -2112,6 +2112,117 @@ try {
     'concurrent audit failures followed by recovery must append exactly one assessment audit event');
   } finally {
     concurrentAuditFailureFinalDb.close();
+  }
+
+  // Response-loss boundary: wait until the server starts writing the response
+  // (which follows request processing/commit), then destroy the client socket before
+  // consuming the response. The same-key retry must recover the committed result.
+  const assessmentResponseLossCheckoutResponse = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-assessment-response-loss-checkout' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-assessment-response-loss-buyer',
+      customer_name: 'Parcel Assessment Response Loss Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-request-http', qty: 1 }],
+      service_delivery: {
+        pickup_details: 'Kazanchis, Addis Ababa',
+        destination_details: 'Lideta, Addis Ababa',
+      },
+    }),
+  });
+  assert.equal(assessmentResponseLossCheckoutResponse.status, 200,
+    'response-loss fixture should create a fresh service request');
+  const assessmentResponseLossCheckout = await assessmentResponseLossCheckoutResponse.json();
+  const assessmentResponseLossOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === assessmentResponseLossCheckout.marketplace_order_id
+      || order.id === assessmentResponseLossCheckout.sub_orders?.[0]?.seller_order_id);
+  assert.ok(assessmentResponseLossOrder?.server_order_id,
+    'response-loss fixture must retain canonical order identity');
+  const assessmentResponseLossPath = '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(assessmentResponseLossOrder.server_order_id) + '/service-delivery-assessment';
+  const assessmentResponseLossUrl = baseUrl + assessmentResponseLossPath;
+  const assessmentResponseLossKey = 'parcel-assessment-response-lost-after-commit';
+  const assessmentResponseLossPayload = { assessment_outcome: 'INELIGIBLE' };
+  const assessmentResponseLossBefore = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === assessmentResponseLossOrder.server_order_id)?.service_delivery_request;
+  const assessmentResponseLossBody = JSON.stringify(assessmentResponseLossPayload);
+  const assessmentResponseLossRawRequest = [
+    'POST ' + assessmentResponseLossPath + ' HTTP/1.1',
+    'Host: 127.0.0.1:' + port,
+    'Authorization: Bearer ' + session.token,
+    'Content-Type: application/json',
+    'Idempotency-Key: ' + assessmentResponseLossKey,
+    'Content-Length: ' + Buffer.byteLength(assessmentResponseLossBody),
+    'Connection: close',
+    '',
+    assessmentResponseLossBody,
+  ].join('\r\n');
+  await new Promise((resolve, reject) => {
+    let receivedResponseBytes = false;
+    const socket = createConnection({ host: '127.0.0.1', port });
+    const timeout = setTimeout(() => {
+      socket.destroy();
+      reject(new Error('timed out waiting for assessment response bytes before simulated response loss'));
+    }, 5000);
+    socket.once('connect', () => socket.write(assessmentResponseLossRawRequest));
+    socket.on('data', () => {
+      receivedResponseBytes = true;
+      clearTimeout(timeout);
+      socket.destroy();
+      resolve();
+    });
+    socket.once('error', error => {
+      clearTimeout(timeout);
+      if (receivedResponseBytes) resolve();
+      else reject(error);
+    });
+    socket.once('close', () => {
+      clearTimeout(timeout);
+      if (!receivedResponseBytes) reject(new Error('assessment response connection closed before any response bytes were observed'));
+    });
+  });
+  const assessmentResponseLossCommitted = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === assessmentResponseLossOrder.server_order_id);
+  assert.equal(assessmentResponseLossCommitted?.service_delivery_request?.assessment_status, 'ASSESSMENT_REJECTED',
+    'server must have committed the assessment before response-loss retry');
+  const assessmentResponseLossRetry = await fetch(assessmentResponseLossUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': assessmentResponseLossKey },
+    body: JSON.stringify(assessmentResponseLossPayload),
+  });
+  assert.equal(assessmentResponseLossRetry.status, 200,
+    'same-key retry must recover after the committed response is lost');
+  const assessmentResponseLossRetryBody = await assessmentResponseLossRetry.json();
+  assert.equal(assessmentResponseLossRetryBody.replayed, true,
+    'response-loss retry must return the already committed assessment as a replay');
+  assert.equal(assessmentResponseLossRetryBody.service_delivery?.assessment_status, 'ASSESSMENT_REJECTED');
+  const assessmentResponseLossDifferentPayload = await fetch(assessmentResponseLossUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': assessmentResponseLossKey },
+    body: JSON.stringify({ assessment_outcome: 'ELIGIBLE' }),
+  });
+  assert.equal(assessmentResponseLossDifferentPayload.status, 409,
+    'response-loss idempotency key must reject a different assessment payload');
+  assert.deepEqual(
+    (await store.getOrders(tenant.chatId)).find(order =>
+      order.server_order_id === assessmentResponseLossOrder.server_order_id)?.service_delivery_request,
+    assessmentResponseLossCommitted.service_delivery_request,
+    'different-payload retry must not overwrite the committed assessment after response loss'
+  );
+  assert.deepEqual(assessmentResponseLossBefore, undefined,
+    'response-loss fixture should begin without a service assessment');
+  const assessmentResponseLossFinalDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(assessmentResponseLossFinalDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), assessmentResponseLossKey).count, 1,
+    'response-loss recovery must retain exactly one durable assessment command');
+    assert.equal(assessmentResponseLossFinalDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, assessmentResponseLossOrder.server_order_id).count, 1,
+    'response-loss recovery must retain exactly one assessment audit event');
+  } finally {
+    assessmentResponseLossFinalDb.close();
   }
 
   const rejectedAssessmentResponse = await fetch(
