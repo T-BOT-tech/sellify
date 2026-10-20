@@ -9260,26 +9260,9 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
 
     assertLogisticsSchedulingAuthorization(actor, organizationId, row.location_id, schedulingAction);
 
-    const priorCommand = db.prepare(`
-      SELECT server_order_id, command_fingerprint
-      FROM fulfillment_commands
-      WHERE organization_id = ? AND command_key = ?
-    `).get(organizationId, commandKey);
-    if (priorCommand) {
-      if (String(priorCommand.server_order_id) !== String(serverOrderId)
-        || String(priorCommand.command_fingerprint) !== commandFingerprint) {
-        throw Object.assign(new Error('Idempotency key was already used for a different fulfillment command'), {
-          statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT',
-        });
-      }
-      const canonicalReplay = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?')
-        .get(String(serverOrderId), organizationId);
-      if (!canonicalReplay) throw Object.assign(new Error('Fulfillment not found for prior command'), {
-        statusCode: 409, code: 'FULFILLMENT_REPLAY_STATE_MISSING',
-      });
-      db.exec('COMMIT');
-      return fulfillmentFromRow(canonicalReplay);
-    }
+    // Scheduling transitions have their own lifecycle and idempotency boundary.
+    // Do not consult fulfillment_commands here: those rows identify fulfillment
+    // commands and their order/fingerprint fields are not scheduling state.
 
     if (String(row.last_command_key || '') === commandKey) {
       const compatible = String(row.status) === target;
