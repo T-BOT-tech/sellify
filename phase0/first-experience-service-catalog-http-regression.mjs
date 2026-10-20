@@ -149,6 +149,62 @@ try {
   assert.deepEqual(replayBody.sub_orders, committedMarketplaceBody.sub_orders,
     'marketplace checkout retry must replay the original seller-order identities');
 
+  // Service booking must work through the authenticated HTTP surface and remain
+  // linked to the canonical seller order created by marketplace checkout.
+  const serviceOrder = (await store.getOrders(tenant.chatId)).find(item =>
+    item.items?.some(line => String(line.item_id || line.id || '') === 'consultation-http'));
+  assert.ok(serviceOrder?.server_order_id, 'marketplace service order must expose its canonical seller-order ID');
+  const bookingsUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(serviceOrder.server_order_id) + '/service-bookings';
+  const bookingRequest = {
+    service_item_id: 'consultation-http',
+    requested_start: '2026-11-02T09:00:00+03:00',
+    requested_end: '2026-11-02T10:00:00+03:00',
+    appointment_mode: 'REMOTE',
+    customer_note: 'HTTP lifecycle regression',
+  };
+  const bookingCreate = await fetch(bookingsUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-create-1' },
+    body: JSON.stringify(bookingRequest),
+  });
+  assert.equal(bookingCreate.status, 201, 'authenticated service booking request should persist');
+  const bookingCreatedBody = await bookingCreate.json();
+  assert.equal(bookingCreatedBody.booking?.status, 'REQUESTED');
+  assert.equal(bookingCreatedBody.booking?.service_item_id, 'consultation-http');
+
+  const bookingList = await fetch(bookingsUrl, { headers: authHeaders });
+  assert.equal(bookingList.status, 200, 'booking list should require and accept view authorization');
+  const bookingListBody = await bookingList.json();
+  assert.ok(bookingListBody.bookings.some(item => item.id === bookingCreatedBody.booking.id));
+
+  const bookingAccept = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-accept-1' },
+    body: JSON.stringify({ status: 'ACCEPTED', expected_version: 1 }),
+  });
+  assert.equal(bookingAccept.status, 200, 'authorized merchant should accept the booking request');
+  const bookingAcceptBody = await bookingAccept.json();
+  assert.equal(bookingAcceptBody.booking.status, 'ACCEPTED');
+  assert.equal(bookingAcceptBody.booking.version, 2);
+
+  const bookingConfirm = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+  });
+  assert.equal(bookingConfirm.status, 200, 'authorized merchant should confirm an accepted appointment');
+  const bookingConfirmBody = await bookingConfirm.json();
+  assert.equal(bookingConfirmBody.booking.status, 'CONFIRMED');
+  assert.equal(bookingConfirmBody.booking.version, 3);
+
+  const missingBookingKey = await fetch(bookingsUrl, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ ...bookingRequest, requested_start: '2026-11-03T09:00:00+03:00' }),
+  });
+  assert.equal(missingBookingKey.status, 400, 'booking mutation must reject a missing idempotency key');
+
   // Logistics service checkout requires customer pickup/destination details,
   // stores only a truthful intake state, and never claims a courier assignment.
   const missingDeliveryDetails = await fetch(checkoutUrl, {
