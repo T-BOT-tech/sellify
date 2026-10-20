@@ -91,4 +91,5 @@ export default {
     packLocalizationAuthority: 'Localization authority',
     packAccessibilityAuthority: 'Accessibility foundation',
     packAccessibilityBoundary: 'Language selection does not change authorization. Screen semantics do not grant permissions; server-side authorization remains authoritative.',
+    checkoutPaymentStateHint: "ይህን ደረጃ ማጠናቀቅ ትዕዛዙን ወደ ወረፋዎ ያስቀምጣል። የደረሰኝ ፎቶ የድጋፍ ማስረጃ ብቻ ነው፤ ክፍያ መቀበሉን አያረጋግጥም።",
 };

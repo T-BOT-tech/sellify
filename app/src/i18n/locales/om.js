@@ -90,4 +90,5 @@ export default {
     packLocalizationAuthority: 'Localization authority',
     packAccessibilityAuthority: 'Accessibility foundation',
     packAccessibilityBoundary: 'Language selection does not change authorization. Screen semantics do not grant permissions; server-side authorization remains authoritative.',
+    checkoutPaymentStateHint: "Tarkaanfii kana xumuruun ajaja gara tarree eegumsaa keessaniitti kuusa. Suuraan ragaa kaffaltii ragaa deeggarsaati qofa; kaffaltiin fudhatamuu isaa hin mirkaneessu.",
 };

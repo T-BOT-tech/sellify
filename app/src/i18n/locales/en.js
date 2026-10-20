@@ -124,6 +124,7 @@ export default {
     currency: "Currency",
     paymentMethods: "Payment methods",
     confirmPayment: "Confirm payment",
+    checkoutPaymentStateHint: "Completing this step saves the order to your queue. A receipt photo is supporting evidence only; it does not confirm that a payment was received.",
     paymentMethod: "Payment method",
     captureProof: "Payment screenshot / receipt photo (optional)",
     completeSale: "Complete sale",
