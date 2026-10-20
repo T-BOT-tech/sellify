@@ -2650,6 +2650,15 @@ if (!applied.includes(39)) {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(74, nowIso());
   }
 
+  // Persist rejection/failure rationale on the booking as well as its audit event.
+  if (!applied.includes(75)) {
+    const bookingColumns = new Set(
+      db.prepare('PRAGMA table_info(service_bookings)').all().map(column => String(column.name))
+    );
+    if (!bookingColumns.has('status_reason')) db.exec('ALTER TABLE service_bookings ADD COLUMN status_reason TEXT');
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(75, nowIso());
+  }
+
   // GAP-1.24: fence status-query workers and permit takeover only before
   // provider I/O has been authorized. Legacy IN_PROGRESS commands are treated
   // as provider-in-flight because their execution phase cannot be proven.
@@ -5695,6 +5704,7 @@ function serviceBookingFromRow(row) {
     started_at: row.started_at || null, started_by: row.started_by || null,
     completed_at: row.completed_at || null, completed_by: row.completed_by || null,
     completion_note: row.completion_note ?? null,
+    status_reason: row.status_reason ?? null,
     created_at: String(row.created_at), updated_at: String(row.updated_at),
   };
 }
@@ -5797,10 +5807,12 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
       started_by=CASE WHEN ?='IN_PROGRESS' THEN ? ELSE started_by END,
       completed_at=CASE WHEN ?='COMPLETED' THEN ? ELSE completed_at END,
       completed_by=CASE WHEN ?='COMPLETED' THEN ? ELSE completed_by END,
-      completion_note=CASE WHEN ?='COMPLETED' THEN ? ELSE completion_note END
+      completion_note=CASE WHEN ?='COMPLETED' THEN ? ELSE completion_note END,
+      status_reason=CASE WHEN ? IN ('REJECTED','FAILED','CANCELLED') THEN ? ELSE status_reason END
       WHERE id=? AND organization_id=? AND version=?`).run(
         target,nextVersion,actorId,now,
         target,now,target,actorId,target,now,target,actorId,target,completionNote,
+        target,reason,
         String(bookingId),organizationId,expectedVersion,
       );
     if(Number(changed.changes)!==1) throw Object.assign(new Error('Service booking version conflict'),{statusCode:409,code:'SERVICE_BOOKING_VERSION_CONFLICT'});
