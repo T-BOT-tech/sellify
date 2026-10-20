@@ -1028,6 +1028,27 @@ try {
   );
   assert.equal(replayedAssignment.id, seededAssignmentId,
     'exact assignment retry must replay the original assignment');
+
+  // A delayed assessment retry after fulfillment assignment must not restore
+  // the old NOT_ASSIGNED snapshot or otherwise overwrite later canonical state.
+  const requestBeforeDelayedAssessmentReplay = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  const delayedAssessmentReplay = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+    body: JSON.stringify(assessmentPayload),
+  });
+  assert.equal(delayedAssessmentReplay.status, 200,
+    'delayed exact assessment retry after assignment should still replay');
+  const delayedAssessmentReplayBody = await delayedAssessmentReplay.json();
+  assert.equal(delayedAssessmentReplayBody.replayed, true);
+  assert.equal(delayedAssessmentReplayBody.service_delivery?.assessment?.customer_acceptance?.evidence_reference,
+    'buyer-chat-confirmation-123');
+  const requestAfterDelayedAssessmentReplay = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(requestAfterDelayedAssessmentReplay, requestBeforeDelayedAssessmentReplay,
+    'delayed assessment replay must not overwrite fulfillment state changed after the original assessment');
+
   let assignmentKeyConflictError = null;
   try {
     await store.assignDeliveryCourier(
