@@ -225,6 +225,54 @@ try {
     'services.booking.requested', 'services.booking.rejected',
   ]);
   assert.equal(rejectionAudit[1].reason, 'Requested time is unavailable');
+  assert.equal(rejected.booking.status_reason, 'Requested time is unavailable',
+    'rejection rationale must be returned with the durable booking record');
+
+  const failureBooking = await store.createServiceBooking(seller.chatId, order.server_order_id, {
+    ...request,
+    requested_start: '2026-11-06T09:00:00+03:00',
+    requested_end: '2026-11-06T10:00:00+03:00',
+    idempotency_key: 'booking-create-failure-' + suffix,
+  }, { userId: owner.id });
+  await store.transitionServiceBooking(seller.chatId, order.server_order_id, failureBooking.booking.id, {
+    status: 'ACCEPTED', expected_version: 1, idempotency_key: 'booking-failure-accept-' + suffix,
+  }, { userId: owner.id });
+  await store.transitionServiceBooking(seller.chatId, order.server_order_id, failureBooking.booking.id, {
+    status: 'CONFIRMED', expected_version: 2, idempotency_key: 'booking-failure-confirm-' + suffix,
+  }, { userId: owner.id });
+  await assert.rejects(
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, failureBooking.booking.id, {
+      status: 'FAILED', expected_version: 3, idempotency_key: 'booking-failure-missing-reason-' + suffix,
+    }, { userId: owner.id }),
+    error => error?.code === 'SERVICE_BOOKING_REASON_REQUIRED',
+    'failure must not be recorded without a reason',
+  );
+  const failed = await store.transitionServiceBooking(seller.chatId, order.server_order_id, failureBooking.booking.id, {
+    status: 'FAILED', expected_version: 3, reason: 'Required specialist was unavailable',
+    idempotency_key: 'booking-failure-with-reason-' + suffix,
+  }, { userId: owner.id });
+  assert.equal(failed.booking.status, 'FAILED');
+  assert.equal(failed.booking.status_reason, 'Required specialist was unavailable');
+  const failedReplay = await store.transitionServiceBooking(seller.chatId, order.server_order_id, failureBooking.booking.id, {
+    status: 'FAILED', expected_version: 3, reason: 'Required specialist was unavailable',
+    idempotency_key: 'booking-failure-with-reason-' + suffix,
+  }, { userId: owner.id });
+  assert.equal(failedReplay.replayed, true);
+  assert.equal(failedReplay.booking.status_reason, 'Required specialist was unavailable');
+  await assert.rejects(
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, failureBooking.booking.id, {
+      status: 'IN_PROGRESS', expected_version: 4, idempotency_key: 'booking-failure-recovery-invalid-' + suffix,
+    }, { userId: owner.id }),
+    error => error?.code === 'SERVICE_BOOKING_TRANSITION_INVALID',
+    'FAILED is terminal; recovery requires a new booking rather than rewriting failed history',
+  );
+  const failureAudit = db.prepare(
+    "SELECT action,reason FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ? ORDER BY id"
+  ).all(failureBooking.booking.id);
+  assert.deepEqual(failureAudit.map(row => row.action), [
+    'services.booking.requested', 'services.booking.accepted', 'services.booking.confirmed', 'services.booking.failed',
+  ]);
+  assert.equal(failureAudit.at(-1).reason, 'Required specialist was unavailable');
 
   console.log('Service Booking Persistence Regression: PASS');
 } finally {
