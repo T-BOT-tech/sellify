@@ -1422,6 +1422,95 @@ try {
     rollbackVerifyDb.close();
   }
 
+  // Recovery boundary: after an injected persistence failure is removed, the
+  // same idempotency key must be usable for a legitimate retry. Use a separate
+  // fresh order so the following concurrency tests still start unassessed.
+  const assessmentRecoveryCheckoutResponse = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-assessment-recovery-checkout' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-assessment-recovery-buyer',
+      customer_name: 'Parcel Assessment Recovery Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-request-http', qty: 1 }],
+      service_delivery: {
+        pickup_details: 'Piassa, Addis Ababa',
+        destination_details: 'Sar Bet, Addis Ababa',
+      },
+    }),
+  });
+  assert.equal(assessmentRecoveryCheckoutResponse.status, 200,
+    'assessment-recovery service order should be created');
+  const assessmentRecoveryCheckout = await assessmentRecoveryCheckoutResponse.json();
+  const assessmentRecoveryOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === assessmentRecoveryCheckout.marketplace_order_id
+      || order.id === assessmentRecoveryCheckout.sub_orders?.[0]?.seller_order_id);
+  assert.ok(assessmentRecoveryOrder?.server_order_id,
+    'assessment-recovery fixture must retain canonical order identity');
+  const assessmentRecoveryKey = 'parcel-assessment-retry-after-persistence-failure';
+  const assessmentRecoveryUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(assessmentRecoveryOrder.server_order_id) + '/service-delivery-assessment';
+  const assessmentRecoveryTriggerDb = new DatabaseSync(dbPath);
+  try {
+    assessmentRecoveryTriggerDb.exec(`CREATE TRIGGER fail_service_assessment_recovery_insert
+      BEFORE INSERT ON service_delivery_assessment_commands
+      WHEN NEW.command_key = '${assessmentRecoveryKey}'
+      BEGIN SELECT RAISE(ABORT, 'injected assessment recovery persistence failure'); END;`);
+  } finally {
+    assessmentRecoveryTriggerDb.close();
+  }
+  let assessmentRecoveryFailureResponse;
+  try {
+    assessmentRecoveryFailureResponse = await fetch(assessmentRecoveryUrl, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': assessmentRecoveryKey },
+      body: JSON.stringify({ assessment_outcome: 'INELIGIBLE' }),
+    });
+  } finally {
+    const cleanupDb = new DatabaseSync(dbPath);
+    try {
+      cleanupDb.exec('DROP TRIGGER IF EXISTS fail_service_assessment_recovery_insert');
+    } finally {
+      cleanupDb.close();
+    }
+  }
+  assert.equal(assessmentRecoveryFailureResponse.status, 500,
+    'injected recovery attempt must fail before durable assessment command persistence');
+  const assessmentRecoveryAfterFailure = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === assessmentRecoveryOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(assessmentRecoveryAfterFailure, assessmentRecoveryOrder.service_delivery_request,
+    'failed recovery attempt must leave canonical service request unchanged');
+  const assessmentRecoveryRetryResponse = await fetch(assessmentRecoveryUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': assessmentRecoveryKey },
+    body: JSON.stringify({ assessment_outcome: 'INELIGIBLE' }),
+  });
+  assert.equal(assessmentRecoveryRetryResponse.status, 200,
+    'same-key retry must succeed once the injected persistence failure is removed');
+  const assessmentRecoveryRetryBody = await assessmentRecoveryRetryResponse.json();
+  assert.equal(assessmentRecoveryRetryBody.service_delivery?.assessment_status, 'ASSESSMENT_REJECTED');
+  const assessmentRecoveryReplayResponse = await fetch(assessmentRecoveryUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': assessmentRecoveryKey },
+    body: JSON.stringify({ assessment_outcome: 'INELIGIBLE' }),
+  });
+  assert.equal(assessmentRecoveryReplayResponse.status, 200,
+    'a retry after successful recovery must replay the committed assessment');
+  const assessmentRecoveryReplayBody = await assessmentRecoveryReplayResponse.json();
+  assert.equal(assessmentRecoveryReplayBody.service_delivery?.assessment_status, 'ASSESSMENT_REJECTED');
+  const assessmentRecoveryVerifyDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(assessmentRecoveryVerifyDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), assessmentRecoveryKey).count, 1,
+    'failed attempt followed by retry and replay must leave exactly one durable command');
+    assert.equal(assessmentRecoveryVerifyDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, assessmentRecoveryOrder.server_order_id).count, 1,
+    'failed attempt followed by retry and replay must append exactly one assessment audit event');
+  } finally {
+    assessmentRecoveryVerifyDb.close();
+  }
+
   // Race two first-time submissions before either response can be observed. Both
   // requests use the same fresh key and identical negative-assessment payload;
   // canonical state, command history, and audit evidence must commit exactly once.
