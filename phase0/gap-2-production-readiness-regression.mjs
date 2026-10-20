@@ -19,8 +19,8 @@ assert.match(ci, /node-version: \[24\]/);
 for (const script of requiredScripts) assert.ok(ci.includes('npm run ' + script), 'CI missing ' + script);
 
 const migrations = [...store.matchAll(/if \(!applied\.includes\((\d+)\)\)/g)].map(m => Number(m[1]));
-assert.equal(Math.max(...migrations), 68, 'latest migration must remain explicit');
-for (const version of [45, 60, 61, 62, 63, 64, 65, 66, 67, 68]) {
+assert.equal(Math.max(...migrations), 72, 'latest migration must remain explicit');
+for (const version of [45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72]) {
   assert.ok(migrations.includes(version), 'missing explicit migration ' + version);
 }
 const migrationPosition = version => store.indexOf(`if (!applied.includes(${version}))`);
@@ -29,6 +29,13 @@ for (const version of [61, 62, 63, 64, 65, 66]) {
   assert.ok(migrationPosition(version) > migrationPosition(45),
     'payment evidence dependent migration ' + version + ' must follow payment_evidence creation');
 }
+for (const version of [69, 70, 71, 72]) {
+  assert.ok(migrationPosition(version) >= 0, 'missing explicit logistics lifecycle migration ' + version);
+}
+assert.ok(migrationPosition(69) > migrationPosition(68), 'fulfillment command fingerprint migration must follow migration 68');
+assert.ok(migrationPosition(70) > migrationPosition(69), 'durable fulfillment command migration must follow migration 69');
+assert.ok(migrationPosition(71) > migrationPosition(70), 'durable delivery assignment command migration must follow migration 70');
+assert.ok(migrationPosition(72) > migrationPosition(71), 'durable service assessment command migration must follow migration 71');
 assert.match(store, /PRAGMA foreign_keys = ON/);
 assert.match(store, /PRAGMA journal_mode = WAL/);
 assert.match(store, /CREATE TABLE IF NOT EXISTS schema_migrations/);

@@ -861,6 +861,15 @@
       <input type="text" id="marketCustName" placeholder="Your name (for order tickets)">
       <input type="tel" id="marketCustPhone" placeholder="Your phone / Telegram handle">
     </div>
+    <div id="marketServiceDeliveryFields" style="display:none; margin:0 0 12px; padding:12px; border:1px solid var(--line); border-radius:8px;">
+      <strong style="display:block; margin-bottom:8px;">Parcel delivery details</strong>
+      <label for="marketServicePickup" style="display:block; font-size:12px; margin-bottom:4px;">Pickup location *</label>
+      <input type="text" id="marketServicePickup" placeholder="Pickup address or landmark" autocomplete="street-address" style="margin-bottom:8px;">
+      <label for="marketServiceDestination" style="display:block; font-size:12px; margin-bottom:4px;">Destination *</label>
+      <input type="text" id="marketServiceDestination" placeholder="Delivery address or landmark" style="margin-bottom:8px;">
+      <label for="marketServiceNote" style="display:block; font-size:12px; margin-bottom:4px;">Instructions (optional)</label>
+      <textarea id="marketServiceNote" rows="2" placeholder="Gate, contact, parcel handling notes"></textarea>
+    </div>
     <div style="display:flex; flex-direction:column; gap:8px;">
       <button class="btn-primary" id="btnPlaceMarketOrder" onclick="submitMarketplaceOrder()">Confirm & Dispatch Tickets</button>
       <button class="btn-secondary" onclick="closeMarketCheckoutModal()" style="margin:0;">Back to Shopping</button>

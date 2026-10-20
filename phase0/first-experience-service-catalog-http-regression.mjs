@@ -7,6 +7,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { createHash } from 'node:crypto';
 
 const tempDir = await mkdtemp(path.join(os.tmpdir(), 'sellify-service-catalog-http-'));
 const dbPath = path.join(tempDir, 'sellify.sqlite');
@@ -231,12 +232,553 @@ try {
     error => error?.code === 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' && error?.statusCode === 409,
     'unassessed service requests must not enter canonical fulfillment'
   );
+  const logisticsActor = { userId: user.id, organizationId: session.organizationId, role: 'owner' };
+  // Activate the canonical Logistics Pack through its lifecycle contract before
+  // assigning a logistics role; the role guard intentionally rejects inactive packs.
+  await store.transitionPackLifecycle(tenant.chatId, 'logistics', 'INSTALLED', logisticsActor);
+  await store.transitionPackLifecycle(tenant.chatId, 'logistics', 'ELIGIBLE', logisticsActor);
+  await store.transitionPackLifecycle(tenant.chatId, 'logistics', 'ACTIVE', logisticsActor);
+
+  const tenantMemberships = await store.listTenantMemberships(tenant.chatId);
+  const ownerMembership = tenantMemberships.find(membership => String(membership.user_id || membership.userId) === String(user.id));
+  assert.ok(ownerMembership?.id, 'test owner membership must be available for scoped logistics role setup');
+  await store.assignMembershipContextualRole({
+    actorUserId: user.id,
+    chatId: tenant.chatId,
+    membershipId: ownerMembership.id,
+    role: 'logistics_manager',
+  });
+  // Session authorization claims are a snapshot. Reissue the test session
+  // after the contextual role change so the HTTP journey tests current scope.
+  const assessmentSession = await store.createSession({
+    userId: user.id,
+    chatId: tenant.chatId,
+    deviceName: 'Service Catalog HTTP assessment regression',
+  });
+  authHeaders.Authorization = 'Bearer ' + assessmentSession.token;
   await assert.rejects(
-    () => store.assignDeliveryCourier(tenant.chatId, requestOrder.server_order_id, '', null, {
+    () => store.assignDeliveryCourier(tenant.chatId, requestOrder.server_order_id, '', logisticsActor, {
       assignmentKey: 'parcel-request-before-assessment',
     }),
-    error => error?.code === 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' && error?.statusCode === 409,
+    error => {
+      assert.equal(error?.code, 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED',
+        `unexpected assignment rejection: code=${error?.code || 'none'} status=${error?.statusCode || 'none'} message=${error?.message || error}`);
+      assert.equal(error?.statusCode, 409);
+      return true;
+    },
     'unassessed service requests must not be assigned to a courier'
+  );
+
+  const assessmentUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(requestOrder.server_order_id) + '/service-delivery-assessment';
+
+  const unauthenticatedAssessmentResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { 'Idempotency-Key': 'parcel-request-assessment-unauthenticated' },
+    body: JSON.stringify({ assessment_outcome: 'INELIGIBLE' }),
+  });
+  assert.equal(unauthenticatedAssessmentResponse.status, 401,
+    'assessment endpoint must reject requests without an authenticated session');
+
+  if (requestOrder.location_id) {
+    const wrongLocationResponse = await fetch(assessmentUrl, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-wrong-location' },
+      body: JSON.stringify({
+        assessment_outcome: 'INELIGIBLE',
+        locationId: 'not-the-canonical-order-location',
+      }),
+    });
+    assert.equal(wrongLocationResponse.status, 403,
+      'assessment must not authorize against a caller-selected location different from the order location');
+    assert.equal((await wrongLocationResponse.json()).error?.code,
+      'LOGISTICS_ASSESSMENT_LOCATION_MISMATCH');
+  }
+
+  const assessmentPayload = {
+    assessment_outcome: 'ELIGIBLE',
+    // These client-supplied identity/authority claims must never override the authenticated session.
+    organization_id: 'attacker-controlled-organization',
+    actor_user_id: 'attacker-controlled-user',
+    assessed_by_user_id: 'attacker-controlled-user',
+    customer_acceptance: {
+      accepted: true,
+      evidence_type: 'telegram_confirmation',
+      evidence_reference: 'buyer-chat-confirmation-123',
+    },
+  };
+  const serviceRequestBeforeInvalidAssessments = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  assert.ok(serviceRequestBeforeInvalidAssessments,
+    'canonical service request must exist before assessment attempts');
+
+  const missingAcceptanceResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-missing-acceptance' },
+    body: JSON.stringify({ assessment_outcome: 'ELIGIBLE' }),
+  });
+  const missingAcceptanceBody = await missingAcceptanceResponse.json();
+  assert.equal(missingAcceptanceResponse.status, 400,
+    `an eligible assessment must fail closed without explicit customer acceptance evidence; got status=${missingAcceptanceResponse.status} body=${JSON.stringify(missingAcceptanceBody)}`);
+  assert.equal(missingAcceptanceBody.error?.code, 'LOGISTICS_CUSTOMER_ACCEPTANCE_REQUIRED');
+
+  const overlongEvidenceResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-overlong-evidence' },
+    body: JSON.stringify({
+      ...assessmentPayload,
+      customer_acceptance: {
+        ...assessmentPayload.customer_acceptance,
+        evidence_reference: 'x'.repeat(201),
+      },
+    }),
+  });
+  assert.equal(overlongEvidenceResponse.status, 400,
+    'overlong evidence references must be rejected rather than silently truncated');
+  assert.equal((await overlongEvidenceResponse.json()).error?.code,
+    'LOGISTICS_CUSTOMER_ACCEPTANCE_EVIDENCE_INVALID');
+
+  const serviceRequestAfterInvalidAssessments = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(serviceRequestAfterInvalidAssessments, serviceRequestBeforeInvalidAssessments,
+    'rejected assessment payloads must leave canonical service request state unchanged');
+
+  const assessmentResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+    body: JSON.stringify(assessmentPayload),
+  });
+  assert.equal(assessmentResponse.status, 200, 'authorized assessment and recorded customer acceptance should enable fulfillment');
+  const assessmentResult = await assessmentResponse.json();
+  assert.equal(assessmentResult.service_delivery?.assessment_status, 'READY_FOR_FULFILLMENT');
+  assert.equal(assessmentResult.service_delivery?.assessment?.outcome, 'ELIGIBLE');
+  assert.equal(assessmentResult.service_delivery?.assessment?.assessed_by_user_id, String(user.id),
+    'recorded assessment actor must come from the authenticated session, not client-supplied identity fields');
+  assert.equal(assessmentResult.service_delivery?.assessment?.customer_acceptance?.evidence_reference, 'buyer-chat-confirmation-123');
+  assert.equal(assessmentResult.service_delivery?.assignment_status, 'NOT_ASSIGNED',
+    'customer acceptance must not automatically assign a courier');
+
+  // Assessment idempotency keys are organization-scoped, not merely embedded
+  // in one order's JSON. Reusing a committed key against another order must
+  // conflict before validating that second order's assessment payload.
+  const crossOrderAssessmentUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(parcelStoredOrder.server_order_id) + '/service-delivery-assessment';
+  const crossOrderAssessmentReplay = await fetch(crossOrderAssessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+    body: JSON.stringify(assessmentPayload),
+  });
+  assert.equal(crossOrderAssessmentReplay.status, 409,
+    'an assessment idempotency key must not be reused across canonical orders');
+  assert.equal((await crossOrderAssessmentReplay.json()).error?.code,
+    'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT');
+
+  assert.ok(parcelStoredOrder.server_order_id,
+    'instant service request must retain its canonical server order identity');
+  const instantAssessmentUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(parcelStoredOrder.server_order_id) + '/service-delivery-assessment';
+  const instantAcceptance = {
+    accepted: true,
+    evidence_type: 'telegram_confirmation',
+    evidence_reference: 'instant-buyer-confirmation-123',
+  };
+  const instantMissingAvailabilityResponse = await fetch(instantAssessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-instant-assessment-missing-availability' },
+    body: JSON.stringify({
+      assessment_outcome: 'ELIGIBLE',
+      customer_acceptance: instantAcceptance,
+    }),
+  });
+  assert.equal(instantMissingAvailabilityResponse.status, 400,
+    'instant delivery cannot become ready without an explicit availability result');
+  assert.equal((await instantMissingAvailabilityResponse.json()).error?.code,
+    'LOGISTICS_AVAILABILITY_CONFIRMATION_REQUIRED');
+  const instantRequestAfterMissingAvailability = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === parcelStoredOrder.server_order_id)?.service_delivery_request;
+  assert.equal(instantRequestAfterMissingAvailability?.assessment, undefined,
+    'failed instant availability checks must not persist an assessment');
+  assert.notEqual(instantRequestAfterMissingAvailability?.assessment_status, 'READY_FOR_FULFILLMENT',
+    'failed instant availability checks must not advance the request lifecycle');
+
+  const instantAssessmentResponse = await fetch(instantAssessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-instant-assessment-eligible' },
+    body: JSON.stringify({
+      assessment_outcome: 'ELIGIBLE',
+      availability_confirmed: true,
+      customer_acceptance: instantAcceptance,
+    }),
+  });
+  assert.equal(instantAssessmentResponse.status, 200,
+    'instant delivery can become ready after eligibility, availability, and acceptance are recorded');
+  const instantAssessmentResult = await instantAssessmentResponse.json();
+  assert.equal(instantAssessmentResult.service_delivery?.assessment_status, 'READY_FOR_FULFILLMENT');
+  assert.equal(instantAssessmentResult.service_delivery?.assessment?.availability_confirmed, true);
+  assert.equal(instantAssessmentResult.service_delivery?.assessment?.availability_confirmation?.source,
+    'authorized_operator_recorded',
+    'recorded availability must not be represented as externally verified');
+  assert.equal(instantAssessmentResult.service_delivery?.assessment?.availability_confirmation?.recorded_by_user_id,
+    String(user.id));
+  assert.equal(instantAssessmentResult.service_delivery?.assignment_status, 'NOT_ASSIGNED',
+    'instant eligibility must not automatically assign a courier');
+
+  if (requestOrder.location_id) {
+    await assert.rejects(
+      () => store.assignDeliveryCourier(
+        tenant.chatId,
+        requestOrder.server_order_id,
+        'not-a-courier',
+        session,
+        {
+          locationId: 'not-the-canonical-order-location',
+          assignmentKey: 'parcel-request-assignment-wrong-location',
+        }
+      ),
+      error => error?.code === 'LOGISTICS_ASSIGNMENT_LOCATION_MISMATCH' && error?.statusCode === 403,
+      'courier assignment must not authorize against a caller-selected location different from the order location'
+    );
+  }
+
+  // Existing fulfillment rows must not let courier assignment drift from
+  // the canonical order's location. Seed a deliberately inconsistent row and
+  // assert the service rejects it before validating/creating an assignment.
+  if (requestOrder.location_id) {
+    const seededFulfillmentDb = new DatabaseSync(dbPath);
+    try {
+      seededFulfillmentDb.prepare(`
+        INSERT INTO fulfillments
+          (id, server_order_id, organization_id, location_id, fulfillment_type, status,
+           destination_json, scheduled_at, tracking_reference, proof_json, last_command_key,
+           created_by_user_id, updated_by_user_id, created_at, updated_at, version)
+        VALUES (?, ?, ?, ?, 'delivery', 'pending', NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?, 1)
+      `).run(
+        'test-mismatched-fulfillment-location',
+        requestOrder.server_order_id,
+        String(session.organizationId),
+        'not-the-canonical-order-location',
+        String(user.id),
+        String(user.id),
+        new Date().toISOString(),
+        new Date().toISOString(),
+      );
+    } finally {
+      seededFulfillmentDb.close();
+    }
+    await assert.rejects(
+      () => store.assignDeliveryCourier(
+        tenant.chatId,
+        requestOrder.server_order_id,
+        'not-a-courier',
+        session,
+        { assignmentKey: 'parcel-request-assignment-existing-fulfillment-location-mismatch' }
+      ),
+      error => error?.code === 'LOGISTICS_FULFILLMENT_LOCATION_MISMATCH' && error?.statusCode === 409,
+      'assignment must reject an existing fulfillment whose location differs from the canonical order'
+    );
+  }
+
+  // Assignment command keys are organization-scoped. Seed a prior committed
+  // assignment to exercise retry behavior without depending on courier selection.
+  const assignmentReplayDb = new DatabaseSync(dbPath);
+  let seededAssignmentId;
+  try {
+    const matchingFulfillment = assignmentReplayDb.prepare(
+      'SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?'
+    ).get(String(requestOrder.server_order_id), String(session.organizationId));
+    // Keep the seeded fulfillment consistent with the location resolution used
+    // by direct transitions when the order has no explicit location.
+    const replayLocationId = requestOrder.location_id
+      ? String(requestOrder.location_id)
+      : (session.locationId ? String(session.locationId) : null);
+    if (matchingFulfillment) {
+      assignmentReplayDb.prepare('UPDATE fulfillments SET location_id = ? WHERE id = ?').run(
+        replayLocationId, matchingFulfillment.id
+      );
+    } else {
+      const now = new Date().toISOString();
+      assignmentReplayDb.prepare(`
+        INSERT INTO fulfillments
+          (id, server_order_id, organization_id, location_id, fulfillment_type, status,
+           destination_json, scheduled_at, tracking_reference, proof_json, last_command_key,
+           created_by_user_id, updated_by_user_id, created_at, updated_at, version)
+        VALUES (?, ?, ?, ?, 'delivery', 'pending', NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?, 1)
+      `).run(
+        'test-assignment-replay-fulfillment', String(requestOrder.server_order_id),
+        String(session.organizationId), replayLocationId,
+        String(user.id), String(user.id), now, now
+      );
+    }
+    const fulfillmentRow = assignmentReplayDb.prepare(
+      'SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?'
+    ).get(String(requestOrder.server_order_id), String(session.organizationId));
+    seededAssignmentId = 'test-assignment-replay-existing';
+    const now = new Date().toISOString();
+    assignmentReplayDb.prepare(`
+      INSERT INTO delivery_assignments
+        (id, fulfillment_id, organization_id, location_id, courier_user_id, status,
+         assignment_key, assigned_by_user_id, assigned_at, updated_at, version, last_command_key)
+      VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, ?, ?, 1, ?)
+    `).run(
+      seededAssignmentId, fulfillmentRow.id, String(session.organizationId),
+      replayLocationId,
+      String(user.id), 'parcel-assignment-idempotency-key-replay',
+      String(user.id), now, now, 'parcel-assignment-idempotency-key-replay'
+    );
+    const assignmentFingerprint = createHash('sha256').update(JSON.stringify({
+      action: 'ASSIGN',
+      requested_courier_user_id: String(user.id),
+    })).digest('hex');
+    assignmentReplayDb.prepare(`
+      INSERT INTO delivery_assignment_commands
+        (organization_id, command_key, server_order_id, command_fingerprint, result_assignment_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      String(session.organizationId), 'parcel-assignment-idempotency-key-replay',
+      String(requestOrder.server_order_id), assignmentFingerprint, seededAssignmentId, now
+    );
+  } finally {
+    assignmentReplayDb.close();
+  }
+  const replayedAssignment = await store.assignDeliveryCourier(
+    tenant.chatId, requestOrder.server_order_id, String(user.id), session,
+    { assignmentKey: 'parcel-assignment-idempotency-key-replay' }
+  );
+  assert.equal(replayedAssignment.id, seededAssignmentId,
+    'exact assignment retry must replay the original assignment');
+  let assignmentKeyConflictError = null;
+  try {
+    await store.assignDeliveryCourier(
+      tenant.chatId, requestOrder.server_order_id, 'different-courier-user', session,
+      { assignmentKey: 'parcel-assignment-idempotency-key-replay' }
+    );
+  } catch (error) {
+    assignmentKeyConflictError = error;
+  }
+  assert.ok(
+    assignmentKeyConflictError?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT'
+      && assignmentKeyConflictError?.statusCode === 409,
+    `reusing an assignment key with a different courier must conflict; got code=${assignmentKeyConflictError?.code} status=${assignmentKeyConflictError?.statusCode} message=${assignmentKeyConflictError?.message}`
+  );
+
+  let directTransitionError = null;
+  try {
+    await store.transitionOrderFulfillment(
+      tenant.chatId, requestOrder.server_order_id, 'out_for_delivery', session,
+      { idempotencyKey: 'parcel-direct-transition-bypasses-assignment' }
+    );
+  } catch (error) {
+    directTransitionError = error;
+  }
+  assert.ok(
+    directTransitionError?.code === 'DELIVERY_ASSIGNMENT_LIFECYCLE_REQUIRED'
+      && directTransitionError?.statusCode === 409,
+    `an active courier assignment must advance through its own lifecycle; got code=${directTransitionError?.code} status=${directTransitionError?.statusCode} message=${directTransitionError?.message}`
+  );
+  let missingReassignmentTargetError = null;
+  try {
+    await store.transitionDeliveryAssignment(
+      tenant.chatId, requestOrder.server_order_id, 'REASSIGN_EXCEPTION', session,
+      { idempotencyKey: 'parcel-assignment-reassign-missing-target' }
+    );
+  } catch (error) {
+    missingReassignmentTargetError = error;
+  }
+  assert.ok(
+    missingReassignmentTargetError?.code === 'REASSIGNMENT_TARGET_REQUIRED'
+      && missingReassignmentTargetError?.statusCode === 400,
+    `reassignment without a target must return a validation error after loading the active assignment; got code=${missingReassignmentTargetError?.code} status=${missingReassignmentTargetError?.statusCode} message=${missingReassignmentTargetError?.message}`
+  );
+  // A stale or corrupted assignment location must not advance even when the
+  // tenant and order still belong to the expected organization.
+  const assignmentLocationGuardDb = new DatabaseSync(dbPath);
+  let originalAssignmentLocationId;
+  let originalAssignmentUpdatedAt;
+  try {
+    const currentAssignment = assignmentLocationGuardDb.prepare(
+      "SELECT id, location_id, updated_at FROM delivery_assignments WHERE id = ?"
+    ).get(seededAssignmentId);
+    assert.ok(currentAssignment, 'seeded assignment should exist for location guard regression');
+    originalAssignmentLocationId = currentAssignment.location_id;
+    originalAssignmentUpdatedAt = currentAssignment.updated_at;
+    // Use NULL to model a corrupted/missing assignment location without
+    // violating the locations foreign key; the canonical order still has one.
+    assignmentLocationGuardDb.prepare(
+      "UPDATE delivery_assignments SET location_id = ?, updated_at = ? WHERE id = ?"
+    ).run(null, '9999-12-31T23:59:59.999Z', seededAssignmentId);
+  } finally {
+    assignmentLocationGuardDb.close();
+  }
+  await assert.rejects(
+    () => store.transitionDeliveryAssignment(
+      tenant.chatId, requestOrder.server_order_id, 'ACCEPTED', session,
+      { idempotencyKey: 'parcel-assignment-stale-location-must-fail' }
+    ),
+    error => error?.code === 'DELIVERY_ASSIGNMENT_LOCATION_MISMATCH' && error?.statusCode === 409,
+    'assignment transition must reject a persisted location that differs from the canonical order'
+  );
+  const restoreAssignmentLocationDb = new DatabaseSync(dbPath);
+  try {
+    restoreAssignmentLocationDb.prepare(
+      "UPDATE delivery_assignments SET location_id = ?, updated_at = ? WHERE id = ?"
+    ).run(originalAssignmentLocationId, originalAssignmentUpdatedAt, seededAssignmentId);
+  } finally {
+    restoreAssignmentLocationDb.close();
+  }
+
+  const acceptedAssignment = await store.transitionDeliveryAssignment(
+    tenant.chatId, requestOrder.server_order_id, 'ACCEPTED', session,
+    { idempotencyKey: 'parcel-assignment-accept-transition' }
+  );
+  assert.equal(acceptedAssignment.status, 'ACCEPTED',
+    'courier assignment should accept before dispatch');
+  await assert.rejects(
+    () => store.transitionDeliveryAssignment(
+      tenant.chatId, requestOrder.server_order_id, 'DELIVERED', session,
+      { idempotencyKey: 'parcel-assignment-delivered-without-proof' }
+    ),
+    error => error?.code === 'DELIVERY_PROOF_REQUIRED' && error?.statusCode === 400,
+    'assignment cannot complete delivery without proof'
+  );
+  const outboundAssignment = await store.transitionDeliveryAssignment(
+    tenant.chatId, requestOrder.server_order_id, 'OUT_FOR_DELIVERY', session,
+    { idempotencyKey: 'parcel-assignment-outbound-transition' }
+  );
+  assert.equal(outboundAssignment.status, 'OUT_FOR_DELIVERY',
+    'assignment and fulfillment should advance together through the canonical lifecycle');
+  assert.equal(
+    (await store.transitionOrderFulfillment(
+      tenant.chatId, requestOrder.server_order_id, 'delivered', session,
+      { idempotencyKey: 'parcel-direct-delivery-completion' }
+    ).catch(error => ({ error }))).error?.code,
+    'DELIVERY_ASSIGNMENT_LIFECYCLE_REQUIRED',
+    'direct completion must not bypass the active assignment lifecycle'
+  );
+
+  const assessmentRetry = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+    body: JSON.stringify(assessmentPayload),
+  });
+  assert.equal(assessmentRetry.status, 200, 'assessment idempotent retry should succeed');
+  assert.equal((await assessmentRetry.json()).replayed, true, 'assessment retry should be reported as replayed');
+
+  const conflictingAssessmentResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+    body: JSON.stringify({
+      ...assessmentPayload,
+      customer_acceptance: {
+        ...assessmentPayload.customer_acceptance,
+        evidence_reference: 'different-buyer-confirmation-456',
+      },
+    }),
+  });
+  assert.equal(conflictingAssessmentResponse.status, 409,
+    'reusing an assessment idempotency key with changed evidence must conflict');
+  assert.equal((await conflictingAssessmentResponse.json()).error?.code,
+    'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT');
+
+  const conflictingInvalidAssessmentResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+    body: JSON.stringify({ assessment_outcome: 'NOT_A_VALID_OUTCOME' }),
+  });
+  assert.equal(conflictingInvalidAssessmentResponse.status, 409,
+    'reusing a recorded assessment key with an invalid changed payload must still conflict');
+  assert.equal((await conflictingInvalidAssessmentResponse.json()).error?.code,
+    'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT');
+
+  const secondAssessmentResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-second-distinct-command' },
+    body: JSON.stringify({
+      assessment_outcome: 'INELIGIBLE',
+    }),
+  });
+  assert.equal(secondAssessmentResponse.status, 409,
+    'a distinct command must not overwrite an already recorded assessment');
+  assert.equal((await secondAssessmentResponse.json()).error?.code,
+    'LOGISTICS_ASSESSMENT_ALREADY_RECORDED');
+
+  const assessedStoredOrder = (await store.getOrders(tenant.chatId)).find(order => order.server_order_id === requestOrder.server_order_id);
+  assert.equal(assessedStoredOrder.service_delivery_request.assessment_status, 'READY_FOR_FULFILLMENT',
+    'the canonical seller order must persist the authoritative readiness state');
+
+  if (requestOrder.location_id) {
+    await assert.rejects(
+      () => store.transitionOrderFulfillment(
+        tenant.chatId, requestOrder.server_order_id, 'out_for_delivery', session,
+        {
+          locationId: 'not-the-canonical-order-location',
+          idempotencyKey: 'parcel-fulfillment-wrong-location-must-fail',
+        }
+      ),
+      error => error?.code === 'FULFILLMENT_LOCATION_MISMATCH' && error?.statusCode === 403,
+      'fulfillment transition must reject a caller-selected location that differs from the canonical order'
+    );
+  }
+
+  // A negative assessment must remain terminal for this lifecycle and must
+  // not permit fulfillment transitions or courier assignment.
+  const rejectedCheckoutResponse = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-request-rejected-http-1' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-request-rejected-buyer-http',
+      customer_name: 'Parcel Request Rejected Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-request-http', qty: 1 }],
+      service_delivery: {
+        pickup_details: 'Piassa, Addis Ababa',
+        destination_details: 'Sar Bet, Addis Ababa',
+      },
+    }),
+  });
+  assert.equal(rejectedCheckoutResponse.status, 200, 'second service request should be created for negative assessment coverage');
+  const rejectedCheckout = await rejectedCheckoutResponse.json();
+  const rejectedOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === rejectedCheckout.marketplace_order_id
+    || order.id === rejectedCheckout.sub_orders?.[0]?.seller_order_id);
+  assert.ok(rejectedOrder?.server_order_id, 'negative-assessment fixture must retain canonical order identity');
+  const rejectedAssessmentResponse = await fetch(
+    baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+      + '/orders/' + encodeURIComponent(rejectedOrder.server_order_id) + '/service-delivery-assessment',
+    {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-ineligible-1' },
+      body: JSON.stringify({ assessment_outcome: 'INELIGIBLE' }),
+    }
+  );
+  assert.equal(rejectedAssessmentResponse.status, 200, 'authorized negative assessment should be recorded');
+  const rejectedAssessment = await rejectedAssessmentResponse.json();
+  assert.equal(rejectedAssessment.service_delivery?.assessment_status, 'ASSESSMENT_REJECTED');
+  assert.equal(rejectedAssessment.service_delivery?.assignment_status, 'NOT_ASSIGNED');
+  await assert.rejects(
+    () => store.transitionDeliveryAssignment(
+      tenant.chatId, rejectedOrder.server_order_id, 'OUT_FOR_DELIVERY', session,
+      { idempotencyKey: 'parcel-assignment-outbound-transition' }
+    ),
+    error => error?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT' && error?.statusCode === 409,
+    'an assignment idempotency key from another order must not replay across canonical orders'
+  );
+  await assert.rejects(
+    () => store.transitionOrderFulfillment(tenant.chatId, rejectedOrder.server_order_id, 'out_for_delivery', session, {
+      idempotencyKey: 'parcel-rejected-order-fulfillment-must-fail',
+    }),
+    error => error?.code === 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' && error?.statusCode === 409,
+    'rejected service requests must not enter canonical fulfillment'
+  );
+  await assert.rejects(
+    () => store.assignDeliveryCourier(tenant.chatId, rejectedOrder.server_order_id, '', logisticsActor, {
+      assignmentKey: 'parcel-rejected-order-assignment-must-fail',
+    }),
+    error => {
+      assert.equal(error?.code, 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED',
+        `rejected service requests must not be assigned to a courier; got code=${error?.code} status=${error?.statusCode} message=${error?.message}`);
+      assert.equal(error?.statusCode, 409);
+      return true;
+    },
+    'rejected service requests must not be assigned to a courier'
   );
 
   const verificationDb = new DatabaseSync(dbPath, { readOnly: true });
@@ -465,7 +1007,119 @@ try {
     .filter(item => item.id === lostResponseOrder.id).length, 1,
   'response-loss retry must not duplicate canonical order');
 
-  console.log('PASS: service catalog HTTP journey, actual frontend sync response-loss recovery, and idempotent order sync');
+  // Complete the existing canonical delivery and prove Telegram buyer tracking
+  // projects that state instead of showing the stale marketplace fulfillment row.
+  const deliveredAssignment = await store.transitionDeliveryAssignment(
+    tenant.chatId,
+    requestOrder.server_order_id,
+    'DELIVERED',
+    session,
+    {
+      idempotencyKey: 'parcel-assignment-delivered-canonical-projection',
+      proof: { type: 'photo', reference: 'proof://parcel-request-delivered-1' },
+    },
+  );
+  assert.equal(deliveredAssignment.status, 'DELIVERED',
+    'canonical delivery assignment should complete with valid evidence');
+  // Deliberately retain multiple legacy rows beside canonical fulfillment.
+  // They must not multiply the canonical tracking projection.
+  const canonicalProjectionDb = store.getDatabaseForTests();
+  const canonicalProjectionSellerOrder = canonicalProjectionDb.prepare(
+    'SELECT id FROM marketplace_seller_orders WHERE marketplace_order_id = ? AND seller_id = ?'
+  ).get(requestedAssessment.marketplace_order_id, String(tenant.chatId));
+  assert.ok(canonicalProjectionSellerOrder?.id,
+    'canonical tracking fixture should have a seller-order row');
+  const projectionLegacyNow = new Date().toISOString();
+  for (const suffix of ['a', 'b']) {
+    canonicalProjectionDb.prepare(
+      'INSERT INTO marketplace_fulfillments (id,seller_order_id,status,fulfillment_type,tracking_reference,created_at,updated_at) VALUES (?,?,?,?,?,?,?)'
+    ).run(
+      'stale-canonical-projection-' + suffix,
+      canonicalProjectionSellerOrder.id,
+      'out_for_delivery',
+      'delivery',
+      'STALE-CANONICAL-' + suffix,
+      projectionLegacyNow,
+      projectionLegacyNow,
+    );
+  }
+  const buyerFulfillmentExperience = await store.getTelegramBuyerFulfillmentExperience(
+    tenant.chatId,
+    'parcel-request-buyer-http',
+    requestedAssessment.marketplace_order_id,
+  );
+  assert.ok(buyerFulfillmentExperience.fulfillments.length > 0,
+    'Telegram buyer tracking should expose the canonical fulfillment');
+  const canonicalFulfillmentCount = canonicalProjectionDb.prepare(
+    'SELECT COUNT(*) AS count FROM fulfillments WHERE server_order_id = ? AND organization_id = ?'
+  ).get(String(requestOrder.server_order_id), String(session.organizationId)).count;
+  assert.equal(buyerFulfillmentExperience.fulfillments.length, canonicalFulfillmentCount,
+    'canonical tracking must not multiply canonical fulfillments by joining legacy marketplace rows');
+  assert.ok(buyerFulfillmentExperience.fulfillments.some(item =>
+    item.status === 'delivered'
+      && item.proof?.type === 'photo'
+      && item.proof?.reference === 'proof://parcel-request-delivered-1'
+  ), 'Telegram buyer tracking must project canonical delivered status and completion proof');
+  assert.equal(
+    buyerFulfillmentExperience.authority.fulfillment,
+    'canonical_logistics_with_legacy_marketplace_fallback',
+    'buyer tracking must declare canonical Logistics as the operational authority',
+  );
+
+  // Legacy compatibility: when this seller order has no canonical commerce
+  // fulfillment, the established marketplace fulfillment remains visible.
+  const legacyMarketplaceOrderId = 'legacy-tracking-' + Date.now().toString(36);
+  const legacySellerOrderRowId = 'legacy-seller-row-' + Date.now().toString(36);
+  const legacySellerOrderId = 'legacy-seller-order-' + Date.now().toString(36);
+  const legacyTrackingReference = 'LEGACY-TRACK-' + Date.now().toString(36);
+  const legacyProofReference = 'proof://legacy-tracking-' + Date.now().toString(36);
+  const legacyNow = new Date().toISOString();
+  const trackingDb = store.getDatabaseForTests();
+  trackingDb.prepare(
+    "INSERT INTO marketplace_orders (id,buyer_identity,customer_name,currency,total_minor,status,tracking_token_hash,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)"
+  ).run(legacyMarketplaceOrderId, 'parcel-request-buyer-http', 'Parcel Buyer', 'ETB', 10000,
+    'confirmed', 'legacy-tracking-hash', legacyNow, legacyNow);
+  trackingDb.prepare(
+    "INSERT INTO marketplace_seller_orders (id,marketplace_order_id,seller_id,seller_order_id,organization_id,currency,subtotal_minor,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)"
+  ).run(legacySellerOrderRowId, legacyMarketplaceOrderId, tenant.chatId, legacySellerOrderId,
+    String(session.organizationId), 'ETB', 10000, 'confirmed', legacyNow, legacyNow);
+  trackingDb.prepare(
+    "INSERT INTO marketplace_fulfillments (id,seller_order_id,status,fulfillment_type,tracking_reference,proof_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)"
+  ).run('legacy-fulfillment-' + Date.now().toString(36), legacySellerOrderRowId, 'out_for_delivery',
+    'delivery', legacyTrackingReference, JSON.stringify({ type: 'photo', reference: legacyProofReference }), legacyNow, legacyNow);
+
+  const legacyExperience = await store.getTelegramBuyerFulfillmentExperience(
+    tenant.chatId, 'parcel-request-buyer-http', legacyMarketplaceOrderId,
+  );
+  assert.equal(legacyExperience.fulfillments.length, 1,
+    'legacy order without canonical fulfillment should retain one marketplace fulfillment');
+  assert.equal(legacyExperience.fulfillments[0].status, 'out_for_delivery',
+    'legacy marketplace status should be used only when canonical fulfillment is absent');
+  assert.equal(legacyExperience.fulfillments[0].trackingReference, legacyTrackingReference);
+  assert.equal(legacyExperience.fulfillments[0].proof.reference, legacyProofReference);
+
+  // A different tenant/seller must not read the original seller's order even
+  // when the caller supplies a valid buyer identity and marketplace order ID.
+  const otherSeller = await store.getOrCreateUserByTelegram(
+    'tracking-isolation-' + Date.now().toString(36), 'Tracking Isolation Seller',
+  );
+  const otherTenant = await store.createTenantForUser({
+    userId: otherSeller.id,
+    sellerName: 'Tracking Isolation Store',
+    businessType: 'retail',
+    country: 'ET',
+    currency: 'ETB',
+    timezone: 'Africa/Addis_Ababa',
+  });
+  await assert.rejects(
+    () => store.getTelegramBuyerFulfillmentExperience(
+      otherTenant.chatId, 'parcel-request-buyer-http', requestedAssessment.marketplace_order_id,
+    ),
+    error => error?.code === 'ORDER_NOT_FOUND',
+    'cross-seller/tenant tracking access must fail closed',
+  );
+
+  console.log('PASS: canonical Telegram fulfillment projection, legacy fallback, tenant/seller isolation, service catalog HTTP journey, frontend sync recovery, and idempotent order sync');
 } catch (error) {
   console.error(error);
   if (childOutput) console.error('Backend output:\n' + childOutput);

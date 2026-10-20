@@ -311,8 +311,10 @@ try {
   await store.transitionOrderFulfillment(integrationChatId, serviceOrderId, 'out_for_delivery', actor, {
     idempotencyKey: 'service-only-start',
   });
+  // Delivery completion requires canonical proof evidence, even for service-only orders.
   const completedService = await store.transitionOrderFulfillment(integrationChatId, serviceOrderId, 'delivered', actor, {
     idempotencyKey: 'service-only-delivered',
+    proof: { type: 'photo', reference: 'service-only-proof' },
   });
   assert.equal(completedService.status, 'delivered');
   const afterService = (await store.getInventoryBalances(integrationChatId))
@@ -337,6 +339,7 @@ try {
   });
   const completedMixed = await store.transitionOrderFulfillment(integrationChatId, mixedOrderId, 'delivered', actor, {
     idempotencyKey: 'mixed-order-delivered',
+    proof: { type: 'photo', reference: 'mixed-order-proof' },
   });
   assert.equal(completedMixed.status, 'delivered');
   const afterMixed = (await store.getInventoryBalances(integrationChatId))
@@ -344,6 +347,7 @@ try {
   assert.equal(beforeMixed - afterMixed, 2, 'server catalog type, not client line metadata, determines stock deduction');
   await store.transitionOrderFulfillment(integrationChatId, mixedOrderId, 'delivered', actor, {
     idempotencyKey: 'mixed-order-delivered',
+    proof: { type: 'photo', reference: 'mixed-order-proof' },
   });
   const afterMixedRetry = (await store.getInventoryBalances(integrationChatId))
     .find(row => row.productId === 'soap-e2e')?.quantity;
@@ -388,6 +392,7 @@ try {
   });
   const locationlessCompleted = await store.transitionOrderFulfillment(locationlessChatId, locationlessServiceOrderId, 'delivered', actor, {
     idempotencyKey: 'locationless-service-delivered',
+    proof: { type: 'photo', reference: 'locationless-service-proof' },
   });
   assert.equal(locationlessCompleted.status, 'delivered', 'service fulfillment must complete with zero physical locations');
 
@@ -413,6 +418,7 @@ try {
   await assert.rejects(
     store.transitionOrderFulfillment(locationlessChatId, locationlessPhysicalOrderId, 'delivered', actor, {
       idempotencyKey: 'locationless-physical-delivered',
+      proof: { type: 'photo', reference: 'locationless-physical-proof' },
     }),
     error => error?.code === 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED',
     'physical-item fulfillment must still require a physical inventory location'
