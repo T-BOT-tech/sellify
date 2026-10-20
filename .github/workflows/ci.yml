@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, fix/gap-1-18-migration63-recovery]
   pull_request:
-    branches: [main, ux/ecosystem-add-action-menu]
+    branches: [main, ux/ecosystem-add-action-menu, ux/catalog-service-localization-13-locales]
 
 permissions:
   contents: read
