@@ -384,6 +384,30 @@ try {
   assert.equal(staleStateAfterScopeDenials.version, 2);
   assert.equal(staleAuditCount(), staleAuditBefore, 'scope denials must not mutate booking or audit state');
 
+  // Authenticated staff without scheduling permissions must be denied at the
+  // HTTP boundary, with no booking mutation or lifecycle audit append.
+  const staffUser = await store.getOrCreateUserByTelegram('service-booking-staff-' + Date.now(), 'Service Booking Staff');
+  await store.ensureMembership(staffUser.id, tenant.chatId, 'staff');
+  const staffSession = await store.createSession({
+    userId: staffUser.id, chatId: tenant.chatId, deviceName: 'Service Booking Unauthorized Staff',
+  });
+  const staffHeaders = {
+    Authorization: 'Bearer ' + staffSession.token,
+    'Content-Type': 'application/json',
+    'Idempotency-Key': 'service-booking-http-permission-denied-1',
+  };
+  const deniedTransition = await fetch(bookingsUrl + '/' + encodeURIComponent(staleBooking.id), {
+    method: 'PATCH',
+    headers: staffHeaders,
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+  });
+  assert.equal(deniedTransition.status, 403, 'staff without scheduling:manage must be denied');
+  const stateAfterPermissionDenial = (await (await fetch(bookingsUrl, { headers: authHeaders })).json()).bookings
+    .find(item => item.id === staleBooking.id);
+  assert.equal(stateAfterPermissionDenial.status, 'ACCEPTED');
+  assert.equal(stateAfterPermissionDenial.version, 2);
+  assert.equal(staleAuditCount(), staleAuditBefore, 'permission denial must not append lifecycle audit evidence');
+
   // Completion actor/timestamp are server-authored even when submitted at the
   // HTTP boundary; completion notes are the only caller-authored completion evidence.
   const completedBookingCreate = await fetch(bookingsUrl, {
