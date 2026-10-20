@@ -7,8 +7,8 @@ for (const status of SELLER_STOREFRONT_CHANNEL_STATUSES) {
 assert.equal(normalizeSellerStorefrontChannel({ channelType: ' WEB ' }).channelType, 'web');
 assert.equal(normalizeSellerStorefrontChannel({ channelType: 'telegram' }).configurationVersion, 1);
 assert.equal(normalizeSellerStorefrontChannel({ channelType: 'telegram', configurationVersion: '2' }).configurationVersion, 2);
-for (const status of ['INVALID', 'ACTIVE', '']) {
-  if (status === '') continue; // empty uses the documented DRAFT default
+assert.equal(normalizeSellerStorefrontChannel({ channelType: 'telegram', status: '' }).status, 'DRAFT');
+for (const status of ['INVALID', 'ACTIVE', '   ']) {
   assert.throws(() => normalizeSellerStorefrontChannel({ channelType: 'telegram', status }), /Invalid seller storefront channel status/);
 }
 for (const configurationVersion of [0, -1, 1.5, NaN, Infinity, 'not-a-number']) {
