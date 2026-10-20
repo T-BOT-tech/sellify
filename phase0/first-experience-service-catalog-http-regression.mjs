@@ -1497,6 +1497,33 @@ try {
     'a retry after successful recovery must replay the committed assessment');
   const assessmentRecoveryReplayBody = await assessmentRecoveryReplayResponse.json();
   assert.equal(assessmentRecoveryReplayBody.service_delivery?.assessment_status, 'ASSESSMENT_REJECTED');
+  // Once the recovery retry commits, the same key is bound to that exact
+  // payload. A changed payload must conflict and must not alter canonical state.
+  const assessmentRecoveryCanonicalBeforeConflict = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === assessmentRecoveryOrder.server_order_id)?.service_delivery_request;
+  const assessmentRecoveryConflictResponse = await fetch(assessmentRecoveryUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': assessmentRecoveryKey },
+    body: JSON.stringify({
+      assessment_outcome: 'ELIGIBLE',
+      customer_acceptance: {
+        accepted: true,
+        evidence_type: 'telegram_confirmation',
+        evidence_reference: 'changed-payload-must-not-replace-original',
+      },
+    }),
+  });
+  assert.equal(assessmentRecoveryConflictResponse.status, 409,
+    'a committed assessment key reused with a different payload must conflict');
+  const assessmentRecoveryConflictBody = await assessmentRecoveryConflictResponse.json();
+  assert.ok(
+    ['IDEMPOTENCY_KEY_REUSE_CONFLICT', 'IDEMPOTENCY_CONFLICT'].includes(assessmentRecoveryConflictBody.error?.code),
+    'changed-payload retry must expose a canonical idempotency conflict');
+  const assessmentRecoveryCanonicalAfterConflict = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === assessmentRecoveryOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(assessmentRecoveryCanonicalAfterConflict, assessmentRecoveryCanonicalBeforeConflict,
+    'changed-payload conflict must not replace the committed assessment');
+
   const assessmentRecoveryVerifyDb = new DatabaseSync(dbPath);
   try {
     assert.equal(assessmentRecoveryVerifyDb.prepare(
