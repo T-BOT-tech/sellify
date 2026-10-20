@@ -325,6 +325,113 @@ try {
   assert.equal(failedRestart.status, 409, 'failed booking must not be restarted through the lifecycle API');
   assert.equal((await failedRestart.json()).error?.code, 'SERVICE_BOOKING_TRANSITION_INVALID');
 
+  // Stale-version commands must fail without changing booking or audit state.
+  const staleBookingCreate = await fetch(bookingsUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-stale-create-1' },
+    body: JSON.stringify({ ...bookingRequest, requested_start: '2026-11-07T09:00:00+03:00', requested_end: '2026-11-07T10:00:00+03:00' }),
+  });
+  assert.equal(staleBookingCreate.status, 201);
+  const staleBooking = (await staleBookingCreate.json()).booking;
+  const staleAuditCount = () => store.getDatabaseForTests().prepare(
+    "SELECT COUNT(*) AS count FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ?"
+  ).get(staleBooking.id).count;
+  const staleAuditBefore = staleAuditCount();
+  const staleResponse = await fetch(bookingsUrl + '/' + encodeURIComponent(staleBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-stale-transition-1' },
+    body: JSON.stringify({ status: 'ACCEPTED', expected_version: 0 }),
+  });
+  assert.equal(staleResponse.status, 409, 'stale expected_version must conflict');
+  const staleState = (await (await fetch(bookingsUrl, { headers: authHeaders })).json()).bookings
+    .find(item => item.id === staleBooking.id);
+  assert.equal(staleState.status, 'REQUESTED');
+  assert.equal(staleState.version, 1);
+  assert.equal(staleAuditCount(), staleAuditBefore, 'stale command must not append lifecycle audit evidence');
+
+  // Tenant and canonical-order scope are checked on the actual HTTP route.
+  const foreignUser = await store.getOrCreateUserByTelegram('service-booking-foreign-' + Date.now(), 'Foreign Service Booking Tenant');
+  const foreignTenant = await store.createTenantForUser({
+    userId: foreignUser.id, sellerName: 'Foreign Service Booking Store', businessType: 'retail',
+    country: 'ET', currency: 'ETB', timezone: 'Africa/Addis_Ababa',
+  });
+  const foreignTenantUrl = baseUrl + '/tenants/' + encodeURIComponent(foreignTenant.chatId)
+    + '/orders/' + encodeURIComponent(serviceOrder.server_order_id) + '/service-bookings/'
+    + encodeURIComponent(staleBooking.id);
+  const crossTenantResponse = await fetch(foreignTenantUrl, {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-cross-tenant-1' },
+    body: JSON.stringify({ status: 'ACCEPTED', expected_version: 1 }),
+  });
+  assert.ok([403, 404].includes(crossTenantResponse.status), 'cross-tenant route must fail closed');
+  const wrongOrderUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/not-the-canonical-order/service-bookings/' + encodeURIComponent(staleBooking.id);
+  const crossOrderResponse = await fetch(wrongOrderUrl, {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-cross-order-1' },
+    body: JSON.stringify({ status: 'ACCEPTED', expected_version: 1 }),
+  });
+  assert.equal(crossOrderResponse.status, 404, 'booking must not be reachable through a different canonical order');
+  const staleStateAfterScopeDenials = (await (await fetch(bookingsUrl, { headers: authHeaders })).json()).bookings
+    .find(item => item.id === staleBooking.id);
+  assert.equal(staleStateAfterScopeDenials.status, 'REQUESTED');
+  assert.equal(staleStateAfterScopeDenials.version, 1);
+  assert.equal(staleAuditCount(), staleAuditBefore, 'scope denials must not mutate booking or audit state');
+
+  // Completion actor/timestamp are server-authored even when submitted at the
+  // HTTP boundary; completion notes are the only caller-authored completion evidence.
+  const completedBookingCreate = await fetch(bookingsUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-complete-create-1' },
+    body: JSON.stringify({ ...bookingRequest, requested_start: '2026-11-08T09:00:00+03:00', requested_end: '2026-11-08T10:00:00+03:00' }),
+  });
+  assert.equal(completedBookingCreate.status, 201);
+  const completedBooking = (await completedBookingCreate.json()).booking;
+  for (const step of [
+    { status: 'ACCEPTED', expected_version: 1, key: 'service-booking-http-complete-accept-1' },
+    { status: 'CONFIRMED', expected_version: 2, key: 'service-booking-http-complete-confirm-1' },
+    { status: 'IN_PROGRESS', expected_version: 3, key: 'service-booking-http-complete-start-1' },
+  ]) {
+    const response = await fetch(bookingsUrl + '/' + encodeURIComponent(completedBooking.id), {
+      method: 'PATCH', headers: { ...authHeaders, 'Idempotency-Key': step.key }, body: JSON.stringify(step),
+    });
+    assert.equal(response.status, 200, 'booking should transition to ' + step.status);
+  }
+  const completionResponse = await fetch(bookingsUrl + '/' + encodeURIComponent(completedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-complete-final-1' },
+    body: JSON.stringify({
+      status: 'COMPLETED', expected_version: 4, completion_note: 'Service delivered',
+      completed_at: '2000-01-01T00:00:00.000Z', completed_by: 'forged-client-completer',
+    }),
+  });
+  assert.equal(completionResponse.status, 200);
+  const completionBody = await completionResponse.json();
+  assert.equal(completionBody.booking.status, 'COMPLETED');
+  assert.notEqual(completionBody.booking.completed_at, '2000-01-01T00:00:00.000Z');
+  assert.notEqual(completionBody.booking.completed_by, 'forged-client-completer');
+  assert.equal(completionBody.booking.completed_by, user.id);
+  const completionAudit = store.getDatabaseForTests().prepare(
+    "SELECT action, metadata_json FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ? ORDER BY id"
+  ).all(completedBooking.id);
+  assert.deepEqual(completionAudit.map(row => row.action), [
+    'services.booking.requested', 'services.booking.accepted', 'services.booking.confirmed',
+    'services.booking.in_progress', 'services.booking.completed',
+  ], 'each successful lifecycle transition must have exactly one audit event');
+  const completionReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(completedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-complete-final-1' },
+    body: JSON.stringify({
+      status: 'COMPLETED', expected_version: 4, completion_note: 'Service delivered',
+      completed_at: '2000-01-01T00:00:00.000Z', completed_by: 'forged-client-completer',
+    }),
+  });
+  assert.equal(completionReplay.status, 200);
+  assert.equal((await completionReplay.json()).replayed, true);
+  assert.equal(store.getDatabaseForTests().prepare(
+    "SELECT COUNT(*) AS count FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ?"
+  ).get(completedBooking.id).count, 5, 'completion replay must not duplicate audit evidence');
+
   const missingBookingKey = await fetch(bookingsUrl, {
     method: 'POST',
     headers: authHeaders,
