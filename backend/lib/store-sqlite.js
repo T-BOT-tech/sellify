@@ -9532,7 +9532,11 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
           related_movement: row.related_movement_id ? { id: row.related_movement_id } : null,
         },
         existingActivities: existingActivities.map(logisticsSchedulingRow),
-        externalEvaluation: input.externalEvaluation ?? input.external_evaluation ?? null,
+        // External feasibility data supplied with a scheduling command is
+        // caller-controlled and is not an authenticated capacity authority.
+        // Until a trusted server-side adapter is wired here, fail closed rather
+        // than allowing request fields to manufacture FEASIBLE evidence.
+        externalEvaluation: null,
       });
 
       const decision = decideLogisticsScheduling({ evaluation: feasibility });
