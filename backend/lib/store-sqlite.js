@@ -25,6 +25,7 @@ import { assertPackLifecyclePrecondition, getPackLifecycleManifest } from './pac
 import { assertUntrustedPaymentEvidenceShape, normalizePaymentEvidenceSource } from './payments/payment-evidence-authority.js';
 import { assertAuthenticatedNotificationContext, assertProviderNotificationEvidenceShape } from './payments/provider-notification-authority.js';
 import { normalizeLogisticsSchedulingRequest } from '../../app/src/verticals/logistics/scheduling-contract.js';
+import { normalizeLogisticsServiceDelivery } from '../../app/src/verticals/logistics/service-delivery-model-contract.js';
 import { evaluateLogisticsSchedulingFeasibility } from '../../app/src/verticals/logistics/scheduling-feasibility-contract.js';
 import { decideLogisticsScheduling } from '../../app/src/verticals/logistics/scheduling-decision-contract.js';
 import { decideLogisticsSchedulingConfirmation } from '../../app/src/verticals/logistics/scheduling-confirmation-contract.js';
@@ -107,6 +108,19 @@ function normaliseProduct(product) {
   value.name = typeof value.name === 'string' ? value.name.trim().slice(0, 200) : '';
   value.price = normalisePrice(value.price);
   value.item_type = String(value.item_type || 'product').trim().toLowerCase() === 'service' ? 'service' : 'product';
+  const hasLogisticsDeliveryModel = value.delivery_model !== undefined || value.deliveryModel !== undefined ||
+    value.service_profile !== undefined || value.serviceProfile !== undefined;
+  if (hasLogisticsDeliveryModel) {
+    const logisticsService = normalizeLogisticsServiceDelivery({
+      item_type: value.item_type,
+      service_profile: value.service_profile ?? value.serviceProfile,
+      delivery_model: value.delivery_model ?? value.deliveryModel,
+    });
+    value.service_profile = logisticsService.service_profile;
+    value.delivery_model = logisticsService.delivery_model;
+    delete value.serviceProfile;
+    delete value.deliveryModel;
+  }
   value.currency = normaliseCurrency(value.currency, 'ETB');
   if (value.stock !== undefined && value.stock !== null) {
     const stock = Number(value.stock);
