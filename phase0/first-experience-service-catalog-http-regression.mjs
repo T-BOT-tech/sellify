@@ -780,6 +780,66 @@ try {
     order.marketplace_order_id === rejectedCheckout.marketplace_order_id
     || order.id === rejectedCheckout.sub_orders?.[0]?.seller_order_id);
   assert.ok(rejectedOrder?.server_order_id, 'negative-assessment fixture must retain canonical order identity');
+
+  // Inject a durable-command write failure after the assessment handler has
+  // updated the order JSON. The surrounding transaction must roll back both
+  // the order mutation and any command/audit evidence.
+  const rollbackCommandKey = 'parcel-assessment-rollback-injected';
+  const rollbackBefore = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === rejectedOrder.server_order_id)?.service_delivery_request;
+  const rollbackSetupDb = new DatabaseSync(dbPath);
+  try {
+    rollbackSetupDb.exec(`
+      CREATE TRIGGER fail_service_assessment_command_insert
+      BEFORE INSERT ON service_delivery_assessment_commands
+      WHEN NEW.command_key = '${rollbackCommandKey}'
+      BEGIN
+        SELECT RAISE(ABORT, 'injected service assessment command failure');
+      END;
+    `);
+  } finally {
+    rollbackSetupDb.close();
+  }
+  let rollbackResponse;
+  try {
+    rollbackResponse = await fetch(
+      baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+        + '/orders/' + encodeURIComponent(rejectedOrder.server_order_id) + '/service-delivery-assessment',
+      {
+        method: 'POST',
+        headers: { ...authHeaders, 'Idempotency-Key': rollbackCommandKey },
+        body: JSON.stringify({ assessment_outcome: 'INELIGIBLE' }),
+      }
+    );
+  } finally {
+    const rollbackCleanupDb = new DatabaseSync(dbPath);
+    try {
+      rollbackCleanupDb.exec('DROP TRIGGER IF EXISTS fail_service_assessment_command_insert');
+    } finally {
+      rollbackCleanupDb.close();
+    }
+  }
+  assert.equal(rollbackResponse.status, 500,
+    'an injected command persistence failure should fail the assessment request');
+  const rollbackAfter = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === rejectedOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(rollbackAfter, rollbackBefore,
+    'failed assessment transaction must roll back the canonical order mutation');
+  const rollbackVerifyDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(rollbackVerifyDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE command_key = ?'
+    ).get(rollbackCommandKey).count, 0,
+    'failed assessment transaction must not leave a durable command record');
+    assert.equal(rollbackVerifyDb.prepare(`
+      SELECT COUNT(*) AS count FROM audit_events
+      WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?
+    `).get(tenant.chatId, rejectedOrder.server_order_id).count, 0,
+    'failed assessment transaction must not leave an assessment audit event');
+  } finally {
+    rollbackVerifyDb.close();
+  }
+
   const rejectedAssessmentResponse = await fetch(
     baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
       + '/orders/' + encodeURIComponent(rejectedOrder.server_order_id) + '/service-delivery-assessment',
