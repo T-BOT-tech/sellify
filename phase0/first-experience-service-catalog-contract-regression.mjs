@@ -390,6 +390,7 @@ try {
   });
   const locationlessCompleted = await store.transitionOrderFulfillment(locationlessChatId, locationlessServiceOrderId, 'delivered', actor, {
     idempotencyKey: 'locationless-service-delivered',
+    proof: { type: 'photo', reference: 'locationless-service-proof' },
   });
   assert.equal(locationlessCompleted.status, 'delivered', 'service fulfillment must complete with zero physical locations');
 
@@ -415,6 +416,7 @@ try {
   await assert.rejects(
     store.transitionOrderFulfillment(locationlessChatId, locationlessPhysicalOrderId, 'delivered', actor, {
       idempotencyKey: 'locationless-physical-delivered',
+      proof: { type: 'photo', reference: 'locationless-physical-proof' },
     }),
     error => error?.code === 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED',
     'physical-item fulfillment must still require a physical inventory location'
