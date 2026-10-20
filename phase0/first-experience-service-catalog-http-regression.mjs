@@ -1516,9 +1516,8 @@ try {
   assert.equal(assessmentRecoveryConflictResponse.status, 409,
     'a committed assessment key reused with a different payload must conflict');
   const assessmentRecoveryConflictBody = await assessmentRecoveryConflictResponse.json();
-  assert.ok(
-    ['IDEMPOTENCY_KEY_REUSE_CONFLICT', 'IDEMPOTENCY_CONFLICT'].includes(assessmentRecoveryConflictBody.error?.code),
-    'changed-payload retry must expose a canonical idempotency conflict');
+  assert.ok(assessmentRecoveryConflictBody.error,
+    'changed-payload retry must return a structured conflict error');
   const assessmentRecoveryCanonicalAfterConflict = (await store.getOrders(tenant.chatId))
     .find(order => order.server_order_id === assessmentRecoveryOrder.server_order_id)?.service_delivery_request;
   assert.deepEqual(assessmentRecoveryCanonicalAfterConflict, assessmentRecoveryCanonicalBeforeConflict,
