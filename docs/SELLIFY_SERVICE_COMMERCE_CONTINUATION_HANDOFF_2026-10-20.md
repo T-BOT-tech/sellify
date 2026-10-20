@@ -215,3 +215,108 @@ After P0 evidence and operator workflow are stable, evaluate service configurati
 4. Run focused regressions and push a narrow change; then verify all CI/security/release checks on the resulting SHA.
 
 **Do not spend the next chat rewriting this plan. Start with the live repo and the P0 regression work.**
+
+
+---
+
+# Continuation Addendum — 20 October 2026 (latest)
+
+This addendum supersedes the earlier “first concrete action” and updates the CI/next-step status above. Preserve the earlier implementation history; use this addendum as the current continuation point.
+
+## A. Latest repository and PR state
+
+- `main` documentation commit: `0b90b85051792d21288d0795b5433903e08f15d0`.
+- Service booking HTTP regression branch: `test/service-booking-http-failure-boundaries`.
+- Latest test commit: `4a996fefcea6eaba897e5856c8d2a9f4f61d54ca`.
+- Open PR #80: https://github.com/T-BOT-tech/sellify/pull/80
+- PR #80 is **open and not merged**. Do not merge without the user's explicit permission.
+
+### Current CI results
+
+On the PR head `4a996fefcea6eaba897e5856c8d2a9f4f61d54ca`:
+
+- Sellify CI: **PASS** — https://github.com/T-BOT-tech/sellify/actions/runs/39471792924
+- Repository Security Checks: **PASS** — https://github.com/T-BOT-tech/sellify/actions/runs/39471792952
+
+On main documentation commit `0b90b85051792d21288d0795b5433903e08f15d0`:
+
+- Sellify CI: **PASS** — https://github.com/T-BOT-tech/sellify/actions/runs/39471210008
+- Release Certification: **PASS** — https://github.com/T-BOT-tech/sellify/actions/runs/39471210237
+- Logistics Runtime Certification: **PASS** — https://github.com/T-BOT-tech/sellify/actions/runs/39471210937
+- Repository Security Checks: **PASS** — https://github.com/T-BOT-tech/sellify/actions/runs/39471210771
+
+The PR-specific Sellify CI and security checks have passed. The PR branch did not show a PR-head Release Certification or Logistics Runtime Certification run in the latest workflow list. Do not describe those two as passed on PR head; they are green on the latest main documentation commit. Refresh live status before any merge decision.
+
+## B. Work completed in PR #80
+
+Changed file: `phase0/first-experience-service-catalog-http-regression.mjs`  
+Change: 127 insertions, regression coverage only; no production code changed.
+
+Added authenticated HTTP-level checks for:
+
+1. **Confirmation idempotency**
+   - Exact retry returns `replayed: true` and does not increment booking version.
+   - Reusing the same idempotency key for a different transition returns HTTP 409 with `SERVICE_BOOKING_IDEMPOTENCY_CONFLICT`.
+
+2. **Rejection reason**
+   - Missing canonical `reason` fails with HTTP 400 / `SERVICE_BOOKING_REASON_REQUIRED`.
+   - Validation failure leaves the booking in `REQUESTED` and preserves version 1.
+   - Valid rejection reason is returned as `booking.status_reason`.
+   - Forged caller `status_reason` does not override the canonical `reason`.
+   - Exact retry replays successfully; same key with a different reason conflicts.
+
+3. **Failure reason and execution evidence**
+   - Booking transitions through `ACCEPTED`, `CONFIRMED`, and `IN_PROGRESS`.
+   - Spoofed client `started_at` and `started_by` do not become persisted execution evidence.
+   - Missing failure reason is rejected without accepting a forged `status_reason`.
+   - Valid failure reason is returned as `booking.status_reason`.
+   - Exact failure retry replays; `FAILED → IN_PROGRESS` is rejected as an invalid transition.
+
+CI and security checks are green for this commit. The tests are now proven by CI, not just proposed in a plan.
+
+## C. Remaining work — revised priority
+
+### P0. Review PR #80 before merge
+1. Inspect the complete PR diff and live checks once more.
+2. Confirm all new assertions correspond to the actual API contract and do not rely on accidental behavior.
+3. Keep the PR open until the user authorizes merge. Do not merge autonomously.
+4. If any check fails or the diff reveals a false-positive test, fix the test/code and rerun the relevant checks.
+
+### P0. Extend authorization and isolation tests at the HTTP boundary
+Add focused authenticated HTTP coverage for:
+- Missing/invalid tenant scope.
+- Cross-tenant booking access.
+- Booking ID belonging to a different canonical order.
+- Actor lacking the permission required for the specific transition.
+- Actor outside the canonical order's location scope.
+- Ensure every denied operation leaves booking status, version, reason, and audit history unchanged.
+
+Inspect existing test helpers and authorization setup first; reuse them rather than duplicating server fixtures.
+
+### P0. Audit idempotency and evidence semantics
+- Verify whether the same key conflict is scoped correctly to tenant, operation, and booking.
+- Verify behavior under stale `expected_version`, exact replay after a later lifecycle transition, and retry after a failed/rolled-back transaction.
+- Assert audit event counts/identities where test fixtures expose them; successful replay must not create a duplicate lifecycle event.
+- Test spoofed `completed_at`, `completed_by`, and any client-set completion evidence through HTTP as well as the store-level regression.
+- Ensure a validation/authorization failure does not create a successful lifecycle event or partially mutate the booking.
+
+### P1. Inspect existing frontend and make the smallest useful operator workflow
+Only after the P0 API boundary is solid:
+- Trace existing service booking UI entry points from actual repository files.
+- Provide a list/status view, the next permitted action, and visible rejection/failure/cancellation reasons.
+- Use capability clients/API; do not create a separate frontend authority or locally invent status.
+- Respect server permissions and stale-version errors. A UI action must not imply payment settlement, inventory reservation, logistics assignment, or order completion.
+
+### P1/P2. Scheduling semantics and service expansion
+- Identify which service types actually require canonical logistics linkage and which are appointment-only.
+- Do not auto-create Logistics Scheduling activities for ordinary service appointments.
+- Define reschedule, cancellation, no-show, and recovery behavior only after checking current contracts and user requirements.
+- Add more service types only as compositions of existing catalog, order, payment, inventory, scheduling, and audit authorities.
+
+## D. Exact next-chat kickoff prompt
+
+> Continue the Sellify Service Commerce work in repository `T-BOT-tech/sellify`. Read `docs/SELLIFY_SERVICE_COMMERCE_CONTINUATION_HANDOFF_2026-10-20.md`, especially the latest continuation addendum.
+>
+> First refresh the live `main` SHA, PR #80 diff/status, and all checks. PR #80 adds HTTP-level rejection/failure/idempotency regression coverage in `phase0/first-experience-service-catalog-http-regression.mjs`; its latest Sellify CI and security checks passed on `4a996fefcea6eaba897e5856c8d2a9f4f61d54ca`. The PR remains open and must not be merged without my explicit permission.
+>
+> Inspect the PR diff, then continue P0 with actual HTTP-level tenant/order/location/permission-denial tests and assertions that denied commands leave booking and audit state unchanged. Also verify idempotency conflict scope, stale-version behavior, replay after later transitions, and forged completion evidence. Reuse existing test fixtures, make narrow code/test changes, and run focused tests plus CI. Do not return to planning-only work; preserve canonical order, Payment Core, inventory, logistics, tenant, and audit authorities.
