@@ -25,15 +25,17 @@ assert.equal(bookingContract.scheduling_authority, 'existing_logistics_schedulin
 assert.equal(booking.persistence, 'none');
 
 // Requested appointment time alone is not an authoritative capacity decision.
-const candidate = normalizeLogisticsSchedulingRequest({
+const schedulingRequest = {
   organization_id: 'org-boundary-test',
   activity_type: 'DELIVERY',
   mode: 'SCHEDULED',
   requested_start: booking.requested_start,
   requested_end: booking.requested_end,
   related_order: { id: booking.order_id, authority: 'canonical_commerce_order' },
-});
-const evaluation = evaluateLogisticsSchedulingFeasibility({ request: candidate });
+};
+const candidate = normalizeLogisticsSchedulingRequest(schedulingRequest);
+assert.equal(candidate.requested_start, booking.requested_start);
+const evaluation = evaluateLogisticsSchedulingFeasibility({ request: schedulingRequest });
 assert.equal(evaluation.evaluation, 'UNKNOWN');
 assert.equal(evaluation.reason, 'NO_AUTHORITATIVE_CAPACITY_DECISION');
 assert.equal(evaluation.feasible, false);
@@ -45,7 +47,7 @@ assert.equal(evaluation.mutation, false);
 // An unrelated activity with no shared canonical reference is not a conflict;
 // the evaluator must still not infer physical capacity from the absence of one.
 const unrelated = evaluateLogisticsSchedulingFeasibility({
-  request: candidate,
+  request: schedulingRequest,
   existingActivities: [{
     id: 'other-activity',
     organization_id: 'org-boundary-test',
@@ -63,7 +65,7 @@ assert.equal(unrelated.mutation, false);
 // Only an explicit result from an existing authoritative capacity source can
 // yield FEASIBLE, and even that is evaluation—not authorization or reservation.
 const authoritative = evaluateLogisticsSchedulingFeasibility({
-  request: candidate,
+  request: schedulingRequest,
   externalEvaluation: {
     outcome: 'FEASIBLE',
     authority: 'existing-capacity-service',
