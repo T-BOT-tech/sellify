@@ -16,6 +16,8 @@ export const SERVICE_BOOKING_STATUSES = Object.freeze([
   'FAILED',
 ]);
 
+export const SERVICE_BOOKING_REASON_REQUIRED_STATUSES = Object.freeze(['REJECTED', 'FAILED']);
+
 export const SERVICE_BOOKING_TRANSITIONS = Object.freeze({
   REQUESTED: Object.freeze(['ACCEPTED', 'REJECTED', 'CANCELLED']),
   ACCEPTED: Object.freeze(['CONFIRMED', 'REJECTED', 'CANCELLED']),
@@ -127,6 +129,7 @@ export function serviceBookingContract() {
     version: SERVICE_BOOKING_CONTRACT_VERSION,
     statuses: SERVICE_BOOKING_STATUSES,
     transitions: SERVICE_BOOKING_TRANSITIONS,
+    reason_required_statuses: SERVICE_BOOKING_REASON_REQUIRED_STATUSES,
     order_authority: 'canonical_commerce_order',
     payment_authority: 'payment_core',
     scheduling_authority: 'existing_logistics_scheduling_when_applicable',
