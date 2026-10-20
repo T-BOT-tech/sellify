@@ -38,6 +38,16 @@ const checks = [
     assert.ok(!permissions.includes('logistics:deliveries:assign'));
     assert.ok(!permissions.includes('logistics:deliveries:update_assigned'));
   }],
+  ['service booking authorization follows the operation being performed', () => {
+    const manager = actor(roles.manager);
+    const viewer = actor(roles.viewer);
+    assert.equal(authorize(manager, organization, null, 'scheduling', 'logistics:scheduling:view'), AUTHZ.ALLOW);
+    assert.equal(authorize(manager, organization, null, 'scheduling', 'logistics:scheduling:request'), AUTHZ.ALLOW);
+    assert.equal(authorize(manager, organization, null, 'scheduling', 'logistics:scheduling:confirm'), AUTHZ.ALLOW);
+    assert.equal(authorize(viewer, organization, null, 'scheduling', 'logistics:scheduling:view'), AUTHZ.ALLOW);
+    assert.equal(authorize(viewer, organization, null, 'scheduling', 'logistics:scheduling:request'), AUTHZ.DENY);
+    assert.equal(authorize(viewer, organization, null, 'scheduling', 'logistics:scheduling:confirm'), AUTHZ.DENY);
+  }],
   ['organization isolation remains enforced', () => {
     assert.equal(authorize(actor(roles.courier), { id: 'foreign-org' }, null, 'logistics', 'logistics:deliveries:update_assigned'), AUTHZ.DENY);
   }],
@@ -50,6 +60,17 @@ assert.match(store, /'logistics_courier'/);
 assert.match(store, /'logistics_viewer'/);
 assert.match(store, /startsWith\('logistics_'\) \? 'logistics'/);
 assert.match(store, /mr\.role_id IN \('logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer'\)/);
+
+const server = fs.readFileSync(new URL('../backend/server.js', import.meta.url), 'utf8');
+const serviceBookingHandler = server.slice(
+  server.indexOf('async function handleServiceBookings('),
+  server.indexOf('async function handleServiceDeliveryAssessment')
+);
+assert.match(serviceBookingHandler, /req\.method === 'GET'[\s\S]*?logistics:scheduling:view/);
+assert.match(serviceBookingHandler, /let authorizationAction = 'logistics:scheduling:request'/);
+assert.match(serviceBookingHandler, /target === 'CONFIRMED'[\s\S]*?logistics:scheduling:confirm/);
+assert.match(serviceBookingHandler, /target === 'CANCELLED'[\s\S]*?logistics:scheduling:cancel/);
+assert.match(serviceBookingHandler, /'logistics:scheduling:manage'/);
 
 const failures = [];
 for (const [name, fn] of checks) {
