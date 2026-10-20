@@ -88,6 +88,9 @@ jobs:
       - name: Run baseline regression
         run: npm run phase0:test
 
+      - name: First product empty-state regression
+        run: npm run first-product-empty-state:test
+
       - name: FUX-31 frontend identity regression
         run: npm run test:fux-31
       - name: FUX-31 accessibility source regression

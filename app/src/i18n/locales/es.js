@@ -17,6 +17,7 @@ export default {
     catalogNav: "Catálogo",
     noProducts: "No hay productos aún. Agrega en la pestaña Catálogo.",
     noProductsCatalog: "No hay productos aún — agrega el primero arriba.",
+    addFirstProduct: "Añade tu primer artículo",
     custNamePlaceholder: "Nombre del cliente (opcional)",
     custPhonePlaceholder: "Teléfono (opcional)",
     total: "Total",
