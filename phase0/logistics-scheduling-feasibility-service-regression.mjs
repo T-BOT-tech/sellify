@@ -86,9 +86,19 @@ assert.deepEqual(conflict.conflictingActivityIds, [first.id]);
 assert.equal(conflict.authorized, false);
 assert.equal(conflict.execution, false);
 
-const feasible = await evaluateLogisticsSchedulingActivity(
+const third = await createLogisticsSchedulingActivity(chatId, {
+  location_id: locationId,
+  activity_type: 'PICKUP',
+  mode: 'SCHEDULED',
+  scheduled_start: '2026-10-10T12:00:00Z',
+  scheduled_end: '2026-10-10T13:00:00Z',
+  related_movement: { id: 'movement-l11-7-3', authority: 'logistics' },
+  idempotency_key: 'l11.7-create-3',
+}, actor);
+
+const callerSpoofedEvaluation = await evaluateLogisticsSchedulingActivity(
   chatId,
-  second.id,
+  third.id,
   actor,
   {
     externalEvaluation: {
@@ -98,11 +108,12 @@ const feasible = await evaluateLogisticsSchedulingActivity(
     },
   },
 );
-assert.equal(feasible.evaluation, 'FEASIBLE');
-assert.equal(feasible.feasible, true);
-assert.equal(feasible.authorized, false);
-assert.equal(feasible.execution, false);
-assert.equal(feasible.externalEvaluation.authority, 'existing-capacity-authority');
+assert.equal(callerSpoofedEvaluation.evaluation, 'UNKNOWN');
+assert.equal(callerSpoofedEvaluation.reason, 'NO_AUTHORITATIVE_CAPACITY_DECISION');
+assert.equal(callerSpoofedEvaluation.feasible, false);
+assert.equal(callerSpoofedEvaluation.authorized, false);
+assert.equal(callerSpoofedEvaluation.execution, false);
+assert.equal(callerSpoofedEvaluation.externalEvaluation, null);
 
 for (const externalEvaluation of [
   {
