@@ -1485,6 +1485,89 @@ try {
     firstAssessmentRaceDbAfter.close();
   }
 
+  // Different idempotency keys must not permit two competing first-time
+  // assessments to overwrite one another on the same canonical service request.
+  const competingAssessmentCheckout = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-request-competing-assessment-checkout' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-request-competing-assessment-buyer',
+      customer_name: 'Parcel Request Competing Assessment Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-request-http', qty: 1 }],
+      service_delivery: {
+        pickup_details: 'Piassa, Addis Ababa',
+        destination_details: 'Sar Bet, Addis Ababa',
+      },
+    }),
+  });
+  assert.equal(competingAssessmentCheckout.status, 200,
+    'competing-assessment service request fixture should be created');
+  const competingAssessmentCheckoutBody = await competingAssessmentCheckout.json();
+  const competingAssessmentOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === competingAssessmentCheckoutBody.marketplace_order_id
+      || order.id === competingAssessmentCheckoutBody.sub_orders?.[0]?.seller_order_id);
+  assert.ok(competingAssessmentOrder?.server_order_id,
+    'competing-assessment fixture must retain canonical order identity');
+  const competingAssessmentUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(competingAssessmentOrder.server_order_id) + '/service-delivery-assessment';
+  const competingAssessmentDb = new DatabaseSync(dbPath);
+  let competingAssessmentAuditsBefore;
+  try {
+    competingAssessmentAuditsBefore = competingAssessmentDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, competingAssessmentOrder.server_order_id).count;
+  } finally {
+    competingAssessmentDb.close();
+  }
+  const competingAssessmentRequests = await Promise.all([
+    fetch(competingAssessmentUrl, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': 'parcel-competing-assessment-eligible' },
+      body: JSON.stringify({
+        assessment_outcome: 'ELIGIBLE',
+        customer_acceptance: {
+          accepted: true,
+          evidence_type: 'telegram_confirmation',
+          evidence_reference: 'competing-assessment-acceptance-evidence',
+        },
+      }),
+    }),
+    fetch(competingAssessmentUrl, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': 'parcel-competing-assessment-ineligible' },
+      body: JSON.stringify({ assessment_outcome: 'INELIGIBLE' }),
+    }),
+  ]);
+  assert.deepEqual(competingAssessmentRequests.map(response => response.status).sort(), [200, 409],
+    'only one of two competing first-time assessments with distinct keys may commit');
+  const competingAssessmentBodies = await Promise.all(
+    competingAssessmentRequests.map(response => response.json()),
+  );
+  const competingAssessmentWinnerIndex = competingAssessmentRequests.findIndex(response => response.status === 200);
+  const competingAssessmentConflictIndex = competingAssessmentRequests.findIndex(response => response.status === 409);
+  assert.equal(competingAssessmentBodies[competingAssessmentConflictIndex].error?.code,
+    'LOGISTICS_ASSESSMENT_ALREADY_RECORDED',
+    'the losing competing assessment must report that canonical assessment is already recorded');
+  const competingAssessmentWinner = competingAssessmentBodies[competingAssessmentWinnerIndex];
+  const competingAssessmentCanonical = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === competingAssessmentOrder.server_order_id)?.service_delivery_request;
+  assert.equal(competingAssessmentCanonical?.assessment?.outcome,
+    competingAssessmentWinner.service_delivery?.assessment?.outcome,
+    'canonical assessment must match the single successful competing request');
+  const competingAssessmentVerifyDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(competingAssessmentVerifyDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND order_id = ?'
+    ).get(String(assessmentSession.organizationId), competingAssessmentOrder.server_order_id).count, 1,
+    'competing distinct-key assessments must persist exactly one durable command');
+    assert.equal(competingAssessmentVerifyDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, competingAssessmentOrder.server_order_id).count, competingAssessmentAuditsBefore + 1,
+    'competing distinct-key assessments must append exactly one audit event');
+  } finally {
+    competingAssessmentVerifyDb.close();
+  }
+
   const rejectedAssessmentResponse = await fetch(
     baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
       + '/orders/' + encodeURIComponent(rejectedOrder.server_order_id) + '/service-delivery-assessment',
