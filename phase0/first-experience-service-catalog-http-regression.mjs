@@ -220,6 +220,34 @@ try {
   assert.equal(bookingConfirmKeyConflict.status, 409, 'reusing a booking key for a different transition must conflict');
   assert.equal((await bookingConfirmKeyConflict.json()).error?.code, 'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT');
 
+  // A delayed retry must remain a no-op even after the booking has advanced.
+  // This catches replay implementations that accidentally reapply an old command.
+  const bookingAuditCount = () => store.getDatabaseForTests().prepare(
+    "SELECT COUNT(*) AS count FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ?"
+  ).get(bookingCreatedBody.booking.id).count;
+  const bookingStart = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-start-after-confirm-1' },
+    body: JSON.stringify({ status: 'IN_PROGRESS', expected_version: 3 }),
+  });
+  assert.equal(bookingStart.status, 200, 'confirmed booking should start execution');
+  const bookingStartBody = await bookingStart.json();
+  assert.equal(bookingStartBody.booking.status, 'IN_PROGRESS');
+  assert.equal(bookingStartBody.booking.version, 4);
+  const auditCountAfterStart = bookingAuditCount();
+  const delayedConfirmReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+  });
+  assert.equal(delayedConfirmReplay.status, 200, 'delayed exact retry should remain idempotent after later transitions');
+  const delayedConfirmReplayBody = await delayedConfirmReplay.json();
+  assert.equal(delayedConfirmReplayBody.replayed, true);
+  assert.equal(delayedConfirmReplayBody.booking.status, 'IN_PROGRESS',
+    'replay should return current canonical state, not roll the booking back to the old result');
+  assert.equal(delayedConfirmReplayBody.booking.version, 4, 'delayed replay must not increment the version');
+  assert.equal(bookingAuditCount(), auditCountAfterStart, 'delayed replay must not append duplicate audit evidence');
+
   // Rejection is validated and persisted at the authenticated HTTP boundary.
   // A client-provided status_reason is not a substitute for the canonical reason.
   const rejectedBookingCreate = await fetch(bookingsUrl, {
