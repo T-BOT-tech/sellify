@@ -4,4 +4,5 @@ export default {
     catalogItemType: "Nau’in abu",
     catalogProduct: "Kaya",
     service: "Sabis",
+    packAccessibilityLocalizationTitle: "Samun dama da fassarar fakiti",
 };
