@@ -2633,6 +2633,23 @@ if (!applied.includes(39)) {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(73, nowIso());
   }
 
+  // Service execution evidence is additive: existing booking rows remain valid.
+  if (!applied.includes(74)) {
+    const bookingColumns = new Set(
+      db.prepare('PRAGMA table_info(service_bookings)').all().map(column => String(column.name))
+    );
+    for (const [name, definition] of [
+      ['started_at', 'TEXT'],
+      ['started_by', 'TEXT'],
+      ['completed_at', 'TEXT'],
+      ['completed_by', 'TEXT'],
+      ['completion_note', 'TEXT'],
+    ]) {
+      if (!bookingColumns.has(name)) db.exec(`ALTER TABLE service_bookings ADD COLUMN ${name} ${definition}`);
+    }
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(74, nowIso());
+  }
+
   // GAP-1.24: fence status-query workers and permit takeover only before
   // provider I/O has been authorized. Legacy IN_PROGRESS commands are treated
   // as provider-in-flight because their execution phase cannot be proven.
@@ -5675,6 +5692,9 @@ function serviceBookingFromRow(row) {
     appointment_mode: String(row.appointment_mode), customer_note: row.customer_note ?? null,
     status: String(row.status), version: Number(row.version),
     created_by: row.created_by || null, updated_by: row.updated_by || null,
+    started_at: row.started_at || null, started_by: row.started_by || null,
+    completed_at: row.completed_at || null, completed_by: row.completed_by || null,
+    completion_note: row.completion_note ?? null,
     created_at: String(row.created_at), updated_at: String(row.updated_at),
   };
 }
@@ -5752,7 +5772,10 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
   if(!Number.isInteger(expectedVersion)||expectedVersion<1) throw Object.assign(new Error('expected_version must be a positive integer'),{statusCode:400,code:'SERVICE_BOOKING_VERSION_REQUIRED'});
   const reason=input.reason==null?null:bookingRequiredText(input.reason,'reason',500);
   if(['REJECTED','FAILED'].includes(target)&&!reason) throw Object.assign(new Error(`A reason is required when a service booking is ${target.toLowerCase()}`),{statusCode:400,code:'SERVICE_BOOKING_REASON_REQUIRED'});
-  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({booking_id:String(bookingId),order_id:String(serverOrderId),status:target,expected_version:expectedVersion,reason})).digest('hex');
+  const completionNote = input.completion_note == null && input.completionNote == null
+    ? null : bookingRequiredText(input.completion_note ?? input.completionNote,'completion_note',500);
+  if(target!=='COMPLETED'&&completionNote!==null) throw Object.assign(new Error('completion_note is only valid when completing a service booking'),{statusCode:400,code:'SERVICE_BOOKING_COMPLETION_NOTE_INVALID'});
+  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({booking_id:String(bookingId),order_id:String(serverOrderId),status:target,expected_version:expectedVersion,reason,completion_note:completionNote})).digest('hex');
   db.exec('BEGIN IMMEDIATE');
   try {
     const freshTenant=db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(String(chatId));
@@ -5767,10 +5790,22 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
     if(!SERVICE_BOOKING_TRANSITIONS[String(row.status)]?.has(target)) throw Object.assign(new Error(`Service booking transition ${row.status} -> ${target} is not allowed`),{statusCode:409,code:'SERVICE_BOOKING_TRANSITION_INVALID'});
     if(Number(row.version)!==expectedVersion) throw Object.assign(new Error('Service booking version conflict'),{statusCode:409,code:'SERVICE_BOOKING_VERSION_CONFLICT'});
     const now=nowIso(), nextVersion=expectedVersion+1;
-    const changed=db.prepare('UPDATE service_bookings SET status=?,version=?,updated_by=?,updated_at=? WHERE id=? AND organization_id=? AND version=?').run(target,nextVersion,actor?.userId||null,now,String(bookingId),organizationId,expectedVersion);
+    const actorId=actor?.userId||null;
+    const changed=db.prepare(`UPDATE service_bookings SET
+      status=?,version=?,updated_by=?,updated_at=?,
+      started_at=CASE WHEN ?='IN_PROGRESS' THEN ? ELSE started_at END,
+      started_by=CASE WHEN ?='IN_PROGRESS' THEN ? ELSE started_by END,
+      completed_at=CASE WHEN ?='COMPLETED' THEN ? ELSE completed_at END,
+      completed_by=CASE WHEN ?='COMPLETED' THEN ? ELSE completed_by END,
+      completion_note=CASE WHEN ?='COMPLETED' THEN ? ELSE completion_note END
+      WHERE id=? AND organization_id=? AND version=?`).run(
+        target,nextVersion,actorId,now,
+        target,now,target,actorId,target,now,target,actorId,target,completionNote,
+        String(bookingId),organizationId,expectedVersion,
+      );
     if(Number(changed.changes)!==1) throw Object.assign(new Error('Service booking version conflict'),{statusCode:409,code:'SERVICE_BOOKING_VERSION_CONFLICT'});
     db.prepare(`INSERT INTO service_booking_commands (organization_id,command_key,booking_id,command_type,command_fingerprint,created_at) VALUES (?,?,?,'TRANSITION',?,?)`).run(organizationId,commandKey,String(bookingId),fingerprint,now);
-    audit(String(chatId),`services.booking.${target.toLowerCase()}`,'service_booking',String(bookingId),{order_id:String(serverOrderId),from_status:String(row.status),to_status:target,version:nextVersion,reason},{organizationId,actorId:actor?.userId||null,deviceId:actor?.deviceId||null,reason:reason||''});
+    audit(String(chatId),`services.booking.${target.toLowerCase()}`,'service_booking',String(bookingId),{order_id:String(serverOrderId),from_status:String(row.status),to_status:target,version:nextVersion,reason,...(target==='COMPLETED'?{completion_note:completionNote,completed_at:now,completed_by:actorId}:{}),...(target==='IN_PROGRESS'?{started_at:now,started_by:actorId}:{})},{organizationId,actorId,deviceId:actor?.deviceId||null,reason:reason||''});
     const updated=db.prepare('SELECT * FROM service_bookings WHERE id=?').get(String(bookingId));
     db.exec('COMMIT'); return {booking:serviceBookingFromRow(updated),replayed:false};
   } catch(error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
