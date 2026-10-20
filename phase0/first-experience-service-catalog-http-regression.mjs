@@ -834,6 +834,38 @@ try {
     'exact assessment retry must not duplicate the durable command record',
   );
 
+  // Two requests arriving together with the same committed command must both
+  // resolve as replays and must not append duplicate durable command records.
+  const concurrentAssessmentReplays = await Promise.all([
+    fetch(assessmentUrl, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+      body: JSON.stringify(assessmentPayload),
+    }),
+    fetch(assessmentUrl, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+      body: JSON.stringify(assessmentPayload),
+    }),
+  ]);
+  assert.deepEqual(concurrentAssessmentReplays.map(response => response.status), [200, 200],
+    'concurrent exact assessment retries should both succeed');
+  const concurrentAssessmentBodies = await Promise.all(
+    concurrentAssessmentReplays.map(response => response.json()),
+  );
+  assert.ok(concurrentAssessmentBodies.every(body => body.replayed === true),
+    'concurrent requests for a committed assessment must both be identified as replays');
+  assert.ok(concurrentAssessmentBodies.every(body =>
+    body.service_delivery?.assessment?.customer_acceptance?.evidence_reference === 'buyer-chat-confirmation-123'),
+  'concurrent assessment replays must return the same canonical acceptance evidence');
+  assert.equal(
+    assessmentReplayDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), 'parcel-request-assessment-accepted-1').count,
+    assessmentCommandCountBeforeReplay,
+    'concurrent exact assessment replays must not duplicate durable command records',
+  );
+
   // Assessment idempotency keys are organization-scoped, not merely embedded
   // in one order's JSON. Reusing a committed key against another order must
   // conflict before validating that second order's assessment payload.
