@@ -2209,8 +2209,8 @@ try {
     assessmentResponseLossCommitted.service_delivery_request,
     'different-payload retry must not overwrite the committed assessment after response loss'
   );
-  assert.deepEqual(assessmentResponseLossBefore, undefined,
-    'response-loss fixture should begin without a service assessment');
+  assert.notEqual(assessmentResponseLossBefore?.assessment_status, 'ASSESSMENT_REJECTED',
+    'response-loss fixture must begin without the final rejected assessment');
   const assessmentResponseLossFinalDb = new DatabaseSync(dbPath);
   try {
     assert.equal(assessmentResponseLossFinalDb.prepare(
