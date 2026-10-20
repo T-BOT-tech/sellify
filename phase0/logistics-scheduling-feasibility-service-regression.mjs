@@ -115,6 +115,24 @@ assert.equal(callerSpoofedEvaluation.authorized, false);
 assert.equal(callerSpoofedEvaluation.execution, false);
 assert.equal(callerSpoofedEvaluation.externalEvaluation, null);
 
+// The snake_case alias is also request-controlled and must not bypass the boundary.
+const callerSnakeCaseEvaluation = await evaluateLogisticsSchedulingActivity(
+  chatId,
+  third.id,
+  actor,
+  {
+    external_evaluation: {
+      outcome: 'FEASIBLE',
+      authority: 'supplier_network',
+      reference_id: 'declared-only-supplier-network-capacity-signal',
+    },
+  },
+);
+assert.equal(callerSnakeCaseEvaluation.evaluation, 'UNKNOWN');
+assert.equal(callerSnakeCaseEvaluation.reason, 'NO_AUTHORITATIVE_CAPACITY_DECISION');
+assert.equal(callerSnakeCaseEvaluation.feasible, false);
+assert.equal(callerSnakeCaseEvaluation.externalEvaluation, null);
+
 for (const externalEvaluation of [
   {
     outcome: 'FEASIBLE',
