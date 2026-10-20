@@ -316,13 +316,13 @@ const fulfillmentTransitionStart = store.indexOf('export async function transiti
 const fulfillmentTransitionEnd = store.indexOf('export async function ', fulfillmentTransitionStart + 40);
 assert.ok(fulfillmentTransitionStart >= 0 && fulfillmentTransitionEnd > fulfillmentTransitionStart,
   'canonical fulfillment transition must remain discoverable');
-const fulfillmentTransition = store.slice(fulfillmentTransitionStart, fulfillmentTransitionEnd);
-const fulfillmentReplayCheck = fulfillmentTransition.indexOf('const priorCommand = db.prepare');
-const fulfillmentLocationCheck = fulfillmentTransition.indexOf('FULFILLMENT_LOCATION_MISMATCH');
+const fulfillmentTransitionBody = store.slice(fulfillmentTransitionStart, fulfillmentTransitionEnd);
+const fulfillmentReplayCheck = fulfillmentTransitionBody.indexOf('const priorCommand = db.prepare');
+const fulfillmentLocationCheck = fulfillmentTransitionBody.indexOf('FULFILLMENT_LOCATION_MISMATCH');
 assert.ok(fulfillmentReplayCheck >= 0 && fulfillmentLocationCheck > fulfillmentReplayCheck,
   'durable fulfillment replay must be resolved before mutable canonical-location validation');
 assert.ok(
-  fulfillmentTransition.indexOf('if (priorCommand)') < fulfillmentLocationCheck,
+  fulfillmentTransitionBody.indexOf('if (priorCommand)') < fulfillmentLocationCheck,
   'a committed fulfillment command replay must not be rejected because canonical location changed later',
 );
 
