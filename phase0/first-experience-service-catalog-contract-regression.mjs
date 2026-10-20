@@ -311,6 +311,7 @@ try {
   await store.transitionOrderFulfillment(integrationChatId, serviceOrderId, 'out_for_delivery', actor, {
     idempotencyKey: 'service-only-start',
   });
+  // Delivery completion requires canonical proof evidence, even for service-only orders.
   const completedService = await store.transitionOrderFulfillment(integrationChatId, serviceOrderId, 'delivered', actor, {
     idempotencyKey: 'service-only-delivered',
     proof: { type: 'photo', reference: 'service-only-proof' },
