@@ -111,13 +111,15 @@ assert.ok(
     < serviceAssessment.indexOf("assertLogisticsSchedulingAuthorization(actor, organizationId, transactionLocationId, 'logistics:scheduling:request')"),
   'committed assessment retries must resolve durable command history before rechecking mutable caller authorization',
 );
+const assessmentCommandInsert = serviceAssessment.indexOf('INSERT INTO service_delivery_assessment_commands');
+const assessmentCommit = serviceAssessment.indexOf("db.exec('COMMIT')", assessmentCommandInsert);
 assert.ok(
   serviceAssessment.indexOf("db.exec('BEGIN IMMEDIATE')")
     < serviceAssessment.indexOf('const priorAssessmentCommand = db.prepare')
     && serviceAssessment.indexOf("db.prepare('UPDATE orders SET order_json = ?")
-      < serviceAssessment.indexOf('INSERT INTO service_delivery_assessment_commands')
-    && serviceAssessment.indexOf('INSERT INTO service_delivery_assessment_commands')
-      < serviceAssessment.indexOf("db.exec('COMMIT')"),
+      < assessmentCommandInsert
+    && assessmentCommandInsert >= 0
+    && assessmentCommit > assessmentCommandInsert,
   'canonical assessment state and durable command identity must commit in the same transaction',
 );
 assert.ok(
