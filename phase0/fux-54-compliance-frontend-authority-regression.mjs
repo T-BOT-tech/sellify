@@ -12,6 +12,9 @@ assert(ui.includes('/compliance/retention'), 'Compliance UI must use canonical r
 assert(ui.includes('complianceRetentionDays'), 'Compliance UI must expose retention policy control');
 assert(ui.includes('compliance:manage'), 'Compliance UI must enforce the canonical permission vocabulary');
 assert(ui.includes('method: \'POST\''), 'Compliance UI must support creating compliance requests');
+assert(ui.includes("const trigger = document.getElementById('complianceNewRequest')"), 'Compliance request submission must use the existing submit control');
+assert(ui.includes('if (trigger?.disabled) return;'), 'Compliance request submission must ignore duplicate activation while pending');
+assert.match(ui, /trigger\.disabled = true;[\s\S]*?finally \{[\s\S]*?trigger\.disabled = false;/, 'Compliance request submission must re-enable its control after completion');
 assert(ui.includes('method: \'PATCH\''), 'Compliance UI must resolve requests through the backend');
 assert(!/localStorage.*compliance/i.test(ui), 'Compliance UI must not persist compliance records locally');
 assert(!/from ['"]\.\/.*audit-boundary|from ['"]\.\.\/audit\/audit-boundary/.test(ui), 'Compliance UI must not create frontend audit records through the audit boundary');
