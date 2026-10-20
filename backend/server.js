@@ -2908,24 +2908,44 @@ async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId 
     authorizationLocation = await getOrganizationLocation(chatId, canonicalOrder.location_id);
     if (!authorizationLocation) throw Object.assign(new Error('Canonical order location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
   }
-  await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:request', {
-    location: authorizationLocation, deniedMessage: 'Service booking permission required',
-  });
+
   if (req.method === 'GET') {
+    await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:view', {
+      location: authorizationLocation, deniedMessage: 'Service booking view permission required',
+    });
     return sendJSON(res, 200, { order_id: String(serverOrderId), bookings: await listServiceBookings(chatId, serverOrderId) }, req);
   }
+  if ((req.method === 'POST' && bookingId) || (req.method === 'PATCH' && !bookingId) ||
+      !['POST', 'PATCH'].includes(req.method)) {
+    return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+  }
+
   const body = await readBody(req);
   const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
   if (!idempotencyKey) return sendJSON(res, 400, { error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' } }, req);
-  if (req.method === 'POST' && !bookingId) {
+
+  let authorizationAction = 'logistics:scheduling:request';
+  if (req.method === 'PATCH') {
+    const target = String(body.status || body.next_status || body.nextStatus || '').trim().toUpperCase();
+    authorizationAction = target === 'CONFIRMED'
+      ? 'logistics:scheduling:confirm'
+      : target === 'CANCELLED'
+        ? 'logistics:scheduling:cancel'
+        : 'logistics:scheduling:manage';
+  }
+  await requireAuthorization(session, tenant, 'scheduling', authorizationAction, {
+    location: authorizationLocation,
+    deniedMessage: authorizationAction === 'logistics:scheduling:request'
+      ? 'Service booking request permission required'
+      : 'Service booking lifecycle permission required',
+  });
+
+  if (req.method === 'POST') {
     const result = await createServiceBooking(chatId, serverOrderId, { ...body, idempotencyKey }, session);
     return sendJSON(res, result.replayed ? 200 : 201, { order_id: String(serverOrderId), booking: result.booking, replayed: result.replayed }, req);
   }
-  if (req.method === 'PATCH' && bookingId) {
-    const result = await transitionServiceBooking(chatId, serverOrderId, bookingId, { ...body, idempotencyKey }, session);
-    return sendJSON(res, 200, { order_id: String(serverOrderId), booking: result.booking, replayed: result.replayed }, req);
-  }
-  return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+  const result = await transitionServiceBooking(chatId, serverOrderId, bookingId, { ...body, idempotencyKey }, session);
+  return sendJSON(res, 200, { order_id: String(serverOrderId), booking: result.booking, replayed: result.replayed }, req);
 }
 
 async function handleServiceDeliveryAssessment(req, res, chatId, serverOrderId) {
