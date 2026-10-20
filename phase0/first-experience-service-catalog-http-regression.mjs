@@ -1791,6 +1791,113 @@ try {
     competingAssessmentVerifyDb.close();
   }
 
+  // Same-key competing payloads are a distinct race from competing command keys:
+  // exactly one payload may bind the idempotency key, and the other must conflict.
+  const sameKeyRaceCheckout = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-same-key-assessment-race-checkout' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-same-key-assessment-race-buyer',
+      customer_name: 'Parcel Same-Key Assessment Race Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-request-http', qty: 1 }],
+      service_delivery: {
+        pickup_details: 'Bole, Addis Ababa',
+        destination_details: 'Arat Kilo, Addis Ababa',
+      },
+    }),
+  });
+  assert.equal(sameKeyRaceCheckout.status, 200,
+    'same-key race fixture should create a fresh service request');
+  const sameKeyRaceCheckoutBody = await sameKeyRaceCheckout.json();
+  const sameKeyRaceOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === sameKeyRaceCheckoutBody.marketplace_order_id
+      || order.id === sameKeyRaceCheckoutBody.sub_orders?.[0]?.seller_order_id);
+  assert.ok(sameKeyRaceOrder?.server_order_id,
+    'same-key race fixture must retain canonical order identity');
+  const sameKeyRaceUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(sameKeyRaceOrder.server_order_id) + '/service-delivery-assessment';
+  const sameKeyRaceKey = 'parcel-same-key-different-payload-race';
+  const sameKeyRacePayloads = [
+    { assessment_outcome: 'INELIGIBLE' },
+    {
+      assessment_outcome: 'ELIGIBLE',
+      customer_acceptance: {
+        accepted: true,
+        evidence_type: 'telegram_confirmation',
+        evidence_reference: 'same-key-race-eligible-acceptance',
+      },
+    },
+  ];
+  const sameKeyRaceDb = new DatabaseSync(dbPath);
+  let sameKeyRaceAuditsBefore;
+  try {
+    sameKeyRaceAuditsBefore = sameKeyRaceDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, sameKeyRaceOrder.server_order_id).count;
+    assert.equal(sameKeyRaceDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), sameKeyRaceKey).count, 0,
+    'same-key race must begin without a durable command');
+  } finally {
+    sameKeyRaceDb.close();
+  }
+  const sameKeyRaceResponses = await Promise.all(sameKeyRacePayloads.map(payload => fetch(sameKeyRaceUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': sameKeyRaceKey },
+    body: JSON.stringify(payload),
+  })));
+  assert.deepEqual(sameKeyRaceResponses.map(response => response.status).sort(), [200, 409],
+    'concurrent different payloads sharing one new idempotency key must yield one success and one conflict');
+  const sameKeyRaceBodies = await Promise.all(sameKeyRaceResponses.map(response => response.json()));
+  const sameKeyRaceWinnerIndex = sameKeyRaceResponses.findIndex(response => response.status === 200);
+  const sameKeyRaceLoserIndex = sameKeyRaceResponses.findIndex(response => response.status === 409);
+  assert.equal(sameKeyRaceBodies[sameKeyRaceLoserIndex].error?.code,
+    'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT',
+    'same-key/different-payload race loser must receive the idempotency conflict, not an already-assessed result');
+  const sameKeyRaceWinnerPayload = sameKeyRacePayloads[sameKeyRaceWinnerIndex];
+  const sameKeyRaceWinnerBody = sameKeyRaceBodies[sameKeyRaceWinnerIndex];
+  assert.equal(sameKeyRaceWinnerBody.service_delivery?.assessment?.outcome,
+    sameKeyRaceWinnerPayload.assessment_outcome,
+    'successful response must correspond to its submitted payload');
+  const sameKeyRaceCanonical = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === sameKeyRaceOrder.server_order_id)?.service_delivery_request;
+  assert.equal(sameKeyRaceCanonical?.assessment?.outcome, sameKeyRaceWinnerPayload.assessment_outcome,
+    'canonical assessment must remain bound to the single winning payload');
+  assert.equal(sameKeyRaceCanonical?.assessment_status,
+    sameKeyRaceWinnerPayload.assessment_outcome === 'ELIGIBLE' ? 'READY_FOR_FULFILLMENT' : 'ASSESSMENT_REJECTED',
+    'canonical status must match the winning assessment outcome');
+  // The same-key loser remains a conflict after the race, while the winner replays.
+  const sameKeyRaceWinnerReplay = await fetch(sameKeyRaceUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': sameKeyRaceKey },
+    body: JSON.stringify(sameKeyRaceWinnerPayload),
+  });
+  assert.equal(sameKeyRaceWinnerReplay.status, 200,
+    'retry of the winning same-key payload must replay successfully');
+  assert.equal((await sameKeyRaceWinnerReplay.json()).replayed, true);
+  const sameKeyRaceLoserReplay = await fetch(sameKeyRaceUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': sameKeyRaceKey },
+    body: JSON.stringify(sameKeyRacePayloads[1 - sameKeyRaceWinnerIndex]),
+  });
+  assert.equal(sameKeyRaceLoserReplay.status, 409,
+    'retry of the losing payload must not overwrite or masquerade as a replay');
+  assert.equal((await sameKeyRaceLoserReplay.json()).error?.code,
+    'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT');
+  const sameKeyRaceVerifyDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(sameKeyRaceVerifyDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), sameKeyRaceKey).count, 1,
+    'same-key competing payloads must persist exactly one durable command');
+    assert.equal(sameKeyRaceVerifyDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, sameKeyRaceOrder.server_order_id).count, sameKeyRaceAuditsBefore + 1,
+    'same-key competing payloads must append exactly one assessment audit event');
+  } finally {
+    sameKeyRaceVerifyDb.close();
+  }
+
   const rejectedAssessmentResponse = await fetch(
     baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
       + '/orders/' + encodeURIComponent(rejectedOrder.server_order_id) + '/service-delivery-assessment',
