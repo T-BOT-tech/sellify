@@ -1056,7 +1056,7 @@ try {
   assert.equal(buyerFulfillmentExperience.fulfillments.length, canonicalFulfillmentCount,
     'canonical tracking must not multiply canonical fulfillments by joining legacy marketplace rows');
   assert.ok(buyerFulfillmentExperience.fulfillments.some(item =>
-    item.status === 'DELIVERED'
+    item.status === 'delivered'
       && item.proof?.type === 'photo'
       && item.proof?.reference === 'proof://parcel-request-delivered-1'
   ), 'Telegram buyer tracking must project canonical delivered status and completion proof');
