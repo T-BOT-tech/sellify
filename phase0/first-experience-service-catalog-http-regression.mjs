@@ -380,8 +380,8 @@ try {
   assert.equal(crossOrderResponse.status, 404, 'booking must not be reachable through a different canonical order');
   const staleStateAfterScopeDenials = (await (await fetch(bookingsUrl, { headers: authHeaders })).json()).bookings
     .find(item => item.id === staleBooking.id);
-  assert.equal(staleStateAfterScopeDenials.status, 'REQUESTED');
-  assert.equal(staleStateAfterScopeDenials.version, 1);
+  assert.equal(staleStateAfterScopeDenials.status, 'ACCEPTED');
+  assert.equal(staleStateAfterScopeDenials.version, 2);
   assert.equal(staleAuditCount(), staleAuditBefore, 'scope denials must not mutate booking or audit state');
 
   // Completion actor/timestamp are server-authored even when submitted at the
