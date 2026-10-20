@@ -198,6 +198,133 @@ try {
   assert.equal(bookingConfirmBody.booking.status, 'CONFIRMED');
   assert.equal(bookingConfirmBody.booking.version, 3);
 
+  // Exact HTTP replay returns the durable transition result; the same key
+  // with a different target must conflict rather than conceal a second command.
+  const bookingConfirmReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+  });
+  assert.equal(bookingConfirmReplay.status, 200, 'exact confirmation retry should replay successfully');
+  const bookingConfirmReplayBody = await bookingConfirmReplay.json();
+  assert.equal(bookingConfirmReplayBody.replayed, true, 'exact confirmation retry must be marked as replayed');
+  assert.equal(bookingConfirmReplayBody.booking.version, 3, 'confirmation replay must not increment the version');
+  const bookingConfirmKeyConflict = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
+    body: JSON.stringify({ status: 'CANCELLED', expected_version: 3 }),
+  });
+  assert.equal(bookingConfirmKeyConflict.status, 409, 'reusing a booking key for a different transition must conflict');
+  assert.equal((await bookingConfirmKeyConflict.json()).error?.code, 'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT');
+
+  // Rejection is validated and persisted at the authenticated HTTP boundary.
+  // A client-provided status_reason is not a substitute for the canonical reason.
+  const rejectedBookingCreate = await fetch(bookingsUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-reject-create-1' },
+    body: JSON.stringify({ ...bookingRequest, requested_start: '2026-11-04T09:00:00+03:00', requested_end: '2026-11-04T10:00:00+03:00' }),
+  });
+  assert.equal(rejectedBookingCreate.status, 201);
+  const rejectedBooking = (await rejectedBookingCreate.json()).booking;
+  const rejectedWithoutReason = await fetch(bookingsUrl + '/' + encodeURIComponent(rejectedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-reject-1' },
+    body: JSON.stringify({ status: 'REJECTED', expected_version: 1, status_reason: 'forged client reason' }),
+  });
+  assert.equal(rejectedWithoutReason.status, 400, 'HTTP rejection must require the canonical reason field');
+  assert.equal((await rejectedWithoutReason.json()).error?.code, 'SERVICE_BOOKING_REASON_REQUIRED');
+  const rejectedAfterValidation = (await (await fetch(bookingsUrl, { headers: authHeaders })).json())
+    .bookings.find(item => item.id === rejectedBooking.id);
+  assert.equal(rejectedAfterValidation.status, 'REQUESTED', 'reason validation failure must not mutate booking state');
+  assert.equal(rejectedAfterValidation.version, 1, 'reason validation failure must not increment booking version');
+  const rejectedResponse = await fetch(bookingsUrl + '/' + encodeURIComponent(rejectedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-reject-1' },
+    body: JSON.stringify({ status: 'REJECTED', expected_version: 1, reason: 'Customer request is outside the service area', status_reason: 'forged client reason' }),
+  });
+  assert.equal(rejectedResponse.status, 200, 'rejection with a reason should persist');
+  const rejectedBody = await rejectedResponse.json();
+  assert.equal(rejectedBody.booking.status, 'REJECTED');
+  assert.equal(rejectedBody.booking.status_reason, 'Customer request is outside the service area',
+    'server must persist the validated reason rather than a client-supplied status_reason');
+  const rejectedReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(rejectedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-reject-1' },
+    body: JSON.stringify({ status: 'REJECTED', expected_version: 1, reason: 'Customer request is outside the service area', status_reason: 'forged client reason' }),
+  });
+  assert.equal(rejectedReplay.status, 200);
+  assert.equal((await rejectedReplay.json()).replayed, true, 'rejection replay should not create a second lifecycle event');
+  const rejectedKeyConflict = await fetch(bookingsUrl + '/' + encodeURIComponent(rejectedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-reject-1' },
+    body: JSON.stringify({ status: 'REJECTED', expected_version: 1, reason: 'Different reason' }),
+  });
+  assert.equal(rejectedKeyConflict.status, 409, 'same rejection key with a different reason must conflict');
+  assert.equal((await rejectedKeyConflict.json()).error?.code, 'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT');
+
+  // Exercise failure after service execution begins. Caller-supplied execution
+  // evidence is ignored; failure reason is server-validated and durable.
+  const failedBookingCreate = await fetch(bookingsUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-fail-create-1' },
+    body: JSON.stringify({ ...bookingRequest, requested_start: '2026-11-05T09:00:00+03:00', requested_end: '2026-11-05T10:00:00+03:00' }),
+  });
+  assert.equal(failedBookingCreate.status, 201);
+  const failedBooking = (await failedBookingCreate.json()).booking;
+  for (const step of [
+    { status: 'ACCEPTED', expected_version: 1, key: 'service-booking-http-fail-accept-1' },
+    { status: 'CONFIRMED', expected_version: 2, key: 'service-booking-http-fail-confirm-1' },
+    {
+      status: 'IN_PROGRESS',
+      expected_version: 3,
+      key: 'service-booking-http-fail-start-1',
+      started_at: '2000-01-01T00:00:00.000Z',
+      started_by: 'forged-client-actor',
+    },
+  ]) {
+    const response = await fetch(bookingsUrl + '/' + encodeURIComponent(failedBooking.id), {
+      method: 'PATCH',
+      headers: { ...authHeaders, 'Idempotency-Key': step.key },
+      body: JSON.stringify(step),
+    });
+    assert.equal(response.status, 200, `booking should transition to ${step.status}`);
+  }
+  const failedBefore = (await (await fetch(bookingsUrl, { headers: authHeaders })).json())
+    .bookings.find(item => item.id === failedBooking.id);
+  assert.equal(failedBefore.status, 'IN_PROGRESS');
+  assert.notEqual(failedBefore.started_by, 'forged-client-actor', 'HTTP client must not forge execution actor');
+  assert.notEqual(failedBefore.started_at, '2000-01-01T00:00:00.000Z', 'HTTP client must not forge execution timestamp');
+  const failedWithoutReason = await fetch(bookingsUrl + '/' + encodeURIComponent(failedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-fail-1' },
+    body: JSON.stringify({ status: 'FAILED', expected_version: 4, status_reason: 'forged failure reason' }),
+  });
+  assert.equal(failedWithoutReason.status, 400, 'HTTP failure must require a canonical reason');
+  assert.equal((await failedWithoutReason.json()).error?.code, 'SERVICE_BOOKING_REASON_REQUIRED');
+  const failedResponse = await fetch(bookingsUrl + '/' + encodeURIComponent(failedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-fail-1' },
+    body: JSON.stringify({ status: 'FAILED', expected_version: 4, reason: 'Required specialist is unavailable', status_reason: 'forged failure reason' }),
+  });
+  assert.equal(failedResponse.status, 200, 'failure with a reason should persist');
+  const failedBody = await failedResponse.json();
+  assert.equal(failedBody.booking.status, 'FAILED');
+  assert.equal(failedBody.booking.status_reason, 'Required specialist is unavailable');
+  const failedReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(failedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-fail-1' },
+    body: JSON.stringify({ status: 'FAILED', expected_version: 4, reason: 'Required specialist is unavailable', status_reason: 'forged failure reason' }),
+  });
+  assert.equal(failedReplay.status, 200);
+  assert.equal((await failedReplay.json()).replayed, true, 'failure replay should return the durable command result');
+  const failedRestart = await fetch(bookingsUrl + '/' + encodeURIComponent(failedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-fail-restart-1' },
+    body: JSON.stringify({ status: 'IN_PROGRESS', expected_version: 5 }),
+  });
+  assert.equal(failedRestart.status, 409, 'failed booking must not be restarted through the lifecycle API');
+  assert.equal((await failedRestart.json()).error?.code, 'SERVICE_BOOKING_TRANSITION_INVALID');
+
   const missingBookingKey = await fetch(bookingsUrl, {
     method: 'POST',
     headers: authHeaders,
