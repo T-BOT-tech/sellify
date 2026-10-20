@@ -5751,6 +5751,7 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
   const expectedVersion=Number(input.expected_version??input.expectedVersion);
   if(!Number.isInteger(expectedVersion)||expectedVersion<1) throw Object.assign(new Error('expected_version must be a positive integer'),{statusCode:400,code:'SERVICE_BOOKING_VERSION_REQUIRED'});
   const reason=input.reason==null?null:bookingRequiredText(input.reason,'reason',500);
+  if(['REJECTED','FAILED'].includes(target)&&!reason) throw Object.assign(new Error(`A reason is required when a service booking is ${target.toLowerCase()}`),{statusCode:400,code:'SERVICE_BOOKING_REASON_REQUIRED'});
   const fingerprint=crypto.createHash('sha256').update(JSON.stringify({booking_id:String(bookingId),order_id:String(serverOrderId),status:target,expected_version:expectedVersion,reason})).digest('hex');
   db.exec('BEGIN IMMEDIATE');
   try {
