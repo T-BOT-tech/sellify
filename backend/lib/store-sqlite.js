@@ -2497,6 +2497,108 @@ if (!applied.includes(39)) {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(68, nowIso());
   }
 
+  // GAP-2: persist normalized command fingerprints for fulfillment retries.
+  if (!applied.includes(69)) {
+    const fulfillmentColumns = new Set(
+      db.prepare('PRAGMA table_info(fulfillments)').all().map(column => String(column.name)),
+    );
+    if (!fulfillmentColumns.has('last_command_fingerprint')) {
+      db.exec('ALTER TABLE fulfillments ADD COLUMN last_command_fingerprint TEXT');
+    }
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(69, nowIso());
+  }
+
+  // GAP-2.2 — durable fulfillment command identities. Keep prior keys after later transitions.
+  if (!applied.includes(70)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS fulfillment_commands (
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        command_key TEXT NOT NULL,
+        server_order_id TEXT NOT NULL REFERENCES orders(server_order_id) ON DELETE CASCADE,
+        command_fingerprint TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (organization_id, command_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_fulfillment_commands_order
+        ON fulfillment_commands(organization_id, server_order_id, created_at DESC);
+    `);
+    const fulfillmentColumns = new Set(db.prepare('PRAGMA table_info(fulfillments)').all().map(column => String(column.name)));
+    if (fulfillmentColumns.has('last_command_fingerprint')) {
+      db.prepare(`
+        INSERT OR IGNORE INTO fulfillment_commands (organization_id, command_key, server_order_id, command_fingerprint, created_at)
+        SELECT organization_id, last_command_key, server_order_id, last_command_fingerprint, updated_at
+        FROM fulfillments
+        WHERE last_command_key IS NOT NULL AND trim(last_command_key) <> ''
+          AND last_command_fingerprint IS NOT NULL AND trim(last_command_fingerprint) <> ''
+      `).run();
+    }
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(70, nowIso());
+  }
+
+  // GAP-2.3 — durable courier-assignment command identities across lifecycle changes.
+  if (!applied.includes(71)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS delivery_assignment_commands (
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        command_key TEXT NOT NULL,
+        server_order_id TEXT NOT NULL,
+        command_fingerprint TEXT NOT NULL,
+        result_assignment_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (organization_id, command_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_delivery_assignment_commands_order
+        ON delivery_assignment_commands(organization_id, server_order_id, created_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(71, nowIso());
+  }
+
+  // GAP-2.4 — durable service-delivery assessment command identities across orders.
+  if (!applied.includes(72)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS service_delivery_assessment_commands (
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        command_key TEXT NOT NULL,
+        server_order_id TEXT NOT NULL,
+        command_fingerprint TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (organization_id, command_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_service_delivery_assessment_commands_order
+        ON service_delivery_assessment_commands(organization_id, server_order_id, created_at DESC);
+    `);
+    // Preserve existing embedded assessment identities when upgrading. Order
+    // by creation time so a legacy duplicate key deterministically keeps its
+    // earliest recorded use.
+    const legacyAssessmentRows = db.prepare(`
+      SELECT o.server_order_id, t.organization_id AS tenant_organization_id, o.order_json, o.created_at
+      FROM orders o
+      JOIN tenants t ON t.chat_id = o.chat_id
+      WHERE t.organization_id IS NOT NULL
+      ORDER BY o.created_at ASC, o.server_order_id ASC
+    `).all();
+    const insertLegacyAssessment = db.prepare(`
+      INSERT OR IGNORE INTO service_delivery_assessment_commands
+        (organization_id, command_key, server_order_id, command_fingerprint, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    for (const row of legacyAssessmentRows) {
+      const order = parseJSON(row.order_json, {});
+      const assessment = order?.service_delivery_request?.assessment;
+      const commandKey = String(assessment?.command_key || '').trim();
+      const fingerprint = String(assessment?.command_fingerprint || '').trim();
+      if (!commandKey || !fingerprint || !row.server_order_id) continue;
+      insertLegacyAssessment.run(
+        String(row.tenant_organization_id),
+        commandKey,
+        String(row.server_order_id),
+        fingerprint,
+        String(assessment.assessed_at || row.created_at || nowIso()),
+      );
+    }
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(72, nowIso());
+  }
+
   // GAP-1.24: fence status-query workers and permit takeover only before
   // provider I/O has been authorized. Legacy IN_PROGRESS commands are treated
   // as provider-in-flight because their execution phase cannot be proven.
@@ -5503,11 +5605,212 @@ function orderFromRow(row) {
 function assertServiceDeliveryReadyForExecution(order) {
   const request = order?.service_delivery_request;
   if (!request) return;
-  if (String(request.assessment_status || '').toUpperCase() !== 'READY_FOR_FULFILLMENT') {
+  const assessment = request.assessment;
+  const evidenceType = String(assessment?.customer_acceptance?.evidence_type || '').trim().toLowerCase();
+  const evidenceReference = String(assessment?.customer_acceptance?.evidence_reference || '').trim();
+  const acceptedEvidenceTypes = new Set([
+    'customer_message',
+    'telegram_confirmation',
+    'recorded_verbal_consent',
+    'signed_confirmation',
+  ]);
+  const hasRecordedAcceptance = assessment?.customer_acceptance?.accepted === true
+    && acceptedEvidenceTypes.has(evidenceType)
+    && evidenceReference.length >= 3
+    && evidenceReference.length <= 200;
+  const instantAvailabilityConfirmed = String(request.delivery_model || '').trim().toLowerCase() !== 'instant'
+    || (assessment?.availability_confirmed === true
+      && assessment?.availability_confirmation?.result === 'CONFIRMED');
+  if (String(request.assessment_status || '').toUpperCase() !== 'READY_FOR_FULFILLMENT'
+    || String(assessment?.outcome || '').toUpperCase() !== 'ELIGIBLE'
+    || !hasRecordedAcceptance
+    || !instantAvailabilityConfirmed) {
     throw Object.assign(
-      new Error('Logistics service request must complete assessment and acceptance before fulfillment or courier assignment'),
+      new Error('Logistics service request must have an eligible assessment, recorded customer acceptance, and required availability confirmation before fulfillment or courier assignment'),
       { statusCode: 409, code: 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' }
     );
+  }
+}
+
+export async function recordServiceDeliveryAssessment(chatId, serverOrderId, input = {}, actor = null) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organization_id) throw Object.assign(new Error('Order organization is required'), { statusCode: 409, code: 'ORDER_ORGANIZATION_REQUIRED' });
+  const orderRow = await getCoreFulfillmentOrder(String(chatId), String(serverOrderId));
+  const organizationId = String(orderRow.tenant_organization_id || '');
+  if (organizationId !== String(tenant.organization_id)) throw Object.assign(new Error('Order organization mismatch'), { statusCode: 403, code: 'ORDER_ORGANIZATION_MISMATCH' });
+  const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  if (!commandKey) throw Object.assign(new Error('Idempotency key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
+  const requestedLocationId = input.locationId || input.location_id || null;
+
+  const outcome = String(input.assessment_outcome || input.assessmentOutcome || '').trim().toUpperCase();
+  const orderJson = orderFromRow(orderRow);
+  const currentRequest = orderJson?.service_delivery_request;
+
+  const acceptance = input.customer_acceptance && typeof input.customer_acceptance === 'object' ? input.customer_acceptance : {};
+  const evidenceType = String(acceptance.evidence_type || acceptance.evidenceType || '').trim().toLowerCase();
+  const evidenceReference = String(acceptance.evidence_reference || acceptance.evidenceReference || '').trim();
+  const accepted = acceptance.accepted === true;
+  const deliveryModel = String(currentRequest?.delivery_model || '').trim().toLowerCase();
+  const availabilityConfirmed = input.availability_confirmed === true;
+  const acceptedEvidenceTypes = new Set(['customer_message', 'telegram_confirmation', 'recorded_verbal_consent', 'signed_confirmation']);
+  // Fingerprint normalized, outcome-relevant input only; timestamps and actor context are server-derived.
+  const commandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+    assessment_outcome: outcome,
+    ...(outcome === 'ELIGIBLE' ? {
+      availability_confirmed: availabilityConfirmed,
+      customer_acceptance: {
+        accepted,
+        evidence_type: evidenceType,
+        evidence_reference: evidenceReference,
+      },
+    } : {}),
+  })).digest('hex');
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const freshRow = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?')
+      .get(String(chatId), String(serverOrderId));
+    if (!freshRow) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    // Re-read both tenant and order organization bindings inside the write
+    // transaction. Preflight authorization alone can become stale before
+    // BEGIN IMMEDIATE, so neither the tenant-to-organization mapping nor the
+    // canonical order's organization may be trusted from the earlier read.
+    const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
+      .get(String(chatId));
+    const freshTenantOrganizationId = String(freshTenantRow?.organization_id || '');
+    if (freshTenantOrganizationId !== organizationId) {
+      throw Object.assign(new Error('Tenant organization changed during assessment'), {
+        statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
+      });
+    }
+    // The orders row is tenant-scoped by (chat_id, server_order_id) and does
+    // not store tenant_organization_id. The tenant mapping checked above is
+    // the canonical organization binding; reading a nonexistent order column
+    // here incorrectly rejects every fresh assessment before validation.
+    const freshOrder = orderFromRow(freshRow);
+    const request = freshOrder?.service_delivery_request;
+    const priorAssessmentCommand = db.prepare(`
+      SELECT * FROM service_delivery_assessment_commands
+      WHERE organization_id = ? AND command_key = ?
+    `).get(organizationId, commandKey);
+    if (priorAssessmentCommand) {
+      if (String(priorAssessmentCommand.server_order_id) !== String(serverOrderId)
+        || String(priorAssessmentCommand.command_fingerprint) !== commandFingerprint) {
+        throw Object.assign(new Error('Idempotency key was already used for a different service assessment'), {
+          statusCode: 409, code: 'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT',
+        });
+      }
+      if (request?.assessment?.command_key !== commandKey
+        || request?.assessment?.command_fingerprint !== commandFingerprint) {
+        throw Object.assign(new Error('Assessment result for prior command is missing from the canonical service request'), {
+          statusCode: 409, code: 'LOGISTICS_ASSESSMENT_REPLAY_STATE_MISSING',
+        });
+      }
+      db.exec('COMMIT');
+      return { order: freshOrder, service_delivery: request, replayed: true };
+    }
+    if (!request) throw Object.assign(new Error('Order is not a logistics service request'), { statusCode: 409, code: 'LOGISTICS_SERVICE_REQUEST_REQUIRED' });
+    // Only new assessment commands validate mutable location and current
+    // scheduling authorization. A committed retry must resolve from durable
+    // command history before location changes can reject it.
+    const freshCanonicalLocationId = freshRow.location_id ? String(freshRow.location_id) : null;
+    if (freshCanonicalLocationId && requestedLocationId
+      && String(requestedLocationId) !== freshCanonicalLocationId) {
+      throw Object.assign(new Error('Assessment location must match the canonical order location'), {
+        statusCode: 403, code: 'LOGISTICS_ASSESSMENT_LOCATION_MISMATCH',
+      });
+    }
+    const transactionLocationId = freshCanonicalLocationId || requestedLocationId || actor?.locationId || null;
+    assertLogisticsSchedulingAuthorization(actor, organizationId, transactionLocationId, 'logistics:scheduling:request');
+    if (String(request.delivery_model || '').trim().toLowerCase() !== deliveryModel) {
+      throw Object.assign(new Error('Service delivery model changed during assessment; retry with current order state'), {
+        statusCode: 409, code: 'LOGISTICS_ASSESSMENT_REQUEST_CHANGED',
+      });
+    }
+    if (request.assessment?.command_key === commandKey) {
+      if (request.assessment.command_fingerprint !== commandFingerprint) {
+        throw Object.assign(new Error('Idempotency key was reused with different assessment data'), {
+          statusCode: 409,
+          code: 'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT',
+        });
+      }
+      db.exec('COMMIT');
+      return { order: freshOrder, service_delivery: request, replayed: true };
+    }
+    if (request.assessment || String(request.assessment_status || '').toUpperCase() === 'READY_FOR_FULFILLMENT') {
+      throw Object.assign(new Error('Logistics service request assessment is already recorded'), { statusCode: 409, code: 'LOGISTICS_ASSESSMENT_ALREADY_RECORDED' });
+    }
+    // Resolve a prior idempotency key before validating the new command payload.
+    // Reusing a key with a changed (even now-invalid) payload must consistently conflict.
+    if (!['ELIGIBLE', 'INELIGIBLE'].includes(outcome)) {
+      throw Object.assign(new Error('Assessment outcome must be ELIGIBLE or INELIGIBLE'), { statusCode: 400, code: 'LOGISTICS_ASSESSMENT_OUTCOME_INVALID' });
+    }
+    if (evidenceReference.length > 200) {
+      throw Object.assign(new Error('Customer acceptance evidence reference must be 200 characters or fewer'), {
+        statusCode: 400, code: 'LOGISTICS_CUSTOMER_ACCEPTANCE_EVIDENCE_INVALID',
+      });
+    }
+    if (outcome === 'ELIGIBLE') {
+      if (!accepted || !acceptedEvidenceTypes.has(evidenceType) || evidenceReference.length < 3) {
+        throw Object.assign(new Error('Eligible service requests require recorded customer acceptance evidence'), { statusCode: 400, code: 'LOGISTICS_CUSTOMER_ACCEPTANCE_REQUIRED' });
+      }
+      if (deliveryModel === 'instant' && !availabilityConfirmed) {
+        throw Object.assign(new Error('Instant delivery requires explicit eligibility and availability confirmation'), { statusCode: 400, code: 'LOGISTICS_AVAILABILITY_CONFIRMATION_REQUIRED' });
+      }
+    }
+    const now = nowIso();
+    const ready = outcome === 'ELIGIBLE';
+    const nextRequest = {
+      ...request,
+      assessment_status: ready ? 'READY_FOR_FULFILLMENT' : 'ASSESSMENT_REJECTED',
+      assignment_status: 'NOT_ASSIGNED',
+      assessment: {
+        outcome,
+        availability_confirmed: String(request.delivery_model || '').toLowerCase() === 'instant' ? availabilityConfirmed : null,
+        availability_confirmation: ready && String(request.delivery_model || '').toLowerCase() === 'instant' ? {
+          result: 'CONFIRMED',
+          source: 'authorized_operator_recorded',
+          recorded_by_user_id: actor?.userId ? String(actor.userId) : null,
+          recorded_at: now,
+        } : null,
+        customer_acceptance: ready ? {
+          accepted: true,
+          evidence_type: evidenceType,
+          evidence_reference: evidenceReference,
+          recorded_at: now,
+        } : null,
+        assessed_by_user_id: actor?.userId ? String(actor.userId) : null,
+        assessed_at: now,
+        command_key: commandKey,
+        command_fingerprint: commandFingerprint,
+      },
+    };
+    const updatedOrder = { ...freshOrder, service_delivery_request: nextRequest };
+    db.prepare('UPDATE orders SET order_json = ? WHERE chat_id = ? AND server_order_id = ?')
+      .run(json(updatedOrder), String(chatId), String(serverOrderId));
+    db.prepare(`
+      INSERT INTO service_delivery_assessment_commands
+        (organization_id, command_key, server_order_id, command_fingerprint, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(organizationId, commandKey, String(serverOrderId), commandFingerprint, now);
+    audit(String(chatId), 'logistics.service_request.assessed', 'order', String(serverOrderId), {
+      outcome,
+      deliveryModel: request.delivery_model,
+      assessmentStatus: nextRequest.assessment_status,
+      customerAcceptanceRecorded: ready,
+      commandKey,
+    }, {
+      organizationId,
+      locationId: transactionLocationId ? String(transactionLocationId) : null,
+      actorId: actor?.userId || null,
+      deviceId: actor?.deviceId || null,
+    });
+    db.exec('COMMIT');
+    return { order: updatedOrder, service_delivery: nextRequest, replayed: false };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
   }
 }
 
@@ -8195,24 +8498,43 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
     : fulfillmentRow.status === 'picked_up';
   if (!terminal) return [];
   const items = Array.isArray(orderJson?.items) ? orderJson.items : [];
-  const defaultLocation = db.prepare("SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1").get(String(fulfillmentRow.organization_id));
-  const locationId = String(fulfillmentRow.location_id || defaultLocation?.id || '');
-  const movements = [];
+  const quantitiesByProduct = new Map();
   for (const item of items) {
     const productId = String(item?.product_id ?? item?.productId ?? item?.item_id ?? item?.id ?? '').trim();
     const quantity = Number(item?.qty ?? item?.quantity ?? 0);
     if (!productId || !Number.isFinite(quantity) || quantity <= 0) continue;
+    quantitiesByProduct.set(productId, (quantitiesByProduct.get(productId) || 0) + quantity);
+  }
+  const defaultLocation = db.prepare("SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1").get(String(fulfillmentRow.organization_id));
+  const locationId = String(fulfillmentRow.location_id || defaultLocation?.id || '');
+  const movements = [];
+  for (const [productId, quantity] of quantitiesByProduct) {
     const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
     if (!product) throw Object.assign(new Error('Fulfillment product not found'), { statusCode: 409, code: 'FULFILLMENT_PRODUCT_NOT_FOUND', productId });
     // Catalog type is server-owned authority. A service fulfills the order
     // without decrementing physical inventory, regardless of client line metadata.
     if (parseJSON(product.product_json, {}).item_type === 'service') continue;
+    const eventId = `fulfillment-sale:${fulfillmentRow.id}:${productId}`;
+    const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
+    if (existing) {
+      const replayMatchesIntent = String(existing.organization_id) === String(fulfillmentRow.organization_id)
+        && String(existing.location_id) === locationId
+        && String(existing.product_id) === productId
+        && Number(existing.quantity) === -quantity
+        && String(existing.movement_type).toUpperCase() === 'SALE'
+        && String(existing.reference_type) === 'fulfillment'
+        && String(existing.reference_id) === String(fulfillmentRow.id);
+      if (!replayMatchesIntent) {
+        throw Object.assign(new Error('Existing fulfillment inventory event conflicts with the current canonical fulfillment intent'), {
+          statusCode: 409, code: 'FULFILLMENT_INVENTORY_REPLAY_CONFLICT', productId, fulfillmentId: String(fulfillmentRow.id),
+        });
+      }
+      movements.push(inventoryMovementFromRow(existing));
+      continue;
+    }
     if (!locationId) throw Object.assign(new Error('Fulfillment inventory location is required'), { statusCode: 409, code: 'FULFILLMENT_INVENTORY_LOCATION_REQUIRED' });
     const balance = Number(db.prepare('SELECT COALESCE(SUM(quantity), 0) AS quantity FROM inventory_movements WHERE organization_id = ? AND location_id = ? AND product_id = ?').get(String(fulfillmentRow.organization_id), locationId, productId)?.quantity || 0);
     if (balance < quantity) throw Object.assign(new Error('Insufficient inventory for fulfillment'), { statusCode: 409, code: 'FULFILLMENT_INSUFFICIENT_INVENTORY', productId, available: balance, requested: quantity });
-    const eventId = `fulfillment-sale:${fulfillmentRow.id}:${productId}`;
-    const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
-    if (existing) { movements.push(inventoryMovementFromRow(existing)); continue; }
     const id = crypto.randomUUID(); const now = nowIso();
     db.prepare('INSERT INTO inventory_movements (id,event_id,organization_id,location_id,product_id,quantity,movement_type,reference_type,reference_id,actor_id,device_id,occurred_at,reason,metadata_json,created_at) VALUES (?,?,?,?,?,?,\'SALE\',\'fulfillment\',?,?,?,?,?,?,?)').run(id,eventId,String(fulfillmentRow.organization_id),locationId,productId,-quantity,String(fulfillmentRow.id),actor?.userId || null,actor?.deviceId || null,now,'Core fulfillment terminal inventory consequence',json({orderId:String(fulfillmentRow.server_order_id),fulfillmentId:String(fulfillmentRow.id)}),now);
     movements.push(inventoryMovementFromRow(db.prepare('SELECT * FROM inventory_movements WHERE id = ?').get(id)));
@@ -8260,20 +8582,103 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
   const tenant = await getTenant(chatId);
   if (!tenant?.organization_id) throw Object.assign(new Error('Order organization is required'), { statusCode: 409 });
   const order = await getCoreFulfillmentOrder(String(chatId), String(serverOrderId));
-  assertServiceDeliveryReadyForExecution(orderFromRow(order));
   const organizationId = String(order.tenant_organization_id || '');
   if (organizationId !== String(tenant.organization_id)) throw Object.assign(new Error('Order organization mismatch'), { statusCode: 403 });
-  const locationId = input.locationId || input.location_id || order.location_id || null;
-  const type = normalizeCoreFulfillmentType(order.fulfillment_type || 'delivery');
-  if (type !== 'delivery') throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
+  const requestedLocationId = input.locationId || input.location_id || null;
+  const canonicalOrderLocationId = order.location_id ? String(order.location_id) : null;
+  let locationId = canonicalOrderLocationId || requestedLocationId || actor?.locationId || null;
   const actorUserId = actor?.userId ? String(actor.userId) : null;
-  assertLogisticsSchedulingAuthorization(actor, organizationId, locationId, 'logistics:scheduling:request');
   let selectedCourierUserId = String(courierUserId || '').trim();
   const key = String(input.assignmentKey || input.assignment_key || `courier:auto:${serverOrderId}`).trim();
   let fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), organizationId);
   if (!key) throw Object.assign(new Error('Assignment key is required'), { statusCode: 400 });
+  let assignmentFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+    action: 'ASSIGN',
+    requested_courier_user_id: selectedCourierUserId || null,
+  })).digest('hex');
   db.exec('BEGIN IMMEDIATE');
   try {
+    const freshOrderRow = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?')
+      .get(String(chatId), String(serverOrderId));
+    if (!freshOrderRow) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
+      .get(String(chatId));
+    if (String(freshTenantRow?.organization_id || '') !== organizationId) {
+      throw Object.assign(new Error('Tenant organization changed during assignment'), {
+        statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
+      });
+    }
+    const freshOrder = orderFromRow(freshOrderRow);
+    const freshCanonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
+    locationId = freshCanonicalLocationId || requestedLocationId || actor?.locationId || null;
+    assignmentFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+      action: 'ASSIGN',
+      requested_courier_user_id: selectedCourierUserId || null,
+    })).digest('hex');
+
+    // Resolve assignment command keys from durable history, not only the
+    // latest command stored on a mutable assignment row.
+    const priorCommand = db.prepare(`
+      SELECT * FROM delivery_assignment_commands
+      WHERE organization_id = ? AND command_key = ?
+    `).get(organizationId, key);
+    if (priorCommand) {
+      if (String(priorCommand.server_order_id) !== String(serverOrderId)
+        || String(priorCommand.command_fingerprint) !== assignmentFingerprint) {
+        throw Object.assign(new Error('Idempotency key was already used for a different delivery assignment'), {
+          statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT',
+        });
+      }
+      const replay = db.prepare('SELECT * FROM delivery_assignments WHERE id = ? AND organization_id = ?')
+        .get(priorCommand.result_assignment_id, organizationId);
+      if (!replay) throw Object.assign(new Error('Assignment result for prior command is missing'), {
+        statusCode: 409, code: 'ASSIGNMENT_REPLAY_STATE_MISSING',
+      });
+      db.exec('COMMIT');
+      return replay;
+    }
+
+    // Location is canonical mutable order state, not caller-controlled command
+    // intent. Validate it for new commands only; a committed retry must replay
+    // even if the order's location or the caller's current authorization changed.
+    if (freshCanonicalLocationId && requestedLocationId
+      && String(requestedLocationId) !== freshCanonicalLocationId) {
+      throw Object.assign(new Error('Assignment location must match the canonical order location'), {
+        statusCode: 403, code: 'LOGISTICS_ASSIGNMENT_LOCATION_MISMATCH',
+      });
+    }
+    assertLogisticsSchedulingAuthorization(actor, organizationId, locationId, 'logistics:scheduling:request');
+
+    // A durable replay represents a command that already passed readiness.
+    // Enforce current readiness only for a new assignment, not for a retry.
+    assertServiceDeliveryReadyForExecution(freshOrder);
+    // Service request readiness is the primary gate for parcel requests; once
+    // ready, retain the canonical delivery-type guard before mutating assignment.
+    if (normalizeCoreFulfillmentType(freshOrderRow.fulfillment_type || 'delivery') !== 'delivery') {
+      throw Object.assign(new Error('Courier assignment requires delivery fulfillment'), { statusCode: 400 });
+    }
+
+    if (!fulfillment) {
+      fulfillment = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?')
+        .get(String(serverOrderId), organizationId);
+    }
+    // An existing canonical fulfillment is authoritative too: do not attach a
+    // courier using a newly inferred location if the persisted fulfillment was
+    // created for another location (or has lost its required location).
+    if (fulfillment) {
+      const fulfillmentOrganizationId = String(fulfillment.organization_id || '');
+      const fulfillmentLocationId = fulfillment.location_id ? String(fulfillment.location_id) : null;
+      if (fulfillmentOrganizationId !== organizationId) {
+        throw Object.assign(new Error('Existing fulfillment organization does not match the canonical order'), {
+          statusCode: 409, code: 'LOGISTICS_FULFILLMENT_ORGANIZATION_MISMATCH',
+        });
+      }
+      if (String(fulfillmentLocationId || '') !== String(locationId || '')) {
+        throw Object.assign(new Error('Existing fulfillment location does not match the canonical order location'), {
+          statusCode: 409, code: 'LOGISTICS_FULFILLMENT_LOCATION_MISMATCH',
+        });
+      }
+    }
     if (!selectedCourierUserId) {
       const selected = await selectDeliveryCourier(chatId, organizationId, locationId);
       selectedCourierUserId = String(selected.user_id);
@@ -8299,14 +8704,16 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
         VALUES (?, ?, ?, ?, 'delivery', 'pending', ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1)
       `).run(
         fulfillmentId, String(serverOrderId), organizationId, locationId ? String(locationId) : null,
-        json(order.delivery_address || null), order.scheduled_time || null, order.tracking_reference || null,
-        json(order.fulfillment_proof || null), actorUserId, actorUserId, now, now,
+        json(orderFromRow(freshOrderRow).delivery_address || null), freshOrder.scheduled_time || null, freshOrder.tracking_reference || null,
+        json(freshOrder.fulfillment_proof || null), actorUserId, actorUserId, now, now,
       );
       fulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(fulfillmentId);
     }
     const existing = db.prepare('SELECT * FROM delivery_assignments WHERE fulfillment_id = ?').get(fulfillment.id);
     if (existing) {
       if (existing.courier_user_id !== selectedCourierUserId) throw Object.assign(new Error('Delivery is already assigned to another courier'), { statusCode: 409, code: 'ASSIGNMENT_CONFLICT' });
+      db.prepare('INSERT INTO delivery_assignment_commands (organization_id, command_key, server_order_id, command_fingerprint, result_assignment_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(organizationId, key, String(serverOrderId), assignmentFingerprint, existing.id, nowIso());
       db.exec('COMMIT');
       return existing;
     }
@@ -8321,6 +8728,8 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
     audit(String(chatId), 'delivery.assignment.created', 'delivery_assignment', id, {
       orderId: String(serverOrderId), courierUserId: selectedCourierUserId, locationId: locationId ? String(locationId) : null,
     }, { organizationId, locationId: locationId ? String(locationId) : null, actorId: actorUserId });
+    db.prepare('INSERT INTO delivery_assignment_commands (organization_id, command_key, server_order_id, command_fingerprint, result_assignment_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(organizationId, key, String(serverOrderId), assignmentFingerprint, id, now);
     db.exec('COMMIT');
     return row;
   } catch (error) {
@@ -8851,6 +9260,27 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
 
     assertLogisticsSchedulingAuthorization(actor, organizationId, row.location_id, schedulingAction);
 
+    const priorCommand = db.prepare(`
+      SELECT server_order_id, command_fingerprint
+      FROM fulfillment_commands
+      WHERE organization_id = ? AND command_key = ?
+    `).get(organizationId, commandKey);
+    if (priorCommand) {
+      if (String(priorCommand.server_order_id) !== String(serverOrderId)
+        || String(priorCommand.command_fingerprint) !== commandFingerprint) {
+        throw Object.assign(new Error('Idempotency key was already used for a different fulfillment command'), {
+          statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT',
+        });
+      }
+      const canonicalReplay = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?')
+        .get(String(serverOrderId), organizationId);
+      if (!canonicalReplay) throw Object.assign(new Error('Fulfillment not found for prior command'), {
+        statusCode: 409, code: 'FULFILLMENT_REPLAY_STATE_MISSING',
+      });
+      db.exec('COMMIT');
+      return fulfillmentFromRow(canonicalReplay);
+    }
+
     if (String(row.last_command_key || '') === commandKey) {
       const compatible = String(row.status) === target;
       if (!compatible) {
@@ -9092,25 +9522,82 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
   const exceptionReason = String(input.reason || input.exceptionReason || input.exception_reason || '').trim().slice(0, 500);
   const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
   if (!commandKey) throw Object.assign(new Error('Idempotency key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
+  // Fingerprint only the command's semantic intent. Location is canonical
+  // order state, not caller-controlled intent; including a mutable location
+  // would make a committed retry depend on stale pre-transaction order data.
+  const commandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+    action: normalizedAction,
+    target_courier_id: targetCourierId || null,
+    reason: exceptionReason || null,
+    proof: input.proof === undefined ? null : input.proof,
+  })).digest('hex');
   if (normalizedAction === 'REASSIGN_EXCEPTION') {
-    if (!targetCourierId) throw Object.assign(new Error('A different courier is required to resolve a delivery exception'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
-    const courier = db.prepare(`SELECT m.user_id, mr.scope_type, mr.scope_id FROM memberships m JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active' WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active' AND mr.role_id = 'logistics_courier'`).get(targetCourierId, String(chatId));
-    if (!courier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
     db.exec('BEGIN IMMEDIATE');
     try {
-      const existingCommand = db.prepare('SELECT * FROM delivery_assignments WHERE organization_id = ? AND last_command_key = ? ORDER BY updated_at DESC LIMIT 1').get(organizationId, commandKey);
+      const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
+        .get(String(chatId));
+      const freshOrderRow = db.prepare(`SELECT o.server_order_id,
+        (SELECT f.location_id FROM fulfillments f
+         WHERE f.server_order_id = o.server_order_id AND f.organization_id = ?
+         ORDER BY f.created_at DESC LIMIT 1) AS location_id
+        FROM orders o WHERE o.chat_id = ? AND o.server_order_id = ?`)
+        .get(organizationId, String(chatId), String(serverOrderId));
+      if (String(freshTenantRow?.organization_id || '') !== organizationId || !freshOrderRow) {
+        throw Object.assign(new Error('Tenant or order organization changed during delivery exception resolution'), {
+          statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
+        });
+      }
+      const canonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
+      // Replay an already-committed command before checking mutable courier
+      // membership. A role revoked after the original success must not turn a
+      // safe retry into a different outcome. Tenant/order scope and fingerprint
+      // are still revalidated before replay.
+      const existingCommand = db.prepare(`
+        SELECT * FROM delivery_assignment_commands
+        WHERE organization_id = ? AND command_key = ?
+      `).get(organizationId, commandKey);
       if (existingCommand) {
-        if (String(existingCommand.status) !== 'ASSIGNED') {
+        if (String(existingCommand.server_order_id) !== String(serverOrderId)
+          || String(existingCommand.command_fingerprint) !== commandFingerprint) {
           throw Object.assign(new Error('Idempotency key was already used for a different delivery command'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT' });
         }
+        const replay = db.prepare('SELECT * FROM delivery_assignments WHERE id = ? AND organization_id = ?')
+          .get(existingCommand.result_assignment_id, organizationId);
+        if (!replay) throw Object.assign(new Error('Assignment result for prior command is missing'), { statusCode: 409, code: 'ASSIGNMENT_REPLAY_STATE_MISSING' });
         db.exec('COMMIT');
-        return existingCommand;
+        return replay;
       }
+      // Resolve durable key reuse before validating the payload for a new command.
+      // A retry with a missing/changed target must conflict against the original
+      // fingerprint rather than return an unrelated target-required error.
+      if (!targetCourierId) throw Object.assign(new Error('A different courier is required to resolve a delivery exception'), {
+        statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED',
+      });
+      // For a new command, revalidate target courier membership and role under
+      // the write lock so concurrent role revocation cannot authorize a stale
+      // reassignment.
+      const freshCourier = db.prepare(`
+        SELECT m.user_id, mr.scope_type, mr.scope_id
+        FROM memberships m
+        JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
+        WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
+          AND mr.role_id = 'logistics_courier'
+      `).get(targetCourierId, String(chatId));
+      if (!freshCourier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), {
+        statusCode: 403, code: 'COURIER_ROLE_REQUIRED',
+      });
       const exception = db.prepare(`SELECT da.* FROM delivery_assignments da JOIN fulfillments f ON f.id = da.fulfillment_id WHERE f.server_order_id = ? AND da.organization_id = ? AND da.status IN ('CANCELLED','FAILED') ORDER BY da.updated_at DESC LIMIT 1`).get(String(serverOrderId), organizationId);
       if (!exception) throw Object.assign(new Error('No unresolved delivery exception exists'), { statusCode: 409, code: 'EXCEPTION_NOT_FOUND' });
+      const exceptionFulfillment = db.prepare('SELECT location_id FROM fulfillments WHERE id = ? AND organization_id = ?').get(exception.fulfillment_id, organizationId);
+      if (canonicalLocationId && (String(exception.location_id || '') !== canonicalLocationId || String(exceptionFulfillment?.location_id || '') !== canonicalLocationId)) {
+        throw Object.assign(new Error('Delivery exception location does not match the canonical order location'), { statusCode: 409, code: 'DELIVERY_ASSIGNMENT_LOCATION_MISMATCH' });
+      }
+      if (canonicalLocationId && !db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(canonicalLocationId, organizationId)) {
+        throw Object.assign(new Error('Canonical order location is outside the organization scope'), { statusCode: 409, code: 'LOCATION_SCOPE_DENIED' });
+      }
       if (String(targetCourierId) === String(exception.courier_user_id)) throw Object.assign(new Error('A different courier is required to resolve a delivery exception'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
-      const locationId = input.locationId || input.location_id || exception.location_id || order.location_id || null;
-      if (courier.scope_type === 'LOCATION' && String(courier.scope_id || '') !== String(locationId || '')) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
+      const locationId = canonicalLocationId || exception.location_id || order.location_id || input.locationId || input.location_id || null;
+      if (freshCourier.scope_type === 'LOCATION' && String(freshCourier.scope_id || '') !== String(locationId || '')) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
       const now = nowIso();
       db.prepare('UPDATE delivery_assignments SET status = \'REASSIGNED\', last_command_key = ?, updated_at = ?, version = version + 1 WHERE id = ?').run(commandKey, now, exception.id);
       const assignmentKey = String(input.assignmentKey || input.assignment_key || ('exception-reassign:' + serverOrderId + ':' + targetCourierId + ':' + commandKey)).trim();
@@ -9118,6 +9605,8 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
       db.prepare(`INSERT INTO delivery_assignments (id,fulfillment_id,organization_id,location_id,courier_user_id,status,assignment_key,assigned_by_user_id,assigned_at,updated_at,version,last_command_key) VALUES (?,?,?,?,?,'ASSIGNED',?,?,?,?,1,?)`).run(newId, exception.fulfillment_id, organizationId, locationId ? String(locationId) : null, targetCourierId, assignmentKey, actor?.userId || null, now, now, commandKey);
       const result = db.prepare('SELECT * FROM delivery_assignments WHERE id = ?').get(newId);
       audit(String(chatId), 'delivery.assignment.exception_resolved', 'delivery_assignment', newId, { orderId: String(serverOrderId), previousAssignmentId: exception.id, previousStatus: exception.status, previousCourierUserId: String(exception.courier_user_id), courierUserId: targetCourierId, commandKey, resolutionReason: exceptionReason }, { organizationId, locationId, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
+      db.prepare('INSERT INTO delivery_assignment_commands (organization_id, command_key, server_order_id, command_fingerprint, result_assignment_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(organizationId, commandKey, String(serverOrderId), commandFingerprint, newId, now);
       db.exec('COMMIT');
       return result;
     } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
@@ -9128,44 +9617,115 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     ACCEPTED: new Set(['OUT_FOR_DELIVERY','CANCELLED','FAILED','REASSIGNED']),
     OUT_FOR_DELIVERY: new Set(['DELIVERED','CANCELLED','FAILED','REASSIGNED']),
   };
-  if (['CANCELLED','FAILED'].includes(normalizedAction) && !exceptionReason) throw Object.assign(new Error('A reason is required when cancelling or failing a delivery assignment'), { statusCode: 400, code: 'EXCEPTION_REASON_REQUIRED' });
   const proofInput = input.proof;
-  if (normalizedAction === 'DELIVERED' && (proofInput == null || (typeof proofInput === 'string' && !proofInput.trim()))) {
-    throw Object.assign(new Error('Delivery proof is required before delivery completion'), { statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED' });
-  }
-  if (normalizedAction === 'DELIVERED' && typeof proofInput === 'object' && !Array.isArray(proofInput)) {
-    const proofType = String(proofInput.type || proofInput.kind || '').trim().toLowerCase();
-    const proofReference = String(proofInput.reference || proofInput.referenceId || proofInput.reference_id || '').trim();
-    if (!proofType || !proofReference) {
-      throw Object.assign(new Error('Delivery proof type and reference are required'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
-    }
-  }
 
-  if (normalizedAction === 'REASSIGNED') {
-    if (!targetCourierId || targetCourierId === String(active.courier_user_id)) throw Object.assign(new Error('A different courier is required for reassignment'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
-    const courier = db.prepare(`SELECT m.user_id, mr.scope_type, mr.scope_id FROM memberships m JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active' WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active' AND mr.role_id = 'logistics_courier'`).get(targetCourierId, String(chatId));
-    if (!courier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
-    const locationId = input.locationId || input.location_id || active.location_id || order.location_id || null;
-    if (courier.scope_type === 'LOCATION' && String(courier.scope_id || '') !== String(locationId || '')) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
-  }
   db.exec('BEGIN IMMEDIATE');
   try {
-    const existingCommand = db.prepare('SELECT * FROM delivery_assignments WHERE organization_id = ? AND last_command_key = ? ORDER BY updated_at DESC LIMIT 1').get(organizationId, commandKey);
-    if (existingCommand) {
-      const replayCompatible = normalizedAction === 'REASSIGN_EXCEPTION'
-        ? String(existingCommand.status) === 'ASSIGNED'
-        : String(existingCommand.status) === normalizedAction;
-      if (!replayCompatible) throw Object.assign(new Error('Idempotency key was already used for a different delivery command'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT' });
-      db.exec('COMMIT');
-      return existingCommand;
+    const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
+      .get(String(chatId));
+    const freshOrderRow = db.prepare(`SELECT o.server_order_id,
+      (SELECT f.location_id FROM fulfillments f
+       WHERE f.server_order_id = o.server_order_id AND f.organization_id = ?
+       ORDER BY f.created_at DESC LIMIT 1) AS location_id
+      FROM orders o WHERE o.chat_id = ? AND o.server_order_id = ?`)
+      .get(organizationId, String(chatId), String(serverOrderId));
+    if (String(freshTenantRow?.organization_id || '') !== organizationId || !freshOrderRow) {
+      throw Object.assign(new Error('Tenant or order organization changed during delivery assignment transition'), {
+        statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
+      });
     }
+    const canonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
+    const existingCommand = db.prepare(`
+    SELECT * FROM delivery_assignment_commands
+    WHERE organization_id = ? AND command_key = ?
+    `).get(organizationId, commandKey);
+    if (existingCommand) {
+    if (String(existingCommand.server_order_id) !== String(serverOrderId)
+      || String(existingCommand.command_fingerprint) !== commandFingerprint) {
+      throw Object.assign(new Error('Idempotency key was already used for a different delivery command'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT' });
+    }
+    const replay = db.prepare('SELECT * FROM delivery_assignments WHERE id = ? AND organization_id = ?')
+      .get(existingCommand.result_assignment_id, organizationId);
+    if (!replay) throw Object.assign(new Error('Assignment result for prior command is missing'), { statusCode: 409, code: 'ASSIGNMENT_REPLAY_STATE_MISSING' });
+    db.exec('COMMIT');
+    return replay;
+    }
+    // Validate action-specific payload only after durable replay resolution.
+    // Reusing a key with changed/malformed intent must produce the idempotency
+    // conflict, not bypass the canonical command-history check.
+    if (['CANCELLED','FAILED'].includes(normalizedAction) && !exceptionReason) throw Object.assign(new Error('A reason is required when cancelling or failing a delivery assignment'), { statusCode: 400, code: 'EXCEPTION_REASON_REQUIRED' });
+    if (normalizedAction === 'DELIVERED' && (proofInput == null || (typeof proofInput === 'string' && !proofInput.trim()))) {
+      throw Object.assign(new Error('Delivery proof is required before delivery completion'), { statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED' });
+    }
+    if (normalizedAction === 'DELIVERED') {
+      if (typeof proofInput === 'object') {
+        if (Array.isArray(proofInput)) {
+          throw Object.assign(new Error('Delivery proof must be a string or a proof object'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
+        }
+        const proofType = String(proofInput.type || proofInput.kind || '').trim().toLowerCase();
+        const proofReference = String(proofInput.reference || proofInput.referenceId || proofInput.reference_id || '').trim();
+        if (!proofType || !proofReference) {
+          throw Object.assign(new Error('Delivery proof type and reference are required'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
+        }
+      } else if (typeof proofInput !== 'string') {
+        throw Object.assign(new Error('Delivery proof must be a non-empty string or a proof object'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
+      }
+    }
+
     const active = db.prepare(`SELECT da.* FROM delivery_assignments da JOIN fulfillments f ON f.id = da.fulfillment_id WHERE f.server_order_id = ? AND da.organization_id = ? AND da.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY') ORDER BY da.updated_at DESC LIMIT 1`).get(String(serverOrderId), organizationId);
     if (!active) throw Object.assign(new Error('No active courier assignment exists'), { statusCode: 409, code: 'ASSIGNMENT_REQUIRED' });
+    // Courier ownership is revalidated under the same write lock as the
+    // lifecycle mutation. The HTTP handler performs an earlier authorization
+    // check, but that check alone is vulnerable to assignment/role changes
+    // between authorization and this transaction.
+    const actorRoles = Array.isArray(actor?.roles) ? actor.roles.map(role => String(role)) : [];
+    const courierActor = actorRoles.includes('logistics_courier') || String(actor?.role || '') === 'logistics_courier';
+    if (courierActor && ['ACCEPTED', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(normalizedAction)) {
+      const actorUserId = String(actor?.userId || '').trim();
+      const courierMembership = db.prepare(`
+        SELECT mr.scope_type, mr.scope_id
+        FROM memberships m
+        JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
+        WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
+          AND mr.role_id = 'logistics_courier'
+      `).get(actorUserId, String(chatId));
+      if (!actorUserId || !courierMembership) {
+        throw Object.assign(new Error('Active logistics courier role is required'), {
+          statusCode: 403, code: 'COURIER_ROLE_REQUIRED',
+        });
+      }
+      if (String(active.courier_user_id) !== actorUserId) {
+        throw Object.assign(new Error('Courier is not assigned to this delivery'), {
+          statusCode: 403, code: 'COURIER_ASSIGNMENT_REQUIRED',
+        });
+      }
+      const assignedLocationId = canonicalLocationId || (active.location_id ? String(active.location_id) : null);
+      if (courierMembership.scope_type === 'LOCATION'
+        && String(courierMembership.scope_id || '') !== String(assignedLocationId || '')) {
+        throw Object.assign(new Error('Courier role is outside the delivery location scope'), {
+          statusCode: 403, code: 'COURIER_SCOPE_DENIED',
+        });
+      }
+    }
     const current = String(active.status);
     if (!transitions[current]?.has(normalizedAction)) throw Object.assign(new Error('Cannot move assignment from ' + current + ' to ' + normalizedAction), { statusCode: 409, code: 'INVALID_ASSIGNMENT_TRANSITION' });
+
+    if (normalizedAction === 'REASSIGNED') {
+      if (!targetCourierId || targetCourierId === String(active.courier_user_id)) throw Object.assign(new Error('A different courier is required for reassignment'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
+      const courier = db.prepare(`SELECT m.user_id, mr.scope_type, mr.scope_id FROM memberships m JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active' WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active' AND mr.role_id = 'logistics_courier'`).get(targetCourierId, String(chatId));
+      if (!courier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
+      const locationId = canonicalLocationId || active.location_id || order.location_id || input.locationId || input.location_id || null;
+      if (courier.scope_type === 'LOCATION' && String(courier.scope_id || '') !== String(locationId || '')) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
+    }
     const now = nowIso();
     const fulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ? AND organization_id = ?').get(active.fulfillment_id, organizationId);
     if (!fulfillment) throw Object.assign(new Error('Fulfillment not found'), { statusCode: 404, code: 'FULFILLMENT_NOT_FOUND' });
+    if (canonicalLocationId && (String(active.location_id || '') !== canonicalLocationId || String(fulfillment.location_id || '') !== canonicalLocationId)) {
+      throw Object.assign(new Error('Delivery assignment location does not match the canonical order location'), { statusCode: 409, code: 'DELIVERY_ASSIGNMENT_LOCATION_MISMATCH' });
+    }
+    if (canonicalLocationId && !db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(canonicalLocationId, organizationId)) {
+      throw Object.assign(new Error('Canonical order location is outside the organization scope'), { statusCode: 409, code: 'LOCATION_SCOPE_DENIED' });
+    }
     const fulfillmentTarget = normalizedAction === 'OUT_FOR_DELIVERY' ? 'out_for_delivery' : normalizedAction === 'DELIVERED' ? 'delivered' : null;
     if (normalizedAction === 'DELIVERED') {
       const existingProof = fulfillment.proof_json ? (() => { try { return JSON.parse(fulfillment.proof_json); } catch { return fulfillment.proof_json; } })() : null;
@@ -9182,18 +9742,20 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
 
     let result = db.prepare('SELECT * FROM delivery_assignments WHERE id = ?').get(active.id);
     if (normalizedAction === 'REASSIGNED') {
-      const locationId = input.locationId || input.location_id || active.location_id || order.location_id || null;
+      const locationId = canonicalLocationId || active.location_id || order.location_id || null;
       const assignmentKey = String(input.assignmentKey || input.assignment_key || ('reassign:' + serverOrderId + ':' + targetCourierId + ':' + commandKey)).trim();
       db.prepare(`INSERT INTO delivery_assignments (id,fulfillment_id,organization_id,location_id,courier_user_id,status,assignment_key,assigned_by_user_id,assigned_at,updated_at,version,last_command_key) VALUES (?,?,?,?,?,'ASSIGNED',?,?,?,?,1,?)`).run(crypto.randomUUID(), active.fulfillment_id, organizationId, locationId ? String(locationId) : null, targetCourierId, assignmentKey, actor?.userId || null, now, now, commandKey);
       result = db.prepare('SELECT * FROM delivery_assignments WHERE fulfillment_id = ? AND status = \'ASSIGNED\' ORDER BY updated_at DESC LIMIT 1').get(active.fulfillment_id);
       audit(String(chatId), 'delivery.assignment.reassigned', 'delivery_assignment', result.id, { orderId: String(serverOrderId), previousCourierUserId: String(active.courier_user_id), courierUserId: targetCourierId, commandKey }, { organizationId, locationId, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
     } else if (normalizedAction === 'DELIVERED') {
       const updatedFulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(fulfillment.id);
-      const inventoryMovements = applyCoreFulfillmentInventoryConsequence(String(chatId), updatedFulfillment, orderFromRow(order), actor);
+      const inventoryMovements = applyCoreFulfillmentInventoryConsequence(String(chatId), updatedFulfillment, orderFromRow(freshOrderRow), actor);
       audit(String(chatId), 'delivery.assignment.delivered', 'delivery_assignment', active.id, { orderId: String(serverOrderId), from: current, to: normalizedAction, commandKey, proofAttached: true, inventoryMovementIds: inventoryMovements.map(item => item.id) }, { organizationId, locationId: active.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
     } else {
       audit(String(chatId), 'delivery.assignment.' + normalizedAction.toLowerCase(), 'delivery_assignment', active.id, { orderId: String(serverOrderId), from: current, to: normalizedAction, commandKey, ...(exceptionReason ? { exceptionReason } : {}) }, { organizationId, locationId: active.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
     }
+    db.prepare('INSERT INTO delivery_assignment_commands (organization_id, command_key, server_order_id, command_fingerprint, result_assignment_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(organizationId, commandKey, String(serverOrderId), commandFingerprint, result.id, now);
     db.exec('COMMIT');
     return result;
   } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
@@ -9209,62 +9771,198 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
   const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
   if (!commandKey) throw Object.assign(new Error('Idempotency key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
   const target = normalizeCoreFulfillmentStatus(nextStatus);
-
   const orderJson = orderFromRow(order);
-  assertServiceDeliveryReadyForExecution(orderJson);
+  const effectiveType = normalizeCoreFulfillmentType(input.fulfillmentType || input.fulfillment_type || orderJson.fulfillment_type || 'delivery');
+  const commandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+    fulfillment_type: effectiveType,
+    target_status: target,
+    destination: input.destination === undefined
+      ? ((effectiveType === 'delivery' ? orderJson.delivery_address : orderJson.pickup_location) ?? null)
+      : input.destination,
+    scheduled_at: input.scheduledAt || input.scheduled_at || orderJson.scheduled_time || null,
+    tracking_reference: input.trackingReference || input.tracking_reference || orderJson.tracking_reference || null,
+    proof: input.proof === undefined ? (orderJson.fulfillment_proof ?? null) : input.proof,
+  })).digest('hex');
   const type = normalizeCoreFulfillmentType(input.fulfillmentType || input.fulfillment_type || orderJson.fulfillment_type || 'delivery');
   if (!CORE_FULFILLMENT_TRANSITIONS[type]) throw Object.assign(new Error('Unsupported fulfillment type'), { statusCode: 400 });
 
+  const requestedLocationId = input.locationId || input.location_id || null;
+  const canonicalOrderLocationId = order.location_id ? String(order.location_id) : null;
   const actorUserId = actor?.userId && db.prepare('SELECT id FROM users WHERE id = ?').get(String(actor.userId)) ? String(actor.userId) : null;
-  const locationId = input.locationId || input.location_id || actor?.locationId || null;
-  if (locationId) {
-    const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(String(locationId), organizationId);
-    if (!location) throw Object.assign(new Error('Location does not belong to this organization'), { statusCode: 400, code: 'LOCATION_SCOPE_DENIED' });
-  }
+  let locationId = canonicalOrderLocationId || requestedLocationId || actor?.locationId || null;
 
+  // Location is mutable canonical state, not fulfillment-command identity.
+  // Validate it for new commands inside the write transaction, after durable
+  // replay lookup, so a committed retry is not rejected by later location changes.
   db.exec('BEGIN IMMEDIATE');
   try {
+    const freshOrderRow = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?')
+      .get(key, String(serverOrderId));
+    if (!freshOrderRow) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
+      .get(key);
+    if (String(freshTenantRow?.organization_id || '') !== organizationId) {
+      throw Object.assign(new Error('Tenant organization changed during fulfillment transition'), {
+        statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH',
+      });
+    }
+    // The orders table is keyed to the tenant through chat_id; it does not
+    // own a tenant_organization_id column. The tenant mapping above is the
+    // canonical organization binding for this scoped order row.
+    const freshOrderJson = orderFromRow(freshOrderRow);
+    // Durable command history must be checked before mutable order-input and
+    // lifecycle validation: a committed retry remains idempotent after later
+    // fulfillment transitions have advanced the current row.
+    const priorCommand = db.prepare(`
+      SELECT * FROM fulfillment_commands
+      WHERE organization_id = ? AND command_key = ?
+    `).get(organizationId, commandKey);
+    if (priorCommand) {
+      if (String(priorCommand.server_order_id) !== String(serverOrderId)
+        || String(priorCommand.command_fingerprint) !== commandFingerprint) {
+        throw Object.assign(new Error('Idempotency key was already used for a different fulfillment command'), {
+          statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT',
+        });
+      }
+      const replay = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?')
+        .get(String(serverOrderId), organizationId);
+      if (!replay) throw Object.assign(new Error('Fulfillment result for prior command is missing'), {
+        statusCode: 409, code: 'FULFILLMENT_REPLAY_STATE_MISSING',
+      });
+      db.exec('COMMIT');
+      return fulfillmentFromRow(replay);
+    }
+    const freshCommandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+      fulfillment_type: effectiveType,
+      target_status: target,
+      destination: input.destination === undefined
+        ? ((effectiveType === 'delivery' ? freshOrderJson.delivery_address : freshOrderJson.pickup_location) ?? null)
+        : input.destination,
+      scheduled_at: input.scheduledAt || input.scheduled_at || freshOrderJson.scheduled_time || null,
+      tracking_reference: input.trackingReference || input.tracking_reference || freshOrderJson.tracking_reference || null,
+      proof: input.proof === undefined ? (freshOrderJson.fulfillment_proof ?? null) : input.proof,
+    })).digest('hex');
+    if (freshCommandFingerprint !== commandFingerprint) {
+      throw Object.assign(new Error('Canonical order fulfillment inputs changed during the command'), {
+        statusCode: 409, code: 'FULFILLMENT_ORDER_CHANGED',
+      });
+    }
+    assertServiceDeliveryReadyForExecution(freshOrderJson);
+    const freshCanonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
+    if (freshCanonicalLocationId && requestedLocationId
+      && String(requestedLocationId) !== freshCanonicalLocationId) {
+      throw Object.assign(new Error('Fulfillment location must match the canonical order location'), {
+        statusCode: 403, code: 'FULFILLMENT_LOCATION_MISMATCH',
+      });
+    }
+    locationId = freshCanonicalLocationId || requestedLocationId || actor?.locationId || null;
+    if (locationId) {
+      const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?')
+        .get(String(locationId), organizationId);
+      if (!location) throw Object.assign(new Error('Location does not belong to this organization'), { statusCode: 400, code: 'LOCATION_SCOPE_DENIED' });
+    }
+
     let row = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), organizationId);
+    if (row) {
+      const persistedLocationId = row.location_id ? String(row.location_id) : null;
+      if (String(persistedLocationId || '') !== String(locationId || '')) {
+        throw Object.assign(new Error('Existing fulfillment location does not match the canonical order location'), {
+          statusCode: 409, code: 'FULFILLMENT_LOCATION_MISMATCH',
+        });
+      }
+    }
     const now = nowIso();
     if (!row) {
       const fulfillmentId = crypto.randomUUID();
-      const destination = input.destination ?? (type === 'delivery' ? orderJson.delivery_address : orderJson.pickup_location) ?? null;
-      const scheduledAt = input.scheduledAt || input.scheduled_at || orderJson.scheduled_time || null;
+      const destination = input.destination ?? (type === 'delivery' ? freshOrderJson.delivery_address : freshOrderJson.pickup_location) ?? null;
+      const scheduledAt = input.scheduledAt || input.scheduled_at || freshOrderJson.scheduled_time || null;
       db.prepare(`
         INSERT INTO fulfillments
           (id, server_order_id, organization_id, location_id, fulfillment_type, status, destination_json, scheduled_at, tracking_reference, proof_json, last_command_key, created_by_user_id, updated_by_user_id, created_at, updated_at, version)
         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1)
       `).run(
         fulfillmentId, String(serverOrderId), organizationId, locationId ? String(locationId) : null, type,
-        json(destination), scheduledAt, input.trackingReference || input.tracking_reference || orderJson.tracking_reference || null,
-        json(input.proof ?? orderJson.fulfillment_proof ?? null), actorUserId, actorUserId, now, now,
+        json(destination), scheduledAt, input.trackingReference || input.tracking_reference || freshOrderJson.tracking_reference || null,
+        json(input.proof ?? freshOrderJson.fulfillment_proof ?? null), actorUserId, actorUserId, now, now,
       );
       row = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(fulfillmentId);
     }
 
     if (String(row.last_command_key || '') === commandKey) {
+      const storedFingerprint = String(row.last_command_fingerprint || '');
+      // Legacy commands predate fingerprints. Preserve replay compatibility only
+      // when the requested target is still the canonical state; new commands
+      // always require an exact normalized command match.
+      const compatible = storedFingerprint
+        ? storedFingerprint === commandFingerprint
+        : normalizeCoreFulfillmentStatus(row.status) === target;
+      if (!compatible) {
+        throw Object.assign(new Error('Idempotency key was already used for a different fulfillment command'), {
+          statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT',
+        });
+      }
       db.exec('COMMIT');
       return fulfillmentFromRow(row);
     }
     if (row.fulfillment_type !== type) throw Object.assign(new Error('Fulfillment type cannot change'), { statusCode: 409, code: 'FULFILLMENT_TYPE_IMMUTABLE' });
     const current = normalizeCoreFulfillmentStatus(row.status);
+    // Assignment lifecycle owns progress whenever an active courier assignment
+    // exists. Check this invariant before generic transition validation so a
+    // direct transition cannot bypass the assignment workflow from any state.
+    if (type === 'delivery' && ['out_for_delivery', 'delivered'].includes(target)) {
+      const activeAssignment = db.prepare(`
+        SELECT id, status FROM delivery_assignments
+        WHERE fulfillment_id = ? AND organization_id = ?
+          AND status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY')
+        ORDER BY updated_at DESC LIMIT 1
+      `).get(row.id, organizationId);
+      if (activeAssignment) {
+        throw Object.assign(new Error('Delivery with an active courier assignment must advance through the assignment lifecycle'), {
+          statusCode: 409, code: 'DELIVERY_ASSIGNMENT_LIFECYCLE_REQUIRED',
+        });
+      }
+    }
     if (!CORE_FULFILLMENT_TRANSITIONS[type][current]?.has(target)) {
       throw Object.assign(new Error(`Cannot move fulfillment from ${current} to ${target}`), { statusCode: 409, code: 'INVALID_FULFILLMENT_TRANSITION' });
+    }
+    if (type === 'delivery' && target === 'delivered') {
+      const proofInput = input.proof === undefined
+        ? (parseJSON(row.proof_json, null) ?? freshOrderJson.fulfillment_proof ?? null)
+        : input.proof;
+      if (proofInput == null || (typeof proofInput === 'string' && !proofInput.trim())) {
+        throw Object.assign(new Error('Delivery proof is required before delivery completion'), {
+          statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED',
+        });
+      }
+      if (typeof proofInput === 'object' && !Array.isArray(proofInput)) {
+        const proofType = String(proofInput.type || proofInput.kind || '').trim().toLowerCase();
+        const proofReference = String(proofInput.reference || proofInput.referenceId || proofInput.reference_id || '').trim();
+        if (!proofType || !proofReference) {
+          throw Object.assign(new Error('Delivery proof type and reference are required'), {
+            statusCode: 400, code: 'DELIVERY_PROOF_INVALID',
+          });
+        }
+      }
     }
 
     db.prepare(`
       UPDATE fulfillments
-      SET status = ?, last_command_key = ?, updated_by_user_id = ?, updated_at = ?, version = version + 1,
+      SET status = ?, last_command_key = ?, last_command_fingerprint = ?,
+          updated_by_user_id = ?, updated_at = ?, version = version + 1,
           tracking_reference = COALESCE(?, tracking_reference), proof_json = COALESCE(?, proof_json)
       WHERE id = ?
     `).run(
-      target, commandKey, actorUserId, now,
+      target, commandKey, commandFingerprint, actorUserId, now,
       input.trackingReference || input.tracking_reference || null,
       input.proof === undefined ? null : json(input.proof),
       row.id,
     );
     const updated = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(row.id);
-    const inventoryMovements = applyCoreFulfillmentInventoryConsequence(key, updated, orderJson, actor);
+    db.prepare(`
+      INSERT INTO fulfillment_commands (organization_id, command_key, server_order_id, command_fingerprint, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(organizationId, commandKey, String(serverOrderId), commandFingerprint, now);
+    const inventoryMovements = applyCoreFulfillmentInventoryConsequence(key, updated, freshOrderJson, actor);
     audit(key, 'fulfillment.transitioned', 'fulfillment', row.id, {
       orderId: String(serverOrderId), from: current, to: target, commandKey,
       inventoryMovementIds: inventoryMovements.map(item => item.id),
@@ -9448,6 +10146,8 @@ export async function searchMarketplaceListings() {
       seller_id: row.chat_id,
       item_id: row.product_id,
       item_type: product.item_type === 'service' ? 'service' : 'product',
+      service_profile: product.service_profile || null,
+      delivery_model: product.delivery_model || null,
       title: product.name,
       price: row.price_minor,
       currency: normaliseCurrency(row.currency || parseJSON(row.branding_json, {})?.currency, 'ETB'),
@@ -10032,14 +10732,25 @@ export async function getTelegramBuyerFulfillmentExperience(chatId, telegramUser
   const rows = db.prepare(`
     SELECT mo.id AS marketplace_order_id, mo.status AS marketplace_status, mo.created_at,
            mso.seller_order_id, mso.status AS seller_status,
-           mf.id AS fulfillment_id, mf.status AS fulfillment_status,
-           mf.fulfillment_type, mf.tracking_reference, mf.proof_json,
-           mf.created_at AS fulfillment_created_at, mf.updated_at AS fulfillment_updated_at
+           o.server_order_id,
+           COALESCE(f.id, mf.id) AS fulfillment_id,
+           CASE WHEN f.id IS NOT NULL THEN f.status ELSE mf.status END AS fulfillment_status,
+           CASE WHEN f.id IS NOT NULL THEN f.fulfillment_type ELSE mf.fulfillment_type END AS fulfillment_type,
+           CASE WHEN f.id IS NOT NULL THEN f.tracking_reference ELSE mf.tracking_reference END AS tracking_reference,
+           CASE WHEN f.id IS NOT NULL THEN f.proof_json ELSE mf.proof_json END AS proof_json,
+           COALESCE(f.created_at, mf.created_at) AS fulfillment_created_at,
+           COALESCE(f.updated_at, mf.updated_at) AS fulfillment_updated_at
     FROM marketplace_orders mo
     JOIN marketplace_seller_orders mso ON mso.marketplace_order_id = mo.id
-    LEFT JOIN marketplace_fulfillments mf ON mf.seller_order_id = mso.id
+    LEFT JOIN orders o
+      ON o.chat_id = mso.seller_id AND o.local_id = mso.seller_order_id AND o.is_marketplace = 1
+    LEFT JOIN fulfillments f
+      ON f.server_order_id = o.server_order_id AND f.organization_id = mso.organization_id
+    LEFT JOIN marketplace_fulfillments mf
+      ON mf.seller_order_id = mso.id AND f.id IS NULL
     WHERE mo.id = ? AND mo.buyer_identity = ? AND mso.seller_id = ?
-    ORDER BY mf.updated_at DESC, mf.created_at DESC
+    ORDER BY COALESCE(f.updated_at, mf.updated_at) DESC,
+             COALESCE(f.created_at, mf.created_at) DESC
   `).all(orderId, buyer, String(chatId));
   if (!rows.length) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
   const first = rows[0];
@@ -10060,7 +10771,7 @@ export async function getTelegramBuyerFulfillmentExperience(chatId, telegramUser
     sellerOrders: [...new Map(rows.map(r => [r.seller_order_id, { sellerOrderId: r.seller_order_id, status: r.seller_status }])).values()],
     fulfillments,
     returns: { supported: false, status: null, requestAction: 'existing_logistics_return_authority_required' },
-    authority: { order: 'commerce', fulfillment: 'existing_marketplace_fulfillment', logistics: 'logistics-pack', returns: 'logistics-pack' },
+    authority: { order: 'commerce', fulfillment: 'canonical_logistics_with_legacy_marketplace_fallback', logistics: 'logistics-pack', returns: 'logistics-pack' },
   };
 }
 
