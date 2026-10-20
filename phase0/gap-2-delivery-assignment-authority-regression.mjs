@@ -33,10 +33,10 @@ assert.match(store, /input\.assignmentKey/);
 
 // Regression: authorization must use the resolved canonical location, not an
 // undefined request variable that would fail before the assignment is applied.
-const assignmentFunction = store.match(/export async function assignDeliveryCourier\\([\\s\\S]*?(?=export async function listDeliveryAssignments\\()/)?.[0];
+const assignmentFunction = store.match(/export async function assignDeliveryCourier\([\s\S]*?(?=export async function listDeliveryAssignments\()/)?.[0];
 assert.ok(assignmentFunction, 'canonical courier assignment function should be present');
-assert.match(assignmentFunction, /assertLogisticsSchedulingAuthorization\\(actor, organizationId, locationId, 'logistics:scheduling:request'\\)/);
-assert.doesNotMatch(assignmentFunction, /request\\.location_id/);
+assert.match(assignmentFunction, /assertLogisticsSchedulingAuthorization\(actor, organizationId, locationId, 'logistics:scheduling:request'\)/);
+assert.doesNotMatch(assignmentFunction, /request\.location_id/);
 
 console.log('GAP-2 Delivery Assignment Authority Regression: PASS');
 console.log('Canonical assignment persistence: PASS');
