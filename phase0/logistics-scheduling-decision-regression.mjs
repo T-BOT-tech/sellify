@@ -446,42 +446,30 @@ const first = await create(
   'movement-l11-8-1',
 );
 
-const scheduled = await transitionLogisticsSchedulingActivity(
-  chatId,
-  first.id,
-  'SCHEDULED',
-  actor,
-  {
-    idempotency_key: 'l11.8-command-1',
-    expectedVersion: 1,
-    externalEvaluation: {
-      outcome: 'FEASIBLE',
-      authority: 'existing-capacity-authority',
-      reference_id: 'l11.8-capacity-1',
+await assert.rejects(
+  () => transitionLogisticsSchedulingActivity(
+    chatId,
+    first.id,
+    'SCHEDULED',
+    actor,
+    {
+      idempotency_key: 'l11.8-command-1',
+      expectedVersion: 1,
+      externalEvaluation: {
+        outcome: 'FEASIBLE',
+        authority: 'caller-invented-capacity-authority',
+        reference_id: 'caller-invented-capacity-check',
+      },
     },
-  },
+  ),
+  error => error?.code === 'SCHEDULING_FEASIBILITY_UNKNOWN',
 );
-assert.equal(scheduled.status, 'SCHEDULED');
-assert.equal(scheduled.version, 2);
 
-const replayed = await transitionLogisticsSchedulingActivity(
-  chatId,
-  first.id,
-  'SCHEDULED',
-  actor,
-  {
-    idempotency_key: 'l11.8-command-1',
-    expectedVersion: 1,
-    externalEvaluation: {
-      outcome: 'FEASIBLE',
-      authority: 'existing-capacity-authority',
-      reference_id: 'l11.8-capacity-1',
-    },
-  },
-);
-assert.equal(replayed.idempotent, true);
-assert.equal(replayed.status, 'SCHEDULED');
-assert.equal(replayed.version, 2);
+// Seed a scheduled state to exercise downstream lifecycle transitions without
+// treating test-provided evidence as proof of real external capacity.
+db.prepare(
+  "UPDATE logistics_scheduling_activities SET status = 'SCHEDULED', scheduled_start = ?, scheduled_end = ?, version = 2 WHERE id = ? AND organization_id = ?"
+).run('2026-10-10T09:00:00Z', '2026-10-10T10:00:00Z', first.id, organizationId);
 
 const confirmed = await transitionLogisticsSchedulingActivity(
   chatId,
@@ -654,22 +642,28 @@ const failed = await create(
   '2026-10-12T10:00:00Z',
   'movement-l11-12-failure',
 );
-const failedScheduled = await transitionLogisticsSchedulingActivity(
-  chatId,
-  failed.id,
-  'SCHEDULED',
-  actor,
-  {
-    idempotency_key: 'l11.12-schedule-failure',
-    expectedVersion: 1,
-    externalEvaluation: {
-      outcome: 'FEASIBLE',
-      authority: 'existing-capacity-authority',
-      reference_id: 'l11.12-capacity-1',
+await assert.rejects(
+  () => transitionLogisticsSchedulingActivity(
+    chatId,
+    failed.id,
+    'SCHEDULED',
+    actor,
+    {
+      idempotency_key: 'l11.12-schedule-failure',
+      expectedVersion: 1,
+      externalEvaluation: {
+        outcome: 'FEASIBLE',
+        authority: 'caller-invented-capacity-authority',
+        reference_id: 'caller-invented-capacity-check',
+      },
     },
-  },
+  ),
+  error => error?.code === 'SCHEDULING_FEASIBILITY_UNKNOWN',
 );
-assert.equal(failedScheduled.status, 'SCHEDULED');
+db.prepare(
+  "UPDATE logistics_scheduling_activities SET status = 'SCHEDULED', scheduled_start = ?, scheduled_end = ?, version = 2 WHERE id = ? AND organization_id = ?"
+).run('2026-10-12T09:00:00Z', '2026-10-12T10:00:00Z', failed.id, organizationId);
+
 const failedConfirmed = await transitionLogisticsSchedulingActivity(
   chatId,
   failed.id,
@@ -765,22 +759,28 @@ const missed = await create(
   '2026-10-14T10:00:00Z',
   'movement-l11-13-missed',
 );
-const missedScheduled = await transitionLogisticsSchedulingActivity(
-  chatId,
-  missed.id,
-  'SCHEDULED',
-  actor,
-  {
-    idempotency_key: 'l11.13-missed-schedule',
-    expectedVersion: 1,
-    externalEvaluation: {
-      outcome: 'FEASIBLE',
-      authority: 'existing-capacity-authority',
-      reference_id: 'l11.13-capacity-1',
+await assert.rejects(
+  () => transitionLogisticsSchedulingActivity(
+    chatId,
+    missed.id,
+    'SCHEDULED',
+    actor,
+    {
+      idempotency_key: 'l11.13-missed-schedule',
+      expectedVersion: 1,
+      externalEvaluation: {
+        outcome: 'FEASIBLE',
+        authority: 'caller-invented-capacity-authority',
+        reference_id: 'caller-invented-capacity-check',
+      },
     },
-  },
+  ),
+  error => error?.code === 'SCHEDULING_FEASIBILITY_UNKNOWN',
 );
-assert.equal(missedScheduled.status, 'SCHEDULED');
+db.prepare(
+  "UPDATE logistics_scheduling_activities SET status = 'SCHEDULED', scheduled_start = ?, scheduled_end = ?, version = 2 WHERE id = ? AND organization_id = ?"
+).run('2026-10-14T09:00:00Z', '2026-10-14T10:00:00Z', missed.id, organizationId);
+
 const missedResult = await transitionLogisticsSchedulingActivity(
   chatId,
   missed.id,
