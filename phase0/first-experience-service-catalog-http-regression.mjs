@@ -1898,6 +1898,110 @@ try {
     sameKeyRaceVerifyDb.close();
   }
 
+  // Fail the audit insert after assessment processing has begun. Canonical order,
+  // command idempotency record, and audit evidence must remain atomic; same-key
+  // retry must be able to commit after the audit fault is removed.
+  const auditFailureCheckout = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-assessment-audit-failure-checkout' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-assessment-audit-failure-buyer',
+      customer_name: 'Parcel Assessment Audit Failure Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-request-http', qty: 1 }],
+      service_delivery: {
+        pickup_details: 'Mexico, Addis Ababa',
+        destination_details: 'CMC, Addis Ababa',
+      },
+    }),
+  });
+  assert.equal(auditFailureCheckout.status, 200,
+    'audit-failure fixture should create a fresh service request');
+  const auditFailureCheckoutBody = await auditFailureCheckout.json();
+  const auditFailureOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === auditFailureCheckoutBody.marketplace_order_id
+      || order.id === auditFailureCheckoutBody.sub_orders?.[0]?.seller_order_id);
+  assert.ok(auditFailureOrder?.server_order_id,
+    'audit-failure fixture must retain canonical order identity');
+  const auditFailureUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(auditFailureOrder.server_order_id) + '/service-delivery-assessment';
+  const auditFailureKey = 'parcel-assessment-audit-insert-failure';
+  const auditFailurePayload = { assessment_outcome: 'INELIGIBLE' };
+  const auditFailureBefore = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === auditFailureOrder.server_order_id)?.service_delivery_request;
+  const auditFailureTriggerDb = new DatabaseSync(dbPath);
+  try {
+    auditFailureTriggerDb.exec(`CREATE TRIGGER fail_service_assessment_audit_insert
+      BEFORE INSERT ON audit_events
+      WHEN NEW.action = 'logistics.service_request.assessed'
+        AND NEW.entity_id = '${auditFailureOrder.server_order_id}'
+      BEGIN SELECT RAISE(ABORT, 'injected service assessment audit persistence failure'); END;`);
+  } finally {
+    auditFailureTriggerDb.close();
+  }
+  let auditFailureResponse;
+  try {
+    auditFailureResponse = await fetch(auditFailureUrl, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': auditFailureKey },
+      body: JSON.stringify(auditFailurePayload),
+    });
+  } finally {
+    const cleanupDb = new DatabaseSync(dbPath);
+    try {
+      cleanupDb.exec('DROP TRIGGER IF EXISTS fail_service_assessment_audit_insert');
+    } finally {
+      cleanupDb.close();
+    }
+  }
+  assert.equal(auditFailureResponse.status, 500,
+    'assessment must fail when its required audit evidence cannot be persisted');
+  const auditFailureAfter = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === auditFailureOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(auditFailureAfter, auditFailureBefore,
+    'audit persistence failure must roll back the canonical assessment mutation');
+  const auditFailureVerifyDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(auditFailureVerifyDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), auditFailureKey).count, 0,
+    'audit persistence failure must not leave a durable assessment command');
+    assert.equal(auditFailureVerifyDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, auditFailureOrder.server_order_id).count, 0,
+    'failed audit insert must leave no assessment audit event');
+  } finally {
+    auditFailureVerifyDb.close();
+  }
+  const auditFailureRetry = await fetch(auditFailureUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': auditFailureKey },
+    body: JSON.stringify(auditFailurePayload),
+  });
+  assert.equal(auditFailureRetry.status, 200,
+    'same-key assessment retry must succeed after audit persistence recovers');
+  assert.equal((await auditFailureRetry.json()).service_delivery?.assessment_status, 'ASSESSMENT_REJECTED');
+  const auditFailureReplay = await fetch(auditFailureUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': auditFailureKey },
+    body: JSON.stringify(auditFailurePayload),
+  });
+  assert.equal(auditFailureReplay.status, 200,
+    'retry after audit recovery must replay the committed assessment');
+  assert.equal((await auditFailureReplay.json()).replayed, true);
+  const auditFailureFinalDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(auditFailureFinalDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), auditFailureKey).count, 1,
+    'audit failure followed by retry and replay must leave exactly one durable command');
+    assert.equal(auditFailureFinalDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, auditFailureOrder.server_order_id).count, 1,
+    'audit failure followed by retry and replay must append exactly one assessment audit event');
+  } finally {
+    auditFailureFinalDb.close();
+  }
+
   const rejectedAssessmentResponse = await fetch(
     baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
       + '/orders/' + encodeURIComponent(rejectedOrder.server_order_id) + '/service-delivery-assessment',
