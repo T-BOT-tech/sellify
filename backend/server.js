@@ -114,6 +114,7 @@ import {
   createPairingChallenge, consumePairingChallenge,
   createInvite, listInvites, revokeInvite, consumeInvite, changeMembershipRole, assignMembershipContextualRole, revokeMembershipContextualRole,
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment, recordServiceDeliveryAssessment,
+  createServiceBooking, transitionServiceBooking, listServiceBookings,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
   createComplianceRequest, getComplianceRequest, listComplianceRequests, resolveComplianceRequest, buildComplianceExport,
   listPaymentAccounts, createPaymentAccount, createPayment, getPayment, getPaymentIdempotency, getPaymentIntent, listPayments, listPaymentLedger, listPaymentEvidence, listPaymentVerifications, listPaymentDecisions, reconcilePayment, recordPaymentReconciliation, listPaymentReconciliations, insertPaymentEvidence, insertProviderNotificationEvidence, getPaymentAccountForProviderNotification, resolvePaymentIntentForProviderEvidence, createPaymentConfirmationAttempt, updatePaymentConfirmationAttempt, getPaymentConfirmationAttempt, getPaymentConfirmationAttemptByProviderTransaction, insertPaymentVerification, insertPaymentDecision, commitPaymentDecision, beginPaymentStatusQuery, markPaymentStatusQueryProviderStarted, completePaymentStatusQuery, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
@@ -2896,6 +2897,37 @@ async function handleDeliveryAssignment(req, res, chatId, serverOrderId) {
   return sendJSON(res, 200, { assignment }, req);
 }
 
+async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId = null) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, chatId);
+  const canonicalOrder = (await getOrders(chatId)).find(order => String(order.server_order_id || '') === String(serverOrderId));
+  if (!canonicalOrder) return sendJSON(res, 404, { error: { message: 'Canonical order not found', status: 404, code: 'ORDER_NOT_FOUND' } }, req);
+  let authorizationLocation = null;
+  if (canonicalOrder.location_id) {
+    authorizationLocation = await getOrganizationLocation(chatId, canonicalOrder.location_id);
+    if (!authorizationLocation) throw Object.assign(new Error('Canonical order location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
+  }
+  await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:request', {
+    location: authorizationLocation, deniedMessage: 'Service booking permission required',
+  });
+  if (req.method === 'GET') {
+    return sendJSON(res, 200, { order_id: String(serverOrderId), bookings: await listServiceBookings(chatId, serverOrderId) }, req);
+  }
+  const body = await readBody(req);
+  const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
+  if (!idempotencyKey) return sendJSON(res, 400, { error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' } }, req);
+  if (req.method === 'POST' && !bookingId) {
+    const result = await createServiceBooking(chatId, serverOrderId, { ...body, idempotencyKey }, session);
+    return sendJSON(res, result.replayed ? 200 : 201, { order_id: String(serverOrderId), booking: result.booking, replayed: result.replayed }, req);
+  }
+  if (req.method === 'PATCH' && bookingId) {
+    const result = await transitionServiceBooking(chatId, serverOrderId, bookingId, { ...body, idempotencyKey }, session);
+    return sendJSON(res, 200, { order_id: String(serverOrderId), booking: result.booking, replayed: result.replayed }, req);
+  }
+  return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+}
+
 async function handleServiceDeliveryAssessment(req, res, chatId, serverOrderId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -3015,6 +3047,9 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/events\/([^/]+)$/, handler: (req, res, m) => handleSyncEvents(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/sync\/([^/]+)$/, handler: (req, res, m) => handleSyncPull(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/orders\/([^/]+)$/, handler: (req, res, m) => handleOrdersFeed(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/service-bookings$/, handler: (req, res, m) => handleServiceBookings(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/service-bookings$/, handler: (req, res, m) => handleServiceBookings(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/service-bookings\/([^/]+)$/, handler: (req, res, m) => handleServiceBookings(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/service-delivery-assessment$/, handler: (req, res, m) => handleServiceDeliveryAssessment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleOrderFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },

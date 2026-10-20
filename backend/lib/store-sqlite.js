@@ -2599,6 +2599,40 @@ if (!applied.includes(39)) {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(72, nowIso());
   }
 
+  // Service appointment booking records and durable command identities.
+  if (!applied.includes(73)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS service_bookings (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        chat_id TEXT NOT NULL REFERENCES tenants(chat_id) ON DELETE CASCADE,
+        server_order_id TEXT NOT NULL,
+        service_item_id TEXT NOT NULL,
+        requested_start TEXT NOT NULL,
+        requested_end TEXT NOT NULL,
+        appointment_mode TEXT NOT NULL CHECK (appointment_mode IN ('ON_SITE','CUSTOMER_LOCATION','REMOTE')),
+        customer_note TEXT,
+        status TEXT NOT NULL CHECK (status IN ('REQUESTED','ACCEPTED','CONFIRMED','IN_PROGRESS','COMPLETED','REJECTED','CANCELLED','FAILED')),
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+        created_by TEXT, updated_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_service_bookings_order
+        ON service_bookings(organization_id, chat_id, server_order_id, created_at DESC);
+      CREATE TABLE IF NOT EXISTS service_booking_commands (
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        command_key TEXT NOT NULL,
+        booking_id TEXT NOT NULL REFERENCES service_bookings(id) ON DELETE CASCADE,
+        command_type TEXT NOT NULL CHECK (command_type IN ('CREATE','TRANSITION')),
+        command_fingerprint TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (organization_id, command_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_service_booking_commands_booking
+        ON service_booking_commands(organization_id, booking_id, created_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(73, nowIso());
+  }
+
   // GAP-1.24: fence status-query workers and permit takeover only before
   // provider I/O has been authorized. Legacy IN_PROGRESS commands are treated
   // as provider-in-flight because their execution phase cannot be proven.
@@ -5630,6 +5664,122 @@ function assertServiceDeliveryReadyForExecution(order) {
       { statusCode: 409, code: 'LOGISTICS_SERVICE_ASSESSMENT_REQUIRED' }
     );
   }
+}
+
+function serviceBookingFromRow(row) {
+  if (!row) return null;
+  return {
+    id: String(row.id), organization_id: String(row.organization_id),
+    order_id: String(row.server_order_id), service_item_id: String(row.service_item_id),
+    requested_start: String(row.requested_start), requested_end: String(row.requested_end),
+    appointment_mode: String(row.appointment_mode), customer_note: row.customer_note ?? null,
+    status: String(row.status), version: Number(row.version),
+    created_by: row.created_by || null, updated_by: row.updated_by || null,
+    created_at: String(row.created_at), updated_at: String(row.updated_at),
+  };
+}
+const SERVICE_BOOKING_TRANSITIONS = Object.freeze({
+  REQUESTED: new Set(['ACCEPTED','REJECTED','CANCELLED']),
+  ACCEPTED: new Set(['CONFIRMED','REJECTED','CANCELLED']),
+  CONFIRMED: new Set(['IN_PROGRESS','COMPLETED','CANCELLED','FAILED']),
+  IN_PROGRESS: new Set(['COMPLETED','FAILED']),
+  COMPLETED: new Set(), REJECTED: new Set(), CANCELLED: new Set(), FAILED: new Set(),
+});
+function bookingRequiredText(value, field, maxLength = 200) {
+  const result = String(value ?? '').trim();
+  if (!result || result.length > maxLength) throw Object.assign(new Error(`${field} is required and must be at most ${maxLength} characters`), { statusCode: 400, code: 'SERVICE_BOOKING_INPUT_INVALID' });
+  return result;
+}
+function bookingTimestamp(value, field) {
+  const result = bookingRequiredText(value, field, 80);
+  if (!/(Z|[+-]\d{2}:?\d{2})$/i.test(result) || Number.isNaN(Date.parse(result))) {
+    throw Object.assign(new Error(`${field} must be ISO-8601 with an explicit timezone`), { statusCode: 400, code: 'SERVICE_BOOKING_TIME_INVALID' });
+  }
+  return new Date(result).toISOString();
+}
+export async function createServiceBooking(chatId, serverOrderId, input = {}, actor = null) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  const organizationId = String(tenant?.organization_id || tenant?.organizationId || '');
+  if (!organizationId) throw Object.assign(new Error('Order organization is required'), { statusCode: 409, code: 'ORDER_ORGANIZATION_REQUIRED' });
+  const orderId = String(serverOrderId || '').trim();
+  const serviceItemId = bookingRequiredText(input.service_item_id ?? input.serviceItemId, 'service_item_id');
+  const requestedStart = bookingTimestamp(input.requested_start ?? input.requestedStart, 'requested_start');
+  const requestedEnd = bookingTimestamp(input.requested_end ?? input.requestedEnd, 'requested_end');
+  if (Date.parse(requestedEnd) <= Date.parse(requestedStart)) throw Object.assign(new Error('requested_end must be later than requested_start'), { statusCode: 400, code: 'SERVICE_BOOKING_TIME_WINDOW_INVALID' });
+  const appointmentMode = String(input.appointment_mode ?? input.appointmentMode ?? 'ON_SITE').trim().toUpperCase();
+  if (!['ON_SITE','CUSTOMER_LOCATION','REMOTE'].includes(appointmentMode)) throw Object.assign(new Error('Unsupported appointment_mode'), { statusCode: 400, code: 'SERVICE_BOOKING_MODE_INVALID' });
+  const customerNote = input.customer_note == null && input.customerNote == null ? null : bookingRequiredText(input.customer_note ?? input.customerNote, 'customer_note', 500);
+  const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  if (!commandKey) throw Object.assign(new Error('Idempotency-Key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
+  const fingerprint = crypto.createHash('sha256').update(JSON.stringify({order_id:orderId,service_item_id:serviceItemId,requested_start:requestedStart,requested_end:requestedEnd,appointment_mode:appointmentMode,customer_note:customerNote})).digest('hex');
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const freshTenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(String(chatId));
+    if (String(freshTenant?.organization_id || '') !== organizationId) throw Object.assign(new Error('Tenant organization changed during booking'), { statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH' });
+    const orderRow = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?').get(String(chatId), orderId);
+    if (!orderRow) throw Object.assign(new Error('Canonical order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    const order = orderFromRow(orderRow);
+    const lines = Array.isArray(order?.items) ? order.items : [];
+    if (!lines.some(item => String(item.item_id ?? item.product_id ?? item.id ?? '') === serviceItemId && String(item.item_type || '').toLowerCase() === 'service')) {
+      throw Object.assign(new Error('Booking must reference a service line on this canonical order'), { statusCode: 409, code: 'SERVICE_BOOKING_ORDER_LINE_INVALID' });
+    }
+    const prior = db.prepare('SELECT * FROM service_booking_commands WHERE organization_id = ? AND command_key = ?').get(organizationId, commandKey);
+    if (prior) {
+      if (prior.command_type !== 'CREATE' || prior.command_fingerprint !== fingerprint) throw Object.assign(new Error('Idempotency key was reused for a different booking command'), { statusCode: 409, code: 'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT' });
+      const replay = db.prepare('SELECT * FROM service_bookings WHERE id = ? AND organization_id = ? AND chat_id = ?').get(prior.booking_id, organizationId, String(chatId));
+      if (!replay) throw Object.assign(new Error('Booking replay state is missing'), { statusCode: 409, code: 'SERVICE_BOOKING_REPLAY_STATE_MISSING' });
+      db.exec('COMMIT'); return { booking: serviceBookingFromRow(replay), replayed: true };
+    }
+    const id = crypto.randomUUID(), now = nowIso();
+    db.prepare(`INSERT INTO service_bookings
+      (id,organization_id,chat_id,server_order_id,service_item_id,requested_start,requested_end,appointment_mode,customer_note,status,version,created_by,updated_by,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,'REQUESTED',1,?,?,?,?)`).run(id,organizationId,String(chatId),orderId,serviceItemId,requestedStart,requestedEnd,appointmentMode,customerNote,actor?.userId||null,actor?.userId||null,now,now);
+    db.prepare(`INSERT INTO service_booking_commands (organization_id,command_key,booking_id,command_type,command_fingerprint,created_at) VALUES (?,?,?,'CREATE',?,?)`).run(organizationId,commandKey,id,fingerprint,now);
+    audit(String(chatId),'services.booking.requested','service_booking',id,{order_id:orderId,service_item_id:serviceItemId,requested_start:requestedStart,requested_end:requestedEnd,appointment_mode:appointmentMode,version:1},{organizationId,actorId:actor?.userId||null,deviceId:actor?.deviceId||null});
+    const created=db.prepare('SELECT * FROM service_bookings WHERE id = ?').get(id);
+    db.exec('COMMIT'); return {booking:serviceBookingFromRow(created),replayed:false};
+  } catch(error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
+export async function transitionServiceBooking(chatId, serverOrderId, bookingId, input = {}, actor = null) {
+  ensureDatabase();
+  const tenant=await getTenant(chatId), organizationId=String(tenant?.organization_id||tenant?.organizationId||'');
+  if(!organizationId) throw Object.assign(new Error('Order organization is required'),{statusCode:409,code:'ORDER_ORGANIZATION_REQUIRED'});
+  const target=String(input.status||input.next_status||input.nextStatus||'').trim().toUpperCase();
+  const commandKey=String(input.idempotencyKey||input.idempotency_key||'').trim();
+  if(!commandKey) throw Object.assign(new Error('Idempotency-Key is required'),{statusCode:400,code:'IDEMPOTENCY_KEY_REQUIRED'});
+  const expectedVersion=Number(input.expected_version??input.expectedVersion);
+  if(!Number.isInteger(expectedVersion)||expectedVersion<1) throw Object.assign(new Error('expected_version must be a positive integer'),{statusCode:400,code:'SERVICE_BOOKING_VERSION_REQUIRED'});
+  const reason=input.reason==null?null:bookingRequiredText(input.reason,'reason',500);
+  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({booking_id:String(bookingId),order_id:String(serverOrderId),status:target,expected_version:expectedVersion,reason})).digest('hex');
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const freshTenant=db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(String(chatId));
+    if(String(freshTenant?.organization_id||'')!==organizationId) throw Object.assign(new Error('Tenant organization changed during booking transition'),{statusCode:409,code:'ORDER_ORGANIZATION_MISMATCH'});
+    const row=db.prepare('SELECT * FROM service_bookings WHERE id=? AND organization_id=? AND chat_id=? AND server_order_id=?').get(String(bookingId),organizationId,String(chatId),String(serverOrderId));
+    if(!row) throw Object.assign(new Error('Service booking not found'),{statusCode:404,code:'SERVICE_BOOKING_NOT_FOUND'});
+    const prior=db.prepare('SELECT * FROM service_booking_commands WHERE organization_id=? AND command_key=?').get(organizationId,commandKey);
+    if(prior) {
+      if(prior.command_type!=='TRANSITION'||String(prior.booking_id)!==String(bookingId)||prior.command_fingerprint!==fingerprint) throw Object.assign(new Error('Idempotency key was reused for a different booking command'),{statusCode:409,code:'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT'});
+      db.exec('COMMIT'); return {booking:serviceBookingFromRow(row),replayed:true};
+    }
+    if(!SERVICE_BOOKING_TRANSITIONS[String(row.status)]?.has(target)) throw Object.assign(new Error(`Service booking transition ${row.status} -> ${target} is not allowed`),{statusCode:409,code:'SERVICE_BOOKING_TRANSITION_INVALID'});
+    if(Number(row.version)!==expectedVersion) throw Object.assign(new Error('Service booking version conflict'),{statusCode:409,code:'SERVICE_BOOKING_VERSION_CONFLICT'});
+    const now=nowIso(), nextVersion=expectedVersion+1;
+    const changed=db.prepare('UPDATE service_bookings SET status=?,version=?,updated_by=?,updated_at=? WHERE id=? AND organization_id=? AND version=?').run(target,nextVersion,actor?.userId||null,now,String(bookingId),organizationId,expectedVersion);
+    if(Number(changed.changes)!==1) throw Object.assign(new Error('Service booking version conflict'),{statusCode:409,code:'SERVICE_BOOKING_VERSION_CONFLICT'});
+    db.prepare(`INSERT INTO service_booking_commands (organization_id,command_key,booking_id,command_type,command_fingerprint,created_at) VALUES (?,?,?,'TRANSITION',?,?)`).run(organizationId,commandKey,String(bookingId),fingerprint,now);
+    audit(String(chatId),`services.booking.${target.toLowerCase()}`,'service_booking',String(bookingId),{order_id:String(serverOrderId),from_status:String(row.status),to_status:target,version:nextVersion,reason},{organizationId,actorId:actor?.userId||null,deviceId:actor?.deviceId||null,reason:reason||''});
+    const updated=db.prepare('SELECT * FROM service_bookings WHERE id=?').get(String(bookingId));
+    db.exec('COMMIT'); return {booking:serviceBookingFromRow(updated),replayed:false};
+  } catch(error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
+export async function listServiceBookings(chatId, serverOrderId) {
+  ensureDatabase();
+  const tenant=await getTenant(chatId), organizationId=String(tenant?.organization_id||tenant?.organizationId||'');
+  if(!organizationId) throw Object.assign(new Error('Order organization is required'),{statusCode:409,code:'ORDER_ORGANIZATION_REQUIRED'});
+  return db.prepare('SELECT * FROM service_bookings WHERE organization_id=? AND chat_id=? AND server_order_id=? ORDER BY created_at DESC,id DESC')
+    .all(organizationId,String(chatId),String(serverOrderId)).map(serviceBookingFromRow);
 }
 
 export async function recordServiceDeliveryAssessment(chatId, serverOrderId, input = {}, actor = null) {
