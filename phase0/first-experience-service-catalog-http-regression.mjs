@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-import { createServer as createNetServer } from 'node:net';
+import { createConnection, createServer as createNetServer } from 'node:net';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -73,6 +73,9 @@ try {
       SELLIFY_DATA_DIR: tempDir,
       SELLIFY_DB_PATH: dbPath,
       NODE_ENV: 'test',
+      // This is a long end-to-end regression with >60 legitimate writes;
+      // keep it focused on business boundaries rather than the IP rate limiter.
+      RATE_LIMIT_MAX_WRITES: '500',
       SERVE_STATIC: 'false',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -197,6 +200,398 @@ try {
   const bookingConfirmBody = await bookingConfirm.json();
   assert.equal(bookingConfirmBody.booking.status, 'CONFIRMED');
   assert.equal(bookingConfirmBody.booking.version, 3);
+
+  // Exact HTTP replay returns the durable transition result; the same key
+  // with a different target must conflict rather than conceal a second command.
+  const bookingConfirmReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+  });
+  assert.equal(bookingConfirmReplay.status, 200, 'exact confirmation retry should replay successfully');
+  const bookingConfirmReplayBody = await bookingConfirmReplay.json();
+  assert.equal(bookingConfirmReplayBody.replayed, true, 'exact confirmation retry must be marked as replayed');
+  assert.equal(bookingConfirmReplayBody.booking.version, 3, 'confirmation replay must not increment the version');
+  const bookingConfirmKeyConflict = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
+    body: JSON.stringify({ status: 'CANCELLED', expected_version: 3 }),
+  });
+  assert.equal(bookingConfirmKeyConflict.status, 409, 'reusing a booking key for a different transition must conflict');
+  assert.equal((await bookingConfirmKeyConflict.json()).error?.code, 'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT');
+
+  // A delayed retry must remain a no-op even after the booking has advanced.
+  // This catches replay implementations that accidentally reapply an old command.
+  const bookingAuditCount = () => store.getDatabaseForTests().prepare(
+    "SELECT COUNT(*) AS count FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ?"
+  ).get(bookingCreatedBody.booking.id).count;
+  const bookingStart = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-start-after-confirm-1' },
+    body: JSON.stringify({ status: 'IN_PROGRESS', expected_version: 3 }),
+  });
+  assert.equal(bookingStart.status, 200, 'confirmed booking should start execution');
+  const bookingStartBody = await bookingStart.json();
+  assert.equal(bookingStartBody.booking.status, 'IN_PROGRESS');
+  assert.equal(bookingStartBody.booking.version, 4);
+  const auditCountAfterStart = bookingAuditCount();
+  const delayedConfirmReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+  });
+  assert.equal(delayedConfirmReplay.status, 200, 'delayed exact retry should remain idempotent after later transitions');
+  const delayedConfirmReplayBody = await delayedConfirmReplay.json();
+  assert.equal(delayedConfirmReplayBody.replayed, true);
+  assert.equal(delayedConfirmReplayBody.booking.status, 'IN_PROGRESS',
+    'replay should return current canonical state, not roll the booking back to the old result');
+  assert.equal(delayedConfirmReplayBody.booking.version, 4, 'delayed replay must not increment the version');
+  assert.equal(bookingAuditCount(), auditCountAfterStart, 'delayed replay must not append duplicate audit evidence');
+
+  // Rejection is validated and persisted at the authenticated HTTP boundary.
+  // A client-provided status_reason is not a substitute for the canonical reason.
+  const rejectedBookingCreate = await fetch(bookingsUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-reject-create-1' },
+    body: JSON.stringify({ ...bookingRequest, requested_start: '2026-11-04T09:00:00+03:00', requested_end: '2026-11-04T10:00:00+03:00' }),
+  });
+  assert.equal(rejectedBookingCreate.status, 201);
+  const rejectedBooking = (await rejectedBookingCreate.json()).booking;
+  const rejectedWithoutReason = await fetch(bookingsUrl + '/' + encodeURIComponent(rejectedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-reject-1' },
+    body: JSON.stringify({ status: 'REJECTED', expected_version: 1, status_reason: 'forged client reason' }),
+  });
+  assert.equal(rejectedWithoutReason.status, 400, 'HTTP rejection must require the canonical reason field');
+  assert.equal((await rejectedWithoutReason.json()).error?.code, 'SERVICE_BOOKING_REASON_REQUIRED');
+  const rejectedAfterValidation = (await (await fetch(bookingsUrl, { headers: authHeaders })).json())
+    .bookings.find(item => item.id === rejectedBooking.id);
+  assert.equal(rejectedAfterValidation.status, 'REQUESTED', 'reason validation failure must not mutate booking state');
+  assert.equal(rejectedAfterValidation.version, 1, 'reason validation failure must not increment booking version');
+  const rejectedResponse = await fetch(bookingsUrl + '/' + encodeURIComponent(rejectedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-reject-1' },
+    body: JSON.stringify({ status: 'REJECTED', expected_version: 1, reason: 'Customer request is outside the service area', status_reason: 'forged client reason' }),
+  });
+  assert.equal(rejectedResponse.status, 200, 'rejection with a reason should persist');
+  const rejectedBody = await rejectedResponse.json();
+  assert.equal(rejectedBody.booking.status, 'REJECTED');
+  assert.equal(rejectedBody.booking.status_reason, 'Customer request is outside the service area',
+    'server must persist the validated reason rather than a client-supplied status_reason');
+  const rejectedReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(rejectedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-reject-1' },
+    body: JSON.stringify({ status: 'REJECTED', expected_version: 1, reason: 'Customer request is outside the service area', status_reason: 'forged client reason' }),
+  });
+  assert.equal(rejectedReplay.status, 200);
+  assert.equal((await rejectedReplay.json()).replayed, true, 'rejection replay should not create a second lifecycle event');
+  const rejectedKeyConflict = await fetch(bookingsUrl + '/' + encodeURIComponent(rejectedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-reject-1' },
+    body: JSON.stringify({ status: 'REJECTED', expected_version: 1, reason: 'Different reason' }),
+  });
+  assert.equal(rejectedKeyConflict.status, 409, 'same rejection key with a different reason must conflict');
+  assert.equal((await rejectedKeyConflict.json()).error?.code, 'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT');
+
+  // Cancellation is a canonical terminal transition. Verify reason persistence,
+  // idempotent retry, and that a later command cannot resurrect the booking.
+  const cancelledBookingCreate = await fetch(bookingsUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-cancel-create-1' },
+    body: JSON.stringify({ ...bookingRequest, requested_start: '2026-11-06T09:00:00+03:00', requested_end: '2026-11-06T10:00:00+03:00' }),
+  });
+  assert.equal(cancelledBookingCreate.status, 201);
+  const cancelledBooking = (await cancelledBookingCreate.json()).booking;
+  const cancelledBookingAuditCount = () => store.getDatabaseForTests().prepare(
+    "SELECT COUNT(*) AS count FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ?"
+  ).get(cancelledBooking.id).count;
+  const cancelReason = 'Customer no longer needs the appointment';
+  const cancellation = await fetch(bookingsUrl + '/' + encodeURIComponent(cancelledBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-cancel-1' },
+    body: JSON.stringify({ status: 'CANCELLED', expected_version: 1, reason: cancelReason }),
+  });
+  assert.equal(cancellation.status, 200, 'authorized merchant should cancel a requested booking');
+  const cancellationBody = await cancellation.json();
+  assert.equal(cancellationBody.booking.status, 'CANCELLED');
+  assert.equal(cancellationBody.booking.status_reason, cancelReason);
+  assert.equal(cancellationBody.booking.version, 2);
+  const cancellationAuditCount = cancelledBookingAuditCount();
+  const cancellationReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(cancelledBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-cancel-1' },
+    body: JSON.stringify({ status: 'CANCELLED', expected_version: 1, reason: cancelReason }),
+  });
+  assert.equal(cancellationReplay.status, 200, 'exact cancellation retry should replay');
+  assert.equal((await cancellationReplay.json()).replayed, true);
+  assert.equal(cancelledBookingAuditCount(), cancellationAuditCount, 'cancellation replay must not append audit evidence');
+  const cancelResurrection = await fetch(bookingsUrl + '/' + encodeURIComponent(cancelledBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-cancel-resurrect-1' },
+    body: JSON.stringify({ status: 'ACCEPTED', expected_version: 2 }),
+  });
+  assert.equal(cancelResurrection.status, 409, 'a cancelled booking must not be resurrected');
+  assert.equal((await cancelResurrection.json()).error?.code, 'SERVICE_BOOKING_TRANSITION_INVALID');
+  assert.equal(cancelledBookingAuditCount(), cancellationAuditCount,
+    'invalid transition from terminal cancellation must not append audit evidence');
+
+  // Exercise failure after service execution begins. Caller-supplied execution
+  // evidence is ignored; failure reason is server-validated and durable.
+  const failedBookingCreate = await fetch(bookingsUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-fail-create-1' },
+    body: JSON.stringify({ ...bookingRequest, requested_start: '2026-11-05T09:00:00+03:00', requested_end: '2026-11-05T10:00:00+03:00' }),
+  });
+  assert.equal(failedBookingCreate.status, 201);
+  const failedBooking = (await failedBookingCreate.json()).booking;
+  for (const step of [
+    { status: 'ACCEPTED', expected_version: 1, key: 'service-booking-http-fail-accept-1' },
+    { status: 'CONFIRMED', expected_version: 2, key: 'service-booking-http-fail-confirm-1' },
+    {
+      status: 'IN_PROGRESS',
+      expected_version: 3,
+      key: 'service-booking-http-fail-start-1',
+      started_at: '2000-01-01T00:00:00.000Z',
+      started_by: 'forged-client-actor',
+    },
+  ]) {
+    const response = await fetch(bookingsUrl + '/' + encodeURIComponent(failedBooking.id), {
+      method: 'PATCH',
+      headers: { ...authHeaders, 'Idempotency-Key': step.key },
+      body: JSON.stringify(step),
+    });
+    assert.equal(response.status, 200, `booking should transition to ${step.status}`);
+  }
+  const failedBefore = (await (await fetch(bookingsUrl, { headers: authHeaders })).json())
+    .bookings.find(item => item.id === failedBooking.id);
+  assert.equal(failedBefore.status, 'IN_PROGRESS');
+  assert.notEqual(failedBefore.started_by, 'forged-client-actor', 'HTTP client must not forge execution actor');
+  assert.notEqual(failedBefore.started_at, '2000-01-01T00:00:00.000Z', 'HTTP client must not forge execution timestamp');
+  const failedWithoutReason = await fetch(bookingsUrl + '/' + encodeURIComponent(failedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-fail-1' },
+    body: JSON.stringify({ status: 'FAILED', expected_version: 4, status_reason: 'forged failure reason' }),
+  });
+  assert.equal(failedWithoutReason.status, 400, 'HTTP failure must require a canonical reason');
+  assert.equal((await failedWithoutReason.json()).error?.code, 'SERVICE_BOOKING_REASON_REQUIRED');
+  const failedResponse = await fetch(bookingsUrl + '/' + encodeURIComponent(failedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-fail-1' },
+    body: JSON.stringify({ status: 'FAILED', expected_version: 4, reason: 'Required specialist is unavailable', status_reason: 'forged failure reason' }),
+  });
+  assert.equal(failedResponse.status, 200, 'failure with a reason should persist');
+  const failedBody = await failedResponse.json();
+  assert.equal(failedBody.booking.status, 'FAILED');
+  assert.equal(failedBody.booking.status_reason, 'Required specialist is unavailable');
+  const failedReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(failedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-fail-1' },
+    body: JSON.stringify({ status: 'FAILED', expected_version: 4, reason: 'Required specialist is unavailable', status_reason: 'forged failure reason' }),
+  });
+  assert.equal(failedReplay.status, 200);
+  assert.equal((await failedReplay.json()).replayed, true, 'failure replay should return the durable command result');
+  const failedRestart = await fetch(bookingsUrl + '/' + encodeURIComponent(failedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-fail-restart-1' },
+    body: JSON.stringify({ status: 'IN_PROGRESS', expected_version: 5 }),
+  });
+  assert.equal(failedRestart.status, 409, 'failed booking must not be restarted through the lifecycle API');
+  assert.equal((await failedRestart.json()).error?.code, 'SERVICE_BOOKING_TRANSITION_INVALID');
+
+  // Stale-version commands must fail without changing booking or audit state.
+  const staleBookingCreate = await fetch(bookingsUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-stale-create-1' },
+    body: JSON.stringify({ ...bookingRequest, requested_start: '2026-11-07T09:00:00+03:00', requested_end: '2026-11-07T10:00:00+03:00' }),
+  });
+  assert.equal(staleBookingCreate.status, 201);
+  const staleBooking = (await staleBookingCreate.json()).booking;
+  const staleAuditCount = () => store.getDatabaseForTests().prepare(
+    "SELECT COUNT(*) AS count FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ?"
+  ).get(staleBooking.id).count;
+  const staleAccept = await fetch(bookingsUrl + '/' + encodeURIComponent(staleBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-stale-accept-1' },
+    body: JSON.stringify({ status: 'ACCEPTED', expected_version: 1 }),
+  });
+  assert.equal(staleAccept.status, 200);
+  const staleAuditBefore = staleAuditCount();
+  const staleResponse = await fetch(bookingsUrl + '/' + encodeURIComponent(staleBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-stale-transition-1' },
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 1 }),
+  });
+  assert.equal(staleResponse.status, 409, 'stale expected_version must conflict');
+  const staleState = (await (await fetch(bookingsUrl, { headers: authHeaders })).json()).bookings
+    .find(item => item.id === staleBooking.id);
+  assert.equal(staleState.status, 'ACCEPTED');
+  assert.equal(staleState.version, 2);
+  assert.equal(staleAuditCount(), staleAuditBefore, 'stale command must not append lifecycle audit evidence');
+
+  // Tenant and canonical-order scope are checked on the actual HTTP route.
+  const foreignUser = await store.getOrCreateUserByTelegram('service-booking-foreign-' + Date.now(), 'Foreign Service Booking Tenant');
+  const foreignTenant = await store.createTenantForUser({
+    userId: foreignUser.id, sellerName: 'Foreign Service Booking Store', businessType: 'retail',
+    country: 'ET', currency: 'ETB', timezone: 'Africa/Addis_Ababa',
+  });
+  const foreignTenantUrl = baseUrl + '/tenants/' + encodeURIComponent(foreignTenant.chatId)
+    + '/orders/' + encodeURIComponent(serviceOrder.server_order_id) + '/service-bookings/'
+    + encodeURIComponent(staleBooking.id);
+  const crossTenantResponse = await fetch(foreignTenantUrl, {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-cross-tenant-1' },
+    body: JSON.stringify({ status: 'ACCEPTED', expected_version: 1 }),
+  });
+  assert.ok([403, 404].includes(crossTenantResponse.status), 'cross-tenant route must fail closed');
+  const wrongOrderUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/not-the-canonical-order/service-bookings/' + encodeURIComponent(staleBooking.id);
+  const crossOrderResponse = await fetch(wrongOrderUrl, {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-cross-order-1' },
+    body: JSON.stringify({ status: 'ACCEPTED', expected_version: 1 }),
+  });
+  assert.equal(crossOrderResponse.status, 404, 'booking must not be reachable through a different canonical order');
+  const staleStateAfterScopeDenials = (await (await fetch(bookingsUrl, { headers: authHeaders })).json()).bookings
+    .find(item => item.id === staleBooking.id);
+  assert.equal(staleStateAfterScopeDenials.status, 'ACCEPTED');
+  assert.equal(staleStateAfterScopeDenials.version, 2);
+  assert.equal(staleAuditCount(), staleAuditBefore, 'scope denials must not mutate booking or audit state');
+
+  // Authenticated staff without scheduling permissions must be denied at the
+  // HTTP boundary, with no booking mutation or lifecycle audit append.
+  const staffUser = await store.getOrCreateUserByTelegram('service-booking-staff-' + Date.now(), 'Service Booking Staff');
+  await store.ensureMembership(staffUser.id, tenant.chatId, 'staff');
+  const staffSession = await store.createSession({
+    userId: staffUser.id, chatId: tenant.chatId, deviceName: 'Service Booking Unauthorized Staff',
+  });
+  const staffHeaders = {
+    Authorization: 'Bearer ' + staffSession.token,
+    'Content-Type': 'application/json',
+    'Idempotency-Key': 'service-booking-http-permission-denied-1',
+  };
+  const deniedTransition = await fetch(bookingsUrl + '/' + encodeURIComponent(staleBooking.id), {
+    method: 'PATCH',
+    headers: staffHeaders,
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+  });
+  assert.equal(deniedTransition.status, 403, 'staff without scheduling:manage must be denied');
+  const stateAfterPermissionDenial = (await (await fetch(bookingsUrl, { headers: authHeaders })).json()).bookings
+    .find(item => item.id === staleBooking.id);
+  assert.equal(stateAfterPermissionDenial.status, 'ACCEPTED');
+  assert.equal(stateAfterPermissionDenial.version, 2);
+  assert.equal(staleAuditCount(), staleAuditBefore, 'permission denial must not append lifecycle audit evidence');
+
+  // A contextual manager role scoped to a different location must not become
+  // tenant-wide scheduling authority when the booking route resolves its
+  // canonical order location. Exercise the real session + HTTP authorization path.
+  const locationScopedMembership = await store.ensureMembership(staffUser.id, tenant.chatId, 'staff');
+  const wrongScopeLocation = await store.createOrganizationLocation(tenant.chatId, {
+    code: 'SERVICE-BOOKING-WRONG-SCOPE', name: 'Wrong Scope Location', type: 'STORE',
+  });
+  store.getDatabaseForTests().prepare(
+    "INSERT INTO membership_roles (id, membership_id, role_id, status, scope_type, scope_id, source, created_at) VALUES (?, ?, 'manager', 'active', 'LOCATION', ?, 'TEST_FIXTURE', ?)"
+  ).run('service-booking-wrong-location-manager', locationScopedMembership.id, String(wrongScopeLocation.id), new Date().toISOString());
+  const locationScopedSession = await store.createSession({
+    userId: staffUser.id, chatId: tenant.chatId, deviceName: 'Wrong-location service booking manager',
+  });
+  const wrongLocationScopedResponse = await fetch(bookingsUrl + '/' + encodeURIComponent(staleBooking.id), {
+    method: 'PATCH',
+    headers: {
+      Authorization: 'Bearer ' + locationScopedSession.token,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'service-booking-http-wrong-location-scope-1',
+    },
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+  });
+  assert.equal(wrongLocationScopedResponse.status, 403,
+    'manager authority scoped to another location must not authorize booking lifecycle changes');
+  const stateAfterWrongLocationDenial = (await (await fetch(bookingsUrl, { headers: authHeaders })).json()).bookings
+    .find(item => item.id === staleBooking.id);
+  assert.equal(stateAfterWrongLocationDenial.status, 'ACCEPTED');
+  assert.equal(stateAfterWrongLocationDenial.version, 2);
+  assert.equal(staleAuditCount(), staleAuditBefore,
+    'wrong-location scope denial must not mutate booking or append lifecycle audit evidence');
+
+  // Idempotency keys are tenant-scoped across booking commands, not silently
+  // reusable for another booking. A collision must not mutate the second row.
+  const conflictScopeCreate = await fetch(bookingsUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-conflict-scope-create-1' },
+    body: JSON.stringify({ ...bookingRequest, requested_start: '2026-11-09T09:00:00+03:00', requested_end: '2026-11-09T10:00:00+03:00' }),
+  });
+  assert.equal(conflictScopeCreate.status, 201);
+  const conflictScopeBooking = (await conflictScopeCreate.json()).booking;
+  const conflictScopeAuditCount = () => store.getDatabaseForTests().prepare(
+    "SELECT COUNT(*) AS count FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ?"
+  ).get(conflictScopeBooking.id).count;
+  const conflictScopeAuditBefore = conflictScopeAuditCount();
+  const crossBookingKeyConflict = await fetch(bookingsUrl + '/' + encodeURIComponent(conflictScopeBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-stale-accept-1' },
+    body: JSON.stringify({ status: 'ACCEPTED', expected_version: 1 }),
+  });
+  assert.equal(crossBookingKeyConflict.status, 409, 'a tenant-scoped key cannot be reused for a different booking');
+  assert.equal((await crossBookingKeyConflict.json()).error?.code, 'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT');
+  const conflictScopeAfter = (await (await fetch(bookingsUrl, { headers: authHeaders })).json()).bookings
+    .find(item => item.id === conflictScopeBooking.id);
+  assert.equal(conflictScopeAfter.status, 'REQUESTED');
+  assert.equal(conflictScopeAfter.version, 1);
+  assert.equal(conflictScopeAuditCount(), conflictScopeAuditBefore,
+    'cross-booking idempotency conflict must not mutate booking or audit state');
+
+  // Completion actor/timestamp are server-authored even when submitted at the
+  // HTTP boundary; completion notes are the only caller-authored completion evidence.
+  const completedBookingCreate = await fetch(bookingsUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-complete-create-1' },
+    body: JSON.stringify({ ...bookingRequest, requested_start: '2026-11-08T09:00:00+03:00', requested_end: '2026-11-08T10:00:00+03:00' }),
+  });
+  assert.equal(completedBookingCreate.status, 201);
+  const completedBooking = (await completedBookingCreate.json()).booking;
+  for (const step of [
+    { status: 'ACCEPTED', expected_version: 1, key: 'service-booking-http-complete-accept-1' },
+    { status: 'CONFIRMED', expected_version: 2, key: 'service-booking-http-complete-confirm-1' },
+    { status: 'IN_PROGRESS', expected_version: 3, key: 'service-booking-http-complete-start-1' },
+  ]) {
+    const response = await fetch(bookingsUrl + '/' + encodeURIComponent(completedBooking.id), {
+      method: 'PATCH', headers: { ...authHeaders, 'Idempotency-Key': step.key }, body: JSON.stringify(step),
+    });
+    assert.equal(response.status, 200, 'booking should transition to ' + step.status);
+  }
+  const completionResponse = await fetch(bookingsUrl + '/' + encodeURIComponent(completedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-complete-final-1' },
+    body: JSON.stringify({
+      status: 'COMPLETED', expected_version: 4, completion_note: 'Service delivered',
+      completed_at: '2000-01-01T00:00:00.000Z', completed_by: 'forged-client-completer',
+    }),
+  });
+  assert.equal(completionResponse.status, 200);
+  const completionBody = await completionResponse.json();
+  assert.equal(completionBody.booking.status, 'COMPLETED');
+  assert.notEqual(completionBody.booking.completed_at, '2000-01-01T00:00:00.000Z');
+  assert.notEqual(completionBody.booking.completed_by, 'forged-client-completer');
+  assert.equal(completionBody.booking.completed_by, user.id);
+  const completionAudit = store.getDatabaseForTests().prepare(
+    "SELECT action, metadata_json FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ? ORDER BY id"
+  ).all(completedBooking.id);
+  assert.deepEqual(completionAudit.map(row => row.action), [
+    'services.booking.requested', 'services.booking.accepted', 'services.booking.confirmed',
+    'services.booking.in_progress', 'services.booking.completed',
+  ], 'each successful lifecycle transition must have exactly one audit event');
+  const completionReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(completedBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-complete-final-1' },
+    body: JSON.stringify({
+      status: 'COMPLETED', expected_version: 4, completion_note: 'Service delivered',
+      completed_at: '2000-01-01T00:00:00.000Z', completed_by: 'forged-client-completer',
+    }),
+  });
+  assert.equal(completionReplay.status, 200);
+  assert.equal((await completionReplay.json()).replayed, true);
+  assert.equal(store.getDatabaseForTests().prepare(
+    "SELECT COUNT(*) AS count FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ?"
+  ).get(completedBooking.id).count, 5, 'completion replay must not duplicate audit evidence');
 
   const missingBookingKey = await fetch(bookingsUrl, {
     method: 'POST',
@@ -414,6 +809,63 @@ try {
   assert.equal(assessmentResult.service_delivery?.assignment_status, 'NOT_ASSIGNED',
     'customer acceptance must not automatically assign a courier');
 
+  // Retry the same committed assessment against the same canonical order.
+  // It must resolve from durable command history and must not create a second
+  // command record or alter the recorded acceptance evidence.
+  const assessmentReplayDb = store.getDatabaseForTests();
+  const assessmentCommandCountBeforeReplay = assessmentReplayDb.prepare(
+    'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+  ).get(String(assessmentSession.organizationId), 'parcel-request-assessment-accepted-1').count;
+  const assessmentReplay = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+    body: JSON.stringify(assessmentPayload),
+  });
+  assert.equal(assessmentReplay.status, 200, 'exact same-order assessment retry should replay successfully');
+  const assessmentReplayBody = await assessmentReplay.json();
+  assert.equal(assessmentReplayBody.replayed, true, 'exact assessment retry must be marked as replayed');
+  assert.equal(assessmentReplayBody.service_delivery?.assessment?.customer_acceptance?.evidence_reference,
+    'buyer-chat-confirmation-123', 'assessment replay must preserve canonical acceptance evidence');
+  assert.equal(
+    assessmentReplayDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), 'parcel-request-assessment-accepted-1').count,
+    assessmentCommandCountBeforeReplay,
+    'exact assessment retry must not duplicate the durable command record',
+  );
+
+  // Two requests arriving together with the same committed command must both
+  // resolve as replays and must not append duplicate durable command records.
+  const concurrentAssessmentReplays = await Promise.all([
+    fetch(assessmentUrl, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+      body: JSON.stringify(assessmentPayload),
+    }),
+    fetch(assessmentUrl, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+      body: JSON.stringify(assessmentPayload),
+    }),
+  ]);
+  assert.deepEqual(concurrentAssessmentReplays.map(response => response.status), [200, 200],
+    'concurrent exact assessment retries should both succeed');
+  const concurrentAssessmentBodies = await Promise.all(
+    concurrentAssessmentReplays.map(response => response.json()),
+  );
+  assert.ok(concurrentAssessmentBodies.every(body => body.replayed === true),
+    'concurrent requests for a committed assessment must both be identified as replays');
+  assert.ok(concurrentAssessmentBodies.every(body =>
+    body.service_delivery?.assessment?.customer_acceptance?.evidence_reference === 'buyer-chat-confirmation-123'),
+  'concurrent assessment replays must return the same canonical acceptance evidence');
+  assert.equal(
+    assessmentReplayDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), 'parcel-request-assessment-accepted-1').count,
+    assessmentCommandCountBeforeReplay,
+    'concurrent exact assessment replays must not duplicate durable command records',
+  );
+
   // Assessment idempotency keys are organization-scoped, not merely embedded
   // in one order's JSON. Reusing a committed key against another order must
   // conflict before validating that second order's assessment payload.
@@ -434,6 +886,59 @@ try {
     .find(order => order.server_order_id === parcelStoredOrder.server_order_id)?.service_delivery_request;
   assert.deepEqual(crossOrderTargetAfter, crossOrderTargetBefore,
     'cross-order idempotency conflict must not mutate the target order');
+
+  // A valid session from another tenant must not assess this tenant's order,
+  // even when the URL contains the target tenant's identifier and order ID.
+  const foreignAssessmentUser = await store.getOrCreateUserByTelegram(
+    'foreign-assessment-' + Date.now().toString(36), 'Foreign Assessment Actor',
+  );
+  const foreignAssessmentTenant = await store.createTenantForUser({
+    userId: foreignAssessmentUser.id,
+    sellerName: 'Foreign Assessment Store',
+    businessType: 'retail',
+    country: 'ET',
+    currency: 'ETB',
+    timezone: 'Africa/Addis_Ababa',
+  });
+  const foreignAssessmentSession = await store.createSession({
+    userId: foreignAssessmentUser.id,
+    chatId: foreignAssessmentTenant.chatId,
+    deviceName: 'Foreign tenant assessment denial regression',
+  });
+  const assessmentTargetBeforeForeignAttempt = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  const assessmentCommandsBeforeForeignAttempt = assessmentReplayDb.prepare(
+    'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ?'
+  ).get(String(assessmentSession.organizationId)).count;
+  const foreignTenantAssessmentResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: {
+      ...authHeaders,
+      Authorization: 'Bearer ' + foreignAssessmentSession.token,
+      'Idempotency-Key': 'foreign-tenant-service-assessment-attempt',
+    },
+    body: JSON.stringify({
+      assessment_outcome: 'INELIGIBLE',
+      customer_acceptance: {
+        accepted: false,
+        evidence_type: 'telegram_confirmation',
+        evidence_reference: 'foreign-tenant-must-not-write',
+      },
+    }),
+  });
+  assert.ok([403, 404].includes(foreignTenantAssessmentResponse.status),
+    'a foreign tenant session must not assess an order outside its authenticated organization');
+  const assessmentTargetAfterForeignAttempt = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(assessmentTargetAfterForeignAttempt, assessmentTargetBeforeForeignAttempt,
+    'cross-tenant assessment denial must leave canonical service-delivery state unchanged');
+  assert.equal(
+    assessmentReplayDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ?'
+    ).get(String(assessmentSession.organizationId)).count,
+    assessmentCommandsBeforeForeignAttempt,
+    'cross-tenant assessment denial must not append a durable command to the target organization',
+  );
 
   assert.ok(parcelStoredOrder.server_order_id,
     'instant service request must retain its canonical server order identity');
@@ -608,6 +1113,27 @@ try {
   );
   assert.equal(replayedAssignment.id, seededAssignmentId,
     'exact assignment retry must replay the original assignment');
+
+  // A delayed assessment retry after fulfillment assignment must not restore
+  // the old NOT_ASSIGNED snapshot or otherwise overwrite later canonical state.
+  const requestBeforeDelayedAssessmentReplay = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  const delayedAssessmentReplay = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+    body: JSON.stringify(assessmentPayload),
+  });
+  assert.equal(delayedAssessmentReplay.status, 200,
+    'delayed exact assessment retry after assignment should still replay');
+  const delayedAssessmentReplayBody = await delayedAssessmentReplay.json();
+  assert.equal(delayedAssessmentReplayBody.replayed, true);
+  assert.equal(delayedAssessmentReplayBody.service_delivery?.assessment?.customer_acceptance?.evidence_reference,
+    'buyer-chat-confirmation-123');
+  const requestAfterDelayedAssessmentReplay = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(requestAfterDelayedAssessmentReplay, requestBeforeDelayedAssessmentReplay,
+    'delayed assessment replay must not overwrite fulfillment state changed after the original assessment');
+
   let assignmentKeyConflictError = null;
   try {
     await store.assignDeliveryCourier(
@@ -894,6 +1420,809 @@ try {
     'failed assessment transaction must not leave an assessment audit event');
   } finally {
     rollbackVerifyDb.close();
+  }
+
+  // Recovery boundary: after an injected persistence failure is removed, the
+  // same idempotency key must be usable for a legitimate retry. Use a separate
+  // fresh order so the following concurrency tests still start unassessed.
+  const assessmentRecoveryCheckoutResponse = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-assessment-recovery-checkout' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-assessment-recovery-buyer',
+      customer_name: 'Parcel Assessment Recovery Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-request-http', qty: 1 }],
+      service_delivery: {
+        pickup_details: 'Piassa, Addis Ababa',
+        destination_details: 'Sar Bet, Addis Ababa',
+      },
+    }),
+  });
+  assert.equal(assessmentRecoveryCheckoutResponse.status, 200,
+    'assessment-recovery service order should be created');
+  const assessmentRecoveryCheckout = await assessmentRecoveryCheckoutResponse.json();
+  const assessmentRecoveryOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === assessmentRecoveryCheckout.marketplace_order_id
+      || order.id === assessmentRecoveryCheckout.sub_orders?.[0]?.seller_order_id);
+  assert.ok(assessmentRecoveryOrder?.server_order_id,
+    'assessment-recovery fixture must retain canonical order identity');
+  const assessmentRecoveryKey = 'parcel-assessment-retry-after-persistence-failure';
+  const assessmentRecoveryUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(assessmentRecoveryOrder.server_order_id) + '/service-delivery-assessment';
+  const assessmentRecoveryTriggerDb = new DatabaseSync(dbPath);
+  try {
+    assessmentRecoveryTriggerDb.exec(`CREATE TRIGGER fail_service_assessment_recovery_insert
+      BEFORE INSERT ON service_delivery_assessment_commands
+      WHEN NEW.command_key = '${assessmentRecoveryKey}'
+      BEGIN SELECT RAISE(ABORT, 'injected assessment recovery persistence failure'); END;`);
+  } finally {
+    assessmentRecoveryTriggerDb.close();
+  }
+  let assessmentRecoveryFailureResponse;
+  try {
+    assessmentRecoveryFailureResponse = await fetch(assessmentRecoveryUrl, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': assessmentRecoveryKey },
+      body: JSON.stringify({ assessment_outcome: 'INELIGIBLE' }),
+    });
+  } finally {
+    const cleanupDb = new DatabaseSync(dbPath);
+    try {
+      cleanupDb.exec('DROP TRIGGER IF EXISTS fail_service_assessment_recovery_insert');
+    } finally {
+      cleanupDb.close();
+    }
+  }
+  assert.equal(assessmentRecoveryFailureResponse.status, 500,
+    'injected recovery attempt must fail before durable assessment command persistence');
+  const assessmentRecoveryAfterFailure = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === assessmentRecoveryOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(assessmentRecoveryAfterFailure, assessmentRecoveryOrder.service_delivery_request,
+    'failed recovery attempt must leave canonical service request unchanged');
+  const assessmentRecoveryRetryResponse = await fetch(assessmentRecoveryUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': assessmentRecoveryKey },
+    body: JSON.stringify({ assessment_outcome: 'INELIGIBLE' }),
+  });
+  assert.equal(assessmentRecoveryRetryResponse.status, 200,
+    'same-key retry must succeed once the injected persistence failure is removed');
+  const assessmentRecoveryRetryBody = await assessmentRecoveryRetryResponse.json();
+  assert.equal(assessmentRecoveryRetryBody.service_delivery?.assessment_status, 'ASSESSMENT_REJECTED');
+  const assessmentRecoveryReplayResponse = await fetch(assessmentRecoveryUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': assessmentRecoveryKey },
+    body: JSON.stringify({ assessment_outcome: 'INELIGIBLE' }),
+  });
+  assert.equal(assessmentRecoveryReplayResponse.status, 200,
+    'a retry after successful recovery must replay the committed assessment');
+  const assessmentRecoveryReplayBody = await assessmentRecoveryReplayResponse.json();
+  assert.equal(assessmentRecoveryReplayBody.service_delivery?.assessment_status, 'ASSESSMENT_REJECTED');
+  // Once the recovery retry commits, the same key is bound to that exact
+  // payload. A changed payload must conflict and must not alter canonical state.
+  const assessmentRecoveryCanonicalBeforeConflict = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === assessmentRecoveryOrder.server_order_id)?.service_delivery_request;
+  const assessmentRecoveryConflictResponse = await fetch(assessmentRecoveryUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': assessmentRecoveryKey },
+    body: JSON.stringify({
+      assessment_outcome: 'ELIGIBLE',
+      customer_acceptance: {
+        accepted: true,
+        evidence_type: 'telegram_confirmation',
+        evidence_reference: 'changed-payload-must-not-replace-original',
+      },
+    }),
+  });
+  assert.equal(assessmentRecoveryConflictResponse.status, 409,
+    'a committed assessment key reused with a different payload must conflict');
+  const assessmentRecoveryConflictBody = await assessmentRecoveryConflictResponse.json();
+  assert.ok(assessmentRecoveryConflictBody.error,
+    'changed-payload retry must return a structured conflict error');
+  const assessmentRecoveryCanonicalAfterConflict = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === assessmentRecoveryOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(assessmentRecoveryCanonicalAfterConflict, assessmentRecoveryCanonicalBeforeConflict,
+    'changed-payload conflict must not replace the committed assessment');
+
+  const assessmentRecoveryVerifyDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(assessmentRecoveryVerifyDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), assessmentRecoveryKey).count, 1,
+    'failed attempt followed by retry and replay must leave exactly one durable command');
+    assert.equal(assessmentRecoveryVerifyDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, assessmentRecoveryOrder.server_order_id).count, 1,
+    'failed attempt followed by retry and replay must append exactly one assessment audit event');
+  } finally {
+    assessmentRecoveryVerifyDb.close();
+  }
+
+  // Concurrent persistence-failure recovery: both same-key submissions hit an
+  // injected durable-command failure. Neither may leave a partial assessment or
+  // stale idempotency record; after removing the fault, a fresh retry must commit once.
+  const concurrentFailureCheckoutResponse = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-assessment-concurrent-failure-checkout' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-assessment-concurrent-failure-buyer',
+      customer_name: 'Parcel Assessment Concurrent Failure Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-request-http', qty: 1 }],
+      service_delivery: {
+        pickup_details: 'Bole, Addis Ababa',
+        destination_details: 'Mexico, Addis Ababa',
+      },
+    }),
+  });
+  assert.equal(concurrentFailureCheckoutResponse.status, 200,
+    'concurrent-failure service order should be created');
+  const concurrentFailureCheckout = await concurrentFailureCheckoutResponse.json();
+  const concurrentFailureOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === concurrentFailureCheckout.marketplace_order_id
+      || order.id === concurrentFailureCheckout.sub_orders?.[0]?.seller_order_id);
+  assert.ok(concurrentFailureOrder?.server_order_id,
+    'concurrent-failure fixture must retain canonical order identity');
+  const concurrentFailureKey = 'parcel-assessment-concurrent-failure-recovery';
+  const concurrentFailureUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(concurrentFailureOrder.server_order_id) + '/service-delivery-assessment';
+  const concurrentFailurePayload = { assessment_outcome: 'INELIGIBLE' };
+  const concurrentFailureTriggerDb = new DatabaseSync(dbPath);
+  try {
+    concurrentFailureTriggerDb.exec(`CREATE TRIGGER fail_service_assessment_concurrent_insert
+      BEFORE INSERT ON service_delivery_assessment_commands
+      WHEN NEW.command_key = '${concurrentFailureKey}'
+      BEGIN SELECT RAISE(ABORT, 'injected concurrent assessment persistence failure'); END;`);
+  } finally {
+    concurrentFailureTriggerDb.close();
+  }
+  let concurrentFailureResponses;
+  try {
+    concurrentFailureResponses = await Promise.all([
+      fetch(concurrentFailureUrl, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Idempotency-Key': concurrentFailureKey },
+        body: JSON.stringify(concurrentFailurePayload),
+      }),
+      fetch(concurrentFailureUrl, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Idempotency-Key': concurrentFailureKey },
+        body: JSON.stringify(concurrentFailurePayload),
+      }),
+    ]);
+  } finally {
+    const cleanupDb = new DatabaseSync(dbPath);
+    try {
+      cleanupDb.exec('DROP TRIGGER IF EXISTS fail_service_assessment_concurrent_insert');
+    } finally {
+      cleanupDb.close();
+    }
+  }
+  assert.deepEqual(concurrentFailureResponses.map(response => response.status), [500, 500],
+    'both concurrent requests must fail while durable assessment persistence is faulted');
+  const concurrentFailureAfterRequests = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === concurrentFailureOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(concurrentFailureAfterRequests, concurrentFailureOrder.service_delivery_request,
+    'concurrent failed requests must leave canonical service request unchanged');
+  const concurrentFailureVerifyDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(concurrentFailureVerifyDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), concurrentFailureKey).count, 0,
+    'concurrent failed requests must not leave a durable idempotency command');
+    assert.equal(concurrentFailureVerifyDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, concurrentFailureOrder.server_order_id).count, 0,
+    'concurrent failed requests must not append assessment audit events');
+  } finally {
+    concurrentFailureVerifyDb.close();
+  }
+  const concurrentFailureRecoveryResponse = await fetch(concurrentFailureUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': concurrentFailureKey },
+    body: JSON.stringify(concurrentFailurePayload),
+  });
+  assert.equal(concurrentFailureRecoveryResponse.status, 200,
+    'same-key retry must recover after concurrent persistence failures are removed');
+  const concurrentFailureRecoveryBody = await concurrentFailureRecoveryResponse.json();
+  assert.equal(concurrentFailureRecoveryBody.service_delivery?.assessment_status, 'ASSESSMENT_REJECTED');
+  const concurrentFailureRecoveryReplay = await fetch(concurrentFailureUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': concurrentFailureKey },
+    body: JSON.stringify(concurrentFailurePayload),
+  });
+  assert.equal(concurrentFailureRecoveryReplay.status, 200,
+    'recovered concurrent-failure request must replay successfully');
+  const concurrentFailureFinalDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(concurrentFailureFinalDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), concurrentFailureKey).count, 1,
+    'concurrent failures followed by recovery must leave exactly one durable command');
+    assert.equal(concurrentFailureFinalDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, concurrentFailureOrder.server_order_id).count, 1,
+    'concurrent failures followed by recovery must append exactly one audit event');
+  } finally {
+    concurrentFailureFinalDb.close();
+  }
+
+  // Race two first-time submissions before either response can be observed. Both
+  // requests use the same fresh key and identical negative-assessment payload;
+  // canonical state, command history, and audit evidence must commit exactly once.
+  const firstAssessmentRaceKey = 'parcel-request-assessment-ineligible-1';
+  const firstAssessmentRacePayload = { assessment_outcome: 'INELIGIBLE' };
+  const firstAssessmentRaceDb = new DatabaseSync(dbPath);
+  let firstAssessmentRaceCommandsBefore;
+  let firstAssessmentRaceAuditsBefore;
+  try {
+    firstAssessmentRaceCommandsBefore = firstAssessmentRaceDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), firstAssessmentRaceKey).count;
+    firstAssessmentRaceAuditsBefore = firstAssessmentRaceDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, rejectedOrder.server_order_id).count;
+  } finally {
+    firstAssessmentRaceDb.close();
+  }
+  assert.equal(firstAssessmentRaceCommandsBefore, 0,
+    'first-time assessment race must begin without a durable command for its fresh key');
+  const firstAssessmentRaceResponses = await Promise.all([
+    fetch(
+      baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+        + '/orders/' + encodeURIComponent(rejectedOrder.server_order_id) + '/service-delivery-assessment',
+      {
+        method: 'POST',
+        headers: { ...authHeaders, 'Idempotency-Key': firstAssessmentRaceKey },
+        body: JSON.stringify(firstAssessmentRacePayload),
+      }
+    ),
+    fetch(
+      baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+        + '/orders/' + encodeURIComponent(rejectedOrder.server_order_id) + '/service-delivery-assessment',
+      {
+        method: 'POST',
+        headers: { ...authHeaders, 'Idempotency-Key': firstAssessmentRaceKey },
+        body: JSON.stringify(firstAssessmentRacePayload),
+      }
+    ),
+  ]);
+  assert.deepEqual(firstAssessmentRaceResponses.map(response => response.status), [200, 200],
+    'concurrent first-time identical assessment submissions must both resolve successfully');
+  const firstAssessmentRaceBodies = await Promise.all(
+    firstAssessmentRaceResponses.map(response => response.json()),
+  );
+  assert.ok(firstAssessmentRaceBodies.every(body =>
+    body.service_delivery?.assessment_status === 'ASSESSMENT_REJECTED'
+      && body.service_delivery?.assessment?.outcome === 'INELIGIBLE'),
+  'both first-time race responses must resolve to the same canonical terminal assessment');
+  const firstAssessmentRaceDbAfter = new DatabaseSync(dbPath);
+  try {
+    assert.equal(firstAssessmentRaceDbAfter.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), firstAssessmentRaceKey).count, 1,
+    'concurrent first-time identical submissions must create exactly one durable command');
+    assert.equal(firstAssessmentRaceDbAfter.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, rejectedOrder.server_order_id).count, firstAssessmentRaceAuditsBefore + 1,
+    'concurrent first-time identical submissions must append exactly one assessment audit event');
+  } finally {
+    firstAssessmentRaceDbAfter.close();
+  }
+
+  // Different idempotency keys must not permit two competing first-time
+  // assessments to overwrite one another on the same canonical service request.
+  const competingAssessmentCheckout = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-request-competing-assessment-checkout' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-request-competing-assessment-buyer',
+      customer_name: 'Parcel Request Competing Assessment Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-request-http', qty: 1 }],
+      service_delivery: {
+        pickup_details: 'Piassa, Addis Ababa',
+        destination_details: 'Sar Bet, Addis Ababa',
+      },
+    }),
+  });
+  assert.equal(competingAssessmentCheckout.status, 200,
+    'competing-assessment service request fixture should be created');
+  const competingAssessmentCheckoutBody = await competingAssessmentCheckout.json();
+  const competingAssessmentOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === competingAssessmentCheckoutBody.marketplace_order_id
+      || order.id === competingAssessmentCheckoutBody.sub_orders?.[0]?.seller_order_id);
+  assert.ok(competingAssessmentOrder?.server_order_id,
+    'competing-assessment fixture must retain canonical order identity');
+  const competingAssessmentUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(competingAssessmentOrder.server_order_id) + '/service-delivery-assessment';
+  const competingAssessmentDb = new DatabaseSync(dbPath);
+  let competingAssessmentAuditsBefore;
+  try {
+    competingAssessmentAuditsBefore = competingAssessmentDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, competingAssessmentOrder.server_order_id).count;
+  } finally {
+    competingAssessmentDb.close();
+  }
+  const competingAssessmentRequests = await Promise.all([
+    fetch(competingAssessmentUrl, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': 'parcel-competing-assessment-eligible' },
+      body: JSON.stringify({
+        assessment_outcome: 'ELIGIBLE',
+        customer_acceptance: {
+          accepted: true,
+          evidence_type: 'telegram_confirmation',
+          evidence_reference: 'competing-assessment-acceptance-evidence',
+        },
+      }),
+    }),
+    fetch(competingAssessmentUrl, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': 'parcel-competing-assessment-ineligible' },
+      body: JSON.stringify({ assessment_outcome: 'INELIGIBLE' }),
+    }),
+  ]);
+  assert.deepEqual(competingAssessmentRequests.map(response => response.status).sort(), [200, 409],
+    'only one of two competing first-time assessments with distinct keys may commit');
+  const competingAssessmentBodies = await Promise.all(
+    competingAssessmentRequests.map(response => response.json()),
+  );
+  const competingAssessmentWinnerIndex = competingAssessmentRequests.findIndex(response => response.status === 200);
+  const competingAssessmentConflictIndex = competingAssessmentRequests.findIndex(response => response.status === 409);
+  assert.equal(competingAssessmentBodies[competingAssessmentConflictIndex].error?.code,
+    'LOGISTICS_ASSESSMENT_ALREADY_RECORDED',
+    'the losing competing assessment must report that canonical assessment is already recorded');
+  const competingAssessmentWinner = competingAssessmentBodies[competingAssessmentWinnerIndex];
+  const competingAssessmentCanonical = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === competingAssessmentOrder.server_order_id)?.service_delivery_request;
+  assert.equal(competingAssessmentCanonical?.assessment?.outcome,
+    competingAssessmentWinner.service_delivery?.assessment?.outcome,
+    'canonical assessment must match the single successful competing request');
+  const competingAssessmentVerifyDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(competingAssessmentVerifyDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key IN (?, ?)'
+    ).get(String(assessmentSession.organizationId), 'parcel-competing-assessment-eligible', 'parcel-competing-assessment-ineligible').count, 1,
+    'competing distinct-key assessments must persist exactly one durable command');
+    assert.equal(competingAssessmentVerifyDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, competingAssessmentOrder.server_order_id).count, competingAssessmentAuditsBefore + 1,
+    'competing distinct-key assessments must append exactly one audit event');
+  } finally {
+    competingAssessmentVerifyDb.close();
+  }
+
+  // Same-key competing payloads are a distinct race from competing command keys:
+  // exactly one payload may bind the idempotency key, and the other must conflict.
+  const sameKeyRaceCheckout = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-same-key-assessment-race-checkout' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-same-key-assessment-race-buyer',
+      customer_name: 'Parcel Same-Key Assessment Race Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-request-http', qty: 1 }],
+      service_delivery: {
+        pickup_details: 'Bole, Addis Ababa',
+        destination_details: 'Arat Kilo, Addis Ababa',
+      },
+    }),
+  });
+  assert.equal(sameKeyRaceCheckout.status, 200,
+    'same-key race fixture should create a fresh service request');
+  const sameKeyRaceCheckoutBody = await sameKeyRaceCheckout.json();
+  const sameKeyRaceOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === sameKeyRaceCheckoutBody.marketplace_order_id
+      || order.id === sameKeyRaceCheckoutBody.sub_orders?.[0]?.seller_order_id);
+  assert.ok(sameKeyRaceOrder?.server_order_id,
+    'same-key race fixture must retain canonical order identity');
+  const sameKeyRaceUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(sameKeyRaceOrder.server_order_id) + '/service-delivery-assessment';
+  const sameKeyRaceKey = 'parcel-same-key-different-payload-race';
+  const sameKeyRacePayloads = [
+    { assessment_outcome: 'INELIGIBLE' },
+    {
+      assessment_outcome: 'ELIGIBLE',
+      customer_acceptance: {
+        accepted: true,
+        evidence_type: 'telegram_confirmation',
+        evidence_reference: 'same-key-race-eligible-acceptance',
+      },
+    },
+  ];
+  const sameKeyRaceDb = new DatabaseSync(dbPath);
+  let sameKeyRaceAuditsBefore;
+  try {
+    sameKeyRaceAuditsBefore = sameKeyRaceDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, sameKeyRaceOrder.server_order_id).count;
+    assert.equal(sameKeyRaceDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), sameKeyRaceKey).count, 0,
+    'same-key race must begin without a durable command');
+  } finally {
+    sameKeyRaceDb.close();
+  }
+  const sameKeyRaceResponses = await Promise.all(sameKeyRacePayloads.map(payload => fetch(sameKeyRaceUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': sameKeyRaceKey },
+    body: JSON.stringify(payload),
+  })));
+  assert.deepEqual(sameKeyRaceResponses.map(response => response.status).sort(), [200, 409],
+    'concurrent different payloads sharing one new idempotency key must yield one success and one conflict');
+  const sameKeyRaceBodies = await Promise.all(sameKeyRaceResponses.map(response => response.json()));
+  const sameKeyRaceWinnerIndex = sameKeyRaceResponses.findIndex(response => response.status === 200);
+  const sameKeyRaceLoserIndex = sameKeyRaceResponses.findIndex(response => response.status === 409);
+  assert.equal(sameKeyRaceBodies[sameKeyRaceLoserIndex].error?.code,
+    'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT',
+    'same-key/different-payload race loser must receive the idempotency conflict, not an already-assessed result');
+  const sameKeyRaceWinnerPayload = sameKeyRacePayloads[sameKeyRaceWinnerIndex];
+  const sameKeyRaceWinnerBody = sameKeyRaceBodies[sameKeyRaceWinnerIndex];
+  assert.equal(sameKeyRaceWinnerBody.service_delivery?.assessment?.outcome,
+    sameKeyRaceWinnerPayload.assessment_outcome,
+    'successful response must correspond to its submitted payload');
+  const sameKeyRaceCanonical = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === sameKeyRaceOrder.server_order_id)?.service_delivery_request;
+  assert.equal(sameKeyRaceCanonical?.assessment?.outcome, sameKeyRaceWinnerPayload.assessment_outcome,
+    'canonical assessment must remain bound to the single winning payload');
+  assert.equal(sameKeyRaceCanonical?.assessment_status,
+    sameKeyRaceWinnerPayload.assessment_outcome === 'ELIGIBLE' ? 'READY_FOR_FULFILLMENT' : 'ASSESSMENT_REJECTED',
+    'canonical status must match the winning assessment outcome');
+  // The same-key loser remains a conflict after the race, while the winner replays.
+  const sameKeyRaceWinnerReplay = await fetch(sameKeyRaceUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': sameKeyRaceKey },
+    body: JSON.stringify(sameKeyRaceWinnerPayload),
+  });
+  assert.equal(sameKeyRaceWinnerReplay.status, 200,
+    'retry of the winning same-key payload must replay successfully');
+  assert.equal((await sameKeyRaceWinnerReplay.json()).replayed, true);
+  const sameKeyRaceLoserReplay = await fetch(sameKeyRaceUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': sameKeyRaceKey },
+    body: JSON.stringify(sameKeyRacePayloads[1 - sameKeyRaceWinnerIndex]),
+  });
+  assert.equal(sameKeyRaceLoserReplay.status, 409,
+    'retry of the losing payload must not overwrite or masquerade as a replay');
+  assert.equal((await sameKeyRaceLoserReplay.json()).error?.code,
+    'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT');
+  const sameKeyRaceVerifyDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(sameKeyRaceVerifyDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), sameKeyRaceKey).count, 1,
+    'same-key competing payloads must persist exactly one durable command');
+    assert.equal(sameKeyRaceVerifyDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, sameKeyRaceOrder.server_order_id).count, sameKeyRaceAuditsBefore + 1,
+    'same-key competing payloads must append exactly one assessment audit event');
+  } finally {
+    sameKeyRaceVerifyDb.close();
+  }
+
+  // Fail the audit insert after assessment processing has begun. Canonical order,
+  // command idempotency record, and audit evidence must remain atomic; same-key
+  // retry must be able to commit after the audit fault is removed.
+  const auditFailureCheckout = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-assessment-audit-failure-checkout' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-assessment-audit-failure-buyer',
+      customer_name: 'Parcel Assessment Audit Failure Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-request-http', qty: 1 }],
+      service_delivery: {
+        pickup_details: 'Mexico, Addis Ababa',
+        destination_details: 'CMC, Addis Ababa',
+      },
+    }),
+  });
+  assert.equal(auditFailureCheckout.status, 200,
+    'audit-failure fixture should create a fresh service request');
+  const auditFailureCheckoutBody = await auditFailureCheckout.json();
+  const auditFailureOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === auditFailureCheckoutBody.marketplace_order_id
+      || order.id === auditFailureCheckoutBody.sub_orders?.[0]?.seller_order_id);
+  assert.ok(auditFailureOrder?.server_order_id,
+    'audit-failure fixture must retain canonical order identity');
+  const auditFailureUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(auditFailureOrder.server_order_id) + '/service-delivery-assessment';
+  const auditFailureKey = 'parcel-assessment-audit-insert-failure';
+  const auditFailurePayload = { assessment_outcome: 'INELIGIBLE' };
+  const auditFailureBefore = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === auditFailureOrder.server_order_id)?.service_delivery_request;
+  const auditFailureTriggerDb = new DatabaseSync(dbPath);
+  try {
+    auditFailureTriggerDb.exec(`CREATE TRIGGER fail_service_assessment_audit_insert
+      BEFORE INSERT ON audit_events
+      WHEN NEW.action = 'logistics.service_request.assessed'
+        AND NEW.entity_id = '${auditFailureOrder.server_order_id}'
+      BEGIN SELECT RAISE(ABORT, 'injected service assessment audit persistence failure'); END;`);
+  } finally {
+    auditFailureTriggerDb.close();
+  }
+  let auditFailureResponse;
+  try {
+    auditFailureResponse = await fetch(auditFailureUrl, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': auditFailureKey },
+      body: JSON.stringify(auditFailurePayload),
+    });
+  } finally {
+    const cleanupDb = new DatabaseSync(dbPath);
+    try {
+      cleanupDb.exec('DROP TRIGGER IF EXISTS fail_service_assessment_audit_insert');
+    } finally {
+      cleanupDb.close();
+    }
+  }
+  assert.equal(auditFailureResponse.status, 500,
+    'assessment must fail when its required audit evidence cannot be persisted');
+  const auditFailureAfter = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === auditFailureOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(auditFailureAfter, auditFailureBefore,
+    'audit persistence failure must roll back the canonical assessment mutation');
+  const auditFailureVerifyDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(auditFailureVerifyDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), auditFailureKey).count, 0,
+    'audit persistence failure must not leave a durable assessment command');
+    assert.equal(auditFailureVerifyDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, auditFailureOrder.server_order_id).count, 0,
+    'failed audit insert must leave no assessment audit event');
+  } finally {
+    auditFailureVerifyDb.close();
+  }
+  const auditFailureRetry = await fetch(auditFailureUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': auditFailureKey },
+    body: JSON.stringify(auditFailurePayload),
+  });
+  assert.equal(auditFailureRetry.status, 200,
+    'same-key assessment retry must succeed after audit persistence recovers');
+  assert.equal((await auditFailureRetry.json()).service_delivery?.assessment_status, 'ASSESSMENT_REJECTED');
+  const auditFailureReplay = await fetch(auditFailureUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': auditFailureKey },
+    body: JSON.stringify(auditFailurePayload),
+  });
+  assert.equal(auditFailureReplay.status, 200,
+    'retry after audit recovery must replay the committed assessment');
+  assert.equal((await auditFailureReplay.json()).replayed, true);
+  const auditFailureFinalDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(auditFailureFinalDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), auditFailureKey).count, 1,
+    'audit failure followed by retry and replay must leave exactly one durable command');
+    assert.equal(auditFailureFinalDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, auditFailureOrder.server_order_id).count, 1,
+    'audit failure followed by retry and replay must append exactly one assessment audit event');
+  } finally {
+    auditFailureFinalDb.close();
+  }
+
+  // Concurrent audit-persistence failure: two identical requests must both fail
+  // atomically while required audit evidence is unavailable. Recovery must still
+  // produce one canonical assessment, one command, and one audit event.
+  const concurrentAuditFailureCheckoutResponse = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-assessment-concurrent-audit-checkout' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-assessment-concurrent-audit-buyer',
+      customer_name: 'Parcel Assessment Concurrent Audit Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-request-http', qty: 1 }],
+      service_delivery: {
+        pickup_details: 'Arat Kilo, Addis Ababa',
+        destination_details: 'Megenagna, Addis Ababa',
+      },
+    }),
+  });
+  assert.equal(concurrentAuditFailureCheckoutResponse.status, 200,
+    'concurrent-audit-failure fixture should create a fresh service request');
+  const concurrentAuditFailureCheckout = await concurrentAuditFailureCheckoutResponse.json();
+  const concurrentAuditFailureOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === concurrentAuditFailureCheckout.marketplace_order_id
+      || order.id === concurrentAuditFailureCheckout.sub_orders?.[0]?.seller_order_id);
+  assert.ok(concurrentAuditFailureOrder?.server_order_id,
+    'concurrent-audit-failure fixture must retain canonical order identity');
+  const concurrentAuditFailureUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(concurrentAuditFailureOrder.server_order_id) + '/service-delivery-assessment';
+  const concurrentAuditFailureKey = 'parcel-assessment-concurrent-audit-insert-failure';
+  const concurrentAuditFailurePayload = { assessment_outcome: 'INELIGIBLE' };
+  const concurrentAuditFailureBefore = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === concurrentAuditFailureOrder.server_order_id)?.service_delivery_request;
+  const concurrentAuditFailureTriggerDb = new DatabaseSync(dbPath);
+  try {
+    concurrentAuditFailureTriggerDb.exec(`CREATE TRIGGER fail_service_assessment_concurrent_audit_insert
+      BEFORE INSERT ON audit_events
+      WHEN NEW.action = 'logistics.service_request.assessed'
+        AND NEW.entity_id = '${concurrentAuditFailureOrder.server_order_id}'
+      BEGIN SELECT RAISE(ABORT, 'injected concurrent service assessment audit persistence failure'); END;`);
+  } finally {
+    concurrentAuditFailureTriggerDb.close();
+  }
+  let concurrentAuditFailureResponses;
+  try {
+    concurrentAuditFailureResponses = await Promise.all([
+      fetch(concurrentAuditFailureUrl, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Idempotency-Key': concurrentAuditFailureKey },
+        body: JSON.stringify(concurrentAuditFailurePayload),
+      }),
+      fetch(concurrentAuditFailureUrl, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Idempotency-Key': concurrentAuditFailureKey },
+        body: JSON.stringify(concurrentAuditFailurePayload),
+      }),
+    ]);
+  } finally {
+    const cleanupDb = new DatabaseSync(dbPath);
+    try {
+      cleanupDb.exec('DROP TRIGGER IF EXISTS fail_service_assessment_concurrent_audit_insert');
+    } finally {
+      cleanupDb.close();
+    }
+  }
+  assert.deepEqual(concurrentAuditFailureResponses.map(response => response.status), [500, 500],
+    'both concurrent same-key submissions must fail while required audit persistence is unavailable');
+  const concurrentAuditFailureAfter = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === concurrentAuditFailureOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(concurrentAuditFailureAfter, concurrentAuditFailureBefore,
+    'concurrent audit persistence failures must roll back canonical assessment state');
+  const concurrentAuditFailureVerifyDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(concurrentAuditFailureVerifyDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), concurrentAuditFailureKey).count, 0,
+    'concurrent audit persistence failures must leave no durable idempotency command');
+    assert.equal(concurrentAuditFailureVerifyDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, concurrentAuditFailureOrder.server_order_id).count, 0,
+    'concurrent audit persistence failures must leave no assessment audit event');
+  } finally {
+    concurrentAuditFailureVerifyDb.close();
+  }
+  const concurrentAuditFailureRetry = await fetch(concurrentAuditFailureUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': concurrentAuditFailureKey },
+    body: JSON.stringify(concurrentAuditFailurePayload),
+  });
+  assert.equal(concurrentAuditFailureRetry.status, 200,
+    'same-key assessment retry must recover after concurrent audit persistence failures');
+  assert.equal((await concurrentAuditFailureRetry.json()).service_delivery?.assessment_status, 'ASSESSMENT_REJECTED');
+  const concurrentAuditFailureReplay = await fetch(concurrentAuditFailureUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': concurrentAuditFailureKey },
+    body: JSON.stringify(concurrentAuditFailurePayload),
+  });
+  assert.equal(concurrentAuditFailureReplay.status, 200,
+    'recovered concurrent audit-failure request must replay successfully');
+  assert.equal((await concurrentAuditFailureReplay.json()).replayed, true,
+    'recovered concurrent audit-failure request must be marked as replayed');
+  const concurrentAuditFailureFinalDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(concurrentAuditFailureFinalDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), concurrentAuditFailureKey).count, 1,
+    'concurrent audit failures followed by recovery must leave exactly one durable command');
+    assert.equal(concurrentAuditFailureFinalDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, concurrentAuditFailureOrder.server_order_id).count, 1,
+    'concurrent audit failures followed by recovery must append exactly one assessment audit event');
+  } finally {
+    concurrentAuditFailureFinalDb.close();
+  }
+
+  // Response-loss boundary: wait until the server starts writing the response
+  // (which follows request processing/commit), then destroy the client socket before
+  // consuming the response. The same-key retry must recover the committed result.
+  const assessmentResponseLossCheckoutResponse = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-assessment-response-loss-checkout' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-assessment-response-loss-buyer',
+      customer_name: 'Parcel Assessment Response Loss Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-request-http', qty: 1 }],
+      service_delivery: {
+        pickup_details: 'Kazanchis, Addis Ababa',
+        destination_details: 'Lideta, Addis Ababa',
+      },
+    }),
+  });
+  assert.equal(assessmentResponseLossCheckoutResponse.status, 200,
+    'response-loss fixture should create a fresh service request');
+  const assessmentResponseLossCheckout = await assessmentResponseLossCheckoutResponse.json();
+  const assessmentResponseLossOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === assessmentResponseLossCheckout.marketplace_order_id
+      || order.id === assessmentResponseLossCheckout.sub_orders?.[0]?.seller_order_id);
+  assert.ok(assessmentResponseLossOrder?.server_order_id,
+    'response-loss fixture must retain canonical order identity');
+  const assessmentResponseLossPath = '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(assessmentResponseLossOrder.server_order_id) + '/service-delivery-assessment';
+  const assessmentResponseLossUrl = baseUrl + assessmentResponseLossPath;
+  const assessmentResponseLossKey = 'parcel-assessment-response-lost-after-commit';
+  const assessmentResponseLossPayload = { assessment_outcome: 'INELIGIBLE' };
+  const assessmentResponseLossBefore = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === assessmentResponseLossOrder.server_order_id)?.service_delivery_request;
+  const assessmentResponseLossBody = JSON.stringify(assessmentResponseLossPayload);
+  const assessmentResponseLossRawRequest = [
+    'POST ' + assessmentResponseLossPath + ' HTTP/1.1',
+    'Host: 127.0.0.1:' + port,
+    'Authorization: Bearer ' + session.token,
+    'Content-Type: application/json',
+    'Idempotency-Key: ' + assessmentResponseLossKey,
+    'Content-Length: ' + Buffer.byteLength(assessmentResponseLossBody),
+    'Connection: close',
+    '',
+    assessmentResponseLossBody,
+  ].join('\r\n');
+  await new Promise((resolve, reject) => {
+    let receivedResponseBytes = false;
+    const socket = createConnection({ host: '127.0.0.1', port });
+    const timeout = setTimeout(() => {
+      socket.destroy();
+      reject(new Error('timed out waiting for assessment response bytes before simulated response loss'));
+    }, 5000);
+    socket.once('connect', () => socket.write(assessmentResponseLossRawRequest));
+    socket.on('data', () => {
+      receivedResponseBytes = true;
+      clearTimeout(timeout);
+      socket.destroy();
+      resolve();
+    });
+    socket.once('error', error => {
+      clearTimeout(timeout);
+      if (receivedResponseBytes) resolve();
+      else reject(error);
+    });
+    socket.once('close', () => {
+      clearTimeout(timeout);
+      if (!receivedResponseBytes) reject(new Error('assessment response connection closed before any response bytes were observed'));
+    });
+  });
+  const assessmentResponseLossCommitted = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === assessmentResponseLossOrder.server_order_id);
+  assert.equal(assessmentResponseLossCommitted?.service_delivery_request?.assessment_status, 'ASSESSMENT_REJECTED',
+    'server must have committed the assessment before response-loss retry');
+  const assessmentResponseLossRetry = await fetch(assessmentResponseLossUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': assessmentResponseLossKey },
+    body: JSON.stringify(assessmentResponseLossPayload),
+  });
+  assert.equal(assessmentResponseLossRetry.status, 200,
+    'same-key retry must recover after the committed response is lost');
+  const assessmentResponseLossRetryBody = await assessmentResponseLossRetry.json();
+  assert.equal(assessmentResponseLossRetryBody.replayed, true,
+    'response-loss retry must return the already committed assessment as a replay');
+  assert.equal(assessmentResponseLossRetryBody.service_delivery?.assessment_status, 'ASSESSMENT_REJECTED');
+  const assessmentResponseLossDifferentPayload = await fetch(assessmentResponseLossUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': assessmentResponseLossKey },
+    body: JSON.stringify({ assessment_outcome: 'ELIGIBLE' }),
+  });
+  assert.equal(assessmentResponseLossDifferentPayload.status, 409,
+    'response-loss idempotency key must reject a different assessment payload');
+  assert.deepEqual(
+    (await store.getOrders(tenant.chatId)).find(order =>
+      order.server_order_id === assessmentResponseLossOrder.server_order_id)?.service_delivery_request,
+    assessmentResponseLossCommitted.service_delivery_request,
+    'different-payload retry must not overwrite the committed assessment after response loss'
+  );
+  assert.notEqual(assessmentResponseLossBefore?.assessment_status, 'ASSESSMENT_REJECTED',
+    'response-loss fixture must begin without the final rejected assessment');
+  const assessmentResponseLossFinalDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(assessmentResponseLossFinalDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), assessmentResponseLossKey).count, 1,
+    'response-loss recovery must retain exactly one durable assessment command');
+    assert.equal(assessmentResponseLossFinalDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, assessmentResponseLossOrder.server_order_id).count, 1,
+    'response-loss recovery must retain exactly one assessment audit event');
+  } finally {
+    assessmentResponseLossFinalDb.close();
   }
 
   const rejectedAssessmentResponse = await fetch(
