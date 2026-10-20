@@ -1537,6 +1537,114 @@ try {
     assessmentRecoveryVerifyDb.close();
   }
 
+  // Concurrent persistence-failure recovery: both same-key submissions hit an
+  // injected durable-command failure. Neither may leave a partial assessment or
+  // stale idempotency record; after removing the fault, a fresh retry must commit once.
+  const concurrentFailureCheckoutResponse = await fetch(checkoutUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'parcel-assessment-concurrent-failure-checkout' },
+    body: JSON.stringify({
+      buyer_id: 'parcel-assessment-concurrent-failure-buyer',
+      customer_name: 'Parcel Assessment Concurrent Failure Buyer',
+      items: [{ seller_id: tenant.chatId, item_id: 'parcel-request-http', qty: 1 }],
+      service_delivery: {
+        pickup_details: 'Bole, Addis Ababa',
+        destination_details: 'Mexico, Addis Ababa',
+      },
+    }),
+  });
+  assert.equal(concurrentFailureCheckoutResponse.status, 200,
+    'concurrent-failure service order should be created');
+  const concurrentFailureCheckout = await concurrentFailureCheckoutResponse.json();
+  const concurrentFailureOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === concurrentFailureCheckout.marketplace_order_id
+      || order.id === concurrentFailureCheckout.sub_orders?.[0]?.seller_order_id);
+  assert.ok(concurrentFailureOrder?.server_order_id,
+    'concurrent-failure fixture must retain canonical order identity');
+  const concurrentFailureKey = 'parcel-assessment-concurrent-failure-recovery';
+  const concurrentFailureUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/orders/' + encodeURIComponent(concurrentFailureOrder.server_order_id) + '/service-delivery-assessment';
+  const concurrentFailurePayload = { assessment_outcome: 'INELIGIBLE' };
+  const concurrentFailureTriggerDb = new DatabaseSync(dbPath);
+  try {
+    concurrentFailureTriggerDb.exec(`CREATE TRIGGER fail_service_assessment_concurrent_insert
+      BEFORE INSERT ON service_delivery_assessment_commands
+      WHEN NEW.command_key = '${concurrentFailureKey}'
+      BEGIN SELECT RAISE(ABORT, 'injected concurrent assessment persistence failure'); END;`);
+  } finally {
+    concurrentFailureTriggerDb.close();
+  }
+  let concurrentFailureResponses;
+  try {
+    concurrentFailureResponses = await Promise.all([
+      fetch(concurrentFailureUrl, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Idempotency-Key': concurrentFailureKey },
+        body: JSON.stringify(concurrentFailurePayload),
+      }),
+      fetch(concurrentFailureUrl, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Idempotency-Key': concurrentFailureKey },
+        body: JSON.stringify(concurrentFailurePayload),
+      }),
+    ]);
+  } finally {
+    const cleanupDb = new DatabaseSync(dbPath);
+    try {
+      cleanupDb.exec('DROP TRIGGER IF EXISTS fail_service_assessment_concurrent_insert');
+    } finally {
+      cleanupDb.close();
+    }
+  }
+  assert.deepEqual(concurrentFailureResponses.map(response => response.status), [500, 500],
+    'both concurrent requests must fail while durable assessment persistence is faulted');
+  const concurrentFailureAfterRequests = (await store.getOrders(tenant.chatId)).find(order =>
+    order.server_order_id === concurrentFailureOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(concurrentFailureAfterRequests, concurrentFailureOrder.service_delivery_request,
+    'concurrent failed requests must leave canonical service request unchanged');
+  const concurrentFailureVerifyDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(concurrentFailureVerifyDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), concurrentFailureKey).count, 0,
+    'concurrent failed requests must not leave a durable idempotency command');
+    assert.equal(concurrentFailureVerifyDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, concurrentFailureOrder.server_order_id).count, 0,
+    'concurrent failed requests must not append assessment audit events');
+  } finally {
+    concurrentFailureVerifyDb.close();
+  }
+  const concurrentFailureRecoveryResponse = await fetch(concurrentFailureUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': concurrentFailureKey },
+    body: JSON.stringify(concurrentFailurePayload),
+  });
+  assert.equal(concurrentFailureRecoveryResponse.status, 200,
+    'same-key retry must recover after concurrent persistence failures are removed');
+  const concurrentFailureRecoveryBody = await concurrentFailureRecoveryResponse.json();
+  assert.equal(concurrentFailureRecoveryBody.service_delivery?.assessment_status, 'ASSESSMENT_REJECTED');
+  const concurrentFailureRecoveryReplay = await fetch(concurrentFailureUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': concurrentFailureKey },
+    body: JSON.stringify(concurrentFailurePayload),
+  });
+  assert.equal(concurrentFailureRecoveryReplay.status, 200,
+    'recovered concurrent-failure request must replay successfully');
+  const concurrentFailureFinalDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(concurrentFailureFinalDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), concurrentFailureKey).count, 1,
+    'concurrent failures followed by recovery must leave exactly one durable command');
+    assert.equal(concurrentFailureFinalDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, concurrentFailureOrder.server_order_id).count, 1,
+    'concurrent failures followed by recovery must append exactly one audit event');
+  } finally {
+    concurrentFailureFinalDb.close();
+  }
+
   // Race two first-time submissions before either response can be observed. Both
   // requests use the same fresh key and identical negative-assessment payload;
   // canonical state, command history, and audit evidence must commit exactly once.
