@@ -339,6 +339,7 @@ try {
   });
   const completedMixed = await store.transitionOrderFulfillment(integrationChatId, mixedOrderId, 'delivered', actor, {
     idempotencyKey: 'mixed-order-delivered',
+    proof: { type: 'photo', reference: 'mixed-order-proof' },
   });
   assert.equal(completedMixed.status, 'delivered');
   const afterMixed = (await store.getInventoryBalances(integrationChatId))
@@ -346,6 +347,7 @@ try {
   assert.equal(beforeMixed - afterMixed, 2, 'server catalog type, not client line metadata, determines stock deduction');
   await store.transitionOrderFulfillment(integrationChatId, mixedOrderId, 'delivered', actor, {
     idempotencyKey: 'mixed-order-delivered',
+    proof: { type: 'photo', reference: 'mixed-order-proof' },
   });
   const afterMixedRetry = (await store.getInventoryBalances(integrationChatId))
     .find(row => row.productId === 'soap-e2e')?.quantity;
