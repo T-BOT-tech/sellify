@@ -114,6 +114,8 @@ jobs:
         run: npm run test:fux-53
       - name: FUX-54 compliance frontend authority regression
         run: npm run test:fux-54
+      - name: GAP-5 IAM membership/contextual role regression
+        run: npm run test:gap-5-iam
       - name: FUX-55 seller storefront channel authority regression
         run: npm run test:fux-55
       - name: FUX-56 B2B customer pricing authority regression
