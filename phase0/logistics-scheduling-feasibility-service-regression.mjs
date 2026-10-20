@@ -86,6 +86,24 @@ assert.deepEqual(conflict.conflictingActivityIds, [first.id]);
 assert.equal(conflict.authorized, false);
 assert.equal(conflict.execution, false);
 
+for (const externalEvaluation of [
+  { outcome: 'FEASIBLE' },
+  { outcome: 'FEASIBLE', authority: 'existing-capacity-authority' },
+  { outcome: 'FEASIBLE', reference_id: 'l11.7-capacity-check-without-authority' },
+]) {
+  const incomplete = await evaluateLogisticsSchedulingActivity(
+    chatId,
+    second.id,
+    actor,
+    { externalEvaluation },
+  );
+  assert.equal(incomplete.evaluation, 'UNKNOWN');
+  assert.equal(incomplete.reason, 'EXTERNAL_CAPACITY_UNKNOWN');
+  assert.equal(incomplete.feasible, false);
+  assert.equal(incomplete.authorized, false);
+  assert.equal(incomplete.execution, false);
+}
+
 const feasible = await evaluateLogisticsSchedulingActivity(
   chatId,
   second.id,
