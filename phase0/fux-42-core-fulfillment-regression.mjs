@@ -56,7 +56,7 @@ assert.equal(replay.status, 'out_for_delivery');
 
 fulfillment = await transitionOrderFulfillment(chatId, orderId, 'delivered', actor, {
   idempotencyKey: 'fux42-command-2',
-  proof: { type: 'photo', ref: 'proof-fux42' },
+  proof: { type: 'photo', reference: 'proof-fux42' },
 });
 assert.equal(fulfillment.status, 'delivered');
 const balances = await (await import('../backend/lib/store-sqlite.js')).getInventoryBalances(chatId);
