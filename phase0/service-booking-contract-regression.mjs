@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   SERVICE_BOOKING_STATUSES,
   SERVICE_BOOKING_TRANSITIONS,
+  SERVICE_BOOKING_REASON_REQUIRED_STATUSES,
   normalizeServiceBookingRequest,
   canTransitionServiceBooking,
   assertServiceBookingTransition,
@@ -65,10 +66,12 @@ assert.throws(() => assertServiceBookingTransition('REQUESTED', 'COMPLETED'),
   error => error?.code === 'SERVICE_BOOKING_TRANSITION_INVALID');
 
 const contract = serviceBookingContract();
+assert.deepEqual(SERVICE_BOOKING_REASON_REQUIRED_STATUSES, ['REJECTED', 'FAILED']);
 assert.equal(contract.persists, false);
 assert.equal(contract.creates_order, false);
 assert.equal(contract.creates_payment, false);
 assert.equal(contract.reserves_inventory, false);
 assert.equal(contract.assigns_courier, false);
+assert.deepEqual(contract.reason_required_statuses, ['REJECTED', 'FAILED']);
 
 console.log('Service Booking Contract Regression: PASS');
