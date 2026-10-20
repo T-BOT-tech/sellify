@@ -1557,8 +1557,8 @@ try {
   const competingAssessmentVerifyDb = new DatabaseSync(dbPath);
   try {
     assert.equal(competingAssessmentVerifyDb.prepare(
-      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND order_id = ?'
-    ).get(String(assessmentSession.organizationId), competingAssessmentOrder.server_order_id).count, 1,
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key IN (?, ?)'
+    ).get(String(assessmentSession.organizationId), 'parcel-competing-assessment-eligible', 'parcel-competing-assessment-ineligible').count, 1,
     'competing distinct-key assessments must persist exactly one durable command');
     assert.equal(competingAssessmentVerifyDb.prepare(
       "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
