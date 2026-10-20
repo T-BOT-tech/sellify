@@ -769,7 +769,7 @@ try {
     'rejected service requests must not enter canonical fulfillment'
   );
   await assert.rejects(
-    () => store.assignDeliveryCourier(tenant.chatId, rejectedOrder.server_order_id, '', session, {
+    () => store.assignDeliveryCourier(tenant.chatId, rejectedOrder.server_order_id, '', logisticsActor, {
       assignmentKey: 'parcel-rejected-order-assignment-must-fail',
     }),
     error => {
