@@ -336,17 +336,23 @@ try {
   const staleAuditCount = () => store.getDatabaseForTests().prepare(
     "SELECT COUNT(*) AS count FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ?"
   ).get(staleBooking.id).count;
+  const staleAccept = await fetch(bookingsUrl + '/' + encodeURIComponent(staleBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-stale-accept-1' },
+    body: JSON.stringify({ status: 'ACCEPTED', expected_version: 1 }),
+  });
+  assert.equal(staleAccept.status, 200);
   const staleAuditBefore = staleAuditCount();
   const staleResponse = await fetch(bookingsUrl + '/' + encodeURIComponent(staleBooking.id), {
     method: 'PATCH',
     headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-stale-transition-1' },
-    body: JSON.stringify({ status: 'ACCEPTED', expected_version: 0 }),
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 1 }),
   });
   assert.equal(staleResponse.status, 409, 'stale expected_version must conflict');
   const staleState = (await (await fetch(bookingsUrl, { headers: authHeaders })).json()).bookings
     .find(item => item.id === staleBooking.id);
-  assert.equal(staleState.status, 'REQUESTED');
-  assert.equal(staleState.version, 1);
+  assert.equal(staleState.status, 'ACCEPTED');
+  assert.equal(staleState.version, 2);
   assert.equal(staleAuditCount(), staleAuditBefore, 'stale command must not append lifecycle audit evidence');
 
   // Tenant and canonical-order scope are checked on the actual HTTP route.
