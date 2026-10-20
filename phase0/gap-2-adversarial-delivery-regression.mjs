@@ -6,7 +6,7 @@ const lifecycleStart = store.indexOf('export async function transitionDeliveryAs
 const lifecycle = store.slice(lifecycleStart, store.indexOf('export async function listDeliveryAssignments', lifecycleStart));
 
 const begin = lifecycle.indexOf("db.exec('BEGIN IMMEDIATE')");
-const replay = lifecycle.indexOf("const existingCommand = db.prepare('SELECT * FROM delivery_assignments WHERE organization_id = ? AND last_command_key = ?");
+const replay = lifecycle.indexOf('SELECT * FROM delivery_assignment_commands');
 assert(begin >= 0, 'lifecycle transaction boundary missing');
 assert(replay > begin, 'idempotency replay lookup must execute inside lifecycle transaction');
 const activeRead = lifecycle.indexOf("const active = db.prepare(`SELECT da.* FROM delivery_assignments da JOIN fulfillments f");
