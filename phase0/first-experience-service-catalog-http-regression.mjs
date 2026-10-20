@@ -293,6 +293,48 @@ try {
   assert.equal(rejectedKeyConflict.status, 409, 'same rejection key with a different reason must conflict');
   assert.equal((await rejectedKeyConflict.json()).error?.code, 'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT');
 
+  // Cancellation is a canonical terminal transition. Verify reason persistence,
+  // idempotent retry, and that a later command cannot resurrect the booking.
+  const cancelledBookingCreate = await fetch(bookingsUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-cancel-create-1' },
+    body: JSON.stringify({ ...bookingRequest, requested_start: '2026-11-06T09:00:00+03:00', requested_end: '2026-11-06T10:00:00+03:00' }),
+  });
+  assert.equal(cancelledBookingCreate.status, 201);
+  const cancelledBooking = (await cancelledBookingCreate.json()).booking;
+  const cancelledBookingAuditCount = () => store.getDatabaseForTests().prepare(
+    "SELECT COUNT(*) AS count FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ?"
+  ).get(cancelledBooking.id).count;
+  const cancelReason = 'Customer no longer needs the appointment';
+  const cancellation = await fetch(bookingsUrl + '/' + encodeURIComponent(cancelledBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-cancel-1' },
+    body: JSON.stringify({ status: 'CANCELLED', expected_version: 1, reason: cancelReason }),
+  });
+  assert.equal(cancellation.status, 200, 'authorized merchant should cancel a requested booking');
+  const cancellationBody = await cancellation.json();
+  assert.equal(cancellationBody.booking.status, 'CANCELLED');
+  assert.equal(cancellationBody.booking.status_reason, cancelReason);
+  assert.equal(cancellationBody.booking.version, 2);
+  const cancellationAuditCount = cancelledBookingAuditCount();
+  const cancellationReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(cancelledBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-cancel-1' },
+    body: JSON.stringify({ status: 'CANCELLED', expected_version: 1, reason: cancelReason }),
+  });
+  assert.equal(cancellationReplay.status, 200, 'exact cancellation retry should replay');
+  assert.equal((await cancellationReplay.json()).replayed, true);
+  assert.equal(cancelledBookingAuditCount(), cancellationAuditCount, 'cancellation replay must not append audit evidence');
+  const cancelResurrection = await fetch(bookingsUrl + '/' + encodeURIComponent(cancelledBooking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-cancel-resurrect-1' },
+    body: JSON.stringify({ status: 'ACCEPTED', expected_version: 2 }),
+  });
+  assert.equal(cancelResurrection.status, 409, 'a cancelled booking must not be resurrected');
+  assert.equal((await cancelResurrection.json()).error?.code, 'SERVICE_BOOKING_TRANSITION_INVALID');
+  assert.equal(cancelledBookingAuditCount(), cancellationAuditCount,
+    'invalid transition from terminal cancellation must not append audit evidence');
+
   // Exercise failure after service execution begins. Caller-supplied execution
   // evidence is ignored; failure reason is server-validated and durable.
   const failedBookingCreate = await fetch(bookingsUrl, {
