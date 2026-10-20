@@ -7960,29 +7960,6 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
       refundId: refund.id, amountMinor: refund.amount_minor, fullRefund,
     });
 
-    // Settlement reversal follows confirmed refunds, never cancellation intent.
-    // For split allocations, reverse only after every allocation for this
-    // seller order has reached a terminal refunded/reversed state.
-    const marketplaceAllocation = db.prepare(`
-      SELECT seller_order_id
-      FROM marketplace_payment_allocations
-      WHERE payment_id = ? AND organization_id = ?
-      LIMIT 1
-    `).get(payment.id, tenant.organizationId);
-    if (marketplaceAllocation) {
-      const outstandingAllocations = db.prepare(`
-        SELECT COUNT(*) AS count
-        FROM marketplace_payment_allocations
-        WHERE seller_order_id = ? AND status NOT IN ('REFUNDED','REVERSED')
-      `).get(marketplaceAllocation.seller_order_id);
-      if (Number(outstandingAllocations?.count || 0) === 0) {
-        db.prepare(`
-          UPDATE marketplace_settlements
-          SET status = 'REVERSED'
-          WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')
-        `).run(marketplaceAllocation.seller_order_id);
-      }
-    }
     db.exec('COMMIT');
     return normalizePaymentRefund(db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(refund.id));
   } catch (error) {
