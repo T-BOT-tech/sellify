@@ -1422,6 +1422,69 @@ try {
     rollbackVerifyDb.close();
   }
 
+  // Race two first-time submissions before either response can be observed. Both
+  // requests use the same fresh key and identical negative-assessment payload;
+  // canonical state, command history, and audit evidence must commit exactly once.
+  const firstAssessmentRaceKey = 'parcel-request-assessment-ineligible-1';
+  const firstAssessmentRacePayload = { assessment_outcome: 'INELIGIBLE' };
+  const firstAssessmentRaceDb = new DatabaseSync(dbPath);
+  let firstAssessmentRaceCommandsBefore;
+  let firstAssessmentRaceAuditsBefore;
+  try {
+    firstAssessmentRaceCommandsBefore = firstAssessmentRaceDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), firstAssessmentRaceKey).count;
+    firstAssessmentRaceAuditsBefore = firstAssessmentRaceDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, rejectedOrder.server_order_id).count;
+  } finally {
+    firstAssessmentRaceDb.close();
+  }
+  assert.equal(firstAssessmentRaceCommandsBefore, 0,
+    'first-time assessment race must begin without a durable command for its fresh key');
+  const firstAssessmentRaceResponses = await Promise.all([
+    fetch(
+      baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+        + '/orders/' + encodeURIComponent(rejectedOrder.server_order_id) + '/service-delivery-assessment',
+      {
+        method: 'POST',
+        headers: { ...authHeaders, 'Idempotency-Key': firstAssessmentRaceKey },
+        body: JSON.stringify(firstAssessmentRacePayload),
+      }
+    ),
+    fetch(
+      baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+        + '/orders/' + encodeURIComponent(rejectedOrder.server_order_id) + '/service-delivery-assessment',
+      {
+        method: 'POST',
+        headers: { ...authHeaders, 'Idempotency-Key': firstAssessmentRaceKey },
+        body: JSON.stringify(firstAssessmentRacePayload),
+      }
+    ),
+  ]);
+  assert.deepEqual(firstAssessmentRaceResponses.map(response => response.status), [200, 200],
+    'concurrent first-time identical assessment submissions must both resolve successfully');
+  const firstAssessmentRaceBodies = await Promise.all(
+    firstAssessmentRaceResponses.map(response => response.json()),
+  );
+  assert.ok(firstAssessmentRaceBodies.every(body =>
+    body.service_delivery?.assessment_status === 'ASSESSMENT_REJECTED'
+      && body.service_delivery?.assessment?.outcome === 'INELIGIBLE'),
+  'both first-time race responses must resolve to the same canonical terminal assessment');
+  const firstAssessmentRaceDbAfter = new DatabaseSync(dbPath);
+  try {
+    assert.equal(firstAssessmentRaceDbAfter.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(assessmentSession.organizationId), firstAssessmentRaceKey).count, 1,
+    'concurrent first-time identical submissions must create exactly one durable command');
+    assert.equal(firstAssessmentRaceDbAfter.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, rejectedOrder.server_order_id).count, firstAssessmentRaceAuditsBefore + 1,
+    'concurrent first-time identical submissions must append exactly one assessment audit event');
+  } finally {
+    firstAssessmentRaceDbAfter.close();
+  }
+
   const rejectedAssessmentResponse = await fetch(
     baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
       + '/orders/' + encodeURIComponent(rejectedOrder.server_order_id) + '/service-delivery-assessment',
