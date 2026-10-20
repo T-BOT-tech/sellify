@@ -363,6 +363,8 @@ try {
   // conflict before validating that second order's assessment payload.
   const crossOrderAssessmentUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
     + '/orders/' + encodeURIComponent(parcelStoredOrder.server_order_id) + '/service-delivery-assessment';
+  const crossOrderTargetBefore = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === parcelStoredOrder.server_order_id)?.service_delivery_request;
   const crossOrderAssessmentReplay = await fetch(crossOrderAssessmentUrl, {
     method: 'POST',
     headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
@@ -372,6 +374,10 @@ try {
     'an assessment idempotency key must not be reused across canonical orders');
   assert.equal((await crossOrderAssessmentReplay.json()).error?.code,
     'LOGISTICS_ASSESSMENT_IDEMPOTENCY_CONFLICT');
+  const crossOrderTargetAfter = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === parcelStoredOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(crossOrderTargetAfter, crossOrderTargetBefore,
+    'cross-order idempotency conflict must not mutate the target order');
 
   assert.ok(parcelStoredOrder.server_order_id,
     'instant service request must retain its canonical server order identity');
@@ -655,6 +661,24 @@ try {
     'direct completion must not bypass the active assignment lifecycle'
   );
 
+  // A retry after the original response has been consumed must replay the
+  // committed command without appending another command or audit event.
+  const assessmentDb = new DatabaseSync(dbPath);
+  let commandCountBeforeRetry;
+  let auditCountBeforeRetry;
+  try {
+    commandCountBeforeRetry = assessmentDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE command_key = ?'
+    ).get('parcel-request-assessment-accepted-1').count;
+    auditCountBeforeRetry = assessmentDb.prepare(
+      'SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ?'
+    ).get(tenant.chatId).count;
+  } finally {
+    assessmentDb.close();
+  }
+  assert.equal(commandCountBeforeRetry, 1,
+    'the accepted assessment must have exactly one durable command record before replay');
+
   const assessmentRetry = await fetch(assessmentUrl, {
     method: 'POST',
     headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
@@ -662,6 +686,22 @@ try {
   });
   assert.equal(assessmentRetry.status, 200, 'assessment idempotent retry should succeed');
   assert.equal((await assessmentRetry.json()).replayed, true, 'assessment retry should be reported as replayed');
+
+  const assessmentDbAfterRetry = new DatabaseSync(dbPath);
+  try {
+    const commandCountAfterRetry = assessmentDbAfterRetry.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE command_key = ?'
+    ).get('parcel-request-assessment-accepted-1').count;
+    const auditCountAfterRetry = assessmentDbAfterRetry.prepare(
+      'SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ?'
+    ).get(tenant.chatId).count;
+    assert.equal(commandCountAfterRetry, commandCountBeforeRetry,
+      'assessment replay must not append a duplicate durable command');
+    assert.equal(auditCountAfterRetry, auditCountBeforeRetry,
+      'assessment replay must not append a duplicate audit event');
+  } finally {
+    assessmentDbAfterRetry.close();
+  }
 
   const conflictingAssessmentResponse = await fetch(assessmentUrl, {
     method: 'POST',
@@ -740,6 +780,66 @@ try {
     order.marketplace_order_id === rejectedCheckout.marketplace_order_id
     || order.id === rejectedCheckout.sub_orders?.[0]?.seller_order_id);
   assert.ok(rejectedOrder?.server_order_id, 'negative-assessment fixture must retain canonical order identity');
+
+  // Inject a durable-command write failure after the assessment handler has
+  // updated the order JSON. The surrounding transaction must roll back both
+  // the order mutation and any command/audit evidence.
+  const rollbackCommandKey = 'parcel-assessment-rollback-injected';
+  const rollbackBefore = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === rejectedOrder.server_order_id)?.service_delivery_request;
+  const rollbackSetupDb = new DatabaseSync(dbPath);
+  try {
+    rollbackSetupDb.exec(`
+      CREATE TRIGGER fail_service_assessment_command_insert
+      BEFORE INSERT ON service_delivery_assessment_commands
+      WHEN NEW.command_key = '${rollbackCommandKey}'
+      BEGIN
+        SELECT RAISE(ABORT, 'injected service assessment command failure');
+      END;
+    `);
+  } finally {
+    rollbackSetupDb.close();
+  }
+  let rollbackResponse;
+  try {
+    rollbackResponse = await fetch(
+      baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+        + '/orders/' + encodeURIComponent(rejectedOrder.server_order_id) + '/service-delivery-assessment',
+      {
+        method: 'POST',
+        headers: { ...authHeaders, 'Idempotency-Key': rollbackCommandKey },
+        body: JSON.stringify({ assessment_outcome: 'INELIGIBLE' }),
+      }
+    );
+  } finally {
+    const rollbackCleanupDb = new DatabaseSync(dbPath);
+    try {
+      rollbackCleanupDb.exec('DROP TRIGGER IF EXISTS fail_service_assessment_command_insert');
+    } finally {
+      rollbackCleanupDb.close();
+    }
+  }
+  assert.equal(rollbackResponse.status, 500,
+    'an injected command persistence failure should fail the assessment request');
+  const rollbackAfter = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === rejectedOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(rollbackAfter, rollbackBefore,
+    'failed assessment transaction must roll back the canonical order mutation');
+  const rollbackVerifyDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(rollbackVerifyDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE command_key = ?'
+    ).get(rollbackCommandKey).count, 0,
+    'failed assessment transaction must not leave a durable command record');
+    assert.equal(rollbackVerifyDb.prepare(`
+      SELECT COUNT(*) AS count FROM audit_events
+      WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?
+    `).get(tenant.chatId, rejectedOrder.server_order_id).count, 0,
+    'failed assessment transaction must not leave an assessment audit event');
+  } finally {
+    rollbackVerifyDb.close();
+  }
+
   const rejectedAssessmentResponse = await fetch(
     baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
       + '/orders/' + encodeURIComponent(rejectedOrder.server_order_id) + '/service-delivery-assessment',
