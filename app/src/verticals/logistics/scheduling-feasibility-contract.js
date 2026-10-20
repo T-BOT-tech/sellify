@@ -99,13 +99,23 @@ function normalizeExternalEvaluation(value) {
     invalid('externalEvaluation.outcome must be FEASIBLE, CONFLICT, or UNKNOWN');
   }
 
+  const authority = optionalText(value.authority, 'externalEvaluation.authority');
+  const referenceId = optionalText(
+    value.referenceId ?? value.reference_id,
+    'externalEvaluation.referenceId',
+  );
+
+  // FEASIBLE is actionable evidence only when its source and durable evidence
+  // reference are both identified. Missing provenance must fail closed as
+  // UNKNOWN; it must never turn a caller-supplied bare outcome into capacity.
+  const normalizedOutcome = outcome === 'FEASIBLE' && (!authority || !referenceId)
+    ? 'UNKNOWN'
+    : outcome;
+
   return Object.freeze({
-    outcome,
-    authority: optionalText(value.authority, 'externalEvaluation.authority'),
-    referenceId: optionalText(
-      value.referenceId ?? value.reference_id,
-      'externalEvaluation.referenceId',
-    ),
+    outcome: normalizedOutcome,
+    authority,
+    referenceId,
   });
 }
 
