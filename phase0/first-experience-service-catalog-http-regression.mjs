@@ -85,6 +85,33 @@ try {
     Authorization: 'Bearer ' + session.token,
     'Content-Type': 'application/json',
   };
+
+  const templatePath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/business-template';
+  const unauthTemplateRead = await fetch(baseUrl + templatePath);
+  assert.equal(unauthTemplateRead.status, 401, 'business template config must require an authenticated tenant session');
+
+  const templateWrite = await fetch(baseUrl + templatePath, {
+    method: 'PUT',
+    headers: authHeaders,
+    body: JSON.stringify({ templateKey: 'repair' }),
+  });
+  assert.equal(templateWrite.status, 200, 'owner can persist an allowlisted business template');
+  const templateWriteBody = await templateWrite.json();
+  assert.equal(templateWriteBody.businessTemplate.templateKey, 'repair');
+  assert.equal(templateWriteBody.businessTemplate.schemaVersion, 1);
+  assert.deepEqual(templateWriteBody.businessTemplate.config, {});
+
+  const templateRead = await fetch(baseUrl + templatePath, { headers: authHeaders });
+  assert.equal(templateRead.status, 200);
+  assert.equal((await templateRead.json()).businessTemplate.templateKey, 'repair',
+    'template config must be read back from server-owned tenant storage');
+
+  const invalidTemplateWrite = await fetch(baseUrl + templatePath, {
+    method: 'PUT',
+    headers: authHeaders,
+    body: JSON.stringify({ templateKey: 'unsupported-hotel-engine', capabilities: ['reservations', 'deposits'] }),
+  });
+  assert.equal(invalidTemplateWrite.status, 400, 'unknown templates and caller-asserted capabilities must be rejected');
   const products = [
     { id: 'consultation-http', name: 'Consultation', price: 25000, currency: 'ETB', item_type: 'service', marketplace_listed: true },
     { id: 'parcel-instant-http', name: 'Instant Parcel Delivery', price: 12000, currency: 'ETB', item_type: 'service',
