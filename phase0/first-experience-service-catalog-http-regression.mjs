@@ -63,6 +63,15 @@ try {
     deviceName: 'Service Catalog HTTP regression',
   });
 
+  const otherTenant = await store.createTenantForUser({
+    userId: user.id,
+    sellerName: 'Other Service Catalog HTTP Store',
+    businessType: 'retail',
+    country: 'ET',
+    currency: 'ETB',
+    timezone: 'Africa/Addis_Ababa',
+  });
+
   const port = await freePort();
   const baseUrl = 'http://127.0.0.1:' + port;
   child = spawn(process.execPath, ['backend/server.js'], {
@@ -112,6 +121,12 @@ try {
     body: JSON.stringify({ templateKey: 'unsupported-hotel-engine', capabilities: ['reservations', 'deposits'] }),
   });
   assert.equal(invalidTemplateWrite.status, 400, 'unknown templates and caller-asserted capabilities must be rejected');
+
+  const crossTenantTemplateRead = await fetch(baseUrl + '/tenants/' + encodeURIComponent(otherTenant.chatId) + '/business-template', {
+    headers: authHeaders,
+  });
+  assert.equal(crossTenantTemplateRead.status, 403,
+    'a valid session for one business must not read another business template');
   const products = [
     { id: 'consultation-http', name: 'Consultation', price: 25000, currency: 'ETB', item_type: 'service', marketplace_listed: true },
     { id: 'parcel-instant-http', name: 'Instant Parcel Delivery', price: 12000, currency: 'ETB', item_type: 'service',
