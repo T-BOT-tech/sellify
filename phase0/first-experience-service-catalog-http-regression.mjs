@@ -122,6 +122,28 @@ try {
   });
   assert.equal(invalidTemplateWrite.status, 400, 'unknown templates and caller-asserted capabilities must be rejected');
 
+  for (const [label, body] of [
+    ['unsupported schema version', { templateKey: 'repair', schemaVersion: 2 }],
+    ['unsupported snake-case schema version', { template_key: 'repair', schema_version: 2 }],
+    ['caller-supplied capability flags', { templateKey: 'repair', config: { reservations: true } }],
+    ['unknown authority fields', { templateKey: 'repair', paymentStatus: 'PAID' }],
+    ['array configuration', { templateKey: 'repair', config: [] }],
+    ['primitive configuration', { templateKey: 'repair', config: 'reservations-enabled' }],
+  ]) {
+    const response = await fetch(baseUrl + templatePath, {
+      method: 'PUT',
+      headers: authHeaders,
+      body: JSON.stringify(body),
+    });
+    assert.equal(response.status, 400, label + ' must be rejected');
+  }
+  const templateAfterRejectedWrites = await fetch(baseUrl + templatePath, { headers: authHeaders });
+  assert.equal(templateAfterRejectedWrites.status, 200);
+  const unchangedTemplate = (await templateAfterRejectedWrites.json()).businessTemplate;
+  assert.equal(unchangedTemplate.templateKey, 'repair', 'rejected writes must not mutate persisted template identity');
+  assert.equal(unchangedTemplate.schemaVersion, 1);
+  assert.deepEqual(unchangedTemplate.config, {});
+
   const crossTenantTemplateRead = await fetch(baseUrl + '/tenants/' + encodeURIComponent(otherTenant.chatId) + '/business-template', {
     headers: authHeaders,
   });
