@@ -11,6 +11,7 @@ const mainSource = await readFile(new URL('../app/src/main.js', import.meta.url)
 const onboardingHtml = await readFile(new URL('../app/index.html', import.meta.url), 'utf8');
 const windowBridgeSource = await readFile(new URL('../app/src/window-bridge.js', import.meta.url), 'utf8');
 
+const appSourceForTemplateSync = await readFile(new URL('../app/src/auth/tenant.js', import.meta.url), 'utf8');
 const tenantStoreSource = await readFile(new URL('../backend/lib/store-sqlite.js', import.meta.url), 'utf8');
 const backendServerSource = await readFile(new URL('../backend/server.js', import.meta.url), 'utf8');
 assert.match(tenantStoreSource, /if \(!applied\.includes\(76\)\)[\s\S]*?CREATE TABLE IF NOT EXISTS tenant_business_templates[\s\S]*?schema_migrations[^\n]*76/,
@@ -25,6 +26,10 @@ assert.match(backendServerSource, /async function handleBusinessTemplateConfig[\
   'template reads and writes must require an authenticated owner session');
 assert.match(backendServerSource, /business-template/,
   'the tenant business-template endpoint must be routed');
+assert.match(backendServerSource, /if \(req\.method === 'GET'\)[\s\S]*?getBusinessTemplateConfig\(chatId\)[\s\S]*?await requireOwnerRole\(session\)/,
+  'tenant members may read shared template configuration while only owners may change it');
+assert.match(appSourceForTemplateSync, /async function loadBusinessTemplateConfig[\s\S]*?businessTemplateSchemaVersion: saved\.schemaVersion/,
+  'authenticated devices must hydrate their cached template from server-owned configuration');
 
 // Guard the real sanitizer implementation used by catalog pull/push. The
 // spread preserves item_type while the following fields normalize ID and price.
