@@ -19,9 +19,9 @@ assert.match(onboardingHtml, /value="rental" data-business-type="services"/,
   'rental is configured through the existing services business type');
 assert.match(onboardingHtml, /value="repair" data-business-type="services"/,
   'repair template supports hybrid service and product merchants without a new vertical');
-assert.match(onboardingHtml, /id="onboardingItemType"[\\s\\S]*?value="product"[\\s\\S]*?value="service"/,
+assert.match(onboardingHtml, /id="onboardingItemType"[\s\S]*?value="product"[\s\S]*?value="service"/,
   'first catalog item setup must distinguish physical products from services');
-assert.match(tenantAuthSource, /item_type: itemType,[\\s\\S]*?itemType === 'product' && stock !== undefined/,
+assert.match(tenantAuthSource, /item_type: itemType,[\s\S]*?itemType === 'product' && stock !== undefined/,
   'service onboarding must preserve canonical item_type and must not attach physical stock');
 assert.match(windowBridgeSource, /applyOnboardingBusinessTemplate, toggleOnboardingItemType/,
   'new onboarding actions must be available to the inline HTML event handlers');
