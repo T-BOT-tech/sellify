@@ -197,11 +197,25 @@ export async function createOnboardingTenant() {
       body: JSON.stringify({ sellerName, businessType, country, currency, timezone, deviceName: 'Telegram Mini App', challengeToken: window.__SELLIFY_ONBOARDING_CHALLENGE || '' }),
     });
     persistAuth(data, data.membership);
-    // The template is merchant setup configuration, not a separate transaction engine.
-    const nextConfig = { ...config, businessTemplate: selectedTemplate };
+    // Keep a local copy for fast startup, but make the tenant API authoritative
+    // so the chosen template follows the business across paired devices.
+    const nextConfig = { ...config, businessTemplate: selectedTemplate, businessTemplateSchemaVersion: 1 };
     setConfig(nextConfig);
     saveJSON(STORAGE_KEYS.config, nextConfig);
+    let templateSyncError = null;
+    try {
+      await request(`/tenants/${encodeURIComponent(config.chatId)}/business-template`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ templateKey: selectedTemplate }),
+      });
+    } catch (error) {
+      templateSyncError = error;
+    }
     showFirstProductStep(sellerName);
+    if (templateSyncError && status) {
+      status.textContent = 'Business created, but its template could not sync to the server. Check your connection and retry template setup in Settings.';
+    }
   } catch (error) {
     if (status) status.textContent = error.message || 'Could not create the business.';
   }
