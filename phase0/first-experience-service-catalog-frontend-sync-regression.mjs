@@ -29,8 +29,9 @@ assert.match(backendServerSource, /business-template/,
 assert.match(backendServerSource, /const session = await requireSession\(req, tenant\.chatId\);[\s\S]*?if \(req\.method === 'GET'\)[\s\S]*?getBusinessTemplateConfig\(chatId\)[\s\S]*?if \(req\.method !== 'PUT' && req\.method !== 'PATCH'\)[\s\S]*?await requireOwnerRole\(session\)[\s\S]*?saveBusinessTemplateConfig\(chatId, body, session\)/,
   'authenticated tenant members may read shared template configuration while only owners may change it');
 assert.match(appSourceForTemplateSync, /async function loadBusinessTemplateConfig[\s\S]*?businessTemplate: saved\.templateKey[\s\S]*?businessTemplateSchemaVersion: saved\.schemaVersion/,
-assert.match(appSourceForTemplateSync, /String\(config\.chatId\) !== chatId \|\| String\(config\.sessionToken\) !== sessionToken/,\n  'a late template response from a previous tenant or session must not overwrite the active tenant cache');
   'authenticated devices must hydrate their cached template from server-owned configuration');
+assert.match(appSourceForTemplateSync, /String\(config\.chatId\) !== chatId \|\| String\(config\.sessionToken\) !== sessionToken/,
+  'a late template response from a previous tenant or session must not overwrite the active tenant cache');
 
 // Guard the real sanitizer implementation used by catalog pull/push. The
 // spread preserves item_type while the following fields normalize ID and price.
