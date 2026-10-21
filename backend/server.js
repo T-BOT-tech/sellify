@@ -1842,6 +1842,8 @@ async function handleBusinessTemplateConfig(req, res, chatId) {
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
   const session = await requireSession(req, tenant.chatId);
   if (req.method === 'GET') {
+    // Any authenticated tenant member may read shared setup context; only
+    // owners may change the canonical tenant's selected template.
     const businessTemplate = await getBusinessTemplateConfig(chatId);
     return sendJSON(res, 200, { businessTemplate }, req);
   }
