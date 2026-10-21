@@ -6135,8 +6135,8 @@ export async function saveBusinessTemplateConfig(chatId, input = {}, actor = nul
   if (!MERCHANT_BUSINESS_TEMPLATE_KEYS.has(templateKey)) {
     throw Object.assign(new Error('Unsupported business template'), { statusCode: 400, code: 'INVALID_BUSINESS_TEMPLATE' });
   }
-  // Only versioned, allowlisted template identity is accepted for now. Industry
-  // behavior must come from real capabilities, not caller-supplied feature flags.
+  // Schema v1 deliberately supports identity only. Industry behavior must come
+  // from real capabilities, not caller-supplied feature flags.
   const schemaVersion = 1;
   const config = {};
   const updatedAt = nowIso();
