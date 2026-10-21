@@ -1845,10 +1845,10 @@ async function handleBusinessTemplateConfig(req, res, chatId) {
     const businessTemplate = await getBusinessTemplateConfig(chatId);
     return sendJSON(res, 200, { businessTemplate }, req);
   }
-  await requireOwnerRole(session);
   if (req.method !== 'PUT' && req.method !== 'PATCH') {
     return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
   }
+  await requireOwnerRole(session);
   const body = await readBody(req);
   const businessTemplate = await saveBusinessTemplateConfig(chatId, body, session);
   return sendJSON(res, 200, { businessTemplate }, req);
