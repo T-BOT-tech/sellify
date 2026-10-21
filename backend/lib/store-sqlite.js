@@ -6087,9 +6087,8 @@ export async function getTenant(chatId) {
 }
 
 const MERCHANT_BUSINESS_TEMPLATE_KEYS = new Set([
-  'retail-shop', 'barbershop-salon', 'hotel-guest-rooms', 'equipment-vehicle-rental',
-  'consultation-professional-services', 'repair-maintenance', 'restaurant-cafe',
-  'wholesale-b2b', 'other-business',
+  'retail-shop', 'barbershop', 'hotel-rooms', 'rental', 'consultation', 'repair',
+  'restaurant', 'wholesale', 'other',
 ]);
 
 export async function getBusinessTemplateConfig(chatId) {
