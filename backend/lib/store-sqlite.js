@@ -5587,6 +5587,18 @@ function ensureDatabase() {
   // surfacing SQLITE_BUSY as a false payment failure.
   db.exec('PRAGMA busy_timeout = 5000');
   runMigrations();
+  // Versioned merchant template configuration is separate from visual branding
+  // and belongs to the canonical tenant, so it follows the merchant across devices.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tenant_business_templates (
+      chat_id TEXT PRIMARY KEY REFERENCES tenants(chat_id) ON DELETE CASCADE,
+      template_key TEXT NOT NULL,
+      schema_version INTEGER NOT NULL DEFAULT 1 CHECK (schema_version > 0),
+      config_json TEXT NOT NULL DEFAULT '{}',
+      updated_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
   importLegacyJSON();
   for (const tenant of db.prepare('SELECT chat_id FROM tenants ORDER BY chat_id').all()) {
     ensureCanonicalIdentityForTenant(tenant.chat_id);
@@ -6072,6 +6084,57 @@ export async function getOrCreateTenant(chatId) {
 export async function getTenant(chatId) {
   ensureDatabase();
   return tenantFromRow(db.prepare('SELECT * FROM tenants WHERE chat_id = ?').get(String(chatId)));
+}
+
+const MERCHANT_BUSINESS_TEMPLATE_KEYS = new Set([
+  'retail-shop', 'barbershop-salon', 'hotel-guest-rooms', 'equipment-vehicle-rental',
+  'consultation-professional-services', 'repair-maintenance', 'restaurant-cafe',
+  'wholesale-b2b', 'other-business',
+]);
+
+export async function getBusinessTemplateConfig(chatId) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404 });
+  const row = db.prepare('SELECT template_key, schema_version, config_json, updated_at FROM tenant_business_templates WHERE chat_id = ?').get(String(chatId));
+  if (!row) return null;
+  return {
+    templateKey: row.template_key,
+    schemaVersion: Number(row.schema_version) || 1,
+    config: parseJSON(row.config_json, {}),
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function saveBusinessTemplateConfig(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const key = String(chatId);
+  const tenant = await getTenant(key);
+  if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404 });
+  const templateKey = String(input.templateKey ?? input.template_key ?? '').trim();
+  if (!MERCHANT_BUSINESS_TEMPLATE_KEYS.has(templateKey)) {
+    throw Object.assign(new Error('Unsupported business template'), { statusCode: 400, code: 'INVALID_BUSINESS_TEMPLATE' });
+  }
+  // Only versioned, allowlisted template identity is accepted for now. Industry
+  // behavior must come from real capabilities, not caller-supplied feature flags.
+  const schemaVersion = 1;
+  const config = {};
+  const updatedAt = nowIso();
+  db.prepare(`
+    INSERT INTO tenant_business_templates
+      (chat_id, template_key, schema_version, config_json, updated_by_user_id, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(chat_id) DO UPDATE SET
+      template_key = excluded.template_key,
+      schema_version = excluded.schema_version,
+      config_json = excluded.config_json,
+      updated_by_user_id = excluded.updated_by_user_id,
+      updated_at = excluded.updated_at
+  `).run(key, templateKey, schemaVersion, json(config), actor?.userId ? String(actor.userId) : null, updatedAt);
+  audit(key, 'tenant.business_template.updated', 'tenant_business_template', key, {
+    templateKey, schemaVersion, actorUserId: actor?.userId ? String(actor.userId) : null,
+  });
+  return { templateKey, schemaVersion, config, updatedAt };
 }
 
 // Synchronous tenant lookup used by the existing organization-scoped store paths.
