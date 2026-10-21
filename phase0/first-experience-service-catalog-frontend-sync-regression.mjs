@@ -8,9 +8,24 @@ const tenantAuthSource = await readFile(new URL('../app/src/auth/tenant.js', imp
 const checkoutSource = await readFile(new URL('../app/src/orders/checkout.js', import.meta.url), 'utf8');
 const marketplaceCheckoutSource = await readFile(new URL('../app/src/marketplace/checkout.js', import.meta.url), 'utf8');
 const mainSource = await readFile(new URL('../app/src/main.js', import.meta.url), 'utf8');
+const onboardingHtml = await readFile(new URL('../app/index.html', import.meta.url), 'utf8');
+const windowBridgeSource = await readFile(new URL('../app/src/window-bridge.js', import.meta.url), 'utf8');
 
 // Guard the real sanitizer implementation used by catalog pull/push. The
 // spread preserves item_type while the following fields normalize ID and price.
+assert.match(onboardingHtml, /Choose your business type/,
+  'merchant onboarding must make business type selection a primary entry point');
+assert.match(onboardingHtml, /value="rental" data-business-type="services"/,
+  'rental is configured through the existing services business type');
+assert.match(onboardingHtml, /value="repair" data-business-type="services"/,
+  'repair template supports hybrid service and product merchants without a new vertical');
+assert.match(onboardingHtml, /id="onboardingItemType"[\\s\\S]*?value="product"[\\s\\S]*?value="service"/,
+  'first catalog item setup must distinguish physical products from services');
+assert.match(tenantAuthSource, /item_type: itemType,[\\s\\S]*?itemType === 'product' && stock !== undefined/,
+  'service onboarding must preserve canonical item_type and must not attach physical stock');
+assert.match(windowBridgeSource, /applyOnboardingBusinessTemplate, toggleOnboardingItemType/,
+  'new onboarding actions must be available to the inline HTML event handlers');
+
 assert.match(catalogSource, /return \{\s*\.\.\.p,/);
 assert.match(catalogSource, /id:\s*sanitizeId\(p\.id\)/);
 assert.match(catalogSource, /price:\s*Number\.isFinite\(numericPrice\)/);
