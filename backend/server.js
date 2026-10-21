@@ -1841,11 +1841,11 @@ async function handleBusinessTemplateConfig(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
   const session = await requireSession(req, tenant.chatId);
-  await requireOwnerRole(session);
   if (req.method === 'GET') {
     const businessTemplate = await getBusinessTemplateConfig(chatId);
     return sendJSON(res, 200, { businessTemplate }, req);
   }
+  await requireOwnerRole(session);
   if (req.method !== 'PUT' && req.method !== 'PATCH') {
     return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
   }
