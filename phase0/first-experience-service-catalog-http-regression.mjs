@@ -115,9 +115,11 @@ try {
 
   for (const [label, body] of [
     ['unsupported schema version', { templateKey: 'repair', schemaVersion: 2 }],
+    ['unsupported snake-case schema version', { template_key: 'repair', schema_version: 2 }],
     ['caller-supplied capability flags', { templateKey: 'repair', config: { reservations: true } }],
     ['unknown authority fields', { templateKey: 'repair', paymentStatus: 'PAID' }],
-    ['malformed configuration', { templateKey: 'repair', config: [] }],
+    ['array configuration', { templateKey: 'repair', config: [] }],
+    ['primitive configuration', { templateKey: 'repair', config: 'reservations-enabled' }],
   ]) {
     const response = await fetch(baseUrl + templatePath, {
       method: 'PUT',
