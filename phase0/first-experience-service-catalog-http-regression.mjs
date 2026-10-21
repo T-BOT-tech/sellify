@@ -112,6 +112,27 @@ try {
     body: JSON.stringify({ templateKey: 'unsupported-hotel-engine', capabilities: ['reservations', 'deposits'] }),
   });
   assert.equal(invalidTemplateWrite.status, 400, 'unknown templates and caller-asserted capabilities must be rejected');
+
+  for (const [label, body] of [
+    ['unsupported schema version', { templateKey: 'repair', schemaVersion: 2 }],
+    ['caller-supplied capability flags', { templateKey: 'repair', config: { reservations: true } }],
+    ['unknown authority fields', { templateKey: 'repair', paymentStatus: 'PAID' }],
+    ['malformed configuration', { templateKey: 'repair', config: [] }],
+  ]) {
+    const response = await fetch(baseUrl + templatePath, {
+      method: 'PUT',
+      headers: authHeaders,
+      body: JSON.stringify(body),
+    });
+    assert.equal(response.status, 400, label + ' must be rejected');
+  }
+  const templateAfterRejectedWrites = await fetch(baseUrl + templatePath, { headers: authHeaders });
+  assert.equal(templateAfterRejectedWrites.status, 200);
+  const unchangedTemplate = (await templateAfterRejectedWrites.json()).businessTemplate;
+  assert.equal(unchangedTemplate.templateKey, 'repair', 'rejected writes must not mutate persisted template identity');
+  assert.equal(unchangedTemplate.schemaVersion, 1);
+  assert.deepEqual(unchangedTemplate.config, {});
+
   const products = [
     { id: 'consultation-http', name: 'Consultation', price: 25000, currency: 'ETB', item_type: 'service', marketplace_listed: true },
     { id: 'parcel-instant-http', name: 'Instant Parcel Delivery', price: 12000, currency: 'ETB', item_type: 'service',
