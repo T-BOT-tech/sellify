@@ -1301,7 +1301,7 @@ try {
   const otherSeller = await store.getOrCreateUserByTelegram(
     'tracking-isolation-' + Date.now().toString(36), 'Tracking Isolation Seller',
   );
-  const otherTenant = await store.createTenantForUser({
+  const otherSellerTenant = await store.createTenantForUser({
     userId: otherSeller.id,
     sellerName: 'Tracking Isolation Store',
     businessType: 'retail',
@@ -1311,7 +1311,7 @@ try {
   });
   await assert.rejects(
     () => store.getTelegramBuyerFulfillmentExperience(
-      otherTenant.chatId, 'parcel-request-buyer-http', requestedAssessment.marketplace_order_id,
+      otherSellerTenant.chatId, 'parcel-request-buyer-http', requestedAssessment.marketplace_order_id,
     ),
     error => error?.code === 'ORDER_NOT_FOUND',
     'cross-seller/tenant tracking access must fail closed',
