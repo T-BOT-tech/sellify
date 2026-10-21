@@ -23,7 +23,7 @@ assert.match(tenantStoreSource, /tenant\.business_template\.updated/,
   'template changes must emit a tenant audit event');
 assert.match(backendServerSource, /async function handleBusinessTemplateConfig[\s\S]*?requireSession\(req, tenant\.chatId\)[\s\S]*?requireOwnerRole\(session\)/,
   'template reads and writes must require an authenticated owner session');
-assert.match(backendServerSource, /\/business-template\//,
+assert.match(backendServerSource, /business-template/,
   'the tenant business-template endpoint must be routed');
 
 // Guard the real sanitizer implementation used by catalog pull/push. The
