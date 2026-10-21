@@ -43,7 +43,7 @@ assert.match(onboardingHtml, /id="onboardingItemType"[\s\S]*?value="product"[\s\
   'first catalog item setup must distinguish physical products from services');
 assert.match(tenantAuthSource, /item_type: itemType,[\s\S]*?itemType === 'product' && stock !== undefined/,
   'service onboarding must preserve canonical item_type and must not attach physical stock');
-assert.match(tenantAuthSource, /business-template[\\s\\S]*?method: 'PUT'[\\s\\S]*?templateKey: selectedTemplate/,
+assert.match(tenantAuthSource, /business-template[\s\S]*?method: 'PUT'[\s\S]*?templateKey: selectedTemplate/,
   'onboarding must persist the selected template through the tenant API, not only local storage');
 assert.match(tenantAuthSource, /businessTemplateSchemaVersion: 1/,
   'the local template cache must carry an explicit schema version');
