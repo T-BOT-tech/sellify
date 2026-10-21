@@ -3229,7 +3229,24 @@ if (!applied.includes(39)) {
         ON logistics_scheduling_activities(organization_id,related_fulfillment_id,updated_at DESC);
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(58, nowIso());
-  }}
+  }
+
+  // Merchant business-template preferences are durable tenant configuration.
+  // Keep table creation in the versioned migration path, not per-startup setup.
+  if (!applied.includes(76)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS tenant_business_templates (
+        chat_id TEXT PRIMARY KEY REFERENCES tenants(chat_id) ON DELETE CASCADE,
+        template_key TEXT NOT NULL,
+        schema_version INTEGER NOT NULL DEFAULT 1 CHECK (schema_version > 0),
+        config_json TEXT NOT NULL DEFAULT '{}',
+        updated_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(76, nowIso());
+  }
+}
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({
   NOT_INSTALLED: new Set(['INSTALLED']),
@@ -5587,18 +5604,6 @@ function ensureDatabase() {
   // surfacing SQLITE_BUSY as a false payment failure.
   db.exec('PRAGMA busy_timeout = 5000');
   runMigrations();
-  // Versioned merchant template configuration is separate from visual branding
-  // and belongs to the canonical tenant, so it follows the merchant across devices.
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS tenant_business_templates (
-      chat_id TEXT PRIMARY KEY REFERENCES tenants(chat_id) ON DELETE CASCADE,
-      template_key TEXT NOT NULL,
-      schema_version INTEGER NOT NULL DEFAULT 1 CHECK (schema_version > 0),
-      config_json TEXT NOT NULL DEFAULT '{}',
-      updated_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-      updated_at TEXT NOT NULL
-    );
-  `);
   importLegacyJSON();
   for (const tenant of db.prepare('SELECT chat_id FROM tenants ORDER BY chat_id').all()) {
     ensureCanonicalIdentityForTenant(tenant.chat_id);
