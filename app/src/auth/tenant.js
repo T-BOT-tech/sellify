@@ -178,7 +178,10 @@ export async function switchActiveTenant() {
 
 export async function createOnboardingTenant() {
   const sellerName = document.getElementById('onboardingBusinessName')?.value.trim();
-  const businessType = document.getElementById('onboardingBusinessType')?.value || 'retail';
+  const templateSelect = document.getElementById('onboardingBusinessTemplate');
+  const selectedTemplate = templateSelect?.value || 'retail-shop';
+  const selectedTemplateOption = templateSelect?.selectedOptions?.[0];
+  const businessType = selectedTemplateOption?.dataset?.businessType || document.getElementById('onboardingBusinessType')?.value || 'retail';
   const country = document.getElementById('onboardingCountry')?.value.trim() || '';
   const currency = document.getElementById('onboardingCurrency')?.value || 'ETB';
   const timezone = document.getElementById('onboardingTimezone')?.value || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -194,6 +197,10 @@ export async function createOnboardingTenant() {
       body: JSON.stringify({ sellerName, businessType, country, currency, timezone, deviceName: 'Telegram Mini App', challengeToken: window.__SELLIFY_ONBOARDING_CHALLENGE || '' }),
     });
     persistAuth(data, data.membership);
+    // The template is merchant setup configuration, not a separate transaction engine.
+    const nextConfig = { ...config, businessTemplate: selectedTemplate };
+    setConfig(nextConfig);
+    saveJSON(STORAGE_KEYS.config, nextConfig);
     showFirstProductStep(sellerName);
   } catch (error) {
     if (status) status.textContent = error.message || 'Could not create the business.';
@@ -219,25 +226,45 @@ function showFirstProductStep(sellerName) {
   if (status) status.textContent = '';
 }
 
+export function applyOnboardingBusinessTemplate(template) {
+  const select = document.getElementById('onboardingBusinessTemplate');
+  const option = select?.selectedOptions?.[0];
+  const businessType = option?.dataset?.businessType || 'other';
+  const legacyType = document.getElementById('onboardingBusinessType');
+  if (legacyType) legacyType.value = businessType;
+}
+
+export function toggleOnboardingItemType(itemType) {
+  const isService = itemType === 'service';
+  const stockWrap = document.getElementById('onboardingProdStockWrap');
+  const nameLabel = document.getElementById('onboardingItemNameLabel');
+  const nameInput = document.getElementById('onboardingProdName');
+  if (stockWrap) stockWrap.style.display = isService ? 'none' : '';
+  if (nameLabel) nameLabel.textContent = isService ? 'Service name' : 'Product name';
+  if (nameInput) nameInput.placeholder = isService ? 'Haircut or consultation' : 'Coffee';
+}
+
 export function addOnboardingProduct() {
   const nameInput = document.getElementById('onboardingProdName');
   const priceInput = document.getElementById('onboardingProdPrice');
   const stockInput = document.getElementById('onboardingProdStock');
+  const itemType = document.getElementById('onboardingItemType')?.value === 'service' ? 'service' : 'product';
   const status = document.getElementById('onboardingStatus');
   const name = nameInput?.value.trim();
   const priceMajor = parseFloat(priceInput?.value);
   if (!name || !Number.isFinite(priceMajor) || priceMajor < 0) {
-    if (status) status.textContent = 'Enter a product name and a valid price.';
+    if (status) status.textContent = 'Enter an item name and a valid price.';
     return;
   }
-  const stockRaw = stockInput?.value.trim();
+  const stockRaw = itemType === 'product' ? stockInput?.value.trim() : '';
   const stock = stockRaw ? Math.max(0, parseInt(stockRaw, 10) || 0) : undefined;
   const newProd = {
     id: uid(),
     name,
+    item_type: itemType,
     price: toMinorUnits(priceMajor, config.currencyCode),
     _priceMinor: true,
-    stock,
+    ...(itemType === 'product' && stock !== undefined ? { stock } : {}),
     updated_at: Date.now(),
   };
   setProducts([...products, newProd]);
