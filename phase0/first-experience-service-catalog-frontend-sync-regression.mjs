@@ -28,7 +28,8 @@ assert.match(backendServerSource, /business-template/,
   'the tenant business-template endpoint must be routed');
 assert.match(backendServerSource, /if \(req\.method === 'GET'\)[\s\S]*?getBusinessTemplateConfig\(chatId\)[\s\S]*?await requireOwnerRole\(session\)/,
   'tenant members may read shared template configuration while only owners may change it');
-assert.match(appSourceForTemplateSync, /async function loadBusinessTemplateConfig[\s\S]*?businessTemplateSchemaVersion: saved\.schemaVersion/,
+assert.match(appSourceForTemplateSync, /async function loadBusinessTemplateConfig[\s\S]*?businessTemplate: saved\.templateKey[\s\S]*?businessTemplateSchemaVersion: saved\.schemaVersion/,
+assert.match(appSourceForTemplateSync, /String\(config\.chatId\) !== chatId \|\| String\(config\.sessionToken\) !== sessionToken/,\n  'a late template response from a previous tenant or session must not overwrite the active tenant cache');
   'authenticated devices must hydrate their cached template from server-owned configuration');
 
 // Guard the real sanitizer implementation used by catalog pull/push. The
