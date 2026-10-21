@@ -6115,6 +6115,22 @@ export async function saveBusinessTemplateConfig(chatId, input = {}, actor = nul
   const key = String(chatId);
   const tenant = await getTenant(key);
   if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404 });
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw Object.assign(new Error('Business template body must be an object'), { statusCode: 400, code: 'INVALID_BUSINESS_TEMPLATE' });
+  }
+  const allowedFields = new Set(['templateKey', 'template_key', 'schemaVersion', 'schema_version', 'config']);
+  const unsupportedFields = Object.keys(input).filter((field) => !allowedFields.has(field));
+  if (unsupportedFields.length) {
+    throw Object.assign(new Error('Unsupported business template fields'), { statusCode: 400, code: 'INVALID_BUSINESS_TEMPLATE_FIELDS' });
+  }
+  if ((input.schemaVersion != null && input.schemaVersion !== 1)
+      || (input.schema_version != null && input.schema_version !== 1)) {
+    throw Object.assign(new Error('Unsupported business template schema version'), { statusCode: 400, code: 'UNSUPPORTED_BUSINESS_TEMPLATE_SCHEMA' });
+  }
+  if (input.config != null && (typeof input.config !== 'object' || Array.isArray(input.config)
+      || Object.keys(input.config).length !== 0)) {
+    throw Object.assign(new Error('This business template schema does not support custom configuration fields'), { statusCode: 400, code: 'INVALID_BUSINESS_TEMPLATE_CONFIG' });
+  }
   const templateKey = String(input.templateKey ?? input.template_key ?? '').trim();
   if (!MERCHANT_BUSINESS_TEMPLATE_KEYS.has(templateKey)) {
     throw Object.assign(new Error('Unsupported business template'), { statusCode: 400, code: 'INVALID_BUSINESS_TEMPLATE' });
