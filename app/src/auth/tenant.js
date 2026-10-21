@@ -103,6 +103,30 @@ export function closeOnboarding() {
   if (modal) modal.style.display = 'none';
 }
 
+
+async function loadBusinessTemplateConfig() {
+  if (!config.sessionToken || !config.chatId) return null;
+  const chatId = String(config.chatId);
+  const sessionToken = String(config.sessionToken);
+  try {
+    const data = await request(`/tenants/${encodeURIComponent(chatId)}/business-template`, {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+    });
+    // Do not let a late response from a previous tenant/session overwrite the
+    // currently selected business on a device that switched while it was loading.
+    if (String(config.chatId) !== chatId || String(config.sessionToken) !== sessionToken) return null;
+    const saved = data.businessTemplate;
+    if (!saved) return null;
+    const next = { ...config, businessTemplate: saved.templateKey, businessTemplateSchemaVersion: saved.schemaVersion || 1 };
+    setConfig(next);
+    saveJSON(STORAGE_KEYS.config, next);
+    return saved;
+  } catch {
+    // Offline or an older backend: keep the local cache and let auth continue.
+    return null;
+  }
+}
+
 export async function selectOnboardingTenant() {
   const select = document.getElementById('onboardingTenantSelect');
   if (!select?.value) return;
@@ -113,6 +137,7 @@ export async function selectOnboardingTenant() {
   });
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('sellify:tenant-changing'));
   persistAuth(data, data.membership);
+  await loadBusinessTemplateConfig();
   closeOnboarding();
   window.location.reload();
 }
@@ -170,6 +195,7 @@ export async function switchActiveTenant() {
     });
     if (typeof window !== 'undefined') window.dispatchEvent(new Event('sellify:tenant-changing'));
     persistAuth(data, data.membership);
+    await loadBusinessTemplateConfig();
     window.location.reload();
   } catch (error) {
     if (status) status.textContent = error.message || 'Could not switch businesses.';
@@ -316,6 +342,7 @@ export async function pairThisDevice() {
       body: JSON.stringify({ token, deviceName: 'Sellify web device' }),
     });
     persistAuth(data, data.membership);
+    await loadBusinessTemplateConfig();
     closeOnboarding();
     window.location.reload();
   } catch (error) {
@@ -369,7 +396,10 @@ export async function submitStaffInvite() {
 // branch on getActivePlatform().id internally (or the exchange should move
 // onto the adapter itself, e.g. platform.silentAuth(request)), not before.
 export async function bootstrapTenantAuth() {
-  if (config.sessionToken && config.sessionExpiresAt && Date.parse(config.sessionExpiresAt) > Date.now() + 30_000) return { authenticated: true };
+  if (config.sessionToken && config.sessionExpiresAt && Date.parse(config.sessionExpiresAt) > Date.now() + 30_000) {
+    await loadBusinessTemplateConfig();
+    return { authenticated: true };
+  }
   const raw = initData();
   if (!raw) return { authenticated: false, reason: 'no-telegram-identity' };
   try {
@@ -377,6 +407,7 @@ export async function bootstrapTenantAuth() {
     const memberships = Array.isArray(data.memberships) ? data.memberships : [];
     if (data.session && memberships.length === 1) {
       persistAuth(data, memberships[0]);
+      await loadBusinessTemplateConfig();
       return { authenticated: true };
     }
     if (data.challenge?.token) window.__SELLIFY_ONBOARDING_CHALLENGE = data.challenge.token;
