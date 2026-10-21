@@ -11,6 +11,21 @@ const mainSource = await readFile(new URL('../app/src/main.js', import.meta.url)
 const onboardingHtml = await readFile(new URL('../app/index.html', import.meta.url), 'utf8');
 const windowBridgeSource = await readFile(new URL('../app/src/window-bridge.js', import.meta.url), 'utf8');
 
+const tenantStoreSource = await readFile(new URL('../backend/lib/store-sqlite.js', import.meta.url), 'utf8');
+const backendServerSource = await readFile(new URL('../backend/server.js', import.meta.url), 'utf8');
+assert.match(tenantStoreSource, /if \(!applied\.includes\(76\)\)[\s\S]*?CREATE TABLE IF NOT EXISTS tenant_business_templates[\s\S]*?schema_migrations[^\n]*76/,
+  'merchant template persistence must be installed by a versioned SQLite migration');
+assert.match(tenantStoreSource, /chat_id TEXT PRIMARY KEY REFERENCES tenants\(chat_id\) ON DELETE CASCADE/,
+  'template configuration must be tenant-scoped and cascade with its canonical tenant');
+assert.match(tenantStoreSource, /const MERCHANT_BUSINESS_TEMPLATE_KEYS = new Set\([\s\S]*?'retail-shop'[\s\S]*?'repair'[\s\S]*?'other'/,
+  'server must validate template keys against a fixed allowlist');
+assert.match(tenantStoreSource, /tenant\.business_template\.updated/,
+  'template changes must emit a tenant audit event');
+assert.match(backendServerSource, /async function handleBusinessTemplateConfig[\s\S]*?requireSession\(req, tenant\.chatId\)[\s\S]*?requireOwnerRole\(session\)/,
+  'template reads and writes must require an authenticated owner session');
+assert.match(backendServerSource, /\/business-template\//,
+  'the tenant business-template endpoint must be routed');
+
 // Guard the real sanitizer implementation used by catalog pull/push. The
 // spread preserves item_type while the following fields normalize ID and price.
 assert.match(onboardingHtml, /Choose your business type/,
