@@ -1841,14 +1841,16 @@ async function handleBusinessTemplateConfig(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
   const session = await requireSession(req, tenant.chatId);
-  await requireOwnerRole(session);
   if (req.method === 'GET') {
+    // Any authenticated tenant member may read shared setup context; only
+    // owners may change the canonical tenant's selected template.
     const businessTemplate = await getBusinessTemplateConfig(chatId);
     return sendJSON(res, 200, { businessTemplate }, req);
   }
   if (req.method !== 'PUT' && req.method !== 'PATCH') {
     return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
   }
+  await requireOwnerRole(session);
   const body = await readBody(req);
   const businessTemplate = await saveBusinessTemplateConfig(chatId, body, session);
   return sendJSON(res, 200, { businessTemplate }, req);
