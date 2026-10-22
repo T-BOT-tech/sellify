@@ -27,7 +27,7 @@ import { Theme } from './theme/branding.js';
 // WhatsApp/SMS/native adapter can occupy the same slot later without
 // another inline `if (window.X)` block here.
 import { getActivePlatform, initPlatform } from './platform/index.js';
-import { bootstrapTenantAuth, closeOnboarding, selectOnboardingTenant, createOnboardingTenant, pairThisDevice, showPairing, createDevicePairing, showJoinByInvite, submitStaffInvite, createStaffInvite, addOnboardingProduct, applyOnboardingBusinessTemplate, toggleOnboardingItemType, skipOnboardingProduct, finishOnboarding, submitSettingsInvite, switchActiveTenant } from './auth/tenant.js';
+import { bootstrapTenantAuth, closeOnboarding, selectOnboardingTenant, createOnboardingTenant, pairThisDevice, showPairing, createDevicePairing, showJoinByInvite, submitStaffInvite, createStaffInvite, addOnboardingProduct, applyOnboardingBusinessTemplate, toggleOnboardingItemType, skipOnboardingProduct, finishOnboarding, submitSettingsInvite, switchActiveTenant, restoreOrdersForTenant } from './auth/tenant.js';
 import { renderCustomers, openCustomerModal, closeCustomerModal, saveCustomerModal } from './customers.js';
 export { renderCustomers, openCustomerModal, closeCustomerModal, saveCustomerModal };
 export { bootstrapTenantAuth, closeOnboarding, selectOnboardingTenant, createOnboardingTenant, pairThisDevice, showPairing, createDevicePairing, showJoinByInvite, submitStaffInvite, createStaffInvite, addOnboardingProduct, applyOnboardingBusinessTemplate, toggleOnboardingItemType, skipOnboardingProduct, finishOnboarding, submitSettingsInvite, switchActiveTenant };
@@ -536,8 +536,9 @@ requestLedgerStoragePersistence();
 
 tenantAuthPromise.then(result => ledgerHydrationPromise.then(async () => {
   if (result?.authenticated && config.chatId && config.syncUrl) {
-    // Restore only a snapshot belonging to the active tenant, after IndexedDB
-    // hydration and before the background pull can replace the local catalog.
+    // Restore tenant-owned offline state only after IndexedDB hydration and
+    // before any background synchronization can consume the shared device cache.
+    await restoreOrdersForTenant(config.chatId);
     await restorePendingCatalogForTenant(config.chatId);
     return fetchRemoteCatalogAndBranding();
   }
