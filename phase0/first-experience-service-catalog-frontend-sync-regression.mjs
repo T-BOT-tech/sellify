@@ -148,6 +148,8 @@ assert.match(tenantAuthSource, /persistAuth\(data, data\.membership\);\s*await c
   'onboarding tenant switching must clear and persist the shared cache before reload');
 assert.match(catalogSource, /if \(isCatalogDirty\(\)\) return;/,
   'background catalog pull must not replace locally dirty catalog state');
+assert.match(catalogSource, /setProducts\(data\.products \? sanitizeRemoteProducts\(data\.products\) : products\);\s*saveJSON\(STORAGE_KEYS\.products, products\);\s*await markCatalogSynced\(\);/,
+  'successful catalog sync must wait for durable pending-snapshot cleanup before reporting completion');
 
 // Both the Telegram order payload and the local queued checkout derive their
 // line-item type from the local catalog. This is presentation/transport
