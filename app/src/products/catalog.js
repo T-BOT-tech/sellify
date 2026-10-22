@@ -21,8 +21,8 @@ import { toMinorUnits, fromMinorUnits, formatMoney } from '../utils/money.js';
 import { getNichePreset, isRestaurant } from '../config/niche.js';
 import { escapeHtml, escapeAttr, uid } from '../utils/index.js';
 import { STORAGE_KEYS, RESTAURANT_COURSES } from '../constants.js';
-import { products, setProducts, currentOrder, currentOrderNotes, currentStaff } from '../state.js';
-import { saveJSON } from '../storage/json.js';
+import { config, products, setProducts, currentOrder, currentOrderNotes, currentStaff } from '../state.js';
+import { loadJSONAsync, saveJSON, saveJSONAsync } from '../storage/json.js';
 import { hasPermission } from '../auth/permissions.js';
 // Phase 8 fix (see modularization plan §5, Phase 8): these used to come
 // from '../main.js', which only re-exported them from their real owning
@@ -36,9 +36,46 @@ import { showToast } from '../ui/toast.js';
 
 export let editingProductId = null;
 let catalogDirty = false;
+const pendingCatalogKey = chatId => `ledger_catalog_pending_v1:${encodeURIComponent(String(chatId))}`;
+
 export function isCatalogDirty() { return catalogDirty; }
-export function markCatalogDirty() { catalogDirty = true; renderCatalogSyncStatus(); }
-export function markCatalogSynced() { catalogDirty = false; renderCatalogSyncStatus(); }
+
+// Persist a tenant-keyed snapshot as well as the normal catalog cache. The
+// marker is intentionally not a source of canonical truth: it only protects
+// unsynced local edits from being overwritten by a background pull.
+export function markCatalogDirty() {
+  catalogDirty = true;
+  renderCatalogSyncStatus();
+  const chatId = String(config.chatId || '');
+  if (!chatId) return Promise.resolve(false);
+  return saveJSONAsync(pendingCatalogKey(chatId), {
+    tenantId: chatId,
+    products: structuredClone(products),
+    updatedAt: Date.now(),
+  });
+}
+
+export async function restorePendingCatalogForTenant(chatId) {
+  const tenantId = String(chatId || '');
+  if (!tenantId || String(config.chatId || '') !== tenantId) return false;
+  const pending = await loadJSONAsync(pendingCatalogKey(tenantId), null);
+  // Tenant may have changed while the durable read was pending.
+  if (String(config.chatId || '') !== tenantId) return false;
+  if (!pending || String(pending.tenantId) !== tenantId || !Array.isArray(pending.products)) return false;
+  setProducts(pending.products);
+  catalogDirty = true;
+  renderCatalogSyncStatus();
+  return true;
+}
+
+export async function markCatalogSynced() {
+  catalogDirty = false;
+  renderCatalogSyncStatus();
+  const chatId = String(config.chatId || '');
+  if (!chatId) return false;
+  // A null tombstone is safe for both IndexedDB and the localStorage fallback.
+  return saveJSONAsync(pendingCatalogKey(chatId), null);
+}
 export function renderCatalogSyncStatus() {
   const el = document.getElementById('catalogSyncStatus');
   if (!el) return;
