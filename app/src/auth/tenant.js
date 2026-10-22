@@ -10,6 +10,7 @@ import { uid } from '../utils/index.js';
 import { toMinorUnits } from '../utils/money.js';
 import { markCatalogDirty } from '../products/catalog.js';
 import { guessLocationDefaults } from '../config/locale-defaults.js';
+import { t } from '../ui/i18n.js';
 
 function baseUrl() {
   return (config.syncUrl || window.location.origin).replace(/\/$/, '');
@@ -327,7 +328,14 @@ export async function addOnboardingProduct() {
   try {
     const { syncCatalog } = await import('../sync/catalog.js');
     const syncMessage = await syncCatalog();
-    if (status) status.textContent = syncMessage || 'Offering sync attempted. Check Sync now if it is still pending.';
+    // syncCatalog handles its own network errors and returns a translated
+    // failure message instead of throwing. Detect that result explicitly so
+    // onboarding never leaves the impression that a failed push succeeded.
+    if (status) {
+      status.textContent = syncMessage === t('catalogSyncFailed')
+        ? 'Saved on this device, but not synced yet. Use Sync now to retry.'
+        : (syncMessage || 'Offering sync attempted. Check Sync now if it is still pending.');
+    }
   } catch {
     // Keep the local offering and dirty state. A later manual sync can retry.
     if (status) status.textContent = 'Saved on this device, but not synced yet. Use Sync now to retry.';
