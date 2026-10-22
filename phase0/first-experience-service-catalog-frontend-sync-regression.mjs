@@ -46,7 +46,7 @@ assert.match(onboardingHtml, /id="onboardingItemType"[\s\S]*?value="product"[\s\
   'first catalog item setup must distinguish physical products from services');
 assert.match(tenantAuthSource, /item_type: itemType,[\s\S]*?itemType === 'product' && stock !== undefined/,
   'service onboarding must preserve canonical item_type and must not attach physical stock');
-assert.match(tenantAuthSource, /import \{ saveJSON, saveJSONAsync \} from '\.\.\/storage\/json\.js';[\s\S]*?const locallySaved = await saveJSONAsync\(STORAGE_KEYS\.products, products\)/,
+assert.match(tenantAuthSource, /import \{ saveJSON, saveJSONAsync, loadJSONAsync \} from '\.\.\/storage\/json\.js';[\s\S]*?const locallySaved = await saveJSONAsync\(STORAGE_KEYS\.products, products\)/,
   'first-offering onboarding must wait for local persistence before reporting or syncing');
 assert.match((await readFile(new URL('../app/src/storage/json.js', import.meta.url), 'utf8')), /export async function saveJSONAsync[\s\S]*?await idbSet\(key, value\)/,
   'critical onboarding persistence must await the IndexedDB transaction instead of fire-and-forget saveJSON');
