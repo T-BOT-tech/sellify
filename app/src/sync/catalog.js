@@ -127,7 +127,7 @@ export async function syncCatalog() {
 
     setProducts(data.products ? sanitizeRemoteProducts(data.products) : products);
     saveJSON(STORAGE_KEYS.products, products);
-    markCatalogSynced();
+    await markCatalogSynced();
     renderAll();
     return t('catalogSyncedMsg');
   } catch (e) {
