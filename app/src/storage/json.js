@@ -20,7 +20,7 @@
 // nothing imports main.js back except window-bridge.js.
 import { t } from '../ui/i18n.js';
 import { showToast } from '../ui/toast.js';
-import { idbSet, isIdbUnavailable, setIdbUnavailable } from './idb.js';
+import { idbGet, idbSet, isIdbUnavailable, setIdbUnavailable } from './idb.js';
 
 export function loadJSON(key, fallback) {
   try {
@@ -73,6 +73,19 @@ export async function saveJSONAsync(key, value) {
       showToast(t('storageFull'));
       return false;
     }
+  }
+}
+
+// Read a critical value from the same durable store used by saveJSONAsync().
+export async function loadJSONAsync(key, fallback = null) {
+  if (isIdbUnavailable()) return loadJSON(key, fallback);
+  try {
+    const value = await idbGet(key);
+    return value === null || value === undefined ? loadJSON(key, fallback) : value;
+  } catch (e) {
+    console.error('IndexedDB read failed for', key, e);
+    setIdbUnavailable(true);
+    return loadJSON(key, fallback);
   }
 }
 
