@@ -127,7 +127,7 @@ import {
 import {
   renderCatalog, startProductEdit, cancelProductEdit, saveProductEdit,
   renderProductFormSelects, toggleNewProdTag, onNewProdCategoryChange,
-  addProduct, removeProduct
+  addProduct, removeProduct, restorePendingCatalogForTenant
 } from './products/catalog.js';
 import {
   setCashTendered, updateCartStickyBar, scrollToOrderSummary, onCashInput,
@@ -534,8 +534,13 @@ const ledgerHydrationPromise = hydrateFromIndexedDB().then(changed => {
 // across all browsers). Settings reads ledgerStoragePersisted whenever it's opened.
 requestLedgerStoragePersistence();
 
-tenantAuthPromise.then(result => ledgerHydrationPromise.then(() => {
-  if (result?.authenticated && config.chatId && config.syncUrl) return fetchRemoteCatalogAndBranding();
+tenantAuthPromise.then(result => ledgerHydrationPromise.then(async () => {
+  if (result?.authenticated && config.chatId && config.syncUrl) {
+    // Restore only a snapshot belonging to the active tenant, after IndexedDB
+    // hydration and before the background pull can replace the local catalog.
+    await restorePendingCatalogForTenant(config.chatId);
+    return fetchRemoteCatalogAndBranding();
+  }
   return null;
 })).catch(() => null);
 
