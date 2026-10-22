@@ -101,6 +101,17 @@ assert.match(ordersSource, /if \(result && result\.status === 'synced'\) \{[\s\S
 assert.match(ordersSource, /if \(result && result\.status === 'rejected'\) \{[\s\S]*?status: 'sync_rejected'/);
 assert.match(tenantAuthSource, /export function authHeaders\(/);
 
+// First-run catalog creation must use the same canonical push path as manual
+// sync. A startup pull alone cannot upload the newly-created local offering.
+assert.match(tenantAuthSource, /export async function addOnboardingProduct\(/,
+  'onboarding offering creation must wait for the best-effort canonical sync attempt');
+assert.match(tenantAuthSource, /markCatalogDirty\(\)[\s\S]*?await import\('\.\.\/sync\/catalog\.js'\)[\s\S]*?await syncCatalog\(\)/,
+  'the onboarding flow must attempt canonical catalog sync after persisting the local offering');
+assert.match(tenantAuthSource, /Saved on this device\. You are offline; use Sync now when connected\./,
+  'offline onboarding must preserve the local offering and explain the recovery path');
+assert.match(tenantAuthSource, /Saved on this device, but not synced yet\. Use Sync now to retry\./,
+  'sync exceptions must not be presented as successful persistence to the server');
+
 // Both the Telegram order payload and the local queued checkout derive their
 // line-item type from the local catalog. This is presentation/transport
 // metadata only; backend catalog data remains authoritative for stock effects.
