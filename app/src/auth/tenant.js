@@ -4,7 +4,7 @@
 // one-time pairing codes. The PWA never stores or sends tenant-wide API keys.
 import { STORAGE_KEYS } from '../constants.js';
 import { config, setConfig, products, setProducts } from '../state.js';
-import { saveJSON } from '../storage/json.js';
+import { saveJSON, saveJSONAsync } from '../storage/json.js';
 import { getActivePlatform } from '../platform/index.js';
 import { uid } from '../utils/index.js';
 import { toMinorUnits } from '../utils/money.js';
@@ -309,11 +309,14 @@ export async function addOnboardingProduct() {
     updated_at: Date.now(),
   };
   setProducts([...products, newProd]);
-  saveJSON(STORAGE_KEYS.products, products);
+  const locallySaved = await saveJSONAsync(STORAGE_KEYS.products, products);
   markCatalogDirty();
   showOnboardingDone();
+  if (!locallySaved && status) {
+    status.textContent = 'Offering added for this session, but local storage failed. Keep this page open while trying Sync now.';
+  }
 
-  // The first offering is already durable in local storage. Push it through
+  // The first offering is persisted before we attempt remote sync. Push it through
   // the canonical catalog endpoint now when online; the startup catalog pull
   // is not an upload path. Dynamic import avoids a static cycle because the
   // catalog sync module uses authHeaders from this module.
