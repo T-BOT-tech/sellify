@@ -3,7 +3,7 @@
 // it for a short-lived device session. Standalone devices use owner-approved
 // one-time pairing codes. The PWA never stores or sends tenant-wide API keys.
 import { STORAGE_KEYS } from '../constants.js';
-import { config, setConfig, products, setProducts, orders, setOrders } from '../state.js';
+import { config, setConfig, products, setProducts, orders, setOrders, staffList, setStaffList, currentStaff, setCurrentStaff, b2bAccounts, setB2bAccounts, customers, setCustomers, inventoryMovements, setInventoryMovements, organizationLocations, setOrganizationLocations, inventoryBalances, setInventoryBalances, outboxEvents, setOutboxEvents, pricingTiers, setPricingTiers, volumeDiscountTiers, setVolumeDiscountTiers, warehouseLocations, setWarehouseLocations, stockTransactions, setStockTransactions } from '../state.js';
 import { saveJSON, saveJSONAsync, loadJSONAsync } from '../storage/json.js';
 import { getActivePlatform } from '../platform/index.js';
 import { uid } from '../utils/index.js';
@@ -128,41 +128,48 @@ async function loadBusinessTemplateConfig() {
   }
 }
 
-const tenantOrdersKey = chatId => `ledger_tenant_orders_v1:${encodeURIComponent(String(chatId))}`;
+const tenantStateKey = chatId => `ledger_tenant_state_v1:${encodeURIComponent(String(chatId))}`;
+const tenantStateFields = [
+  ['products', () => products, setProducts, STORAGE_KEYS.products, []],
+  ['orders', () => orders, setOrders, STORAGE_KEYS.orders, []],
+  ['staff', () => staffList, setStaffList, STORAGE_KEYS.staff, []],
+  ['activeStaff', () => currentStaff, setCurrentStaff, STORAGE_KEYS.activeStaff, null],
+  ['b2bAccounts', () => b2bAccounts, setB2bAccounts, STORAGE_KEYS.b2bAccounts, []],
+  ['customers', () => customers, setCustomers, STORAGE_KEYS.customers, []],
+  ['inventoryMovements', () => inventoryMovements, setInventoryMovements, STORAGE_KEYS.inventoryMovements, []],
+  ['organizationLocations', () => organizationLocations, setOrganizationLocations, STORAGE_KEYS.organizationLocations, []],
+  ['inventoryBalances', () => inventoryBalances, setInventoryBalances, STORAGE_KEYS.inventoryBalances, []],
+  ['outboxEvents', () => outboxEvents, setOutboxEvents, STORAGE_KEYS.outboxEvents, []],
+  ['pricingTiers', () => pricingTiers, setPricingTiers, STORAGE_KEYS.pricingTiers, []],
+  ['volumeDiscountTiers', () => volumeDiscountTiers, setVolumeDiscountTiers, STORAGE_KEYS.volumeDiscounts, []],
+  ['warehouseLocations', () => warehouseLocations, setWarehouseLocations, STORAGE_KEYS.warehouseLocations, []],
+  ['stockTransactions', () => stockTransactions, setStockTransactions, STORAGE_KEYS.stockTransactions, []],
+];
 
-// Orders include offline queued work, so preserve the current tenant's local
-// queue before clearing shared device storage. This is a recovery cache only;
-// the server remains authoritative for accepted/synced order state.
-async function preserveOrdersForTenant(chatId) {
+async function preserveTenantState(chatId) {
   const tenantId = String(chatId || '');
   if (!tenantId) return false;
-  return saveJSONAsync(tenantOrdersKey(tenantId), {
-    tenantId,
-    orders: structuredClone(orders),
-    updatedAt: Date.now(),
-  });
+  const state = Object.fromEntries(tenantStateFields.map(([name, getValue]) => [name, structuredClone(getValue())]));
+  return saveJSONAsync(tenantStateKey(tenantId), { tenantId, state, updatedAt: Date.now() });
 }
 
-export async function restoreOrdersForTenant(chatId) {
+export async function restoreTenantStateForTenant(chatId) {
   const tenantId = String(chatId || '');
   if (!tenantId || String(config.chatId || '') !== tenantId) return false;
-  const snapshot = await loadJSONAsync(tenantOrdersKey(tenantId), null);
+  const snapshot = await loadJSONAsync(tenantStateKey(tenantId), null);
   if (String(config.chatId || '') !== tenantId) return false;
-  if (!snapshot || String(snapshot.tenantId) !== tenantId || !Array.isArray(snapshot.orders)) return false;
-  setOrders(snapshot.orders);
+  if (!snapshot || String(snapshot.tenantId) !== tenantId || !snapshot.state || typeof snapshot.state !== 'object') return false;
+  for (const [name, , setter] of tenantStateFields) {
+    if (Object.prototype.hasOwnProperty.call(snapshot.state, name)) setter(snapshot.state[name]);
+  }
   return true;
 }
 
 async function clearSharedTenantCaches() {
-  // These device-level keys are shared across businesses. Keep each tenant's
-  // recoverable order queue in its tenant-keyed snapshot, then clear the
-  // shared values before reloading into the newly selected tenant.
-  setProducts([]);
-  setOrders([]);
-  await Promise.all([
-    saveJSONAsync(STORAGE_KEYS.products, []),
-    saveJSONAsync(STORAGE_KEYS.orders, []),
-  ]);
+  for (const [, , setter, storageKey, emptyValue] of tenantStateFields) {
+    setter(emptyValue);
+    await saveJSONAsync(storageKey, emptyValue);
+  }
 }
 
 export async function selectOnboardingTenant() {
@@ -174,7 +181,7 @@ export async function selectOnboardingTenant() {
     body: JSON.stringify({ chatId: select.value, deviceName: 'Telegram Mini App' }),
   });
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('sellify:tenant-changing'));
-  await preserveOrdersForTenant(config.chatId);
+  await preserveTenantState(config.chatId);
   persistAuth(data, data.membership);
   await clearSharedTenantCaches();
   await loadBusinessTemplateConfig();
