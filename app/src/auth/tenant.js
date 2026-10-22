@@ -284,7 +284,7 @@ export function toggleOnboardingItemType(itemType) {
   if (nameInput) nameInput.placeholder = isService ? 'Haircut or consultation' : 'Coffee';
 }
 
-export function addOnboardingProduct() {
+export async function addOnboardingProduct() {
   const nameInput = document.getElementById('onboardingProdName');
   const priceInput = document.getElementById('onboardingProdPrice');
   const stockInput = document.getElementById('onboardingProdStock');
@@ -311,6 +311,27 @@ export function addOnboardingProduct() {
   saveJSON(STORAGE_KEYS.products, products);
   markCatalogDirty();
   showOnboardingDone();
+
+  // The first offering is already durable in local storage. Push it through
+  // the canonical catalog endpoint now when online; the startup catalog pull
+  // is not an upload path. Dynamic import avoids a static cycle because the
+  // catalog sync module uses authHeaders from this module.
+  if (!config.syncUrl || !config.chatId) {
+    if (status) status.textContent = 'Saved on this device. Connect this business to sync the offering.';
+    return;
+  }
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (status) status.textContent = 'Saved on this device. You are offline; use Sync now when connected.';
+    return;
+  }
+  try {
+    const { syncCatalog } = await import('../sync/catalog.js');
+    const syncMessage = await syncCatalog();
+    if (status) status.textContent = syncMessage || 'Offering sync attempted. Check Sync now if it is still pending.';
+  } catch {
+    // Keep the local offering and dirty state. A later manual sync can retry.
+    if (status) status.textContent = 'Saved on this device, but not synced yet. Use Sync now to retry.';
+  }
 }
 
 export function skipOnboardingProduct() {
