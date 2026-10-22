@@ -310,7 +310,7 @@ export async function addOnboardingProduct() {
   };
   setProducts([...products, newProd]);
   const locallySaved = await saveJSONAsync(STORAGE_KEYS.products, products);
-  markCatalogDirty();
+  await markCatalogDirty();
   showOnboardingDone();
   if (!locallySaved && status) {
     status.textContent = 'Offering added for this session, but local storage failed. Keep this page open while trying Sync now.';
