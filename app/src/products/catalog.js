@@ -36,6 +36,7 @@ import { showToast } from '../ui/toast.js';
 
 export let editingProductId = null;
 let catalogDirty = false;
+export function isCatalogDirty() { return catalogDirty; }
 export function markCatalogDirty() { catalogDirty = true; renderCatalogSyncStatus(); }
 export function markCatalogSynced() { catalogDirty = false; renderCatalogSyncStatus(); }
 export function renderCatalogSyncStatus() {
