@@ -115,6 +115,15 @@ assert.match(tenantAuthSource, /Saved on this device, but not synced yet\. Use S
 assert.match(tenantAuthSource, /syncMessage === t\('catalogSyncFailed'\)[\s\S]*?Saved on this device, but not synced yet\. Use Sync now to retry\./,
   'the onboarding flow must detect syncCatalog’s returned failure message, not only thrown exceptions');
 
+assert.match(catalogSource, /export function isCatalogDirty\(\)/,
+  'catalog pull must be able to distinguish a locally modified catalog');
+assert.match(catalogSource, /const ledgerHydrationPromise = hydrateFromIndexedDB\(\)/,
+  'startup must expose the local-storage hydration completion boundary');
+assert.match(catalogSource, /tenantAuthPromise\.then\(result => ledgerHydrationPromise\.then\(\(\) => \{/,
+  'remote catalog pull must wait until local IndexedDB hydration completes');
+assert.match(catalogSource, /if \(isCatalogDirty\(\)\) return;/,
+  'background catalog pull must not replace locally dirty catalog state');
+
 // Both the Telegram order payload and the local queued checkout derive their
 // line-item type from the local catalog. This is presentation/transport
 // metadata only; backend catalog data remains authoritative for stock effects.
