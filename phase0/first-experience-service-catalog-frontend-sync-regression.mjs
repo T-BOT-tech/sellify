@@ -117,9 +117,9 @@ assert.match(tenantAuthSource, /syncMessage === t\('catalogSyncFailed'\)[\s\S]*?
 
 assert.match(catalogSource, /export function isCatalogDirty\(\)/,
   'catalog pull must be able to distinguish a locally modified catalog');
-assert.match(catalogSource, /const ledgerHydrationPromise = hydrateFromIndexedDB\(\)/,
+assert.match(mainSource, /const ledgerHydrationPromise = hydrateFromIndexedDB\(\)/,
   'startup must expose the local-storage hydration completion boundary');
-assert.match(catalogSource, /tenantAuthPromise\.then\(result => ledgerHydrationPromise\.then\(\(\) => \{/,
+assert.match(mainSource, /tenantAuthPromise\.then\(result => ledgerHydrationPromise\.then\(\(\) => \{/,
   'remote catalog pull must wait until local IndexedDB hydration completes');
 assert.match(catalogSource, /if \(isCatalogDirty\(\)\) return;/,
   'background catalog pull must not replace locally dirty catalog state');
