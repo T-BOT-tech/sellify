@@ -3,6 +3,7 @@ import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 
 const catalogSource = await readFile(new URL('../app/src/sync/catalog.js', import.meta.url), 'utf8');
+const productsSource = await readFile(new URL('../app/src/products/catalog.js', import.meta.url), 'utf8');
 const ordersSource = await readFile(new URL('../app/src/sync/orders.js', import.meta.url), 'utf8');
 const tenantAuthSource = await readFile(new URL('../app/src/auth/tenant.js', import.meta.url), 'utf8');
 const checkoutSource = await readFile(new URL('../app/src/orders/checkout.js', import.meta.url), 'utf8');
@@ -115,7 +116,7 @@ assert.match(tenantAuthSource, /Saved on this device, but not synced yet\. Use S
 assert.match(tenantAuthSource, /syncMessage === t\('catalogSyncFailed'\)[\s\S]*?Saved on this device, but not synced yet\. Use Sync now to retry\./,
   'the onboarding flow must detect syncCatalog’s returned failure message, not only thrown exceptions');
 
-assert.match(catalogSource, /export function isCatalogDirty\(\)/,
+assert.match(productsSource, /export function isCatalogDirty\(\)/,
   'catalog pull must be able to distinguish a locally modified catalog');
 assert.match(mainSource, /const ledgerHydrationPromise = hydrateFromIndexedDB\(\)/,
   'startup must expose the local-storage hydration completion boundary');
