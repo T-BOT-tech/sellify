@@ -128,6 +128,14 @@ async function loadBusinessTemplateConfig() {
   }
 }
 
+async function clearSharedCatalogCacheForTenantSwitch() {
+  // STORAGE_KEYS.products is a shared device cache, not tenant-keyed. Clear it
+  // before reload so an offline switch cannot briefly expose the previous
+  // business's catalog. Pending snapshots remain isolated under tenant keys.
+  setProducts([]);
+  await saveJSONAsync(STORAGE_KEYS.products, []);
+}
+
 export async function selectOnboardingTenant() {
   const select = document.getElementById('onboardingTenantSelect');
   if (!select?.value) return;
@@ -138,6 +146,7 @@ export async function selectOnboardingTenant() {
   });
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('sellify:tenant-changing'));
   persistAuth(data, data.membership);
+  await clearSharedCatalogCacheForTenantSwitch();
   await loadBusinessTemplateConfig();
   closeOnboarding();
   window.location.reload();
@@ -196,6 +205,7 @@ export async function switchActiveTenant() {
     });
     if (typeof window !== 'undefined') window.dispatchEvent(new Event('sellify:tenant-changing'));
     persistAuth(data, data.membership);
+    await clearSharedCatalogCacheForTenantSwitch();
     await loadBusinessTemplateConfig();
     window.location.reload();
   } catch (error) {
