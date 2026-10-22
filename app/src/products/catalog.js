@@ -22,7 +22,7 @@ import { getNichePreset, isRestaurant } from '../config/niche.js';
 import { escapeHtml, escapeAttr, uid } from '../utils/index.js';
 import { STORAGE_KEYS, RESTAURANT_COURSES } from '../constants.js';
 import { config, products, setProducts, currentOrder, currentOrderNotes, currentStaff } from '../state.js';
-import { loadJSONAsync, saveJSON, saveJSONAsync } from '../storage/json.js';
+import { loadJSONAsync, saveJSONAsync } from '../storage/json.js';
 import { hasPermission } from '../auth/permissions.js';
 // Phase 8 fix (see modularization plan §5, Phase 8): these used to come
 // from '../main.js', which only re-exported them from their real owning
@@ -193,7 +193,7 @@ export function cancelProductEdit() {
   renderCatalog();
 }
 
-export function saveProductEdit(id) {
+export async function saveProductEdit(id) {
   // Phase 3 fix (see modularization plan §5, Phase 3): editing a product
   // previously had no permission gate — the "Edit" button was already
   // hidden for roles without inventory:add (see applyRolePermissions), but
@@ -237,8 +237,8 @@ export function saveProductEdit(id) {
     }
     return p;
   }));
-  saveJSON(STORAGE_KEYS.products, products);
-  markCatalogDirty();
+  await saveJSONAsync(STORAGE_KEYS.products, products);
+  await markCatalogDirty();
   delete editingProdImages[id];
   editingProductId = null;
   renderAll();
@@ -325,7 +325,7 @@ export function onNewProdCategoryChange() {
   }
 }
 
-export function addProduct() {
+export async function addProduct() {
   // Phase 3 fix (see modularization plan §5, Phase 3): same gap as
   // saveProductEdit/removeProduct — the form itself was hidden for roles
   // without inventory:add, but adding a product was never actually
@@ -367,8 +367,8 @@ export function addProduct() {
     updated_at: Date.now()
   };
   products.push(newProd);
-  saveJSON(STORAGE_KEYS.products, products);
-  markCatalogDirty();
+  await saveJSONAsync(STORAGE_KEYS.products, products);
+  await markCatalogDirty();
 
   nameInput.value = ''; priceInput.value = '';
   if (typeSel) typeSel.value = 'product';
@@ -384,15 +384,15 @@ export function addProduct() {
   renderAll();
 }
 
-export function removeProduct(id) {
+export async function removeProduct(id) {
   // Phase 3 fix (see modularization plan §5, Phase 3): this previously had
   // no permission gate at all — any role could remove a product. Gated on
   // inventory:edit (same permission that already governs stock adjustment).
   if (!hasPermission(currentStaff ? currentStaff.role : 'owner', 'inventory:edit')) return;
   if (!confirm('Remove this product from the catalog? This change will be included on the next sync.')) return;
   setProducts(products.filter(p => p.id !== id));
-  saveJSON(STORAGE_KEYS.products, products);
-  markCatalogDirty();
+  await saveJSONAsync(STORAGE_KEYS.products, products);
+  await markCatalogDirty();
   delete currentOrder[id];
   delete currentOrderNotes[id];
   renderAll();
