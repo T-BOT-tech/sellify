@@ -159,8 +159,11 @@ export async function restoreTenantStateForTenant(chatId) {
   const snapshot = await loadJSONAsync(tenantStateKey(tenantId), null);
   if (String(config.chatId || '') !== tenantId) return false;
   if (!snapshot || String(snapshot.tenantId) !== tenantId || !snapshot.state || typeof snapshot.state !== 'object') return false;
-  for (const [name, , setter] of tenantStateFields) {
-    if (Object.prototype.hasOwnProperty.call(snapshot.state, name)) setter(snapshot.state[name]);
+  for (const [name, , setter, storageKey] of tenantStateFields) {
+    if (Object.prototype.hasOwnProperty.call(snapshot.state, name)) {
+      setter(snapshot.state[name]);
+      await saveJSONAsync(storageKey, snapshot.state[name]);
+    }
   }
   return true;
 }
@@ -168,7 +171,11 @@ export async function restoreTenantStateForTenant(chatId) {
 async function clearSharedTenantCaches() {
   for (const [, , setter, storageKey, emptyValue] of tenantStateFields) {
     setter(emptyValue);
-    await saveJSONAsync(storageKey, emptyValue);
+    const saved = await saveJSONAsync(storageKey, emptyValue);
+    if (!saved) {
+      await restoreTenantStateForTenant(config.chatId);
+      throw new Error('Could not safely clear local business data for tenant switch');
+    }
   }
 }
 
@@ -181,9 +188,12 @@ export async function selectOnboardingTenant() {
     body: JSON.stringify({ chatId: select.value, deviceName: 'Telegram Mini App' }),
   });
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('sellify:tenant-changing'));
-  await preserveTenantState(config.chatId);
-  persistAuth(data, data.membership);
+  if (config.chatId && !(await preserveTenantState(config.chatId))) {
+    showToast(t('storageFull'));
+    return;
+  }
   await clearSharedTenantCaches();
+  persistAuth(data, data.membership);
   await loadBusinessTemplateConfig();
   closeOnboarding();
   window.location.reload();
@@ -241,9 +251,12 @@ export async function switchActiveTenant() {
       body: JSON.stringify({ chatId, deviceName: 'Sellify device' }),
     });
     if (typeof window !== 'undefined') window.dispatchEvent(new Event('sellify:tenant-changing'));
-    await preserveOrdersForTenant(config.chatId);
-    persistAuth(data, data.membership);
+    if (config.chatId && !(await preserveTenantState(config.chatId))) {
+      showToast(t('storageFull'));
+      return;
+    }
     await clearSharedTenantCaches();
+    persistAuth(data, data.membership);
     await loadBusinessTemplateConfig();
     window.location.reload();
   } catch (error) {
