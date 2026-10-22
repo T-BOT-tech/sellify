@@ -517,7 +517,7 @@ renderAll();
 // for zero benefit until Phase 4 lands. Once Phase 4 makes IndexedDB the sole
 // write target, this becomes the step that actually matters, and a loading
 // state may be worth adding then instead of here.
-hydrateFromIndexedDB().then(changed => {
+const ledgerHydrationPromise = hydrateFromIndexedDB().then(changed => {
   if (changed) renderAll();
   // Phase 3 fix (see modularization plan §5, Phase 3): runs after
   // hydration resolves, not before, so it operates on whichever copy of
@@ -534,10 +534,10 @@ hydrateFromIndexedDB().then(changed => {
 // across all browsers). Settings reads ledgerStoragePersisted whenever it's opened.
 requestLedgerStoragePersistence();
 
-tenantAuthPromise.then(result => {
+tenantAuthPromise.then(result => ledgerHydrationPromise.then(() => {
   if (result?.authenticated && config.chatId && config.syncUrl) return fetchRemoteCatalogAndBranding();
   return null;
-}).catch(() => null);
+})).catch(() => null);
 
 if ('serviceWorker' in navigator) {
   let sellifyServiceWorkerRegistration = null;
