@@ -140,8 +140,8 @@ assert.match(productsSource, /export async function addProduct\(\)[\s\S]*?await 
   'adding a catalog item must durably save its data and pending marker before returning');
 assert.match(productsSource, /export async function removeProduct\(id\)[\s\S]*?await saveJSONAsync\(STORAGE_KEYS\.products, products\)[\s\S]*?await markCatalogDirty\(\)/,
   'removing a catalog item must durably save its data and pending marker before returning');
-assert.match(tenantAuthSource, /async function clearSharedTenantCaches\(\)[\s\S]*?setProducts\(\[\]\);[\s\S]*?await saveJSONAsync\(STORAGE_KEYS\.products, \[\]\)/,
-  'tenant switching must clear the shared product cache before reload to prevent offline cross-tenant leakage');
+assert.match(tenantAuthSource, /async function clearSharedTenantCaches\(\)[\s\S]*?for \(const \[, , setter, storageKey, emptyValue\] of tenantStateFields\)[\s\S]*?saveJSONAsync\(storageKey, emptyValue\)/,
+  'tenant switching must clear every shared business-state cache before reload to prevent offline cross-tenant leakage');
 assert.match(tenantAuthSource, /await clearSharedTenantCaches\(\);[\s\S]*?persistAuth\(data, data\.membership\);[\s\S]*?window\.location\.reload\(\);/,
   'settings tenant switching must clear shared caches durably before changing the active identity');
 assert.match(tenantAuthSource, /await clearSharedTenantCaches\(\);[\s\S]*?persistAuth\(data, data\.membership\);[\s\S]*?closeOnboarding\(\);[\s\S]*?window\.location\.reload\(\);/,
