@@ -43,6 +43,39 @@ export function loadJSON(key, fallback) {
 // narrows this window but can't close it (the page can be torn down before an
 // async promise settles) — that's a separate, deliberate follow-up, not part
 // of this phase.
+// Awaitable persistence path for critical first-run mutations. Existing saveJSON()
+// remains fire-and-forget for legacy call sites; onboarding can wait for the
+// IndexedDB transaction to commit before attempting the remote sync or reporting
+// that the local write is complete.
+export async function saveJSONAsync(key, value) {
+  if (isIdbUnavailable()) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (e) {
+      console.error('Storage write failed for', key, e);
+      showToast(t('storageFull'));
+      return false;
+    }
+  }
+
+  try {
+    await idbSet(key, value);
+    return true;
+  } catch (e) {
+    console.error('IndexedDB write failed for', key, e);
+    setIdbUnavailable(true);
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (e2) {
+      console.error('Storage write failed for', key, e2);
+      showToast(t('storageFull'));
+      return false;
+    }
+  }
+}
+
 export function saveJSON(key, value) {
   if (isIdbUnavailable()) {
     // IndexedDB isn't usable this session (unsupported, blocked, or corrupted
