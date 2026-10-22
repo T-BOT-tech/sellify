@@ -140,12 +140,24 @@ assert.match(productsSource, /export async function addProduct\(\)[\s\S]*?await 
   'adding a catalog item must durably save its data and pending marker before returning');
 assert.match(productsSource, /export async function removeProduct\(id\)[\s\S]*?await saveJSONAsync\(STORAGE_KEYS\.products, products\)[\s\S]*?await markCatalogDirty\(\)/,
   'removing a catalog item must durably save its data and pending marker before returning');
-assert.match(tenantAuthSource, /async function clearSharedCatalogCacheForTenantSwitch\(\)[\s\S]*?setProducts\(\[\]\);[\s\S]*?await saveJSONAsync\(STORAGE_KEYS\.products, \[\]\)/,
+assert.match(tenantAuthSource, /async function clearSharedTenantCaches\(\)[\s\S]*?setProducts\(\[\]\);[\s\S]*?await saveJSONAsync\(STORAGE_KEYS\.products, \[\]\)/,
   'tenant switching must clear the shared product cache before reload to prevent offline cross-tenant leakage');
-assert.match(tenantAuthSource, /persistAuth\(data, data\.membership\);\s*await clearSharedCatalogCacheForTenantSwitch\(\);[\s\S]*?window\.location\.reload\(\);/,
+assert.match(tenantAuthSource, /persistAuth\(data, data\.membership\);\s*await clearSharedTenantCaches\(\);[\s\S]*?window\.location\.reload\(\);/,
   'settings tenant switching must clear and persist the shared cache after selecting the new tenant');
-assert.match(tenantAuthSource, /persistAuth\(data, data\.membership\);\s*await clearSharedCatalogCacheForTenantSwitch\(\);[\s\S]*?closeOnboarding\(\);[\s\S]*?window\.location\.reload\(\);/,
+assert.match(tenantAuthSource, /persistAuth\(data, data\.membership\);\s*await clearSharedTenantCaches\(\);[\s\S]*?closeOnboarding\(\);[\s\S]*?window\.location\.reload\(\);/,
   'onboarding tenant switching must clear and persist the shared cache before reload');
+assert.match(tenantAuthSource, /const tenantOrdersKey = chatId => `ledger_tenant_orders_v1:/,
+  'offline order snapshots must be keyed by tenant');
+assert.match(tenantAuthSource, /async function preserveOrdersForTenant\(chatId\)[\s\S]*?tenantOrdersKey\(tenantId\)[\s\S]*?orders: structuredClone\(orders\)/,
+  'tenant switching must durably preserve the outgoing tenant order queue');
+assert.match(tenantAuthSource, /export async function restoreOrdersForTenant\(chatId\)[\s\S]*?String\(snapshot\.tenantId\) !== tenantId[\s\S]*?setOrders\(snapshot\.orders\)/,
+  'order recovery must validate snapshot tenant ownership before restoration');
+assert.match(tenantAuthSource, /await preserveOrdersForTenant\(config\.chatId\);[\s\S]*?persistAuth\(data, data\.membership\);[\s\S]*?await clearSharedTenantCaches\(\)/,
+  'tenant switching must preserve queued orders before changing identity and clearing shared state');
+assert.match(tenantAuthSource, /setOrders\(\[\]\);[\s\S]*?saveJSONAsync\(STORAGE_KEYS\.orders, \[\]\)/,
+  'tenant switching must clear the shared order cache after preserving its tenant snapshot');
+assert.match(mainSource, /await restoreOrdersForTenant\(config\.chatId\);[\s\S]*?await restorePendingCatalogForTenant\(config\.chatId\);[\s\S]*?return fetchRemoteCatalogAndBranding\(\)/,
+  'active tenant order queue must be restored after hydration and before synchronization');
 assert.match(catalogSource, /if \(isCatalogDirty\(\)\) return;/,
   'background catalog pull must not replace locally dirty catalog state');
 assert.match(catalogSource, /if \(Array\.isArray\(data\.products\)\) \{[\s\S]*?setProducts\(sanitizeRemoteProducts\(data\.products\)\)/,
