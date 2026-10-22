@@ -74,9 +74,8 @@ export function sanitizeRemoteListings(rawList) {
 
 export async function fetchRemoteCatalogAndBranding() {
   if (!config.syncUrl || !config.chatId) return;
-  // A local catalog mutation must not be silently replaced by a background
-  // pull before the merchant has synced it. The dirty flag is session-scoped;
-  // durable tenant-scoped recovery remains a separate follow-up.
+  // A restored tenant-scoped pending snapshot must not be silently replaced by
+  // a background pull before the merchant has synced it.
   if (isCatalogDirty()) return;
   try {
     const res = await fetch(`${config.syncUrl.replace(/\/$/, '')}/catalog/${config.chatId}`);
@@ -85,7 +84,7 @@ export async function fetchRemoteCatalogAndBranding() {
     if (data.products && data.products.length) {
       setProducts(sanitizeRemoteProducts(data.products));
       saveJSON(STORAGE_KEYS.products, products);
-      markCatalogSynced();
+      await markCatalogSynced();
       renderAll();
     }
     if (data.branding) {
@@ -114,7 +113,7 @@ export async function syncCatalog() {
       if (Array.isArray(data.products)) {
         setProducts(sanitizeRemoteProducts(data.products));
         saveJSON(STORAGE_KEYS.products, products);
-        markCatalogSynced();
+        await markCatalogSynced();
         renderAll();
       }
       throw new Error('Catalog changed on another device. Your local catalog was refreshed; review your changes before saving again.');
