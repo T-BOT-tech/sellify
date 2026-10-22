@@ -146,18 +146,21 @@ assert.match(tenantAuthSource, /persistAuth\(data, data\.membership\);\s*await c
   'settings tenant switching must clear and persist the shared cache after selecting the new tenant');
 assert.match(tenantAuthSource, /persistAuth\(data, data\.membership\);\s*await clearSharedTenantCaches\(\);[\s\S]*?closeOnboarding\(\);[\s\S]*?window\.location\.reload\(\);/,
   'onboarding tenant switching must clear and persist the shared cache before reload');
-assert.match(tenantAuthSource, /const tenantOrdersKey = chatId => `ledger_tenant_orders_v1:/,
-  'offline order snapshots must be keyed by tenant');
-assert.match(tenantAuthSource, /async function preserveOrdersForTenant\(chatId\)[\s\S]*?tenantOrdersKey\(tenantId\)[\s\S]*?orders: structuredClone\(orders\)/,
-  'tenant switching must durably preserve the outgoing tenant order queue');
-assert.match(tenantAuthSource, /export async function restoreOrdersForTenant\(chatId\)[\s\S]*?String\(snapshot\.tenantId\) !== tenantId[\s\S]*?setOrders\(snapshot\.orders\)/,
-  'order recovery must validate snapshot tenant ownership before restoration');
-assert.match(tenantAuthSource, /await preserveOrdersForTenant\(config\.chatId\);[\s\S]*?persistAuth\(data, data\.membership\);[\s\S]*?await clearSharedTenantCaches\(\)/,
-  'tenant switching must preserve queued orders before changing identity and clearing shared state');
-assert.match(tenantAuthSource, /setOrders\(\[\]\);[\s\S]*?saveJSONAsync\(STORAGE_KEYS\.orders, \[\]\)/,
-  'tenant switching must clear the shared order cache after preserving its tenant snapshot');
-assert.match(mainSource, /await restoreOrdersForTenant\(config\.chatId\);[\s\S]*?await restorePendingCatalogForTenant\(config\.chatId\);[\s\S]*?return fetchRemoteCatalogAndBranding\(\)/,
-  'active tenant order queue must be restored after hydration and before synchronization');
+assert.match(tenantAuthSource, /const tenantStateKey = chatId => `ledger_tenant_state_v1:/,
+  'all persisted business state snapshots must be keyed by tenant');
+assert.match(tenantAuthSource, /async function preserveTenantState\(chatId\)[\s\S]*?structuredClone\(getValue\(\)\)[\s\S]*?saveJSONAsync\(tenantStateKey\(tenantId\)/,
+  'tenant switching must durably preserve the outgoing tenant local state before clearing shared keys');
+assert.match(tenantAuthSource, /export async function restoreTenantStateForTenant\(chatId\)[\s\S]*?String\(snapshot\.tenantId\) !== tenantId[\s\S]*?setter\(snapshot\.state\[name\]\)/,
+  'tenant recovery must validate snapshot ownership before restoring tenant state');
+assert.match(tenantAuthSource, /\['inventoryMovements',[\s\S]*?\['inventoryBalances',[\s\S]*?\['outboxEvents',[\s\S]*?\['stockTransactions'/,
+  'tenant snapshots must include inventory projections and durable offline outbox events');
+assert.match(tenantAuthSource, /await preserveTenantState\(config\.chatId\);[\s\S]*?persistAuth\(data, data\.membership\);[\s\S]*?await clearSharedTenantCaches\(\)/,
+  'tenant switching must preserve outgoing state before changing identity and clearing shared caches');
+assert.match(tenantAuthSource, /for \(const \[, , setter, storageKey, emptyValue\] of tenantStateFields\)[\s\S]*?setter\(emptyValue\);[\s\S]*?saveJSONAsync\(storageKey, emptyValue\)/,
+  'tenant switching must clear every shared business-state key after snapshotting it');
+assert.match(mainSource, /await restoreTenantStateForTenant\(config\.chatId\);[\s\S]*?await restorePendingCatalogForTenant\(config\.chatId\);[\s\S]*?return fetchRemoteCatalogAndBranding\(\)/,
+  'active tenant state must be restored after hydration and before synchronization');
+
 assert.match(catalogSource, /if \(isCatalogDirty\(\)\) return;/,
   'background catalog pull must not replace locally dirty catalog state');
 assert.match(catalogSource, /if \(Array\.isArray\(data\.products\)\) \{[\s\S]*?setProducts\(sanitizeRemoteProducts\(data\.products\)\)/,
