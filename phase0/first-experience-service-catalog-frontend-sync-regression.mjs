@@ -140,6 +140,12 @@ assert.match(productsSource, /export async function addProduct\(\)[\s\S]*?await 
   'adding a catalog item must durably save its data and pending marker before returning');
 assert.match(productsSource, /export async function removeProduct\(id\)[\s\S]*?await saveJSONAsync\(STORAGE_KEYS\.products, products\)[\s\S]*?await markCatalogDirty\(\)/,
   'removing a catalog item must durably save its data and pending marker before returning');
+assert.match(tenantAuthSource, /async function clearSharedCatalogCacheForTenantSwitch\(\)[\s\S]*?setProducts\(\[\]\);[\s\S]*?await saveJSONAsync\(STORAGE_KEYS\.products, \[\]\)/,
+  'tenant switching must clear the shared product cache before reload to prevent offline cross-tenant leakage');
+assert.match(tenantAuthSource, /persistAuth\(data, data\.membership\);\s*await clearSharedCatalogCacheForTenantSwitch\(\);[\s\S]*?window\.location\.reload\(\);/,
+  'settings tenant switching must clear and persist the shared cache after selecting the new tenant');
+assert.match(tenantAuthSource, /persistAuth\(data, data\.membership\);\s*await clearSharedCatalogCacheForTenantSwitch\(\);[\s\S]*?closeOnboarding\(\);[\s\S]*?window\.location\.reload\(\);/,
+  'onboarding tenant switching must clear and persist the shared cache before reload');
 assert.match(catalogSource, /if \(isCatalogDirty\(\)\) return;/,
   'background catalog pull must not replace locally dirty catalog state');
 
