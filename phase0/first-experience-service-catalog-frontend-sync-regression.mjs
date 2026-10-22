@@ -124,8 +124,16 @@ assert.match(productsSource, /export function isCatalogDirty\(\)/,
   'catalog pull must be able to distinguish a locally modified catalog');
 assert.match(mainSource, /const ledgerHydrationPromise = hydrateFromIndexedDB\(\)/,
   'startup must expose the local-storage hydration completion boundary');
-assert.match(mainSource, /tenantAuthPromise\.then\(result => ledgerHydrationPromise\.then\(\(\) => \{/,
+assert.match(mainSource, /tenantAuthPromise\.then\(result => ledgerHydrationPromise\.then\(async \(\) => \{/,
   'remote catalog pull must wait until local IndexedDB hydration completes');
+assert.match(productsSource, /pendingCatalogKey = chatId => `ledger_catalog_pending_v1:/,
+  'pending catalog snapshots must use a tenant-specific durable key');
+assert.match(productsSource, /export async function restorePendingCatalogForTenant\(chatId\)[\s\S]*?String\(pending\.tenantId\) !== tenantId[\s\S]*?setProducts\(pending\.products\)/,
+  'startup recovery must validate tenant ownership before restoring a pending catalog');
+assert.match(mainSource, /await restorePendingCatalogForTenant\(config\.chatId\);[\s\S]*?return fetchRemoteCatalogAndBranding\(\);/,
+  'tenant pending catalog must be restored after hydration and before remote pull');
+assert.match(productsSource, /export async function markCatalogSynced\(\)[\s\S]*?saveJSONAsync\(pendingCatalogKey\(chatId\), null\)/,
+  'successful sync must durably clear the pending snapshot marker');
 assert.match(catalogSource, /if \(isCatalogDirty\(\)\) return;/,
   'background catalog pull must not replace locally dirty catalog state');
 
