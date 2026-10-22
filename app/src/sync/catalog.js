@@ -21,7 +21,7 @@ import { saveJSON } from '../storage/json.js';
 import { applyStoreBranding } from '../ui/branding.js';
 import { t } from '../ui/i18n.js';
 import { renderAll } from '../ui/render.js';
-import { markCatalogSynced } from '../products/catalog.js';
+import { isCatalogDirty, markCatalogSynced } from '../products/catalog.js';
 import { authHeaders as tenantAuthHeaders } from '../auth/tenant.js';
 
 // IDs are meant to be opaque identifiers (not markup), so restricting them to a
@@ -74,6 +74,10 @@ export function sanitizeRemoteListings(rawList) {
 
 export async function fetchRemoteCatalogAndBranding() {
   if (!config.syncUrl || !config.chatId) return;
+  // A local catalog mutation must not be silently replaced by a background
+  // pull before the merchant has synced it. The dirty flag is session-scoped;
+  // durable tenant-scoped recovery remains a separate follow-up.
+  if (isCatalogDirty()) return;
   try {
     const res = await fetch(`${config.syncUrl.replace(/\/$/, '')}/catalog/${config.chatId}`);
     if (!res.ok) return;
