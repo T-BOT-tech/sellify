@@ -112,6 +112,9 @@ assert.match(tenantAuthSource, /Saved on this device\. You are offline; use Sync
 assert.match(tenantAuthSource, /Saved on this device, but not synced yet\. Use Sync now to retry\./,
   'sync exceptions must not be presented as successful persistence to the server');
 
+assert.match(tenantAuthSource, /syncMessage === t\('catalogSyncFailed'\)[\s\S]*?Saved on this device, but not synced yet\. Use Sync now to retry\./,
+  'the onboarding flow must detect syncCatalog’s returned failure message, not only thrown exceptions');
+
 // Both the Telegram order payload and the local queued checkout derive their
 // line-item type from the local catalog. This is presentation/transport
 // metadata only; backend catalog data remains authoritative for stock effects.
