@@ -3,8 +3,8 @@
 // it for a short-lived device session. Standalone devices use owner-approved
 // one-time pairing codes. The PWA never stores or sends tenant-wide API keys.
 import { STORAGE_KEYS } from '../constants.js';
-import { config, setConfig, products, setProducts } from '../state.js';
-import { saveJSON, saveJSONAsync } from '../storage/json.js';
+import { config, setConfig, products, setProducts, orders, setOrders } from '../state.js';
+import { saveJSON, saveJSONAsync, loadJSONAsync } from '../storage/json.js';
 import { getActivePlatform } from '../platform/index.js';
 import { uid } from '../utils/index.js';
 import { toMinorUnits } from '../utils/money.js';
@@ -128,12 +128,41 @@ async function loadBusinessTemplateConfig() {
   }
 }
 
-async function clearSharedCatalogCacheForTenantSwitch() {
-  // STORAGE_KEYS.products is a shared device cache, not tenant-keyed. Clear it
-  // before reload so an offline switch cannot briefly expose the previous
-  // business's catalog. Pending snapshots remain isolated under tenant keys.
+const tenantOrdersKey = chatId => `ledger_tenant_orders_v1:${encodeURIComponent(String(chatId))}`;
+
+// Orders include offline queued work, so preserve the current tenant's local
+// queue before clearing shared device storage. This is a recovery cache only;
+// the server remains authoritative for accepted/synced order state.
+async function preserveOrdersForTenant(chatId) {
+  const tenantId = String(chatId || '');
+  if (!tenantId) return false;
+  return saveJSONAsync(tenantOrdersKey(tenantId), {
+    tenantId,
+    orders: structuredClone(orders),
+    updatedAt: Date.now(),
+  });
+}
+
+export async function restoreOrdersForTenant(chatId) {
+  const tenantId = String(chatId || '');
+  if (!tenantId || String(config.chatId || '') !== tenantId) return false;
+  const snapshot = await loadJSONAsync(tenantOrdersKey(tenantId), null);
+  if (String(config.chatId || '') !== tenantId) return false;
+  if (!snapshot || String(snapshot.tenantId) !== tenantId || !Array.isArray(snapshot.orders)) return false;
+  setOrders(snapshot.orders);
+  return true;
+}
+
+async function clearSharedTenantCaches() {
+  // These device-level keys are shared across businesses. Keep each tenant's
+  // recoverable order queue in its tenant-keyed snapshot, then clear the
+  // shared values before reloading into the newly selected tenant.
   setProducts([]);
-  await saveJSONAsync(STORAGE_KEYS.products, []);
+  setOrders([]);
+  await Promise.all([
+    saveJSONAsync(STORAGE_KEYS.products, []),
+    saveJSONAsync(STORAGE_KEYS.orders, []),
+  ]);
 }
 
 export async function selectOnboardingTenant() {
@@ -145,8 +174,9 @@ export async function selectOnboardingTenant() {
     body: JSON.stringify({ chatId: select.value, deviceName: 'Telegram Mini App' }),
   });
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('sellify:tenant-changing'));
+  await preserveOrdersForTenant(config.chatId);
   persistAuth(data, data.membership);
-  await clearSharedCatalogCacheForTenantSwitch();
+  await clearSharedTenantCaches();
   await loadBusinessTemplateConfig();
   closeOnboarding();
   window.location.reload();
@@ -204,8 +234,9 @@ export async function switchActiveTenant() {
       body: JSON.stringify({ chatId, deviceName: 'Sellify device' }),
     });
     if (typeof window !== 'undefined') window.dispatchEvent(new Event('sellify:tenant-changing'));
+    await preserveOrdersForTenant(config.chatId);
     persistAuth(data, data.membership);
-    await clearSharedCatalogCacheForTenantSwitch();
+    await clearSharedTenantCaches();
     await loadBusinessTemplateConfig();
     window.location.reload();
   } catch (error) {
