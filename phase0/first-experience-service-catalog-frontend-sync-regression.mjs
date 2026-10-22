@@ -156,6 +156,8 @@ assert.match(tenantAuthSource, /\['inventoryMovements',[\s\S]*?\['inventoryBalan
   'tenant snapshots must include inventory projections and durable offline outbox events');
 assert.match(tenantAuthSource, /await preserveTenantState\(config\.chatId\);[\s\S]*?persistAuth\(data, data\.membership\);[\s\S]*?await clearSharedTenantCaches\(\)/,
   'tenant switching must preserve outgoing state before changing identity and clearing shared caches');
+assert.match(tenantAuthSource, /const saved = await saveJSONAsync\(storageKey, emptyValue\);[\s\S]*?if \(!saved\)[\s\S]*?await restoreTenantStateForTenant\(config\.chatId\);[\s\S]*?throw new Error\('Could not safely clear local business data for tenant switch'\)/,
+  'failed cache writes must abort tenant switching and restore the outgoing tenant state');
 assert.match(tenantAuthSource, /for \(const \[, , setter, storageKey, emptyValue\] of tenantStateFields\)[\s\S]*?setter\(emptyValue\);[\s\S]*?saveJSONAsync\(storageKey, emptyValue\)/,
   'tenant switching must clear every shared business-state key after snapshotting it');
 assert.match(mainSource, /await restoreTenantStateForTenant\(config\.chatId\);[\s\S]*?await restorePendingCatalogForTenant\(config\.chatId\);[\s\S]*?return fetchRemoteCatalogAndBranding\(\)/,
