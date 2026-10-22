@@ -142,10 +142,10 @@ assert.match(productsSource, /export async function removeProduct\(id\)[\s\S]*?a
   'removing a catalog item must durably save its data and pending marker before returning');
 assert.match(tenantAuthSource, /async function clearSharedTenantCaches\(\)[\s\S]*?setProducts\(\[\]\);[\s\S]*?await saveJSONAsync\(STORAGE_KEYS\.products, \[\]\)/,
   'tenant switching must clear the shared product cache before reload to prevent offline cross-tenant leakage');
-assert.match(tenantAuthSource, /persistAuth\(data, data\.membership\);\s*await clearSharedTenantCaches\(\);[\s\S]*?window\.location\.reload\(\);/,
-  'settings tenant switching must clear and persist the shared cache after selecting the new tenant');
-assert.match(tenantAuthSource, /persistAuth\(data, data\.membership\);\s*await clearSharedTenantCaches\(\);[\s\S]*?closeOnboarding\(\);[\s\S]*?window\.location\.reload\(\);/,
-  'onboarding tenant switching must clear and persist the shared cache before reload');
+assert.match(tenantAuthSource, /await clearSharedTenantCaches\(\);[\s\S]*?persistAuth\(data, data\.membership\);[\s\S]*?window\.location\.reload\(\);/,
+  'settings tenant switching must clear shared caches durably before changing the active identity');
+assert.match(tenantAuthSource, /await clearSharedTenantCaches\(\);[\s\S]*?persistAuth\(data, data\.membership\);[\s\S]*?closeOnboarding\(\);[\s\S]*?window\.location\.reload\(\);/,
+  'onboarding tenant switching must clear shared caches durably before changing the active identity');
 assert.match(tenantAuthSource, /const tenantStateKey = chatId => `ledger_tenant_state_v1:/,
   'all persisted business state snapshots must be keyed by tenant');
 assert.match(tenantAuthSource, /async function preserveTenantState\(chatId\)[\s\S]*?structuredClone\(getValue\(\)\)[\s\S]*?saveJSONAsync\(tenantStateKey\(tenantId\)/,
@@ -154,8 +154,8 @@ assert.match(tenantAuthSource, /export async function restoreTenantStateForTenan
   'tenant recovery must validate snapshot ownership before restoring tenant state');
 assert.match(tenantAuthSource, /\['inventoryMovements',[\s\S]*?\['inventoryBalances',[\s\S]*?\['outboxEvents',[\s\S]*?\['stockTransactions'/,
   'tenant snapshots must include inventory projections and durable offline outbox events');
-assert.match(tenantAuthSource, /await preserveTenantState\(config\.chatId\);[\s\S]*?persistAuth\(data, data\.membership\);[\s\S]*?await clearSharedTenantCaches\(\)/,
-  'tenant switching must preserve outgoing state before changing identity and clearing shared caches');
+assert.match(tenantAuthSource, /await preserveTenantState\(config\.chatId\);[\s\S]*?await clearSharedTenantCaches\(\);[\s\S]*?persistAuth\(data, data\.membership\);/,
+  'tenant switching must durably preserve and clear outgoing state before changing identity');
 assert.match(tenantAuthSource, /const saved = await saveJSONAsync\(storageKey, emptyValue\);[\s\S]*?if \(!saved\)[\s\S]*?await restoreTenantStateForTenant\(config\.chatId\);[\s\S]*?throw new Error\('Could not safely clear local business data for tenant switch'\)/,
   'failed cache writes must abort tenant switching and restore the outgoing tenant state');
 assert.match(tenantAuthSource, /for \(const \[, , setter, storageKey, emptyValue\] of tenantStateFields\)[\s\S]*?setter\(emptyValue\);[\s\S]*?saveJSONAsync\(storageKey, emptyValue\)/,
