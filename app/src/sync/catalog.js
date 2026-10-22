@@ -81,7 +81,10 @@ export async function fetchRemoteCatalogAndBranding() {
     const res = await fetch(`${config.syncUrl.replace(/\/$/, '')}/catalog/${config.chatId}`);
     if (!res.ok) return;
     const data = await res.json();
-    if (data.products && data.products.length) {
+    // An empty array is a valid canonical catalog too (for example, after
+    // the last item was removed). Do not leave a stale local tenant catalog
+    // visible merely because the server currently has zero items.
+    if (Array.isArray(data.products)) {
       setProducts(sanitizeRemoteProducts(data.products));
       saveJSON(STORAGE_KEYS.products, products);
       await markCatalogSynced();
