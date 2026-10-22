@@ -134,6 +134,12 @@ assert.match(mainSource, /await restorePendingCatalogForTenant\(config\.chatId\)
   'tenant pending catalog must be restored after hydration and before remote pull');
 assert.match(productsSource, /export async function markCatalogSynced\(\)[\s\S]*?saveJSONAsync\(pendingCatalogKey\(chatId\), null\)/,
   'successful sync must durably clear the pending snapshot marker');
+assert.match(productsSource, /export async function saveProductEdit\(id\)[\s\S]*?await saveJSONAsync\(STORAGE_KEYS\.products, products\)[\s\S]*?await markCatalogDirty\(\)/,
+  'editing a catalog item must durably save its data and pending marker before returning');
+assert.match(productsSource, /export async function addProduct\(\)[\s\S]*?await saveJSONAsync\(STORAGE_KEYS\.products, products\)[\s\S]*?await markCatalogDirty\(\)/,
+  'adding a catalog item must durably save its data and pending marker before returning');
+assert.match(productsSource, /export async function removeProduct\(id\)[\s\S]*?await saveJSONAsync\(STORAGE_KEYS\.products, products\)[\s\S]*?await markCatalogDirty\(\)/,
+  'removing a catalog item must durably save its data and pending marker before returning');
 assert.match(catalogSource, /if \(isCatalogDirty\(\)\) return;/,
   'background catalog pull must not replace locally dirty catalog state');
 
