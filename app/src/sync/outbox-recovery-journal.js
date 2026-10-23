@@ -6,6 +6,11 @@
 // resurrecting entries removed by another tab. It is not a transactional
 // cross-tab lock: simultaneous edits to the same event remain last-writer-wins.
 export const OUTBOX_RECOVERY_KEY = 'sellify.outbox.recovery.v1';
+let lastSnapshot = null;
+
+export function initializeOutboxRecoveryBaseline(events) {
+  if (!Array.isArray(lastSnapshot)) lastSnapshot = Array.isArray(events) ? events.map(event => ({ ...event })) : [];
+}
 
 function byId(events) {
   return new Map((Array.isArray(events) ? events : [])
@@ -61,7 +66,8 @@ export function writeOutboxRecoveryJournal(
 ) {
   let snapshot = events;
   try {
-    if (Array.isArray(previousEvents)) {
+    const baseline = Array.isArray(lastSnapshot) ? lastSnapshot : previousEvents;
+    if (Array.isArray(baseline)) {
       let shared = [];
       try {
         const raw = storage.getItem(OUTBOX_RECOVERY_KEY);
@@ -70,10 +76,11 @@ export function writeOutboxRecoveryJournal(
       } catch (readError) {
         logger.error('Outbox recovery journal read-before-write failed; using local snapshot', readError);
       }
-      snapshot = mergeOutboxSnapshots(previousEvents, events, shared);
+      snapshot = mergeOutboxSnapshots(baseline, events, shared);
       if (typeof onMerged === 'function') onMerged(snapshot);
     }
     storage.setItem(OUTBOX_RECOVERY_KEY, JSON.stringify(snapshot));
+    lastSnapshot = snapshot.map(event => ({ ...event }));
     return true;
   } catch (error) {
     logger.error('Outbox recovery journal write failed; removing any stale snapshot', error);
@@ -99,6 +106,7 @@ export function restoreOutboxRecoveryJournal({
     if (!Array.isArray(recovered)) return false;
     setOutboxEvents(recovered);
     saveOutbox(recovered);
+    lastSnapshot = recovered.map(event => ({ ...event }));
     return true;
   } catch (error) {
     logger.error('Outbox recovery journal read/restore failed', error);
