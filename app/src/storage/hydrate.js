@@ -105,7 +105,8 @@ export async function hydrateFromIndexedDB() {
   try {
     fromIdb = await idbGetAll(Object.values(STORAGE_KEYS));
   } catch (e) {
-    console.error('IndexedDB hydration read failed, keeping localStorage-loaded values', e);
+    console.error('IndexedDB hydration read failed, restoring local outbox journal and keeping localStorage-loaded values', e);
+    restoreOutboxRecoveryJournal();
     migrateMoneyNow();
     ledgerHydrated = true;
     return false;
