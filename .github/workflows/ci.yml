@@ -71,6 +71,9 @@ jobs:
       - name: Country-pack onboarding integrity regression
         run: npm run test:country-pack-onboarding
 
+      - name: Offline outbox recovery journal regression
+        run: npm run test:offline-outbox-recovery-journal
+
       - name: GAP-1.18I payment verification migration independence regression
         run: npm run gap-1.18:provider-verification-migration-test
 
