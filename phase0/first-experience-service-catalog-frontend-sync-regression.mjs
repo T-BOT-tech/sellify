@@ -154,8 +154,17 @@ assert.match(tenantAuthSource, /export async function restoreTenantStateForTenan
   'tenant recovery must validate snapshot ownership before restoring tenant state');
 assert.match(tenantAuthSource, /\['inventoryMovements',[\s\S]*?\['inventoryBalances',[\s\S]*?\['outboxEvents',[\s\S]*?\['stockTransactions'/,
   'tenant snapshots must include inventory projections and durable offline outbox events');
-assert.match(tenantAuthSource, /await preserveTenantState\(config\.chatId\);[\s\S]*?await clearSharedTenantCaches\(\);[\s\S]*?persistAuth\(data, data\.membership\);/,
-  'tenant switching must durably preserve and clear outgoing state before changing identity');
+const tenantSwitchPreserveIndex = tenantAuthSource.indexOf('await preserveTenantState(config.chatId)');
+const tenantSwitchClearIndex = tenantAuthSource.indexOf('await clearSharedTenantCaches();', tenantSwitchPreserveIndex);
+const tenantSwitchAuthIndex = tenantAuthSource.indexOf('persistAuth(data, data.membership);', tenantSwitchClearIndex);
+assert.ok(
+  tenantSwitchPreserveIndex >= 0 &&
+  tenantSwitchClearIndex > tenantSwitchPreserveIndex &&
+  tenantSwitchAuthIndex > tenantSwitchClearIndex,
+  'tenant switching must durably preserve and clear outgoing state before changing identity'
+);
+assert.match(tenantAuthSource, /if \(config\.chatId && !\(await preserveTenantState\(config\.chatId\)\)\) \{[\s\S]*?return;/,
+  'tenant switching must abort before clearing caches or changing identity when snapshot persistence fails');
 assert.match(tenantAuthSource, /const saved = await saveJSONAsync\(storageKey, emptyValue\);[\s\S]*?if \(!saved\)[\s\S]*?await restoreTenantStateForTenant\(config\.chatId\);[\s\S]*?throw new Error\('Could not safely clear local business data for tenant switch'\)/,
   'failed cache writes must abort tenant switching and restore the outgoing tenant state');
 assert.match(tenantAuthSource, /for \(const \[, , setter, storageKey, emptyValue\] of tenantStateFields\)[\s\S]*?setter\(emptyValue\);[\s\S]*?saveJSONAsync\(storageKey, emptyValue\)/,
