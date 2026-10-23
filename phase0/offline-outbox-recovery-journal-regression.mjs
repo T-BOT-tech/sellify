@@ -151,6 +151,13 @@ for (const raw of ['{broken', JSON.stringify({ eventId: 'not-an-array' }), null]
   const merged = mergeOutboxSnapshots([completed], [completed], [],);
   assert.deepEqual(merged, [], 'an unchanged stale tab must not resurrect a completed command');
 }
+{
+  const completed = { eventId: 'completed-command', kind: 'command', status: 'pending', attempts: 0 };
+  const staleRetry = { ...completed, attempts: 1, lastAttemptAt: 123 };
+  const merged = mergeOutboxSnapshots([completed], [staleRetry], []);
+  assert.deepEqual(merged, [],
+    'a stale retry/update must not resurrect an event another tab removed after completion');
+}
 
 // Keep the production helper's catch boundaries visible to this contract test.
 assert.match(journal, /storage\.removeItem\(OUTBOX_RECOVERY_KEY\)/);
