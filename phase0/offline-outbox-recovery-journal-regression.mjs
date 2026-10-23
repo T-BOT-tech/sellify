@@ -144,7 +144,8 @@ for (const raw of ['{broken', JSON.stringify({ eventId: 'not-an-array' }), null]
 // Keep the production helper's catch boundaries visible to this contract test.
 assert.match(journal, /storage\.removeItem\(OUTBOX_RECOVERY_KEY\)/);
 assert.match(journal, /if \(!Array\.isArray\(recovered\)\) return false/);
-assert.match(journal, /snapshot = mergeOutboxSnapshots\(baseline, events, shared\)/,\n  'journal writes must merge local mutations into the latest shared snapshot');
+assert.match(journal, /snapshot = mergeOutboxSnapshots\(baseline, events, shared\)/,
+  'journal writes must merge local mutations into the latest shared snapshot');
 
 const commandSuccessMatch = outbox.match(/await flushCommand\(command\);([\s\S]*?)processed \+= 1;/);
 assert.ok(commandSuccessMatch, 'command success path must be present');
