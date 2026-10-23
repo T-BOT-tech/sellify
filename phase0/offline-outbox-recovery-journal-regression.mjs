@@ -18,6 +18,7 @@ assert.ok(
 );
 assert.match(persistBody, /JSON\.stringify\(outboxEvents\)/);
 assert.match(persistBody, /catch \(error\)/, 'journal storage failures must not prevent the existing IndexedDB path');
+assert.match(persistBody, /localStorage\.removeItem\('sellify\.outbox\.recovery\.v1'\)/, 'a failed journal update must attempt to remove the stale snapshot so it cannot resurrect completed work');
 
 const restoreMatch = hydrate.match(/function restoreOutboxRecoveryJournal\(\) \{([\s\S]*?)\n\}/);
 assert.ok(restoreMatch, 'startup hydration must provide a recovery-journal restore boundary');
