@@ -13,7 +13,7 @@ import {
 
 // Capture this tab's starting point so persistence can distinguish local
 // mutations from entries added/updated/removed by another tab.
-initializeOutboxRecoveryBaseline(outboxEvents);
+initializeOutboxRecoveryBaseline();
 
 function persist() {
   writeOutboxRecoveryJournal(outboxEvents, {
