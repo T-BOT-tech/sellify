@@ -91,7 +91,10 @@ export function writeOutboxRecoveryJournal(
         const parsed = raw ? JSON.parse(raw) : [];
         if (Array.isArray(parsed)) shared = parsed;
       } catch (readError) {
-        logger.error('Outbox recovery journal read-before-write failed; using local snapshot', readError);
+        // Do not replace a potentially newer shared journal when it cannot be
+        // read. The caller still persists through the normal IndexedDB path.
+        logger.error('Outbox recovery journal read-before-write failed; preserving shared snapshot', readError);
+        return false;
       }
       snapshot = mergeOutboxSnapshots(baseline, events, shared);
     }
