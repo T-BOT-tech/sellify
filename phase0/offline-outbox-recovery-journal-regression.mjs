@@ -44,4 +44,23 @@ assert.match(
   'journal recovery must run when IndexedDB hydration throws, not only when IndexedDB is marked unavailable'
 );
 
-console.log('PASS: offline outbox recovery journal is written before async persistence and restored after all hydration paths');
+
+const commandSuccessMatch = outbox.match(/await flushCommand\(command\);([\s\S]*?)processed \+= 1;/);
+assert.ok(commandSuccessMatch, 'command success path must be present');
+assert.match(
+  commandSuccessMatch[1],
+  /setOutboxEvents\(outboxEvents\.filter\(event => event\.eventId !== command\.eventId\)\);\s*persist\(\);/,
+  'successful commands must be removed from the recovery snapshot before persisting'
+);
+assert.match(
+  outbox,
+  /const pending = getPendingCommands\(commandType\)\.filter\(command => command\.tenantChatId === activeTenant\)/,
+  'command replay must remain restricted to the active tenant'
+);
+assert.match(
+  outbox,
+  /String\(e\.tenantChatId \|\| e\.payload\?\.tenantChatId \|\| ''\) === activeTenant/,
+  'event replay must remain restricted to the active tenant'
+);
+
+console.log('PASS: offline outbox recovery journal write ordering, hydration failure recovery, completed-command cleanup, and tenant-bound replay guards');
