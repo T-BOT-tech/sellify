@@ -67,6 +67,9 @@ jobs:
       - name: First-experience service catalog frontend sync regression
         run: npm run test:service-catalog-frontend-sync
 
+      - name: Offline outbox recovery journal regression
+        run: npm run test:offline-outbox-recovery-journal
+
       - name: GAP-1.18I payment verification migration independence regression
         run: npm run gap-1.18:provider-verification-migration-test
 
