@@ -77,10 +77,10 @@ export function writeOutboxRecoveryJournal(
         logger.error('Outbox recovery journal read-before-write failed; using local snapshot', readError);
       }
       snapshot = mergeOutboxSnapshots(baseline, events, shared);
-      if (typeof onMerged === 'function') onMerged(snapshot);
     }
     storage.setItem(OUTBOX_RECOVERY_KEY, JSON.stringify(snapshot));
     lastSnapshot = snapshot.map(event => ({ ...event }));
+    if (typeof onMerged === 'function') onMerged(snapshot);
     return true;
   } catch (error) {
     logger.error('Outbox recovery journal write failed; removing any stale snapshot', error);
