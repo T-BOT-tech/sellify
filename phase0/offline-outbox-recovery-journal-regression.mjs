@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
   OUTBOX_RECOVERY_KEY,
+  mergeOutboxSnapshots,
   restoreOutboxRecoveryJournal,
   writeOutboxRecoveryJournal,
 } from '../app/src/sync/outbox-recovery-journal.js';
@@ -107,6 +108,37 @@ for (const raw of ['{broken', JSON.stringify({ eventId: 'not-an-array' }), null]
     logger: quietLogger,
   }), false);
   assert.equal(calls, 0);
+}
+
+// Deterministic stale-tab regressions: unrelated concurrent additions survive,
+// explicit removals beat stale copies, and an unchanged stale tab cannot
+// resurrect an item another tab has already removed.
+{
+  const baseline = [
+    { eventId: 'shared-existing', status: 'pending' },
+  ];
+  const tabA = [
+    { eventId: 'shared-existing', status: 'pending' },
+    { eventId: 'tab-a-new', status: 'pending' },
+  ];
+  const sharedAfterTabB = [
+    { eventId: 'shared-existing', status: 'pending' },
+    { eventId: 'tab-b-new', status: 'pending' },
+  ];
+  const merged = mergeOutboxSnapshots(baseline, tabA, sharedAfterTabB);
+  assert.deepEqual(new Set(merged.map(event => event.eventId)),
+    new Set(['shared-existing', 'tab-a-new', 'tab-b-new']));
+}
+{
+  const completed = { eventId: 'completed-command', kind: 'command', status: 'pending' };
+  const unrelated = { eventId: 'other-command', kind: 'command', status: 'pending' };
+  const merged = mergeOutboxSnapshots([completed, unrelated], [unrelated], [completed, unrelated]);
+  assert.deepEqual(merged, [unrelated], 'a local completion must remove the completed event from the shared snapshot');
+}
+{
+  const completed = { eventId: 'completed-command', kind: 'command', status: 'pending' };
+  const merged = mergeOutboxSnapshots([completed], [completed], [],);
+  assert.deepEqual(merged, [], 'an unchanged stale tab must not resurrect a completed command');
 }
 
 // Keep the production helper's catch boundaries visible to this contract test.
