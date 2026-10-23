@@ -92,6 +92,36 @@ export function idbGet(key) {
   }));
 }
 
+// Atomically read, reconcile, and write one key inside a single readwrite
+// transaction. The updater must be synchronous: awaiting inside an IndexedDB
+// transaction can let the browser auto-commit before the write is queued.
+export function idbUpdate(key, updater) {
+  if (typeof updater !== 'function') return Promise.reject(new TypeError('idbUpdate requires an updater function'));
+  return idbOpen().then(db => new Promise((resolve, reject) => {
+    let nextValue;
+    const tx = db.transaction(IDB_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(IDB_STORE_NAME);
+    const request = store.get(key);
+    request.onsuccess = () => {
+      try {
+        nextValue = updater(request.result !== undefined ? request.result : null);
+        if (nextValue === undefined) throw new TypeError('idbUpdate updater must return a value');
+        store.put(nextValue, key);
+      } catch (error) {
+        try { tx.abort(); } catch {}
+        reject(error);
+      }
+    };
+    request.onerror = () => {
+      try { tx.abort(); } catch {}
+      reject(request.error || new Error('IndexedDB update read failed for ' + key));
+    };
+    tx.oncomplete = () => resolve(nextValue);
+    tx.onerror = () => reject(tx.error || new Error('IndexedDB update failed for ' + key));
+    tx.onabort = () => reject(tx.error || new Error('IndexedDB update transaction aborted for ' + key));
+  }));
+}
+
 export function idbSet(key, value) {
   return idbOpen().then(db => new Promise((resolve, reject) => {
     const tx = db.transaction(IDB_STORE_NAME, 'readwrite');

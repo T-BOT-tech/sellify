@@ -15,6 +15,10 @@ import { idbGetAll, isIdbUnavailable } from './idb.js';
 import { runLedgerMigration, migrateProductMoney, migrateOrderMoney } from './migration.js';
 import { saveJSON } from './json.js';
 import {
+  resetOutboxRecoveryBaseline,
+  restoreOutboxRecoveryJournal as restoreRecoveryJournal,
+} from '../sync/outbox-recovery-journal.js';
+import {
   config, products, orders, staffList, currentStaff, orderViewMode,
   b2bAccounts, pricingTiers, volumeDiscountTiers, stockTransactions, warehouseLocations, inventoryMovements, organizationLocations, inventoryBalances, outboxEvents,
   setConfig, setProducts, setOrders, setStaffList, setCurrentStaff, setOrderViewModeValue,
@@ -35,6 +39,21 @@ function migrateMoneyNow() {
   const ordersChanged = migrateOrderMoney(orders);
   if (ordersChanged) saveJSON(STORAGE_KEYS.orders, orders);
   return productsChanged || ordersChanged;
+}
+
+// Restore the synchronous outbox journal after IndexedDB hydration, or when
+// IndexedDB is unavailable. This protects queued intent from a stale IDB
+// snapshot after a tab closed before its latest transaction committed.
+function restoreOutboxRecoveryJournal() {
+  const restored = restoreRecoveryJournal({
+    setOutboxEvents,
+    saveOutbox: recovered => saveJSON(STORAGE_KEYS.outboxEvents, recovered),
+  });
+  // If no valid recovery journal exists, IndexedDB hydration may still have
+  // replaced the startup localStorage snapshot. Make that hydrated state the
+  // baseline before the first post-hydration mutation is persisted.
+  if (!restored) resetOutboxRecoveryBaseline(outboxEvents);
+  return restored;
 }
 
 let ledgerHydrated = false;
@@ -71,6 +90,7 @@ export async function hydrateFromIndexedDB() {
   }
 
   if (isIdbUnavailable()) {
+    restoreOutboxRecoveryJournal();
     // No usable IndexedDB this session (unsupported, blocked, or corrupted).
     // The values already loaded synchronously from localStorage stand as-is
     // (already money-migrated by state.js at load time; re-run here anyway
@@ -84,7 +104,8 @@ export async function hydrateFromIndexedDB() {
   try {
     fromIdb = await idbGetAll(Object.values(STORAGE_KEYS));
   } catch (e) {
-    console.error('IndexedDB hydration read failed, keeping localStorage-loaded values', e);
+    console.error('IndexedDB hydration read failed, restoring local outbox journal and keeping localStorage-loaded values', e);
+    restoreOutboxRecoveryJournal();
     migrateMoneyNow();
     ledgerHydrated = true;
     return false;
@@ -114,6 +135,7 @@ export async function hydrateFromIndexedDB() {
   apply(STORAGE_KEYS.organizationLocations, organizationLocations, v => setOrganizationLocations(v));
   apply(STORAGE_KEYS.inventoryBalances, inventoryBalances, v => setInventoryBalances(v));
   apply(STORAGE_KEYS.outboxEvents, outboxEvents, v => setOutboxEvents(v));
+  restoreOutboxRecoveryJournal();
 
   const moneyMigrated = migrateMoneyNow();
 

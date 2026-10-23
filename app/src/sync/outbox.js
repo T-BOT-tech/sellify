@@ -5,9 +5,49 @@
 import { STORAGE_KEYS } from '../constants.js';
 import { config, outboxEvents, setOutboxEvents } from '../state.js';
 import { saveJSON } from '../storage/json.js';
+import { idbUpdate, isIdbUnavailable } from '../storage/idb.js';
 import { authHeaders } from '../auth/tenant.js';
+import {
+  getOutboxRecoveryBaseline,
+  initializeOutboxRecoveryBaseline,
+  mergeOutboxSnapshots,
+  resetOutboxRecoveryBaseline,
+  writeOutboxRecoveryJournal,
+} from './outbox-recovery-journal.js';
 
-function persist() { saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents); }
+// Capture this tab's starting point so persistence can distinguish local
+// mutations from entries added/updated/removed by another tab.
+initializeOutboxRecoveryBaseline();
+
+function persist() {
+  writeOutboxRecoveryJournal(outboxEvents, {
+    onMerged: merged => setOutboxEvents(merged),
+  });
+  if (isIdbUnavailable()) {
+    saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents);
+    return;
+  }
+  // Reconcile against the latest persisted snapshot within the same IDB
+  // readwrite transaction. This closes the read/merge/write race between tabs
+  // for unrelated additions and explicit removals.
+  const localEvents = outboxEvents.map(event => ({ ...event }));
+  idbUpdate(STORAGE_KEYS.outboxEvents, storedEvents => {
+    const baseline = getOutboxRecoveryBaseline() || localEvents;
+    return mergeOutboxSnapshots(baseline, localEvents, Array.isArray(storedEvents) ? storedEvents : []);
+  }).then(merged => {
+    resetOutboxRecoveryBaseline(merged);
+    // Don't replace newer in-memory mutations that happened while this
+    // transaction was pending; the next persist will reconcile them.
+    const currentIds = outboxEvents.map(event => event.eventId);
+    const savedIds = localEvents.map(event => event.eventId);
+    if (currentIds.length === savedIds.length && currentIds.every((id, index) => id === savedIds[index])) {
+      setOutboxEvents(merged);
+    }
+  }).catch(error => {
+    console.error('Atomic IndexedDB outbox update failed; falling back to saveJSON', error);
+    saveJSON(STORAGE_KEYS.outboxEvents, localEvents);
+  });
+}
 
 function commandHeaders(idempotencyKey) {
   return {
