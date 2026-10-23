@@ -38,5 +38,10 @@ assert.match(
   /apply\(STORAGE_KEYS\.outboxEvents, outboxEvents, v => setOutboxEvents\(v\)\);\s*restoreOutboxRecoveryJournal\(\);/,
   'journal recovery must run after the IndexedDB snapshot is applied'
 );
+assert.match(
+  hydrate,
+  /catch \(e\) \{\s*console\.error\('IndexedDB hydration read failed[^']*', e\);\s*restoreOutboxRecoveryJournal\(\);/,
+  'journal recovery must run when IndexedDB hydration throws, not only when IndexedDB is marked unavailable'
+);
 
-console.log('PASS: offline outbox recovery journal is written before async persistence and restored after hydration');
+console.log('PASS: offline outbox recovery journal is written before async persistence and restored after all hydration paths');
