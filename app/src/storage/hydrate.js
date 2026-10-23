@@ -37,6 +37,26 @@ function migrateMoneyNow() {
   return productsChanged || ordersChanged;
 }
 
+const OUTBOX_RECOVERY_KEY = 'sellify.outbox.recovery.v1';
+
+// Restore the synchronous outbox journal after IndexedDB hydration, or when
+// IndexedDB is unavailable. This protects queued intent from a stale IDB
+// snapshot after a tab closed before its latest transaction committed.
+function restoreOutboxRecoveryJournal() {
+  try {
+    const raw = localStorage.getItem(OUTBOX_RECOVERY_KEY);
+    if (!raw) return false;
+    const recovered = JSON.parse(raw);
+    if (!Array.isArray(recovered)) return false;
+    setOutboxEvents(recovered);
+    saveJSON(STORAGE_KEYS.outboxEvents, recovered);
+    return true;
+  } catch (error) {
+    console.error('Outbox recovery journal read failed', error);
+    return false;
+  }
+}
+
 let ledgerHydrated = false;
 
 export function isLedgerHydrated() {
@@ -71,6 +91,7 @@ export async function hydrateFromIndexedDB() {
   }
 
   if (isIdbUnavailable()) {
+    restoreOutboxRecoveryJournal();
     // No usable IndexedDB this session (unsupported, blocked, or corrupted).
     // The values already loaded synchronously from localStorage stand as-is
     // (already money-migrated by state.js at load time; re-run here anyway
@@ -114,6 +135,7 @@ export async function hydrateFromIndexedDB() {
   apply(STORAGE_KEYS.organizationLocations, organizationLocations, v => setOrganizationLocations(v));
   apply(STORAGE_KEYS.inventoryBalances, inventoryBalances, v => setInventoryBalances(v));
   apply(STORAGE_KEYS.outboxEvents, outboxEvents, v => setOutboxEvents(v));
+  restoreOutboxRecoveryJournal();
 
   const moneyMigrated = migrateMoneyNow();
 
