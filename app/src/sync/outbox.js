@@ -7,7 +7,11 @@ import { config, outboxEvents, setOutboxEvents } from '../state.js';
 import { saveJSON } from '../storage/json.js';
 import { authHeaders } from '../auth/tenant.js';
 
-function persist() { saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents); }
+function persist() {
+  try { localStorage.setItem('sellify.outbox.recovery.v1', JSON.stringify(outboxEvents)); }
+  catch (error) { console.error('Outbox recovery journal write failed', error); }
+  saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents);
+}
 
 function commandHeaders(idempotencyKey) {
   return {
