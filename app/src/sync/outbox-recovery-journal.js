@@ -9,7 +9,11 @@ export const OUTBOX_RECOVERY_KEY = 'sellify.outbox.recovery.v1';
 let lastSnapshot = null;
 
 export function initializeOutboxRecoveryBaseline(events) {
-  if (!Array.isArray(lastSnapshot)) lastSnapshot = Array.isArray(events) ? events.map(event => ({ ...event })) : [];
+  if (!Array.isArray(lastSnapshot)) resetOutboxRecoveryBaseline(events);
+}
+
+export function resetOutboxRecoveryBaseline(events) {
+  lastSnapshot = Array.isArray(events) ? events.map(event => ({ ...event })) : [];
 }
 
 function byId(events) {
