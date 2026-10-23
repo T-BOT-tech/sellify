@@ -51,7 +51,14 @@ export function mergeOutboxSnapshots(previousEvents, localEvents, sharedEvents) 
     const before = previous.get(id);
     const now = local.get(id);
     if (hadBefore && !hasNow) {
+      // A local completion/removal is an explicit deletion.
       merged.delete(id);
+    } else if (hadBefore && hasNow && !merged.has(id)) {
+      // Once the shared journal has removed an existing event, a stale tab
+      // must not resurrect it merely because its local copy was also updated
+      // (for example, an attempt counter changed while another tab completed
+      // the command). This deliberately prefers completion over stale retries.
+      continue;
     } else if (hasNow && (!hadBefore || !sameValue(before, now))) {
       merged.set(id, now);
     }
@@ -88,7 +95,10 @@ export function writeOutboxRecoveryJournal(
       let shared = [];
       try {
         const raw = storage.getItem(OUTBOX_RECOVERY_KEY);
-        const parsed = raw ? JSON.parse(raw) : [];
+        // No journal yet means this tab's baseline is the best available
+        // seed. An existing empty array, by contrast, is an explicit snapshot
+        // that must not be treated as missing data.
+        const parsed = raw === null ? baseline : JSON.parse(raw);
         if (Array.isArray(parsed)) shared = parsed;
       } catch (readError) {
         // Do not replace a potentially newer shared journal when it cannot be
