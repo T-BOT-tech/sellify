@@ -9,7 +9,20 @@ export const OUTBOX_RECOVERY_KEY = 'sellify.outbox.recovery.v1';
 let lastSnapshot = null;
 
 export function initializeOutboxRecoveryBaseline(events) {
-  if (!Array.isArray(lastSnapshot)) resetOutboxRecoveryBaseline(events);
+  if (Array.isArray(lastSnapshot)) return;
+  if (Array.isArray(events)) {
+    resetOutboxRecoveryBaseline(events);
+    return;
+  }
+  // Avoid importing application state here: state.js and sync modules can
+  // participate in a cycle. The synchronous boot fallback uses this same key.
+  try {
+    const raw = globalThis.localStorage?.getItem('ledger_outbox_events');
+    const stored = raw ? JSON.parse(raw) : [];
+    resetOutboxRecoveryBaseline(Array.isArray(stored) ? stored : []);
+  } catch {
+    resetOutboxRecoveryBaseline([]);
+  }
 }
 
 export function resetOutboxRecoveryBaseline(events) {
