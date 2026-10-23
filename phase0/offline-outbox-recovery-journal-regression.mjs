@@ -1,67 +1,122 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import {
+  OUTBOX_RECOVERY_KEY,
+  restoreOutboxRecoveryJournal,
+  writeOutboxRecoveryJournal,
+} from '../app/src/sync/outbox-recovery-journal.js';
 
 const outbox = await readFile(new URL('../app/src/sync/outbox.js', import.meta.url), 'utf8');
 const hydrate = await readFile(new URL('../app/src/storage/hydrate.js', import.meta.url), 'utf8');
+const journal = await readFile(new URL('../app/src/sync/outbox-recovery-journal.js', import.meta.url), 'utf8');
 
-const recoveryKey = 'sellify.outbox.recovery.v1';
-assert.ok(outbox.includes(recoveryKey), 'outbox writes must use a versioned recovery journal key');
-assert.ok(hydrate.includes(recoveryKey), 'startup hydration must read the same recovery journal key');
+assert.equal(OUTBOX_RECOVERY_KEY, 'sellify.outbox.recovery.v1');
+assert.match(outbox, /writeOutboxRecoveryJournal\(outboxEvents\);\s*saveJSON\(STORAGE_KEYS\.outboxEvents, outboxEvents\);/,
+  'the synchronous recovery journal must be written before the asynchronous IndexedDB save');
+assert.match(hydrate, /restoreRecoveryJournal\(\{/,
+  'hydration must use the tested recovery journal implementation');
+assert.match(hydrate, /apply\(STORAGE_KEYS\.outboxEvents, outboxEvents, v => setOutboxEvents\(v\)\);\s*restoreOutboxRecoveryJournal\(\);/,
+  'journal recovery must run after the IndexedDB snapshot is applied');
+assert.match(hydrate, /if \(isIdbUnavailable\(\)\) \{\s*restoreOutboxRecoveryJournal\(\);/,
+  'journal recovery must also run when IndexedDB is unavailable');
+assert.match(hydrate, /catch \(e\) \{\s*console\.error\('IndexedDB hydration read failed[^']*', e\);\s*restoreOutboxRecoveryJournal\(\);/,
+  'journal recovery must run when IndexedDB hydration throws');
+assert.match(outbox, /const pending = getPendingCommands\(commandType\)\.filter\(command => command\.tenantChatId === activeTenant\)/,
+  'command replay must remain restricted to the active tenant');
+assert.match(outbox, /String\(e\.tenantChatId \|\| e\.payload\?\.tenantChatId \|\| ''\) === activeTenant/,
+  'event replay must remain restricted to the active tenant');
 
-const persistMatch = outbox.match(/function persist\(\) \{([\s\S]*?)\n\}/);
-assert.ok(persistMatch, 'outbox must expose the expected persistence boundary');
-const persistBody = persistMatch[1];
-assert.ok(
-  persistBody.indexOf('localStorage.setItem') >= 0
-    && persistBody.indexOf('localStorage.setItem') < persistBody.indexOf('saveJSON'),
-  'the synchronous recovery journal must be written before the asynchronous IndexedDB save'
-);
-assert.match(persistBody, /JSON\.stringify\(outboxEvents\)/);
-assert.match(persistBody, /catch \(error\)/, 'journal storage failures must not prevent the existing IndexedDB path');
-assert.match(persistBody, /localStorage\.removeItem\('sellify\.outbox\.recovery\.v1'\)/, 'a failed journal update must attempt to remove the stale snapshot so it cannot resurrect completed work');
+// Behavioral tests use deterministic storage adapters, exercising the real
+// production helper without needing to import the browser app singleton.
+function fakeStorage(initial = {}) {
+  const values = new Map(Object.entries(initial));
+  return {
+    values,
+    getItem(key) { return values.has(key) ? values.get(key) : null; },
+    setItem(key, value) { values.set(key, String(value)); },
+    removeItem(key) { values.delete(key); },
+  };
+}
+const quietLogger = { error() {} };
+const stale = [{ eventId: 'completed-command', kind: 'command', status: 'pending' }];
+const latest = [{ eventId: 'new-command', kind: 'command', status: 'pending' }];
 
-const restoreMatch = hydrate.match(/function restoreOutboxRecoveryJournal\(\) \{([\s\S]*?)\n\}/);
-assert.ok(restoreMatch, 'startup hydration must provide a recovery-journal restore boundary');
-assert.match(restoreMatch[1], /JSON\.parse\(raw\)/);
-assert.match(restoreMatch[1], /Array\.isArray\(recovered\)/, 'invalid journal shapes must not replace the outbox');
-assert.match(restoreMatch[1], /setOutboxEvents\(recovered\)/);
-assert.match(restoreMatch[1], /saveJSON\(STORAGE_KEYS\.outboxEvents, recovered\)/);
+// Successful write persists the exact current snapshot synchronously.
+{
+  const storage = fakeStorage();
+  assert.equal(writeOutboxRecoveryJournal(latest, { storage, logger: quietLogger }), true);
+  assert.deepEqual(JSON.parse(storage.getItem(OUTBOX_RECOVERY_KEY)), latest);
+}
 
-// IndexedDB may overwrite the synchronously loaded state, so recovery must run
-// after that application as well as when IndexedDB is unavailable.
-assert.match(
-  hydrate,
-  /if \(isIdbUnavailable\(\)\) \{[\s\S]*?restoreOutboxRecoveryJournal\(\);/,
-  'the recovery journal must also be used when IndexedDB cannot be opened'
-);
-assert.match(
-  hydrate,
-  /apply\(STORAGE_KEYS\.outboxEvents, outboxEvents, v => setOutboxEvents\(v\)\);\s*restoreOutboxRecoveryJournal\(\);/,
-  'journal recovery must run after the IndexedDB snapshot is applied'
-);
-assert.match(
-  hydrate,
-  /catch \(e\) \{\s*console\.error\('IndexedDB hydration read failed[^']*', e\);\s*restoreOutboxRecoveryJournal\(\);/,
-  'journal recovery must run when IndexedDB hydration throws, not only when IndexedDB is marked unavailable'
-);
+// A failed write attempts to delete a stale snapshot so completed work cannot
+// be resurrected. The normal persistence caller can still continue to saveJSON.
+{
+  const storage = fakeStorage({ [OUTBOX_RECOVERY_KEY]: JSON.stringify(stale) });
+  storage.setItem = () => { throw new Error('quota exceeded'); };
+  assert.equal(writeOutboxRecoveryJournal(latest, { storage, logger: quietLogger }), false);
+  assert.equal(storage.getItem(OUTBOX_RECOVERY_KEY), null);
+}
 
+// If both write and cleanup fail, failure is contained and explicitly best-effort.
+{
+  const storage = fakeStorage({ [OUTBOX_RECOVERY_KEY]: JSON.stringify(stale) });
+  storage.setItem = () => { throw new Error('quota exceeded'); };
+  storage.removeItem = () => { throw new Error('storage blocked'); };
+  assert.doesNotThrow(() => writeOutboxRecoveryJournal(latest, { storage, logger: quietLogger }));
+  assert.deepEqual(JSON.parse(storage.getItem(OUTBOX_RECOVERY_KEY)), stale);
+}
+
+// Recovery overrides an older state (representing stale IndexedDB hydration),
+// then mirrors the recovered snapshot through the provided persistence adapter.
+{
+  const storage = fakeStorage({ [OUTBOX_RECOVERY_KEY]: JSON.stringify(latest) });
+  let state = stale;
+  let saved = null;
+  assert.equal(restoreOutboxRecoveryJournal({
+    storage,
+    setOutboxEvents: value => { state = value; },
+    saveOutbox: value => { saved = value; },
+    logger: quietLogger,
+  }), true);
+  assert.deepEqual(state, latest);
+  assert.deepEqual(saved, latest);
+}
+
+// Invalid JSON, non-array JSON, and absent journals never replace current state.
+for (const raw of ['{broken', JSON.stringify({ eventId: 'not-an-array' }), null]) {
+  const storage = raw === null ? fakeStorage() : fakeStorage({ [OUTBOX_RECOVERY_KEY]: raw });
+  let calls = 0;
+  assert.equal(restoreOutboxRecoveryJournal({
+    storage,
+    setOutboxEvents: () => { calls += 1; },
+    saveOutbox: () => { calls += 1; },
+    logger: quietLogger,
+  }), false);
+  assert.equal(calls, 0);
+}
+
+// Storage read failures are contained and do not mutate application state.
+{
+  const storage = fakeStorage();
+  storage.getItem = () => { throw new Error('storage blocked'); };
+  let calls = 0;
+  assert.equal(restoreOutboxRecoveryJournal({
+    storage,
+    setOutboxEvents: () => { calls += 1; },
+    saveOutbox: () => { calls += 1; },
+    logger: quietLogger,
+  }), false);
+  assert.equal(calls, 0);
+}
+
+// Keep the production helper's catch boundaries visible to this contract test.
+assert.match(journal, /storage\.removeItem\(OUTBOX_RECOVERY_KEY\)/);
+assert.match(journal, /if \(!Array\.isArray\(recovered\)\) return false/);
 
 const commandSuccessMatch = outbox.match(/await flushCommand\(command\);([\s\S]*?)processed \+= 1;/);
 assert.ok(commandSuccessMatch, 'command success path must be present');
-assert.match(
-  commandSuccessMatch[1],
+assert.match(commandSuccessMatch[1],
   /setOutboxEvents\(outboxEvents\.filter\(event => event\.eventId !== command\.eventId\)\);\s*persist\(\);/,
-  'successful commands must be removed from the recovery snapshot before persisting'
-);
-assert.match(
-  outbox,
-  /const pending = getPendingCommands\(commandType\)\.filter\(command => command\.tenantChatId === activeTenant\)/,
-  'command replay must remain restricted to the active tenant'
-);
-assert.match(
-  outbox,
-  /String\(e\.tenantChatId \|\| e\.payload\?\.tenantChatId \|\| ''\) === activeTenant/,
-  'event replay must remain restricted to the active tenant'
-);
+  'successful commands must be removed from the recovery snapshot before persisting');
 
-console.log('PASS: offline outbox recovery journal write ordering, hydration failure recovery, completed-command cleanup, and tenant-bound replay guards');
+console.log('PASS: behavioral outbox journal write, stale-snapshot cleanup, restore/mirror, invalid-data handling, storage failures, and tenant-bound replay guards');
