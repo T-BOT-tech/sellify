@@ -67,6 +67,17 @@ const latest = [{ eventId: 'new-command', kind: 'command', status: 'pending' }];
   assert.deepEqual(JSON.parse(storage.getItem(OUTBOX_RECOVERY_KEY)), stale);
 }
 
+// A transient shared-journal read failure must not overwrite a snapshot
+// that may contain another tab's newer work.
+{
+  const storage = fakeStorage({ [OUTBOX_RECOVERY_KEY]: JSON.stringify(stale) });
+  storage.getItem = () => { throw new Error('temporary read failure'); };
+  let writes = 0;
+  storage.setItem = () => { writes += 1; };
+  assert.equal(writeOutboxRecoveryJournal(latest, { storage, logger: quietLogger }), false);
+  assert.equal(writes, 0, 'a failed read must not write a possibly stale replacement snapshot');
+}
+
 // Recovery overrides an older state (representing stale IndexedDB hydration),
 // then mirrors the recovered snapshot through the provided persistence adapter.
 {
@@ -153,4 +164,4 @@ assert.match(commandSuccessMatch[1],
   /setOutboxEvents\(outboxEvents\.filter\(event => event\.eventId !== command\.eventId\)\);\s*persist\(\);/,
   'successful commands must be removed from the recovery snapshot before persisting');
 
-console.log('PASS: behavioral outbox journal write, stale-snapshot cleanup, restore/mirror, invalid-data handling, storage failures, and tenant-bound replay guards');
+console.log('PASS: behavioral outbox journal write, read-failure preservation, stale-snapshot cleanup, restore/mirror, invalid-data handling, storage failures, and tenant-bound replay guards');
