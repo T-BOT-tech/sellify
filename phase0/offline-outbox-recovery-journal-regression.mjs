@@ -10,10 +10,13 @@ import {
 const outbox = await readFile(new URL('../app/src/sync/outbox.js', import.meta.url), 'utf8');
 const hydrate = await readFile(new URL('../app/src/storage/hydrate.js', import.meta.url), 'utf8');
 const journal = await readFile(new URL('../app/src/sync/outbox-recovery-journal.js', import.meta.url), 'utf8');
+const idb = await readFile(new URL('../app/src/storage/idb.js', import.meta.url), 'utf8');
 
 assert.equal(OUTBOX_RECOVERY_KEY, 'sellify.outbox.recovery.v1');
 assert.match(outbox, /writeOutboxRecoveryJournal\(outboxEvents, \{\s*onMerged: merged => setOutboxEvents\(merged\),?\s*\}\);\s*saveJSON\(STORAGE_KEYS\.outboxEvents, outboxEvents\);/,
   'the reconciled synchronous recovery journal must be written before the asynchronous IndexedDB save');
+assert.match(idb, /export function idbUpdate\(key, updater\)[\s\S]*?store\.get\(key\)[\s\S]*?nextValue = updater\(request\.result !== undefined \? request\.result : null\)[\s\S]*?store\.put\(nextValue, key\)/, 'outbox reconciliation must read, merge, and write within one IndexedDB readwrite transaction');
+assert.match(outbox, /idbUpdate\(STORAGE_KEYS\.outboxEvents, storedEvents =>[\s\S]*?mergeOutboxSnapshots\(baseline, localEvents, Array\.isArray\(storedEvents\) \? storedEvents : \[\]\)/, 'outbox persistence must reconcile against the current IndexedDB value atomically');
 assert.match(hydrate, /restoreRecoveryJournal\(\{/,
   'hydration must use the tested recovery journal implementation');
 assert.match(hydrate, /apply\(STORAGE_KEYS\.outboxEvents, outboxEvents, v => setOutboxEvents\(v\)\);\s*restoreOutboxRecoveryJournal\(\);/,
