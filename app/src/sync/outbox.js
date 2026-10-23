@@ -5,9 +5,13 @@
 import { STORAGE_KEYS } from '../constants.js';
 import { config, outboxEvents, setOutboxEvents } from '../state.js';
 import { saveJSON } from '../storage/json.js';
+import { idbUpdate, isIdbUnavailable } from '../storage/idb.js';
 import { authHeaders } from '../auth/tenant.js';
 import {
+  getOutboxRecoveryBaseline,
   initializeOutboxRecoveryBaseline,
+  mergeOutboxSnapshots,
+  resetOutboxRecoveryBaseline,
   writeOutboxRecoveryJournal,
 } from './outbox-recovery-journal.js';
 
@@ -19,7 +23,24 @@ function persist() {
   writeOutboxRecoveryJournal(outboxEvents, {
     onMerged: merged => setOutboxEvents(merged),
   });
-  saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents);
+  if (isIdbUnavailable()) {
+    saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents);
+    return;
+  }
+  // Reconcile against the latest persisted snapshot within the same IDB
+  // readwrite transaction. This closes the read/merge/write race between tabs
+  // for unrelated additions and explicit removals.
+  const localEvents = outboxEvents.map(event => ({ ...event }));
+  idbUpdate(STORAGE_KEYS.outboxEvents, storedEvents => {
+    const baseline = getOutboxRecoveryBaseline() || localEvents;
+    const merged = mergeOutboxSnapshots(baseline, localEvents, Array.isArray(storedEvents) ? storedEvents : []);
+    resetOutboxRecoveryBaseline(merged);
+    setOutboxEvents(merged);
+    return merged;
+  }).catch(error => {
+    console.error('Atomic IndexedDB outbox update failed; falling back to saveJSON', error);
+    saveJSON(STORAGE_KEYS.outboxEvents, localEvents);
+  });
 }
 
 function commandHeaders(idempotencyKey) {
