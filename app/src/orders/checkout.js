@@ -136,12 +136,20 @@ export function saveOrder(payMethodId, proofMeta) {
   }).filter(Boolean);
   if (items.length === 0) return;
 
+  // Defense in depth: callers must never turn a missing or disabled method
+  // into an implicit cash order. The modal validates too, but configuration
+  // can change between opening checkout and saving.
+  const resolvedMethodId = String(payMethodId || '').trim();
+  const methodMeta = (config.paymentMethods || []).find(pm => pm.id === resolvedMethodId && pm.enabled);
+  if (!methodMeta) {
+    showToast('No enabled payment method is selected. Enable a payment method in Settings and try again.');
+    return;
+  }
+
   const total = items.reduce((sum, i) => sum + i.qty * i.price, 0);
 
   let cashTendered = null;
   let changeDue = null;
-  const resolvedMethodId = payMethodId || 'cash';
-  const methodMeta = (config.paymentMethods || []).find(pm => pm.id === resolvedMethodId);
   if (!methodMeta || methodMeta.type === 'cash') {
     if (currentTenderedAmount !== null && !isNaN(currentTenderedAmount)) {
       // Phase 4: currentTenderedAmount is already an integer minor-unit
