@@ -93,6 +93,7 @@ import {
   getOrders,
   getTenantByApiKey,
   getTenant,
+  getBusinessTemplateConfig, saveBusinessTemplateConfig,
   getOrganizationLocation,
   updateTenant,
   listTenants,
@@ -1836,6 +1837,23 @@ async function handleAuthorizationIamCertification(req, res, chatId) {
   }, req);
 }
 
+async function handleBusinessTemplateConfig(req, res, chatId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+  if (req.method === 'GET') {
+    const businessTemplate = await getBusinessTemplateConfig(chatId);
+    return sendJSON(res, 200, { businessTemplate }, req);
+  }
+  if (req.method !== 'PUT' && req.method !== 'PATCH') {
+    return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+  }
+  await requireOwnerRole(session);
+  const body = await readBody(req);
+  const businessTemplate = await saveBusinessTemplateConfig(chatId, body, session);
+  return sendJSON(res, 200, { businessTemplate }, req);
+}
+
 async function handleTenantPatch(req, res, chatId) {
   const body = await readBody(req);
   const tenant = await getTenant(chatId);
@@ -3190,6 +3208,9 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/authorization\/conditions-contract$/, handler: (req, res, m) => handleAuthorizationConditionsContract(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/authorization\/role-matrix$/, handler: (req, res, m) => handleAuthorizationRoleMatrix(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/authorization\/iam-certification$/, handler: (req, res, m) => handleAuthorizationIamCertification(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/business-template$/, handler: (req, res, m) => handleBusinessTemplateConfig(req, res, decodeURIComponent(m[1])) },
+  { method: 'PUT', pattern: /^\/tenants\/([^/]+)\/business-template$/, handler: (req, res, m) => handleBusinessTemplateConfig(req, res, decodeURIComponent(m[1])) },
+  { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/business-template$/, handler: (req, res, m) => handleBusinessTemplateConfig(req, res, decodeURIComponent(m[1])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)$/, handler: (req, res, m) => handleTenantPatch(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/providers$/, handler: (req, res, m) => handlePaymentProviderMetadata(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/accounts$/, handler: (req, res, m) => handlePaymentAccounts(req, res, decodeURIComponent(m[1])) },

@@ -19,8 +19,8 @@ assert.match(ci, /node-version: \[24\]/);
 for (const script of requiredScripts) assert.ok(ci.includes('npm run ' + script), 'CI missing ' + script);
 
 const migrations = [...store.matchAll(/if \(!applied\.includes\((\d+)\)\)/g)].map(m => Number(m[1]));
-assert.equal(Math.max(...migrations), 75, 'latest migration must remain explicit');
-for (const version of [45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75]) {
+assert.equal(Math.max(...migrations), 76, 'latest migration must remain explicit');
+for (const version of [45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76]) {
   assert.ok(migrations.includes(version), 'missing explicit migration ' + version);
 }
 const migrationPosition = version => store.indexOf(`if (!applied.includes(${version}))`);
@@ -39,6 +39,8 @@ assert.ok(migrationPosition(72) > migrationPosition(71), 'durable service assess
 assert.ok(migrationPosition(73) > migrationPosition(72), 'service booking persistence migration must follow migration 72');
 assert.ok(migrationPosition(74) > migrationPosition(73), 'service execution evidence migration must follow migration 73');
 assert.ok(migrationPosition(75) > migrationPosition(74), 'service booking status-reason migration must follow migration 74');
+assert.ok(migrationPosition(76) > migrationPosition(75), 'tenant business-template persistence migration must follow migration 75');
+assert.match(store, /CREATE TABLE IF NOT EXISTS tenant_business_templates/);
 assert.match(store, /PRAGMA foreign_keys = ON/);
 assert.match(store, /PRAGMA journal_mode = WAL/);
 assert.match(store, /CREATE TABLE IF NOT EXISTS schema_migrations/);

@@ -910,10 +910,22 @@
       <div id="onboardingCreate">
         <label>Business name</label>
         <input id="onboardingBusinessName" type="text" placeholder="ABC Coffee">
-        <label>Business type</label>
-        <select id="onboardingBusinessType">
+        <label for="onboardingBusinessTemplate">Choose your business type</label>
+        <select id="onboardingBusinessTemplate" onchange="applyOnboardingBusinessTemplate(this.value)">
+          <option value="retail-shop" data-business-type="retail">Retail shop — physical products</option>
+          <option value="barbershop" data-business-type="services">Barbershop / Salon — services</option>
+          <option value="hotel-rooms" data-business-type="services">Hotel / Guest rooms — reservations</option>
+          <option value="rental" data-business-type="services">Equipment / Vehicle rental</option>
+          <option value="consultation" data-business-type="services">Consultation / Professional services</option>
+          <option value="repair" data-business-type="services">Repair &amp; Maintenance — services + parts</option>
+          <option value="restaurant" data-business-type="restaurant">Restaurant / Cafe — menu</option>
+          <option value="wholesale" data-business-type="wholesale">Wholesale / B2B</option>
+          <option value="other" data-business-type="other">Other business</option>
+        </select>
+        <select id="onboardingBusinessType" aria-hidden="true" tabindex="-1" style="display:none;">
           <option value="retail">Retail</option><option value="restaurant">Restaurant</option><option value="wholesale">Wholesale</option><option value="pharmacy">Pharmacy</option><option value="services">Services</option><option value="manufacturing">Manufacturing</option><option value="other">Other</option>
         </select>
+        <div class="hint" style="margin-top:5px;">Sellify sets up the starting point. You can sell physical products, services, or both from the same catalog.</div>
         <label>Country</label><input id="onboardingCountry" type="text" placeholder="Ethiopia">
         <label>Currency</label><select id="onboardingCurrency"><option value="ETB">ETB</option><option value="USD">USD</option><option value="KES">KES</option><option value="NGN">NGN</option><option value="GHS">GHS</option><option value="TZS">TZS</option><option value="UGX">UGX</option><option value="ZAR">ZAR</option><option value="XOF">XOF</option><option value="INR">INR</option><option value="EUR">EUR</option><option value="GBP">GBP</option></select>
         <label>Timezone</label><input id="onboardingTimezone" type="text" readonly>
@@ -935,13 +947,20 @@
     </div>
     <div id="onboardingFirstProduct" style="display:none;">
       <div style="font-weight:600; margin-bottom:4px;"><span id="onboardingFirstProductBiz"></span> is set up.</div>
-      <div class="hint" style="margin-bottom:10px;">Add your first product now, or skip and add products later from the Catalog tab.</div>
-      <label>Product name</label>
+      <div class="hint" style="margin-bottom:10px;">Add your first catalog item. Choose a physical product or a service; you can add both later.</div>
+      <label for="onboardingItemType">Catalog item type</label>
+      <select id="onboardingItemType" onchange="toggleOnboardingItemType(this.value)">
+        <option value="product">Physical product</option>
+        <option value="service">Service</option>
+      </select>
+      <label for="onboardingProdName" id="onboardingItemNameLabel">Product name</label>
       <input id="onboardingProdName" type="text" placeholder="Coffee">
-      <label>Price</label>
+      <label for="onboardingProdPrice">Price</label>
       <input id="onboardingProdPrice" type="number" min="0" step="0.01" placeholder="125">
-      <label>Stock (optional)</label>
-      <input id="onboardingProdStock" type="number" min="0" step="1" placeholder="34">
+      <div id="onboardingProdStockWrap">
+        <label for="onboardingProdStock">Stock (optional)</label>
+        <input id="onboardingProdStock" type="number" min="0" step="1" placeholder="34">
+      </div>
       <div style="display:flex; gap:8px; margin-top:8px;">
         <button class="primary" onclick="addOnboardingProduct()" style="flex:1;">Add product</button>
         <button onclick="skipOnboardingProduct()" style="flex:1;">Skip for now</button>

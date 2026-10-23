@@ -63,6 +63,15 @@ try {
     deviceName: 'Service Catalog HTTP regression',
   });
 
+  const otherTenant = await store.createTenantForUser({
+    userId: user.id,
+    sellerName: 'Other Service Catalog HTTP Store',
+    businessType: 'retail',
+    country: 'ET',
+    currency: 'ETB',
+    timezone: 'Africa/Addis_Ababa',
+  });
+
   const port = await freePort();
   const baseUrl = 'http://127.0.0.1:' + port;
   child = spawn(process.execPath, ['backend/server.js'], {
@@ -85,6 +94,61 @@ try {
     Authorization: 'Bearer ' + session.token,
     'Content-Type': 'application/json',
   };
+
+  const templatePath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/business-template';
+  const unauthTemplateRead = await fetch(baseUrl + templatePath);
+  assert.equal(unauthTemplateRead.status, 401, 'business template config must require an authenticated tenant session');
+
+  const templateWrite = await fetch(baseUrl + templatePath, {
+    method: 'PUT',
+    headers: authHeaders,
+    body: JSON.stringify({ templateKey: 'repair' }),
+  });
+  assert.equal(templateWrite.status, 200, 'owner can persist an allowlisted business template');
+  const templateWriteBody = await templateWrite.json();
+  assert.equal(templateWriteBody.businessTemplate.templateKey, 'repair');
+  assert.equal(templateWriteBody.businessTemplate.schemaVersion, 1);
+  assert.deepEqual(templateWriteBody.businessTemplate.config, {});
+
+  const templateRead = await fetch(baseUrl + templatePath, { headers: authHeaders });
+  assert.equal(templateRead.status, 200);
+  assert.equal((await templateRead.json()).businessTemplate.templateKey, 'repair',
+    'template config must be read back from server-owned tenant storage');
+
+  const invalidTemplateWrite = await fetch(baseUrl + templatePath, {
+    method: 'PUT',
+    headers: authHeaders,
+    body: JSON.stringify({ templateKey: 'unsupported-hotel-engine', capabilities: ['reservations', 'deposits'] }),
+  });
+  assert.equal(invalidTemplateWrite.status, 400, 'unknown templates and caller-asserted capabilities must be rejected');
+
+  for (const [label, body] of [
+    ['unsupported schema version', { templateKey: 'repair', schemaVersion: 2 }],
+    ['unsupported snake-case schema version', { template_key: 'repair', schema_version: 2 }],
+    ['caller-supplied capability flags', { templateKey: 'repair', config: { reservations: true } }],
+    ['unknown authority fields', { templateKey: 'repair', paymentStatus: 'PAID' }],
+    ['array configuration', { templateKey: 'repair', config: [] }],
+    ['primitive configuration', { templateKey: 'repair', config: 'reservations-enabled' }],
+  ]) {
+    const response = await fetch(baseUrl + templatePath, {
+      method: 'PUT',
+      headers: authHeaders,
+      body: JSON.stringify(body),
+    });
+    assert.equal(response.status, 400, label + ' must be rejected');
+  }
+  const templateAfterRejectedWrites = await fetch(baseUrl + templatePath, { headers: authHeaders });
+  assert.equal(templateAfterRejectedWrites.status, 200);
+  const unchangedTemplate = (await templateAfterRejectedWrites.json()).businessTemplate;
+  assert.equal(unchangedTemplate.templateKey, 'repair', 'rejected writes must not mutate persisted template identity');
+  assert.equal(unchangedTemplate.schemaVersion, 1);
+  assert.deepEqual(unchangedTemplate.config, {});
+
+  const crossTenantTemplateRead = await fetch(baseUrl + '/tenants/' + encodeURIComponent(otherTenant.chatId) + '/business-template', {
+    headers: authHeaders,
+  });
+  assert.equal(crossTenantTemplateRead.status, 403,
+    'a valid session for one business must not read another business template');
   const products = [
     { id: 'consultation-http', name: 'Consultation', price: 25000, currency: 'ETB', item_type: 'service', marketplace_listed: true },
     { id: 'parcel-instant-http', name: 'Instant Parcel Delivery', price: 12000, currency: 'ETB', item_type: 'service',
@@ -1259,7 +1323,7 @@ try {
   const otherSeller = await store.getOrCreateUserByTelegram(
     'tracking-isolation-' + Date.now().toString(36), 'Tracking Isolation Seller',
   );
-  const otherTenant = await store.createTenantForUser({
+  const otherSellerTenant = await store.createTenantForUser({
     userId: otherSeller.id,
     sellerName: 'Tracking Isolation Store',
     businessType: 'retail',
@@ -1269,7 +1333,7 @@ try {
   });
   await assert.rejects(
     () => store.getTelegramBuyerFulfillmentExperience(
-      otherTenant.chatId, 'parcel-request-buyer-http', requestedAssessment.marketplace_order_id,
+      otherSellerTenant.chatId, 'parcel-request-buyer-http', requestedAssessment.marketplace_order_id,
     ),
     error => error?.code === 'ORDER_NOT_FOUND',
     'cross-seller/tenant tracking access must fail closed',

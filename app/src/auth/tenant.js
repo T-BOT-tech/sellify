@@ -3,13 +3,14 @@
 // it for a short-lived device session. Standalone devices use owner-approved
 // one-time pairing codes. The PWA never stores or sends tenant-wide API keys.
 import { STORAGE_KEYS } from '../constants.js';
-import { config, setConfig, products, setProducts } from '../state.js';
-import { saveJSON } from '../storage/json.js';
+import { config, setConfig, products, setProducts, orders, setOrders, staffList, setStaffList, currentStaff, setCurrentStaff, b2bAccounts, setB2bAccounts, customers, setCustomers, inventoryMovements, setInventoryMovements, organizationLocations, setOrganizationLocations, inventoryBalances, setInventoryBalances, outboxEvents, setOutboxEvents, pricingTiers, setPricingTiers, volumeDiscountTiers, setVolumeDiscountTiers, warehouseLocations, setWarehouseLocations, stockTransactions, setStockTransactions } from '../state.js';
+import { saveJSON, saveJSONAsync, loadJSONAsync } from '../storage/json.js';
 import { getActivePlatform } from '../platform/index.js';
 import { uid } from '../utils/index.js';
 import { toMinorUnits } from '../utils/money.js';
 import { markCatalogDirty } from '../products/catalog.js';
 import { guessLocationDefaults } from '../config/locale-defaults.js';
+import { t } from '../ui/i18n.js';
 
 function baseUrl() {
   return (config.syncUrl || window.location.origin).replace(/\/$/, '');
@@ -103,6 +104,81 @@ export function closeOnboarding() {
   if (modal) modal.style.display = 'none';
 }
 
+
+async function loadBusinessTemplateConfig() {
+  if (!config.sessionToken || !config.chatId) return null;
+  const chatId = String(config.chatId);
+  const sessionToken = String(config.sessionToken);
+  try {
+    const data = await request(`/tenants/${encodeURIComponent(chatId)}/business-template`, {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+    });
+    // Do not let a late response from a previous tenant/session overwrite the
+    // currently selected business on a device that switched while it was loading.
+    if (String(config.chatId) !== chatId || String(config.sessionToken) !== sessionToken) return null;
+    const saved = data.businessTemplate;
+    if (!saved) return null;
+    const next = { ...config, businessTemplate: saved.templateKey, businessTemplateSchemaVersion: saved.schemaVersion || 1 };
+    setConfig(next);
+    saveJSON(STORAGE_KEYS.config, next);
+    return saved;
+  } catch {
+    // Offline or an older backend: keep the local cache and let auth continue.
+    return null;
+  }
+}
+
+const tenantStateKey = chatId => `ledger_tenant_state_v1:${encodeURIComponent(String(chatId))}`;
+const tenantStateFields = [
+  ['products', () => products, setProducts, STORAGE_KEYS.products, []],
+  ['orders', () => orders, setOrders, STORAGE_KEYS.orders, []],
+  ['staff', () => staffList, setStaffList, STORAGE_KEYS.staff, []],
+  ['activeStaff', () => currentStaff, setCurrentStaff, STORAGE_KEYS.activeStaff, null],
+  ['b2bAccounts', () => b2bAccounts, setB2bAccounts, STORAGE_KEYS.b2bAccounts, []],
+  ['customers', () => customers, setCustomers, STORAGE_KEYS.customers, []],
+  ['inventoryMovements', () => inventoryMovements, setInventoryMovements, STORAGE_KEYS.inventoryMovements, []],
+  ['organizationLocations', () => organizationLocations, setOrganizationLocations, STORAGE_KEYS.organizationLocations, []],
+  ['inventoryBalances', () => inventoryBalances, setInventoryBalances, STORAGE_KEYS.inventoryBalances, []],
+  ['outboxEvents', () => outboxEvents, setOutboxEvents, STORAGE_KEYS.outboxEvents, []],
+  ['pricingTiers', () => pricingTiers, setPricingTiers, STORAGE_KEYS.pricingTiers, []],
+  ['volumeDiscountTiers', () => volumeDiscountTiers, setVolumeDiscountTiers, STORAGE_KEYS.volumeDiscounts, []],
+  ['warehouseLocations', () => warehouseLocations, setWarehouseLocations, STORAGE_KEYS.warehouseLocations, []],
+  ['stockTransactions', () => stockTransactions, setStockTransactions, STORAGE_KEYS.stockTransactions, []],
+];
+
+async function preserveTenantState(chatId) {
+  const tenantId = String(chatId || '');
+  if (!tenantId) return false;
+  const state = Object.fromEntries(tenantStateFields.map(([name, getValue]) => [name, structuredClone(getValue())]));
+  return saveJSONAsync(tenantStateKey(tenantId), { tenantId, state, updatedAt: Date.now() });
+}
+
+export async function restoreTenantStateForTenant(chatId) {
+  const tenantId = String(chatId || '');
+  if (!tenantId || String(config.chatId || '') !== tenantId) return false;
+  const snapshot = await loadJSONAsync(tenantStateKey(tenantId), null);
+  if (String(config.chatId || '') !== tenantId) return false;
+  if (!snapshot || String(snapshot.tenantId) !== tenantId || !snapshot.state || typeof snapshot.state !== 'object') return false;
+  for (const [name, , setter, storageKey] of tenantStateFields) {
+    if (Object.prototype.hasOwnProperty.call(snapshot.state, name)) {
+      setter(snapshot.state[name]);
+      await saveJSONAsync(storageKey, snapshot.state[name]);
+    }
+  }
+  return true;
+}
+
+async function clearSharedTenantCaches() {
+  for (const [, , setter, storageKey, emptyValue] of tenantStateFields) {
+    setter(emptyValue);
+    const saved = await saveJSONAsync(storageKey, emptyValue);
+    if (!saved) {
+      await restoreTenantStateForTenant(config.chatId);
+      throw new Error('Could not safely clear local business data for tenant switch');
+    }
+  }
+}
+
 export async function selectOnboardingTenant() {
   const select = document.getElementById('onboardingTenantSelect');
   if (!select?.value) return;
@@ -112,7 +188,13 @@ export async function selectOnboardingTenant() {
     body: JSON.stringify({ chatId: select.value, deviceName: 'Telegram Mini App' }),
   });
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('sellify:tenant-changing'));
+  if (config.chatId && !(await preserveTenantState(config.chatId))) {
+    showToast(t('storageFull'));
+    return;
+  }
+  await clearSharedTenantCaches();
   persistAuth(data, data.membership);
+  await loadBusinessTemplateConfig();
   closeOnboarding();
   window.location.reload();
 }
@@ -169,7 +251,13 @@ export async function switchActiveTenant() {
       body: JSON.stringify({ chatId, deviceName: 'Sellify device' }),
     });
     if (typeof window !== 'undefined') window.dispatchEvent(new Event('sellify:tenant-changing'));
+    if (config.chatId && !(await preserveTenantState(config.chatId))) {
+      showToast(t('storageFull'));
+      return;
+    }
+    await clearSharedTenantCaches();
     persistAuth(data, data.membership);
+    await loadBusinessTemplateConfig();
     window.location.reload();
   } catch (error) {
     if (status) status.textContent = error.message || 'Could not switch businesses.';
@@ -178,7 +266,10 @@ export async function switchActiveTenant() {
 
 export async function createOnboardingTenant() {
   const sellerName = document.getElementById('onboardingBusinessName')?.value.trim();
-  const businessType = document.getElementById('onboardingBusinessType')?.value || 'retail';
+  const templateSelect = document.getElementById('onboardingBusinessTemplate');
+  const selectedTemplate = templateSelect?.value || 'retail-shop';
+  const selectedTemplateOption = templateSelect?.selectedOptions?.[0];
+  const businessType = selectedTemplateOption?.dataset?.businessType || document.getElementById('onboardingBusinessType')?.value || 'retail';
   const country = document.getElementById('onboardingCountry')?.value.trim() || '';
   const currency = document.getElementById('onboardingCurrency')?.value || 'ETB';
   const timezone = document.getElementById('onboardingTimezone')?.value || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -194,7 +285,25 @@ export async function createOnboardingTenant() {
       body: JSON.stringify({ sellerName, businessType, country, currency, timezone, deviceName: 'Telegram Mini App', challengeToken: window.__SELLIFY_ONBOARDING_CHALLENGE || '' }),
     });
     persistAuth(data, data.membership);
+    // Keep a local copy for fast startup, but make the tenant API authoritative
+    // so the chosen template follows the business across paired devices.
+    const nextConfig = { ...config, businessTemplate: selectedTemplate, businessTemplateSchemaVersion: 1 };
+    setConfig(nextConfig);
+    saveJSON(STORAGE_KEYS.config, nextConfig);
+    let templateSyncError = null;
+    try {
+      await request(`/tenants/${encodeURIComponent(config.chatId)}/business-template`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ templateKey: selectedTemplate }),
+      });
+    } catch (error) {
+      templateSyncError = error;
+    }
     showFirstProductStep(sellerName);
+    if (templateSyncError && status) {
+      status.textContent = 'Business created, but its template could not sync to the server. Check your connection and retry template setup in Settings.';
+    }
   } catch (error) {
     if (status) status.textContent = error.message || 'Could not create the business.';
   }
@@ -219,31 +328,82 @@ function showFirstProductStep(sellerName) {
   if (status) status.textContent = '';
 }
 
-export function addOnboardingProduct() {
+export function applyOnboardingBusinessTemplate(template) {
+  const select = document.getElementById('onboardingBusinessTemplate');
+  const option = select?.selectedOptions?.[0];
+  const businessType = option?.dataset?.businessType || 'other';
+  const legacyType = document.getElementById('onboardingBusinessType');
+  if (legacyType) legacyType.value = businessType;
+}
+
+export function toggleOnboardingItemType(itemType) {
+  const isService = itemType === 'service';
+  const stockWrap = document.getElementById('onboardingProdStockWrap');
+  const nameLabel = document.getElementById('onboardingItemNameLabel');
+  const nameInput = document.getElementById('onboardingProdName');
+  if (stockWrap) stockWrap.style.display = isService ? 'none' : '';
+  if (nameLabel) nameLabel.textContent = isService ? 'Service name' : 'Product name';
+  if (nameInput) nameInput.placeholder = isService ? 'Haircut or consultation' : 'Coffee';
+}
+
+export async function addOnboardingProduct() {
   const nameInput = document.getElementById('onboardingProdName');
   const priceInput = document.getElementById('onboardingProdPrice');
   const stockInput = document.getElementById('onboardingProdStock');
+  const itemType = document.getElementById('onboardingItemType')?.value === 'service' ? 'service' : 'product';
   const status = document.getElementById('onboardingStatus');
   const name = nameInput?.value.trim();
   const priceMajor = parseFloat(priceInput?.value);
   if (!name || !Number.isFinite(priceMajor) || priceMajor < 0) {
-    if (status) status.textContent = 'Enter a product name and a valid price.';
+    if (status) status.textContent = 'Enter an item name and a valid price.';
     return;
   }
-  const stockRaw = stockInput?.value.trim();
+  const stockRaw = itemType === 'product' ? stockInput?.value.trim() : '';
   const stock = stockRaw ? Math.max(0, parseInt(stockRaw, 10) || 0) : undefined;
   const newProd = {
     id: uid(),
     name,
+    item_type: itemType,
     price: toMinorUnits(priceMajor, config.currencyCode),
     _priceMinor: true,
-    stock,
+    ...(itemType === 'product' && stock !== undefined ? { stock } : {}),
     updated_at: Date.now(),
   };
   setProducts([...products, newProd]);
-  saveJSON(STORAGE_KEYS.products, products);
-  markCatalogDirty();
+  const locallySaved = await saveJSONAsync(STORAGE_KEYS.products, products);
+  await markCatalogDirty();
   showOnboardingDone();
+  if (!locallySaved && status) {
+    status.textContent = 'Offering added for this session, but local storage failed. Keep this page open while trying Sync now.';
+  }
+
+  // The first offering is persisted before we attempt remote sync. Push it through
+  // the canonical catalog endpoint now when online; the startup catalog pull
+  // is not an upload path. Dynamic import avoids a static cycle because the
+  // catalog sync module uses authHeaders from this module.
+  if (!config.syncUrl || !config.chatId) {
+    if (status) status.textContent = 'Saved on this device. Connect this business to sync the offering.';
+    return;
+  }
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (status) status.textContent = 'Saved on this device. You are offline; use Sync now when connected.';
+    return;
+  }
+  try {
+    const { syncCatalog } = await import('../sync/catalog.js');
+    const syncMessage = await syncCatalog();
+    // syncCatalog handles its own network errors and returns a translated
+    // failure message instead of throwing. Detect that result explicitly so
+    // onboarding never leaves the impression that a failed push succeeded.
+    if (status) {
+      status.textContent = syncMessage === t('catalogSyncFailed')
+        ? 'Saved on this device, but not synced yet. Use Sync now to retry.'
+        : (syncMessage || 'Offering sync attempted. Check Sync now if it is still pending.');
+    }
+  } catch {
+    // Keep the local offering and dirty state. A later manual sync can retry.
+    if (status) status.textContent = 'Saved on this device, but not synced yet. Use Sync now to retry.';
+  }
 }
 
 export function skipOnboardingProduct() {
@@ -275,6 +435,7 @@ export async function pairThisDevice() {
       body: JSON.stringify({ token, deviceName: 'Sellify web device' }),
     });
     persistAuth(data, data.membership);
+    await loadBusinessTemplateConfig();
     closeOnboarding();
     window.location.reload();
   } catch (error) {
@@ -328,7 +489,10 @@ export async function submitStaffInvite() {
 // branch on getActivePlatform().id internally (or the exchange should move
 // onto the adapter itself, e.g. platform.silentAuth(request)), not before.
 export async function bootstrapTenantAuth() {
-  if (config.sessionToken && config.sessionExpiresAt && Date.parse(config.sessionExpiresAt) > Date.now() + 30_000) return { authenticated: true };
+  if (config.sessionToken && config.sessionExpiresAt && Date.parse(config.sessionExpiresAt) > Date.now() + 30_000) {
+    await loadBusinessTemplateConfig();
+    return { authenticated: true };
+  }
   const raw = initData();
   if (!raw) return { authenticated: false, reason: 'no-telegram-identity' };
   try {
@@ -336,6 +500,7 @@ export async function bootstrapTenantAuth() {
     const memberships = Array.isArray(data.memberships) ? data.memberships : [];
     if (data.session && memberships.length === 1) {
       persistAuth(data, memberships[0]);
+      await loadBusinessTemplateConfig();
       return { authenticated: true };
     }
     if (data.challenge?.token) window.__SELLIFY_ONBOARDING_CHALLENGE = data.challenge.token;
