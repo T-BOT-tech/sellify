@@ -9,7 +9,13 @@ import { authHeaders } from '../auth/tenant.js';
 
 function persist() {
   try { localStorage.setItem('sellify.outbox.recovery.v1', JSON.stringify(outboxEvents)); }
-  catch (error) { console.error('Outbox recovery journal write failed', error); }
+  catch (error) {
+    console.error('Outbox recovery journal write failed; removing any stale snapshot', error);
+    // A stale journal could resurrect a command that was already completed.
+    // If the latest snapshot cannot be written, discard the old one when possible.
+    try { localStorage.removeItem('sellify.outbox.recovery.v1'); }
+    catch (cleanupError) { console.error('Outbox recovery journal cleanup failed', cleanupError); }
+  }
   saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents);
 }
 
