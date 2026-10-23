@@ -33,10 +33,16 @@ function persist() {
   const localEvents = outboxEvents.map(event => ({ ...event }));
   idbUpdate(STORAGE_KEYS.outboxEvents, storedEvents => {
     const baseline = getOutboxRecoveryBaseline() || localEvents;
-    const merged = mergeOutboxSnapshots(baseline, localEvents, Array.isArray(storedEvents) ? storedEvents : []);
+    return mergeOutboxSnapshots(baseline, localEvents, Array.isArray(storedEvents) ? storedEvents : []);
+  }).then(merged => {
     resetOutboxRecoveryBaseline(merged);
-    setOutboxEvents(merged);
-    return merged;
+    // Don't replace newer in-memory mutations that happened while this
+    // transaction was pending; the next persist will reconcile them.
+    const currentIds = outboxEvents.map(event => event.eventId);
+    const savedIds = localEvents.map(event => event.eventId);
+    if (currentIds.length === savedIds.length && currentIds.every((id, index) => id === savedIds[index])) {
+      setOutboxEvents(merged);
+    }
   }).catch(error => {
     console.error('Atomic IndexedDB outbox update failed; falling back to saveJSON', error);
     saveJSON(STORAGE_KEYS.outboxEvents, localEvents);
