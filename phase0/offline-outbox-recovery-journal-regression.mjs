@@ -12,8 +12,8 @@ const hydrate = await readFile(new URL('../app/src/storage/hydrate.js', import.m
 const journal = await readFile(new URL('../app/src/sync/outbox-recovery-journal.js', import.meta.url), 'utf8');
 
 assert.equal(OUTBOX_RECOVERY_KEY, 'sellify.outbox.recovery.v1');
-assert.match(outbox, /writeOutboxRecoveryJournal\(outboxEvents\);\s*saveJSON\(STORAGE_KEYS\.outboxEvents, outboxEvents\);/,
-  'the synchronous recovery journal must be written before the asynchronous IndexedDB save');
+assert.match(outbox, /writeOutboxRecoveryJournal\(outboxEvents, \{\s*onMerged: merged => setOutboxEvents\(merged\),?\s*\}\);\s*saveJSON\(STORAGE_KEYS\.outboxEvents, outboxEvents\);/,
+  'the reconciled synchronous recovery journal must be written before the asynchronous IndexedDB save');
 assert.match(hydrate, /restoreRecoveryJournal\(\{/,
   'hydration must use the tested recovery journal implementation');
 assert.match(hydrate, /apply\(STORAGE_KEYS\.outboxEvents, outboxEvents, v => setOutboxEvents\(v\)\);\s*restoreOutboxRecoveryJournal\(\);/,
@@ -144,6 +144,7 @@ for (const raw of ['{broken', JSON.stringify({ eventId: 'not-an-array' }), null]
 // Keep the production helper's catch boundaries visible to this contract test.
 assert.match(journal, /storage\.removeItem\(OUTBOX_RECOVERY_KEY\)/);
 assert.match(journal, /if \(!Array\.isArray\(recovered\)\) return false/);
+assert.match(journal, /snapshot = mergeOutboxSnapshots\(baseline, events, shared\)/,\n  'journal writes must merge local mutations into the latest shared snapshot');
 
 const commandSuccessMatch = outbox.match(/await flushCommand\(command\);([\s\S]*?)processed \+= 1;/);
 assert.ok(commandSuccessMatch, 'command success path must be present');
