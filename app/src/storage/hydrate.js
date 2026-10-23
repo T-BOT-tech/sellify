@@ -14,7 +14,10 @@ import { STORAGE_KEYS, DEFAULT_PAYMENT_METHODS, defaultSyncServerUrl } from '../
 import { idbGetAll, isIdbUnavailable } from './idb.js';
 import { runLedgerMigration, migrateProductMoney, migrateOrderMoney } from './migration.js';
 import { saveJSON } from './json.js';
-import { restoreOutboxRecoveryJournal as restoreRecoveryJournal } from '../sync/outbox-recovery-journal.js';
+import {
+  resetOutboxRecoveryBaseline,
+  restoreOutboxRecoveryJournal as restoreRecoveryJournal,
+} from '../sync/outbox-recovery-journal.js';
 import {
   config, products, orders, staffList, currentStaff, orderViewMode,
   b2bAccounts, pricingTiers, volumeDiscountTiers, stockTransactions, warehouseLocations, inventoryMovements, organizationLocations, inventoryBalances, outboxEvents,
@@ -42,10 +45,15 @@ function migrateMoneyNow() {
 // IndexedDB is unavailable. This protects queued intent from a stale IDB
 // snapshot after a tab closed before its latest transaction committed.
 function restoreOutboxRecoveryJournal() {
-  return restoreRecoveryJournal({
+  const restored = restoreRecoveryJournal({
     setOutboxEvents,
     saveOutbox: recovered => saveJSON(STORAGE_KEYS.outboxEvents, recovered),
   });
+  // If no valid recovery journal exists, IndexedDB hydration may still have
+  // replaced the startup localStorage snapshot. Make that hydrated state the
+  // baseline before the first post-hydration mutation is persisted.
+  if (!restored) resetOutboxRecoveryBaseline(outboxEvents);
+  return restored;
 }
 
 let ledgerHydrated = false;
