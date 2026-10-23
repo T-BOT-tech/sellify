@@ -25,6 +25,10 @@ export function initializeOutboxRecoveryBaseline(events) {
   }
 }
 
+export function getOutboxRecoveryBaseline() {
+  return Array.isArray(lastSnapshot) ? lastSnapshot.map(event => ({ ...event })) : null;
+}
+
 export function resetOutboxRecoveryBaseline(events) {
   lastSnapshot = Array.isArray(events) ? events.map(event => ({ ...event })) : [];
 }
