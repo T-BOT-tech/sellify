@@ -6,10 +6,19 @@ import { STORAGE_KEYS } from '../constants.js';
 import { config, outboxEvents, setOutboxEvents } from '../state.js';
 import { saveJSON } from '../storage/json.js';
 import { authHeaders } from '../auth/tenant.js';
-import { writeOutboxRecoveryJournal } from './outbox-recovery-journal.js';
+import {
+  initializeOutboxRecoveryBaseline,
+  writeOutboxRecoveryJournal,
+} from './outbox-recovery-journal.js';
+
+// Capture this tab's starting point so persistence can distinguish local
+// mutations from entries added/updated/removed by another tab.
+initializeOutboxRecoveryBaseline(outboxEvents);
 
 function persist() {
-  writeOutboxRecoveryJournal(outboxEvents);
+  writeOutboxRecoveryJournal(outboxEvents, {
+    onMerged: merged => setOutboxEvents(merged),
+  });
   saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents);
 }
 
