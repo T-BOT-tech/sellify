@@ -427,7 +427,8 @@
     "test:first-experience-add-availability": "node phase0/first-experience-add-availability-regression.mjs",
     "test:first-experience-home-readiness": "node phase0/first-experience-home-readiness-regression.mjs",
     "test:first-experience-pack-readiness": "node phase0/first-experience-pack-readiness-regression.mjs",
-    "test:first-experience-channel-compatibility": "node phase0/first-experience-channel-compatibility-regression.mjs"
+    "test:first-experience-channel-compatibility": "node phase0/first-experience-channel-compatibility-regression.mjs",
+    "test:first-experience-ecosystem-discovery": "node phase0/first-experience-ecosystem-discovery-regression.mjs"
   },
   "engines": {
     "node": ">=24"
