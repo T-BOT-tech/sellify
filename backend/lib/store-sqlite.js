@@ -3429,10 +3429,11 @@ export async function upsertTelegramStorefrontConfig(chatId, input = {}, actor =
   if (identityChanged && ['VERIFIED','PUBLISHED','PAUSED'].includes(current.status)) {
     status = 'CONFIGURED';
   }
-  assertTelegramStorefrontTransition(current?.status || 'DRAFT', status);
-  if (['VERIFIED','PUBLISHED'].includes(status) && !current?.status?.match(/^(VERIFIED|PUBLISHED)$/)) {
+  // CONFIGURED is the pre-verification state; report that boundary before generic transition validation.
+  if (current?.status === 'CONFIGURED' && ['VERIFIED','PUBLISHED'].includes(status)) {
     throw Object.assign(new Error('Use the Telegram storefront verification boundary before VERIFIED or PUBLISHED'), { statusCode: 409, code: 'TELEGRAM_VERIFICATION_REQUIRED' });
   }
+  assertTelegramStorefrontTransition(current?.status || 'DRAFT', status);
   const capabilities = Array.isArray(input.enabledCapabilities) ? [...new Set(input.enabledCapabilities.map(String).map(x => x.trim()).filter(Boolean))] : (current?.enabledCapabilities || ['browse','search','product','cart','checkout','order_status']);
   const metadata = input.metadata && typeof input.metadata === 'object' && !Array.isArray(input.metadata) ? input.metadata : (current?.metadata || {});
   const now = nowIso();
