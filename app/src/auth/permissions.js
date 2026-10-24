@@ -59,4 +59,13 @@ export function applyRolePermissions(role) {
 
   const gearBtn = document.getElementById('gearSettingsBtn');
   if (gearBtn) gearBtn.style.display = hasPermission(roleClean, 'settings:configure') ? '' : 'none';
+
+  // Keep the Add (+) launcher aligned with this same role map so it does not
+  // advertise actions that the current operator cannot open. This is only a
+  // presentation filter; the owning screens and backend remain authoritative.
+  document.querySelectorAll('[data-add-permission]').forEach(button => {
+    const allowed = hasPermission(roleClean, button.dataset.addPermission);
+    button.hidden = !allowed;
+    button.setAttribute('aria-hidden', String(!allowed));
+  });
 }

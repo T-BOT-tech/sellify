@@ -1,6 +1,7 @@
 // SQLite-backed Sellify store.
 import { AUTHZ, authorize } from './authorization.js';
 import { normalizeTelegramCredentialRef, verifyTelegramBotCredential } from '../../app/src/platform/telegram-bot-credential-contract.js';
+import { TELEGRAM_STOREFRONT_CAPABILITIES } from '../../app/src/telegram-storefront-contract.js';
 //
 // Phase 5 replaces the old per-file JSON read/modify/write model with one
 // transactional database. The JSON files remain readable as a one-time import
@@ -3396,10 +3397,14 @@ export function getTelegramStorefrontConfig(chatId) {
   if (!org?.organization_id) return null;
   const row = db.prepare('SELECT * FROM telegram_storefront_configs WHERE organization_id=?').get(org.organization_id);
   if (!row) return null;
+  const storedCapabilities = parseJSON(row.enabled_capabilities_json, []);
+  const capabilityList = Array.isArray(storedCapabilities) ? storedCapabilities : [];
+  const enabledCapabilities = capabilityList.filter(capability => TELEGRAM_STOREFRONT_CAPABILITIES.includes(String(capability)));
+  const unsupportedCapabilities = capabilityList.filter(capability => !TELEGRAM_STOREFRONT_CAPABILITIES.includes(String(capability)));
   return {
     organizationId: row.organization_id, channelType: row.channel_type, botId: row.bot_id,
     botUsername: row.bot_username, credentialRef: row.credential_ref, status: row.status,
-    webappUrl: row.webapp_url, enabledCapabilities: parseJSON(row.enabled_capabilities_json, []),
+    webappUrl: row.webapp_url, enabledCapabilities, unsupportedCapabilities,
     metadata: parseJSON(row.metadata_json, {}), createdByUserId: row.created_by_user_id,
     updatedByUserId: row.updated_by_user_id, createdAt: row.created_at, updatedAt: row.updated_at,
     version: Number(row.version || 1),
@@ -3430,10 +3435,20 @@ export async function upsertTelegramStorefrontConfig(chatId, input = {}, actor =
     status = 'CONFIGURED';
   }
   assertTelegramStorefrontTransition(current?.status || 'DRAFT', status);
-  if (['VERIFIED','PUBLISHED'].includes(status) && !current?.status?.match(/^(VERIFIED|PUBLISHED)$/)) {
+  if (['VERIFIED','PUBLISHED'].includes(status) && !current?.status?.match(/^(VERIFIED|PUBLISHED|PAUSED)$/)) {
     throw Object.assign(new Error('Use the Telegram storefront verification boundary before VERIFIED or PUBLISHED'), { statusCode: 409, code: 'TELEGRAM_VERIFICATION_REQUIRED' });
   }
-  const capabilities = Array.isArray(input.enabledCapabilities) ? [...new Set(input.enabledCapabilities.map(String).map(x => x.trim()).filter(Boolean))] : (current?.enabledCapabilities || ['browse','search','product','cart','checkout','order_status']);
+  const requestedCapabilities = Array.isArray(input.enabledCapabilities)
+    ? [...new Set(input.enabledCapabilities.map(String).map(x => x.trim()).filter(Boolean))]
+    : null;
+  const unsupportedCapabilities = requestedCapabilities?.filter(capability => !TELEGRAM_STOREFRONT_CAPABILITIES.includes(capability)) || [];
+  if (unsupportedCapabilities.length) {
+    throw Object.assign(new Error(`Unsupported Telegram storefront capability: ${unsupportedCapabilities.join(', ')}`), {
+      statusCode: 400,
+      code: 'UNSUPPORTED_TELEGRAM_STOREFRONT_CAPABILITY',
+    });
+  }
+  const capabilities = requestedCapabilities || (current?.enabledCapabilities || ['browse','search','product','cart','checkout','order_status']);
   const metadata = input.metadata && typeof input.metadata === 'object' && !Array.isArray(input.metadata) ? input.metadata : (current?.metadata || {});
   const now = nowIso();
   const values = [org, String(input.botId ?? current?.botId ?? '') || null, String(input.botUsername ?? current?.botUsername ?? '') || null, String(input.credentialRef ?? current?.credentialRef ?? '') || null, status, String(input.webappUrl ?? current?.webappUrl ?? '') || null, json(capabilities), json(metadata), actorId, now];

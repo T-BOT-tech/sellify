@@ -422,7 +422,12 @@
     "gap-1.18:decision-idempotency-test": "node phase0/gap-1.18Q-payment-decision-idempotency-regression.mjs",
     "gap-1.18:financial-transition-idempotency-test": "node phase0/gap-1.18U-financial-transition-idempotency-regression.mjs",
     "test:service-catalog-http": "node phase0/first-experience-service-catalog-http-regression.mjs",
-    "test:service-catalog-frontend-sync": "node phase0/first-experience-service-catalog-frontend-sync-regression.mjs"
+    "test:service-catalog-frontend-sync": "node phase0/first-experience-service-catalog-frontend-sync-regression.mjs",
+    "test:first-experience-returning-merchant": "node phase0/first-experience-returning-merchant-regression.mjs",
+    "test:first-experience-add-availability": "node phase0/first-experience-add-availability-regression.mjs",
+    "test:first-experience-home-readiness": "node phase0/first-experience-home-readiness-regression.mjs",
+    "test:first-experience-pack-readiness": "node phase0/first-experience-pack-readiness-regression.mjs",
+    "test:first-experience-channel-compatibility": "node phase0/first-experience-channel-compatibility-regression.mjs"
   },
   "engines": {
     "node": ">=24"
