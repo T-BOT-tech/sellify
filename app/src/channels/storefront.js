@@ -1,7 +1,10 @@
 // FUX-55 — canonical seller storefront channel + Telegram seller configuration UI.
 import { config } from '../state.js';
 import { hasPermission } from '../auth/permissions.js';
-import { TELEGRAM_STOREFRONT_CAPABILITIES } from '../telegram-storefront-contract.js';
+import {
+  TELEGRAM_STOREFRONT_CAPABILITIES,
+  TELEGRAM_STOREFRONT_UNSUPPORTED_CAPABILITIES,
+} from '../telegram-storefront-contract.js';
 
 const CAPABILITIES = TELEGRAM_STOREFRONT_CAPABILITIES;
 function baseUrl() { return (config.syncUrl || window.location.origin).replace(/\/$/, ''); }
@@ -82,11 +85,18 @@ export function renderSellerChannelSummary(channels = []) {
     const type = esc(channel.displayName || channel.channelType || 'Channel');
     const status = esc(String(channel.status || 'DRAFT').toUpperCase());
     const enabled = channel.enabled !== false;
-    const caps = Array.isArray(channel.capabilities) ? channel.capabilities.map(esc).join(', ') : '';
+    const rawCaps = Array.isArray(channel.capabilities) ? channel.capabilities : [];
+    const channelType = String(channel.channelType || '').toLowerCase();
+    const unsupported = [...new Set([
+      ...(Array.isArray(channel.unsupportedCapabilities) ? channel.unsupportedCapabilities : []),
+      ...(channelType === 'telegram' ? rawCaps.filter(cap => TELEGRAM_STOREFRONT_UNSUPPORTED_CAPABILITIES.includes(String(cap))) : []),
+    ])];
+    const configuredCaps = rawCaps.filter(cap => !(channelType === 'telegram' && TELEGRAM_STOREFRONT_UNSUPPORTED_CAPABILITIES.includes(String(cap)))).map(esc).join(', ');
     return '<div style="padding:10px;border:1px solid var(--line);border-radius:10px;margin-top:8px;">' +
       '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">' +
       '<strong>' + type + '</strong><span class="hint">' + status + (enabled ? '' : ' · DISABLED') + '</span></div>' +
-      (caps ? '<div class="hint" style="margin-top:4px;">Capabilities: ' + caps + '</div>' : '') +
+      (configuredCaps ? '<div class="hint" style="margin-top:4px;">Configured operation flags (not readiness confirmation): ' + configuredCaps + '</div>' : '') +
+      (unsupported.length ? '<div class="hint" style="margin-top:4px;">Unsupported operations: ' + unsupported.map(esc).join(', ') + '</div>' : '') +
       '</div>';
   }).join('');
 }
@@ -114,7 +124,8 @@ export function renderTelegramStorefront(storefront) {
     <select id="telegramStorefrontState">
       <option value="DRAFT">DRAFT</option><option value="CONFIGURED">CONFIGURED</option><option value="PAUSED">PAUSED</option><option value="UNPUBLISHED">UNPUBLISHED</option>
     </select>
-    <div class="hint">Verification is a separate server-authorized step. Publishing is allowed only after verification.</div>
+    <div class="hint">Verification is a separate server-authorized step. Publishing is allowed only after verification; publishing does not prove every associated workflow is ready.</div>
+    <div class="hint" style="margin-top:8px;">Returns are not supported as a Telegram operation. The Logistics Pack remains the returns authority, but this Telegram channel has no return-request action.${(s.unsupportedCapabilities || []).length ? ' Previously saved unsupported flag(s): ' + (s.unsupportedCapabilities || []).map(esc).join(', ') + '.' : ''}</div>
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:10px 0;">
       ${CAPABILITIES.map(cap => `<label style="margin:0;"><input type="checkbox" data-telegram-cap value="${cap}" ${caps.includes(cap) ? 'checked' : ''}> ${esc(cap)}</label>`).join('')}
     </div>

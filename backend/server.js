@@ -81,6 +81,7 @@ import crypto from 'node:crypto';
 import { resolveTelegramBotCredential } from '../app/src/platform/telegram-bot-credential-contract.js';
 import { verifyTelegramBuyerInitDataWithSecret } from '../app/src/platform/telegram-buyer-identity-contract.js';
 import { normalizeTelegramCheckoutContext, buildTelegramPaymentBoundary } from '../app/src/platform/telegram-checkout-contract.js';
+import { TELEGRAM_STOREFRONT_FULFILLMENT_CAPABILITIES } from '../app/src/telegram-storefront-contract.js';
 import { buildSellerStorefrontChannelSummary } from '../app/src/platform/seller-channel-storefront-contract.js';
 import { buildCrossChannelConsistencyContract, evaluateCrossChannelConsistency } from '../app/src/platform/cross-channel-consistency-contract.js';
 import { getDiscoveryProvider, discoverUnified } from './lib/discovery/index.js';
@@ -582,7 +583,7 @@ async function handleTelegramStorefrontFulfillment(req, res, chatId, orderId) {
   const config = getTelegramStorefrontConfig(chatId);
   if (!config || config.status !== 'PUBLISHED') return sendJSON(res, 404, { error: { message: 'Telegram storefront is not published', status: 404 } }, req);
   const enabled = new Set(Array.isArray(config.enabledCapabilities) ? config.enabledCapabilities : []);
-  if (![...enabled].some(c => ['tracking','proof_of_delivery','returns'].includes(c))) {
+  if (![...enabled].some(c => TELEGRAM_STOREFRONT_FULFILLMENT_CAPABILITIES.includes(c))) {
     return sendJSON(res, 403, { error: { message: 'Fulfillment capabilities are disabled', status: 403, code: 'TELEGRAM_FULFILLMENT_DISABLED' } }, req);
   }
   const initData = String(req.headers['x-telegram-init-data'] || '').trim();
@@ -3334,4 +3335,3 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`sellify-backend listening on http://localhost:${PORT} (env=${NODE_ENV}, static=${SERVE_STATIC ? STATIC_DIR : 'disabled'})`);
 });
-

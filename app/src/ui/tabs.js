@@ -11,6 +11,7 @@ import { renderCustomers } from '../customers.js';
 import { switchWarehouseSubtab, warehouseActiveSubtab } from '../warehouse/ui.js';
 import { renderLogistics } from '../logistics/ui.js';
 import { renderSourcing, bindSourcingUI } from '../procurement/ui.js';
+import { renderEcosystemDiscovery } from '../experience/ecosystem-discovery.js';
 
 // ---------- Tabs ----------
 export function switchTab(tab) {
@@ -28,6 +29,7 @@ export function switchTab(tab) {
   const navMore = document.getElementById('navMore');
   if (navMore) navMore.classList.toggle('active', overflowTabs.includes(tab));
   if (tab === 'marketplace') {
+    renderEcosystemDiscovery();
     fetchMarketplaceListings();
     renderMarketplace();
   }

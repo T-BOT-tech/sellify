@@ -412,6 +412,8 @@
       <h3><svg class="icon"><use href="#i-globe"/></svg> Global Marketplace</h3>
       <p>Discover products across all community stalls. Add items from multiple vendors and check out with automated ticket splitting.</p>
     </div>
+    <div id="marketEcosystemDiscovery"></div>
+    <h3 class="market-offerings-heading">Products &amp; services to purchase</h3>
     
     <div class="search-container">
       <div class="search-input-wrap">
@@ -804,22 +806,22 @@
     <h3 id="addSheetTitle">What would you like to do?</h3>
     <p class="hint">Start selling, discover the ecosystem, or configure your business.</p>
     <div class="more-sheet-list add-sheet-list">
-      <button type="button" class="btn-ghost more-sheet-item" onclick="switchTab('order'); closeAddSheet();">
+      <button type="button" class="btn-ghost more-sheet-item" data-add-permission="orders:create" onclick="switchTab('order'); closeAddSheet();">
         <svg class="icon"><use href="#i-receipt"/></svg><span>Take an order</span>
       </button>
-      <button type="button" class="btn-ghost more-sheet-item" onclick="openAddProduct();">
+      <button type="button" class="btn-ghost more-sheet-item" data-add-permission="inventory:add" onclick="openAddProduct();">
         <svg class="icon"><use href="#i-box"/></svg><span>Add product</span>
       </button>
       <button type="button" class="btn-ghost more-sheet-item" onclick="switchTab('marketplace'); closeAddSheet();">
         <svg class="icon"><use href="#i-globe"/></svg><span>Discover marketplace</span>
       </button>
-      <button type="button" class="btn-ghost more-sheet-item" onclick="openAddSettings('configure-packs');">
+      <button type="button" class="btn-ghost more-sheet-item" data-add-permission="settings:configure" onclick="openAddSettings('configure-packs');">
         <svg class="icon"><use href="#i-sliders"/></svg><span>Configure packs</span>
       </button>
-      <button type="button" class="btn-ghost more-sheet-item" onclick="openAddSettings('connect-sales-channels');">
+      <button type="button" class="btn-ghost more-sheet-item" data-add-permission="settings:configure" onclick="openAddSettings('connect-sales-channels');">
         <svg class="icon"><use href="#i-globe"/></svg><span>Connect sales channels</span>
       </button>
-      <button type="button" class="btn-ghost more-sheet-item" onclick="openAddSettings('business-setup');">
+      <button type="button" class="btn-ghost more-sheet-item" data-add-permission="settings:configure" onclick="openAddSettings('business-setup');">
         <svg class="icon"><use href="#i-settings"/></svg><span>Business setup</span>
       </button>
     </div>
@@ -926,6 +928,8 @@
       <label>Pairing code</label>
       <input id="pairingCode" type="text" autocomplete="one-time-code" placeholder="Paste one-time code">
       <button class="primary" onclick="pairThisDevice()">Pair this device</button>
+      <div class="hint" style="text-align:center; margin-top:12px;">Just looking around? You can browse marketplace offerings without setting up or joining a business.</div>
+      <button type="button" class="btn-ghost" style="width:100%; margin-top:8px;" onclick="closeOnboarding(); switchTab('marketplace');">Browse marketplace</button>
     </div>
     <div id="onboardingInvite" style="display:none;">
       <div class="hint" style="margin-bottom:10px;">Enter the invite code the owner or manager sent you. This joins the business under your own Telegram account.</div>
