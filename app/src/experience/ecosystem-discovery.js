@@ -85,6 +85,12 @@ export function renderEcosystemDiscovery(containerId = 'marketEcosystemDiscovery
           <button type="button" data-ecosystem-action="channels" ${canConfigure ? '' : 'disabled'}>Review channel connections</button>
           ${canConfigure ? '' : '<small>Settings access is not available for the current role.</small>'}
         </article>
+        <article class="ecosystem-discovery-card" data-lifecycle="business-setup">
+          <h4>Start or open a business</h4>
+          <p>Continue through Sellify’s existing secure onboarding. You’ll be asked to authenticate, then can create a business or select an existing one.</p>
+          <button type="button" data-ecosystem-action="business">Start business setup</button>
+          <p class="hint" data-ecosystem-status="business" role="status" aria-live="polite"></p>
+        </article>
         <article class="ecosystem-discovery-card" data-lifecycle="seller-registration">
           <h4>Seller registration</h4>
           <p><strong>Unavailable here.</strong> No supported in-app seller-registration workflow is declared. Seller registration is not a purchase or Pack activation.</p>
@@ -103,6 +109,29 @@ export function renderEcosystemDiscovery(containerId = 'marketEcosystemDiscovery
   });
   root.querySelector('[data-ecosystem-action="packs"]')?.addEventListener('click', () => openAddSettings('configure-packs'));
   root.querySelector('[data-ecosystem-action="channels"]')?.addEventListener('click', () => openAddSettings('connect-sales-channels'));
+  root.querySelector('[data-ecosystem-action="business"]')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    const status = root.querySelector('[data-ecosystem-status="business"]');
+    if (button) button.disabled = true;
+    if (status) status.textContent = 'Checking your account…';
+    try {
+      const result = await window.bootstrapTenantAuth?.();
+      if (result?.onboarding) {
+        if (status) status.textContent = 'Continue in onboarding to create a business or select an existing business.';
+      } else if (result?.authenticated) {
+        if (status) status.textContent = 'Opening your authorized business workspace.';
+        if (typeof window.switchTab === 'function') window.switchTab('home');
+      } else if (result?.reason === 'no-telegram-identity') {
+        if (status) status.textContent = 'Business setup requires a supported sign-in. Open Sellify from Telegram to continue.';
+      } else {
+        if (status) status.textContent = result?.error?.message || 'Could not verify your account. Try again from Sellify’s supported sign-in flow.';
+      }
+    } catch (error) {
+      if (status) status.textContent = error?.message || 'Could not verify your account. Try again.';
+    } finally {
+      if (button) button.disabled = false;
+    }
+  });
   root.querySelector('[data-ecosystem-action="workspaces"]')?.addEventListener('click', () => {
     if (typeof window.switchTab === 'function') window.switchTab('home');
   });

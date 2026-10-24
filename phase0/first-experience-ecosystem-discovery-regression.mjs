@@ -35,6 +35,16 @@ assert.match(discovery, /openAddSettings\('connect-sales-channels'\)/,
 assert.match(discovery, /Seller registration/);
 assert.match(discovery, /No supported in-app seller-registration workflow is declared/,
   'seller registration must not be represented as a purchase or an implemented action');
+assert.match(discovery, /Start or open a business/);
+assert.match(discovery, /data-ecosystem-action="business"/,
+  'prospective sellers must have a distinct business-setup handoff from Marketplace discovery');
+assert.match(discovery, /window\.bootstrapTenantAuth\?\.\(\)/,
+  'business setup must reuse the existing authentication and onboarding authority');
+assert.match(discovery, /result\?\.onboarding/);
+assert.match(discovery, /result\?\.authenticated[\s\S]*?window\.switchTab\('home'\)/,
+  'an already authenticated user must be sent to their authorized workspace instead of being prompted to create another business');
+assert.match(discovery, /result\?\.reason === 'no-telegram-identity'[\s\S]*?Open Sellify from Telegram/,
+  'unauthenticated visitors must receive a truthful supported-sign-in path rather than an unusable creation form');
 assert.match(discovery, /workspaces/);
 assert.match(addMenu, /'configure-packs': 'packReadinessPanel'/);
 assert.match(addMenu, /'connect-sales-channels': 'sellerStorefrontChannelsPanel'/);
