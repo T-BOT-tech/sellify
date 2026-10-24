@@ -54,8 +54,11 @@ assert.match(tenantAuthSource, /business-template[\s\S]*?method: 'PUT'[\s\S]*?te
   'onboarding must persist the selected template through the tenant API, not only local storage');
 assert.match(tenantAuthSource, /businessTemplateSchemaVersion: 1/,
   'the local template cache must carry an explicit schema version');
-assert.match(windowBridgeSource, /applyOnboardingBusinessTemplate, toggleOnboardingItemType/,
-  'new onboarding actions must be available to the inline HTML event handlers');
+const windowAssignment = windowBridgeSource.match(/Object\.assign\(window,\s*\{([\s\S]*?)\n\s*\}\);/)?.[1] || '';
+assert.match(windowAssignment, /\bapplyOnboardingBusinessTemplate\b/,
+  'business-template onchange handler must be exposed on window');
+assert.match(windowAssignment, /\btoggleOnboardingItemType\b/,
+  'product/service onchange handler must be exposed on window');
 
 assert.match(catalogSource, /return \{\s*\.\.\.p,/);
 assert.match(catalogSource, /id:\s*sanitizeId\(p\.id\)/);
