@@ -7,6 +7,8 @@ export default {
     catalogProduct: "उत्पाद",
     service: "सेवा",
     setupBusiness: "अपना व्यवसाय सेटअप करें",
+    firstSaleAddProduct: "बेचना शुरू करने के लिए एक उत्पाद जोड़ें",
+    catalogReady: "उत्पाद सूची तैयार है",
     online: "ऑनलाइन",
     offline: "ऑफ़लाइन",
     toSync: "सिंक के लिए",

@@ -7,6 +7,8 @@ export default {
     catalogProduct: "ምርት",
     service: "አገልግሎት",
     setupBusiness: "ንግድዎን ያዋቅሩ",
+    firstSaleAddProduct: "ሽያጭ ለመጀመር ምርት ያክሉ",
+    catalogReady: "ካታሎግ ዝግጁ ነው",
     online: "ኦንላይን",
     offline: "ኦፍላይን",
     toSync: "ለማመሳሰል",

@@ -7,6 +7,8 @@ export default {
     catalogProduct: "Badeecad",
     service: "Adeeg",
     setupBusiness: "Hagaaji ganacsigaaga",
+    firstSaleAddProduct: "Ku dar badeecad si aad wax u iibiso",
+    catalogReady: "Liiska badeecaduhu waa diyaar",
     online: "Khadka",
     offline: "Off-line",
     toSync: "is-raacin",

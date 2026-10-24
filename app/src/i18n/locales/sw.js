@@ -7,6 +7,8 @@ export default {
     catalogProduct: "Bidhaa",
     service: "Huduma",
     setupBusiness: "Weka mipangilio ya biashara",
+    firstSaleAddProduct: "Ongeza bidhaa ili uanze kuuza",
+    catalogReady: "Katalogi iko tayari",
     online: "Mtandaoni",
     offline: "Nje ya Mtandao",
     toSync: "ya kusawazisha",
