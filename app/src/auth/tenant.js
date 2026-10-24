@@ -341,9 +341,11 @@ export function toggleOnboardingItemType(itemType) {
   const stockWrap = document.getElementById('onboardingProdStockWrap');
   const nameLabel = document.getElementById('onboardingItemNameLabel');
   const nameInput = document.getElementById('onboardingProdName');
+  const addButton = document.getElementById('onboardingAddOfferingButton');
   if (stockWrap) stockWrap.style.display = isService ? 'none' : '';
   if (nameLabel) nameLabel.textContent = isService ? 'Service name' : 'Product name';
   if (nameInput) nameInput.placeholder = isService ? 'Haircut or consultation' : 'Coffee';
+  if (addButton) addButton.textContent = isService ? 'Add service' : 'Add product';
 }
 
 export async function addOnboardingProduct() {

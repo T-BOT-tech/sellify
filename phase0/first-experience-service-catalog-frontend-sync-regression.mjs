@@ -59,6 +59,31 @@ assert.match(windowAssignment, /\bapplyOnboardingBusinessTemplate\b/,
   'business-template onchange handler must be exposed on window');
 assert.match(windowAssignment, /\btoggleOnboardingItemType\b/,
   'product/service onchange handler must be exposed on window');
+assert.match(onboardingHtml, /id="onboardingAddOfferingButton"[^>]*>Add product</,
+  'the first-offering action must have a stable target for type-specific labeling');
+const itemTypeToggleMatch = tenantAuthSource.match(/export function toggleOnboardingItemType\(itemType\) \{[\s\S]*?\n\}/);
+assert.ok(itemTypeToggleMatch, 'the onboarding offering-type selector handler must exist');
+const onboardingElements = {
+  onboardingProdStockWrap: { style: { display: '' } },
+  onboardingItemNameLabel: { textContent: 'Product name' },
+  onboardingProdName: { placeholder: 'Coffee' },
+  onboardingAddOfferingButton: { textContent: 'Add product' },
+};
+const onboardingUiContext = {
+  document: { getElementById: id => onboardingElements[id] || null },
+};
+vm.runInNewContext(itemTypeToggleMatch[0].replace(/^export /, ''), onboardingUiContext);
+onboardingUiContext.toggleOnboardingItemType('service');
+assert.equal(onboardingElements.onboardingProdStockWrap.style.display, 'none',
+  'service offerings must not request physical stock');
+assert.equal(onboardingElements.onboardingItemNameLabel.textContent, 'Service name');
+assert.equal(onboardingElements.onboardingProdName.placeholder, 'Haircut or consultation');
+assert.equal(onboardingElements.onboardingAddOfferingButton.textContent, 'Add service');
+onboardingUiContext.toggleOnboardingItemType('product');
+assert.equal(onboardingElements.onboardingProdStockWrap.style.display, '');
+assert.equal(onboardingElements.onboardingItemNameLabel.textContent, 'Product name');
+assert.equal(onboardingElements.onboardingProdName.placeholder, 'Coffee');
+assert.equal(onboardingElements.onboardingAddOfferingButton.textContent, 'Add product');
 
 assert.match(catalogSource, /return \{\s*\.\.\.p,/);
 assert.match(catalogSource, /id:\s*sanitizeId\(p\.id\)/);
