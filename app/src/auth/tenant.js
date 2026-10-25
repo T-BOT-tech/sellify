@@ -222,6 +222,7 @@ export async function restoreTenantStateForTenant(chatId) {
       for (const prior of written.reverse()) await saveJSONAsync(prior.storageKey, prior.previous);
       return false;
     }
+    if (entry.storageKey === null) continue; // In-memory-only state is restored after durable fields succeed.
     const saved = await saveJSONAsync(entry.storageKey, entry.target);
     if (!saved) {
       let rollbackOk = true;
@@ -248,6 +249,7 @@ export async function restoreTenantStateForTenant(chatId) {
 async function clearSharedTenantCaches() {
   for (const [, , setter, storageKey, emptyValue] of tenantStateFields) {
     setter(emptyValue);
+    if (storageKey === null) continue; // No shared persistence key exists for this in-memory-only state.
     const saved = await saveJSONAsync(storageKey, emptyValue);
     if (!saved) {
       await restoreTenantStateForTenant(config.chatId);
