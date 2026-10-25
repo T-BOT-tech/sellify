@@ -48,7 +48,9 @@ function persist() {
     }
   }).catch(error => {
     console.error('Atomic IndexedDB outbox update failed; falling back to saveJSON', error);
-    saveJSON(STORAGE_KEYS.outboxEvents, localEvents);
+    // The transaction may fail after newer same-tab mutations have occurred.
+    // Persist the current state rather than the snapshot captured before it began.
+    saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents);
   });
 }
 
