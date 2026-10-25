@@ -6198,9 +6198,11 @@ export async function updateTenant(chatId, patch) {
         throw Object.assign(new Error('Organization currency cannot change after monetary records exist'), { statusCode: 409, code: 'CURRENCY_LOCKED' });
       }
       next.branding = { ...next.branding, currency: requestedCurrency };
+      next.currency = requestedCurrency;
       db.prepare('UPDATE organizations SET currency = ? WHERE id = (SELECT organization_id FROM tenants WHERE chat_id = ?)').run(requestedCurrency, key);
     } else {
       next.branding = { ...next.branding, currency: currentCurrency };
+      next.currency = currentCurrency;
     }
   }
   db.prepare(`
