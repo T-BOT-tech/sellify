@@ -164,7 +164,7 @@ async function loadBusinessTemplateConfig() {
     const next = { ...config, businessTemplate: pending.templateKey, businessTemplateSchemaVersion: pending.schemaVersion || 1 };
     setConfig(next);
     saveJSON(STORAGE_KEYS.config, next);
-    await saveJSONAsync(pendingBusinessTemplateKey(chatId), null);
+    await saveJSONAsync(pendingBusinessTemplateKey(chatId), { tenantId: chatId, status: 'synced' });
     return { templateKey: pending.templateKey, schemaVersion: pending.schemaVersion || 1 };
   } catch {
     // Offline or an older backend: retain the tenant-scoped marker for a later retry.
