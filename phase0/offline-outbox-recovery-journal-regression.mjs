@@ -20,6 +20,8 @@ assert.match(outbox, /writeOutboxRecoveryJournal\(outboxEvents, \{\s*onMerged: m
   'the recovery journal must be written before the IndexedDB path, with localStorage fallback when IndexedDB is unavailable');
 assert.match(idb, /export function idbUpdate\(key, updater\)[\s\S]*?store\.get\(key\)[\s\S]*?nextValue = updater\(request\.result !== undefined \? request\.result : null\)[\s\S]*?store\.put\(nextValue, key\)/, 'outbox reconciliation must read, merge, and write within one IndexedDB readwrite transaction');
 assert.match(outbox, /idbUpdate\(STORAGE_KEYS\.outboxEvents, storedEvents =>[\s\S]*?mergeOutboxSnapshots\(indexedDbBaseline, localEvents, Array\.isArray\(storedEvents\) \? storedEvents : \[\]\)/, 'outbox persistence must reconcile against the current IndexedDB value atomically');
+assert.match(outbox, /\.catch\(error => \{[\s\S]*?Atomic IndexedDB outbox update failed; falling back to saveJSON[\s\S]*?saveJSON\(STORAGE_KEYS\.outboxEvents, outboxEvents\);/,
+  'an IndexedDB transaction failure must persist the current outbox, not a snapshot captured before newer same-tab mutations');
 assert.match(outbox, /const indexedDbBaseline = getOutboxIndexedDbBaseline\(\) \|\| localEvents;[\s\S]*?mergeOutboxSnapshots\(indexedDbBaseline, localEvents, Array\.isArray\(storedEvents\) \? storedEvents : \[\]\)/,
   'IndexedDB reconciliation must use a baseline independent from the synchronously updated recovery journal');
 assert.match(outbox, /\.then\(merged => \{\s*resetOutboxIndexedDbBaseline\(merged\);/,
