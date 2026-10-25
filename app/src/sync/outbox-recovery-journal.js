@@ -7,6 +7,11 @@
 // cross-tab lock: simultaneous edits to the same event remain last-writer-wins.
 export const OUTBOX_RECOVERY_KEY = 'sellify.outbox.recovery.v1';
 let lastSnapshot = null;
+// Keep the recovery-journal merge baseline separate from IndexedDB's last
+// committed snapshot. The journal may advance before the IDB transaction
+// commits; conflating those baselines can erase additions/deletions in the
+// delta that the IDB reconciliation needs to apply.
+let lastIndexedDbSnapshot = null;
 
 export function initializeOutboxRecoveryBaseline(events) {
   if (Array.isArray(lastSnapshot)) return;
@@ -31,6 +36,16 @@ export function getOutboxRecoveryBaseline() {
 
 export function resetOutboxRecoveryBaseline(events) {
   lastSnapshot = Array.isArray(events) ? events.map(event => ({ ...event })) : [];
+}
+
+export function getOutboxIndexedDbBaseline() {
+  return Array.isArray(lastIndexedDbSnapshot)
+    ? lastIndexedDbSnapshot.map(event => ({ ...event }))
+    : null;
+}
+
+export function resetOutboxIndexedDbBaseline(events) {
+  lastIndexedDbSnapshot = Array.isArray(events) ? events.map(event => ({ ...event })) : [];
 }
 
 function byId(events) {

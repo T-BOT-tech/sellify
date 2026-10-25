@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
   OUTBOX_RECOVERY_KEY,
+  getOutboxIndexedDbBaseline,
   mergeOutboxSnapshots,
+  resetOutboxIndexedDbBaseline,
+  resetOutboxRecoveryBaseline,
   restoreOutboxRecoveryJournal,
   writeOutboxRecoveryJournal,
 } from '../app/src/sync/outbox-recovery-journal.js';
@@ -16,11 +19,15 @@ assert.equal(OUTBOX_RECOVERY_KEY, 'sellify.outbox.recovery.v1');
 assert.match(outbox, /writeOutboxRecoveryJournal\(outboxEvents, \{\s*onMerged: merged => setOutboxEvents\(merged\),?\s*\}\);\s*if \(isIdbUnavailable\(\)\) \{\s*saveJSON\(STORAGE_KEYS\.outboxEvents, outboxEvents\);/,
   'the recovery journal must be written before the IndexedDB path, with localStorage fallback when IndexedDB is unavailable');
 assert.match(idb, /export function idbUpdate\(key, updater\)[\s\S]*?store\.get\(key\)[\s\S]*?nextValue = updater\(request\.result !== undefined \? request\.result : null\)[\s\S]*?store\.put\(nextValue, key\)/, 'outbox reconciliation must read, merge, and write within one IndexedDB readwrite transaction');
-assert.match(outbox, /idbUpdate\(STORAGE_KEYS\.outboxEvents, storedEvents =>[\s\S]*?mergeOutboxSnapshots\(baseline, localEvents, Array\.isArray\(storedEvents\) \? storedEvents : \[\]\)/, 'outbox persistence must reconcile against the current IndexedDB value atomically');
+assert.match(outbox, /idbUpdate\(STORAGE_KEYS\.outboxEvents, storedEvents =>[\s\S]*?mergeOutboxSnapshots\(indexedDbBaseline, localEvents, Array\.isArray\(storedEvents\) \? storedEvents : \[\]\)/, 'outbox persistence must reconcile against the current IndexedDB value atomically');
+assert.match(outbox, /const indexedDbBaseline = getOutboxIndexedDbBaseline\(\) \|\| localEvents;[\s\S]*?mergeOutboxSnapshots\(indexedDbBaseline, localEvents, Array\.isArray\(storedEvents\) \? storedEvents : \[\]\)/,
+  'IndexedDB reconciliation must use a baseline independent from the synchronously updated recovery journal');
+assert.match(outbox, /\.then\(merged => \{\s*resetOutboxIndexedDbBaseline\(merged\);/,
+  'the IndexedDB baseline must advance only after the atomic IndexedDB transaction commits');
 assert.match(hydrate, /restoreRecoveryJournal\(\{/,
   'hydration must use the tested recovery journal implementation');
-assert.match(hydrate, /apply\(STORAGE_KEYS\.outboxEvents, outboxEvents, v => setOutboxEvents\(v\)\);\s*restoreOutboxRecoveryJournal\(\);/,
-  'journal recovery must run after the IndexedDB snapshot is applied');
+assert.match(hydrate, /apply\(STORAGE_KEYS\.outboxEvents, outboxEvents, v => setOutboxEvents\(v\)\);\s*resetOutboxIndexedDbBaseline\(Array\.isArray\(fromIdb\[STORAGE_KEYS\.outboxEvents\]\)[\s\S]*?restoreOutboxRecoveryJournal\(\);/,
+  'the IndexedDB baseline must capture the hydrated snapshot before journal recovery overrides application state');
 assert.match(hydrate, /if \(isIdbUnavailable\(\)\) \{\s*restoreOutboxRecoveryJournal\(\);/,
   'journal recovery must also run when IndexedDB is unavailable');
 assert.match(hydrate, /catch \(e\) \{\s*console\.error\('IndexedDB hydration read failed[^']*', e\);\s*restoreOutboxRecoveryJournal\(\);/,
@@ -44,6 +51,40 @@ function fakeStorage(initial = {}) {
 const quietLogger = { error() {} };
 const stale = [{ eventId: 'completed-command', kind: 'command', status: 'pending' }];
 const latest = [{ eventId: 'new-command', kind: 'command', status: 'pending' }];
+
+// IDB reconciliation must retain the pre-journal delta: a completed item is
+// deleted from the journal synchronously, then removed from the still-stale IDB
+// value when its transaction commits.
+{
+  const storage = fakeStorage({ [OUTBOX_RECOVERY_KEY]: JSON.stringify(stale) });
+  resetOutboxRecoveryBaseline(stale);
+  resetOutboxIndexedDbBaseline(stale);
+  const committedOutbox = [];
+  assert.equal(writeOutboxRecoveryJournal(committedOutbox, { storage, logger: quietLogger }), true);
+  assert.deepEqual(JSON.parse(storage.getItem(OUTBOX_RECOVERY_KEY)), []);
+  assert.deepEqual(getOutboxIndexedDbBaseline(), stale,
+    'writing the localStorage journal must not advance the last committed IndexedDB baseline');
+  const idbAfterDelete = mergeOutboxSnapshots(getOutboxIndexedDbBaseline(), committedOutbox, stale);
+  assert.deepEqual(idbAfterDelete, [], 'the IDB transaction must not resurrect an entry just removed from the recovery journal');
+}
+
+// When hydration recovers an entry missing from IndexedDB, the separate empty
+// IDB baseline makes the recovered entry a local addition to be committed.
+{
+  const storage = fakeStorage({ [OUTBOX_RECOVERY_KEY]: JSON.stringify(latest) });
+  resetOutboxRecoveryBaseline([]);
+  resetOutboxIndexedDbBaseline([]);
+  let recoveredOutbox = [];
+  assert.equal(restoreOutboxRecoveryJournal({
+    storage,
+    setOutboxEvents: value => { recoveredOutbox = value; },
+    saveOutbox() {},
+    logger: quietLogger,
+  }), true);
+  const idbAfterRecovery = mergeOutboxSnapshots(getOutboxIndexedDbBaseline(), recoveredOutbox, []);
+  assert.deepEqual(idbAfterRecovery, latest,
+    'the next IDB transaction must persist entries recovered from the journal instead of dropping them as stale');
+}
 
 // Successful write persists the exact current snapshot synchronously.
 {

@@ -8,9 +8,11 @@ import { saveJSON } from '../storage/json.js';
 import { idbUpdate, isIdbUnavailable } from '../storage/idb.js';
 import { authHeaders } from '../auth/tenant.js';
 import {
+  getOutboxIndexedDbBaseline,
   getOutboxRecoveryBaseline,
   initializeOutboxRecoveryBaseline,
   mergeOutboxSnapshots,
+  resetOutboxIndexedDbBaseline,
   resetOutboxRecoveryBaseline,
   writeOutboxRecoveryJournal,
 } from './outbox-recovery-journal.js';
@@ -31,10 +33,11 @@ function persist() {
   // readwrite transaction. This closes the read/merge/write race between tabs
   // for unrelated additions and explicit removals.
   const localEvents = outboxEvents.map(event => ({ ...event }));
+  const indexedDbBaseline = getOutboxIndexedDbBaseline() || localEvents;
   idbUpdate(STORAGE_KEYS.outboxEvents, storedEvents => {
-    const baseline = getOutboxRecoveryBaseline() || localEvents;
-    return mergeOutboxSnapshots(baseline, localEvents, Array.isArray(storedEvents) ? storedEvents : []);
+    return mergeOutboxSnapshots(indexedDbBaseline, localEvents, Array.isArray(storedEvents) ? storedEvents : []);
   }).then(merged => {
+    resetOutboxIndexedDbBaseline(merged);
     resetOutboxRecoveryBaseline(merged);
     // Don't replace newer in-memory mutations that happened while this
     // transaction was pending; the next persist will reconcile them.
