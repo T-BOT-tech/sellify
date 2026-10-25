@@ -217,6 +217,10 @@ assert.match(tenantAuthSource, /const entries = tenantStateFields[\s\S]*?previou
 
 assert.match(tenantAuthSource, /\['inventoryMovements',[\s\S]*?\['inventoryBalances',[\s\S]*?\['outboxEvents',[\s\S]*?\['stockTransactions'/,
   'tenant snapshots must include inventory projections and durable offline outbox events');
+assert.match(tenantAuthSource, /\['currentOrder',[^\n]*null, \{\}\][\s\S]*?\['currentOrderNotes',[^\n]*null, \{\}\]/,
+  'tenant switching must preserve the in-progress cart and its notes per business');
+assert.match(tenantAuthSource, /if \(entry\.storageKey === null\) continue[\s\S]*?if \(storageKey === null\) continue/,
+  'in-memory-only cart state must not be written under an invalid storage key during restore or tenant clearing');
 const tenantSwitchPreserveIndex = tenantAuthSource.indexOf('await preserveTenantState(config.chatId)');
 const tenantSwitchClearIndex = tenantAuthSource.indexOf('await clearSharedTenantCaches();', tenantSwitchPreserveIndex);
 const tenantSwitchAuthIndex = tenantAuthSource.indexOf('persistAuth(data, data.membership);', tenantSwitchClearIndex);
