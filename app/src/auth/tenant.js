@@ -124,25 +124,50 @@ export function closeOnboarding() {
 }
 
 
+const pendingBusinessTemplateKey = chatId =>
+  `ledger_business_template_pending_v1:${encodeURIComponent(String(chatId))}`;
+
 async function loadBusinessTemplateConfig() {
   if (!config.sessionToken || !config.chatId) return null;
   const chatId = String(config.chatId);
   const sessionToken = String(config.sessionToken);
+  const stillActive = () =>
+    String(config.chatId) === chatId && String(config.sessionToken) === sessionToken;
   try {
     const data = await request(`/tenants/${encodeURIComponent(chatId)}/business-template`, {
       headers: { Authorization: `Bearer ${sessionToken}` },
     });
     // Do not let a late response from a previous tenant/session overwrite the
     // currently selected business on a device that switched while it was loading.
-    if (String(config.chatId) !== chatId || String(config.sessionToken) !== sessionToken) return null;
+    if (!stillActive()) return null;
     const saved = data.businessTemplate;
-    if (!saved) return null;
-    const next = { ...config, businessTemplate: saved.templateKey, businessTemplateSchemaVersion: saved.schemaVersion || 1 };
+    if (saved) {
+      const next = { ...config, businessTemplate: saved.templateKey, businessTemplateSchemaVersion: saved.schemaVersion || 1 };
+      setConfig(next);
+      saveJSON(STORAGE_KEYS.config, next);
+      // A canonical server value wins over any stale local retry marker.
+      await saveJSONAsync(pendingBusinessTemplateKey(chatId), null);
+      return saved;
+    }
+
+    // Retry only an explicitly recorded, tenant-scoped onboarding write. Never
+    // infer server intent from the general device config cache.
+    const pending = await loadJSONAsync(pendingBusinessTemplateKey(chatId), null);
+    if (!stillActive()) return null;
+    if (!pending || String(pending.tenantId) !== chatId || typeof pending.templateKey !== 'string') return null;
+    await request(`/tenants/${encodeURIComponent(chatId)}/business-template`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify({ templateKey: pending.templateKey }),
+    });
+    if (!stillActive()) return null;
+    const next = { ...config, businessTemplate: pending.templateKey, businessTemplateSchemaVersion: pending.schemaVersion || 1 };
     setConfig(next);
     saveJSON(STORAGE_KEYS.config, next);
-    return saved;
+    await saveJSONAsync(pendingBusinessTemplateKey(chatId), null);
+    return { templateKey: pending.templateKey, schemaVersion: pending.schemaVersion || 1 };
   } catch {
-    // Offline or an older backend: keep the local cache and let auth continue.
+    // Offline or an older backend: retain the tenant-scoped marker for a later retry.
     return null;
   }
 }
@@ -347,12 +372,26 @@ export async function createOnboardingTenant() {
     setConfig(nextConfig);
     saveJSON(STORAGE_KEYS.config, nextConfig);
     let templateSyncError = null;
+    const templateTenantId = String(config.chatId || '');
+    const pendingTemplate = {
+      tenantId: templateTenantId,
+      templateKey: selectedTemplate,
+      schemaVersion: 1,
+      updatedAt: Date.now(),
+    };
     try {
-      await request(`/tenants/${encodeURIComponent(config.chatId)}/business-template`, {
+      if (!templateTenantId || !(await saveJSONAsync(pendingBusinessTemplateKey(templateTenantId), pendingTemplate))) {
+        throw new Error('Could not persist pending business template sync');
+      }
+      await request(`/tenants/${encodeURIComponent(templateTenantId)}/business-template`, {
         method: 'PUT',
         headers: authHeaders(),
         body: JSON.stringify({ templateKey: selectedTemplate }),
       });
+      if (String(config.chatId || '') !== templateTenantId) {
+        throw new Error('Business changed before template sync completed');
+      }
+      await saveJSONAsync(pendingBusinessTemplateKey(templateTenantId), null);
     } catch (error) {
       templateSyncError = error;
     }
