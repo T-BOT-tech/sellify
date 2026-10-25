@@ -145,10 +145,18 @@ try {
   assert.match(indexHtml, /<label for="onboardingLanguage">Interface language<\/label>/);
   assert.match(indexHtml, /id="onboardingLanguage"[^>]*onchange="changeLanguage\(this\.value\)"/);
   assert.match(indexHtml, /does not determine business country, currency, or tax\/payment setup/);
+  const onboardingModalStart = indexHtml.indexOf('<div class="modal-backdrop" id="onboardingModal"');
+  const languageControl = indexHtml.indexOf('id="onboardingLanguage"', onboardingModalStart);
+  const membershipPath = indexHtml.indexOf('<div id="onboardingTelegram">', onboardingModalStart);
+  assert.ok(languageControl >= 0 && languageControl < membershipPath,
+    'interface language must be outside create-only content and visible on existing/joining paths');
   assert.match(tenantUi, /import \{ TRANSLATIONS \} from '\.\.\/i18n\/translations\.js'/);
   assert.match(tenantUi, /Object\.keys\(TRANSLATIONS\)\.map/);
   assert.match(tenantUi, /Object\.hasOwn\(TRANSLATIONS, config\.lang\) \? config\.lang : 'en'/,
     'a saved supported interface language is preserved; missing/unsupported preferences default to English');
+  const wizardSetup = tenantUi.slice(tenantUi.indexOf('function showWizard('), tenantUi.indexOf('export function closeOnboarding'));
+  assert.match(wizardSetup, /populateOnboardingLanguageOptions\(\)[\s\S]*?if \(memberships\.length/,
+    'language preference must initialize before existing-versus-new-business onboarding routing');
   assert.match(tenantUi, /regional locale hint/);
   const tenantCreation = tenantUi.slice(
     tenantUi.indexOf('export async function createOnboardingTenant()'),
