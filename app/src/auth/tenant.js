@@ -460,6 +460,7 @@ export async function pairThisDevice() {
       body: JSON.stringify({ token, deviceName: 'Sellify web device' }),
     });
     persistAuth(data, data.membership);
+    await loadCanonicalTenantCurrency();
     await loadBusinessTemplateConfig();
     closeOnboarding();
     window.location.reload();
@@ -515,6 +516,7 @@ export async function submitStaffInvite() {
 // onto the adapter itself, e.g. platform.silentAuth(request)), not before.
 export async function bootstrapTenantAuth() {
   if (config.sessionToken && config.sessionExpiresAt && Date.parse(config.sessionExpiresAt) > Date.now() + 30_000) {
+    await loadCanonicalTenantCurrency();
     await loadBusinessTemplateConfig();
     return { authenticated: true };
   }
