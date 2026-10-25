@@ -178,12 +178,43 @@ export async function restoreTenantStateForTenant(chatId) {
   const snapshot = await loadJSONAsync(tenantStateKey(tenantId), null);
   if (String(config.chatId || '') !== tenantId) return false;
   if (!snapshot || String(snapshot.tenantId) !== tenantId || !snapshot.state || typeof snapshot.state !== 'object') return false;
-  for (const [name, , setter, storageKey] of tenantStateFields) {
-    if (Object.prototype.hasOwnProperty.call(snapshot.state, name)) {
-      setter(snapshot.state[name]);
-      await saveJSONAsync(storageKey, snapshot.state[name]);
+
+  // Persist the full target snapshot before exposing it in shared in-memory
+  // state. If any write fails, roll back already-written shared keys so a
+  // restart cannot hydrate a mixture of two businesses.
+  const entries = tenantStateFields
+    .filter(([name]) => Object.prototype.hasOwnProperty.call(snapshot.state, name))
+    .map(([name, getValue, setter, storageKey]) => ({
+      name, getValue, setter, storageKey,
+      target: snapshot.state[name],
+      previous: structuredClone(getValue()),
+    }));
+  const written = [];
+  for (const entry of entries) {
+    if (String(config.chatId || '') !== tenantId) {
+      for (const prior of written.reverse()) await saveJSONAsync(prior.storageKey, prior.previous);
+      return false;
     }
+    const saved = await saveJSONAsync(entry.storageKey, entry.target);
+    if (!saved) {
+      let rollbackOk = true;
+      for (const prior of written.reverse()) {
+        if (!(await saveJSONAsync(prior.storageKey, prior.previous))) rollbackOk = false;
+      }
+      if (!rollbackOk) throw new Error('Could not roll back partially restored tenant state');
+      throw new Error('Could not durably restore tenant state; synchronization was stopped');
+    }
+    written.push(entry);
   }
+  if (String(config.chatId || '') !== tenantId) {
+    let rollbackOk = true;
+    for (const prior of written.reverse()) {
+      if (!(await saveJSONAsync(prior.storageKey, prior.previous))) rollbackOk = false;
+    }
+    if (!rollbackOk) throw new Error('Could not roll back tenant state after identity changed');
+    return false;
+  }
+  for (const entry of entries) entry.setter(entry.target);
   return true;
 }
 
