@@ -1855,24 +1855,29 @@ async function handleBusinessTemplateConfig(req, res, chatId) {
 }
 
 async function handleTenantPatch(req, res, chatId) {
-  const body = await readBody(req);
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
   const session = await requireSession(req, tenant.chatId);
+  if (req.method === 'GET') return sendJSON(res, 200, { tenant }, req);
+  if (req.method !== 'PATCH') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
   await requireOwnerRole(session);
+  const body = await readBody(req);
 
   const patch = {};
   if (typeof body.sellerName === 'string') patch.sellerName = body.sellerName;
   if (body.branding && typeof body.branding === 'object') {
     const branding = body.branding;
-    const allowed = ['business_name', 'primary_color', 'logo_url'];
+    const allowed = ['business_name', 'primary_color', 'logo_url', 'currency'];
     const clean = {};
     for (const key of allowed) {
       if (branding[key] == null || branding[key] === '') continue;
       if (typeof branding[key] !== 'string') {
         throw Object.assign(new Error(`branding.${key} must be a string`), { statusCode: 400 });
       }
-      clean[key] = branding[key].trim();
+      clean[key] = key === 'currency' ? branding[key].trim().toUpperCase() : branding[key].trim();
+    }
+    if (Object.hasOwn(clean, 'currency') && !/^[A-Z]{3}$/.test(clean.currency)) {
+      throw Object.assign(new Error('Currency must be a three-letter ISO code'), { statusCode: 400, code: 'INVALID_CURRENCY' });
     }
     if (clean.business_name && (clean.business_name.length < 1 || clean.business_name.length > 120)) {
       throw Object.assign(new Error('Brand name must be 1–120 characters'), { statusCode: 400 });
@@ -3211,6 +3216,7 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/business-template$/, handler: (req, res, m) => handleBusinessTemplateConfig(req, res, decodeURIComponent(m[1])) },
   { method: 'PUT', pattern: /^\/tenants\/([^/]+)\/business-template$/, handler: (req, res, m) => handleBusinessTemplateConfig(req, res, decodeURIComponent(m[1])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/business-template$/, handler: (req, res, m) => handleBusinessTemplateConfig(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)$/, handler: (req, res, m) => handleTenantPatch(req, res, decodeURIComponent(m[1])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)$/, handler: (req, res, m) => handleTenantPatch(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/providers$/, handler: (req, res, m) => handlePaymentProviderMetadata(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/accounts$/, handler: (req, res, m) => handlePaymentAccounts(req, res, decodeURIComponent(m[1])) },
