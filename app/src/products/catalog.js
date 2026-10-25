@@ -69,12 +69,20 @@ export async function restorePendingCatalogForTenant(chatId) {
 }
 
 export async function markCatalogSynced() {
-  catalogDirty = false;
-  renderCatalogSyncStatus();
   const chatId = String(config.chatId || '');
   if (!chatId) return false;
-  // A null tombstone is safe for both IndexedDB and the localStorage fallback.
-  return saveJSONAsync(pendingCatalogKey(chatId), null);
+  // Do not announce a clean catalog until the tenant-scoped pending snapshot
+  // has been durably cleared. If persistence fails, restart recovery must still
+  // be able to see the catalog as dirty.
+  const saved = await saveJSONAsync(pendingCatalogKey(chatId), null);
+  if (!saved) {
+    catalogDirty = true;
+    renderCatalogSyncStatus();
+    return false;
+  }
+  catalogDirty = false;
+  renderCatalogSyncStatus();
+  return true;
 }
 export function renderCatalogSyncStatus() {
   const el = document.getElementById('catalogSyncStatus');
