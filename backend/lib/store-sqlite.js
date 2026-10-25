@@ -17,6 +17,7 @@ import { mkdir, readdir, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
+import { resolveOnboardingCountry } from './country-pack-onboarding.js';
 import { assertVerificationFreshness } from './payments/verification-freshness.js';
 import { requirePaymentProvider } from './payments/provider-registry.js';
 import { requirePaymentChannel } from './payments/channel-registry.js';
@@ -11449,12 +11450,13 @@ export async function ensureMembership(userId, chatId, role = 'owner') {
 }
 
 export async function createTenantForUser({ userId, sellerName, businessType, country, currency, timezone }) {
+  const countryPack = resolveOnboardingCountry(country);
   ensureDatabase();
   const chatId = `tenant_${crypto.randomUUID()}`;
   const tenantId = crypto.randomUUID();
   const now = nowIso();
   const apiKey = crypto.randomBytes(32).toString('hex');
-  const tenant = { sellerName: String(sellerName || '').trim(), businessType: String(businessType || 'retail'), country: String(country || ''), currency: normaliseCurrency(currency, 'ETB'), timezone: String(timezone || 'UTC') };
+  const tenant = { sellerName: String(sellerName || '').trim(), businessType: String(businessType || 'retail'), country: countryPack.countryCode, currency: normaliseCurrency(currency, countryPack.currency), timezone: String(timezone || 'UTC') };
   db.exec('BEGIN IMMEDIATE');
   try {
     db.prepare(`INSERT INTO tenants (chat_id, tenant_id, api_key, created_at, seller_name, branding_json, vendor_code) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(chatId, tenantId, apiKey, now, tenant.sellerName, json({ currency: tenant.currency, country: tenant.country, timezone: tenant.timezone }), null);

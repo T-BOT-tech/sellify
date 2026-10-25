@@ -155,6 +155,7 @@
     "test:phase15.16": "node phase0/phase15.16-compliance-expansion-regression.mjs",
     "test:phase15.17": "node phase0/phase15.17-country-security-expansion-regression.mjs",
     "test:phase15.20": "node phase0/phase15.20-cross-country-regression-gate.mjs",
+    "test:country-pack-onboarding": "node phase0/country-pack-onboarding-integrity-regression.mjs",
     "test:phase15.21": "node phase0/phase15.21-node24-full-regression.mjs",
     "test:phase16.0": "node phase0/phase16.0-platform-baseline-regression.mjs",
     "test:phase16.1": "node phase0/phase16.1-canonical-capability-contract-regression.mjs",

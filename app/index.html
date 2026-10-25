@@ -914,7 +914,9 @@
         <select id="onboardingBusinessType">
           <option value="retail">Retail</option><option value="restaurant">Restaurant</option><option value="wholesale">Wholesale</option><option value="pharmacy">Pharmacy</option><option value="services">Services</option><option value="manufacturing">Manufacturing</option><option value="other">Other</option>
         </select>
-        <label>Country</label><input id="onboardingCountry" type="text" placeholder="Ethiopia">
+        <label for="onboardingCountry">Country</label>
+        <select id="onboardingCountry" required disabled><option value="">Loading active country packs…</option></select>
+        <div id="onboardingCountryPackPreview" class="hint" role="status" aria-live="polite">Loading active country-pack options…</div>
         <label>Currency</label><select id="onboardingCurrency"><option value="ETB">ETB</option><option value="USD">USD</option><option value="KES">KES</option><option value="NGN">NGN</option><option value="GHS">GHS</option><option value="TZS">TZS</option><option value="UGX">UGX</option><option value="ZAR">ZAR</option><option value="XOF">XOF</option><option value="INR">INR</option><option value="EUR">EUR</option><option value="GBP">GBP</option></select>
         <label>Timezone</label><input id="onboardingTimezone" type="text" readonly>
         <button class="primary" onclick="createOnboardingTenant()">Create business</button>

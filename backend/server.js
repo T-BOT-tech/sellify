@@ -154,6 +154,7 @@ import { PaymentDecisionEngine } from './lib/payments/decision-engine.js';
 import { listPaymentChannels } from './lib/payments/channel-registry.js';
 import { processEventIsolated } from './lib/event-failure-isolation.js';
 import { assertEventTenantScope } from './lib/event-replay.js';
+import { listOnboardingCountryOptions } from './lib/country-pack-onboarding.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -707,6 +708,14 @@ async function handleTelegramAuth(req, res) {
     memberships,
     session,
     challenge,
+  }, req);
+}
+
+function handleOnboardingCountryOptions(req, res) {
+  sendJSON(res, 200, {
+    countries: listOnboardingCountryOptions(),
+    authority: 'existing_country_pack_and_country_security_contracts',
+    persistence: 'none',
   }, req);
 }
 
@@ -3045,6 +3054,7 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/integrations\/payments\/([^/]+)\/notifications$/, handler: (req, res, m) => handlePaymentProviderNotification(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/auth\/telegram$/, handler: handleTelegramAuth },
   { method: 'POST', pattern: /^\/auth\/migrate-legacy$/, handler: handleLegacyMigration },
+  { method: 'GET', pattern: /^\/auth\/country-packs$/, handler: handleOnboardingCountryOptions },
   { method: 'POST', pattern: /^\/auth\/tenants$/, handler: handleCreateTenant },
   { method: 'GET', pattern: /^\/auth\/tenants$/, handler: handleMyTenants },
   { method: 'POST', pattern: /^\/auth\/select-tenant$/, handler: handleSelectTenant },
@@ -3334,4 +3344,3 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`sellify-backend listening on http://localhost:${PORT} (env=${NODE_ENV}, static=${SERVE_STATIC ? STATIC_DIR : 'disabled'})`);
 });
-
