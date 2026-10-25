@@ -95,6 +95,46 @@ try {
     'Content-Type': 'application/json',
   };
 
+  const tenantPath = '/tenants/' + encodeURIComponent(tenant.chatId);
+  const unauthTenantRead = await fetch(baseUrl + tenantPath);
+  assert.equal(unauthTenantRead.status, 401, 'canonical currency reads must require a tenant session');
+  const tenantRead = await fetch(baseUrl + tenantPath, { headers: authHeaders });
+  assert.equal(tenantRead.status, 200);
+  assert.equal((await tenantRead.json()).tenant.currency, 'ETB',
+    'tenant settings must read the canonical organization currency, not the local device default');
+
+  const brandingWrite = await fetch(baseUrl + tenantPath, {
+    method: 'PATCH',
+    headers: authHeaders,
+    body: JSON.stringify({ branding: { business_name: 'Currency Regression Brand', primary_color: '#123456' } }),
+  });
+  assert.equal(brandingWrite.status, 200);
+  const currencyWrite = await fetch(baseUrl + tenantPath, {
+    method: 'PATCH',
+    headers: authHeaders,
+    body: JSON.stringify({ branding: { currency: 'usd' } }),
+  });
+  assert.equal(currencyWrite.status, 200, 'an owner may intentionally set currency before monetary records exist');
+  const currencyWriteBody = await currencyWrite.json();
+  assert.equal(currencyWriteBody.tenant.currency, 'USD', 'the update response must report the confirmed canonical currency');
+  assert.equal(currencyWriteBody.tenant.branding.business_name, 'Currency Regression Brand',
+    'currency-only updates must preserve existing branding fields');
+  assert.equal(currencyWriteBody.tenant.branding.primary_color, '#123456');
+  const restoreCurrency = await fetch(baseUrl + tenantPath, {
+    method: 'PATCH',
+    headers: authHeaders,
+    body: JSON.stringify({ branding: { currency: 'ETB' } }),
+  });
+  assert.equal(restoreCurrency.status, 200);
+  assert.equal((await restoreCurrency.json()).tenant.currency, 'ETB');
+  const invalidCurrency = await fetch(baseUrl + tenantPath, {
+    method: 'PATCH',
+    headers: authHeaders,
+    body: JSON.stringify({ branding: { currency: 'ETBB' } }),
+  });
+  assert.equal(invalidCurrency.status, 400, 'currency settings must reject non-three-letter currency codes');
+  assert.equal((await invalidCurrency.json()).error.code, 'INVALID_CURRENCY');
+
   const templatePath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/business-template';
   const unauthTemplateRead = await fetch(baseUrl + templatePath);
   assert.equal(unauthTemplateRead.status, 401, 'business template config must require an authenticated tenant session');
@@ -168,6 +208,18 @@ try {
   const writeBody = await writeResponse.json();
   assert.equal(writeBody.products.find(item => item.id === 'consultation-http')?.item_type, 'service');
   assert.equal(writeBody.products.find(item => item.id === 'soap-http')?.item_type, 'product');
+
+  const lockedCurrencyWrite = await fetch(baseUrl + tenantPath, {
+    method: 'PATCH',
+    headers: authHeaders,
+    body: JSON.stringify({ branding: { currency: 'USD' } }),
+  });
+  assert.equal(lockedCurrencyWrite.status, 409,
+    'currency changes must be rejected once catalog monetary records exist');
+  assert.equal((await lockedCurrencyWrite.json()).error.code, 'CURRENCY_LOCKED');
+  const currencyAfterLock = await fetch(baseUrl + tenantPath, { headers: authHeaders });
+  assert.equal((await currencyAfterLock.json()).tenant.currency, 'ETB',
+    'a rejected currency change must leave the canonical organization currency unchanged');
 
   // The storefront read path must expose the persisted item type, not merely
   // echo the submitted request payload.
