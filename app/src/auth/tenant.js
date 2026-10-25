@@ -60,6 +60,29 @@ function persistAuth(data, membership = null) {
   return next;
 }
 
+async function loadCanonicalTenantCurrency() {
+  if (!config.chatId || !config.sessionToken) return null;
+  const chatId = String(config.chatId);
+  const sessionToken = String(config.sessionToken);
+  try {
+    const data = await request(`/tenants/${encodeURIComponent(chatId)}`, {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+    });
+    // Ignore late responses from a business/session that is no longer active.
+    if (String(config.chatId) !== chatId || String(config.sessionToken) !== sessionToken) return null;
+    const currency = String(data?.tenant?.currency || data?.tenant?.branding?.currency || '').toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) return null;
+    const next = { ...config, currencyCode: currency, branding: data.tenant?.branding || config.branding || {} };
+    setConfig(next);
+    saveJSON(STORAGE_KEYS.config, next);
+    return currency;
+  } catch {
+    // Keep the last known cache during offline startup; callers for a brand-new
+    // business seed ETB first because that is the backend's canonical fallback.
+    return null;
+  }
+}
+
 function showWizard({ user, memberships = [] }) {
   const modal = document.getElementById('onboardingModal');
   if (!modal) return;
@@ -190,6 +213,7 @@ export async function selectOnboardingTenant() {
   }
   await clearSharedTenantCaches();
   persistAuth(data, data.membership);
+  await loadCanonicalTenantCurrency();
   await loadBusinessTemplateConfig();
   closeOnboarding();
   window.location.reload();
@@ -253,6 +277,7 @@ export async function switchActiveTenant() {
     }
     await clearSharedTenantCaches();
     persistAuth(data, data.membership);
+    await loadCanonicalTenantCurrency();
     await loadBusinessTemplateConfig();
     window.location.reload();
   } catch (error) {
@@ -279,7 +304,12 @@ export async function createOnboardingTenant() {
       method: 'POST',
       body: JSON.stringify({ sellerName, businessType, country, timezone, deviceName: 'Telegram Mini App', challengeToken: window.__SELLIFY_ONBOARDING_CHALLENGE || '' }),
     });
-    persistAuth(data, data.membership);
+    const persisted = persistAuth(data, data.membership);
+    // New tenants use the same ETB fallback as the canonical organization row.
+    const initialConfig = { ...persisted, currencyCode: 'ETB' };
+    setConfig(initialConfig);
+    saveJSON(STORAGE_KEYS.config, initialConfig);
+    await loadCanonicalTenantCurrency();
     // Keep a local copy for fast startup, but make the tenant API authoritative
     // so the chosen template follows the business across paired devices.
     const nextConfig = { ...config, businessTemplate: selectedTemplate, businessTemplateSchemaVersion: 1 };
@@ -495,6 +525,7 @@ export async function bootstrapTenantAuth() {
     const memberships = Array.isArray(data.memberships) ? data.memberships : [];
     if (data.session && memberships.length === 1) {
       persistAuth(data, memberships[0]);
+      await loadCanonicalTenantCurrency();
       await loadBusinessTemplateConfig();
       return { authenticated: true };
     }
@@ -564,6 +595,7 @@ export async function acceptStaffInvite(token, statusElId = 'onboardingStatus') 
       body: JSON.stringify({ token, initData: raw, deviceName: 'Telegram Mini App' }),
     });
     persistAuth(data, data.membership);
+    await loadCanonicalTenantCurrency();
     // Redeeming an invite you're already covered by (same or lower role)
     // is a real outcome, not a generic success — say so instead of just
     // silently switching context. Give it a moment on screen before the
