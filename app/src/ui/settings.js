@@ -7,7 +7,7 @@
 // which — as elsewhere in this migration — is fine because it's only ever
 // invoked from inside a function body, never at module-init time.
 import { escapeHtml } from '../utils/index.js';
-import { STORAGE_KEYS, CURRENCY_SYMBOLS } from '../constants.js';
+import { STORAGE_KEYS } from '../constants.js';
 import { config, setConfig, currentStaff } from '../state.js';
 import { saveJSON } from '../storage/json.js';
 import {
