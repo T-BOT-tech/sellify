@@ -72,6 +72,8 @@ assert.match(settingsSource, /currencyHydrated[\s\S]*?\/tenants\//,
   'Settings must hydrate the active business currency from the authenticated tenant API');
 assert.match(settingsSource, /currencyWasEdited[\s\S]*?requestedCurrency !== canonicalCurrency[\s\S]*?method: 'PATCH'[\s\S]*?branding: \{ currency: requestedCurrency \}/,
   'Settings must patch canonical currency only after an explicit selection change');
+assert.match(settingsSource, /const updated = await update\.json\(\)\.catch\(\(\) => \(\{\}\)\);[\s\S]*?Active business changed\. Reopen Settings and try again\.[\s\S]*?canonicalCurrency = String\(updated\?\.tenant\?\.currency/,
+  'a late currency PATCH response must not overwrite config after the active tenant/session changes');
 assert.match(settingsSource, /currencyCode: canonicalCurrency[\s\S]*?currencySymbol: symInput\.value\.trim\(\)/,
   'a custom display symbol must not replace the canonical ISO currency code');
 assert.doesNotMatch(onboardingHtml, /<option value="CUSTOM">/,
