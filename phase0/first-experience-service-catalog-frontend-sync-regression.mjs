@@ -225,6 +225,8 @@ assert.match(catalogSource, /if \(isCatalogDirty\(\)\) return;/,
   'background catalog pull must not replace locally dirty catalog state');
 assert.match(catalogSource, /if \(Array\.isArray\(data\.products\)\) \{[\s\S]*?setProducts\(sanitizeRemoteProducts\(data\.products\)\)/,
   'remote catalog pull must apply an empty canonical catalog instead of retaining stale local products');
+assert.match(catalogSource, /const previousProducts = products;[\s\S]*?const remoteProducts = sanitizeRemoteProducts\(data\.products\);[\s\S]*?setProducts\(remoteProducts\);[\s\S]*?const saved = await saveJSONAsync\(STORAGE_KEYS\.products, remoteProducts\);[\s\S]*?if \(!saved\) \{[\s\S]*?setProducts\(previousProducts\);\s*return;[\s\S]*?\}\s*await markCatalogSynced\(\);/,
+  'background catalog pull must durably persist the canonical response before acknowledging it and restore prior in-memory products if persistence fails');
 assert.match(catalogSource, /setProducts\(data\.products \? sanitizeRemoteProducts\(data\.products\) : products\);\s*const saved = await saveJSONAsync\(STORAGE_KEYS\.products, products\);\s*if \(!saved\) throw new Error\([\s\S]*?\);\s*await markCatalogSynced\(\);/,
   'successful catalog sync must durably persist the server-confirmed catalog before clearing pending state or reporting completion');
 assert.match(catalogSource, /const saved = await saveJSONAsync\(STORAGE_KEYS\.products, products\);\s*if \(saved\) \{\s*await markCatalogSynced\(\);[\s\S]*?pending sync state was retained/,
