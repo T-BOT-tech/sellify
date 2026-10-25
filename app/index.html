@@ -914,6 +914,9 @@
         <select id="onboardingBusinessType">
           <option value="retail">Retail</option><option value="restaurant">Restaurant</option><option value="wholesale">Wholesale</option><option value="pharmacy">Pharmacy</option><option value="services">Services</option><option value="manufacturing">Manufacturing</option><option value="other">Other</option>
         </select>
+        <label for="onboardingLanguage">Interface language</label>
+        <select id="onboardingLanguage" aria-label="Interface language" onchange="changeLanguage(this.value)"></select>
+        <div class="hint">Choose the language Sellify uses on this device. It does not determine business country, currency, or tax/payment setup.</div>
         <label for="onboardingCountry">Country</label>
         <select id="onboardingCountry" required disabled><option value="">Loading active country packs…</option></select>
         <div id="onboardingCountryPackPreview" class="hint" role="status" aria-live="polite">Loading active country-pack options…</div>

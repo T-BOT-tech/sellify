@@ -13,11 +13,12 @@ const dataDir = mkdtempSync(path.join(tmpdir(), 'sellify-country-onboarding-'));
 process.env.SELLIFY_DATA_DIR = dataDir;
 process.env.SELLIFY_DB_PATH = path.join(dataDir, 'sellify.sqlite');
 
-const [store, packContract, security, onboarding] = await Promise.all([
+const [store, packContract, security, onboarding, translations] = await Promise.all([
   import('../backend/lib/store-sqlite.js'),
   import('../app/src/country-pack-contract.js'),
   import('../backend/lib/country-security-expansion.js'),
   import('../backend/lib/country-pack-onboarding.js'),
+  import('../app/src/i18n/translations.js'),
 ]);
 
 let serverProcess;
@@ -139,6 +140,23 @@ try {
 
   const indexHtml = readFileSync(path.join(repoRoot, 'app/index.html'), 'utf8');
   const tenantUi = readFileSync(path.join(repoRoot, 'app/src/auth/tenant.js'), 'utf8');
+  const supportedLanguages = Object.keys(translations.TRANSLATIONS);
+  assert.equal(supportedLanguages.length, 13, 'onboarding must reuse the existing 13-language catalog');
+  assert.match(indexHtml, /<label for="onboardingLanguage">Interface language<\/label>/);
+  assert.match(indexHtml, /id="onboardingLanguage"[^>]*onchange="changeLanguage\(this\.value\)"/);
+  assert.match(indexHtml, /does not determine business country, currency, or tax\/payment setup/);
+  assert.match(tenantUi, /import \{ TRANSLATIONS \} from '\.\.\/i18n\/translations\.js'/);
+  assert.match(tenantUi, /Object\.keys\(TRANSLATIONS\)\.map/);
+  assert.match(tenantUi, /Object\.hasOwn\(TRANSLATIONS, config\.lang\) \? config\.lang : 'en'/,
+    'a saved supported interface language is preserved; missing/unsupported preferences default to English');
+  assert.match(tenantUi, /regional locale hint/);
+  const tenantCreation = tenantUi.slice(
+    tenantUi.indexOf('export async function createOnboardingTenant()'),
+    tenantUi.indexOf('// Step 5 of the wizard'),
+  );
+  assert.match(tenantCreation, /body: JSON\.stringify\(\{ sellerName, businessType, country, currency, timezone,/);
+  assert.doesNotMatch(tenantCreation, /\blanguage\b|\blang\b/,
+    'interface language must not become tenant country or legal-jurisdiction data');
   assert.match(indexHtml, /<select id="onboardingCountry" required disabled>/);
   assert.match(indexHtml, /id="onboardingCountryPackPreview"/);
   assert.match(tenantUi, /request\('\/auth\/country-packs'\)/);

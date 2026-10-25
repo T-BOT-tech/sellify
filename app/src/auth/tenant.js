@@ -10,6 +10,7 @@ import { uid } from '../utils/index.js';
 import { toMinorUnits } from '../utils/money.js';
 import { markCatalogDirty } from '../products/catalog.js';
 import { guessLocationDefaults } from '../config/locale-defaults.js';
+import { TRANSLATIONS } from '../i18n/translations.js';
 
 function baseUrl() {
   return (config.syncUrl || window.location.origin).replace(/\/$/, '');
@@ -62,6 +63,16 @@ function persistAuth(data, membership = null) {
 let onboardingCountryOptions = null;
 let onboardingCurrencyTouched = false;
 
+function populateOnboardingLanguageOptions() {
+  const select = document.getElementById('onboardingLanguage');
+  if (!select) return;
+  const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });
+  select.replaceChildren(...Object.keys(TRANSLATIONS).map(code =>
+    new Option(`${languageNames.of(code) || code} (${code})`, code)));
+  const savedLanguage = Object.hasOwn(TRANSLATIONS, config.lang) ? config.lang : 'en';
+  select.value = savedLanguage;
+}
+
 function renderCountryPackPreview() {
   const countrySelect = document.getElementById('onboardingCountry');
   const currencySelect = document.getElementById('onboardingCurrency');
@@ -78,7 +89,7 @@ function renderCountryPackPreview() {
   const overrideNote = selectedCurrency === country.currency
     ? ''
     : ` Your selected organization currency is ${selectedCurrency}; ${country.currency} is the country-pack default.`;
-  preview.textContent = `${country.displayName} (${country.countryCode}) country pack available · default currency ${country.currency} · locale ${country.locale}. Country packs describe local configuration; payment, tax, and compliance readiness remain in their existing workflows.${overrideNote}`;
+  preview.textContent = `${country.displayName} (${country.countryCode}) country pack available · default currency ${country.currency} · regional locale hint ${country.locale}. Interface language is selected separately. Country packs describe local configuration; payment, tax, and compliance readiness remain in their existing workflows.${overrideNote}`;
 }
 
 function bindCountryPackControls() {
@@ -160,6 +171,7 @@ function showWizard({ user, memberships = [] }) {
   document.getElementById('onboardingDone')?.style.setProperty('display', 'none');
   const tz = document.getElementById('onboardingTimezone');
   if (tz && !tz.value) tz.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  populateOnboardingLanguageOptions();
   // A timezone-derived country is only a suggestion; the server-provided active
   // pack list is the selection surface and the backend validates again on create.
   const guessed = guessLocationDefaults();
