@@ -13,12 +13,13 @@ const dataDir = mkdtempSync(path.join(tmpdir(), 'sellify-country-onboarding-'));
 process.env.SELLIFY_DATA_DIR = dataDir;
 process.env.SELLIFY_DB_PATH = path.join(dataDir, 'sellify.sqlite');
 
-const [store, packContract, security, onboarding, translations] = await Promise.all([
+const [store, packContract, security, onboarding, translations, languagePreference] = await Promise.all([
   import('../backend/lib/store-sqlite.js'),
   import('../app/src/country-pack-contract.js'),
   import('../backend/lib/country-security-expansion.js'),
   import('../backend/lib/country-pack-onboarding.js'),
   import('../app/src/i18n/translations.js'),
+  import('../app/src/i18n/language-preference.js'),
 ]);
 
 let serverProcess;
@@ -140,6 +141,17 @@ try {
 
   const indexHtml = readFileSync(path.join(repoRoot, 'app/index.html'), 'utf8');
   const tenantUi = readFileSync(path.join(repoRoot, 'app/src/auth/tenant.js'), 'utf8');
+  const i18nUi = readFileSync(path.join(repoRoot, 'app/src/ui/i18n.js'), 'utf8');
+  const preferenceState = { lang: 'en', organizationCountryCode: 'KE', currencyCode: 'KES' };
+  let persistedPreference;
+  languagePreference.persistLanguagePreference(preferenceState, 'fr', value => {
+    persistedPreference = structuredClone(value);
+  });
+  assert.equal(persistedPreference.lang, 'fr');
+  assert.equal(persistedPreference.organizationCountryCode, 'KE');
+  assert.equal(persistedPreference.currencyCode, 'KES');
+  assert.match(i18nUi, /persistLanguagePreference\(config, lang, nextConfig => saveJSON\(STORAGE_KEYS\.config, nextConfig\)\)/,
+    'the production changeLanguage path must persist only through the locale preference helper');
   const supportedLanguages = Object.keys(translations.TRANSLATIONS);
   assert.equal(supportedLanguages.length, 13, 'onboarding must reuse the existing 13-language catalog');
   for (const [code, dictionary] of Object.entries(translations.TRANSLATIONS)) {
