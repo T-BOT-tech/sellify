@@ -6088,7 +6088,9 @@ export async function getOrCreateTenant(chatId) {
 
 export async function getTenant(chatId) {
   ensureDatabase();
-  return tenantFromRow(db.prepare('SELECT * FROM tenants WHERE chat_id = ?').get(String(chatId)));
+  const key = String(chatId);
+  const tenant = tenantFromRow(db.prepare('SELECT * FROM tenants WHERE chat_id = ?').get(key));
+  return tenant ? { ...tenant, currency: tenantCurrency(key) } : null;
 }
 
 const MERCHANT_BUSINESS_TEMPLATE_KEYS = new Set([
@@ -6175,7 +6177,15 @@ export async function updateTenant(chatId, patch) {
   const key = String(chatId);
   const current = await getTenant(key);
   if (!current) throw new Error(`Unknown tenant: ${chatId}`);
-  const next = { ...current, ...patch };
+  const next = {
+    ...current,
+    ...patch,
+    // Branding patches are partial; preserve existing brand fields when a
+    // currency-only settings change is submitted.
+    ...(patch.branding && typeof patch.branding === 'object'
+      ? { branding: { ...(current.branding && typeof current.branding === 'object' ? current.branding : {}), ...patch.branding } }
+      : {}),
+  };
   if (next.branding && typeof next.branding === 'object' && Object.hasOwn(next.branding, 'currency')) {
     const currentCurrency = tenantCurrency(key);
     const requestedCurrency = normaliseCurrency(next.branding.currency, currentCurrency);
