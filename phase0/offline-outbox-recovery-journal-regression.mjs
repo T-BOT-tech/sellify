@@ -202,7 +202,7 @@ for (const raw of ['{broken', JSON.stringify({ eventId: 'not-an-array' }), null]
 }
 
 // Keep the production helper's catch boundaries visible to this contract test.
-assert.match(journal, /storage\.removeItem\(OUTBOX_RECOVERY_KEY\)/);
+assert.doesNotMatch(journal, /storage\.removeItem\(OUTBOX_RECOVERY_KEY\)/, 'failed journal replacement must preserve the last known-good snapshot');
 assert.match(journal, /if \(!Array\.isArray\(recovered\)\) return false/);
 assert.match(journal, /snapshot = mergeOutboxSnapshots\(baseline, events, shared\)/,
   'journal writes must merge local mutations into the latest shared snapshot');
@@ -213,4 +213,4 @@ assert.match(commandSuccessMatch[1],
   /setOutboxEvents\(outboxEvents\.filter\(event => event\.eventId !== command\.eventId\)\);\s*persist\(\);/,
   'successful commands must be removed from the recovery snapshot before persisting');
 
-console.log('PASS: behavioral outbox journal write, read-failure preservation, stale-snapshot cleanup, restore/mirror, invalid-data handling, storage failures, and tenant-bound replay guards');
+console.log('PASS: behavioral outbox journal write, read-failure preservation, last-known-good preservation, restore/mirror, invalid-data handling, storage failures, and tenant-bound replay guards');
