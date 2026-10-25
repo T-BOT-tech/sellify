@@ -201,8 +201,8 @@ assert.match(tenantAuthSource, /const tenantStateKey = chatId => `ledger_tenant_
   'all persisted business state snapshots must be keyed by tenant');
 assert.match(tenantAuthSource, /async function preserveTenantState\(chatId\)[\s\S]*?structuredClone\(getValue\(\)\)[\s\S]*?saveJSONAsync\(tenantStateKey\(tenantId\)/,
   'tenant switching must durably preserve the outgoing tenant local state before clearing shared keys');
-assert.match(tenantAuthSource, /export async function restoreTenantStateForTenant\(chatId\)[\s\S]*?String\(snapshot\.tenantId\) !== tenantId[\s\S]*?setter\(snapshot\.state\[name\]\)/,
-  'tenant recovery must validate snapshot ownership before restoring tenant state');
+assert.match(tenantAuthSource, /export async function restoreTenantStateForTenant\(chatId\)[\s\S]*?String\(snapshot\.tenantId\) !== tenantId[\s\S]*?saveJSONAsync\(entry\.storageKey, entry\.target\)[\s\S]*?entry\.setter\(entry\.target\)/,
+  'tenant recovery must validate snapshot ownership and durably persist tenant values before exposing them in memory');
 
 assert.match(tenantAuthSource, /const entries = tenantStateFields[\s\S]*?previous: structuredClone\(getValue\(\)\)[\s\S]*?const written = \[\];[\s\S]*?const saved = await saveJSONAsync\(entry\.storageKey, entry\.target\);[\s\S]*?if \(!saved\)[\s\S]*?saveJSONAsync\(prior\.storageKey, prior\.previous\)[\s\S]*?throw new Error\('Could not durably restore tenant state; synchronization was stopped'\)[\s\S]*?for \(const entry of entries\) entry\.setter\(entry\.target\)/,
   'tenant recovery must durably persist the complete target snapshot before exposing it in memory and roll back partial writes on failure');
