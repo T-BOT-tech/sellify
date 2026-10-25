@@ -67,6 +67,7 @@ export default {
     syncServerUrl: "Sync server URL",
     syncUrlHint: "Where queued orders sync to. Only needed when you're back online — orders queue locally either way.",
     language: "Language / ቋንቋ / Lugha",
+    onboardingLanguageHint: "Interface language applies to this device only. It does not determine your business country, currency, legal jurisdiction, or tax/payment readiness.",
     orderSaved: "Order saved to queue ✅",
     settingsSaved: "Settings saved.",
     syncing: "Syncing…",

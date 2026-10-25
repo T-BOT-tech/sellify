@@ -39,6 +39,7 @@ export default {
     syncServerUrl: "सिंक सर्वर URL",
     syncUrlHint: "जहाँ कतारबद्ध ऑर्डर सिंक होते हैं।",
     language: "भाषा",
+    onboardingLanguageHint: "Sellify इस भाषा का उपयोग केवल इस डिवाइस पर करता है। यह आपके व्यवसाय का देश, मुद्रा, कानूनी क्षेत्राधिकार या कर/भुगतान की तैयारी तय नहीं करता।",
     orderSaved: "ऑर्डर कतार में सहेजा गया ✅",
     settingsSaved: "सेटिंग्स सहेजी गईं।",
     syncing: "सिंक हो रहा है…",

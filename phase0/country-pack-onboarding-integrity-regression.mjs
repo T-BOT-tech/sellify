@@ -144,11 +144,12 @@ try {
   assert.equal(supportedLanguages.length, 13, 'onboarding must reuse the existing 13-language catalog');
   for (const [code, dictionary] of Object.entries(translations.TRANSLATIONS)) {
     assert.ok(dictionary.language, `language selector label must be localized for ${code}`);
+    assert.ok(dictionary.onboardingLanguageHint, `language/country independence hint must be localized for ${code}`);
   }
   assert.match(indexHtml, /<label for="onboardingLanguage" data-i18n="language">Interface language<\/label>/);
   assert.match(indexHtml, /id="onboardingLanguage"[^>]*onchange="changeLanguage\(this\.value\)"/);
   assert.match(indexHtml, /id="onboardingLanguage"[^>]*data-i18n-aria-label="language"/);
-  assert.match(indexHtml, /does not determine business country, currency, or tax\/payment setup/);
+  assert.match(indexHtml, /data-i18n="onboardingLanguageHint"/);
   const onboardingModalStart = indexHtml.indexOf('<div class="modal-backdrop" id="onboardingModal"');
   const languageControl = indexHtml.indexOf('id="onboardingLanguage"', onboardingModalStart);
   const membershipPath = indexHtml.indexOf('<div id="onboardingTelegram">', onboardingModalStart);
