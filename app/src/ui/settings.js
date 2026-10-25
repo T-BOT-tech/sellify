@@ -171,7 +171,7 @@ export function openSettings() {
   if (config.chatId && config.sessionToken) {
     const activeChatId = String(config.chatId);
     const activeSessionToken = String(config.sessionToken);
-    const base = (config.syncUrl || window.location.origin).replace(/\\/$/, '');
+    const base = (config.syncUrl || window.location.origin).replace(/\/$/, '');
     fetch(`${base}/tenants/${encodeURIComponent(activeChatId)}`, {
       headers: { Authorization: `Bearer ${activeSessionToken}` },
     }).then(async res => {
@@ -392,7 +392,7 @@ export async function saveSettings() {
     try {
       const activeChatId = String(config.chatId);
       const activeSessionToken = String(config.sessionToken);
-      const base = (config.syncUrl || window.location.origin).replace(/\\/$/, '');
+      const base = (config.syncUrl || window.location.origin).replace(/\/$/, '');
       const response = await fetch(`${base}/tenants/${encodeURIComponent(activeChatId)}`, {
         headers: { Authorization: `Bearer ${activeSessionToken}` },
       });
