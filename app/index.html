@@ -1094,8 +1094,8 @@
 
     <label data-i18n="currency">Currency</label>
     <select id="setCurrencyCode" onchange="onCurrencyCodeChange()" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background: var(--surface); margin-bottom:4px;">
+      <option value="ETB" selected>Br ETB — Ethiopian Birr</option>
       <option value="INR">₹ INR — Indian Rupee</option>
-      <option value="ETB">Br ETB — Ethiopian Birr</option>
       <option value="KES">KSh KES — Kenyan Shilling</option>
       <option value="NGN">₦ NGN — Nigerian Naira</option>
       <option value="GHS">GH₵ GHS — Ghanaian Cedi</option>
@@ -1108,7 +1108,8 @@
       <option value="GBP">£ GBP — British Pound</option>
       <option value="CUSTOM">Custom symbol…</option>
     </select>
-    <input type="text" id="setCurrencySymbol" placeholder="Custom symbol, e.g. Br" style="display:none; margin-bottom:4px;">
+    <input type="text" id="setCurrencySymbol" placeholder="Custom display symbol, e.g. Br" aria-label="Custom display symbol" style="display:none; margin-bottom:4px;">
+    <div class="hint">A custom symbol changes display only; it does not change the business or transaction currency.</div>
 
     <div class="settings-section-label" data-i18n="paymentMethods">Payment methods</div>
     <div id="paymentMethodsList" style="margin-bottom:8px;"></div>
