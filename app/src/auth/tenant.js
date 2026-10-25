@@ -146,7 +146,7 @@ async function loadBusinessTemplateConfig() {
       setConfig(next);
       saveJSON(STORAGE_KEYS.config, next);
       // A canonical server value wins over any stale local retry marker.
-      await saveJSONAsync(pendingBusinessTemplateKey(chatId), null);
+      await saveJSONAsync(pendingBusinessTemplateKey(chatId), { tenantId: chatId, status: 'synced' });
       return saved;
     }
 
@@ -154,7 +154,7 @@ async function loadBusinessTemplateConfig() {
     // infer server intent from the general device config cache.
     const pending = await loadJSONAsync(pendingBusinessTemplateKey(chatId), null);
     if (!stillActive()) return null;
-    if (!pending || String(pending.tenantId) !== chatId || typeof pending.templateKey !== 'string') return null;
+    if (!pending || pending.status !== 'pending' || String(pending.tenantId) !== chatId || typeof pending.templateKey !== 'string') return null;
     await request(`/tenants/${encodeURIComponent(chatId)}/business-template`, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${sessionToken}` },
@@ -375,6 +375,7 @@ export async function createOnboardingTenant() {
     const templateTenantId = String(config.chatId || '');
     const pendingTemplate = {
       tenantId: templateTenantId,
+      status: 'pending',
       templateKey: selectedTemplate,
       schemaVersion: 1,
       updatedAt: Date.now(),
@@ -391,7 +392,7 @@ export async function createOnboardingTenant() {
       if (String(config.chatId || '') !== templateTenantId) {
         throw new Error('Business changed before template sync completed');
       }
-      await saveJSONAsync(pendingBusinessTemplateKey(templateTenantId), null);
+      await saveJSONAsync(pendingBusinessTemplateKey(templateTenantId), { tenantId: templateTenantId, status: 'synced' });
     } catch (error) {
       templateSyncError = error;
     }
