@@ -1107,10 +1107,10 @@
       <option value="USD">$ USD — US Dollar</option>
       <option value="EUR">€ EUR — Euro</option>
       <option value="GBP">£ GBP — British Pound</option>
-      <option value="CUSTOM">Custom symbol…</option>
     </select>
-    <input type="text" id="setCurrencySymbol" placeholder="Custom display symbol, e.g. Br" aria-label="Custom display symbol" style="display:none; margin-bottom:4px;">
-    <div class="hint">A custom symbol changes display only; it does not change the business or transaction currency.</div>
+    <label for="setCurrencySymbol" style="margin-top:8px;">Optional display symbol override</label>
+    <input type="text" id="setCurrencySymbol" placeholder="e.g. Br" aria-label="Optional display symbol override" style="margin-bottom:4px;">
+    <div class="hint">The override changes display only. It never changes the business, transaction, or settlement currency.</div>
 
     <div class="settings-section-label" data-i18n="paymentMethods">Payment methods</div>
     <div id="paymentMethodsList" style="margin-bottom:8px;"></div>
