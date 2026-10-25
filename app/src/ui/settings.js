@@ -406,6 +406,11 @@ export async function saveSettings() {
         });
         const updated = await update.json().catch(() => ({}));
         if (!update.ok) throw new Error(updated?.error?.message || `Currency update failed (${update.status})`);
+        // A tenant switch may happen while the PATCH is in flight. Do not let
+        // the old tenant's response overwrite the newly active local config.
+        if (String(config.chatId) !== activeChatId || String(config.sessionToken) !== activeSessionToken) {
+          throw new Error('Active business changed. Reopen Settings and try again.');
+        }
         canonicalCurrency = String(updated?.tenant?.currency || updated?.tenant?.branding?.currency || requestedCurrency).toUpperCase();
         canonicalBranding = updated?.tenant?.branding || canonicalBranding;
       }
