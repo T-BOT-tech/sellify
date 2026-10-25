@@ -95,7 +95,10 @@ export async function fetchRemoteCatalogAndBranding() {
         setProducts(previousProducts);
         return;
       }
-      await markCatalogSynced();
+      if (!(await markCatalogSynced())) {
+        setProducts(previousProducts);
+        return;
+      }
       renderAll();
     }
     if (data.branding) {
@@ -124,12 +127,13 @@ export async function syncCatalog() {
       if (Array.isArray(data.products)) {
         setProducts(sanitizeRemoteProducts(data.products));
         const saved = await saveJSONAsync(STORAGE_KEYS.products, products);
-        if (saved) {
-          await markCatalogSynced();
-          renderAll();
-        } else {
+        if (!saved) {
           throw new Error('Could not persist the refreshed catalog locally; pending sync state was retained.');
         }
+        if (!(await markCatalogSynced())) {
+          throw new Error('Could not clear the pending catalog snapshot; pending sync state was retained.');
+        }
+        renderAll();
       }
       throw new Error('Catalog changed on another device. Your local catalog was refreshed; review your changes before saving again.');
     }
@@ -143,7 +147,9 @@ export async function syncCatalog() {
     setProducts(data.products ? sanitizeRemoteProducts(data.products) : products);
     const saved = await saveJSONAsync(STORAGE_KEYS.products, products);
     if (!saved) throw new Error('Could not persist the server-confirmed catalog locally; pending sync state was retained.');
-    await markCatalogSynced();
+    if (!(await markCatalogSynced())) {
+      throw new Error('Could not clear the pending catalog snapshot; pending sync state was retained.');
+    }
     renderAll();
     return t('catalogSyncedMsg');
   } catch (e) {
