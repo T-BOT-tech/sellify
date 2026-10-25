@@ -11,7 +11,7 @@
 import { uid } from '../utils/index.js';
 import { STORAGE_KEYS } from '../constants.js';
 import { config, products, setProducts } from '../state.js';
-import { saveJSON } from '../storage/json.js';
+import { saveJSON, saveJSONAsync } from '../storage/json.js';
 // Phase 8 fix (see modularization plan §5, Phase 8): these used to come
 // from '../main.js', which only re-exported them from their real owning
 // module. That made main.js and every feature file that needed a toast,
@@ -115,9 +115,13 @@ export async function syncCatalog() {
     if (res.status === 409 && data.code === 'CATALOG_STOCK_CONFLICT' || res.status === 409 && data.error?.code === 'CATALOG_STOCK_CONFLICT') {
       if (Array.isArray(data.products)) {
         setProducts(sanitizeRemoteProducts(data.products));
-        saveJSON(STORAGE_KEYS.products, products);
-        await markCatalogSynced();
-        renderAll();
+        const saved = await saveJSONAsync(STORAGE_KEYS.products, products);
+        if (saved) {
+          await markCatalogSynced();
+          renderAll();
+        } else {
+          throw new Error('Could not persist the refreshed catalog locally; pending sync state was retained.');
+        }
       }
       throw new Error('Catalog changed on another device. Your local catalog was refreshed; review your changes before saving again.');
     }
@@ -129,7 +133,8 @@ export async function syncCatalog() {
     }
 
     setProducts(data.products ? sanitizeRemoteProducts(data.products) : products);
-    saveJSON(STORAGE_KEYS.products, products);
+    const saved = await saveJSONAsync(STORAGE_KEYS.products, products);
+    if (!saved) throw new Error('Could not persist the server-confirmed catalog locally; pending sync state was retained.');
     await markCatalogSynced();
     renderAll();
     return t('catalogSyncedMsg');
