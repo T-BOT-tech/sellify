@@ -85,8 +85,16 @@ export async function fetchRemoteCatalogAndBranding() {
     // the last item was removed). Do not leave a stale local tenant catalog
     // visible merely because the server currently has zero items.
     if (Array.isArray(data.products)) {
-      setProducts(sanitizeRemoteProducts(data.products));
-      saveJSON(STORAGE_KEYS.products, products);
+      const previousProducts = products;
+      const remoteProducts = sanitizeRemoteProducts(data.products);
+      setProducts(remoteProducts);
+      const saved = await saveJSONAsync(STORAGE_KEYS.products, remoteProducts);
+      if (!saved) {
+        // Keep the prior in-memory catalog and do not acknowledge a remote
+        // refresh that cannot be recovered after a restart.
+        setProducts(previousProducts);
+        return;
+      }
       await markCatalogSynced();
       renderAll();
     }
