@@ -38,6 +38,10 @@ assert.match(appSourceForTemplateSync, /String\(config\.chatId\) !== chatId \|\|
 // spread preserves item_type while the following fields normalize ID and price.
 assert.match(onboardingHtml, /Choose your business type/,
   'merchant onboarding must make business type selection a primary entry point');
+assert.doesNotMatch(onboardingHtml, /id="onboardingCurrency"/,
+  'detailed currency configuration belongs in Business Settings, not first-experience onboarding');
+assert.doesNotMatch(tenantAuthSource, /getElementById\('onboardingCurrency'\)|sellerName, businessType, country, currency, timezone/,
+  'tenant onboarding must not require or submit a user-selected currency');
 assert.match(onboardingHtml, /value="rental" data-business-type="services"/,
   'rental is configured through the existing services business type');
 assert.match(onboardingHtml, /value="repair" data-business-type="services"/,
