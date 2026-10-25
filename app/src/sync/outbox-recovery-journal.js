@@ -132,12 +132,10 @@ export function writeOutboxRecoveryJournal(
     if (typeof onMerged === 'function') onMerged(snapshot);
     return true;
   } catch (error) {
-    logger.error('Outbox recovery journal write failed; removing any stale snapshot', error);
-    try {
-      storage.removeItem(OUTBOX_RECOVERY_KEY);
-    } catch (cleanupError) {
-      logger.error('Outbox recovery journal cleanup failed', cleanupError);
-    }
+    // Keep the last known-good recovery snapshot. Deleting it after a failed
+    // replacement can destroy unrelated pending work if IndexedDB also fails
+    // or the app exits before the normal persistence path completes.
+    logger.error('Outbox recovery journal write failed; preserving previous snapshot', error);
     return false;
   }
 }
