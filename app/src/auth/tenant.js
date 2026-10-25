@@ -78,10 +78,6 @@ function showWizard({ user, memberships = [] }) {
   const guessed = guessLocationDefaults();
   const countryInput = document.getElementById('onboardingCountry');
   if (countryInput && !countryInput.value && guessed.country) countryInput.value = guessed.country;
-  const currencySelect = document.getElementById('onboardingCurrency');
-  if (currencySelect && guessed.currency && Array.from(currencySelect.options).some(o => o.value === guessed.currency)) {
-    currencySelect.value = guessed.currency;
-  }
   const name = document.getElementById('onboardingUserName');
   if (name) name.textContent = user?.displayName || 'Telegram account';
   const existing = document.getElementById('onboardingExisting');
@@ -271,7 +267,6 @@ export async function createOnboardingTenant() {
   const selectedTemplateOption = templateSelect?.selectedOptions?.[0];
   const businessType = selectedTemplateOption?.dataset?.businessType || document.getElementById('onboardingBusinessType')?.value || 'retail';
   const country = document.getElementById('onboardingCountry')?.value.trim() || '';
-  const currency = document.getElementById('onboardingCurrency')?.value || 'ETB';
   const timezone = document.getElementById('onboardingTimezone')?.value || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   const status = document.getElementById('onboardingStatus');
   if (!sellerName) {
@@ -282,7 +277,7 @@ export async function createOnboardingTenant() {
   try {
     const data = await request('/auth/tenants', {
       method: 'POST',
-      body: JSON.stringify({ sellerName, businessType, country, currency, timezone, deviceName: 'Telegram Mini App', challengeToken: window.__SELLIFY_ONBOARDING_CHALLENGE || '' }),
+      body: JSON.stringify({ sellerName, businessType, country, timezone, deviceName: 'Telegram Mini App', challengeToken: window.__SELLIFY_ONBOARDING_CHALLENGE || '' }),
     });
     persistAuth(data, data.membership);
     // Keep a local copy for fast startup, but make the tenant API authoritative
