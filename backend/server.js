@@ -1858,7 +1858,17 @@ async function handleTenantPatch(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
   const session = await requireSession(req, tenant.chatId);
-  if (req.method === 'GET') return sendJSON(res, 200, { tenant }, req);
+  const tenantSettingsView = ({
+    chatId: tenant.chatId,
+    id: tenant.id,
+    createdAt: tenant.createdAt,
+    sellerName: tenant.sellerName,
+    branding: tenant.branding,
+    vendorCode: tenant.vendorCode,
+    organizationId: tenant.organizationId,
+    currency: tenant.currency,
+  });
+  if (req.method === 'GET') return sendJSON(res, 200, { tenant: tenantSettingsView }, req);
   if (req.method !== 'PATCH') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
   await requireOwnerRole(session);
   const body = await readBody(req);
@@ -1905,7 +1915,16 @@ async function handleTenantPatch(req, res, chatId) {
   if (typeof body.vendorCode === 'string' && body.vendorCode.trim()) patch.vendorCode = body.vendorCode.trim();
 
   const updated = await updateTenant(chatId, patch);
-  sendJSON(res, 200, { tenant: updated }, req);
+  sendJSON(res, 200, { tenant: {
+    chatId: updated.chatId,
+    id: updated.id,
+    createdAt: updated.createdAt,
+    sellerName: updated.sellerName,
+    branding: updated.branding,
+    vendorCode: updated.vendorCode,
+    organizationId: updated.organizationId,
+    currency: updated.currency,
+  } }, req);
 }
 
 
