@@ -100,8 +100,11 @@ try {
   assert.equal(unauthTenantRead.status, 401, 'canonical currency reads must require a tenant session');
   const tenantRead = await fetch(baseUrl + tenantPath, { headers: authHeaders });
   assert.equal(tenantRead.status, 200);
-  assert.equal((await tenantRead.json()).tenant.currency, 'ETB',
+  const tenantReadBody = await tenantRead.json();
+  assert.equal(tenantReadBody.tenant.currency, 'ETB',
     'tenant settings must read the canonical organization currency, not the local device default');
+  assert.equal(Object.hasOwn(tenantReadBody.tenant, 'apiKey'), false,
+    'tenant currency settings must not expose legacy tenant API credentials');
 
   const brandingWrite = await fetch(baseUrl + tenantPath, {
     method: 'PATCH',
