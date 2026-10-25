@@ -69,8 +69,12 @@ assert.match(settingsSource, /currencyHydrated[\s\S]*?\/tenants\//,
   'Settings must hydrate the active business currency from the authenticated tenant API');
 assert.match(settingsSource, /currencyWasEdited[\s\S]*?requestedCurrency !== canonicalCurrency[\s\S]*?method: 'PATCH'[\s\S]*?branding: \{ currency: requestedCurrency \}/,
   'Settings must patch canonical currency only after an explicit selection change');
-assert.match(settingsSource, /currencyCode: canonicalCurrency[\s\S]*?currencySymbol: isCustom \? symInput\.value\.trim\(\) : ''/,
+assert.match(settingsSource, /currencyCode: canonicalCurrency[\s\S]*?currencySymbol: symInput\.value\.trim\(\)/,
   'a custom display symbol must not replace the canonical ISO currency code');
+assert.doesNotMatch(onboardingHtml, /<option value="CUSTOM">/,
+  'a display symbol must not be presented as a business currency code');
+assert.match(onboardingHtml, /Optional display symbol override[\s\S]*?changes display only[\s\S]*?transaction, or settlement currency/,
+  'display symbol override must remain separate from canonical monetary currencies');
 assert.match(onboardingHtml, /value="rental" data-business-type="services"/,
   'rental is configured through the existing services business type');
 assert.match(onboardingHtml, /value="repair" data-business-type="services"/,
