@@ -3,7 +3,7 @@
 // it for a short-lived device session. Standalone devices use owner-approved
 // one-time pairing codes. The PWA never stores or sends tenant-wide API keys.
 import { STORAGE_KEYS } from '../constants.js';
-import { config, setConfig, products, setProducts, orders, setOrders, staffList, setStaffList, currentStaff, setCurrentStaff, b2bAccounts, setB2bAccounts, customers, setCustomers, inventoryMovements, setInventoryMovements, organizationLocations, setOrganizationLocations, inventoryBalances, setInventoryBalances, outboxEvents, setOutboxEvents, pricingTiers, setPricingTiers, volumeDiscountTiers, setVolumeDiscountTiers, warehouseLocations, setWarehouseLocations, stockTransactions, setStockTransactions } from '../state.js';
+import { config, setConfig, products, setProducts, orders, setOrders, currentOrder, setCurrentOrder, currentOrderNotes, setCurrentOrderNotes, staffList, setStaffList, currentStaff, setCurrentStaff, b2bAccounts, setB2bAccounts, customers, setCustomers, inventoryMovements, setInventoryMovements, organizationLocations, setOrganizationLocations, inventoryBalances, setInventoryBalances, outboxEvents, setOutboxEvents, pricingTiers, setPricingTiers, volumeDiscountTiers, setVolumeDiscountTiers, warehouseLocations, setWarehouseLocations, stockTransactions, setStockTransactions } from '../state.js';
 import { saveJSON, saveJSONAsync, loadJSONAsync } from '../storage/json.js';
 import { getActivePlatform } from '../platform/index.js';
 import { uid } from '../utils/index.js';
@@ -176,6 +176,8 @@ const tenantStateKey = chatId => `ledger_tenant_state_v1:${encodeURIComponent(St
 const tenantStateFields = [
   ['products', () => products, setProducts, STORAGE_KEYS.products, []],
   ['orders', () => orders, setOrders, STORAGE_KEYS.orders, []],
+  ['currentOrder', () => currentOrder, setCurrentOrder, null, {}],
+  ['currentOrderNotes', () => currentOrderNotes, setCurrentOrderNotes, null, {}],
   ['staff', () => staffList, setStaffList, STORAGE_KEYS.staff, []],
   ['activeStaff', () => currentStaff, setCurrentStaff, STORAGE_KEYS.activeStaff, null],
   ['b2bAccounts', () => b2bAccounts, setB2bAccounts, STORAGE_KEYS.b2bAccounts, []],
