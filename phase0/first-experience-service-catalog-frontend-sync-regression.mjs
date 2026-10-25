@@ -42,6 +42,29 @@ assert.doesNotMatch(onboardingHtml, /id="onboardingCurrency"/,
   'detailed currency configuration belongs in Business Settings, not first-experience onboarding');
 assert.doesNotMatch(tenantAuthSource, /getElementById\('onboardingCurrency'\)|sellerName, businessType, country, currency, timezone/,
   'tenant onboarding must not require or submit a user-selected currency');
+
+const settingsSource = await readFile(new URL('../app/src/ui/settings.js', import.meta.url), 'utf8');
+const appStateSource = await readFile(new URL('../app/src/state.js', import.meta.url), 'utf8');
+assert.match(appStateSource, /currencyCode: 'ETB'/,
+  'a fresh device must use ETB as the regional first-run fallback instead of the unrelated INR default');
+assert.match(onboardingHtml, /<option value="ETB" selected>Br ETB/,
+  'Business Settings must present ETB as the visible first-run currency choice');
+assert.match(backendServerSource, /if \(req\.method === 'GET'\) return sendJSON\(res, 200, \{ tenant \}, req\)/,
+  'authenticated tenant reads must expose the canonical organization currency to Settings');
+assert.match(backendServerSource, /'business_name', 'primary_color', 'logo_url', 'currency'[\s\S]*?INVALID_CURRENCY/,
+  'tenant settings must validate and route intentional ISO currency changes to the canonical store');
+assert.match(tenantStoreSource, /return tenant \? \{ \.\.\.tenant, currency: tenantCurrency\(key\) \} : null/,
+  'tenant reads must expose the currency from the canonical organization row');
+assert.match(tenantStoreSource, /Branding patches are partial[\s\S]*?current\.branding[\s\S]*?patch\.branding/,
+  'currency-only updates must preserve existing storefront branding');
+assert.match(tenantStoreSource, /code: 'CURRENCY_LOCKED'/,
+  'the canonical store must reject currency changes after monetary records exist');
+assert.match(settingsSource, /currencyHydrated[\s\S]*?\/tenants\//,
+  'Settings must hydrate the active business currency from the authenticated tenant API');
+assert.match(settingsSource, /currencyWasEdited[\s\S]*?requestedCurrency !== canonicalCurrency[\s\S]*?method: 'PATCH'[\s\S]*?branding: \{ currency: requestedCurrency \}/,
+  'Settings must patch canonical currency only after an explicit selection change');
+assert.match(settingsSource, /currencyCode: canonicalCurrency[\s\S]*?currencySymbol: isCustom \? symInput\.value\.trim\(\) : ''/,
+  'a custom display symbol must not replace the canonical ISO currency code');
 assert.match(onboardingHtml, /value="rental" data-business-type="services"/,
   'rental is configured through the existing services business type');
 assert.match(onboardingHtml, /value="repair" data-business-type="services"/,
