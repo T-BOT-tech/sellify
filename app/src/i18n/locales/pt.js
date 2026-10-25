@@ -3,6 +3,7 @@
 export default {
     catalogItemType: "Tipo de item",
     catalogProduct: "Produto",
+    language: "Idioma",
     service: "Serviço",
     packAccessibilityLocalizationTitle: "Acessibilidade e localização dos pacotes",
 };

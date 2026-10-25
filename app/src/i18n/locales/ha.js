@@ -3,6 +3,7 @@
 export default {
     catalogItemType: "Nau’in abu",
     catalogProduct: "Kaya",
+    language: "Harshe",
     service: "Sabis",
     packAccessibilityLocalizationTitle: "Samun dama da fassarar fakiti",
 };

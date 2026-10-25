@@ -3,6 +3,7 @@
 export default {
     catalogItemType: "Irú ohun",
     catalogProduct: "Ọjà",
+    language: "Èdè",
     service: "Iṣẹ́",
     packAccessibilityLocalizationTitle: "Wíwọlé rọrùn àti ìtumọ̀ Pack",
 };

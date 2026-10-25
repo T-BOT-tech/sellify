@@ -3,6 +3,7 @@
 export default {
     catalogItemType: "نوع العنصر",
     catalogProduct: "منتج",
+    language: "اللغة",
     service: "خدمة",
     packAccessibilityLocalizationTitle: "إمكانية الوصول وتعريب الحزم",
 };

@@ -142,8 +142,12 @@ try {
   const tenantUi = readFileSync(path.join(repoRoot, 'app/src/auth/tenant.js'), 'utf8');
   const supportedLanguages = Object.keys(translations.TRANSLATIONS);
   assert.equal(supportedLanguages.length, 13, 'onboarding must reuse the existing 13-language catalog');
-  assert.match(indexHtml, /<label for="onboardingLanguage">Interface language<\/label>/);
+  for (const [code, dictionary] of Object.entries(translations.TRANSLATIONS)) {
+    assert.ok(dictionary.language, `language selector label must be localized for ${code}`);
+  }
+  assert.match(indexHtml, /<label for="onboardingLanguage" data-i18n="language">Interface language<\/label>/);
   assert.match(indexHtml, /id="onboardingLanguage"[^>]*onchange="changeLanguage\(this\.value\)"/);
+  assert.match(indexHtml, /id="onboardingLanguage"[^>]*data-i18n-aria-label="language"/);
   assert.match(indexHtml, /does not determine business country, currency, or tax\/payment setup/);
   const onboardingModalStart = indexHtml.indexOf('<div class="modal-backdrop" id="onboardingModal"');
   const languageControl = indexHtml.indexOf('id="onboardingLanguage"', onboardingModalStart);
@@ -152,6 +156,8 @@ try {
     'interface language must be outside create-only content and visible on existing/joining paths');
   assert.match(tenantUi, /import \{ TRANSLATIONS \} from '\.\.\/i18n\/translations\.js'/);
   assert.match(tenantUi, /Object\.keys\(TRANSLATIONS\)\.map/);
+  assert.match(tenantUi, /new Intl\.DisplayNames\(\[code\], \{ type: 'language' \}\)/,
+    'each language option should be labeled in its own language rather than by country flag or pack');
   assert.match(tenantUi, /Object\.hasOwn\(TRANSLATIONS, config\.lang\) \? config\.lang : 'en'/,
     'a saved supported interface language is preserved; missing/unsupported preferences default to English');
   const wizardSetup = tenantUi.slice(tenantUi.indexOf('function showWizard('), tenantUi.indexOf('export function closeOnboarding'));

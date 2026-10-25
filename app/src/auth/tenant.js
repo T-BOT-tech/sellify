@@ -66,9 +66,15 @@ let onboardingCurrencyTouched = false;
 function populateOnboardingLanguageOptions() {
   const select = document.getElementById('onboardingLanguage');
   if (!select) return;
-  const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });
+  const languageName = code => {
+    try {
+      return new Intl.DisplayNames([code], { type: 'language' }).of(code) || code;
+    } catch {
+      return code;
+    }
+  };
   select.replaceChildren(...Object.keys(TRANSLATIONS).map(code =>
-    new Option(`${languageNames.of(code) || code} (${code})`, code)));
+    new Option(`${languageName(code)} (${code})`, code)));
   const savedLanguage = Object.hasOwn(TRANSLATIONS, config.lang) ? config.lang : 'en';
   select.value = savedLanguage;
 }
