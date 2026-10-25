@@ -157,7 +157,7 @@ export function openSettings() {
   const symInput = document.getElementById('setCurrencySymbol');
   codeSel.dataset.currencyHydrated = 'false';
   codeSel.dataset.currencyEdited = 'false';
-  codeSel.value = config.currencyCode || 'ETB';
+  codeSel.value = /^[A-Z]{3}$/.test(String(config.currencyCode || '').toUpperCase()) ? String(config.currencyCode).toUpperCase() : 'ETB';
   symInput.value = config.currencySymbol || '';
   symInput.style.display = 'block';
   // A saved device setting is only a cache. Hydrate the active business's
@@ -376,7 +376,7 @@ export async function saveSettings() {
   const symInput = document.getElementById('setCurrencySymbol');
   const requestedCurrency = String(codeSel.value || '').toUpperCase();
   const currencyWasEdited = codeSel.dataset.currencyEdited === 'true';
-  let canonicalCurrency = String(config.currencyCode || 'ETB').toUpperCase();
+  let canonicalCurrency = /^[A-Z]{3}$/.test(String(config.currencyCode || '').toUpperCase()) ? String(config.currencyCode).toUpperCase() : 'ETB';
   let canonicalBranding = config.branding || {};
 
   // Authenticated business currency always comes from the backend. Only an
