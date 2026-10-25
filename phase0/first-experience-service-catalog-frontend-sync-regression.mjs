@@ -234,12 +234,12 @@ assert.match(catalogSource, /if \(isCatalogDirty\(\)\) return;/,
   'background catalog pull must not replace locally dirty catalog state');
 assert.match(catalogSource, /if \(Array\.isArray\(data\.products\)\) \{[\s\S]*?setProducts\(sanitizeRemoteProducts\(data\.products\)\)/,
   'remote catalog pull must apply an empty canonical catalog instead of retaining stale local products');
-assert.match(catalogSource, /const previousProducts = products;[\s\S]*?const remoteProducts = sanitizeRemoteProducts\(data\.products\);[\s\S]*?setProducts\(remoteProducts\);[\s\S]*?const saved = await saveJSONAsync\(STORAGE_KEYS\.products, remoteProducts\);[\s\S]*?if \(!saved\) \{[\s\S]*?setProducts\(previousProducts\);\s*return;[\s\S]*?\}\s*await markCatalogSynced\(\);/,
-  'background catalog pull must durably persist the canonical response before acknowledging it and restore prior in-memory products if persistence fails');
-assert.match(catalogSource, /setProducts\(data\.products \? sanitizeRemoteProducts\(data\.products\) : products\);\s*const saved = await saveJSONAsync\(STORAGE_KEYS\.products, products\);\s*if \(!saved\) throw new Error\([\s\S]*?\);\s*await markCatalogSynced\(\);/,
-  'successful catalog sync must durably persist the server-confirmed catalog before clearing pending state or reporting completion');
-assert.match(catalogSource, /const saved = await saveJSONAsync\(STORAGE_KEYS\.products, products\);\s*if \(saved\) \{\s*await markCatalogSynced\(\);[\s\S]*?pending sync state was retained/,
-  'stock-conflict refresh must not clear the pending marker if its canonical catalog cannot be persisted');
+assert.match(catalogSource, /const previousProducts = products;[\s\S]*?const remoteProducts = sanitizeRemoteProducts\(data\.products\);[\s\S]*?setProducts\(remoteProducts\);[\s\S]*?const saved = await saveJSONAsync\(STORAGE_KEYS\.products, remoteProducts\);[\s\S]*?if \(!saved\) \{[\s\S]*?setProducts\(previousProducts\);\s*return;[\s\S]*?\}[\s\S]*?if \(!\(await markCatalogSynced\(\)\)\) \{[\s\S]*?setProducts\(previousProducts\);\s*return;/,
+  'background catalog pull must durably persist the canonical response and clear its pending marker before replacing prior in-memory products');
+assert.match(catalogSource, /setProducts\(data\.products \? sanitizeRemoteProducts\(data\.products\) : products\);\s*const saved = await saveJSONAsync\(STORAGE_KEYS\.products, products\);\s*if \(!saved\) throw new Error\([\s\S]*?\);\s*if \(!\(await markCatalogSynced\(\)\)\) throw new Error\([\s\S]*?\);/,
+  'successful catalog sync must durably persist the server-confirmed catalog and clear the pending marker before reporting completion');
+assert.match(catalogSource, /if \(!saved\) \{\s*throw new Error\('Could not persist the refreshed catalog locally; pending sync state was retained\.'\);\s*\}\s*if \(!\(await markCatalogSynced\(\)\)\) \{[\s\S]*?pending sync state was retained/,
+  'stock-conflict refresh must not clear the pending marker if refreshed data or marker clearance cannot be persisted');
 
 // Both the Telegram order payload and the local queued checkout derive their
 // line-item type from the local catalog. This is presentation/transport
