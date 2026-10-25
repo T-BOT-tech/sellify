@@ -396,11 +396,12 @@ export async function addOnboardingProduct() {
   };
   setProducts([...products, newProd]);
   const locallySaved = await saveJSONAsync(STORAGE_KEYS.products, products);
+  if (!locallySaved) {
+    if (status) status.textContent = 'Local storage failed. The offering is only in this session; keep this page open and retry before leaving.';
+    return;
+  }
   await markCatalogDirty();
   showOnboardingDone();
-  if (!locallySaved && status) {
-    status.textContent = 'Offering added for this session, but local storage failed. Keep this page open while trying Sync now.';
-  }
 
   // The first offering is persisted before we attempt remote sync. Push it through
   // the canonical catalog endpoint now when online; the startup catalog pull
