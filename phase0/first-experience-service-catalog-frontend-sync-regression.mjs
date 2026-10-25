@@ -3,6 +3,8 @@ import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 
 const catalogSource = await readFile(new URL('../app/src/sync/catalog.js', import.meta.url), 'utf8');
+const productsCatalogSource = await readFile(new URL('../app/src/products/catalog.js', import.meta.url), 'utf8');
+
 const productsSource = await readFile(new URL('../app/src/products/catalog.js', import.meta.url), 'utf8');
 const ordersSource = await readFile(new URL('../app/src/sync/orders.js', import.meta.url), 'utf8');
 const tenantAuthSource = await readFile(new URL('../app/src/auth/tenant.js', import.meta.url), 'utf8');
@@ -220,6 +222,13 @@ assert.match(tenantAuthSource, /for \(const \[, , setter, storageKey, emptyValue
   'tenant switching must clear every shared business-state key after snapshotting it');
 assert.match(mainSource, /await restoreTenantStateForTenant\(config\.chatId\);[\s\S]*?await restorePendingCatalogForTenant\(config\.chatId\);[\s\S]*?return fetchRemoteCatalogAndBranding\(\)/,
   'active tenant state must be restored after hydration and before synchronization');
+
+assert.match(productsCatalogSource, /export async function markCatalogSynced\(\) \{[\s\S]*?const saved = await saveJSONAsync\(pendingCatalogKey\(chatId\), null\);[\s\S]*?if \(!saved\) \{[\s\S]*?catalogDirty = true;[\s\S]*?return false;[\s\S]*?\}\s*catalogDirty = false;/,
+  'catalog dirty state must remain set unless clearing the durable tenant pending marker succeeds');
+assert.match(catalogSource, /if \(!\(await markCatalogSynced\(\)\)\) \{[\s\S]*?pending catalog snapshot; pending sync state was retained/,
+  'catalog sync must not report success when durable pending-snapshot clearance fails');
+assert.match(catalogSource, /if \(!\(await markCatalogSynced\(\)\)\) \{[\s\S]*?setProducts\(previousProducts\);\s*return;/,
+  'background refresh must restore prior products when the pending snapshot cannot be durably cleared');
 
 assert.match(catalogSource, /if \(isCatalogDirty\(\)\) return;/,
   'background catalog pull must not replace locally dirty catalog state');
