@@ -106,6 +106,8 @@ assert.match(tenantAuthSource, /const pending = await loadJSONAsync\(pendingBusi
   'startup must retry only the active tenant pending marker and retain it on network failure');
 assert.match(tenantAuthSource, /const stillActive = \(\) =>[\s\S]*?if \(!stillActive\(\)\) return null;[\s\S]*?loadJSONAsync\(pendingBusinessTemplateKey\(chatId\), null\)/,
   'a tenant/session switch during template recovery must abort before applying or retrying stale tenant data');
+assert.match(tenantAuthSource, /const templateSessionToken = String\(config\.sessionToken \|\| ''\)[\s\S]*?String\(config\.sessionToken \|\| ''\) !== templateSessionToken[\s\S]*?Authorization: `Bearer \$\{templateSessionToken\}`/,
+  'onboarding template writes must use the captured tenant session and abort if active identity changes while persistence is pending');
 assert.match(tenantAuthSource, /businessTemplateSchemaVersion: 1/,
   'the local template cache must carry an explicit schema version');
 const windowAssignment = windowBridgeSource.match(/Object\.assign\(window,\s*\{([\s\S]*?)\n\s*\}\);/)?.[1] || '';
