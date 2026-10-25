@@ -90,6 +90,8 @@ assert.match(tenantAuthSource, /item_type: itemType,[\s\S]*?itemType === 'produc
   'service onboarding must preserve canonical item_type and must not attach physical stock');
 assert.match(tenantAuthSource, /import \{ saveJSON, saveJSONAsync, loadJSONAsync \} from '\.\.\/storage\/json\.js';[\s\S]*?const locallySaved = await saveJSONAsync\(STORAGE_KEYS\.products, products\)/,
   'first-offering onboarding must wait for local persistence before reporting or syncing');
+assert.match(tenantAuthSource, /const locallySaved = await saveJSONAsync\(STORAGE_KEYS\.products, products\);[\s\S]*?if \(!locallySaved\) \{[\s\S]*?Local storage failed\.[\s\S]*?return;\s*\}\s*await markCatalogDirty\(\);\s*showOnboardingDone\(\);/,
+  'first-offering onboarding must not mark the catalog dirty, report completion, or attempt remote sync if durable local persistence fails');
 assert.match((await readFile(new URL('../app/src/storage/json.js', import.meta.url), 'utf8')), /export async function saveJSONAsync[\s\S]*?await idbSet\(key, value\)/,
   'critical onboarding persistence must await the IndexedDB transaction instead of fire-and-forget saveJSON');
 assert.match(tenantAuthSource, /business-template[\s\S]*?method: 'PUT'[\s\S]*?templateKey: selectedTemplate/,
