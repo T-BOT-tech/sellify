@@ -100,10 +100,10 @@ assert.match((await readFile(new URL('../app/src/storage/json.js', import.meta.u
   'critical onboarding persistence must await the IndexedDB transaction instead of fire-and-forget saveJSON');
 assert.match(tenantAuthSource, /business-template[\s\S]*?method: 'PUT'[\s\S]*?templateKey: selectedTemplate/,
   'onboarding must persist the selected template through the tenant API, not only local storage');
-assert.match(tenantAuthSource, /const pendingBusinessTemplateKey = chatId =>[\s\S]*?ledger_business_template_pending_v1:[\s\S]*?tenantId: templateTenantId[\s\S]*?saveJSONAsync\(pendingBusinessTemplateKey\(templateTenantId\), pendingTemplate\)[\s\S]*?await request\([\s\S]*?method: 'PUT'[\s\S]*?saveJSONAsync\\(pendingBusinessTemplateKey\\(templateTenantId\\), \\{ tenantId: templateTenantId, status: 'synced' \\}\\)/,
-  'onboarding must durably record a tenant-scoped template retry before PUT and clear it after server acknowledgement');
-assert.match(tenantAuthSource, /const pending = await loadJSONAsync\(pendingBusinessTemplateKey\(chatId\), null\)[\s\S]*?pending.status !== 'pending'[\\s\\S]*?String\\(pending.tenantId\\) !== chatId[\s\S]*?method: 'PUT'[\s\S]*?pending\.templateKey[\s\S]*?Offline or an older backend: retain the tenant-scoped marker for a later retry/,
-  'startup must retry only the active tenant template marker and retain it on network failure');
+assert.match(tenantAuthSource, /const pendingBusinessTemplateKey = chatId =>[\s\S]*?ledger_business_template_pending_v1:[\s\S]*?tenantId: templateTenantId[\s\S]*?saveJSONAsync\(pendingBusinessTemplateKey\(templateTenantId\), pendingTemplate\)[\s\S]*?await request\([\s\S]*?method: 'PUT'[\s\S]*?saveJSONAsync\(pendingBusinessTemplateKey\(templateTenantId\), \{ tenantId: templateTenantId, status: 'synced' \}\)/,
+  'onboarding must durably record a tenant-scoped template retry before PUT and mark it synced after server acknowledgement');
+assert.match(tenantAuthSource, /const pending = await loadJSONAsync\(pendingBusinessTemplateKey\(chatId\), null\)[\s\S]*?pending\.status !== 'pending'[\s\S]*?String\(pending\.tenantId\) !== chatId[\s\S]*?method: 'PUT'[\s\S]*?pending\.templateKey[\s\S]*?Offline or an older backend: retain the tenant-scoped marker for a later retry/,
+  'startup must retry only the active tenant pending marker and retain it on network failure');
 assert.match(tenantAuthSource, /const stillActive = \(\) =>[\s\S]*?if \(!stillActive\(\)\) return null;[\s\S]*?loadJSONAsync\(pendingBusinessTemplateKey\(chatId\), null\)/,
   'a tenant/session switch during template recovery must abort before applying or retrying stale tenant data');
 assert.match(tenantAuthSource, /businessTemplateSchemaVersion: 1/,
