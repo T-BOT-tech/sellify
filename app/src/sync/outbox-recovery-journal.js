@@ -6,7 +6,9 @@
 // resurrecting entries removed by another tab. It is not a transactional
 // cross-tab lock: simultaneous edits to the same event remain last-writer-wins.
 export const OUTBOX_RECOVERY_KEY = 'sellify.outbox.recovery.v1';
+export const OUTBOX_RECOVERY_COMMIT_KEY = 'ledger_outbox_recovery_commit_v1';
 let lastSnapshot = null;
+let lastSnapshotId = null;
 // Keep the recovery-journal merge baseline separate from IndexedDB's last
 // committed snapshot. The journal may advance before the IDB transaction
 // commits; conflating those baselines can erase additions/deletions in the
@@ -34,8 +36,9 @@ export function getOutboxRecoveryBaseline() {
   return Array.isArray(lastSnapshot) ? lastSnapshot.map(event => ({ ...event })) : null;
 }
 
-export function resetOutboxRecoveryBaseline(events) {
+export function resetOutboxRecoveryBaseline(events, snapshotId = null) {
   lastSnapshot = Array.isArray(events) ? events.map(event => ({ ...event })) : [];
+  lastSnapshotId = typeof snapshotId === 'string' ? snapshotId : null;
 }
 
 export function getOutboxIndexedDbBaseline() {
@@ -103,10 +106,26 @@ export function mergeOutboxSnapshots(previousEvents, localEvents, sharedEvents) 
   return ordered;
 }
 
+function parseRecoverySnapshot(raw) {
+  if (raw == null) return null;
+  const parsed = JSON.parse(raw);
+  if (Array.isArray(parsed)) return { events: parsed, snapshotId: null };
+  if (parsed?.version === 1 && typeof parsed.snapshotId === 'string' && Array.isArray(parsed.events)) {
+    return { events: parsed.events, snapshotId: parsed.snapshotId };
+  }
+  return null;
+}
+
+function newSnapshotId() {
+  return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function writeOutboxRecoveryJournal(
   events,
   { storage = globalThis.localStorage, logger = console, previousEvents, onMerged } = {}
 ) {
+  const attemptId = newSnapshotId();
+  let previousSnapshotId = lastSnapshotId;
   let snapshot = events;
   try {
     const baseline = Array.isArray(lastSnapshot) ? lastSnapshot : previousEvents;
@@ -117,26 +136,29 @@ export function writeOutboxRecoveryJournal(
         // No journal yet means this tab's baseline is the best available
         // seed. An existing empty array, by contrast, is an explicit snapshot
         // that must not be treated as missing data.
-        const parsed = raw === null ? baseline : JSON.parse(raw);
-        if (Array.isArray(parsed)) shared = parsed;
+        const parsed = parseRecoverySnapshot(raw);
+        previousSnapshotId = parsed?.snapshotId ?? null;
+        if (raw === null) shared = baseline;
+        else if (parsed) shared = parsed.events;
       } catch (readError) {
         // Do not replace a potentially newer shared journal when it cannot be
         // read. The caller still persists through the normal IndexedDB path.
         logger.error('Outbox recovery journal read-before-write failed; preserving shared snapshot', readError);
-        return false;
+        return { written: false, attemptId, previousSnapshotId };
       }
       snapshot = mergeOutboxSnapshots(baseline, events, shared);
     }
-    storage.setItem(OUTBOX_RECOVERY_KEY, JSON.stringify(snapshot));
+    storage.setItem(OUTBOX_RECOVERY_KEY, JSON.stringify({ version: 1, snapshotId: attemptId, events: snapshot }));
     lastSnapshot = snapshot.map(event => ({ ...event }));
+    lastSnapshotId = attemptId;
     if (typeof onMerged === 'function') onMerged(snapshot);
-    return true;
+    return { written: true, attemptId, previousSnapshotId };
   } catch (error) {
     // Keep the last known-good recovery snapshot. Deleting it after a failed
     // replacement can destroy unrelated pending work if IndexedDB also fails
     // or the app exits before the normal persistence path completes.
     logger.error('Outbox recovery journal write failed; preserving previous snapshot', error);
-    return false;
+    return { written: false, attemptId, previousSnapshotId };
   }
 }
 
@@ -145,15 +167,23 @@ export function restoreOutboxRecoveryJournal({
   setOutboxEvents,
   saveOutbox,
   logger = console,
+  indexedDbCommit = null,
 } = {}) {
   try {
     const raw = storage.getItem(OUTBOX_RECOVERY_KEY);
     if (!raw) return false;
-    const recovered = JSON.parse(raw);
-    if (!Array.isArray(recovered)) return false;
-    setOutboxEvents(recovered);
-    saveOutbox(recovered);
-    lastSnapshot = recovered.map(event => ({ ...event }));
+    const journal = parseRecoverySnapshot(raw);
+    if (!journal) return false;
+    const commitMatchesJournal = indexedDbCommit?.version === 1 && (
+      indexedDbCommit.journalWritten === true
+        ? journal.snapshotId === indexedDbCommit.attemptId
+        : journal.snapshotId === indexedDbCommit.previousSnapshotId
+    );
+    if (commitMatchesJournal) return false;
+    setOutboxEvents(journal.events);
+    saveOutbox(journal.events);
+    lastSnapshot = journal.events.map(event => ({ ...event }));
+    lastSnapshotId = journal.snapshotId;
     return true;
   } catch (error) {
     logger.error('Outbox recovery journal read/restore failed', error);

@@ -15,6 +15,7 @@ import { idbGetAll, isIdbUnavailable } from './idb.js';
 import { runLedgerMigration, migrateProductMoney, migrateOrderMoney } from './migration.js';
 import { saveJSON } from './json.js';
 import {
+  OUTBOX_RECOVERY_COMMIT_KEY,
   resetOutboxIndexedDbBaseline,
   resetOutboxRecoveryBaseline,
   restoreOutboxRecoveryJournal as restoreRecoveryJournal,
@@ -45,15 +46,21 @@ function migrateMoneyNow() {
 // Restore the synchronous outbox journal after IndexedDB hydration, or when
 // IndexedDB is unavailable. This protects queued intent from a stale IDB
 // snapshot after a tab closed before its latest transaction committed.
-function restoreOutboxRecoveryJournal() {
+function restoreOutboxRecoveryJournal({ indexedDbCommit = null } = {}) {
   const restored = restoreRecoveryJournal({
     setOutboxEvents,
     saveOutbox: recovered => saveJSON(STORAGE_KEYS.outboxEvents, recovered),
+    indexedDbCommit,
   });
   // If no valid recovery journal exists, IndexedDB hydration may still have
   // replaced the startup localStorage snapshot. Make that hydrated state the
   // baseline before the first post-hydration mutation is persisted.
-  if (!restored) resetOutboxRecoveryBaseline(outboxEvents);
+  if (!restored) {
+    const snapshotId = indexedDbCommit?.journalWritten === true
+      ? indexedDbCommit.attemptId
+      : indexedDbCommit?.previousSnapshotId;
+    resetOutboxRecoveryBaseline(outboxEvents, snapshotId);
+  }
   return restored;
 }
 
@@ -103,7 +110,7 @@ export async function hydrateFromIndexedDB() {
 
   let fromIdb;
   try {
-    fromIdb = await idbGetAll(Object.values(STORAGE_KEYS));
+    fromIdb = await idbGetAll([...Object.values(STORAGE_KEYS), OUTBOX_RECOVERY_COMMIT_KEY]);
   } catch (e) {
     console.error('IndexedDB hydration read failed, restoring local outbox journal and keeping localStorage-loaded values', e);
     restoreOutboxRecoveryJournal();
@@ -139,7 +146,11 @@ export async function hydrateFromIndexedDB() {
   resetOutboxIndexedDbBaseline(Array.isArray(fromIdb[STORAGE_KEYS.outboxEvents])
     ? fromIdb[STORAGE_KEYS.outboxEvents]
     : []);
-  restoreOutboxRecoveryJournal();
+  restoreOutboxRecoveryJournal({
+    indexedDbCommit: Array.isArray(fromIdb[STORAGE_KEYS.outboxEvents])
+      ? fromIdb[OUTBOX_RECOVERY_COMMIT_KEY]
+      : null,
+  });
 
   const moneyMigrated = migrateMoneyNow();
 

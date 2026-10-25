@@ -5,7 +5,7 @@
 import { STORAGE_KEYS } from '../constants.js';
 import { config, outboxEvents, setOutboxEvents } from '../state.js';
 import { saveJSON } from '../storage/json.js';
-import { idbUpdate, isIdbUnavailable } from '../storage/idb.js';
+import { idbUpdateAndSet, isIdbUnavailable } from '../storage/idb.js';
 import { authHeaders } from '../auth/tenant.js';
 import {
   getOutboxIndexedDbBaseline,
@@ -14,6 +14,7 @@ import {
   mergeOutboxSnapshots,
   resetOutboxIndexedDbBaseline,
   resetOutboxRecoveryBaseline,
+  OUTBOX_RECOVERY_COMMIT_KEY,
   writeOutboxRecoveryJournal,
 } from './outbox-recovery-journal.js';
 
@@ -22,7 +23,7 @@ import {
 initializeOutboxRecoveryBaseline();
 
 function persist() {
-  writeOutboxRecoveryJournal(outboxEvents, {
+  const journalWrite = writeOutboxRecoveryJournal(outboxEvents, {
     onMerged: merged => setOutboxEvents(merged),
   });
   if (isIdbUnavailable()) {
@@ -34,8 +35,13 @@ function persist() {
   // for unrelated additions and explicit removals.
   const localEvents = outboxEvents.map(event => ({ ...event }));
   const indexedDbBaseline = getOutboxIndexedDbBaseline() || localEvents;
-  idbUpdate(STORAGE_KEYS.outboxEvents, storedEvents => {
+  idbUpdateAndSet(STORAGE_KEYS.outboxEvents, storedEvents => {
     return mergeOutboxSnapshots(indexedDbBaseline, localEvents, Array.isArray(storedEvents) ? storedEvents : []);
+  }, OUTBOX_RECOVERY_COMMIT_KEY, {
+    version: 1,
+    attemptId: journalWrite.attemptId,
+    previousSnapshotId: journalWrite.previousSnapshotId,
+    journalWritten: journalWrite.written,
   }).then(merged => {
     resetOutboxIndexedDbBaseline(merged);
     resetOutboxRecoveryBaseline(merged);
