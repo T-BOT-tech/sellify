@@ -59,6 +59,96 @@ function persistAuth(data, membership = null) {
   return next;
 }
 
+let onboardingCountryOptions = null;
+let onboardingCurrencyTouched = false;
+
+function renderCountryPackPreview() {
+  const countrySelect = document.getElementById('onboardingCountry');
+  const currencySelect = document.getElementById('onboardingCurrency');
+  const preview = document.getElementById('onboardingCountryPackPreview');
+  if (!preview) return;
+  const country = onboardingCountryOptions?.find(item => item.countryCode === countrySelect?.value);
+  if (!country) {
+    preview.textContent = onboardingCountryOptions
+      ? 'Choose an available country to see its country-pack defaults.'
+      : 'Supported country options are not available yet. Reopen onboarding when you are online.';
+    return;
+  }
+  const selectedCurrency = currencySelect?.value || country.currency;
+  const overrideNote = selectedCurrency === country.currency
+    ? ''
+    : ` Your selected organization currency is ${selectedCurrency}; ${country.currency} is the country-pack default.`;
+  preview.textContent = `${country.displayName} (${country.countryCode}) country pack available · default currency ${country.currency} · locale ${country.locale}. Country packs describe local configuration; payment, tax, and compliance readiness remain in their existing workflows.${overrideNote}`;
+}
+
+function bindCountryPackControls() {
+  const countrySelect = document.getElementById('onboardingCountry');
+  const currencySelect = document.getElementById('onboardingCurrency');
+  if (countrySelect && countrySelect.dataset.countryPackBound !== 'true') {
+    countrySelect.dataset.countryPackBound = 'true';
+    countrySelect.addEventListener('change', () => {
+      const country = onboardingCountryOptions?.find(item => item.countryCode === countrySelect.value);
+      if (country && currencySelect && !onboardingCurrencyTouched) {
+        if (!Array.from(currencySelect.options).some(option => option.value === country.currency)) {
+          currencySelect.add(new Option(country.currency, country.currency));
+        }
+        currencySelect.value = country.currency;
+      }
+      renderCountryPackPreview();
+    });
+  }
+  if (currencySelect && currencySelect.dataset.countryPackBound !== 'true') {
+    currencySelect.dataset.countryPackBound = 'true';
+    currencySelect.addEventListener('change', () => {
+      onboardingCurrencyTouched = true;
+      renderCountryPackPreview();
+    });
+  }
+}
+
+async function loadOnboardingCountryOptions(guessedCountry = '') {
+  const countrySelect = document.getElementById('onboardingCountry');
+  const preview = document.getElementById('onboardingCountryPackPreview');
+  if (!countrySelect) return;
+  bindCountryPackControls();
+  countrySelect.disabled = true;
+  if (preview) preview.textContent = 'Loading active country-pack options…';
+  try {
+    if (!onboardingCountryOptions) {
+      const data = await request('/auth/country-packs');
+      if (!Array.isArray(data.countries) || !data.countries.length) throw new Error('No active country packs are available.');
+      onboardingCountryOptions = data.countries;
+    }
+    const previous = countrySelect.value;
+    countrySelect.replaceChildren(new Option('Select a supported country', ''));
+    for (const country of onboardingCountryOptions) {
+      countrySelect.add(new Option(`${country.displayName} (${country.countryCode})`, country.countryCode));
+    }
+    if (onboardingCountryOptions.some(country => country.countryCode === previous)) {
+      countrySelect.value = previous;
+    } else if (guessedCountry) {
+      const normalizedGuess = guessedCountry.trim().toLocaleLowerCase();
+      const guess = onboardingCountryOptions.find(country => country.displayName.toLocaleLowerCase() === normalizedGuess);
+      if (guess) countrySelect.value = guess.countryCode;
+    }
+    countrySelect.disabled = false;
+    const selected = onboardingCountryOptions.find(country => country.countryCode === countrySelect.value);
+    const currencySelect = document.getElementById('onboardingCurrency');
+    if (selected && currencySelect && !onboardingCurrencyTouched) {
+      if (!Array.from(currencySelect.options).some(option => option.value === selected.currency)) {
+        currencySelect.add(new Option(selected.currency, selected.currency));
+      }
+      currencySelect.value = selected.currency;
+    }
+    renderCountryPackPreview();
+  } catch {
+    onboardingCountryOptions = null;
+    countrySelect.replaceChildren(new Option('Country options unavailable', ''));
+    countrySelect.disabled = true;
+    if (preview) preview.textContent = 'Could not load active country-pack options. Reopen onboarding when you are online.';
+  }
+}
+
 function showWizard({ user, memberships = [] }) {
   const modal = document.getElementById('onboardingModal');
   if (!modal) return;
@@ -70,17 +160,10 @@ function showWizard({ user, memberships = [] }) {
   document.getElementById('onboardingDone')?.style.setProperty('display', 'none');
   const tz = document.getElementById('onboardingTimezone');
   if (tz && !tz.value) tz.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  // Best-effort country/currency prefill from the device's timezone — see
-  // config/locale-defaults.js. Only fills blank fields, never overwrites
-  // something the user already typed/picked (e.g. on a re-render after a
-  // failed submit), and a miss just leaves the field at its plain default.
+  // A timezone-derived country is only a suggestion; the server-provided active
+  // pack list is the selection surface and the backend validates again on create.
   const guessed = guessLocationDefaults();
-  const countryInput = document.getElementById('onboardingCountry');
-  if (countryInput && !countryInput.value && guessed.country) countryInput.value = guessed.country;
-  const currencySelect = document.getElementById('onboardingCurrency');
-  if (currencySelect && guessed.currency && Array.from(currencySelect.options).some(o => o.value === guessed.currency)) {
-    currencySelect.value = guessed.currency;
-  }
+  void loadOnboardingCountryOptions(guessed.country);
   const name = document.getElementById('onboardingUserName');
   if (name) name.textContent = user?.displayName || 'Telegram account';
   const existing = document.getElementById('onboardingExisting');
@@ -179,12 +262,16 @@ export async function switchActiveTenant() {
 export async function createOnboardingTenant() {
   const sellerName = document.getElementById('onboardingBusinessName')?.value.trim();
   const businessType = document.getElementById('onboardingBusinessType')?.value || 'retail';
-  const country = document.getElementById('onboardingCountry')?.value.trim() || '';
+  const country = document.getElementById('onboardingCountry')?.value.trim().toUpperCase() || '';
   const currency = document.getElementById('onboardingCurrency')?.value || 'ETB';
   const timezone = document.getElementById('onboardingTimezone')?.value || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   const status = document.getElementById('onboardingStatus');
   if (!sellerName) {
     if (status) status.textContent = 'Business name is required.';
+    return;
+  }
+  if (!onboardingCountryOptions?.some(option => option.countryCode === country)) {
+    if (status) status.textContent = 'Choose a country with an active country pack before creating the business.';
     return;
   }
   if (status) status.textContent = 'Creating your business…';

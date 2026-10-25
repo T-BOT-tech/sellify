@@ -1,10 +1,8 @@
 // config/locale-defaults.js
-// Rough timezone -> {country, currency} guess used to prefill Step 2/3 of
-// the onboarding wizard. Deliberately coarse and best-effort: it only needs
-// to save a tap for the common case, never to be authoritative. Country
-// stays a free-text input and currency stays a normal <select>, so a wrong
-// or missing guess costs the user nothing beyond typing/picking it
-// themselves — this never blocks or overrides an explicit answer.
+// Rough timezone -> {country, currency} hint. First-run onboarding uses only
+// the country as a suggestion among server-provided active country packs; the
+// selected pack supplies the default currency. These hints remain coarse and
+// non-authoritative and never block or override an explicit merchant choice.
 const TZ_DEFAULTS = {
   'Africa/Addis_Ababa': { country: 'Ethiopia', currency: 'ETB' },
   'Africa/Nairobi': { country: 'Kenya', currency: 'KES' },
@@ -30,9 +28,8 @@ const TZ_DEFAULTS = {
   'America/Los_Angeles': { country: 'United States', currency: 'USD' },
 };
 
-// Region-only fallback for timezones not in the table above (e.g. a city in
-// Europe we didn't list by name) — currency only, no country guess, since a
-// region alone isn't enough to name one.
+// Region-only legacy currency hint for timezones not in the table above. A
+// region is not enough to select a country pack and is never used to do so.
 const REGION_CURRENCY = { Europe: 'EUR', Asia: 'INR', America: 'USD' };
 
 export function guessLocationDefaults() {

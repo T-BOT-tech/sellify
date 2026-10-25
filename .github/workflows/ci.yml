@@ -66,6 +66,8 @@ jobs:
         run: npm run test:service-catalog-http
       - name: First-experience service catalog frontend sync regression
         run: npm run test:service-catalog-frontend-sync
+      - name: Country-pack onboarding integrity regression
+        run: npm run test:country-pack-onboarding
 
       - name: GAP-1.18I payment verification migration independence regression
         run: npm run gap-1.18:provider-verification-migration-test
