@@ -203,6 +203,10 @@ assert.match(tenantAuthSource, /async function preserveTenantState\(chatId\)[\s\
   'tenant switching must durably preserve the outgoing tenant local state before clearing shared keys');
 assert.match(tenantAuthSource, /export async function restoreTenantStateForTenant\(chatId\)[\s\S]*?String\(snapshot\.tenantId\) !== tenantId[\s\S]*?setter\(snapshot\.state\[name\]\)/,
   'tenant recovery must validate snapshot ownership before restoring tenant state');
+
+assert.match(tenantAuthSource, /const entries = tenantStateFields[\s\S]*?previous: structuredClone\(getValue\(\)\)[\s\S]*?const written = \[\];[\s\S]*?const saved = await saveJSONAsync\(entry\.storageKey, entry\.target\);[\s\S]*?if \(!saved\)[\s\S]*?saveJSONAsync\(prior\.storageKey, prior\.previous\)[\s\S]*?throw new Error\('Could not durably restore tenant state; synchronization was stopped'\)[\s\S]*?for \(const entry of entries\) entry\.setter\(entry\.target\)/,
+  'tenant recovery must durably persist the complete target snapshot before exposing it in memory and roll back partial writes on failure');
+
 assert.match(tenantAuthSource, /\['inventoryMovements',[\s\S]*?\['inventoryBalances',[\s\S]*?\['outboxEvents',[\s\S]*?\['stockTransactions'/,
   'tenant snapshots must include inventory projections and durable offline outbox events');
 const tenantSwitchPreserveIndex = tenantAuthSource.indexOf('await preserveTenantState(config.chatId)');
