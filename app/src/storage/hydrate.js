@@ -15,6 +15,7 @@ import { idbGetAll, isIdbUnavailable } from './idb.js';
 import { runLedgerMigration, migrateProductMoney, migrateOrderMoney } from './migration.js';
 import { saveJSON } from './json.js';
 import {
+  resetOutboxIndexedDbBaseline,
   resetOutboxRecoveryBaseline,
   restoreOutboxRecoveryJournal as restoreRecoveryJournal,
 } from '../sync/outbox-recovery-journal.js';
@@ -135,6 +136,9 @@ export async function hydrateFromIndexedDB() {
   apply(STORAGE_KEYS.organizationLocations, organizationLocations, v => setOrganizationLocations(v));
   apply(STORAGE_KEYS.inventoryBalances, inventoryBalances, v => setInventoryBalances(v));
   apply(STORAGE_KEYS.outboxEvents, outboxEvents, v => setOutboxEvents(v));
+  resetOutboxIndexedDbBaseline(Array.isArray(fromIdb[STORAGE_KEYS.outboxEvents])
+    ? fromIdb[STORAGE_KEYS.outboxEvents]
+    : []);
   restoreOutboxRecoveryJournal();
 
   const moneyMigrated = migrateMoneyNow();
