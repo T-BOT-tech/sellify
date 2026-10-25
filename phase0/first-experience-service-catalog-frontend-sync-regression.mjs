@@ -44,9 +44,12 @@ assert.doesNotMatch(tenantAuthSource, /getElementById\('onboardingCurrency'\)|se
   'tenant onboarding must not require or submit a user-selected currency');
 
 const settingsSource = await readFile(new URL('../app/src/ui/settings.js', import.meta.url), 'utf8');
+const currencyConfigSource = await readFile(new URL('../app/src/config/currency.js', import.meta.url), 'utf8');
 const appStateSource = await readFile(new URL('../app/src/state.js', import.meta.url), 'utf8');
 assert.match(appStateSource, /currencyCode: 'ETB'/,
   'a fresh device must use ETB as the regional first-run fallback instead of the unrelated INR default');
+assert.match(currencyConfigSource, /config\?\.currencyCode \|\| 'ETB'[\s\S]*?CURRENCY_SYMBOLS\.ETB/,
+  'missing or unsupported currency settings must render the ETB symbol, not the legacy INR/Rupee fallback');
 assert.match(onboardingHtml, /<option value="ETB" selected>Br ETB/,
   'Business Settings must present ETB as the visible first-run currency choice');
 assert.match(onboardingHtml, /Business currency starts at ETB[\s\S]*?skip this step and choose it in Settings before adding priced catalog items/,
