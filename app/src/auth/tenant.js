@@ -373,6 +373,7 @@ export async function createOnboardingTenant() {
     saveJSON(STORAGE_KEYS.config, nextConfig);
     let templateSyncError = null;
     const templateTenantId = String(config.chatId || '');
+    const templateSessionToken = String(config.sessionToken || '');
     const pendingTemplate = {
       tenantId: templateTenantId,
       status: 'pending',
@@ -381,15 +382,18 @@ export async function createOnboardingTenant() {
       updatedAt: Date.now(),
     };
     try {
-      if (!templateTenantId || !(await saveJSONAsync(pendingBusinessTemplateKey(templateTenantId), pendingTemplate))) {
+      if (!templateTenantId || !templateSessionToken || !(await saveJSONAsync(pendingBusinessTemplateKey(templateTenantId), pendingTemplate))) {
         throw new Error('Could not persist pending business template sync');
+      }
+      if (String(config.chatId || '') !== templateTenantId || String(config.sessionToken || '') !== templateSessionToken) {
+        throw new Error('Business changed before template sync started');
       }
       await request(`/tenants/${encodeURIComponent(templateTenantId)}/business-template`, {
         method: 'PUT',
-        headers: authHeaders(),
+        headers: { Authorization: `Bearer ${templateSessionToken}` },
         body: JSON.stringify({ templateKey: selectedTemplate }),
       });
-      if (String(config.chatId || '') !== templateTenantId) {
+      if (String(config.chatId || '') !== templateTenantId || String(config.sessionToken || '') !== templateSessionToken) {
         throw new Error('Business changed before template sync completed');
       }
       await saveJSONAsync(pendingBusinessTemplateKey(templateTenantId), { tenantId: templateTenantId, status: 'synced' });
