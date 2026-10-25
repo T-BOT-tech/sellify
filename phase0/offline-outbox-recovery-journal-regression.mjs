@@ -97,21 +97,15 @@ const latest = [{ eventId: 'new-command', kind: 'command', status: 'pending' }];
   assert.deepEqual(JSON.parse(storage.getItem(OUTBOX_RECOVERY_KEY)), latest);
 }
 
-// A failed write attempts to delete a stale snapshot so completed work cannot
-// be resurrected. The normal persistence caller can still continue to saveJSON.
+// A failed replacement must preserve the last known-good snapshot. Removing
+// it could lose unrelated pending work if IndexedDB also fails before exit.
 {
   const storage = fakeStorage({ [OUTBOX_RECOVERY_KEY]: JSON.stringify(stale) });
   storage.setItem = () => { throw new Error('quota exceeded'); };
+  let removals = 0;
+  storage.removeItem = () => { removals += 1; };
   assert.equal(writeOutboxRecoveryJournal(latest, { storage, logger: quietLogger }), false);
-  assert.equal(storage.getItem(OUTBOX_RECOVERY_KEY), null);
-}
-
-// If both write and cleanup fail, failure is contained and explicitly best-effort.
-{
-  const storage = fakeStorage({ [OUTBOX_RECOVERY_KEY]: JSON.stringify(stale) });
-  storage.setItem = () => { throw new Error('quota exceeded'); };
-  storage.removeItem = () => { throw new Error('storage blocked'); };
-  assert.doesNotThrow(() => writeOutboxRecoveryJournal(latest, { storage, logger: quietLogger }));
+  assert.equal(removals, 0, 'failed replacement must not delete the last known-good journal');
   assert.deepEqual(JSON.parse(storage.getItem(OUTBOX_RECOVERY_KEY)), stale);
 }
 
