@@ -192,6 +192,24 @@ try {
   });
   assert.equal(crossTenantTemplateRead.status, 403,
     'a valid session for one business must not read another business template');
+
+  const crossTenantTemplateWrite = await fetch(baseUrl + '/tenants/' + encodeURIComponent(otherTenant.chatId) + '/business-template', {
+    method: 'PUT',
+    headers: authHeaders,
+    body: JSON.stringify({ templateKey: 'repair' }),
+  });
+  assert.equal(crossTenantTemplateWrite.status, 403,
+    'a valid owner session for one business must not write another business template');
+  const otherTenantTemplateAfterDeniedWrite = await fetch(baseUrl + '/tenants/' + encodeURIComponent(otherTenant.chatId) + '/business-template', {
+    headers: { Authorization: 'Bearer ' + (await store.createSession({
+      userId: user.id,
+      chatId: otherTenant.chatId,
+      deviceName: 'Other Service Catalog HTTP read',
+    })).token },
+  });
+  assert.equal(otherTenantTemplateAfterDeniedWrite.status, 200);
+  assert.equal((await otherTenantTemplateAfterDeniedWrite.json()).businessTemplate, null,
+    'a denied cross-tenant write must leave the other business template unchanged');
   const products = [
     { id: 'consultation-http', name: 'Consultation', price: 25000, currency: 'ETB', item_type: 'service', marketplace_listed: true },
     { id: 'parcel-instant-http', name: 'Instant Parcel Delivery', price: 12000, currency: 'ETB', item_type: 'service',
