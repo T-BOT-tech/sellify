@@ -49,8 +49,12 @@ assert.match(appStateSource, /currencyCode: 'ETB'/,
   'a fresh device must use ETB as the regional first-run fallback instead of the unrelated INR default');
 assert.match(onboardingHtml, /<option value="ETB" selected>Br ETB/,
   'Business Settings must present ETB as the visible first-run currency choice');
-assert.match(backendServerSource, /if \(req\.method === 'GET'\) return sendJSON\(res, 200, \{ tenant \}, req\)/,
-  'authenticated tenant reads must expose the canonical organization currency to Settings');
+assert.match(backendServerSource, /const tenantSettingsView = \(\{[\s\S]*?currency: tenant\.currency,[\s\S]*?\}\);[\s\S]*?sendJSON\(res, 200, \{ tenant: tenantSettingsView \}/,
+  'authenticated tenant reads must expose canonical currency through a minimal settings view');
+assert.match(tenantAuthSource, /async function loadCanonicalTenantCurrency\(\)[\s\S]*?currencyCode: currency[\s\S]*?saveJSON\(STORAGE_KEYS\.config, next\)/,
+  'tenant authentication and switching must hydrate local money formatting from the canonical organization currency');
+assert.match(tenantAuthSource, /const persisted = persistAuth\(data, data\.membership\)[\s\S]*?currencyCode: 'ETB'[\s\S]*?await loadCanonicalTenantCurrency\(\)[\s\S]*?showFirstProductStep/,
+  'new-business first catalog entry must use the canonical currency before recording a price');
 assert.match(backendServerSource, /'business_name', 'primary_color', 'logo_url', 'currency'[\s\S]*?INVALID_CURRENCY/,
   'tenant settings must validate and route intentional ISO currency changes to the canonical store');
 assert.match(tenantStoreSource, /return tenant \? \{ \.\.\.tenant, currency: tenantCurrency\(key\) \} : null/,
