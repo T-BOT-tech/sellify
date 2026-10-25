@@ -385,11 +385,16 @@ export async function addOnboardingProduct() {
   }
   const stockRaw = itemType === 'product' ? stockInput?.value.trim() : '';
   const stock = stockRaw ? Math.max(0, parseInt(stockRaw, 10) || 0) : undefined;
+  const priceMinor = toMinorUnits(priceMajor, config.currencyCode);
+  if (!Number.isSafeInteger(priceMinor) || priceMinor < 0 || priceMinor > 2147483647) {
+    if (status) status.textContent = 'Price is outside the supported range for this business currency.';
+    return;
+  }
   const newProd = {
     id: uid(),
     name,
     item_type: itemType,
-    price: toMinorUnits(priceMajor, config.currencyCode),
+    price: priceMinor,
     _priceMinor: true,
     ...(itemType === 'product' && stock !== undefined ? { stock } : {}),
     updated_at: Date.now(),
