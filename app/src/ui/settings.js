@@ -157,15 +157,9 @@ export function openSettings() {
   const symInput = document.getElementById('setCurrencySymbol');
   codeSel.dataset.currencyHydrated = 'false';
   codeSel.dataset.currencyEdited = 'false';
-  if (config.currencySymbol) {
-    codeSel.value = 'CUSTOM';
-    symInput.value = config.currencySymbol;
-    symInput.style.display = 'block';
-  } else {
-    codeSel.value = config.currencyCode || 'ETB';
-    symInput.value = '';
-    symInput.style.display = 'none';
-  }
+  codeSel.value = config.currencyCode || 'ETB';
+  symInput.value = config.currencySymbol || '';
+  symInput.style.display = 'block';
   // A saved device setting is only a cache. Hydrate the active business's
   // canonical organization currency before treating a selection as intent.
   if (config.chatId && config.sessionToken) {
@@ -182,7 +176,7 @@ export function openSettings() {
       if (!/^[A-Z]{3}$/.test(canonicalCode)) return;
       codeSel.dataset.currencyHydrated = 'true';
       if (codeSel.dataset.currencyEdited !== 'true') {
-        codeSel.value = config.currencySymbol ? 'CUSTOM' : canonicalCode;
+        codeSel.value = canonicalCode;
         setConfig({ ...config, currencyCode: canonicalCode, branding: data.tenant?.branding || config.branding || {} });
         saveJSON(STORAGE_KEYS.config, config);
       }
@@ -373,14 +367,14 @@ export function onCurrencyCodeChange() {
   const codeSel = document.getElementById('setCurrencyCode');
   const symInput = document.getElementById('setCurrencySymbol');
   if (codeSel) codeSel.dataset.currencyEdited = 'true';
-  if (symInput) symInput.style.display = (codeSel?.value === 'CUSTOM') ? 'block' : 'none';
+  // A custom display symbol belongs to the previous currency choice.
+  if (symInput) symInput.value = '';
 }
 
 export async function saveSettings() {
   const codeSel = document.getElementById('setCurrencyCode');
   const symInput = document.getElementById('setCurrencySymbol');
-  const isCustom = codeSel.value === 'CUSTOM';
-  const requestedCurrency = isCustom ? null : String(codeSel.value || '').toUpperCase();
+  const requestedCurrency = String(codeSel.value || '').toUpperCase();
   const currencyWasEdited = codeSel.dataset.currencyEdited === 'true';
   let canonicalCurrency = String(config.currencyCode || 'ETB').toUpperCase();
   let canonicalBranding = config.branding || {};
@@ -436,7 +430,7 @@ export async function saveSettings() {
     businessModel: modelSel && BUSINESS_MODELS[modelSel.value] ? modelSel.value : (config.businessModel || 'retail'),
     niche: nicheSel ? nicheSel.value : (config.niche || ''),
     currencyCode: canonicalCurrency,
-    currencySymbol: isCustom ? symInput.value.trim() : '',
+    currencySymbol: symInput.value.trim(),
     branding: canonicalBranding,
     paymentMethods: config.paymentMethods,
     wholesaleEnabled: !!(document.getElementById('setWholesaleEnabled') && document.getElementById('setWholesaleEnabled').checked),
