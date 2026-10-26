@@ -63,31 +63,46 @@ try {
   });
   await Promise.all([preparePage(first), preparePage(second)]);
 
-  const persist = (page, eventId) => page.evaluate(async id => {
-    const idb = await import('/app/src/storage/idb.js');
-    const journal = await import('/app/src/sync/outbox-recovery-journal.js');
-    const localEvents = [{ eventId: id, status: 'pending', payload: { source: id } }];
-    const indexedDbBaseline = [];
-    let journalWrite = null;
-    let journalSnapshot = localEvents;
-    await idb.idbUpdateAndSet('ledger_outbox_events', storedEvents => {
-      journalWrite = journal.writeOutboxRecoveryJournal(localEvents, {
-        onMerged: merged => { journalSnapshot = merged; },
-      });
-      return journal.mergeOutboxSnapshots(
-        indexedDbBaseline,
-        journalSnapshot,
-        Array.isArray(storedEvents) ? storedEvents : [],
-      );
-    }, journal.OUTBOX_RECOVERY_COMMIT_KEY, () => ({
-      version: 1,
-      attemptId: journalWrite.attemptId,
-      previousSnapshotId: journalWrite.previousSnapshotId,
-      journalWritten: journalWrite.written,
-    }));
+  const enqueue = (page, eventId) => page.evaluate(async id => {
+    // Exercise the production enqueue -> persist path, not a test-only
+    // reimplementation of the transaction sequence.
+    const outbox = await import('/app/src/sync/outbox.js');
+    outbox.enqueueEvent('browser-runtime-regression', { source: id }, { eventId: id });
   }, eventId);
 
-  // Separate page realms share origin storage but have independent module state.
+  // Separate page realms share origin storage but run the real outbox module.
+  await Promise.all([enqueue(first, 'browser-tab-A'), enqueue(second, 'browser-tab-B')]);
+  const waitForConcurrentCommit = await first.evaluate(async () => {
+    const idb = await import('/app/src/storage/idb.js');
+    const journal = await import('/app/src/sync/outbox-recovery-journal.js');
+    const deadline = Date.now() + 10000;
+    let events = [];
+    let marker = null;
+    let snapshot = null;
+    while (Date.now() < deadline) {
+      events = await idb.idbGet('ledger_outbox_events') || [];
+      marker = await idb.idbGet(journal.OUTBOX_RECOVERY_COMMIT_KEY);
+      snapshot = JSON.parse(localStorage.getItem(journal.OUTBOX_RECOVERY_KEY) || 'null');
+      const ids = events.map(event => event.eventId).sort();
+      if (ids.includes('browser-tab-A') && ids.includes('browser-tab-B')) {
+        return {
+          indexedDbIds: ids,
+          journalIds: (snapshot?.events || []).map(event => event.eventId).sort(),
+          markerMatchesJournal: marker?.journalWritten === true && marker?.attemptId === snapshot?.snapshotId,
+        };
+      }
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return {
+      indexedDbIds: events.map(event => event.eventId).sort(),
+      journalIds: (snapshot?.events || []).map(event => event.eventId).sort(),
+      markerMatchesJournal: marker?.journalWritten === true && marker?.attemptId === snapshot?.snapshotId,
+    };
+  });
+  const concurrent = waitForConcurrentCommit;
+  assert.deepEqual(concurrent.indexedDbIds, ['browser-tab-A', 'browser-tab-B']);
+  assert.deepEqual(concurrent.journalIds, ['browser-tab-A', 'browser-tab-B']);
+  assert.equal(concurrent.markerMatchesJournal, true);
   await Promise.all([persist(first, 'browser-tab-A'), persist(second, 'browser-tab-B')]);
   const concurrent = await first.evaluate(async () => {
     const idb = await import('/app/src/storage/idb.js');
