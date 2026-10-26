@@ -123,7 +123,7 @@ assert.match(idb, /request\.onerror = \(\) => \{\s*try \{ tx\.abort\(\); \} catc
   'IDB read errors, transaction errors, and aborts must reject idbUpdate so the outbox fallback runs instead of hanging');
 assert.match(outbox, /\.catch\(error => \{[\s\S]*?Atomic IndexedDB outbox update failed; falling back to saveJSON[\s\S]*?saveJSON\(STORAGE_KEYS\.outboxEvents, outboxEvents\);/,
   'an IndexedDB transaction failure must persist the current outbox, not a snapshot captured before newer same-tab mutations');
-assert.match(outbox, /const indexedDbBaseline = getOutboxIndexedDbBaseline\(\) \|\| localEvents;[\s\S]*?mergeOutboxSnapshots\(indexedDbBaseline, localEvents, Array\.isArray\(storedEvents\) \? storedEvents : \[\]\)/,
+assert.match(outbox, /const indexedDbBaseline = getOutboxIndexedDbBaseline\(\) \|\| localEvents;[\s\S]*?mergeOutboxSnapshots\(indexedDbBaseline, journalSnapshot, Array\.isArray\(storedEvents\) \? storedEvents : \[\]\)/,
   'IndexedDB reconciliation must use a baseline independent from the synchronously updated recovery journal');
 assert.match(outbox, /\.then\(merged => \{\s*resetOutboxIndexedDbBaseline\(merged\);/,
   'the IndexedDB baseline must advance only after the atomic IndexedDB transaction commits');
