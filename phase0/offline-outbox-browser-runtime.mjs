@@ -210,6 +210,44 @@ try {
   assert.equal(recovered.didRestore, true);
   assert.deepEqual(recovered.ids, ['browser-tab-A', 'browser-tab-B', 'interrupted-event']);
 
+  // A full recovery-journal quota must not make an otherwise available IndexedDB write disappear.
+  // Simulate quota only for the journal key; IndexedDB remains writable.
+  const quota = await first.evaluate(async () => {
+    const idb = await import('/app/src/storage/idb.js');
+    const journal = await import('/app/src/sync/outbox-recovery-journal.js');
+    const originalSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === journal.OUTBOX_RECOVERY_KEY) {
+        const error = new DOMException('Storage quota exceeded', 'QuotaExceededError');
+        throw error;
+      }
+      return originalSetItem.call(this, key, value);
+    };
+    try {
+      const outbox = await import('/app/src/sync/outbox.js');
+      outbox.enqueueEvent('browser-runtime-regression', { source: 'quota' }, { eventId: 'quota-journal-event' });
+      const deadline = Date.now() + 10000;
+      let events = [];
+      let marker = null;
+      while (Date.now() < deadline) {
+        events = await idb.idbGet('ledger_outbox_events') || [];
+        marker = await idb.idbGet(journal.OUTBOX_RECOVERY_COMMIT_KEY);
+        if (events.some(event => event.eventId === 'quota-journal-event')) break;
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      return {
+        eventPersistedInIndexedDb: events.some(event => event.eventId === 'quota-journal-event'),
+        markerRecordsJournalWriteFailure: marker?.version === 1 && marker?.journalWritten === false,
+        priorJournalPreserved: Boolean(localStorage.getItem(journal.OUTBOX_RECOVERY_KEY)),
+      };
+    } finally {
+      Storage.prototype.setItem = originalSetItem;
+    }
+  });
+  assert.equal(quota.eventPersistedInIndexedDb, true);
+  assert.equal(quota.markerRecordsJournalWriteFailure, true);
+  assert.equal(quota.priorJournalPreserved, true);
+
   console.log('PASS: concurrent browser pages preserve outbox events and aborted writes remain recoverable.');
   await context.close();
 } catch (error) {
