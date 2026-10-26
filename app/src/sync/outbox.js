@@ -14,6 +14,7 @@ import {
   mergeOutboxSnapshots,
   resetOutboxIndexedDbBaseline,
   resetOutboxRecoveryBaseline,
+  sameOutboxSnapshot,
   OUTBOX_RECOVERY_COMMIT_KEY,
   writeOutboxRecoveryJournal,
 } from './outbox-recovery-journal.js';
@@ -47,9 +48,7 @@ function persist() {
     resetOutboxRecoveryBaseline(merged);
     // Don't replace newer in-memory mutations that happened while this
     // transaction was pending; the next persist will reconcile them.
-    const currentIds = outboxEvents.map(event => event.eventId);
-    const savedIds = localEvents.map(event => event.eventId);
-    if (currentIds.length === savedIds.length && currentIds.every((id, index) => id === savedIds[index])) {
+    if (sameOutboxSnapshot(outboxEvents, localEvents)) {
       setOutboxEvents(merged);
     }
   }).catch(error => {
