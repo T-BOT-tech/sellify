@@ -87,6 +87,7 @@ import { getDiscoveryProvider, discoverUnified } from './lib/discovery/index.js'
 import { readFile } from 'node:fs/promises';
 import { existsSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { BROWSER_BACKEND_MODULES, BROWSER_SHARED_MODULES } from '../app/browser-backend-modules.mjs';
 import { fileURLToPath } from 'node:url';
 import {
   getOrCreateTenant,
@@ -2655,6 +2656,54 @@ const MIME_TYPES = {
   '.webmanifest': 'application/manifest+json',
 };
 
+async function serveBrowserBackendModule(req, res, pathname) {
+  let relativePath;
+  try { relativePath = decodeURIComponent(pathname.slice('/backend/'.length)); }
+  catch { return sendError(res, 400, new Error('Bad request'), req); }
+  if (!BROWSER_BACKEND_MODULES.includes(relativePath)) {
+    return sendError(res, 404, new Error('Not found'), req);
+  }
+  const safeRoot = `${path.resolve(__dirname, 'lib')}${path.sep}`;
+  const filePath = path.resolve(__dirname, relativePath);
+  if (!filePath.startsWith(safeRoot)) return sendError(res, 404, new Error('Not found'), req);
+  try {
+    const data = await readFile(filePath);
+    res.writeHead(200, {
+      'Content-Type': 'application/javascript; charset=utf-8',
+      'Content-Length': data.length,
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'public, max-age=3600',
+    });
+    return res.end(data);
+  } catch {
+    return sendError(res, 404, new Error('Not found'), req);
+  }
+}
+
+async function serveBrowserSharedModule(req, res, pathname) {
+  let relativePath;
+  try { relativePath = decodeURIComponent(pathname.slice('/shared/'.length)); }
+  catch { return sendError(res, 400, new Error('Bad request'), req); }
+  if (!BROWSER_SHARED_MODULES.includes(relativePath)) {
+    return sendError(res, 404, new Error('Not found'), req);
+  }
+  const safeRoot = `${path.resolve(__dirname, '..', 'shared')}${path.sep}`;
+  const filePath = path.resolve(__dirname, '..', 'shared', relativePath);
+  if (!filePath.startsWith(safeRoot)) return sendError(res, 404, new Error('Not found'), req);
+  try {
+    const data = await readFile(filePath);
+    res.writeHead(200, {
+      'Content-Type': 'application/javascript; charset=utf-8',
+      'Content-Length': data.length,
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'public, max-age=3600',
+    });
+    return res.end(data);
+  } catch {
+    return sendError(res, 404, new Error('Not found'), req);
+  }
+}
+
 async function serveStatic(req, res, pathname) {
   // Path-traversal guard: resolve against STATIC_DIR and reject anything
   // that escapes it (e.g. "/../../etc/passwd" after normalization).
@@ -3291,6 +3340,16 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === '/config.js' && req.method === 'GET') {
     return handleConfigJs(req, res);
+  }
+
+  // Browser module imports are served only from the explicit read-only allowlist.
+  // This delivers policy/projection source required by the PWA without exposing
+  // the backend tree, server implementation, or persistent data as static files.
+  if (req.method === 'GET' && url.pathname.startsWith('/backend/lib/')) {
+    return serveBrowserBackendModule(req, res, url.pathname);
+  }
+  if (req.method === 'GET' && url.pathname.startsWith('/shared/')) {
+    return serveBrowserSharedModule(req, res, url.pathname);
   }
 
   // Public storefront route: the viewer itself is static; its only data access is the public catalog GET.
