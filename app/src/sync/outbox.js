@@ -41,7 +41,10 @@ if (typeof globalThis.addEventListener === 'function') {
       const baseline = getOutboxRecoveryBaseline() || outboxEvents;
       const reconciled = mergeOutboxSnapshots(baseline, outboxEvents, sharedEvents);
       setOutboxEvents(reconciled);
-      resetOutboxRecoveryBaseline(reconciled, typeof parsed?.snapshotId === 'string' ? parsed.snapshotId : null);
+      // Keep the shared snapshot as the common ancestor. `reconciled` may
+      // include unsaved local additions; treating those as part of the shared
+      // baseline would make the next journal merge misread them as deletions.
+      resetOutboxRecoveryBaseline(sharedEvents, typeof parsed?.snapshotId === 'string' ? parsed.snapshotId : null);
     } catch (error) {
       console.error('Outbox cross-tab snapshot reconciliation failed', error);
     }
