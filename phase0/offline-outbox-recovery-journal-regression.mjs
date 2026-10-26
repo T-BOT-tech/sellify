@@ -105,12 +105,14 @@ assert.match(outbox, /journalWrite = writeOutboxRecoveryJournal\\(localEvents/,
 
 assert.match(idb, /function updateInTransaction\(key, updater, additionalWrite = null\)[\s\S]*?store\.get\(key\)[\s\S]*?nextValue = updater\(request\.result !== undefined \? request\.result : null\)[\s\S]*?store\.put\(nextValue, key\)[\s\S]*?if \(additionalWrite\) store\.put\(additionalWrite\.value, additionalWrite\.key\)/,
   'outbox reconciliation and its commit marker must be written in one IndexedDB transaction');
-assert.match(idb, /export function idbUpdateAndSet\(key, updater, sidecarKey, sidecarValue\)/,
+assert.match(idb, /export function idbUpdateAndSet\\(key, updater, sidecarKey, sidecarValue\\)/,
   'the transaction helper must expose an atomic outbox-plus-marker write');
+assert.match(idb, /typeof additionalWrite\\.value === 'function'[\\s\\S]*?additionalWrite\\.value\\(nextValue\\)/,
+  'the transaction must derive the commit marker after its updater runs');
 assert.match(idb, /export function idbGetAll\(keys\)[\s\S]*?db\.transaction\(IDB_STORE_NAME, 'readonly'\)[\s\S]*?for \(const key of keys\)[\s\S]*?tx\.oncomplete = \(\) => resolve\(values\)/,
   'hydration must read the outbox and its commit marker from one readonly snapshot');
-assert.match(outbox, /idbUpdateAndSet\(STORAGE_KEYS\.outboxEvents, storedEvents =>[\s\S]*?mergeOutboxSnapshots\(indexedDbBaseline, localEvents, Array\.isArray\(storedEvents\) \? storedEvents : \[\]\)[\s\S]*?OUTBOX_RECOVERY_COMMIT_KEY[\s\S]*?journalWritten: journalWrite\.written/,
-  'the outbox commit must atomically record whether its corresponding journal replacement succeeded');
+assert.match(outbox, /idbUpdateAndSet\\(STORAGE_KEYS\\.outboxEvents, storedEvents =>[\\s\\S]*?mergeOutboxSnapshots\\(indexedDbBaseline, localEvents, Array\\.isArray\\(storedEvents\\) \\? storedEvents : \\]\\)[\\s\\S]*?OUTBOX_RECOVERY_COMMIT_KEY, \\(\\) => \\(\\{[\\s\\S]*?journalWritten: journalWrite\\.written/,
+  'the outbox commit must atomically record whether its transaction-serialized journal replacement succeeded');
 assert.match(idb, /request\.onerror = \(\) => \{\s*try \{ tx\.abort\(\); \} catch \{\}\s*reject\(request\.error \|\| new Error\('IndexedDB update read failed for ' \+ key\)\);\s*\};[\s\S]*?tx\.oncomplete = \(\) => resolve\(nextValue\);\s*tx\.onerror = \(\) => reject\(tx\.error \|\| new Error\('IndexedDB update failed for ' \+ key\)\);\s*tx\.onabort = \(\) => reject\(tx\.error \|\| new Error\('IndexedDB update transaction aborted for ' \+ key\)\);/,
   'IDB read errors, transaction errors, and aborts must reject idbUpdate so the outbox fallback runs instead of hanging');
 assert.match(outbox, /\.catch\(error => \{[\s\S]*?Atomic IndexedDB outbox update failed; falling back to saveJSON[\s\S]*?saveJSON\(STORAGE_KEYS\.outboxEvents, outboxEvents\);/,
