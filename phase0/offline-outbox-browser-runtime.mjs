@@ -162,6 +162,22 @@ try {
   assert.deepEqual(concurrent.indexedDbIds, ['browser-tab-A', 'browser-tab-B']);
   assert.deepEqual(concurrent.journalIds, ['browser-tab-A', 'browser-tab-B']);
   assert.equal(concurrent.markerMatchesJournal, true);
+
+  // An already-open tab must observe another tab's committed snapshot without reload.
+  await enqueue(second, 'cross-tab-visible-event');
+  const visible = await first.evaluate(async () => {
+    const deadline = Date.now() + 10000;
+    const state = await import('/app/src/state.js');
+    while (Date.now() < deadline) {
+      if (state.outboxEvents.some(event => event.eventId === 'cross-tab-visible-event')) {
+        return state.outboxEvents.map(event => event.eventId).sort();
+      }
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    return state.outboxEvents.map(event => event.eventId).sort();
+  });
+  assert.ok(visible.includes('cross-tab-visible-event'), 'open tab should reconcile a peer tab event without reload');
+  assert.ok(visible.includes('browser-tab-A'), 'reconciliation should preserve local pending events');
   // An updater failure after the journal write must abort the IDB value and marker.
   const aborted = await first.evaluate(async () => {
     const idb = await import('/app/src/storage/idb.js');
