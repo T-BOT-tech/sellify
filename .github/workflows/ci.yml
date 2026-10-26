@@ -23,6 +23,8 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - name: Install root dependencies
         run: npm install --ignore-scripts
+      - name: Install Chromium for outbox browser runtime regression
+        run: npx playwright install --with-deps chromium
       - name: Run L18 P2P Delivery product boundary regression
         run: npm run test:logistics-l18
 
@@ -69,6 +71,9 @@ jobs:
 
       - name: Offline outbox recovery journal regression
         run: npm run test:offline-outbox-recovery-journal
+
+      - name: Offline outbox browser runtime regression
+        run: npm run test:offline-outbox-browser-runtime
 
       - name: GAP-1.18I payment verification migration independence regression
         run: npm run gap-1.18:provider-verification-migration-test
