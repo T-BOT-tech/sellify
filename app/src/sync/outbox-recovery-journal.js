@@ -32,10 +32,35 @@ function cloneEvents(events) {
 // localStorage read/write would still allow commit markers to cross in flight.
 // Browsers without Web Locks retain the existing IndexedDB transaction guard,
 // but cannot guarantee atomic localStorage journal writes across tabs.
+// Serialize overlapping persistence calls in this JavaScript realm even
+// when Web Locks are unavailable. This does not coordinate separate tabs;
+// only the Web Locks path provides cross-tab serialization.
+let fallbackPersistenceTail = Promise.resolve();
+let fallbackPersistencePending = 0;
+
 export function withOutboxPersistenceLock(callback, lockManager = globalThis.navigator?.locks) {
   if (typeof callback !== 'function') throw new TypeError('Outbox persistence callback is required');
-  if (typeof lockManager?.request !== 'function') return callback();
-  return lockManager.request('sellify-outbox-persistence-v1', { mode: 'exclusive' }, callback);
+  if (typeof lockManager?.request === 'function') {
+    return lockManager.request('sellify-outbox-persistence-v1', { mode: 'exclusive' }, callback);
+  }
+
+  // Preserve the existing synchronous behavior for a standalone synchronous
+  // fallback, but queue subsequent calls while an async persistence operation
+  // is still pending. Otherwise same-tab journal/IDB markers can interleave on
+  // browsers without Web Locks even though IDB transactions themselves queue.
+  if (fallbackPersistencePending === 0) {
+    const result = callback();
+    if (!result || typeof result.then !== 'function') return result;
+    fallbackPersistencePending += 1;
+    const tracked = Promise.resolve(result).finally(() => { fallbackPersistencePending -= 1; });
+    fallbackPersistenceTail = tracked.catch(() => {});
+    return tracked;
+  }
+
+  fallbackPersistencePending += 1;
+  const tracked = fallbackPersistenceTail.then(callback).finally(() => { fallbackPersistencePending -= 1; });
+  fallbackPersistenceTail = tracked.catch(() => {});
+  return tracked;
 }
 
 export function initializeOutboxRecoveryBaseline(events) {
