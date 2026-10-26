@@ -16,6 +16,7 @@ import {
   resetOutboxRecoveryBaseline,
   sameOutboxSnapshot,
   OUTBOX_RECOVERY_COMMIT_KEY,
+  withOutboxPersistenceLock,
   writeOutboxRecoveryJournal,
 } from './outbox-recovery-journal.js';
 
@@ -24,38 +25,41 @@ import {
 initializeOutboxRecoveryBaseline();
 
 function persist() {
-  const journalWrite = writeOutboxRecoveryJournal(outboxEvents, {
-    onMerged: merged => setOutboxEvents(merged),
-  });
-  if (isIdbUnavailable()) {
-    saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents);
-    return;
-  }
-  // Reconcile against the latest persisted snapshot within the same IDB
-  // readwrite transaction. This closes the read/merge/write race between tabs
-  // for unrelated additions and explicit removals.
-  const localEvents = outboxEvents.map(event => ({ ...event }));
-  const indexedDbBaseline = getOutboxIndexedDbBaseline() || localEvents;
-  idbUpdateAndSet(STORAGE_KEYS.outboxEvents, storedEvents => {
-    return mergeOutboxSnapshots(indexedDbBaseline, localEvents, Array.isArray(storedEvents) ? storedEvents : []);
-  }, OUTBOX_RECOVERY_COMMIT_KEY, {
-    version: 1,
-    attemptId: journalWrite.attemptId,
-    previousSnapshotId: journalWrite.previousSnapshotId,
-    journalWritten: journalWrite.written,
-  }).then(merged => {
-    resetOutboxIndexedDbBaseline(merged);
-    resetOutboxRecoveryBaseline(merged);
-    // Don't replace newer in-memory mutations that happened while this
-    // transaction was pending; the next persist will reconcile them.
-    if (sameOutboxSnapshot(outboxEvents, localEvents)) {
-      setOutboxEvents(merged);
+  // Keep journal replacement and its matching IndexedDB commit marker inside
+  // one cross-tab exclusive section where Web Locks are available. The lock
+  // also serializes overlapping persist() calls in this tab.
+  return withOutboxPersistenceLock(() => {
+    const journalWrite = writeOutboxRecoveryJournal(outboxEvents, {
+      onMerged: merged => setOutboxEvents(merged),
+    });
+    if (isIdbUnavailable()) {
+      saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents);
+      return;
     }
-  }).catch(error => {
-    console.error('Atomic IndexedDB outbox update failed; falling back to saveJSON', error);
-    // The transaction may fail after newer same-tab mutations have occurred.
-    // Persist the current state rather than the snapshot captured before it began.
-    saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents);
+    // Capture nested payloads too: the transaction's merge ancestor must not
+    // alias mutable event data that changes while the IDB request is pending.
+    const localEvents = JSON.parse(JSON.stringify(outboxEvents));
+    const indexedDbBaseline = getOutboxIndexedDbBaseline() || localEvents;
+    return idbUpdateAndSet(STORAGE_KEYS.outboxEvents, storedEvents => {
+      return mergeOutboxSnapshots(indexedDbBaseline, localEvents, Array.isArray(storedEvents) ? storedEvents : []);
+    }, OUTBOX_RECOVERY_COMMIT_KEY, {
+      version: 1,
+      attemptId: journalWrite.attemptId,
+      previousSnapshotId: journalWrite.previousSnapshotId,
+      journalWritten: journalWrite.written,
+    }).then(merged => {
+      resetOutboxIndexedDbBaseline(merged);
+      resetOutboxRecoveryBaseline(merged);
+      // Don't replace newer in-memory mutations that happened while this
+      // transaction was pending; the next queued persist will reconcile them.
+      if (sameOutboxSnapshot(outboxEvents, localEvents)) {
+        setOutboxEvents(merged);
+      }
+    }).catch(error => {
+      console.error('Atomic IndexedDB outbox update failed; falling back to saveJSON', error);
+      // The transaction may fail after newer same-tab mutations have occurred.
+      saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents);
+    });
   });
 }
 
