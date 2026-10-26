@@ -1,0 +1,164 @@
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const server = http.createServer(async (req, res) => {
+  try {
+    const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
+    if (pathname === '/') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end('<!doctype html><meta charset="utf-8"><title>Sellify outbox browser regression</title>');
+      return;
+    }
+    if (!pathname.startsWith('/app/src/')) {
+      res.writeHead(404).end('Not found');
+      return;
+    }
+    const filePath = path.resolve(root, `.${pathname}`);
+    if (!filePath.startsWith(path.join(root, 'app', 'src') + path.sep)) {
+      res.writeHead(403).end('Forbidden');
+      return;
+    }
+    const body = await readFile(filePath);
+    res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(body);
+  } catch (error) {
+    res.writeHead(500).end(String(error));
+  }
+});
+
+const listen = () => new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(server.address().port)));
+const close = () => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+let browser;
+try {
+  const port = await listen();
+  browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext();
+  const first = await context.newPage();
+  const second = await context.newPage();
+  const base = `http://127.0.0.1:${port}`;
+  await Promise.all([first.goto(base), second.goto(base)]);
+  await first.evaluate(async () => {
+    localStorage.clear();
+    await new Promise((resolve, reject) => {
+      const request = indexedDB.deleteDatabase('ledger_db');
+      request.onsuccess = resolve;
+      request.onerror = () => reject(request.error);
+      request.onblocked = () => reject(new Error('database deletion blocked'));
+    });
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
+  });
+  await second.evaluate(() => Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined }));
+
+  const preparePage = page => page.evaluate(async () => {
+    const idb = await import('/app/src/storage/idb.js');
+    const journal = await import('/app/src/sync/outbox-recovery-journal.js');
+    journal.resetOutboxRecoveryBaseline([]);
+    journal.resetOutboxIndexedDbBaseline([]);
+    return true;
+  });
+  await Promise.all([preparePage(first), preparePage(second)]);
+
+  const persist = (page, eventId) => page.evaluate(async id => {
+    const idb = await import('/app/src/storage/idb.js');
+    const journal = await import('/app/src/sync/outbox-recovery-journal.js');
+    const localEvents = [{ eventId: id, status: 'pending', payload: { source: id } }];
+    const indexedDbBaseline = [];
+    let journalWrite = null;
+    let journalSnapshot = localEvents;
+    await idb.idbUpdateAndSet('ledger_outbox_events', storedEvents => {
+      journalWrite = journal.writeOutboxRecoveryJournal(localEvents, {
+        onMerged: merged => { journalSnapshot = merged; },
+      });
+      return journal.mergeOutboxSnapshots(
+        indexedDbBaseline,
+        journalSnapshot,
+        Array.isArray(storedEvents) ? storedEvents : [],
+      );
+    }, journal.OUTBOX_RECOVERY_COMMIT_KEY, () => ({
+      version: 1,
+      attemptId: journalWrite.attemptId,
+      previousSnapshotId: journalWrite.previousSnapshotId,
+      journalWritten: journalWrite.written,
+    }));
+  }, eventId);
+
+  // Separate page realms share origin storage but have independent module state.
+  await Promise.all([persist(first, 'browser-tab-A'), persist(second, 'browser-tab-B')]);
+  const concurrent = await first.evaluate(async () => {
+    const idb = await import('/app/src/storage/idb.js');
+    const journal = await import('/app/src/sync/outbox-recovery-journal.js');
+    const events = await idb.idbGet('ledger_outbox_events');
+    const marker = await idb.idbGet(journal.OUTBOX_RECOVERY_COMMIT_KEY);
+    const snapshot = JSON.parse(localStorage.getItem(journal.OUTBOX_RECOVERY_KEY));
+    return {
+      indexedDbIds: (events || []).map(event => event.eventId).sort(),
+      journalIds: (snapshot?.events || []).map(event => event.eventId).sort(),
+      markerMatchesJournal: marker?.journalWritten === true && marker?.attemptId === snapshot?.snapshotId,
+    };
+  });
+  assert.deepEqual(concurrent.indexedDbIds, ['browser-tab-A', 'browser-tab-B']);
+  assert.deepEqual(concurrent.journalIds, ['browser-tab-A', 'browser-tab-B']);
+  assert.equal(concurrent.markerMatchesJournal, true);
+
+  // An updater failure after the journal write must abort the IDB value and marker.
+  const aborted = await first.evaluate(async () => {
+    const idb = await import('/app/src/storage/idb.js');
+    const journal = await import('/app/src/sync/outbox-recovery-journal.js');
+    const markerBefore = await idb.idbGet(journal.OUTBOX_RECOVERY_COMMIT_KEY);
+    journal.resetOutboxRecoveryBaseline([]);
+    let journalWrite;
+    await assertRejects(idb.idbUpdateAndSet('ledger_outbox_events', () => {
+      journalWrite = journal.writeOutboxRecoveryJournal(
+        [{ eventId: 'interrupted-event', status: 'pending' }],
+        { onMerged: () => {} },
+      );
+      throw new Error('intentional transaction abort');
+    }, journal.OUTBOX_RECOVERY_COMMIT_KEY, () => ({
+      version: 1, attemptId: journalWrite.attemptId,
+      previousSnapshotId: journalWrite.previousSnapshotId, journalWritten: journalWrite.written,
+    })));
+    const markerAfter = await idb.idbGet(journal.OUTBOX_RECOVERY_COMMIT_KEY);
+    const snapshot = JSON.parse(localStorage.getItem(journal.OUTBOX_RECOVERY_KEY));
+    return {
+      markerUnchanged: JSON.stringify(markerAfter) === JSON.stringify(markerBefore),
+      journalHasInterruptedEvent: snapshot.events.some(event => event.eventId === 'interrupted-event'),
+    };
+    async function assertRejects(promise) {
+      try { await promise; } catch { return; }
+      throw new Error('Expected IndexedDB update to reject');
+    }
+  });
+  assert.equal(aborted.markerUnchanged, true);
+  assert.equal(aborted.journalHasInterruptedEvent, true);
+
+  // Reload into a fresh module realm and verify the uncommitted journal is recoverable.
+  await second.reload();
+  const recovered = await second.evaluate(async () => {
+    const idb = await import('/app/src/storage/idb.js');
+    const journal = await import('/app/src/sync/outbox-recovery-journal.js');
+    const marker = await idb.idbGet(journal.OUTBOX_RECOVERY_COMMIT_KEY);
+    let restored = null;
+    const didRestore = journal.restoreOutboxRecoveryJournal({
+      indexedDbCommit: marker,
+      setOutboxEvents: events => { restored = events; },
+      saveOutbox: () => {},
+    });
+    return { didRestore, ids: (restored || []).map(event => event.eventId).sort() };
+  });
+  assert.equal(recovered.didRestore, true);
+  assert.deepEqual(recovered.ids, ['browser-tab-A', 'browser-tab-B', 'interrupted-event']);
+
+  console.log('PASS: concurrent browser pages preserve outbox events and aborted writes remain recoverable.');
+  await context.close();
+} catch (error) {
+  console.error(error);
+  process.exitCode = 1;
+} finally {
+  if (browser) await browser.close();
+  await close();
+}
