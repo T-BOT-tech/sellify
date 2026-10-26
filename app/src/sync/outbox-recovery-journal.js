@@ -15,6 +15,17 @@ let lastSnapshotId = null;
 // delta that the IDB reconciliation needs to apply.
 let lastIndexedDbSnapshot = null;
 
+// Snapshot nested event data as well as the top-level object. Payloads are
+// JSON-persisted records; shallow copies let an in-place payload mutation
+// rewrite the supposed common ancestor and hide a real local delta.
+function cloneEvents(events) {
+  if (!Array.isArray(events)) return [];
+  return events.map(event => {
+    if (!event || typeof event !== 'object') return event;
+    return JSON.parse(JSON.stringify(event));
+  });
+}
+
 export function initializeOutboxRecoveryBaseline(events) {
   if (Array.isArray(lastSnapshot)) return;
   if (Array.isArray(events)) {
@@ -42,22 +53,20 @@ export function sameOutboxSnapshot(left, right) {
 }
 
 export function getOutboxRecoveryBaseline() {
-  return Array.isArray(lastSnapshot) ? lastSnapshot.map(event => ({ ...event })) : null;
+  return Array.isArray(lastSnapshot) ? cloneEvents(lastSnapshot) : null;
 }
 
 export function resetOutboxRecoveryBaseline(events, snapshotId = null) {
-  lastSnapshot = Array.isArray(events) ? events.map(event => ({ ...event })) : [];
+  lastSnapshot = cloneEvents(events);
   lastSnapshotId = typeof snapshotId === 'string' ? snapshotId : null;
 }
 
 export function getOutboxIndexedDbBaseline() {
-  return Array.isArray(lastIndexedDbSnapshot)
-    ? lastIndexedDbSnapshot.map(event => ({ ...event }))
-    : null;
+  return Array.isArray(lastIndexedDbSnapshot) ? cloneEvents(lastIndexedDbSnapshot) : null;
 }
 
 export function resetOutboxIndexedDbBaseline(events) {
-  lastIndexedDbSnapshot = Array.isArray(events) ? events.map(event => ({ ...event })) : [];
+  lastIndexedDbSnapshot = cloneEvents(events);
 }
 
 function byId(events) {
@@ -185,7 +194,7 @@ export function writeOutboxRecoveryJournal(
       snapshot = mergeOutboxSnapshots(baseline, events, shared);
     }
     storage.setItem(OUTBOX_RECOVERY_KEY, JSON.stringify({ version: 1, snapshotId: attemptId, events: snapshot }));
-    lastSnapshot = snapshot.map(event => ({ ...event }));
+    lastSnapshot = cloneEvents(snapshot);
     lastSnapshotId = attemptId;
     if (typeof onMerged === 'function') onMerged(snapshot);
     return { written: true, attemptId, previousSnapshotId };
@@ -218,7 +227,7 @@ export function restoreOutboxRecoveryJournal({
     if (commitMatchesJournal) return false;
     setOutboxEvents(journal.events);
     saveOutbox(journal.events);
-    lastSnapshot = journal.events.map(event => ({ ...event }));
+    lastSnapshot = cloneEvents(journal.events);
     lastSnapshotId = journal.snapshotId;
     return true;
   } catch (error) {
