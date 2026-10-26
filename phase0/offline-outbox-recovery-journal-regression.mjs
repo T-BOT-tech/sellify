@@ -74,6 +74,30 @@ assert.equal(OUTBOX_RECOVERY_COMMIT_KEY, 'ledger_outbox_recovery_commit_v1');
     'start:third', 'end:third',
   ], 'lockless persistence callbacks must retain invocation order');
 }
+// A rejected lockless operation must not poison the queue or let the next
+// persistence callback overtake the unfinished operation. A synchronous callback
+// arriving during an async write is queued too, then retains its own result.
+{
+  const order = [];
+  const first = withOutboxPersistenceLock(async () => {
+    order.push('start:first-fails');
+    await new Promise(resolve => setTimeout(resolve, 5));
+    order.push('end:first-fails');
+    throw new Error('simulated persistence failure');
+  }, null);
+  const second = withOutboxPersistenceLock(() => {
+    order.push('second-sync-callback');
+    return 'second-result';
+  }, null);
+  const [firstResult, secondResult] = await Promise.allSettled([first, second]);
+  assert.equal(firstResult.status, 'rejected', 'the original persistence failure must remain observable');
+  assert.match(firstResult.reason.message, /simulated persistence failure/);
+  assert.deepEqual(secondResult, { status: 'fulfilled', value: 'second-result' },
+    'a failed operation must not poison later queued persistence work');
+  assert.deepEqual(order, ['start:first-fails', 'end:first-fails', 'second-sync-callback'],
+    'queued callbacks must wait for a failed operation to settle before running');
+}
+
 assert.match(outbox, /writeOutboxRecoveryJournal\(outboxEvents, \{\s*onMerged: merged => setOutboxEvents\(merged\),?\s*\}\);\s*if \(isIdbUnavailable\(\)\) \{\s*saveJSON\(STORAGE_KEYS\.outboxEvents, outboxEvents\);/,
   'the recovery journal must be written before the IndexedDB path, with localStorage fallback when IndexedDB is unavailable');
 assert.match(idb, /function updateInTransaction\(key, updater, additionalWrite = null\)[\s\S]*?store\.get\(key\)[\s\S]*?nextValue = updater\(request\.result !== undefined \? request\.result : null\)[\s\S]*?store\.put\(nextValue, key\)[\s\S]*?if \(additionalWrite\) store\.put\(additionalWrite\.value, additionalWrite\.key\)/,
