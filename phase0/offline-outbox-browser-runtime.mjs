@@ -14,14 +14,55 @@ const server = http.createServer(async (req, res) => {
       res.end('<!doctype html><meta charset="utf-8"><title>Sellify outbox browser regression</title>');
       return;
     }
-    if (!pathname.startsWith('/app/src/')) {
+    // Match the production browser-module boundary: only exact, reviewed
+    // browser-safe backend policy modules and the declarative shared manifest
+    // may be served. Never expose the backend tree or persistent data.
+    const backendModules = new Set([
+      'lib/authorization.js',
+      'lib/country-security-expansion.js',
+      'lib/country-security-isolation.js',
+      'lib/payments/channel-registry.js',
+      'lib/payments/provider-errors.js',
+      'lib/payments/provider-registry.js',
+      'lib/resource-action-registry.js',
+      'lib/security-context.js',
+      'lib/tenant-isolation.js',
+    ]);
+    const sharedModules = new Set(['vertical-pack-manifests.js']);
+    let filePath;
+    if (pathname.startsWith('/app/src/')) {
+      filePath = path.resolve(root, `.${pathname}`);
+      if (!filePath.startsWith(path.join(root, 'app', 'src') + path.sep)) {
+        res.writeHead(403).end('Forbidden');
+        return;
+      }
+    } else if (pathname.startsWith('/backend/')) {
+      const relativePath = pathname.slice('/backend/'.length);
+      if (!backendModules.has(relativePath)) {
+        console.error('Browser regression server rejected backend module path:', pathname);
+        res.writeHead(404).end('Not found');
+        return;
+      }
+      filePath = path.resolve(root, 'backend', relativePath);
+      if (!filePath.startsWith(path.join(root, 'backend') + path.sep)) {
+        res.writeHead(403).end('Forbidden');
+        return;
+      }
+    } else if (pathname.startsWith('/shared/')) {
+      const relativePath = pathname.slice('/shared/'.length);
+      if (!sharedModules.has(relativePath)) {
+        console.error('Browser regression server rejected shared module path:', pathname);
+        res.writeHead(404).end('Not found');
+        return;
+      }
+      filePath = path.resolve(root, 'shared', relativePath);
+      if (!filePath.startsWith(path.join(root, 'shared') + path.sep)) {
+        res.writeHead(403).end('Forbidden');
+        return;
+      }
+    } else {
       console.error('Browser regression server rejected module path:', pathname);
       res.writeHead(404).end('Not found');
-      return;
-    }
-    const filePath = path.resolve(root, `.${pathname}`);
-    if (!filePath.startsWith(path.join(root, 'app', 'src') + path.sep)) {
-      res.writeHead(403).end('Forbidden');
       return;
     }
     let body;
