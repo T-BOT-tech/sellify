@@ -102,6 +102,12 @@ assert.ok(outbox.includes("if (isIdbUnavailable())"),
   'the IndexedDB-unavailable fallback must remain present');
 assert.ok(outbox.includes("journalWrite = writeOutboxRecoveryJournal(localEvents"),
   'the recovery journal write must run inside the IndexedDB transaction updater');
+assert.ok(outbox.includes("let journalSnapshot = localEvents"),
+  'the journal merge result must be captured separately from the pre-transaction local snapshot');
+assert.ok(outbox.includes("journalSnapshot = merged"),
+  'journal-only recovered entries must be included in the transaction input');
+assert.ok(outbox.includes("mergeOutboxSnapshots(indexedDbBaseline, journalSnapshot, Array.isArray(storedEvents) ? storedEvents : [])"),
+  'the committed IndexedDB snapshot must include entries recovered from an interrupted prior transaction');
 
 assert.ok(idb.includes("typeof additionalWrite.value === 'function'"),
   'the transaction helper must support a commit marker derived after the updater runs');
