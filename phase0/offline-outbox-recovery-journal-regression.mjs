@@ -52,6 +52,28 @@ assert.equal(OUTBOX_RECOVERY_COMMIT_KEY, 'ledger_outbox_recovery_commit_v1');
   assert.equal(called, true, 'browsers without Web Locks must retain the synchronous fallback path');
   assert.equal(result, 'fallback');
 }
+// Without Web Locks, async persistence callbacks must still serialize within
+// this tab so a later journal/IDB marker pair cannot overtake an earlier one.
+{
+  let active = 0;
+  let maxActive = 0;
+  const order = [];
+  const work = label => withOutboxPersistenceLock(async () => {
+    active += 1;
+    maxActive = Math.max(maxActive, active);
+    order.push(`start:${label}`);
+    await new Promise(resolve => setTimeout(resolve, 5));
+    order.push(`end:${label}`);
+    active -= 1;
+  }, null);
+  await Promise.all([work('first'), work('second'), work('third')]);
+  assert.equal(maxActive, 1, 'lockless async persistence callbacks in one tab must not overlap');
+  assert.deepEqual(order, [
+    'start:first', 'end:first',
+    'start:second', 'end:second',
+    'start:third', 'end:third',
+  ], 'lockless persistence callbacks must retain invocation order');
+}
 assert.match(outbox, /writeOutboxRecoveryJournal\(outboxEvents, \{\s*onMerged: merged => setOutboxEvents\(merged\),?\s*\}\);\s*if \(isIdbUnavailable\(\)\) \{\s*saveJSON\(STORAGE_KEYS\.outboxEvents, outboxEvents\);/,
   'the recovery journal must be written before the IndexedDB path, with localStorage fallback when IndexedDB is unavailable');
 assert.match(idb, /function updateInTransaction\(key, updater, additionalWrite = null\)[\s\S]*?store\.get\(key\)[\s\S]*?nextValue = updater\(request\.result !== undefined \? request\.result : null\)[\s\S]*?store\.put\(nextValue, key\)[\s\S]*?if \(additionalWrite\) store\.put\(additionalWrite\.value, additionalWrite\.key\)/,
