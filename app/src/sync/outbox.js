@@ -62,9 +62,9 @@ function persist() {
       return mergeOutboxSnapshots(indexedDbBaseline, journalSnapshot, Array.isArray(storedEvents) ? storedEvents : []);
     }, OUTBOX_RECOVERY_COMMIT_KEY, merged => ({
       version: 1,
-      attemptId: journalWrite?.attemptId,
-      previousSnapshotId: journalWrite?.previousSnapshotId,
-      journalWritten: journalWrite?.written === true,
+      attemptId: journalWrite.attemptId,
+      previousSnapshotId: journalWrite.previousSnapshotId,
+      journalWritten: journalWrite.written,
     })).then(merged => {
       resetOutboxIndexedDbBaseline(merged);
       resetOutboxRecoveryBaseline(merged);
