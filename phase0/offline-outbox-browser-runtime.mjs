@@ -15,6 +15,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (!pathname.startsWith('/app/src/')) {
+      console.error('Browser regression server rejected module path:', pathname);
       res.writeHead(404).end('Not found');
       return;
     }
@@ -23,7 +24,17 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(403).end('Forbidden');
       return;
     }
-    const body = await readFile(filePath);
+    let body;
+    try {
+      body = await readFile(filePath);
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        console.error('Browser regression module file missing:', pathname, filePath);
+        res.writeHead(404).end('Module file not found');
+        return;
+      }
+      throw error;
+    }
     res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
     res.end(body);
   } catch (error) {
