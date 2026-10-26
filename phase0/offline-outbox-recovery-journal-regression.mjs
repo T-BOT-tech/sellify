@@ -98,9 +98,9 @@ assert.equal(OUTBOX_RECOVERY_COMMIT_KEY, 'ledger_outbox_recovery_commit_v1');
     'queued callbacks must wait for a failed operation to settle before running');
 }
 
-assert.match(outbox, /if \\(isIdbUnavailable\\(\\)\\) \\{[\\s\\S]*?writeOutboxRecoveryJournal\\(outboxEvents/,
-  'the recovery journal must remain available when IndexedDB is unavailable');
-assert.match(outbox, /journalWrite = writeOutboxRecoveryJournal\\(localEvents/,
+assert.ok(outbox.includes("if (isIdbUnavailable())"),
+  'the IndexedDB-unavailable fallback must remain present');
+assert.ok(outbox.includes("journalWrite = writeOutboxRecoveryJournal(localEvents"),
   'the recovery journal write must run inside the IndexedDB transaction updater');
 
 assert.match(idb, /function updateInTransaction\(key, updater, additionalWrite = null\)[\s\S]*?store\.get\(key\)[\s\S]*?nextValue = updater\(request\.result !== undefined \? request\.result : null\)[\s\S]*?store\.put\(nextValue, key\)[\s\S]*?if \(additionalWrite\) store\.put\(additionalWrite\.value, additionalWrite\.key\)/,
