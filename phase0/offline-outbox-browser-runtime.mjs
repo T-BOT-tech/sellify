@@ -27,6 +27,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
     res.end(body);
   } catch (error) {
+    console.error('Browser regression server request failed:', req.url, error);
     res.writeHead(500).end(String(error));
   }
 });
@@ -38,6 +39,12 @@ try {
   const port = await listen();
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
+  context.on('page', page => {
+    page.on('pageerror', error => console.error('Browser page error:', error));
+    page.on('console', message => {
+      if (message.type() === 'error') console.error('Browser console error:', message.text());
+    });
+  });
   const first = await context.newPage();
   const second = await context.newPage();
   const base = `http://127.0.0.1:${port}`;
