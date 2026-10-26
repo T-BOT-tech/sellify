@@ -103,23 +103,6 @@ try {
   assert.deepEqual(concurrent.indexedDbIds, ['browser-tab-A', 'browser-tab-B']);
   assert.deepEqual(concurrent.journalIds, ['browser-tab-A', 'browser-tab-B']);
   assert.equal(concurrent.markerMatchesJournal, true);
-  await Promise.all([persist(first, 'browser-tab-A'), persist(second, 'browser-tab-B')]);
-  const concurrent = await first.evaluate(async () => {
-    const idb = await import('/app/src/storage/idb.js');
-    const journal = await import('/app/src/sync/outbox-recovery-journal.js');
-    const events = await idb.idbGet('ledger_outbox_events');
-    const marker = await idb.idbGet(journal.OUTBOX_RECOVERY_COMMIT_KEY);
-    const snapshot = JSON.parse(localStorage.getItem(journal.OUTBOX_RECOVERY_KEY));
-    return {
-      indexedDbIds: (events || []).map(event => event.eventId).sort(),
-      journalIds: (snapshot?.events || []).map(event => event.eventId).sort(),
-      markerMatchesJournal: marker?.journalWritten === true && marker?.attemptId === snapshot?.snapshotId,
-    };
-  });
-  assert.deepEqual(concurrent.indexedDbIds, ['browser-tab-A', 'browser-tab-B']);
-  assert.deepEqual(concurrent.journalIds, ['browser-tab-A', 'browser-tab-B']);
-  assert.equal(concurrent.markerMatchesJournal, true);
-
   // An updater failure after the journal write must abort the IDB value and marker.
   const aborted = await first.evaluate(async () => {
     const idb = await import('/app/src/storage/idb.js');
