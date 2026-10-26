@@ -83,6 +83,9 @@ jobs:
       - name: GAP-1.18U financial transition idempotency regression
         run: npm run gap-1.18:financial-transition-idempotency-test
 
+      - name: Browser module serving boundary regression
+        run: npm run test:browser-module-serving
+
       - name: Syntax check core entrypoints
         run: |
           node --check backend/server.js
