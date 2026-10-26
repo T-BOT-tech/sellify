@@ -98,8 +98,11 @@ assert.equal(OUTBOX_RECOVERY_COMMIT_KEY, 'ledger_outbox_recovery_commit_v1');
     'queued callbacks must wait for a failed operation to settle before running');
 }
 
-assert.match(outbox, /writeOutboxRecoveryJournal\(outboxEvents, \{\s*onMerged: merged => setOutboxEvents\(merged\),?\s*\}\);\s*if \(isIdbUnavailable\(\)\) \{\s*saveJSON\(STORAGE_KEYS\.outboxEvents, outboxEvents\);/,
-  'the recovery journal must be written before the IndexedDB path, with localStorage fallback when IndexedDB is unavailable');
+assert.match(outbox, /if \\(isIdbUnavailable\\(\\)\\) \\{[\\s\\S]*?writeOutboxRecoveryJournal\\(outboxEvents/,
+  'the recovery journal must remain available when IndexedDB is unavailable');
+assert.match(outbox, /journalWrite = writeOutboxRecoveryJournal\\(localEvents/,
+  'the recovery journal write must run inside the IndexedDB transaction updater');
+
 assert.match(idb, /function updateInTransaction\(key, updater, additionalWrite = null\)[\s\S]*?store\.get\(key\)[\s\S]*?nextValue = updater\(request\.result !== undefined \? request\.result : null\)[\s\S]*?store\.put\(nextValue, key\)[\s\S]*?if \(additionalWrite\) store\.put\(additionalWrite\.value, additionalWrite\.key\)/,
   'outbox reconciliation and its commit marker must be written in one IndexedDB transaction');
 assert.match(idb, /export function idbUpdateAndSet\(key, updater, sidecarKey, sidecarValue\)/,
