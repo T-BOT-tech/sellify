@@ -35,7 +35,7 @@ function persist() {
         onMerged: merged => setOutboxEvents(merged),
       });
       saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents);
-      return journalWrite;
+      return;
     }
     // Capture nested payloads too: the transaction's merge ancestor must not
     // alias mutable event data that changes while the IDB request is pending.
