@@ -60,7 +60,7 @@ function persist() {
       // committed without carrying that work into IDB would make hydration
       // treat the journal as already consumed and lose those entries on restart.
       return mergeOutboxSnapshots(indexedDbBaseline, journalSnapshot, Array.isArray(storedEvents) ? storedEvents : []);
-    }, OUTBOX_RECOVERY_COMMIT_KEY, merged => ({
+    }, OUTBOX_RECOVERY_COMMIT_KEY, () => ({
       version: 1,
       attemptId: journalWrite.attemptId,
       previousSnapshotId: journalWrite.previousSnapshotId,
