@@ -26,6 +26,24 @@ jobs:
       - name: Run L18 P2P Delivery product boundary regression
         run: npm run test:logistics-l18
 
+  logistics_exit_certification:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install root dependencies
+        run: npm install --ignore-scripts
+      - name: Audit Logistics master specification and authority boundaries
+        run: node phase0/logistics-master-specification-exit-audit.mjs
+      - name: Execute L1-L7 cumulative regression gate
+        run: npm run test:phase13.10.15
+      - name: Execute L8-L21 cumulative exit certification
+        run: npm run test:logistics-l8-l21-certification
+
   baseline:
     runs-on: ubuntu-latest
     strategy:
