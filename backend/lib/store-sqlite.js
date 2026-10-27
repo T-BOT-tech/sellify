@@ -9908,10 +9908,20 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
       throw Object.assign(new Error('Canonical order location is outside the organization scope'), { statusCode: 409, code: 'LOCATION_SCOPE_DENIED' });
     }
     const fulfillmentTarget = normalizedAction === 'OUT_FOR_DELIVERY' ? 'out_for_delivery' : normalizedAction === 'DELIVERED' ? 'delivered' : null;
+    // Proof may be supplied through this lifecycle endpoint on any transition;
+    // once captured, no transition may replace it before or after delivery.
+    const existingProof = fulfillment.proof_json
+      ? parseJSON(fulfillment.proof_json, fulfillment.proof_json)
+      : null;
+    if (existingProof != null && input.proof !== undefined
+      && JSON.stringify(existingProof) !== JSON.stringify(input.proof)) {
+      throw Object.assign(new Error('Delivery proof cannot be changed after capture'), {
+        statusCode: 409, code: 'DELIVERY_PROOF_IMMUTABLE',
+      });
+    }
     if (normalizedAction === 'DELIVERED') {
-      const existingProof = fulfillment.proof_json ? (() => { try { return JSON.parse(fulfillment.proof_json); } catch { return fulfillment.proof_json; } })() : null;
-      if (existingProof && JSON.stringify(existingProof) !== JSON.stringify(proofInput)) {
-        throw Object.assign(new Error('Delivery proof cannot be changed after capture'), { statusCode: 409, code: 'DELIVERY_PROOF_IMMUTABLE' });
+      if (existingProof != null && input.proof === undefined) {
+        // Existing proof is valid evidence; do not require a duplicate payload.
       }
     }
     if (fulfillmentTarget) {
