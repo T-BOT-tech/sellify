@@ -69,7 +69,7 @@ async function smokeServer({ label, args, extraEnv = {} }) {
     const pageErrors = [];
     const failedLocalScripts = [];
     const badLocalScriptResponses = [];
-    page.on('pageerror', error => pageErrors.push(error.message));
+    page.on('pageerror', error => pageErrors.push(error.stack || error.message));
     page.on('requestfailed', request => {
       const url = request.url();
       if (url.startsWith(baseUrl) && /\.(?:m?js)(?:[?#]|$)/i.test(new URL(url).pathname)) {
