@@ -396,19 +396,19 @@ assert.ok(assignCourierBody.includes('.all(selectedCourierUserId, String(chatId)
     && assignCourierBody.includes('hasCourierLocationGrant(couriers, locationId)'),
   'initial assignment must validate all active target courier grants');
 
-const assignmentTransitionStart = store.indexOf('export async function transitionDeliveryAssignment(');
-const assignmentTransitionEnd = store.indexOf('export async function ', assignmentTransitionStart + 40);
-assert.ok(assignmentTransitionStart >= 0 && assignmentTransitionEnd > assignmentTransitionStart,
+const assignmentScopeTransitionStart = store.indexOf('export async function transitionDeliveryAssignment(');
+const assignmentScopeTransitionEnd = store.indexOf('export async function ', assignmentScopeTransitionStart + 40);
+assert.ok(assignmentScopeTransitionStart >= 0 && assignmentScopeTransitionEnd > assignmentScopeTransitionStart,
   'canonical delivery assignment transition must remain explicit');
-const assignmentTransitionBody = store.slice(assignmentTransitionStart, assignmentTransitionEnd);
-assert.ok(assignmentTransitionBody.includes('.all(actorUserId, String(chatId))')
-    && assignmentTransitionBody.includes('hasCourierLocationGrant(courierMemberships, assignedLocationId)'),
+const assignmentScopeTransitionBody = store.slice(assignmentScopeTransitionStart, assignmentScopeTransitionEnd);
+assert.ok(assignmentScopeTransitionBody.includes('.all(actorUserId, String(chatId))')
+    && assignmentScopeTransitionBody.includes('hasCourierLocationGrant(courierMemberships, assignedLocationId)'),
   'courier lifecycle commands must validate all active actor grants');
-assert.ok(assignmentTransitionBody.includes('freshCourierGrants')
-    && assignmentTransitionBody.includes('hasCourierLocationGrant(freshCourierGrants, locationId)'),
+assert.ok(assignmentScopeTransitionBody.includes('freshCourierGrants')
+    && assignmentScopeTransitionBody.includes('hasCourierLocationGrant(freshCourierGrants, locationId)'),
   'exception reassignment must validate all target courier grants');
-assert.ok(assignmentTransitionBody.includes('courierGrants')
-    && assignmentTransitionBody.includes('hasCourierLocationGrant(courierGrants, locationId)'),
+assert.ok(assignmentScopeTransitionBody.includes('courierGrants')
+    && assignmentScopeTransitionBody.includes('hasCourierLocationGrant(courierGrants, locationId)'),
   'normal reassignment must validate all target courier grants');
 
 // Workload projection must honor every active courier location grant too.
