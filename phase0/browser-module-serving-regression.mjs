@@ -29,8 +29,13 @@ function fileForBrowserUrl(urlPath) {
 
 function importsFrom(source) {
   const specs = [];
-  const expression = /^\s*(?:import|export)\s+(?:[^'";]*?\s+from\s*)?['"]([^'"]+)['"]/gm;
-  for (const match of source.matchAll(expression)) specs.push(match[1]);
+  const staticExpression = /^\\s*(?:import|export)\\s+(?:[^'\";]*?\\s+from\\s*)?['\"]([^'\"]+)['\"]/gm;
+  for (const match of source.matchAll(staticExpression)) specs.push(match[1]);
+
+  // Follow literal dynamic imports too. Runtime-computed specifiers cannot be
+  // resolved statically, but literal imports must obey the same allowlist graph.
+  const dynamicExpression = /\\bimport\\s*\\(\\s*['\"]([^'\"]+)['\"]\\s*\\)/g;
+  for (const match of source.matchAll(dynamicExpression)) specs.push(match[1]);
   return specs;
 }
 
