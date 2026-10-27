@@ -29,6 +29,11 @@ initializeOutboxRecoveryBaseline();
 // additions and edits survive; never replace the whole in-memory queue with a
 // potentially stale shared snapshot. The next normal persist still commits the
 // reconciled result through the existing IndexedDB authority.
+let lastObservedSharedOutboxSnapshot = getOutboxRecoveryBaseline() || outboxEvents;
+
+// Keep this observation baseline separate from the persistence journal's
+// baseline. Updating the latter during an in-flight write can make that write's
+// captured local snapshot look like it deleted events added by another tab.
 if (typeof globalThis.addEventListener === 'function') {
   globalThis.addEventListener('storage', event => {
     if (event.key !== 'sellify.outbox.recovery.v1' || !event.newValue) return;
@@ -38,13 +43,9 @@ if (typeof globalThis.addEventListener === 'function') {
         ? parsed
         : parsed?.version === 1 && Array.isArray(parsed.events) ? parsed.events : null;
       if (!sharedEvents) return;
-      const baseline = getOutboxRecoveryBaseline() || outboxEvents;
-      const reconciled = mergeOutboxSnapshots(baseline, outboxEvents, sharedEvents);
+      const reconciled = mergeOutboxSnapshots(lastObservedSharedOutboxSnapshot, outboxEvents, sharedEvents);
+      lastObservedSharedOutboxSnapshot = sharedEvents;
       setOutboxEvents(reconciled);
-      // Keep the shared snapshot as the common ancestor. `reconciled` may
-      // include unsaved local additions; treating those as part of the shared
-      // baseline would make the next journal merge misread them as deletions.
-      resetOutboxRecoveryBaseline(sharedEvents, typeof parsed?.snapshotId === 'string' ? parsed.snapshotId : null);
     } catch (error) {
       console.error('Outbox cross-tab snapshot reconciliation failed', error);
     }
