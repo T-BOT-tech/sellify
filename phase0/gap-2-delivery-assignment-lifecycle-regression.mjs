@@ -382,13 +382,14 @@ const courierListEnd = store.indexOf('export async function getDeliveryAssignmen
 assert.ok(courierListStart >= 0 && courierListEnd > courierListStart,
   'courier assignment listing must remain explicit');
 const courierList = store.slice(courierListStart, courierListEnd);
-assert.match(courierList, /SELECT mr\\.scope_type, mr\\.scope_id[\\s\\S]*?\\.all\\(actorUserId, String\\(chatId\\)\\)/,
+assert.ok(courierList.includes('SELECT mr.scope_type, mr.scope_id')
+    && courierList.includes('.all(actorUserId, String(chatId))'),
   'courier workload must load all active role grants');
-assert.match(courierList, /courierMemberships\\.some\\(membership => membership\\.scope_type !== 'LOCATION'\\)/,
+assert.ok(courierList.includes("courierMemberships.some(membership => membership.scope_type !== 'LOCATION')"),
   'a broad active grant must preserve organization-level workload access');
-assert.match(courierList, /scopedLocations\\.includes\\(String\\(locationId\\)\\)/,
+assert.ok(courierList.includes('scopedLocations.includes(String(locationId))'),
   'requested location filters must be checked against every granted location');
-assert.match(courierList, /da\\.location_id IN \\(\\$\\{scopedLocations\\.map\\(\\(\\) => '\\?'\\)\\.join\\(', '\\)\\}\\)/,
+assert.ok(courierList.includes("da.location_id IN (${scopedLocations.map(() => '?').join(', ')})"),
   'courier workload must include all granted locations without exposing other branches');
 
 console.log('GAP-2 Delivery Assignment Lifecycle Regression: PASS');
