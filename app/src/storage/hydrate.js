@@ -69,11 +69,16 @@ function restoreOutboxRecoveryJournal({ indexedDbCommit = null } = {}) {
   return restored;
 }
 
-function restoreOutboxFallbackOperations() {
+function restoreOutboxFallbackOperations({ persistLocalFallback = true } = {}) {
   return restoreOutboxRecoveryOperations({
     events: outboxEvents,
     setOutboxEvents,
-    saveOutbox: recovered => saveJSON(STORAGE_KEYS.outboxEvents, recovered),
+    // When IndexedDB is available, the caller checkpoints replayed operations
+    // in the atomic outbox + commit-marker transaction below. Do not launch a
+    // separate fire-and-forget save that can poison the session on abort.
+    saveOutbox: persistLocalFallback
+      ? recovered => saveJSON(STORAGE_KEYS.outboxEvents, recovered)
+      : undefined,
   });
 }
 
@@ -169,7 +174,7 @@ export async function hydrateFromIndexedDB() {
 
   // Replay a prior localStorage-only session over this IDB snapshot, then
   // checkpoint atomically; keep log keys until the transaction commits.
-  const fallbackRecovery = restoreOutboxFallbackOperations();
+  const fallbackRecovery = restoreOutboxFallbackOperations({ persistLocalFallback: false });
   if (fallbackRecovery.keys.length) {
     const indexedDbBaseline = getOutboxIndexedDbBaseline() || [];
     const recoveredEvents = fallbackRecovery.events;
