@@ -269,6 +269,7 @@ export {
   saveStockAdjustModal, openReceiveModal, closeReceiveModal, saveReceiveModal, onWarehouseToggle,
   isLogisticsEnabled, nextFulfillmentStatus, isFulfillmentFinal, fulfillmentStatusLabel,
   advanceFulfillmentOrder, selectedFulfillmentType, setSelectedFulfillmentType,
+  canonicalDeliveryAssignment, refreshDeliveryAssignments, transitionDeliveryAssignmentForOrder,
   applyLogisticsUI, renderOrderFulfillmentPicker, setFulfillmentType, renderLogistics,
   restaurantTables, selectedOrderTableId, setSelectedOrderTableId, selectedOrderCourse,
   setSelectedOrderCourse, saveTables, addTable, openTableModal, closeTableModal, saveTableModal,
