@@ -10085,6 +10085,20 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
       db.exec('COMMIT');
       return fulfillmentFromRow(row);
     }
+
+    // Delivery proof is immutable once captured, regardless of whether the
+    // caller uses the courier-assignment lifecycle or generic fulfillment API.
+    // Keep this check after durable replay so a legitimate retry stays replayable.
+    const existingDeliveryProof = row.proof_json
+      ? parseJSON(row.proof_json, row.proof_json)
+      : null;
+    if (existingDeliveryProof != null && input.proof !== undefined
+      && JSON.stringify(existingDeliveryProof) !== JSON.stringify(input.proof)) {
+      throw Object.assign(new Error('Delivery proof cannot be changed after capture'), {
+        statusCode: 409, code: 'DELIVERY_PROOF_IMMUTABLE',
+      });
+    }
+
     if (row.fulfillment_type !== type) throw Object.assign(new Error('Fulfillment type cannot change'), { statusCode: 409, code: 'FULFILLMENT_TYPE_IMMUTABLE' });
     const current = normalizeCoreFulfillmentStatus(row.status);
     // Assignment lifecycle owns progress whenever an active courier assignment
