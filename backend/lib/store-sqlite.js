@@ -9067,21 +9067,28 @@ export async function assertCourierOwnsDelivery(chatId, serverOrderId, actor) {
   if (!tenant?.organization_id || !actorUserId) {
     throw Object.assign(new Error('Courier identity is required'), { statusCode: 403, code: 'COURIER_IDENTITY_REQUIRED' });
   }
-  const membership = db.prepare(`
-    SELECT m.user_id, mr.scope_type, mr.scope_id
+  const memberships = db.prepare(`
+    SELECT mr.scope_type, mr.scope_id
     FROM memberships m
     JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
     WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
       AND mr.role_id = 'logistics_courier'
-  `).get(actorUserId, String(chatId));
-  if (!membership) {
+  `).all(actorUserId, String(chatId));
+  if (!memberships.length) {
     throw Object.assign(new Error('Active logistics courier role is required'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
   }
   const assignment = await getDeliveryAssignment(chatId, serverOrderId, actor);
   if (!assignment || String(assignment.courier_user_id) !== actorUserId) {
     throw Object.assign(new Error('Courier is not assigned to this delivery'), { statusCode: 403, code: 'COURIER_ASSIGNMENT_REQUIRED' });
   }
-  if (membership.scope_type === 'LOCATION' && String(membership.scope_id || '') !== String(assignment.location_id || '')) {
+  // A courier can hold separate location-scoped grants for multiple branches.
+  // Do not let SQLite's arbitrary first-row choice deny a valid grant or skip
+  // a matching grant when several active contextual roles exist.
+  const hasLocationAccess = memberships.some(membership =>
+    membership.scope_type !== 'LOCATION'
+      || String(membership.scope_id || '') === String(assignment.location_id || '')
+  );
+  if (!hasLocationAccess) {
     throw Object.assign(new Error('Courier role is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
   }
   if (String(assignment.organization_id) !== String(tenant.organization_id)) {
