@@ -102,6 +102,7 @@
     "test:order-sync-idempotency": "node phase0/order-sync-idempotency-regression.mjs",
     "test:browser-module-serving": "node phase0/browser-module-serving-regression.mjs",
     "test:browser-module-serving-http": "node phase0/browser-module-serving-http-regression.mjs",
+    "test:browser-module-serving-production-http": "node phase0/browser-module-serving-production-http-regression.mjs",
     "test:service-catalog-contract": "node phase0/first-experience-service-catalog-contract-regression.mjs",
     "test:service-booking-contract": "node phase0/service-booking-contract-regression.mjs",
     "test:service-booking-persistence": "node phase0/service-booking-persistence-regression.mjs",
