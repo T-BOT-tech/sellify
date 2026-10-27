@@ -21,6 +21,7 @@ import {
   restoreOutboxRecoveryOperations,
   writeOutboxRecoveryJournal,
   OUTBOX_RECOVERY_COMMIT_KEY,
+  OUTBOX_FALLBACK_CHECKPOINT_KEY,
   resetOutboxIndexedDbBaseline,
   resetOutboxRecoveryBaseline,
   restoreOutboxRecoveryJournal as restoreRecoveryJournal,
@@ -69,9 +70,10 @@ function restoreOutboxRecoveryJournal({ indexedDbCommit = null } = {}) {
   return restored;
 }
 
-function restoreOutboxFallbackOperations({ persistLocalFallback = true } = {}) {
+function restoreOutboxFallbackOperations({ persistLocalFallback = true, checkpointedOperationIds = [] } = {}) {
   return restoreOutboxRecoveryOperations({
     events: outboxEvents,
+    checkpointedOperationIds,
     setOutboxEvents,
     // When IndexedDB is available, the caller checkpoints replayed operations
     // in the atomic outbox + commit-marker transaction below. Do not launch a
@@ -129,7 +131,7 @@ export async function hydrateFromIndexedDB() {
 
   let fromIdb;
   try {
-    fromIdb = await idbGetAll([...Object.values(STORAGE_KEYS), OUTBOX_RECOVERY_COMMIT_KEY]);
+    fromIdb = await idbGetAll([...Object.values(STORAGE_KEYS), OUTBOX_RECOVERY_COMMIT_KEY, OUTBOX_FALLBACK_CHECKPOINT_KEY]);
   } catch (e) {
     console.error('IndexedDB hydration read failed, restoring local outbox journal and keeping localStorage-loaded values', e);
     restoreOutboxRecoveryJournal();
@@ -174,7 +176,9 @@ export async function hydrateFromIndexedDB() {
 
   // Replay a prior localStorage-only session over this IDB snapshot, then
   // checkpoint atomically; keep log keys until the transaction commits.
-  const fallbackRecovery = restoreOutboxFallbackOperations({ persistLocalFallback: false });
+  const checkpointedIds = Array.isArray(fromIdb[OUTBOX_FALLBACK_CHECKPOINT_KEY]) ? fromIdb[OUTBOX_FALLBACK_CHECKPOINT_KEY] : [];
+  const fallbackRecovery = restoreOutboxFallbackOperations({ persistLocalFallback: false, checkpointedOperationIds: checkpointedIds });
+  if (fallbackRecovery.checkpointedKeys?.length) removeOutboxRecoveryOperations(fallbackRecovery.checkpointedKeys);
   if (fallbackRecovery.keys.length) {
     const indexedDbBaseline = getOutboxIndexedDbBaseline() || [];
     const recoveredEvents = fallbackRecovery.events;
@@ -185,12 +189,15 @@ export async function hydrateFromIndexedDB() {
         onMerged: merged => { journalSnapshot = merged; setOutboxEvents(merged); },
       });
       return mergeOutboxSnapshots(indexedDbBaseline, journalSnapshot, Array.isArray(storedEvents) ? storedEvents : []);
-    }, OUTBOX_RECOVERY_COMMIT_KEY, () => ({
-      version: 1,
-      attemptId: journalWrite.attemptId,
-      previousSnapshotId: journalWrite.previousSnapshotId,
-      journalWritten: journalWrite.written,
-    })).then(merged => {
+    }, [
+      { key: OUTBOX_RECOVERY_COMMIT_KEY, value: () => ({
+        version: 1,
+        attemptId: journalWrite.attemptId,
+        previousSnapshotId: journalWrite.previousSnapshotId,
+        journalWritten: journalWrite.written,
+      }) },
+      { key: OUTBOX_FALLBACK_CHECKPOINT_KEY, value: () => [...new Set([...checkpointedIds, ...(fallbackRecovery.operationIds || [])])] },
+    ]).then(merged => {
       setOutboxEvents(merged);
       resetOutboxIndexedDbBaseline(merged);
       resetOutboxRecoveryBaseline(merged);
