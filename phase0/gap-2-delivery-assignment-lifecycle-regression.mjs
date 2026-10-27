@@ -369,7 +369,7 @@ assert.ok(courierOwnershipStart >= 0 && courierOwnershipEnd > courierOwnershipSt
 const courierOwnership = store.slice(courierOwnershipStart, courierOwnershipEnd);
 assert.match(courierOwnership, /SELECT mr\.scope_type, mr\.scope_id[\s\S]*?\.all\(actorUserId, String\(chatId\)\)/,
   'courier ownership must load all active location-scoped role grants');
-assert.match(courierOwnership, /memberships\.some\(membership =>[\s\S]*?membership\.scope_type !== 'LOCATION'[\s\S]*?membership\.scope_id[\s\S]*?assignment\.location_id/,
+assert.match(courierOwnership, /hasCourierLocationGrant\(memberships, assignment\.location_id\)/,
   'a matching location-scoped grant must authorize access even if another grant appears first');
 assert.match(courierOwnership, /if \(!hasLocationAccess\)[\s\S]*?COURIER_SCOPE_DENIED/,
   'courier requests must still fail closed when no active grant covers the assigned location');
