@@ -86,6 +86,9 @@ jobs:
       - name: Browser module serving boundary regression
         run: npm run test:browser-module-serving
 
+      - name: Browser module serving HTTP regression
+        run: npm run test:browser-module-serving-http
+
       - name: Syntax check core entrypoints
         run: |
           node --check backend/server.js
