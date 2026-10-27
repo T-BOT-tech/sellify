@@ -39,7 +39,7 @@ async function waitForServer(baseUrl, child, getOutput) {
   throw new Error(`server did not become ready: ${lastError?.message || 'timeout'}; ${getOutput()}`);
 }
 
-async function smokeServer({ label, command, args, extraEnv = {}, dataDir }) {
+async function smokeServer({ label, args, extraEnv = {} }) {
   const port = await reservePort();
   const baseUrl = `http://${HOST}:${port}`;
   const child = spawn(process.execPath, args, {
@@ -122,7 +122,6 @@ try {
   await smokeServer({
     label: 'production server',
     args: ['backend/server.js'],
-    dataDir,
     extraEnv: {
       SELLIFY_DATA_DIR: dataDir,
       SELLIFY_DB_PATH: path.join(dataDir, 'smoke.sqlite'),
