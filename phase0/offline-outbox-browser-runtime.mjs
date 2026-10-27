@@ -430,9 +430,13 @@ try {
       { eventId: 'partial-cleanup-a', status: 'pending' },
       { eventId: 'partial-cleanup-b', status: 'pending' },
     ], { storage: localStorage, writerId: 'partial-cleanup-regression-writer' });
+    const writerId = 'partial-cleanup-regression-writer';
     const keys = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
-      .filter(key => typeof key === 'string' && key.startsWith(prefix)
-        && (localStorage.getItem(key) || '').includes('partial-cleanup-'));
+      .filter(key => {
+        if (typeof key !== 'string' || !key.startsWith(prefix)) return false;
+        try { return JSON.parse(localStorage.getItem(key) || 'null')?.writerId === writerId; }
+        catch { return false; }
+      });
     if (keys.length !== 2) throw new Error(`Expected two partial-cleanup records, found ${keys.length}`);
     const failKey = keys[1];
     const originalRemoveItem = Storage.prototype.removeItem;
