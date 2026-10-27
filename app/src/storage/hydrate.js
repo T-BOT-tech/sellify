@@ -12,6 +12,24 @@
 // call-site changes (this is Rule 1 from the modularization plan, §1).
 import { STORAGE_KEYS, DEFAULT_PAYMENT_METHODS, defaultSyncServerUrl } from '../constants.js';
 import { idbGetAll, idbUpdate, idbUpdateAndSet, isIdbUnavailable } from './idb.js';
+
+// Return only operation IDs whose exact localStorage records are confirmed
+// absent. Cleanup can fail partway through, so a single boolean would retain
+// checkpoint IDs for records that were already removed.
+function getRemovedOutboxFallbackOperationIds(keys) {
+  const removedIds = new Set();
+  try {
+    for (const key of keys || []) {
+      if (typeof key !== 'string' || !key.startsWith('sellify.outbox.recovery.log.v1:')) continue;
+      if (globalThis.localStorage.getItem(key) === null) {
+        removedIds.add(key.slice('sellify.outbox.recovery.log.v1:'.length));
+      }
+    }
+  } catch (error) {
+    console.error('Could not inspect outbox fallback cleanup state; retaining checkpoint metadata', error);
+  }
+  return removedIds;
+}
 import { runLedgerMigration, migrateProductMoney, migrateOrderMoney } from './migration.js';
 import { saveJSON } from './json.js';
 import {
@@ -179,13 +197,11 @@ export async function hydrateFromIndexedDB() {
   let checkpointedIds = Array.isArray(fromIdb[OUTBOX_FALLBACK_CHECKPOINT_KEY]) ? fromIdb[OUTBOX_FALLBACK_CHECKPOINT_KEY] : [];
   const fallbackRecovery = restoreOutboxFallbackOperations({ persistLocalFallback: false, checkpointedOperationIds: checkpointedIds });
   if (fallbackRecovery.checkpointedKeys?.length) {
-    const cleaned = removeOutboxRecoveryOperations(fallbackRecovery.checkpointedKeys);
-    if (cleaned) {
-      const cleanedIds = new Set(fallbackRecovery.checkpointedKeys
-        .filter(key => typeof key === 'string' && key.startsWith('sellify.outbox.recovery.log.v1:'))
-        .map(key => key.slice('sellify.outbox.recovery.log.v1:'.length)));
+    removeOutboxRecoveryOperations(fallbackRecovery.checkpointedKeys);
+    const cleanedIds = getRemovedOutboxFallbackOperationIds(fallbackRecovery.checkpointedKeys);
+    if (cleanedIds.size) {
       checkpointedIds = checkpointedIds.filter(id => !cleanedIds.has(id));
-      // Prune only IDs whose exact recovery records were successfully removed.
+      // Prune only IDs whose exact recovery records are confirmed absent.
       // An atomic IDB updater preserves unrelated checkpoint IDs committed by
       // another tab while this hydration was running.
       try {
@@ -218,9 +234,9 @@ export async function hydrateFromIndexedDB() {
       setOutboxEvents(merged);
       resetOutboxIndexedDbBaseline(merged);
       resetOutboxRecoveryBaseline(merged);
-      const cleaned = removeOutboxRecoveryOperations(fallbackRecovery.keys);
-      if (cleaned) {
-        const cleanedIds = new Set(fallbackRecovery.operationIds || []);
+      removeOutboxRecoveryOperations(fallbackRecovery.keys);
+      const cleanedIds = getRemovedOutboxFallbackOperationIds(fallbackRecovery.keys);
+      if (cleanedIds.size) {
         try {
           await idbUpdate(OUTBOX_FALLBACK_CHECKPOINT_KEY, current =>
             (Array.isArray(current) ? current : []).filter(id => !cleanedIds.has(id)));
