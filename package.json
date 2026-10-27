@@ -424,6 +424,7 @@
     "test:service-catalog-http": "node phase0/first-experience-service-catalog-http-regression.mjs",
     "test:service-catalog-frontend-sync": "node phase0/first-experience-service-catalog-frontend-sync-regression.mjs",
     "test:offline-outbox-recovery-journal": "node phase0/offline-outbox-recovery-journal-regression.mjs",
+    "test:outbox-localstorage-fallback-race": "node phase0/outbox-localstorage-fallback-race-regression.mjs",
     "test:offline-outbox-browser-runtime": "node phase0/offline-outbox-browser-runtime.mjs"
   },
   "engines": {
