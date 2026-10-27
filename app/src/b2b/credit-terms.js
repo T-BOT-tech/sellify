@@ -74,7 +74,5 @@ export function bindCreditTermsUI() {
       list.insertAdjacentHTML('afterbegin', `<div class="empty">${escapeHtml(error.message || 'Credit-term update failed.')}</div>`);
     }
   });
-  // Multiple module entrypoints share state.js. Defer this optional read until
-  // the bootstrap graph has finished initializing its live config binding.
-  setTimeout(() => { loadBusinessCreditCustomers().catch(() => {}); }, 0);
+  loadBusinessCreditCustomers();
 }
