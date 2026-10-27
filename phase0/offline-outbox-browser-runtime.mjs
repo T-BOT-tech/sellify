@@ -508,6 +508,71 @@ try {
   assert.deepEqual(finalCheckpointIds.ids, [], 'checkpoint ledger should be empty after all records are cleaned');
   await migrationContext.close();
 
+  // Exercise the actual production enqueue -> persist branch with both IndexedDB
+  // and Web Locks unavailable, then restore IndexedDB and migrate the durable log.
+  const fallbackContext = await browser.newContext();
+  const fallbackPage = await fallbackContext.newPage();
+  await fallbackPage.goto(base);
+  const noIdbFallback = await fallbackPage.evaluate(async () => {
+    localStorage.clear();
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
+    const idb = await import('/app/src/storage/idb.js');
+    const state = await import('/app/src/state.js');
+    const journal = await import('/app/src/sync/outbox-recovery-journal.js');
+    journal.resetOutboxRecoveryBaseline([]);
+    journal.resetOutboxIndexedDbBaseline([]);
+    idb.setIdbUnavailable(true);
+    const outbox = await import('/app/src/sync/outbox.js');
+    outbox.enqueueEvent('fallback-runtime-regression', { sequence: 1 }, { eventId: 'runtime-fallback-A' });
+    outbox.enqueueEvent('fallback-runtime-regression', { sequence: 2 }, { eventId: 'runtime-fallback-B' });
+    // Model completion/removal in the live app state. The next normal enqueue
+    // persists that delta through the same production fallback branch.
+    state.setOutboxEvents(state.outboxEvents.filter(event => event.eventId !== 'runtime-fallback-A'));
+    outbox.enqueueEvent('fallback-runtime-regression', { sequence: 3 }, { eventId: 'runtime-fallback-C' });
+    const keys = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
+      .filter(key => typeof key === 'string' && key.startsWith(journal.OUTBOX_FALLBACK_LOG_PREFIX));
+    const records = keys.map(key => JSON.parse(localStorage.getItem(key)));
+    const restored = journal.restoreOutboxRecoveryOperations({ storage: localStorage, events: [] });
+    return {
+      locksUnavailable: typeof navigator.locks?.request !== 'function',
+      idbUnavailable: idb.isIdbUnavailable(),
+      records: records.map(record => ({ eventId: record.eventId, kind: record.kind })),
+      restoredIds: restored.events.map(event => event.eventId).sort(),
+      localSnapshotIds: state.outboxEvents.map(event => event.eventId).sort(),
+    };
+  });
+  assert.equal(noIdbFallback.locksUnavailable, true);
+  assert.equal(noIdbFallback.idbUnavailable, true);
+  assert.ok(noIdbFallback.records.some(record => record.eventId === 'runtime-fallback-A' && record.kind === 'delete'),
+    'real no-IDB/no-Web-Locks persistence should append a tombstone for a removed event');
+  assert.deepEqual(noIdbFallback.restoredIds, ['runtime-fallback-B', 'runtime-fallback-C'],
+    'append-only fallback replay must retain current events without resurrecting the deleted event');
+  assert.deepEqual(noIdbFallback.localSnapshotIds, ['runtime-fallback-B', 'runtime-fallback-C']);
+
+  const fallbackMigration = await fallbackPage.evaluate(async () => {
+    const idb = await import('/app/src/storage/idb.js');
+    const hydration = await import('/app/src/storage/hydrate.js');
+    const journal = await import('/app/src/sync/outbox-recovery-journal.js');
+    idb.setIdbUnavailable(false);
+    await hydration.hydrateFromIndexedDB();
+    const persisted = await idb.idbGet('ledger_outbox_events') || [];
+    const remainingKeys = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
+      .filter(key => typeof key === 'string' && key.startsWith(journal.OUTBOX_FALLBACK_LOG_PREFIX));
+    const checkpointIds = await idb.idbGet(journal.OUTBOX_FALLBACK_CHECKPOINT_KEY) || [];
+    return {
+      persistedIds: persisted.map(event => event.eventId).sort(),
+      remainingKeys,
+      checkpointIds,
+    };
+  });
+  assert.deepEqual(fallbackMigration.persistedIds, ['runtime-fallback-B', 'runtime-fallback-C'],
+    'the production fallback log must migrate into IndexedDB without resurrecting deleted events');
+  assert.deepEqual(fallbackMigration.remainingKeys, [],
+    'fallback records should be removed after the IndexedDB checkpoint commits');
+  assert.deepEqual(fallbackMigration.checkpointIds, [],
+    'checkpoint IDs should be pruned after successful fallback-record cleanup');
+  await fallbackContext.close();
+
   console.log('PASS: concurrent browser pages preserve outbox events; aborted recovery and migration writes remain recoverable.');
   await context.close();
 } catch (error) {
