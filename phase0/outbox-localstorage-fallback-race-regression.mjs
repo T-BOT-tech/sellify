@@ -72,7 +72,7 @@ function compareText(left, right) { return left === right ? 0 : left < right ? -
   appendOutboxRecoveryOperations([], { storage, writerId: 'writer-b' });
   storage.setItem(`${OUTBOX_FALLBACK_LOG_PREFIX}stale-put`, JSON.stringify({
     version: 1, operationId: 'writer-c:1', writerId: 'writer-c', sequence: 1,
-    counter: 999, eventId: 'done', kind: 'put', event: done,
+    counter: 1, eventId: 'done', kind: 'put', event: done,
   }));
   const restored = restoreOutboxRecoveryOperations({ storage, events: [done] });
   assert.deepEqual(restored.events, []);
