@@ -72,7 +72,7 @@ try {
   ]) {
     const response = await fetch(`${baseUrl}${pathname}`);
     assert.notEqual(response.status, 200, `sensitive or invalid path is not served: ${pathname}`);
-    assert.notMatch(response.headers.get('content-type') || '', /^application\/javascript\b/i,
+    assert.ok(!/^application\/javascript\b/i.test(response.headers.get('content-type') || ''),
       `rejected path is not returned as JavaScript: ${pathname}`);
   }
 
