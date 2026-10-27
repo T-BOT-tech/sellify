@@ -362,7 +362,6 @@ try {
       persistedEventIds: persisted.map(item => item.eventId),
       inMemoryEventIds: (await import('/app/src/state.js')).outboxEvents?.map(item => item.eventId) || [],
       fallbackRecords,
-      browserErrors: migrationBrowserErrors,
     };
   });
   assert.ok(migrationAbort.logCountBefore > 0, 'migration test must begin with a durable append-log record');
