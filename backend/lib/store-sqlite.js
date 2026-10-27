@@ -8960,22 +8960,28 @@ export async function listDeliveryAssignments(chatId, actor = null, filters = {}
 
   if (isCourier) {
     const actorUserId = String(actor?.userId || '').trim();
-    const courierMembership = db.prepare(`
-      SELECT m.user_id, mr.scope_type, mr.scope_id
+    const courierMemberships = db.prepare(`
+      SELECT mr.scope_type, mr.scope_id
       FROM memberships m
       JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
       WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
         AND mr.role_id = 'logistics_courier'
-    `).get(actorUserId, String(chatId));
-    if (!courierMembership) throw Object.assign(new Error('Active logistics courier role is required'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
-    if (courierMembership.scope_type === 'LOCATION') {
-      const scopedLocation = String(courierMembership.scope_id || '');
-      courierLocationScoped = true;
-      if (locationId && String(locationId) !== scopedLocation) {
+    `).all(actorUserId, String(chatId));
+    if (!courierMemberships.length) throw Object.assign(new Error('Active logistics courier role is required'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
+
+    // Match the command authorization boundary: any broad grant covers the
+    // organization; otherwise, evaluate every active location-scoped grant.
+    const hasBroadCourierScope = courierMemberships.some(membership => membership.scope_type !== 'LOCATION');
+    if (!hasBroadCourierScope) {
+      const scopedLocations = [...new Set(courierMemberships
+        .filter(membership => membership.scope_type === 'LOCATION' && membership.scope_id != null)
+        .map(membership => String(membership.scope_id)))];
+      if (!scopedLocations.length || (locationId && !scopedLocations.includes(String(locationId)))) {
         throw Object.assign(new Error('Courier workload is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
       }
-      clauses.push('da.location_id = ?');
-      params.push(scopedLocation);
+      courierLocationScoped = true;
+      clauses.push(`da.location_id IN (${scopedLocations.map(() => '?').join(', ')})`);
+      params.push(...scopedLocations);
     }
   }
   if (status && ['ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY'].includes(status)) {
