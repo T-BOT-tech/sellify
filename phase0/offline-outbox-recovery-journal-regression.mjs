@@ -109,7 +109,7 @@ assert.ok(outbox.includes("journalSnapshot = merged"),
 assert.ok(outbox.includes("mergeOutboxSnapshots(indexedDbBaseline, journalSnapshot, Array.isArray(storedEvents) ? storedEvents : [])"),
   'the committed IndexedDB snapshot must include entries recovered from an interrupted prior transaction');
 
-assert.ok(idb.includes("typeof additionalWrite.value === 'function'"),
+assert.ok(idb.includes("typeof sidecar.value === 'function'"),
   'the transaction helper must support a commit marker derived after the updater runs');
 assert.ok(idb.includes("export function idbUpdateAndSet(key, updater, sidecarKey, sidecarValue)"),
   'the transaction helper must expose an atomic outbox-plus-marker write');
