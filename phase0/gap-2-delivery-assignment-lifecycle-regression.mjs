@@ -41,6 +41,16 @@ assert.match(fulfillmentTransition, /INSERT INTO fulfillment_commands/,
   'successful fulfillment commands must be recorded transactionally');
 assert.match(fulfillmentTransition, /ROLLBACK/,
   'failed fulfillment transitions must roll back the write transaction');
+assert.match(fulfillmentTransition, /existingDeliveryProof != null[\\s\\S]*?input\\.proof !== undefined[\\s\\S]*?DELIVERY_PROOF_IMMUTABLE/,
+  'generic fulfillment transitions must not overwrite captured delivery proof');
+const fulfillmentReplayBoundary = fulfillmentTransition.indexOf("if (String(row.last_command_key || '') === commandKey)");
+const deliveryProofMutationGuard = fulfillmentTransition.indexOf('const existingDeliveryProof');
+const fulfillmentPersistenceWrite = fulfillmentTransition.indexOf('UPDATE fulfillments');
+assert.ok(fulfillmentReplayBoundary >= 0
+    && deliveryProofMutationGuard > fulfillmentReplayBoundary
+    && fulfillmentPersistenceWrite > deliveryProofMutationGuard,
+  'delivery proof immutability must be enforced after durable replay and before persistence');
+
 assert.match(fulfillmentTransition, /applyCoreFulfillmentInventoryConsequence\(key, updated, freshOrderJson, actor\)/,
   'fulfillment inventory consequences must use the order re-read inside the write transaction');
 
