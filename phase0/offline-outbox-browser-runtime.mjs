@@ -431,13 +431,20 @@ try {
       { eventId: 'partial-cleanup-b', status: 'pending' },
     ], { storage: localStorage, writerId: 'partial-cleanup-regression-writer' });
     const writerId = 'partial-cleanup-regression-writer';
-    const keys = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
-      .filter(key => {
-        if (typeof key !== 'string' || !key.startsWith(prefix)) return false;
-        try { return JSON.parse(localStorage.getItem(key) || 'null')?.writerId === writerId; }
-        catch { return false; }
-      });
-    if (keys.length !== 2) throw new Error(`Expected two partial-cleanup records, found ${keys.length}`);
+    const allRecoveryKeys = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
+      .filter(key => typeof key === 'string' && key.startsWith(prefix));
+    const keys = allRecoveryKeys.filter(key => {
+      try {
+        const operation = JSON.parse(localStorage.getItem(key) || 'null');
+        return operation?.writerId === writerId
+          && ['partial-cleanup-a', 'partial-cleanup-b'].includes(operation.eventId);
+      } catch { return false; }
+    });
+    if (keys.length !== 2) throw new Error(`Expected two targeted partial-cleanup records, found ${keys.length}`);
+    // Isolate this failure-injection case from unrelated records left by earlier
+    // scenarios; the test only exercises these two exact operations.
+    for (const key of allRecoveryKeys) if (!keys.includes(key)) localStorage.removeItem(key);
+    await idb.idbUpdate(journal.OUTBOX_FALLBACK_CHECKPOINT_KEY, () => []);
     const failKey = keys[1];
     const originalRemoveItem = Storage.prototype.removeItem;
     Storage.prototype.removeItem = function (key) {
