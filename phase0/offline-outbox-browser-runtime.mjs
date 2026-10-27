@@ -350,16 +350,25 @@ try {
     await hydration.hydrateFromIndexedDB();
     const keysAfterRetry = listFallbackKeys();
     const persisted = await idb.idbGet('ledger_outbox_events') || [];
+    const fallbackRecords = keysAfterRetry.map(key => ({
+      key,
+      value: localStorage.getItem(key),
+    }));
     return {
       logCountBefore: logKeysBefore.length,
       logCountAfterAbort: keysAfterAbort.length,
       logCountAfterRetry: keysAfterRetry.length,
       eventPersisted: persisted.some(item => item.eventId === event.eventId),
+      persistedEventIds: persisted.map(item => item.eventId),
+      inMemoryEventIds: (await import('/app/src/state.js')).outboxEvents?.map(item => item.eventId) || [],
+      fallbackRecords,
+      browserErrors: migrationBrowserErrors,
     };
   });
   assert.ok(migrationAbort.logCountBefore > 0, 'migration test must begin with a durable append-log record');
   assert.ok(migrationAbort.logCountAfterAbort >= migrationAbort.logCountBefore, 'failed checkpoint must retain append-log records');
-  assert.equal(migrationAbort.eventPersisted, true, 'retry must checkpoint the pending event into IndexedDB');
+  assert.equal(migrationAbort.eventPersisted, true,
+    `retry must checkpoint the pending event into IndexedDB; diagnostics=${JSON.stringify(migrationAbort)}`);
   assert.equal(migrationAbort.logCountAfterRetry, 0, 'append-log records may be removed only after successful checkpoint');
   await migrationContext.close();
 
