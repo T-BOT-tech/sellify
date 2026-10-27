@@ -374,6 +374,43 @@ assert.match(courierOwnership, /memberships\.some\(membership =>[\s\S]*?membersh
 assert.match(courierOwnership, /if \(!hasLocationAccess\)[\s\S]*?COURIER_SCOPE_DENIED/,
   'courier requests must still fail closed when no active grant covers the assigned location');
 
+// All assignment paths must use the same all-grants location check. Cover initial
+// assignment, normal reassignment, exception reassignment, and courier lifecycle.
+const courierScopeHelperStart = store.indexOf('function hasCourierLocationGrant(');
+const courierScopeHelperEnd = store.indexOf('export async function selectDeliveryCourier(', courierScopeHelperStart + 30);
+assert.ok(courierScopeHelperStart >= 0 && courierScopeHelperEnd > courierScopeHelperStart,
+  'shared courier location-grant predicate must remain explicit');
+const courierScopeHelper = store.slice(courierScopeHelperStart, courierScopeHelperEnd);
+assert.ok(courierScopeHelper.includes('memberships.some(')
+    && courierScopeHelper.includes("membership.scope_type !== 'LOCATION'")
+    && courierScopeHelper.includes('membership.scope_id')
+    && courierScopeHelper.includes('locationId'),
+  'shared courier location check must authorize any matching active grant');
+
+const assignCourierStart = store.indexOf('export async function assignDeliveryCourier(');
+const assignCourierEnd = store.indexOf('export async function listDeliveryAssignments(', assignCourierStart + 40);
+assert.ok(assignCourierStart >= 0 && assignCourierEnd > assignCourierStart,
+  'canonical initial courier assignment must remain explicit');
+const assignCourierBody = store.slice(assignCourierStart, assignCourierEnd);
+assert.ok(assignCourierBody.includes('.all(selectedCourierUserId, String(chatId))')
+    && assignCourierBody.includes('hasCourierLocationGrant(couriers, locationId)'),
+  'initial assignment must validate all active target courier grants');
+
+const assignmentTransitionStart = store.indexOf('export async function transitionDeliveryAssignment(');
+const assignmentTransitionEnd = store.indexOf('export async function ', assignmentTransitionStart + 40);
+assert.ok(assignmentTransitionStart >= 0 && assignmentTransitionEnd > assignmentTransitionStart,
+  'canonical delivery assignment transition must remain explicit');
+const assignmentTransitionBody = store.slice(assignmentTransitionStart, assignmentTransitionEnd);
+assert.ok(assignmentTransitionBody.includes('.all(actorUserId, String(chatId))')
+    && assignmentTransitionBody.includes('hasCourierLocationGrant(courierMemberships, assignedLocationId)'),
+  'courier lifecycle commands must validate all active actor grants');
+assert.ok(assignmentTransitionBody.includes('freshCourierGrants')
+    && assignmentTransitionBody.includes('hasCourierLocationGrant(freshCourierGrants, locationId)'),
+  'exception reassignment must validate all target courier grants');
+assert.ok(assignmentTransitionBody.includes('courierGrants')
+    && assignmentTransitionBody.includes('hasCourierLocationGrant(courierGrants, locationId)'),
+  'normal reassignment must validate all target courier grants');
+
 // Workload projection must honor every active courier location grant too.
 // Fixing command authorization alone is insufficient if the courier cannot see
 // their assignments for other valid locations.
