@@ -214,7 +214,7 @@ export async function hydrateFromIndexedDB() {
         journalWritten: journalWrite.written,
       }) },
       { key: OUTBOX_FALLBACK_CHECKPOINT_KEY, value: () => [...new Set([...checkpointedIds, ...(fallbackRecovery.operationIds || [])])] },
-    ]).then(merged => {
+    ]).then(async merged => {
       setOutboxEvents(merged);
       resetOutboxIndexedDbBaseline(merged);
       resetOutboxRecoveryBaseline(merged);
