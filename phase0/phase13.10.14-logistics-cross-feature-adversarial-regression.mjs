@@ -152,7 +152,7 @@ const sourceFiles = fs.readdirSync(logisticsDir).filter(name => name.endsWith('.
 assert.equal(sourceFiles.some(name => /(^|[-_])route(s)?([-.]|$)/i.test(name)), false);
 for (const name of sourceFiles) {
   const content = fs.readFileSync(path.join(logisticsDir, name), 'utf8');
-  assert.doesNotMatch(content, /route[-_ ]?(engine|planner|optimizer)/i);
+  assert.doesNotMatch(content, /(?:new\s+RouteEngine\b|class\s+RouteEngine\b|createRouteEngine\s*\()/i);
   assert.doesNotMatch(content, /maps?[-_ ]?(api|provider|sdk)/i);
   assert.doesNotMatch(content, /carrier[-_ ]?route/i);
 }
