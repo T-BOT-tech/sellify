@@ -390,6 +390,19 @@ assert.ok(courierScopeHelper.includes("membership.scope_type === 'ORGANIZATION'"
 assert.ok(!courierScopeHelper.includes("membership.scope_type !== 'LOCATION'"),
   'unknown or malformed courier scope types must not be treated as organization-wide access');
 
+// Automatic courier selection must apply the same fail-closed scope contract:
+// organization-wide grants are broad, location grants must match, and RESOURCE
+// or malformed scopes must never be treated as organization-wide eligibility.
+const courierSelectionStart = store.indexOf('export async function selectDeliveryCourier(');
+const courierSelectionEnd = store.indexOf('export async function assignDeliveryCourier(', courierSelectionStart + 40);
+assert.ok(courierSelectionStart >= 0 && courierSelectionEnd > courierSelectionStart,
+  'canonical courier selection must remain explicit');
+const courierSelection = store.slice(courierSelectionStart, courierSelectionEnd);
+assert.match(courierSelection, /mr\\.scope_type = 'ORGANIZATION'[\\s\\S]*?mr\\.scope_type = 'LOCATION' AND mr\\.scope_id = \\?/,
+  'automatic courier selection must include organization grants or matching location grants only');
+assert.doesNotMatch(courierSelection, /mr\\.scope_type IS NULL|mr\\.scope_type != 'LOCATION'/,
+  'null, resource, and unknown scope types must not qualify for an arbitrary delivery location');
+
 const assignCourierStart = store.indexOf('export async function assignDeliveryCourier(');
 const assignCourierEnd = store.indexOf('export async function listDeliveryAssignments(', assignCourierStart + 40);
 assert.ok(assignCourierStart >= 0 && assignCourierEnd > assignCourierStart,
