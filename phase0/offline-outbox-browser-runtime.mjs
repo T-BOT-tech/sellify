@@ -293,8 +293,18 @@ try {
   // Use a fresh browser context so concurrent enqueue activity from the
   // preceding multi-tab test cannot mutate this migration-failure fixture.
   const migrationContext = await browser.newContext();
+  const migrationBrowserErrors = [];
   migrationContext.on('page', page => {
-    page.on('pageerror', error => console.error('Migration test browser page error:', error));
+    page.on('pageerror', error => {
+      migrationBrowserErrors.push(error.message);
+      console.error('Migration test browser page error:', error);
+    });
+    page.on('console', message => {
+      if (message.type() === 'error') {
+        migrationBrowserErrors.push(message.text());
+        console.error('Migration test browser console error:', message.text());
+      }
+    });
   });
   const migrationPage = await migrationContext.newPage();
   await migrationPage.goto(base);
