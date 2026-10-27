@@ -113,6 +113,26 @@ try {
   });
   await second.evaluate(() => Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined }));
 
+  const sidecarConcurrency = await first.evaluate(async () => {
+    const idb = await import('/app/src/storage/idb.js');
+    const mainKey = 'regression_concurrent_sidecar_main';
+    const ledgerKey = 'regression_concurrent_sidecar_ledger';
+    const append = label => idb.idbUpdateAndSet(
+      mainKey,
+      current => [...(Array.isArray(current) ? current : []), label],
+      [{ key: ledgerKey, update: current => [...new Set([...(Array.isArray(current) ? current : []), label])] }],
+    );
+    await Promise.all([append('writer-a'), append('writer-b')]);
+    const main = await idb.idbGet(mainKey);
+    const ledger = await idb.idbGet(ledgerKey);
+    await Promise.all([idb.idbDelete(mainKey), idb.idbDelete(ledgerKey)]);
+    return { main, ledger };
+  });
+  assert.deepEqual(sidecarConcurrency.main.sort(), ['writer-a', 'writer-b'],
+    'concurrent atomic updates should preserve both main-key changes');
+  assert.deepEqual(sidecarConcurrency.ledger.sort(), ['writer-a', 'writer-b'],
+    'concurrent sidecar read-modify-write should preserve both writers\' ledger IDs');
+
   const preparePage = page => page.evaluate(async () => {
     const idb = await import('/app/src/storage/idb.js');
     const journal = await import('/app/src/sync/outbox-recovery-journal.js');
