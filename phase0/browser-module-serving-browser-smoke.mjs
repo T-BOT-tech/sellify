@@ -72,13 +72,13 @@ async function smokeServer({ label, args, extraEnv = {} }) {
     page.on('pageerror', error => pageErrors.push(error.message));
     page.on('requestfailed', request => {
       const url = request.url();
-      if (url.startsWith(baseUrl) && /\\.(?:m?js)(?:[?#]|$)/i.test(new URL(url).pathname)) {
+      if (url.startsWith(baseUrl) && /\.(?:m?js)(?:[?#]|$)/i.test(new URL(url).pathname)) {
         failedLocalScripts.push(`${request.method()} ${url}: ${request.failure()?.errorText || 'request failed'}`);
       }
     });
     page.on('response', response => {
       const url = response.url();
-      if (url.startsWith(baseUrl) && /\\.(?:m?js)(?:[?#]|$)/i.test(new URL(url).pathname) && response.status() >= 400) {
+      if (url.startsWith(baseUrl) && /\.(?:m?js)(?:[?#]|$)/i.test(new URL(url).pathname) && response.status() >= 400) {
         badLocalScriptResponses.push(`${response.status()} ${url}`);
       }
     });
