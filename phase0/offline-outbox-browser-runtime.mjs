@@ -369,6 +369,50 @@ try {
   assert.equal(migrationAbort.eventPersisted, true,
     `retry must checkpoint the pending event into IndexedDB; diagnostics=${JSON.stringify(migrationAbort)}`);
   assert.equal(migrationAbort.logCountAfterRetry, 0, 'append-log records may be removed only after successful checkpoint');
+
+  // If IndexedDB checkpoint succeeds but localStorage cleanup fails, a durable
+  // IndexedDB checkpoint ledger must prevent stale operation replay on reboot.
+  const cleanupFailure = await migrationPage.evaluate(async () => {
+    const journal = await import('/app/src/sync/outbox-recovery-journal.js');
+    const hydration = await import('/app/src/storage/hydrate.js');
+    const idb = await import('/app/src/storage/idb.js');
+    const eventId = 'fallback-cleanup-failure-event';
+    journal.resetOutboxRecoveryBaseline([]);
+    journal.appendOutboxRecoveryOperations([{ eventId, status: 'pending', attempts: 0 }], {
+      storage: localStorage, writerId: 'cleanup-failure-regression-writer',
+    });
+    const originalRemoveItem = Storage.prototype.removeItem;
+    Storage.prototype.removeItem = function (key) {
+      if (typeof key === 'string' && key.startsWith('sellify.outbox.recovery.log.v1:')) {
+        throw new DOMException('Injected cleanup failure', 'UnknownError');
+      }
+      return originalRemoveItem.call(this, key);
+    };
+    try {
+      await hydration.hydrateFromIndexedDB();
+    } finally {
+      Storage.prototype.removeItem = originalRemoveItem;
+    }
+    const keysRemain = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
+      .filter(key => typeof key === 'string' && key.startsWith('sellify.outbox.recovery.log.v1:'));
+    const checkpointIds = await idb.idbGet(journal.OUTBOX_FALLBACK_CHECKPOINT_KEY) || [];
+    const journalSnapshot = JSON.parse(localStorage.getItem(journal.OUTBOX_RECOVERY_KEY));
+    await idb.idbSet('ledger_outbox_events', [{ eventId, status: 'completed', attempts: 7 }]);
+    await idb.idbSet(journal.OUTBOX_RECOVERY_COMMIT_KEY, {
+      version: 1, journalWritten: false, previousSnapshotId: journalSnapshot.snapshotId,
+    });
+    await hydration.hydrateFromIndexedDB();
+    const stored = await idb.idbGet('ledger_outbox_events') || [];
+    return {
+      staleLogRetained: keysRemain.some(key => localStorage.getItem(key)?.includes(eventId)),
+      operationCheckpointed: checkpointIds.some(id => keysRemain.some(key => key.endsWith(id))),
+      storedEvent: stored.find(event => event.eventId === eventId) || null,
+    };
+  });
+  assert.equal(cleanupFailure.staleLogRetained, true, 'injected cleanup failure should leave the operation record behind');
+  assert.equal(cleanupFailure.operationCheckpointed, true, 'successful checkpoint must durably identify the operation');
+  assert.deepEqual(cleanupFailure.storedEvent, { eventId: 'fallback-cleanup-failure-event', status: 'completed', attempts: 7 },
+    'later hydration must not replay the stale append-log over newer IndexedDB data');
   await migrationContext.close();
 
   console.log('PASS: concurrent browser pages preserve outbox events; aborted recovery and migration writes remain recoverable.');
