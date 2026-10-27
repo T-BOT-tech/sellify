@@ -306,6 +306,7 @@ try {
       .filter(key => key.startsWith(journal.OUTBOX_FALLBACK_LOG_PREFIX));
     if (!logKeysBefore.length) throw new Error('Expected append-only recovery record before migration');
 
+    const hydration = await import('/app/src/storage/hydrate.js');
     const originalPut = IDBObjectStore.prototype.put;
     IDBObjectStore.prototype.put = function (value, key) {
       if (key === 'ledger_outbox_events'
@@ -316,7 +317,6 @@ try {
       return originalPut.call(this, value, key);
     };
     try {
-      const hydration = await import('/app/src/storage/hydrate.js');
       await hydration.hydrateFromIndexedDB();
     } finally {
       IDBObjectStore.prototype.put = originalPut;
