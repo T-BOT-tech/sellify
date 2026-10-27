@@ -395,7 +395,9 @@ try {
     }
     const keysRemain = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
       .filter(key => typeof key === 'string' && key.startsWith('sellify.outbox.recovery.log.v1:'));
+    const staleLogRetainedBeforeRetry = keysRemain.some(key => localStorage.getItem(key)?.includes(eventId));
     const checkpointIds = await idb.idbGet(journal.OUTBOX_FALLBACK_CHECKPOINT_KEY) || [];
+    const operationCheckpointed = checkpointIds.some(id => keysRemain.some(key => key.endsWith(id)));
     const journalSnapshot = JSON.parse(localStorage.getItem(journal.OUTBOX_RECOVERY_KEY));
     await idb.idbSet('ledger_outbox_events', [{ eventId, status: 'completed', attempts: 7 }]);
     await idb.idbSet(journal.OUTBOX_RECOVERY_COMMIT_KEY, {
@@ -404,8 +406,8 @@ try {
     await hydration.hydrateFromIndexedDB();
     const stored = await idb.idbGet('ledger_outbox_events') || [];
     return {
-      staleLogRetained: keysRemain.some(key => localStorage.getItem(key)?.includes(eventId)),
-      operationCheckpointed: checkpointIds.some(id => keysRemain.some(key => key.endsWith(id))),
+      staleLogRetained: staleLogRetainedBeforeRetry,
+      operationCheckpointed,
       storedEvent: stored.find(event => event.eventId === eventId) || null,
     };
   });
