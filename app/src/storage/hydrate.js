@@ -11,10 +11,15 @@
 // functions, event handlers) sees the new value automatically, with no
 // call-site changes (this is Rule 1 from the modularization plan, §1).
 import { STORAGE_KEYS, DEFAULT_PAYMENT_METHODS, defaultSyncServerUrl } from '../constants.js';
-import { idbGetAll, isIdbUnavailable } from './idb.js';
+import { idbGetAll, idbUpdateAndSet, isIdbUnavailable } from './idb.js';
 import { runLedgerMigration, migrateProductMoney, migrateOrderMoney } from './migration.js';
 import { saveJSON } from './json.js';
 import {
+  getOutboxIndexedDbBaseline,
+  mergeOutboxSnapshots,
+  removeOutboxRecoveryOperations,
+  restoreOutboxRecoveryOperations,
+  writeOutboxRecoveryJournal,
   OUTBOX_RECOVERY_COMMIT_KEY,
   resetOutboxIndexedDbBaseline,
   resetOutboxRecoveryBaseline,
@@ -64,6 +69,14 @@ function restoreOutboxRecoveryJournal({ indexedDbCommit = null } = {}) {
   return restored;
 }
 
+function restoreOutboxFallbackOperations() {
+  return restoreOutboxRecoveryOperations({
+    events: outboxEvents,
+    setOutboxEvents,
+    saveOutbox: recovered => saveJSON(STORAGE_KEYS.outboxEvents, recovered),
+  });
+}
+
 let ledgerHydrated = false;
 
 export function isLedgerHydrated() {
@@ -99,6 +112,7 @@ export async function hydrateFromIndexedDB() {
 
   if (isIdbUnavailable()) {
     restoreOutboxRecoveryJournal();
+    restoreOutboxFallbackOperations();
     // No usable IndexedDB this session (unsupported, blocked, or corrupted).
     // The values already loaded synchronously from localStorage stand as-is
     // (already money-migrated by state.js at load time; re-run here anyway
@@ -114,6 +128,7 @@ export async function hydrateFromIndexedDB() {
   } catch (e) {
     console.error('IndexedDB hydration read failed, restoring local outbox journal and keeping localStorage-loaded values', e);
     restoreOutboxRecoveryJournal();
+    restoreOutboxFallbackOperations();
     migrateMoneyNow();
     ledgerHydrated = true;
     return false;
@@ -151,6 +166,34 @@ export async function hydrateFromIndexedDB() {
       ? fromIdb[OUTBOX_RECOVERY_COMMIT_KEY]
       : null,
   });
+
+  // Replay a prior localStorage-only session over this IDB snapshot, then
+  // checkpoint atomically; keep log keys until the transaction commits.
+  const fallbackRecovery = restoreOutboxFallbackOperations();
+  if (fallbackRecovery.keys.length) {
+    const indexedDbBaseline = getOutboxIndexedDbBaseline() || [];
+    const recoveredEvents = fallbackRecovery.events;
+    let journalWrite = null;
+    let journalSnapshot = recoveredEvents;
+    await idbUpdateAndSet(STORAGE_KEYS.outboxEvents, storedEvents => {
+      journalWrite = writeOutboxRecoveryJournal(recoveredEvents, {
+        onMerged: merged => { journalSnapshot = merged; setOutboxEvents(merged); },
+      });
+      return mergeOutboxSnapshots(indexedDbBaseline, journalSnapshot, Array.isArray(storedEvents) ? storedEvents : []);
+    }, OUTBOX_RECOVERY_COMMIT_KEY, () => ({
+      version: 1,
+      attemptId: journalWrite.attemptId,
+      previousSnapshotId: journalWrite.previousSnapshotId,
+      journalWritten: journalWrite.written,
+    })).then(merged => {
+      setOutboxEvents(merged);
+      resetOutboxIndexedDbBaseline(merged);
+      resetOutboxRecoveryBaseline(merged);
+      removeOutboxRecoveryOperations(fallbackRecovery.keys);
+    }).catch(error => {
+      console.error('Failed to migrate append-only outbox recovery records into IndexedDB; retaining fallback log', error);
+    });
+  }
 
   const moneyMigrated = migrateMoneyNow();
 
