@@ -290,7 +290,62 @@ try {
   assert.equal(quota.markerRecordsJournalWriteFailure, true);
   assert.equal(quota.priorJournalPreserved, true);
 
-  console.log('PASS: concurrent browser pages preserve outbox events and aborted writes remain recoverable.');
+  // Fault-inject the append-log -> IndexedDB checkpoint failure. The recovery
+  // records must survive the rejected transaction and be removed only after a
+  // subsequent successful hydration checkpoint.
+  const migrationAbort = await first.evaluate(async () => {
+    const journal = await import('/app/src/sync/outbox-recovery-journal.js');
+    const idb = await import('/app/src/storage/idb.js');
+    const event = { eventId: 'fallback-migration-abort-event', status: 'pending', payload: { source: 'migration-abort-regression' } };
+    journal.resetOutboxRecoveryBaseline([]);
+    journal.appendOutboxRecoveryOperations([event], {
+      storage: localStorage,
+      writerId: 'migration-abort-regression-writer',
+    });
+    const logKeysBefore = Object.keys(localStorage)
+      .filter(key => key.startsWith(journal.OUTBOX_FALLBACK_LOG_PREFIX));
+    if (!logKeysBefore.length) throw new Error('Expected append-only recovery record before migration');
+
+    const originalPut = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (value, key) {
+      if (key === 'ledger_outbox_events'
+          && Array.isArray(value)
+          && value.some(item => item.eventId === event.eventId)) {
+        throw new DOMException('Injected append-log checkpoint failure', 'UnknownError');
+      }
+      return originalPut.call(this, value, key);
+    };
+    try {
+      const hydration = await import('/app/src/storage/hydrate.js');
+      await hydration.hydrateFromIndexedDB();
+    } finally {
+      IDBObjectStore.prototype.put = originalPut;
+    }
+
+    const keysAfterAbort = Object.keys(localStorage)
+      .filter(key => key.startsWith(journal.OUTBOX_FALLBACK_LOG_PREFIX));
+    if (!logKeysBefore.every(key => keysAfterAbort.includes(key))) {
+      throw new Error('Append-only recovery records were removed after an aborted IndexedDB checkpoint');
+    }
+
+    const recoveredOnRetry = await hydration.hydrateFromIndexedDB();
+    const keysAfterRetry = Object.keys(localStorage)
+      .filter(key => key.startsWith(journal.OUTBOX_FALLBACK_LOG_PREFIX));
+    const persisted = await idb.idbGet('ledger_outbox_events') || [];
+    return {
+      logCountBefore: logKeysBefore.length,
+      logCountAfterAbort: keysAfterAbort.length,
+      logCountAfterRetry: keysAfterRetry.length,
+      eventPersisted: persisted.some(item => item.eventId === event.eventId),
+      recoveredOnRetry,
+    };
+  });
+  assert.ok(migrationAbort.logCountBefore > 0, 'migration test must begin with a durable append-log record');
+  assert.ok(migrationAbort.logCountAfterAbort >= migrationAbort.logCountBefore, 'failed checkpoint must retain append-log records');
+  assert.equal(migrationAbort.eventPersisted, true, 'retry must checkpoint the pending event into IndexedDB');
+  assert.equal(migrationAbort.logCountAfterRetry, 0, 'append-log records may be removed only after successful checkpoint');
+
+  console.log('PASS: concurrent browser pages preserve outbox events; aborted recovery and migration writes remain recoverable.');
   await context.close();
 } catch (error) {
   console.error(error);
