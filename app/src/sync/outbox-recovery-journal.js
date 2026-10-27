@@ -136,9 +136,14 @@ function readFallbackOperationRecords(storage) {
     if (typeof key !== 'string' || !key.startsWith(OUTBOX_FALLBACK_LOG_PREFIX)) continue;
     try {
       const operation = JSON.parse(storage.getItem(key));
-      if (operation?.version !== 1 || typeof operation.eventId !== 'string'
-          || typeof operation.writerId !== 'string' || !Number.isSafeInteger(operation.sequence)
-          || !Number.isSafeInteger(operation.counter) || !['put', 'delete'].includes(operation.kind)
+      const operationId = key.slice(OUTBOX_FALLBACK_LOG_PREFIX.length);
+      if (operation?.version !== 1 || typeof operation.operationId !== 'string'
+          || operation.operationId !== operationId
+          || typeof operation.eventId !== 'string' || !operation.eventId
+          || typeof operation.writerId !== 'string' || !operation.writerId
+          || !Number.isSafeInteger(operation.sequence) || operation.sequence < 1
+          || !Number.isSafeInteger(operation.counter) || operation.counter < 1
+          || !['put', 'delete'].includes(operation.kind)
           || (operation.kind === 'put' && (!operation.event || operation.event.eventId !== operation.eventId))) continue;
       records.push({ key, operation });
     } catch { /* Ignore malformed records without hiding valid records. */ }
