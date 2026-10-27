@@ -177,7 +177,33 @@ try {
     return state.outboxEvents.map(event => event.eventId).sort();
   });
   assert.ok(visible.includes('cross-tab-visible-event'), 'open tab should reconcile a peer tab event without reload');
+
   assert.ok(visible.includes('browser-tab-A'), 'reconciliation should preserve local pending events');
+
+  // A peer may complete an event while this tab still holds a stale copy
+  // whose retry metadata changes. Completion must win without dropping other
+  // independent pending work.
+  const staleRemoval = await first.evaluate(async () => {
+    const { mergeOutboxSnapshots } = await import('/app/src/sync/outbox-recovery-journal.js');
+    const previous = [
+      { eventId: 'completed-in-peer-tab', status: 'pending', attempts: 0 },
+      { eventId: 'unrelated-pending-event', status: 'pending', attempts: 0 },
+    ];
+    const local = [
+      { eventId: 'completed-in-peer-tab', status: 'pending', attempts: 1, lastError: 'stale retry' },
+      { eventId: 'unrelated-pending-event', status: 'pending', attempts: 1, lastError: 'temporary failure' },
+    ];
+    const shared = [
+      { eventId: 'unrelated-pending-event', status: 'pending', attempts: 0 },
+    ];
+    const merged = mergeOutboxSnapshots(previous, local, shared);
+    return {
+      ids: merged.map(event => event.eventId).sort(),
+      unrelatedAttempts: merged.find(event => event.eventId === 'unrelated-pending-event')?.attempts,
+    };
+  });
+  assert.deepEqual(staleRemoval.ids, ['unrelated-pending-event'], 'a stale local retry must not resurrect an event removed by a peer');
+  assert.equal(staleRemoval.unrelatedAttempts, 1, 'independent pending work should retain local retry metadata');
   // An updater failure after the journal write must abort the IDB value and marker.
   const aborted = await first.evaluate(async () => {
     const idb = await import('/app/src/storage/idb.js');
