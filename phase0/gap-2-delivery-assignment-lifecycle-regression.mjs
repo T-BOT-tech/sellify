@@ -153,11 +153,11 @@ assert.match(store, /Target courier does not have an active logistics courier ro
 const exceptionResolutionStart = store.indexOf("if (normalizedAction === 'REASSIGN_EXCEPTION')");
 const exceptionResolutionEnd = store.indexOf("  const transitions =", exceptionResolutionStart);
 const exceptionResolution = store.slice(exceptionResolutionStart, exceptionResolutionEnd);
-assert.match(exceptionResolution, /BEGIN IMMEDIATE[\s\S]*?const freshCourier = db\.prepare/,
+assert.match(exceptionResolution, /BEGIN IMMEDIATE[\s\S]*?const freshCourierGrants = db\.prepare/,
   'exception reassignment must revalidate target courier authorization inside the write transaction');
 assert.ok(
   exceptionResolution.indexOf('const existingCommand = db.prepare') >= 0
-    && exceptionResolution.indexOf('const freshCourier = db.prepare') > exceptionResolution.indexOf('const existingCommand = db.prepare'),
+    && exceptionResolution.indexOf('const freshCourierGrants = db.prepare') > exceptionResolution.indexOf('const existingCommand = db.prepare'),
   'committed exception reassignment retries must replay durable command history before rechecking mutable courier role',
 );
 assert.ok(
@@ -165,7 +165,7 @@ assert.ok(
   'exception reassignment retries must resolve key reuse before validating a missing target courier',
 );
 assert.ok(
-  exceptionResolution.indexOf('if (!targetCourierId)') < exceptionResolution.indexOf('const freshCourier = db.prepare'),
+  exceptionResolution.indexOf('if (!targetCourierId)') < exceptionResolution.indexOf('const freshCourierGrants = db.prepare'),
   'new exception reassignment commands must require a target before checking its active courier role',
 );
 
