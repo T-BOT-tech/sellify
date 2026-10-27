@@ -224,7 +224,7 @@ try {
     return { didRestore, ids: (restored || []).map(event => event.eventId).sort() };
   });
   assert.equal(recovered.didRestore, true);
-  assert.deepEqual(recovered.ids, ['browser-tab-A', 'browser-tab-B', 'interrupted-event']);
+  assert.deepEqual(recovered.ids, ['browser-tab-A', 'browser-tab-B', 'cross-tab-visible-event', 'interrupted-event']);
 
   // A full recovery-journal quota must not make an otherwise available IndexedDB write disappear.
   // Simulate quota only for the journal key; IndexedDB remains writable.
