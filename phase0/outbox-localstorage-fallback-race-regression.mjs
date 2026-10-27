@@ -96,6 +96,41 @@ function compareText(left, right) { return left === right ? 0 : left < right ? -
   assert.equal(seed(false)[0].status, 'failed');
 }
 
+// A multi-operation append can fail after an earlier operation reached storage.
+// The successful prefix must remain durable, and retrying the same snapshot must
+// recover every event even if it appends a duplicate put for the prefix.
+{
+  const storage = fakeStorage();
+  const originalSetItem = storage.setItem.bind(storage);
+  let logWrites = 0;
+  let failOnce = true;
+  storage.setItem = (key, value) => {
+    if (key.startsWith(OUTBOX_FALLBACK_LOG_PREFIX) && ++logWrites === 2 && failOnce) {
+      failOnce = false;
+      throw new Error('injected quota/write failure after first append');
+    }
+    originalSetItem(key, value);
+  };
+  const events = [
+    { eventId: 'partial-A', status: 'pending' },
+    { eventId: 'partial-B', status: 'pending' },
+  ];
+  resetOutboxRecoveryBaseline([]);
+  assert.throws(() => appendOutboxRecoveryOperations(events, {
+    storage, writerId: 'partial-writer', logger: { error() {} },
+  }), /injected quota\/write failure/);
+  assert.equal([...storage.values.keys()].filter(key => key.startsWith(OUTBOX_FALLBACK_LOG_PREFIX)).length, 1,
+    'the successful append prefix must not be rolled back or overwritten');
+
+  const retried = appendOutboxRecoveryOperations(events, {
+    storage, writerId: 'partial-writer', logger: { error() {} },
+  });
+  assert.equal(retried.operationCount, 2, 'retry should write the full current snapshot delta');
+  const restored = restoreOutboxRecoveryOperations({ storage, events: [] });
+  assert.deepEqual(restored.events.map(event => event.eventId), ['partial-A', 'partial-B'],
+    'replay must recover all events after a partial append and retry');
+}
+
 // Malformed or unsupported records are ignored without making valid records
 // inaccessible.
 {
