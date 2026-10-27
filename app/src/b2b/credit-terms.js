@@ -46,6 +46,9 @@ export async function createCreditTermsFromUI() {
 }
 
 export async function loadBusinessCreditCustomers() {
+  // The deferred initial load may outlive a Node-based DOM test's temporary
+  // document mock. This function is browser-only; no DOM means no-op.
+  if (typeof document === 'undefined') return;
   const select = document.getElementById('b2bCreditCustomer');
   if (!select || !config.chatId || !config.sessionToken) return;
   if (!hasPermission(currentStaff?.role || 'owner', 'b2b:credit:create')) return;
