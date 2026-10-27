@@ -290,23 +290,33 @@ try {
   assert.equal(quota.markerRecordsJournalWriteFailure, true);
   assert.equal(quota.priorJournalPreserved, true);
 
-  // Fault-inject the append-log -> IndexedDB checkpoint failure. The recovery
-  // records must survive the rejected transaction and be removed only after a
-  // subsequent successful hydration checkpoint.
-  const migrationAbort = await first.evaluate(async () => {
+  // Use a fresh browser context so concurrent enqueue activity from the
+  // preceding multi-tab test cannot mutate this migration-failure fixture.
+  const migrationContext = await browser.newContext();
+  migrationContext.on('page', page => {
+    page.on('pageerror', error => console.error('Migration test browser page error:', error));
+  });
+  const migrationPage = await migrationContext.newPage();
+  await migrationPage.goto(base);
+  const migrationAbort = await migrationPage.evaluate(async () => {
+    const listFallbackKeys = () => Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index))
+      .filter(key => typeof key === 'string' && key.startsWith('sellify.outbox.recovery.log.v1:'));
     const journal = await import('/app/src/sync/outbox-recovery-journal.js');
-    const idb = await import('/app/src/storage/idb.js');
-    const event = { eventId: 'fallback-migration-abort-event', status: 'pending', payload: { source: 'migration-abort-regression' } };
     journal.resetOutboxRecoveryBaseline([]);
+    const event = {
+      eventId: 'fallback-migration-abort-event',
+      status: 'pending',
+      payload: { source: 'migration-abort-regression' },
+    };
     journal.appendOutboxRecoveryOperations([event], {
       storage: localStorage,
       writerId: 'migration-abort-regression-writer',
     });
-    const logKeysBefore = Object.keys(localStorage)
-      .filter(key => key.startsWith(journal.OUTBOX_FALLBACK_LOG_PREFIX));
+    const logKeysBefore = listFallbackKeys();
     if (!logKeysBefore.length) throw new Error('Expected append-only recovery record before migration');
 
     const hydration = await import('/app/src/storage/hydrate.js');
+    const idb = await import('/app/src/storage/idb.js');
     const originalPut = IDBObjectStore.prototype.put;
     IDBObjectStore.prototype.put = function (value, key) {
       if (key === 'ledger_outbox_events'
@@ -322,28 +332,26 @@ try {
       IDBObjectStore.prototype.put = originalPut;
     }
 
-    const keysAfterAbort = Object.keys(localStorage)
-      .filter(key => key.startsWith(journal.OUTBOX_FALLBACK_LOG_PREFIX));
+    const keysAfterAbort = listFallbackKeys();
     if (!logKeysBefore.every(key => keysAfterAbort.includes(key))) {
-      throw new Error('Append-only recovery records were removed after an aborted IndexedDB checkpoint');
+      throw new Error(`Append-only recovery records were removed after an aborted checkpoint: before=${JSON.stringify(logKeysBefore)}, after=${JSON.stringify(keysAfterAbort)}`);
     }
 
-    const recoveredOnRetry = await hydration.hydrateFromIndexedDB();
-    const keysAfterRetry = Object.keys(localStorage)
-      .filter(key => key.startsWith(journal.OUTBOX_FALLBACK_LOG_PREFIX));
+    await hydration.hydrateFromIndexedDB();
+    const keysAfterRetry = listFallbackKeys();
     const persisted = await idb.idbGet('ledger_outbox_events') || [];
     return {
       logCountBefore: logKeysBefore.length,
       logCountAfterAbort: keysAfterAbort.length,
       logCountAfterRetry: keysAfterRetry.length,
       eventPersisted: persisted.some(item => item.eventId === event.eventId),
-      recoveredOnRetry,
     };
   });
   assert.ok(migrationAbort.logCountBefore > 0, 'migration test must begin with a durable append-log record');
   assert.ok(migrationAbort.logCountAfterAbort >= migrationAbort.logCountBefore, 'failed checkpoint must retain append-log records');
   assert.equal(migrationAbort.eventPersisted, true, 'retry must checkpoint the pending event into IndexedDB');
   assert.equal(migrationAbort.logCountAfterRetry, 0, 'append-log records may be removed only after successful checkpoint');
+  await migrationContext.close();
 
   console.log('PASS: concurrent browser pages preserve outbox events; aborted recovery and migration writes remain recoverable.');
   await context.close();
