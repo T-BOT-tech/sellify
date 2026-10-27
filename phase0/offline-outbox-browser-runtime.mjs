@@ -350,11 +350,13 @@ try {
     await hydration.hydrateFromIndexedDB();
     const keysAfterRetry = listFallbackKeys();
     const persisted = await idb.idbGet('ledger_outbox_events') || [];
+    const checkpointIdsAfterRetry = await idb.idbGet(journal.OUTBOX_FALLBACK_CHECKPOINT_KEY) || [];
     const fallbackRecords = keysAfterRetry.map(key => ({
       key,
       value: localStorage.getItem(key),
     }));
     return {
+      checkpointIdsAfterRetry,
       logCountBefore: logKeysBefore.length,
       logCountAfterAbort: keysAfterAbort.length,
       logCountAfterRetry: keysAfterRetry.length,
@@ -369,6 +371,8 @@ try {
   assert.equal(migrationAbort.eventPersisted, true,
     `retry must checkpoint the pending event into IndexedDB; diagnostics=${JSON.stringify(migrationAbort)}`);
   assert.equal(migrationAbort.logCountAfterRetry, 0, 'append-log records may be removed only after successful checkpoint');
+  assert.deepEqual(migrationAbort.checkpointIdsAfterRetry, [],
+    'successfully checkpointed operation IDs should be pruned after their exact recovery records are removed');
 
   // If IndexedDB checkpoint succeeds but localStorage cleanup fails, a durable
   // IndexedDB checkpoint ledger must prevent stale operation replay on reboot.
