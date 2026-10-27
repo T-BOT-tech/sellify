@@ -9912,7 +9912,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     // once captured, no transition may replace it before or after delivery.
     const existingProof = fulfillment.proof_json
       ? parseJSON(fulfillment.proof_json, fulfillment.proof_json)
-      : null;
+      : (orderFromRow(freshOrderRow).fulfillment_proof ?? null);
     if (existingProof != null && input.proof !== undefined
       && JSON.stringify(existingProof) !== JSON.stringify(input.proof)) {
       throw Object.assign(new Error('Delivery proof cannot be changed after capture'), {
@@ -10096,7 +10096,7 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     // Keep this check after durable replay so a legitimate retry stays replayable.
     const existingDeliveryProof = row.proof_json
       ? parseJSON(row.proof_json, row.proof_json)
-      : null;
+      : (freshOrderJson.fulfillment_proof ?? null);
     if (existingDeliveryProof != null && input.proof !== undefined
       && JSON.stringify(existingDeliveryProof) !== JSON.stringify(input.proof)) {
       throw Object.assign(new Error('Delivery proof cannot be changed after capture'), {
