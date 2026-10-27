@@ -74,5 +74,13 @@ export function bindCreditTermsUI() {
       list.insertAdjacentHTML('afterbegin', `<div class="empty">${escapeHtml(error.message || 'Credit-term update failed.')}</div>`);
     }
   });
-  loadBusinessCreditCustomers();
+  // This module can bind after DOMContentLoaded while the shared ES-module
+  // graph is still resolving a state.js cycle. Defer the optional initial read
+  // until module evaluation has completed; keep failures visible instead of
+  // silently swallowing them.
+  setTimeout(() => {
+    loadBusinessCreditCustomers().catch(error => {
+      console.error('Could not load business credit customers', error);
+    });
+  }, 0);
 }
