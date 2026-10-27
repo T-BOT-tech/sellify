@@ -381,11 +381,14 @@ const courierScopeHelperEnd = store.indexOf('export async function selectDeliver
 assert.ok(courierScopeHelperStart >= 0 && courierScopeHelperEnd > courierScopeHelperStart,
   'shared courier location-grant predicate must remain explicit');
 const courierScopeHelper = store.slice(courierScopeHelperStart, courierScopeHelperEnd);
-assert.ok(courierScopeHelper.includes('memberships.some(')
-    && courierScopeHelper.includes("membership.scope_type !== 'LOCATION'")
+assert.ok(courierScopeHelper.includes("membership.scope_type === 'ORGANIZATION'")
+    && courierScopeHelper.includes("membership.scope_type === 'LOCATION'")
+    && courierScopeHelper.includes('Boolean(targetLocationId)')
     && courierScopeHelper.includes('membership.scope_id')
     && courierScopeHelper.includes('locationId'),
-  'shared courier location check must authorize any matching active grant');
+  'shared courier location check must allow explicit organization grants or matching non-empty location grants only');
+assert.ok(!courierScopeHelper.includes("membership.scope_type !== 'LOCATION'"),
+  'unknown or malformed courier scope types must not be treated as organization-wide access');
 
 const assignCourierStart = store.indexOf('export async function assignDeliveryCourier(');
 const assignCourierEnd = store.indexOf('export async function listDeliveryAssignments(', assignCourierStart + 40);
@@ -422,8 +425,8 @@ const courierList = store.slice(courierListStart, courierListEnd);
 assert.ok(courierList.includes('SELECT mr.scope_type, mr.scope_id')
     && courierList.includes('.all(actorUserId, String(chatId))'),
   'courier workload must load all active role grants');
-assert.ok(courierList.includes("courierMemberships.some(membership => membership.scope_type !== 'LOCATION')"),
-  'a broad active grant must preserve organization-level workload access');
+assert.ok(courierList.includes("courierMemberships.some(membership => membership.scope_type === 'ORGANIZATION')"),
+  'only an explicit organization-scoped grant may preserve organization-level workload access');
 assert.ok(courierList.includes('scopedLocations.includes(String(locationId))'),
   'requested location filters must be checked against every granted location');
 assert.ok(courierList.includes("if (locationId) {") && courierList.includes("clauses.push('da.location_id = ?')"),
