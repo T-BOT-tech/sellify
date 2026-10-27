@@ -229,7 +229,9 @@ export async function hydrateFromIndexedDB() {
         previousSnapshotId: journalWrite.previousSnapshotId,
         journalWritten: journalWrite.written,
       }) },
-      { key: OUTBOX_FALLBACK_CHECKPOINT_KEY, value: () => [...new Set([...checkpointedIds, ...(fallbackRecovery.operationIds || [])])] },
+      { key: OUTBOX_FALLBACK_CHECKPOINT_KEY, update: current => [
+        ...new Set([...(Array.isArray(current) ? current : []), ...(fallbackRecovery.operationIds || [])]),
+      ] },
     ]).then(async merged => {
       setOutboxEvents(merged);
       resetOutboxIndexedDbBaseline(merged);
