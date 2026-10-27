@@ -389,6 +389,8 @@ assert.ok(courierList.includes("courierMemberships.some(membership => membership
   'a broad active grant must preserve organization-level workload access');
 assert.ok(courierList.includes('scopedLocations.includes(String(locationId))'),
   'requested location filters must be checked against every granted location');
+assert.ok(courierList.includes("if (locationId) {") && courierList.includes("clauses.push('da.location_id = ?')"),
+  'an allowed explicit location filter must narrow results to that location');
 assert.ok(courierList.includes("da.location_id IN (${scopedLocations.map(() => '?').join(', ')})"),
   'courier workload must include all granted locations without exposing other branches');
 
