@@ -360,6 +360,20 @@ assert.match(server, /logistics:deliveries:update_assigned/);
 assert.match(server, /logistics:deliveries:reassign/);
 assert.match(server, /Idempotency-Key is required/);
 
+// Multi-location couriers may hold more than one active location-scoped grant.
+// Ownership enforcement must evaluate all grants rather than an arbitrary first row.
+const courierOwnershipStart = store.indexOf('export async function assertCourierOwnsDelivery(');
+const courierOwnershipEnd = store.indexOf('export async function ', courierOwnershipStart + 40);
+assert.ok(courierOwnershipStart >= 0 && courierOwnershipEnd > courierOwnershipStart,
+  'courier ownership guard must remain explicit');
+const courierOwnership = store.slice(courierOwnershipStart, courierOwnershipEnd);
+assert.match(courierOwnership, /SELECT mr\.scope_type, mr\.scope_id[\s\S]*?\.all\(actorUserId, String\(chatId\)\)/,
+  'courier ownership must load all active location-scoped role grants');
+assert.match(courierOwnership, /memberships\.some\(membership =>[\s\S]*?membership\.scope_type !== 'LOCATION'[\s\S]*?membership\.scope_id[\s\S]*?assignment\.location_id/,
+  'a matching location-scoped grant must authorize access even if another grant appears first');
+assert.match(courierOwnership, /if \(!hasLocationAccess\)[\s\S]*?COURIER_SCOPE_DENIED/,
+  'courier requests must still fail closed when no active grant covers the assigned location');
+
 console.log('GAP-2 Delivery Assignment Lifecycle Regression: PASS');
 console.log('Assignment history + active-assignment uniqueness: PASS');
 console.log('Courier accept/start/deliver authorization boundary: PASS');
