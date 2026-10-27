@@ -11,7 +11,7 @@
 // functions, event handlers) sees the new value automatically, with no
 // call-site changes (this is Rule 1 from the modularization plan, §1).
 import { STORAGE_KEYS, DEFAULT_PAYMENT_METHODS, defaultSyncServerUrl } from '../constants.js';
-import { idbGetAll, idbUpdateAndSet, isIdbUnavailable } from './idb.js';
+import { idbGetAll, idbUpdate, idbUpdateAndSet, isIdbUnavailable } from './idb.js';
 import { runLedgerMigration, migrateProductMoney, migrateOrderMoney } from './migration.js';
 import { saveJSON } from './json.js';
 import {
@@ -176,9 +176,26 @@ export async function hydrateFromIndexedDB() {
 
   // Replay a prior localStorage-only session over this IDB snapshot, then
   // checkpoint atomically; keep log keys until the transaction commits.
-  const checkpointedIds = Array.isArray(fromIdb[OUTBOX_FALLBACK_CHECKPOINT_KEY]) ? fromIdb[OUTBOX_FALLBACK_CHECKPOINT_KEY] : [];
+  let checkpointedIds = Array.isArray(fromIdb[OUTBOX_FALLBACK_CHECKPOINT_KEY]) ? fromIdb[OUTBOX_FALLBACK_CHECKPOINT_KEY] : [];
   const fallbackRecovery = restoreOutboxFallbackOperations({ persistLocalFallback: false, checkpointedOperationIds: checkpointedIds });
-  if (fallbackRecovery.checkpointedKeys?.length) removeOutboxRecoveryOperations(fallbackRecovery.checkpointedKeys);
+  if (fallbackRecovery.checkpointedKeys?.length) {
+    const cleaned = removeOutboxRecoveryOperations(fallbackRecovery.checkpointedKeys);
+    if (cleaned) {
+      const cleanedIds = new Set(fallbackRecovery.checkpointedKeys
+        .filter(key => typeof key === 'string' && key.startsWith('sellify.outbox.recovery.log.v1:'))
+        .map(key => key.slice('sellify.outbox.recovery.log.v1:'.length)));
+      checkpointedIds = checkpointedIds.filter(id => !cleanedIds.has(id));
+      // Prune only IDs whose exact recovery records were successfully removed.
+      // An atomic IDB updater preserves unrelated checkpoint IDs committed by
+      // another tab while this hydration was running.
+      try {
+        await idbUpdate(OUTBOX_FALLBACK_CHECKPOINT_KEY, current =>
+          (Array.isArray(current) ? current : []).filter(id => !cleanedIds.has(id)));
+      } catch (error) {
+        console.error('Could not prune cleaned outbox fallback checkpoint IDs; retaining checkpoint metadata', error);
+      }
+    }
+  }
   if (fallbackRecovery.keys.length) {
     const indexedDbBaseline = getOutboxIndexedDbBaseline() || [];
     const recoveredEvents = fallbackRecovery.events;
@@ -201,7 +218,16 @@ export async function hydrateFromIndexedDB() {
       setOutboxEvents(merged);
       resetOutboxIndexedDbBaseline(merged);
       resetOutboxRecoveryBaseline(merged);
-      removeOutboxRecoveryOperations(fallbackRecovery.keys);
+      const cleaned = removeOutboxRecoveryOperations(fallbackRecovery.keys);
+      if (cleaned) {
+        const cleanedIds = new Set(fallbackRecovery.operationIds || []);
+        try {
+          await idbUpdate(OUTBOX_FALLBACK_CHECKPOINT_KEY, current =>
+            (Array.isArray(current) ? current : []).filter(id => !cleanedIds.has(id)));
+        } catch (error) {
+          console.error('Could not prune successfully migrated outbox fallback checkpoint IDs; retaining checkpoint metadata', error);
+        }
+      }
     }).catch(error => {
       console.error('Failed to migrate append-only outbox recovery records into IndexedDB; retaining fallback log', error);
     });
