@@ -9919,11 +9919,6 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
         statusCode: 409, code: 'DELIVERY_PROOF_IMMUTABLE',
       });
     }
-    if (normalizedAction === 'DELIVERED') {
-      if (existingProof != null && input.proof === undefined) {
-        // Existing proof is valid evidence; do not require a duplicate payload.
-      }
-    }
     if (fulfillmentTarget) {
       const currentFulfillment = normalizeCoreFulfillmentStatus(fulfillment.status);
       if (!CORE_FULFILLMENT_TRANSITIONS.delivery[currentFulfillment]?.has(fulfillmentTarget)) throw Object.assign(new Error('Cannot move fulfillment from ' + currentFulfillment + ' to ' + fulfillmentTarget), { statusCode: 409, code: 'INVALID_FULFILLMENT_TRANSITION' });
