@@ -8741,10 +8741,14 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
 }
 
 function hasCourierLocationGrant(memberships, locationId) {
-  return memberships.some(membership =>
-    membership.scope_type !== 'LOCATION'
-      || String(membership.scope_id || '') === String(locationId || '')
-  );
+  const targetLocationId = String(locationId || '').trim();
+  return memberships.some(membership => {
+    if (membership.scope_type === 'ORGANIZATION') return true;
+    return membership.scope_type === 'LOCATION'
+      && Boolean(targetLocationId)
+      && Boolean(String(membership.scope_id || '').trim())
+      && String(membership.scope_id) === targetLocationId;
+  });
 }
 
 export async function selectDeliveryCourier(chatId, organizationId, locationId) {
@@ -8979,10 +8983,10 @@ export async function listDeliveryAssignments(chatId, actor = null, filters = {}
 
     // Match the command authorization boundary: any broad grant covers the
     // organization; otherwise, evaluate every active location-scoped grant.
-    const hasBroadCourierScope = courierMemberships.some(membership => membership.scope_type !== 'LOCATION');
+    const hasBroadCourierScope = courierMemberships.some(membership => membership.scope_type === 'ORGANIZATION');
     if (!hasBroadCourierScope) {
       const scopedLocations = [...new Set(courierMemberships
-        .filter(membership => membership.scope_type === 'LOCATION' && membership.scope_id != null)
+        .filter(membership => membership.scope_type === 'LOCATION' && String(membership.scope_id || '').trim() !== '')
         .map(membership => String(membership.scope_id)))];
       if (!scopedLocations.length || (locationId && !scopedLocations.includes(String(locationId)))) {
         throw Object.assign(new Error('Courier workload is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
@@ -9104,10 +9108,7 @@ export async function assertCourierOwnsDelivery(chatId, serverOrderId, actor) {
   // A courier can hold separate location-scoped grants for multiple branches.
   // Do not let SQLite's arbitrary first-row choice deny a valid grant or skip
   // a matching grant when several active contextual roles exist.
-  const hasLocationAccess = memberships.some(membership =>
-    membership.scope_type !== 'LOCATION'
-      || String(membership.scope_id || '') === String(assignment.location_id || '')
-  );
+  const hasLocationAccess = hasCourierLocationGrant(memberships, assignment.location_id);
   if (!hasLocationAccess) {
     throw Object.assign(new Error('Courier role is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
   }
