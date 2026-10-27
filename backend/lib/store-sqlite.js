@@ -8740,6 +8740,13 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
   return movements;
 }
 
+function hasCourierLocationGrant(memberships, locationId) {
+  return memberships.some(membership =>
+    membership.scope_type !== 'LOCATION'
+      || String(membership.scope_id || '') === String(locationId || '')
+  );
+}
+
 export async function selectDeliveryCourier(chatId, organizationId, locationId) {
   ensureDatabase();
   const location = locationId ? String(locationId) : null;
@@ -8881,16 +8888,17 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
       const selected = await selectDeliveryCourier(chatId, organizationId, locationId);
       selectedCourierUserId = String(selected.user_id);
     }
-    const courier = db.prepare(`
-      SELECT m.user_id, mr.role_id, mr.scope_type, mr.scope_id
+    const couriers = db.prepare(`
+      SELECT mr.scope_type, mr.scope_id
       FROM memberships m
       JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
       WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
         AND mr.role_id = 'logistics_courier'
-    `).get(selectedCourierUserId, String(chatId));
-    if (!courier) throw Object.assign(new Error('Courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
-    const scopeId = courier.scope_type === 'LOCATION' ? String(courier.scope_id || '') : null;
-    if (scopeId && String(locationId || '') !== scopeId) throw Object.assign(new Error('Courier role is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
+    `).all(selectedCourierUserId, String(chatId));
+    if (!couriers.length) throw Object.assign(new Error('Courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
+    if (!hasCourierLocationGrant(couriers, locationId)) {
+      throw Object.assign(new Error('Courier role is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
+    }
     if (!fulfillment) {
       const now = nowIso();
       const fulfillmentId = crypto.randomUUID();
@@ -9776,14 +9784,14 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
       // For a new command, revalidate target courier membership and role under
       // the write lock so concurrent role revocation cannot authorize a stale
       // reassignment.
-      const freshCourier = db.prepare(`
-        SELECT m.user_id, mr.scope_type, mr.scope_id
+      const freshCourierGrants = db.prepare(`
+        SELECT mr.scope_type, mr.scope_id
         FROM memberships m
         JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
         WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
           AND mr.role_id = 'logistics_courier'
-      `).get(targetCourierId, String(chatId));
-      if (!freshCourier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), {
+      `).all(targetCourierId, String(chatId));
+      if (!freshCourierGrants.length) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), {
         statusCode: 403, code: 'COURIER_ROLE_REQUIRED',
       });
       const exception = db.prepare(`SELECT da.* FROM delivery_assignments da JOIN fulfillments f ON f.id = da.fulfillment_id WHERE f.server_order_id = ? AND da.organization_id = ? AND da.status IN ('CANCELLED','FAILED') ORDER BY da.updated_at DESC LIMIT 1`).get(String(serverOrderId), organizationId);
@@ -9797,7 +9805,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
       }
       if (String(targetCourierId) === String(exception.courier_user_id)) throw Object.assign(new Error('A different courier is required to resolve a delivery exception'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
       const locationId = canonicalLocationId || exception.location_id || order.location_id || input.locationId || input.location_id || null;
-      if (freshCourier.scope_type === 'LOCATION' && String(freshCourier.scope_id || '') !== String(locationId || '')) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
+      if (!hasCourierLocationGrant(freshCourierGrants, locationId)) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
       const now = nowIso();
       db.prepare('UPDATE delivery_assignments SET status = \'REASSIGNED\', last_command_key = ?, updated_at = ?, version = version + 1 WHERE id = ?').run(commandKey, now, exception.id);
       const assignmentKey = String(input.assignmentKey || input.assignment_key || ('exception-reassign:' + serverOrderId + ':' + targetCourierId + ':' + commandKey)).trim();
@@ -9882,14 +9890,14 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     const courierActor = actorRoles.includes('logistics_courier') || String(actor?.role || '') === 'logistics_courier';
     if (courierActor && ['ACCEPTED', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(normalizedAction)) {
       const actorUserId = String(actor?.userId || '').trim();
-      const courierMembership = db.prepare(`
+      const courierMemberships = db.prepare(`
         SELECT mr.scope_type, mr.scope_id
         FROM memberships m
         JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
         WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
           AND mr.role_id = 'logistics_courier'
-      `).get(actorUserId, String(chatId));
-      if (!actorUserId || !courierMembership) {
+      `).all(actorUserId, String(chatId));
+      if (!actorUserId || !courierMemberships.length) {
         throw Object.assign(new Error('Active logistics courier role is required'), {
           statusCode: 403, code: 'COURIER_ROLE_REQUIRED',
         });
@@ -9900,8 +9908,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
         });
       }
       const assignedLocationId = canonicalLocationId || (active.location_id ? String(active.location_id) : null);
-      if (courierMembership.scope_type === 'LOCATION'
-        && String(courierMembership.scope_id || '') !== String(assignedLocationId || '')) {
+      if (!hasCourierLocationGrant(courierMemberships, assignedLocationId)) {
         throw Object.assign(new Error('Courier role is outside the delivery location scope'), {
           statusCode: 403, code: 'COURIER_SCOPE_DENIED',
         });
@@ -9912,10 +9919,10 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
 
     if (normalizedAction === 'REASSIGNED') {
       if (!targetCourierId || targetCourierId === String(active.courier_user_id)) throw Object.assign(new Error('A different courier is required for reassignment'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
-      const courier = db.prepare(`SELECT m.user_id, mr.scope_type, mr.scope_id FROM memberships m JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active' WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active' AND mr.role_id = 'logistics_courier'`).get(targetCourierId, String(chatId));
-      if (!courier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
+      const courierGrants = db.prepare(`SELECT mr.scope_type, mr.scope_id FROM memberships m JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active' WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active' AND mr.role_id = 'logistics_courier'`).all(targetCourierId, String(chatId));
+      if (!courierGrants.length) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
       const locationId = canonicalLocationId || active.location_id || order.location_id || input.locationId || input.location_id || null;
-      if (courier.scope_type === 'LOCATION' && String(courier.scope_id || '') !== String(locationId || '')) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
+      if (!hasCourierLocationGrant(courierGrants, locationId)) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
     }
     const now = nowIso();
     const fulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ? AND organization_id = ?').get(active.fulfillment_id, organizationId);
