@@ -43,8 +43,9 @@ assert.match(fulfillmentTransition, /ROLLBACK/,
   'failed fulfillment transitions must roll back the write transaction');
 assert.ok(fulfillmentTransition.includes('existingDeliveryProof != null')
     && fulfillmentTransition.includes('input.proof !== undefined')
-    && fulfillmentTransition.includes('DELIVERY_PROOF_IMMUTABLE'),
-  'generic fulfillment transitions must not overwrite captured delivery proof');
+    && fulfillmentTransition.includes('DELIVERY_PROOF_IMMUTABLE')
+    && fulfillmentTransition.includes('freshOrderJson.fulfillment_proof'),
+  'generic fulfillment transitions must not overwrite captured delivery proof, including legacy order proof');
 const fulfillmentReplayBoundary = fulfillmentTransition.indexOf("if (String(row.last_command_key || '') === commandKey)");
 const deliveryProofMutationGuard = fulfillmentTransition.indexOf('const existingDeliveryProof');
 const fulfillmentPersistenceWrite = fulfillmentTransition.indexOf('UPDATE fulfillments');
@@ -65,8 +66,9 @@ assert.ok(proofGuardStart >= 0 && proofGuardEnd > proofGuardStart,
 const assignmentProofGuard = assignmentLifecycleBody.slice(proofGuardStart, proofGuardEnd);
 assert.ok(assignmentProofGuard.includes('const existingProof')
     && assignmentProofGuard.includes('input.proof !== undefined')
-    && assignmentProofGuard.includes('DELIVERY_PROOF_IMMUTABLE'),
-  'all assignment transitions must protect captured proof against replacement');
+    && assignmentProofGuard.includes('DELIVERY_PROOF_IMMUTABLE')
+    && assignmentProofGuard.includes('orderFromRow(freshOrderRow).fulfillment_proof'),
+  'all assignment transitions must protect captured proof, including legacy order proof');
 assert.ok(!assignmentProofGuard.includes("if (normalizedAction === 'DELIVERED')"),
   'proof immutability must apply to accepted/in-progress transitions too, not only delivery completion');
 
