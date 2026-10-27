@@ -53,6 +53,24 @@ assert.ok(fulfillmentReplayBoundary >= 0
     && fulfillmentPersistenceWrite > deliveryProofMutationGuard,
   'delivery proof immutability must be enforced after durable replay and before persistence');
 
+const assignmentLifecycleStart = store.indexOf('export async function transitionDeliveryAssignment(');
+const assignmentLifecycleEnd = store.indexOf('export async function transitionOrderFulfillment(', assignmentLifecycleStart + 40);
+assert.ok(assignmentLifecycleStart >= 0 && assignmentLifecycleEnd > assignmentLifecycleStart,
+  'canonical delivery assignment lifecycle must remain explicit');
+const assignmentLifecycleBody = store.slice(assignmentLifecycleStart, assignmentLifecycleEnd);
+const proofGuardStart = assignmentLifecycleBody.indexOf('const fulfillmentTarget =');
+const proofGuardEnd = assignmentLifecycleBody.indexOf('if (fulfillmentTarget)', proofGuardStart);
+assert.ok(proofGuardStart >= 0 && proofGuardEnd > proofGuardStart,
+  'assignment lifecycle proof guard must remain adjacent to fulfillment persistence');
+const assignmentProofGuard = assignmentLifecycleBody.slice(proofGuardStart, proofGuardEnd);
+assert.ok(assignmentProofGuard.includes('const existingProof')
+    && assignmentProofGuard.includes('input.proof !== undefined')
+    && assignmentProofGuard.includes('DELIVERY_PROOF_IMMUTABLE'),
+  'all assignment transitions must protect captured proof against replacement');
+assert.ok(!assignmentProofGuard.includes("if (normalizedAction === 'DELIVERED')"),
+  'proof immutability must apply to accepted/in-progress transitions too, not only delivery completion');
+
+
 assert.match(fulfillmentTransition, /applyCoreFulfillmentInventoryConsequence\(key, updated, freshOrderJson, actor\)/,
   'fulfillment inventory consequences must use the order re-read inside the write transaction');
 
