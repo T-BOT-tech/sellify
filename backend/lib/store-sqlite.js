@@ -8770,9 +8770,8 @@ export async function selectDeliveryCourier(chatId, organizationId, locationId) 
     WHERE m.chat_id = ?
       AND m.status = 'active'
       AND (
-        mr.scope_type IS NULL
-        OR mr.scope_type != 'LOCATION'
-        OR mr.scope_id = ?
+        mr.scope_type = 'ORGANIZATION'
+        OR (mr.scope_type = 'LOCATION' AND mr.scope_id = ?)
       )
     GROUP BY m.user_id, mr.scope_type, mr.scope_id
     ORDER BY active_workload ASC, m.user_id ASC
