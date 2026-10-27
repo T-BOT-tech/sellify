@@ -8980,8 +8980,14 @@ export async function listDeliveryAssignments(chatId, actor = null, filters = {}
         throw Object.assign(new Error('Courier workload is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
       }
       courierLocationScoped = true;
-      clauses.push(`da.location_id IN (${scopedLocations.map(() => '?').join(', ')})`);
-      params.push(...scopedLocations);
+      if (locationId) {
+        // Preserve an explicit workload filter when the requested location is allowed.
+        clauses.push('da.location_id = ?');
+        params.push(String(locationId));
+      } else {
+        clauses.push(`da.location_id IN (${scopedLocations.map(() => '?').join(', ')})`);
+        params.push(...scopedLocations);
+      }
     }
   }
   if (status && ['ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY'].includes(status)) {
