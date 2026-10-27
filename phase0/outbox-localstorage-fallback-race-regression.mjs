@@ -70,7 +70,7 @@ function compareText(left, right) { return left === right ? 0 : left < right ? -
   appendOutboxRecoveryOperations([done], { storage, writerId: 'writer-a' });
   resetOutboxRecoveryBaseline([done]);
   appendOutboxRecoveryOperations([], { storage, writerId: 'writer-b' });
-  storage.setItem(`${OUTBOX_FALLBACK_LOG_PREFIX}stale-put`, JSON.stringify({
+  storage.setItem(`${OUTBOX_FALLBACK_LOG_PREFIX}writer-c:1`, JSON.stringify({
     version: 1, operationId: 'writer-c:1', writerId: 'writer-c', sequence: 1,
     counter: 1, eventId: 'done', kind: 'put', event: done,
   }));
@@ -135,7 +135,7 @@ function compareText(left, right) { return left === right ? 0 : left < right ? -
 // inaccessible.
 {
   const storage = fakeStorage();
-  storage.setItem(`${OUTBOX_FALLBACK_LOG_PREFIX}valid`, JSON.stringify({
+  storage.setItem(`${OUTBOX_FALLBACK_LOG_PREFIX}tab-a:1`, JSON.stringify({
     version: 1, operationId: 'tab-a:1', writerId: 'tab-a', sequence: 1,
     counter: 1, eventId: 'valid', kind: 'put', event: { eventId: 'valid' },
   }));
