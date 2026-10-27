@@ -398,9 +398,9 @@ const courierSelectionEnd = store.indexOf('export async function assignDeliveryC
 assert.ok(courierSelectionStart >= 0 && courierSelectionEnd > courierSelectionStart,
   'canonical courier selection must remain explicit');
 const courierSelection = store.slice(courierSelectionStart, courierSelectionEnd);
-assert.match(courierSelection, /mr\\.scope_type = 'ORGANIZATION'[\\s\\S]*?mr\\.scope_type = 'LOCATION' AND mr\\.scope_id = \\?/,
+assert.match(courierSelection, /mr\.scope_type = 'ORGANIZATION'[\s\S]*?mr\.scope_type = 'LOCATION' AND mr\.scope_id = \?/,
   'automatic courier selection must include organization grants or matching location grants only');
-assert.doesNotMatch(courierSelection, /mr\\.scope_type IS NULL|mr\\.scope_type != 'LOCATION'/,
+assert.doesNotMatch(courierSelection, /mr\.scope_type IS NULL|mr\.scope_type != 'LOCATION'/,
   'null, resource, and unknown scope types must not qualify for an arbitrary delivery location');
 
 const assignCourierStart = store.indexOf('export async function assignDeliveryCourier(');
