@@ -89,6 +89,9 @@ jobs:
       - name: Browser module serving HTTP regression
         run: npm run test:browser-module-serving-http
 
+      - name: Production server browser module HTTP regression
+        run: npm run test:browser-module-serving-production-http
+
       - name: Syntax check core entrypoints
         run: |
           node --check backend/server.js
