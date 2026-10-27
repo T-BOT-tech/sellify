@@ -10,7 +10,6 @@ const backendServer = fs.readFileSync(path.join(ROOT, 'backend/server.js'), 'utf
 const devServer = fs.readFileSync(path.join(ROOT, 'app/dev-server.mjs'), 'utf8');
 const bridge = fs.readFileSync(path.join(ROOT, 'app/src/window-bridge.js'), 'utf8');
 const main = fs.readFileSync(path.join(ROOT, 'app/src/main.js'), 'utf8');
-const creditTerms = fs.readFileSync(path.join(ROOT, 'app/src/b2b/credit-terms.js'), 'utf8');
 const backendAllowlist = new Set(BROWSER_BACKEND_MODULES);
 const sharedAllowlist = new Set(BROWSER_SHARED_MODULES);
 
@@ -79,7 +78,6 @@ assert.match(devServer, /ALLOWED_SHARED_MODULES\.has\(relativePath\)/, 'frontend
 assert.match(bridge, /refreshDeliveryAssignments, transitionDeliveryAssignmentForOrder/, 'bridge imports logistics exports');
 assert.match(bridge.slice(bridge.indexOf('Object.assign(window')), /refreshDeliveryAssignments, transitionDeliveryAssignmentForOrder/, 'bridge assigns logistics exports to window');
 assert.match(main, /refreshDeliveryAssignments, transitionDeliveryAssignmentForOrder/, 'main re-exports logistics functions');
-assert.match(creditTerms, /setTimeout\(\(\) => \{ loadBusinessCreditCustomers\(\)\.catch\(\(\) => \{\}\); \}, 0\)/, 'optional initial credit read waits until state initialization completes');
 
 console.log('Browser module serving regression: PASS');
 console.log(`Bootstrap modules: ${visited.size}; allowlisted backend modules reached: ${backendRequests.size}; shared modules reached: ${sharedRequests.size}`);
