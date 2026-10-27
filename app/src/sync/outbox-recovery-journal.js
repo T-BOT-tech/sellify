@@ -8,6 +8,7 @@
 export const OUTBOX_RECOVERY_KEY = 'sellify.outbox.recovery.v1';
 export const OUTBOX_RECOVERY_COMMIT_KEY = 'ledger_outbox_recovery_commit_v1';
 export const OUTBOX_FALLBACK_LOG_PREFIX = 'sellify.outbox.recovery.log.v1:';
+export const OUTBOX_FALLBACK_CHECKPOINT_KEY = 'ledger_outbox_fallback_checkpoint_v1';
 const fallbackWriterId = newSnapshotId();
 let fallbackSequence = 0;
 let lastSnapshot = null;
@@ -184,10 +185,14 @@ export function appendOutboxRecoveryOperations(events, {
 
 export function restoreOutboxRecoveryOperations({
   storage = globalThis.localStorage, events = [], setOutboxEvents, saveOutbox, logger = console,
+  checkpointedOperationIds = [],
 } = {}) {
   try {
-    const records = readFallbackOperationRecords(storage);
-    if (!records.length) return { restored: false, changed: false, events, keys: [] };
+    const allRecords = readFallbackOperationRecords(storage);
+    const checkpointed = new Set(Array.isArray(checkpointedOperationIds) ? checkpointedOperationIds : []);
+    const checkpointedKeys = allRecords.filter(({ operation }) => checkpointed.has(operation.operationId)).map(record => record.key);
+    const records = allRecords.filter(({ operation }) => !checkpointed.has(operation.operationId));
+    if (!records.length) return { restored: false, changed: false, events, keys: [], checkpointedKeys, operationIds: [] };
     const latest = new Map();
     for (const { operation } of records) {
       const current = latest.get(operation.eventId);
@@ -208,10 +213,10 @@ export function restoreOutboxRecoveryOperations({
     const changed = !sameValue(baseline, result);
     if (changed) { setOutboxEvents?.(result); saveOutbox?.(result); }
     lastSnapshot = cloneEvents(result);
-    return { restored: true, changed, events: result, keys: records.map(record => record.key) };
+    return { restored: true, changed, events: result, keys: records.map(record => record.key), checkpointedKeys, operationIds: records.map(({ operation }) => operation.operationId) };
   } catch (error) {
     logger.error('Outbox append-only fallback replay failed', error);
-    return { restored: false, changed: false, events, keys: [] };
+    return { restored: false, changed: false, events, keys: [], checkpointedKeys: [], operationIds: [] };
   }
 }
 
