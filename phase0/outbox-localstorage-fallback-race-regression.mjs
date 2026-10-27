@@ -141,7 +141,16 @@ function compareText(left, right) { return left === right ? 0 : left < right ? -
   }));
   storage.setItem(`${OUTBOX_FALLBACK_LOG_PREFIX}bad-json`, '{bad json');
   storage.setItem(`${OUTBOX_FALLBACK_LOG_PREFIX}bad-shape`, JSON.stringify({ version: 7, eventId: 'ignored' }));
-  assert.deepEqual(restoreOutboxRecoveryOperations({ storage, events: [] }).events.map(event => event.eventId), ['valid']);
+  storage.setItem(`${OUTBOX_FALLBACK_LOG_PREFIX}mismatched-key`, JSON.stringify({
+    version: 1, operationId: 'different-key', writerId: 'tab-b', sequence: 1,
+    counter: 1, eventId: 'spoofed', kind: 'put', event: { eventId: 'spoofed' },
+  }));
+  storage.setItem(`${OUTBOX_FALLBACK_LOG_PREFIX}zero-counter`, JSON.stringify({
+    version: 1, operationId: 'zero-counter', writerId: 'tab-c', sequence: 1,
+    counter: 0, eventId: 'zero-counter-event', kind: 'put', event: { eventId: 'zero-counter-event' },
+  }));
+  assert.deepEqual(restoreOutboxRecoveryOperations({ storage, events: [] }).events.map(event => event.eventId), ['valid'],
+    'records with mismatched key identity or invalid revision counters must not be replayed');
 }
 
 console.log('PASS: naive lost-update characterization, production append-only concurrent additions, tombstone replay, deterministic conflict resolution, and malformed-record handling');
