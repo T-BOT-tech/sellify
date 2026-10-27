@@ -204,7 +204,7 @@ assert.ok(
   'automatic courier retries must resolve durable command history before selecting a currently eligible courier',
 );
 const autoSelectionStart = assignmentCreation.indexOf('if (!selectedCourierUserId)');
-const autoSelectionEnd = assignmentCreation.indexOf('const courier = db.prepare', autoSelectionStart);
+const autoSelectionEnd = assignmentCreation.indexOf('const couriers = db.prepare', autoSelectionStart);
 assert.ok(autoSelectionStart >= 0 && autoSelectionEnd > autoSelectionStart,
   'automatic courier selection and subsequent role validation must remain explicit');
 assert.ok(
