@@ -107,11 +107,12 @@ function updateInTransaction(key, updater, additionalWrite = null) {
         nextValue = updater(request.result !== undefined ? request.result : null);
         if (nextValue === undefined) throw new TypeError('idbUpdate updater must return a value');
         store.put(nextValue, key);
-        for (const sidecar of (Array.isArray(additionalWrite) ? additionalWrite : additionalWrite ? [additionalWrite] : [])) {
-          const sidecarValue = typeof sidecar.value === 'function'
-            ? sidecar.value(nextValue)
-            : sidecar.value;
-          store.put(sidecarValue, sidecar.key);
+        const sidecars = Array.isArray(additionalWrite) ? additionalWrite : additionalWrite ? [additionalWrite] : [];
+        for (const additionalWrite of sidecars) {
+          const sidecarValue = typeof additionalWrite.value === 'function'
+            ? additionalWrite.value(nextValue)
+            : additionalWrite.value;
+          store.put(sidecarValue, additionalWrite.key);
         }
       } catch (error) {
         try { tx.abort(); } catch {}
