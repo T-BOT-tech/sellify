@@ -10,6 +10,7 @@ globalThis.localStorage = {
   removeItem(key) { storage.delete(key); },
 };
 globalThis.window = globalThis;
+globalThis.addEventListener = () => {};
 globalThis.__APP_CONFIG__ = {};
 globalThis.document = {
   getElementById() { return null; },
