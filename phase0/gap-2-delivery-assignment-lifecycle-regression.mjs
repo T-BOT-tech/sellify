@@ -374,6 +374,23 @@ assert.match(courierOwnership, /memberships\.some\(membership =>[\s\S]*?membersh
 assert.match(courierOwnership, /if \(!hasLocationAccess\)[\s\S]*?COURIER_SCOPE_DENIED/,
   'courier requests must still fail closed when no active grant covers the assigned location');
 
+// Workload projection must honor every active courier location grant too.
+// Fixing command authorization alone is insufficient if the courier cannot see
+// their assignments for other valid locations.
+const courierListStart = store.indexOf('export async function listDeliveryAssignments(');
+const courierListEnd = store.indexOf('export async function getDeliveryAssignment(', courierListStart + 40);
+assert.ok(courierListStart >= 0 && courierListEnd > courierListStart,
+  'courier assignment listing must remain explicit');
+const courierList = store.slice(courierListStart, courierListEnd);
+assert.match(courierList, /SELECT mr\\.scope_type, mr\\.scope_id[\\s\\S]*?\\.all\\(actorUserId, String\\(chatId\\)\\)/,
+  'courier workload must load all active role grants');
+assert.match(courierList, /courierMemberships\\.some\\(membership => membership\\.scope_type !== 'LOCATION'\\)/,
+  'a broad active grant must preserve organization-level workload access');
+assert.match(courierList, /scopedLocations\\.includes\\(String\\(locationId\\)\\)/,
+  'requested location filters must be checked against every granted location');
+assert.match(courierList, /da\\.location_id IN \\(\\$\\{scopedLocations\\.map\\(\\(\\) => '\\?'\\)\\.join\\(', '\\)\\}\\)/,
+  'courier workload must include all granted locations without exposing other branches');
+
 console.log('GAP-2 Delivery Assignment Lifecycle Regression: PASS');
 console.log('Assignment history + active-assignment uniqueness: PASS');
 console.log('Courier accept/start/deliver authorization boundary: PASS');
