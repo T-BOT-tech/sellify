@@ -32,6 +32,15 @@ export function initializeOutboxRecoveryBaseline(events) {
   }
 }
 
+// Compare the complete ordered snapshot, not just event IDs. During an
+// IndexedDB transaction an existing event can change status/attempt metadata
+// without changing its ID; a length/ID-only check would then overwrite that
+// newer same-tab mutation with the older transaction result.
+export function sameOutboxSnapshot(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+  return left.every((event, index) => JSON.stringify(event) === JSON.stringify(right[index]));
+}
+
 export function getOutboxRecoveryBaseline() {
   return Array.isArray(lastSnapshot) ? lastSnapshot.map(event => ({ ...event })) : null;
 }

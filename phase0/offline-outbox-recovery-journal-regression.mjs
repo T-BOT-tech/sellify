@@ -7,6 +7,7 @@ import {
   mergeOutboxSnapshots,
   resetOutboxIndexedDbBaseline,
   resetOutboxRecoveryBaseline,
+  sameOutboxSnapshot,
   restoreOutboxRecoveryJournal,
   writeOutboxRecoveryJournal,
 } from '../app/src/sync/outbox-recovery-journal.js';
@@ -36,6 +37,24 @@ assert.match(outbox, /const indexedDbBaseline = getOutboxIndexedDbBaseline\(\) \
   'IndexedDB reconciliation must use a baseline independent from the synchronously updated recovery journal');
 assert.match(outbox, /\.then\(merged => \{\s*resetOutboxIndexedDbBaseline\(merged\);/,
   'the IndexedDB baseline must advance only after the atomic IndexedDB transaction commits');
+assert.match(outbox, /if \(sameOutboxSnapshot\(outboxEvents, localEvents\)\) \{\s*setOutboxEvents\(merged\);/,
+  'an IndexedDB completion must not replace newer same-tab mutations to an existing event');
+assert.doesNotMatch(outbox, /currentIds\.length === savedIds\.length && currentIds\.every/,
+  'matching event IDs alone must not be treated as an unchanged snapshot');
+
+// Same event IDs are not sufficient evidence that the live state is unchanged:
+// retry metadata, status, payload, and other fields can change while IDB commits.
+{
+  const before = [{ eventId: 'same-event', status: 'pending', attempts: 0 }];
+  const unchangedClone = [{ eventId: 'same-event', status: 'pending', attempts: 0 }];
+  const changedExistingEvent = [{ eventId: 'same-event', status: 'failed', attempts: 1 }];
+  assert.equal(sameOutboxSnapshot(before, unchangedClone), true,
+    'equal full snapshots may be replaced by the committed merged snapshot');
+  assert.equal(sameOutboxSnapshot(before, changedExistingEvent), false,
+    'a same-ID status/attempt mutation must be preserved while a transaction is in flight');
+  assert.equal(sameOutboxSnapshot(before, [{ eventId: 'same-event', status: 'pending', attempts: 0, lastError: null }]), false,
+    'adding or clearing metadata is also a mutation even when IDs are unchanged');
+}
 assert.match(hydrate, /restoreRecoveryJournal\(\{/,
   'hydration must use the tested recovery journal implementation');
 assert.match(hydrate, /idbGetAll\(\[\.\.\.Object\.values\(STORAGE_KEYS\), OUTBOX_RECOVERY_COMMIT_KEY\]\)/,
