@@ -39,6 +39,7 @@ export default {
     syncServerUrl: "URL-ka Server-ka Is-raacinta",
     syncUrlHint: "Halka dalabaadka safka ku jira loo diro.",
     language: "Luuqadda",
+    onboardingLanguageHint: "Sellify luqaddan waxay ugu isticmaashaa qalabkan oo keliya. Tani ma go'aamiso dalka ganacsigaaga, lacagta, xukunka sharciga ee khuseeya, ama u diyaarsanaanta canshuuraha iyo lacag-bixinta.",
     orderSaved: "Dalabka waa la kaydiyay ✅",
     settingsSaved: "Hagaajintii waa la kaydiyay.",
     syncing: "Waa la is-raacinayaa…",

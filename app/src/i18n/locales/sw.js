@@ -39,6 +39,7 @@ export default {
     syncServerUrl: "URL ya Server ya Kusawazisha",
     syncUrlHint: "Mahali ambapo oda zilizowekwa kwenye foleni zinasawazishwa.",
     language: "Lugha",
+    onboardingLanguageHint: "Sellify hutumia lugha hii kwenye kifaa hiki pekee. Haibainishi nchi ya biashara yako, sarafu, mamlaka ya kisheria, wala utayari wako wa kodi au malipo.",
     orderSaved: "Oda imehifadhiwa kwenye foleni ✅",
     settingsSaved: "Mipangilio imehifadhiwa.",
     syncing: "Inasawazisha…",

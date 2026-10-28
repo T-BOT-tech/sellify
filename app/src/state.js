@@ -32,7 +32,7 @@ import { migrateProductMoney, migrateOrderMoney } from './storage/migration.js';
 
 export let config = loadJSON(STORAGE_KEYS.config, {
   sellerName: '', chatId: '', syncUrl: defaultSyncServerUrl, lang: 'en',
-  currencyCode: 'INR', currencySymbol: '', niche: '', businessModel: 'retail',
+  currencyCode: 'ETB', currencySymbol: '', niche: '', businessModel: 'retail',
   paymentMethods: DEFAULT_PAYMENT_METHODS.map(pm => ({ ...pm })),
   wholesaleEnabled: false,
   volumeDiscountEnabled: false,
@@ -51,7 +51,7 @@ if (!config.syncUrl && defaultSyncServerUrl) {
 if (!Array.isArray(config.paymentMethods) || config.paymentMethods.length === 0) {
   config.paymentMethods = DEFAULT_PAYMENT_METHODS.map(pm => ({ ...pm }));
 }
-if (!config.currencyCode) config.currencyCode = 'INR';
+if (!config.currencyCode) config.currencyCode = 'ETB';
 export function setConfig(next) { config = next; }
 
 export let products = loadJSON(STORAGE_KEYS.products, []);

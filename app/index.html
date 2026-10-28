@@ -412,6 +412,8 @@
       <h3><svg class="icon"><use href="#i-globe"/></svg> Global Marketplace</h3>
       <p>Discover products across all community stalls. Add items from multiple vendors and check out with automated ticket splitting.</p>
     </div>
+    <div id="marketEcosystemDiscovery"></div>
+    <h3 class="market-offerings-heading">Products &amp; services to purchase</h3>
     
     <div class="search-container">
       <div class="search-input-wrap">
@@ -804,22 +806,22 @@
     <h3 id="addSheetTitle">What would you like to do?</h3>
     <p class="hint">Start selling, discover the ecosystem, or configure your business.</p>
     <div class="more-sheet-list add-sheet-list">
-      <button type="button" class="btn-ghost more-sheet-item" onclick="switchTab('order'); closeAddSheet();">
+      <button type="button" class="btn-ghost more-sheet-item" data-add-permission="orders:create" onclick="switchTab('order'); closeAddSheet();">
         <svg class="icon"><use href="#i-receipt"/></svg><span>Take an order</span>
       </button>
-      <button type="button" class="btn-ghost more-sheet-item" onclick="openAddProduct();">
+      <button type="button" class="btn-ghost more-sheet-item" data-add-permission="inventory:add" onclick="openAddProduct();">
         <svg class="icon"><use href="#i-box"/></svg><span>Add product</span>
       </button>
       <button type="button" class="btn-ghost more-sheet-item" onclick="switchTab('marketplace'); closeAddSheet();">
         <svg class="icon"><use href="#i-globe"/></svg><span>Discover marketplace</span>
       </button>
-      <button type="button" class="btn-ghost more-sheet-item" onclick="openAddSettings('configure-packs');">
+      <button type="button" class="btn-ghost more-sheet-item" data-add-permission="settings:configure" onclick="openAddSettings('configure-packs');">
         <svg class="icon"><use href="#i-sliders"/></svg><span>Configure packs</span>
       </button>
-      <button type="button" class="btn-ghost more-sheet-item" onclick="openAddSettings('connect-sales-channels');">
+      <button type="button" class="btn-ghost more-sheet-item" data-add-permission="settings:configure" onclick="openAddSettings('connect-sales-channels');">
         <svg class="icon"><use href="#i-globe"/></svg><span>Connect sales channels</span>
       </button>
-      <button type="button" class="btn-ghost more-sheet-item" onclick="openAddSettings('business-setup');">
+      <button type="button" class="btn-ghost more-sheet-item" data-add-permission="settings:configure" onclick="openAddSettings('business-setup');">
         <svg class="icon"><use href="#i-settings"/></svg><span>Business setup</span>
       </button>
     </div>
@@ -901,6 +903,9 @@
       <div style="font-weight:600;">Account</div>
       <div id="onboardingUserName" class="hint">Telegram account</div>
     </div>
+    <label for="onboardingLanguage" data-i18n="language">Interface language</label>
+    <select id="onboardingLanguage" aria-label="Language" data-i18n-aria-label="language" onchange="changeLanguage(this.value)"></select>
+    <div class="hint" style="margin-bottom:12px;" data-i18n="onboardingLanguageHint">Interface language applies to this device only. It does not determine your business country, currency, legal jurisdiction, or tax/payment readiness.</div>
     <div id="onboardingTelegram">
       <div id="onboardingExisting" style="display:none;">
         <label>Open existing business</label>
@@ -910,12 +915,25 @@
       <div id="onboardingCreate">
         <label>Business name</label>
         <input id="onboardingBusinessName" type="text" placeholder="ABC Coffee">
-        <label>Business type</label>
-        <select id="onboardingBusinessType">
+        <label for="onboardingBusinessTemplate">Choose your business type</label>
+        <select id="onboardingBusinessTemplate" onchange="applyOnboardingBusinessTemplate(this.value)">
+          <option value="retail-shop" data-business-type="retail">Retail shop — physical products</option>
+          <option value="barbershop" data-business-type="services">Barbershop / Salon — services</option>
+          <option value="hotel-rooms" data-business-type="services">Hotel / Guest rooms — reservations</option>
+          <option value="rental" data-business-type="services">Equipment / Vehicle rental</option>
+          <option value="consultation" data-business-type="services">Consultation / Professional services</option>
+          <option value="repair" data-business-type="services">Repair &amp; Maintenance — services + parts</option>
+          <option value="restaurant" data-business-type="restaurant">Restaurant / Cafe — menu</option>
+          <option value="wholesale" data-business-type="wholesale">Wholesale / B2B</option>
+          <option value="other" data-business-type="other">Other business</option>
+        </select>
+        <select id="onboardingBusinessType" aria-hidden="true" tabindex="-1" style="display:none;">
           <option value="retail">Retail</option><option value="restaurant">Restaurant</option><option value="wholesale">Wholesale</option><option value="pharmacy">Pharmacy</option><option value="services">Services</option><option value="manufacturing">Manufacturing</option><option value="other">Other</option>
         </select>
-        <label>Country</label><input id="onboardingCountry" type="text" placeholder="Ethiopia">
-        <label>Currency</label><select id="onboardingCurrency"><option value="ETB">ETB</option><option value="USD">USD</option><option value="KES">KES</option><option value="NGN">NGN</option><option value="GHS">GHS</option><option value="TZS">TZS</option><option value="UGX">UGX</option><option value="ZAR">ZAR</option><option value="XOF">XOF</option><option value="INR">INR</option><option value="EUR">EUR</option><option value="GBP">GBP</option></select>
+        <div class="hint" style="margin-top:5px;">Sellify sets up the starting point. You can sell physical products, services, or both from the same catalog.</div>
+        <label for="onboardingCountry">Country</label>
+        <select id="onboardingCountry" required disabled><option value="">Loading active country packs…</option></select>
+        <div id="onboardingCountryPackPreview" class="hint" role="status" aria-live="polite">Loading active country-pack options…</div>
         <label>Timezone</label><input id="onboardingTimezone" type="text" readonly>
         <button class="primary" onclick="createOnboardingTenant()">Create business</button>
         <div class="hint" style="text-align:center; margin-top:10px;">Joining an existing business as staff? <a href="#" onclick="showJoinByInvite(); return false;">Enter your invite code</a>.</div>
@@ -926,6 +944,8 @@
       <label>Pairing code</label>
       <input id="pairingCode" type="text" autocomplete="one-time-code" placeholder="Paste one-time code">
       <button class="primary" onclick="pairThisDevice()">Pair this device</button>
+      <div class="hint" style="text-align:center; margin-top:12px;">Just looking around? You can browse marketplace offerings without setting up or joining a business.</div>
+      <button type="button" class="btn-ghost" style="width:100%; margin-top:8px;" onclick="closeOnboarding(); switchTab('marketplace');">Browse marketplace</button>
     </div>
     <div id="onboardingInvite" style="display:none;">
       <div class="hint" style="margin-bottom:10px;">Enter the invite code the owner or manager sent you. This joins the business under your own Telegram account.</div>
@@ -935,15 +955,23 @@
     </div>
     <div id="onboardingFirstProduct" style="display:none;">
       <div style="font-weight:600; margin-bottom:4px;"><span id="onboardingFirstProductBiz"></span> is set up.</div>
-      <div class="hint" style="margin-bottom:10px;">Add your first product now, or skip and add products later from the Catalog tab.</div>
-      <label>Product name</label>
+      <div class="hint" style="margin-bottom:10px;">Add your first catalog item. Choose a physical product or a service; you can add both later.</div>
+      <div class="hint" style="margin-bottom:10px;">Business currency starts at ETB. If you use another currency, skip this step and choose it in Settings before adding priced catalog items; currency changes are locked after monetary records exist.</div>
+      <label for="onboardingItemType">Catalog item type</label>
+      <select id="onboardingItemType" onchange="toggleOnboardingItemType(this.value)">
+        <option value="product">Physical product</option>
+        <option value="service">Service</option>
+      </select>
+      <label for="onboardingProdName" id="onboardingItemNameLabel">Product name</label>
       <input id="onboardingProdName" type="text" placeholder="Coffee">
-      <label>Price</label>
+      <label for="onboardingProdPrice">Price</label>
       <input id="onboardingProdPrice" type="number" min="0" step="0.01" placeholder="125">
-      <label>Stock (optional)</label>
-      <input id="onboardingProdStock" type="number" min="0" step="1" placeholder="34">
+      <div id="onboardingProdStockWrap">
+        <label for="onboardingProdStock">Stock (optional)</label>
+        <input id="onboardingProdStock" type="number" min="0" step="1" placeholder="34">
+      </div>
       <div style="display:flex; gap:8px; margin-top:8px;">
-        <button class="primary" onclick="addOnboardingProduct()" style="flex:1;">Add product</button>
+        <button id="onboardingAddOfferingButton" class="primary" onclick="addOnboardingProduct()" style="flex:1;">Add product</button>
         <button onclick="skipOnboardingProduct()" style="flex:1;">Skip for now</button>
       </div>
     </div>
@@ -1076,8 +1104,8 @@
 
     <label data-i18n="currency">Currency</label>
     <select id="setCurrencyCode" onchange="onCurrencyCodeChange()" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background: var(--surface); margin-bottom:4px;">
+      <option value="ETB" selected>Br ETB — Ethiopian Birr</option>
       <option value="INR">₹ INR — Indian Rupee</option>
-      <option value="ETB">Br ETB — Ethiopian Birr</option>
       <option value="KES">KSh KES — Kenyan Shilling</option>
       <option value="NGN">₦ NGN — Nigerian Naira</option>
       <option value="GHS">GH₵ GHS — Ghanaian Cedi</option>
@@ -1088,9 +1116,10 @@
       <option value="USD">$ USD — US Dollar</option>
       <option value="EUR">€ EUR — Euro</option>
       <option value="GBP">£ GBP — British Pound</option>
-      <option value="CUSTOM">Custom symbol…</option>
     </select>
-    <input type="text" id="setCurrencySymbol" placeholder="Custom symbol, e.g. Br" style="display:none; margin-bottom:4px;">
+    <label for="setCurrencySymbol" style="margin-top:8px;">Optional display symbol override</label>
+    <input type="text" id="setCurrencySymbol" placeholder="e.g. Br" aria-label="Optional display symbol override" style="margin-bottom:4px;">
+    <div class="hint">The override changes display only. It never changes the business, transaction, or settlement currency.</div>
 
     <div class="settings-section-label" data-i18n="paymentMethods">Payment methods</div>
     <div id="paymentMethodsList" style="margin-bottom:8px;"></div>

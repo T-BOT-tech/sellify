@@ -8,6 +8,7 @@ import { TRANSLATIONS } from '../i18n/translations.js';
 import { STORAGE_KEYS } from '../constants.js';
 import { config } from '../state.js';
 import { saveJSON } from '../storage/json.js';
+import { persistLanguagePreference } from '../i18n/language-preference.js';
 import { renderAll } from './render.js';
 
 export function getLang() {
@@ -26,8 +27,7 @@ export function t(key) {
 }
 
 export function changeLanguage(lang) {
-  config.lang = lang;
-  saveJSON(STORAGE_KEYS.config, config);
+  persistLanguagePreference(config, lang, nextConfig => saveJSON(STORAGE_KEYS.config, nextConfig));
   updateI18n();
   renderAll();
 }

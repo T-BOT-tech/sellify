@@ -39,6 +39,7 @@ export default {
     syncServerUrl: "URL del servidor de sincronización",
     syncUrlHint: "Dónde se sincronizan los pedidos guardados.",
     language: "Idioma",
+    onboardingLanguageHint: "Sellify solo usa este idioma en este dispositivo. No determina el país de tu negocio, la moneda, la jurisdicción legal ni si estás preparado para gestionar impuestos y pagos.",
     orderSaved: "Pedido guardado en la cola ✅",
     settingsSaved: "Ajustes guardados.",
     syncing: "Sincronizando…",

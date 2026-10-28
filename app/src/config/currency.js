@@ -8,5 +8,6 @@ import { CURRENCY_SYMBOLS } from '../constants.js';
 // (CURRENCY_SYMBOLS now comes from constants.js.)
 export function CS() {
   if (config && config.currencySymbol) return config.currencySymbol;
-  return CURRENCY_SYMBOLS[(config && config.currencyCode) || 'INR'] || '₹';
+  const currencyCode = String(config?.currencyCode || 'ETB').toUpperCase();
+  return CURRENCY_SYMBOLS[currencyCode] || CURRENCY_SYMBOLS.ETB;
 }

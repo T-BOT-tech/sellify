@@ -39,6 +39,7 @@ export default {
     syncServerUrl: "URL Sarvarii Sinkii",
     syncUrlHint: "Eessatti ajajooni sinkii akka ta'an.",
     language: "Afaan",
+    onboardingLanguageHint: "Sellify afaan kana meeshaa kana qofa irratti fayyadama. Kun biyya daldalaa, maallaqa, aangoo seeraa, yookaan qophii gibiraa/kaffaltii kee hin murteessu.",
     orderSaved: "Ajajni tarreetti olka'ameera ✅",
     settingsSaved: "Sajjoomni olka'ameera.",
     syncing: "Sinkii gochaa jira…",

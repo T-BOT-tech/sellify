@@ -46,6 +46,9 @@ export async function createCreditTermsFromUI() {
 }
 
 export async function loadBusinessCreditCustomers() {
+  // The deferred initial load may outlive a Node-based DOM test's temporary
+  // document mock. This function is browser-only; no DOM means no-op.
+  if (typeof document === 'undefined') return;
   const select = document.getElementById('b2bCreditCustomer');
   if (!select || !config.chatId || !config.sessionToken) return;
   if (!hasPermission(currentStaff?.role || 'owner', 'b2b:credit:create')) return;
@@ -74,5 +77,15 @@ export function bindCreditTermsUI() {
       list.insertAdjacentHTML('afterbegin', `<div class="empty">${escapeHtml(error.message || 'Credit-term update failed.')}</div>`);
     }
   });
-  loadBusinessCreditCustomers();
+  // This module can bind after DOMContentLoaded while the shared ES-module
+  // graph is still resolving a state.js cycle. Defer the optional initial read
+  // until module evaluation has completed; keep failures visible instead of
+  // silently swallowing them.
+  if (typeof document !== 'undefined') {
+    setTimeout(() => {
+      loadBusinessCreditCustomers().catch(error => {
+        console.error('Could not load business credit customers', error);
+      });
+    }, 0);
+  }
 }

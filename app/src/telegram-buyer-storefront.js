@@ -4,7 +4,7 @@
 
 export const TELEGRAM_BUYER_CAPABILITIES = Object.freeze([
   'browse', 'search', 'product', 'cart', 'checkout', 'order_status',
-  'tracking', 'proof_of_delivery', 'returns'
+  'tracking', 'proof_of_delivery'
 ]);
 
 export function isTelegramWebApp() {

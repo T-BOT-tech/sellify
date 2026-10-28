@@ -7,7 +7,7 @@ import { statusClass } from '../design-system/index.js';
 import { t } from '../ui/i18n.js';
 import { hasPermission } from '../auth/permissions.js';
 import { renderPackWorkspace } from './pack-workspace.js';
-import { getLowStockProducts, getOutOfStockProducts } from '../warehouse/inventory.js';
+import { getLowStockProducts, getOutOfStockProducts, isStockTracked } from '../warehouse/inventory.js';
 import { getInventoryBalanceRefreshState, loadInventoryBalances } from '../warehouse/ledger.js';
 
 let inventoryRefreshScope = '';
@@ -70,6 +70,7 @@ export function renderWorkspace() {
   // projections; this surface does not claim that they were freshly verified.
   const lowStock = getLowStockProducts().length;
   const outOfStock = getOutOfStockProducts().length;
+  const stockTrackedProducts = products.filter(isStockTracked).length;
   const inventoryAttention = lowStock + outOfStock;
   const inventoryRefresh = getInventoryBalanceRefreshState({ locationId: config.locationId || '' });
   const refreshMessage = inventoryRefreshMessage(inventoryRefresh);
@@ -95,6 +96,7 @@ export function renderWorkspace() {
           <h3 id="fux-attention-title">Attention</h3>
           <span>${queued + inventoryAttention} items</span>
         </div>
+        <p class="fux-summary-note">Business readiness is operation-specific and is checked by the workflow that owns the action. This Home screen does not certify the business as universally ready.</p>
         <div class="fux-card-grid">
           <button class="fux-work-card ${queued ? 'has-attention' : ''}" type="button" onclick="switchTab('queue')">
             <span class="fux-card-label">Orders & sync</span>
@@ -102,9 +104,9 @@ export function renderWorkspace() {
             <small>${queued ? 'Review queued work' : 'No queued orders'}</small>
           </button>
           <button class="fux-work-card ${inventoryAttention ? 'has-attention' : ''}" type="button" onclick="switchTab('catalog')">
-            <span class="fux-card-label">Inventory health</span>
-            <strong>${inventoryAttention ? `${inventoryAttention} to review` : 'No saved exceptions'}</strong>
-            <small>${lowStock} below reorder point · ${outOfStock} out of stock. ${refreshMessage}</small>
+            <span class="fux-card-label">Inventory health · separate from business readiness</span>
+            <strong>${stockTrackedProducts === 0 ? 'Not applicable to current stock-tracked catalog' : inventoryAttention ? `${inventoryAttention} to review` : 'No saved exceptions'}</strong>
+            <small>${stockTrackedProducts === 0 ? 'No stock-tracked products are present in the current catalog projection. ' : `${lowStock} below reorder point · ${outOfStock} out of stock. `}${refreshMessage}</small>
           </button>
           ${config.chatId && config.sessionToken ? '<button class="fux-action" type="button" data-action="refresh-inventory">Refresh inventory</button>' : ''}
         </div>

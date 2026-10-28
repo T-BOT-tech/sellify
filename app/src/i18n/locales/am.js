@@ -39,6 +39,7 @@ export default {
     syncServerUrl: "የማመሳሰያ አገልጋይ URL",
     syncUrlHint: "የተሰለፉ ትዕዛዞች የሚመሳሰሉበት ቦታ።",
     language: "ቋንቋ",
+    onboardingLanguageHint: "Sellify ይህን ቋንቋ በዚህ መሣሪያ ላይ ብቻ ይጠቀማል። የንግድዎን አገር፣ ምንዛሬ፣ የሕግ ሥልጣን ክልል ወይም የግብር/ክፍያ ዝግጁነት አይወስንም።",
     orderSaved: "ትዕዛዝ በወረፋ ተቀምጧል ✅",
     settingsSaved: "ቅንብሮች ተቀምጠዋል।",
     syncing: "በማመሳሰል ላይ…",
