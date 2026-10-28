@@ -46,7 +46,7 @@ assert.ok(fulfillmentTransition.includes('existingDeliveryProof != null')
     && fulfillmentTransition.includes('DELIVERY_PROOF_IMMUTABLE')
     && fulfillmentTransition.includes('freshOrderJson.fulfillment_proof'),
   'generic fulfillment transitions must not overwrite captured delivery proof, including legacy order proof');
-const existingDeliveryProofSnapshot = fulfillmentTransition.indexOf('const existingDeliveryProof = row?.proof_json');
+const existingDeliveryProofSnapshot = fulfillmentTransition.indexOf('const persistedDeliveryProof = row?.proof_json');
 const fulfillmentCreation = fulfillmentTransition.indexOf('if (!row) {');
 const fulfillmentReplayBoundary = fulfillmentTransition.indexOf("if (String(row.last_command_key || '') === commandKey)");
 const deliveryProofMutationGuard = fulfillmentTransition.indexOf('if (existingDeliveryProof != null && input.proof !== undefined');
