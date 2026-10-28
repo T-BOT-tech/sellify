@@ -94,6 +94,8 @@ assert.match(tenantAuthSource, /import \{ saveJSON, saveJSONAsync, loadJSONAsync
   'first-offering onboarding must wait for local persistence before reporting or syncing');
 assert.match(tenantAuthSource, /const locallySaved = await saveJSONAsync\(STORAGE_KEYS\.products, products\);[\s\S]*?if \(!locallySaved\) \{[\s\S]*?Local storage failed\.[\s\S]*?return;\s*\}\s*await markCatalogDirty\(\);\s*showOnboardingDone\(\);/,
   'first-offering onboarding must not mark the catalog dirty, report completion, or attempt remote sync if durable local persistence fails');
+assert.match(tenantAuthSource, /const previousProducts = products;[\s\S]*?setProducts\(\[\.\.\.previousProducts, newProd\]\);[\s\S]*?if \(!locallySaved\) \{\s*setProducts\(previousProducts\);/,
+  'failed first-offering persistence must roll back in-memory state so retry cannot duplicate the unsaved offering');
 assert.match(tenantAuthSource, /const priceMinor = toMinorUnits\(priceMajor, config\.currencyCode\);[\s\S]*?if \(!Number\.isSafeInteger\(priceMinor\) \|\| priceMinor < 0 \|\| priceMinor > 2147483647\)[\s\S]*?Price is outside the supported range[\s\S]*?price: priceMinor,/,
   'first-offering onboarding must reject prices outside the backend-supported integer minor-unit range before local persistence or sync');
 assert.match((await readFile(new URL('../app/src/storage/json.js', import.meta.url), 'utf8')), /export async function saveJSONAsync[\s\S]*?await idbSet\(key, value\)/,
