@@ -70,6 +70,30 @@ function sameValue(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+// Merge an event using the tab's previous snapshot as the common ancestor.
+// Independent field changes from both tabs survive. If both tabs changed the
+// same field differently, keep the shared journal's value: it is the latest
+// cross-tab snapshot observed by this writer. This is a deterministic conflict
+// policy, not proof that the shared value is causally newer.
+function mergeConcurrentEvent(before, local, shared) {
+  const merged = { ...shared };
+  const keys = new Set([
+    ...Object.keys(before || {}),
+    ...Object.keys(local || {}),
+    ...Object.keys(shared || {}),
+  ]);
+
+  for (const key of keys) {
+    const localChanged = !sameValue(before?.[key], local?.[key]);
+    const sharedChanged = !sameValue(before?.[key], shared?.[key]);
+    if (!localChanged || sharedChanged) continue;
+
+    if (Object.prototype.hasOwnProperty.call(local, key)) merged[key] = local[key];
+    else delete merged[key];
+  }
+  return merged;
+}
+
 export function mergeOutboxSnapshots(previousEvents, localEvents, sharedEvents) {
   const previous = byId(previousEvents);
   const local = byId(localEvents);
@@ -90,8 +114,11 @@ export function mergeOutboxSnapshots(previousEvents, localEvents, sharedEvents) 
       // (for example, an attempt counter changed while another tab completed
       // the command). This deliberately prefers completion over stale retries.
       continue;
-    } else if (hasNow && (!hadBefore || !sameValue(before, now))) {
+    } else if (hasNow && !hadBefore) {
       merged.set(id, now);
+    } else if (hasNow && !sameValue(before, now)) {
+      const sharedEvent = merged.get(id);
+      merged.set(id, mergeConcurrentEvent(before, now, sharedEvent));
     }
   }
 

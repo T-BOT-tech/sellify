@@ -275,6 +275,52 @@ for (const raw of ['{broken', JSON.stringify({ eventId: 'not-an-array' }), null]
     'a stale retry/update must not resurrect an event another tab removed after completion');
 }
 
+// Concurrent edits to one event merge by field against the common baseline.
+// A local payload edit and a shared retry update are independent and both survive.
+{
+  const baseline = [{
+    eventId: 'same-event', status: 'pending', attempts: 0,
+    payload: { amount: 10 }, lastError: null,
+  }];
+  const local = [{
+    eventId: 'same-event', status: 'pending', attempts: 0,
+    payload: { amount: 12 }, lastError: null,
+  }];
+  const shared = [{
+    eventId: 'same-event', status: 'pending', attempts: 1,
+    payload: { amount: 10 }, lastError: 'temporary network failure',
+  }];
+  const merged = mergeOutboxSnapshots(baseline, local, shared);
+  assert.deepEqual(merged, [{
+    eventId: 'same-event', status: 'pending', attempts: 1,
+    payload: { amount: 12 }, lastError: 'temporary network failure',
+  }], 'independent local and shared fields must not overwrite each other');
+}
+
+// A divergent edit to the same field uses an explicit deterministic policy:
+// retain the shared journal field while preserving local-only field changes.
+{
+  const baseline = [{ eventId: 'same-event', status: 'pending', attempts: 0, lastError: null }];
+  const local = [{ eventId: 'same-event', status: 'failed', attempts: 1, lastError: 'local error' }];
+  const shared = [{ eventId: 'same-event', status: 'rejected', attempts: 2, lastError: 'shared error' }];
+  const merged = mergeOutboxSnapshots(baseline, local, shared);
+  assert.deepEqual(merged, [{
+    eventId: 'same-event', status: 'rejected', attempts: 2, lastError: 'shared error',
+  }], 'same-field conflicts must resolve deterministically to the shared snapshot');
+}
+
+// A property removed locally must be removed only when the shared snapshot did
+// not independently change that property.
+{
+  const baseline = [{ eventId: 'same-event', status: 'pending', lastError: 'old' }];
+  const local = [{ eventId: 'same-event', status: 'pending' }];
+  const shared = [{ eventId: 'same-event', status: 'pending', lastError: 'new shared error', attempts: 1 }];
+  const merged = mergeOutboxSnapshots(baseline, local, shared);
+  assert.deepEqual(merged, [{
+    eventId: 'same-event', status: 'pending', lastError: 'new shared error', attempts: 1,
+  }], 'a local deletion must not erase an independently changed shared field');
+}
+
 // Keep the production helper's catch boundaries visible to this contract test.
 assert.doesNotMatch(journal, /storage\.removeItem\(OUTBOX_RECOVERY_KEY\)/, 'failed journal replacement must preserve the last known-good snapshot');
 assert.match(journal, /function parseRecoverySnapshot\(raw\)[\s\S]*?if \(Array\.isArray\(parsed\)\) return \{ events: parsed, snapshotId: null \}/,
