@@ -52,6 +52,7 @@ const fulfillmentReplayBoundary = fulfillmentTransition.indexOf("if (String(row.
 const deliveryProofMutationGuard = fulfillmentTransition.indexOf('if (existingDeliveryProof != null && input.proof !== undefined');
 const fulfillmentPersistenceWrite = fulfillmentTransition.indexOf('UPDATE fulfillments');
 assert.ok(existingDeliveryProofSnapshot >= 0
+    && fulfillmentTransition.includes('const existingDeliveryProof = persistedDeliveryProof ?? (freshOrderJson.fulfillment_proof ?? null)')
     && fulfillmentCreation > existingDeliveryProofSnapshot,
   'legacy delivery proof must be snapshotted before a new fulfillment can be seeded from caller input');
 assert.ok(fulfillmentReplayBoundary > fulfillmentCreation
@@ -69,7 +70,8 @@ const proofGuardEnd = assignmentLifecycleBody.indexOf('if (fulfillmentTarget)', 
 assert.ok(proofGuardStart >= 0 && proofGuardEnd > proofGuardStart,
   'assignment lifecycle proof guard must remain adjacent to fulfillment persistence');
 const assignmentProofGuard = assignmentLifecycleBody.slice(proofGuardStart, proofGuardEnd);
-assert.ok(assignmentProofGuard.includes('const existingProof')
+assert.ok(assignmentProofGuard.includes('const persistedAssignmentProof')
+    && assignmentProofGuard.includes('const existingProof = persistedAssignmentProof ??')
     && assignmentProofGuard.includes('input.proof !== undefined')
     && assignmentProofGuard.includes('DELIVERY_PROOF_IMMUTABLE')
     && assignmentProofGuard.includes('orderFromRow(freshOrderRow).fulfillment_proof'),
