@@ -64,6 +64,39 @@ function parseJSON(value, fallback) {
   }
 }
 
+function deliveryProofReference(value) {
+  if (typeof value === 'string') return value.trim();
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+  return String(value.reference || value.referenceId || value.reference_id || value.ref || '').trim();
+}
+
+function assertDeliveryProofInput(value) {
+  if (value == null || (typeof value === 'string' && !value.trim())) {
+    throw Object.assign(new Error('Delivery proof is required before delivery completion'), {
+      statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED',
+    });
+  }
+  if (typeof value === 'string') return;
+  if (typeof value !== 'object' || Array.isArray(value) || !deliveryProofReference(value)
+    || !String(value.type || value.kind || '').trim()) {
+    throw Object.assign(new Error('Delivery proof type and reference are required'), {
+      statusCode: 400, code: 'DELIVERY_PROOF_INVALID',
+    });
+  }
+}
+
+function resolveDeliveryProof(existingProof, requestedProof) {
+  const existingReference = deliveryProofReference(existingProof);
+  const requestedReference = deliveryProofReference(requestedProof);
+  if (existingReference && requestedProof !== undefined && existingReference !== requestedReference) {
+    throw Object.assign(new Error('Delivery proof cannot be changed after capture'), {
+      statusCode: 409, code: 'DELIVERY_PROOF_IMMUTABLE',
+    });
+  }
+  // Preserve the first accepted payload, including its type/capture metadata.
+  return existingProof ?? requestedProof;
+}
+
 function json(value) {
   return JSON.stringify(value == null ? null : value);
 }
@@ -8740,6 +8773,17 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
   return movements;
 }
 
+function hasCourierLocationGrant(memberships, locationId) {
+  const targetLocationId = String(locationId || '').trim();
+  return memberships.some(membership => {
+    if (membership.scope_type === 'ORGANIZATION') return true;
+    return membership.scope_type === 'LOCATION'
+      && Boolean(targetLocationId)
+      && Boolean(String(membership.scope_id || '').trim())
+      && String(membership.scope_id) === targetLocationId;
+  });
+}
+
 export async function selectDeliveryCourier(chatId, organizationId, locationId) {
   ensureDatabase();
   const location = locationId ? String(locationId) : null;
@@ -8759,9 +8803,8 @@ export async function selectDeliveryCourier(chatId, organizationId, locationId) 
     WHERE m.chat_id = ?
       AND m.status = 'active'
       AND (
-        mr.scope_type IS NULL
-        OR mr.scope_type != 'LOCATION'
-        OR mr.scope_id = ?
+        mr.scope_type = 'ORGANIZATION'
+        OR (mr.scope_type = 'LOCATION' AND mr.scope_id = ?)
       )
     GROUP BY m.user_id, mr.scope_type, mr.scope_id
     ORDER BY active_workload ASC, m.user_id ASC
@@ -8881,16 +8924,17 @@ export async function assignDeliveryCourier(chatId, serverOrderId, courierUserId
       const selected = await selectDeliveryCourier(chatId, organizationId, locationId);
       selectedCourierUserId = String(selected.user_id);
     }
-    const courier = db.prepare(`
-      SELECT m.user_id, mr.role_id, mr.scope_type, mr.scope_id
+    const couriers = db.prepare(`
+      SELECT mr.scope_type, mr.scope_id
       FROM memberships m
       JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
       WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
         AND mr.role_id = 'logistics_courier'
-    `).get(selectedCourierUserId, String(chatId));
-    if (!courier) throw Object.assign(new Error('Courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
-    const scopeId = courier.scope_type === 'LOCATION' ? String(courier.scope_id || '') : null;
-    if (scopeId && String(locationId || '') !== scopeId) throw Object.assign(new Error('Courier role is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
+    `).all(selectedCourierUserId, String(chatId));
+    if (!couriers.length) throw Object.assign(new Error('Courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
+    if (!hasCourierLocationGrant(couriers, locationId)) {
+      throw Object.assign(new Error('Courier role is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
+    }
     if (!fulfillment) {
       const now = nowIso();
       const fulfillmentId = crypto.randomUUID();
@@ -8960,22 +9004,34 @@ export async function listDeliveryAssignments(chatId, actor = null, filters = {}
 
   if (isCourier) {
     const actorUserId = String(actor?.userId || '').trim();
-    const courierMembership = db.prepare(`
-      SELECT m.user_id, mr.scope_type, mr.scope_id
+    const courierMemberships = db.prepare(`
+      SELECT mr.scope_type, mr.scope_id
       FROM memberships m
       JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
       WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
         AND mr.role_id = 'logistics_courier'
-    `).get(actorUserId, String(chatId));
-    if (!courierMembership) throw Object.assign(new Error('Active logistics courier role is required'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
-    if (courierMembership.scope_type === 'LOCATION') {
-      const scopedLocation = String(courierMembership.scope_id || '');
-      courierLocationScoped = true;
-      if (locationId && String(locationId) !== scopedLocation) {
+    `).all(actorUserId, String(chatId));
+    if (!courierMemberships.length) throw Object.assign(new Error('Active logistics courier role is required'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
+
+    // Match the command authorization boundary: any broad grant covers the
+    // organization; otherwise, evaluate every active location-scoped grant.
+    const hasBroadCourierScope = courierMemberships.some(membership => membership.scope_type === 'ORGANIZATION');
+    if (!hasBroadCourierScope) {
+      const scopedLocations = [...new Set(courierMemberships
+        .filter(membership => membership.scope_type === 'LOCATION' && String(membership.scope_id || '').trim() !== '')
+        .map(membership => String(membership.scope_id)))];
+      if (!scopedLocations.length || (locationId && !scopedLocations.includes(String(locationId)))) {
         throw Object.assign(new Error('Courier workload is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
       }
-      clauses.push('da.location_id = ?');
-      params.push(scopedLocation);
+      courierLocationScoped = true;
+      if (locationId) {
+        // Preserve an explicit workload filter when the requested location is allowed.
+        clauses.push('da.location_id = ?');
+        params.push(String(locationId));
+      } else {
+        clauses.push(`da.location_id IN (${scopedLocations.map(() => '?').join(', ')})`);
+        params.push(...scopedLocations);
+      }
     }
   }
   if (status && ['ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY'].includes(status)) {
@@ -9067,21 +9123,25 @@ export async function assertCourierOwnsDelivery(chatId, serverOrderId, actor) {
   if (!tenant?.organization_id || !actorUserId) {
     throw Object.assign(new Error('Courier identity is required'), { statusCode: 403, code: 'COURIER_IDENTITY_REQUIRED' });
   }
-  const membership = db.prepare(`
-    SELECT m.user_id, mr.scope_type, mr.scope_id
+  const memberships = db.prepare(`
+    SELECT mr.scope_type, mr.scope_id
     FROM memberships m
     JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
     WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
       AND mr.role_id = 'logistics_courier'
-  `).get(actorUserId, String(chatId));
-  if (!membership) {
+  `).all(actorUserId, String(chatId));
+  if (!memberships.length) {
     throw Object.assign(new Error('Active logistics courier role is required'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
   }
   const assignment = await getDeliveryAssignment(chatId, serverOrderId, actor);
   if (!assignment || String(assignment.courier_user_id) !== actorUserId) {
     throw Object.assign(new Error('Courier is not assigned to this delivery'), { statusCode: 403, code: 'COURIER_ASSIGNMENT_REQUIRED' });
   }
-  if (membership.scope_type === 'LOCATION' && String(membership.scope_id || '') !== String(assignment.location_id || '')) {
+  // A courier can hold separate location-scoped grants for multiple branches.
+  // Do not let SQLite's arbitrary first-row choice deny a valid grant or skip
+  // a matching grant when several active contextual roles exist.
+  const hasLocationAccess = hasCourierLocationGrant(memberships, assignment.location_id);
+  if (!hasLocationAccess) {
     throw Object.assign(new Error('Courier role is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
   }
   if (String(assignment.organization_id) !== String(tenant.organization_id)) {
@@ -9757,14 +9817,14 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
       // For a new command, revalidate target courier membership and role under
       // the write lock so concurrent role revocation cannot authorize a stale
       // reassignment.
-      const freshCourier = db.prepare(`
-        SELECT m.user_id, mr.scope_type, mr.scope_id
+      const freshCourierGrants = db.prepare(`
+        SELECT mr.scope_type, mr.scope_id
         FROM memberships m
         JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
         WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
           AND mr.role_id = 'logistics_courier'
-      `).get(targetCourierId, String(chatId));
-      if (!freshCourier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), {
+      `).all(targetCourierId, String(chatId));
+      if (!freshCourierGrants.length) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), {
         statusCode: 403, code: 'COURIER_ROLE_REQUIRED',
       });
       const exception = db.prepare(`SELECT da.* FROM delivery_assignments da JOIN fulfillments f ON f.id = da.fulfillment_id WHERE f.server_order_id = ? AND da.organization_id = ? AND da.status IN ('CANCELLED','FAILED') ORDER BY da.updated_at DESC LIMIT 1`).get(String(serverOrderId), organizationId);
@@ -9778,7 +9838,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
       }
       if (String(targetCourierId) === String(exception.courier_user_id)) throw Object.assign(new Error('A different courier is required to resolve a delivery exception'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
       const locationId = canonicalLocationId || exception.location_id || order.location_id || input.locationId || input.location_id || null;
-      if (freshCourier.scope_type === 'LOCATION' && String(freshCourier.scope_id || '') !== String(locationId || '')) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
+      if (!hasCourierLocationGrant(freshCourierGrants, locationId)) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
       const now = nowIso();
       db.prepare('UPDATE delivery_assignments SET status = \'REASSIGNED\', last_command_key = ?, updated_at = ?, version = version + 1 WHERE id = ?').run(commandKey, now, exception.id);
       const assignmentKey = String(input.assignmentKey || input.assignment_key || ('exception-reassign:' + serverOrderId + ':' + targetCourierId + ':' + commandKey)).trim();
@@ -9804,7 +9864,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
   try {
     const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
       .get(String(chatId));
-    const freshOrderRow = db.prepare(`SELECT o.server_order_id,
+    const freshOrderRow = db.prepare(`SELECT o.server_order_id, o.order_json,
       (SELECT f.location_id FROM fulfillments f
        WHERE f.server_order_id = o.server_order_id AND f.organization_id = ?
        ORDER BY f.created_at DESC LIMIT 1) AS location_id
@@ -9835,24 +9895,12 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     // Reusing a key with changed/malformed intent must produce the idempotency
     // conflict, not bypass the canonical command-history check.
     if (['CANCELLED','FAILED'].includes(normalizedAction) && !exceptionReason) throw Object.assign(new Error('A reason is required when cancelling or failing a delivery assignment'), { statusCode: 400, code: 'EXCEPTION_REASON_REQUIRED' });
-    if (normalizedAction === 'DELIVERED' && (proofInput == null || (typeof proofInput === 'string' && !proofInput.trim()))) {
-      throw Object.assign(new Error('Delivery proof is required before delivery completion'), { statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED' });
+    if (normalizedAction === 'DELIVERED' && Array.isArray(proofInput)) {
+      throw Object.assign(new Error('Delivery proof must be a string or a proof object'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
     }
-    if (normalizedAction === 'DELIVERED') {
-      if (typeof proofInput === 'object') {
-        if (Array.isArray(proofInput)) {
-          throw Object.assign(new Error('Delivery proof must be a string or a proof object'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
-        }
-        const proofType = String(proofInput.type || proofInput.kind || '').trim().toLowerCase();
-        const proofReference = String(proofInput.reference || proofInput.referenceId || proofInput.reference_id || '').trim();
-        if (!proofType || !proofReference) {
-          throw Object.assign(new Error('Delivery proof type and reference are required'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
-        }
-      } else if (typeof proofInput !== 'string') {
-        throw Object.assign(new Error('Delivery proof must be a non-empty string or a proof object'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
-      }
+    if (normalizedAction === 'DELIVERED' && proofInput !== undefined && typeof proofInput !== 'string' && (typeof proofInput !== 'object' || proofInput === null)) {
+      throw Object.assign(new Error('Delivery proof must be a non-empty string or a proof object'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
     }
-
     const active = db.prepare(`SELECT da.* FROM delivery_assignments da JOIN fulfillments f ON f.id = da.fulfillment_id WHERE f.server_order_id = ? AND da.organization_id = ? AND da.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY') ORDER BY da.updated_at DESC LIMIT 1`).get(String(serverOrderId), organizationId);
     if (!active) throw Object.assign(new Error('No active courier assignment exists'), { statusCode: 409, code: 'ASSIGNMENT_REQUIRED' });
     // Courier ownership is revalidated under the same write lock as the
@@ -9863,14 +9911,14 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     const courierActor = actorRoles.includes('logistics_courier') || String(actor?.role || '') === 'logistics_courier';
     if (courierActor && ['ACCEPTED', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(normalizedAction)) {
       const actorUserId = String(actor?.userId || '').trim();
-      const courierMembership = db.prepare(`
+      const courierMemberships = db.prepare(`
         SELECT mr.scope_type, mr.scope_id
         FROM memberships m
         JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
         WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
           AND mr.role_id = 'logistics_courier'
-      `).get(actorUserId, String(chatId));
-      if (!actorUserId || !courierMembership) {
+      `).all(actorUserId, String(chatId));
+      if (!actorUserId || !courierMemberships.length) {
         throw Object.assign(new Error('Active logistics courier role is required'), {
           statusCode: 403, code: 'COURIER_ROLE_REQUIRED',
         });
@@ -9881,22 +9929,18 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
         });
       }
       const assignedLocationId = canonicalLocationId || (active.location_id ? String(active.location_id) : null);
-      if (courierMembership.scope_type === 'LOCATION'
-        && String(courierMembership.scope_id || '') !== String(assignedLocationId || '')) {
+      if (!hasCourierLocationGrant(courierMemberships, assignedLocationId)) {
         throw Object.assign(new Error('Courier role is outside the delivery location scope'), {
           statusCode: 403, code: 'COURIER_SCOPE_DENIED',
         });
       }
     }
-    const current = String(active.status);
-    if (!transitions[current]?.has(normalizedAction)) throw Object.assign(new Error('Cannot move assignment from ' + current + ' to ' + normalizedAction), { statusCode: 409, code: 'INVALID_ASSIGNMENT_TRANSITION' });
-
     if (normalizedAction === 'REASSIGNED') {
       if (!targetCourierId || targetCourierId === String(active.courier_user_id)) throw Object.assign(new Error('A different courier is required for reassignment'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
-      const courier = db.prepare(`SELECT m.user_id, mr.scope_type, mr.scope_id FROM memberships m JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active' WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active' AND mr.role_id = 'logistics_courier'`).get(targetCourierId, String(chatId));
-      if (!courier) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
+      const courierGrants = db.prepare(`SELECT mr.scope_type, mr.scope_id FROM memberships m JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active' WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active' AND mr.role_id = 'logistics_courier'`).all(targetCourierId, String(chatId));
+      if (!courierGrants.length) throw Object.assign(new Error('Target courier does not have an active logistics courier role'), { statusCode: 403, code: 'COURIER_ROLE_REQUIRED' });
       const locationId = canonicalLocationId || active.location_id || order.location_id || input.locationId || input.location_id || null;
-      if (courier.scope_type === 'LOCATION' && String(courier.scope_id || '') !== String(locationId || '')) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
+      if (!hasCourierLocationGrant(courierGrants, locationId)) throw Object.assign(new Error('Target courier is outside the delivery location scope'), { statusCode: 403, code: 'COURIER_SCOPE_DENIED' });
     }
     const now = nowIso();
     const fulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ? AND organization_id = ?').get(active.fulfillment_id, organizationId);
@@ -9908,16 +9952,30 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
       throw Object.assign(new Error('Canonical order location is outside the organization scope'), { statusCode: 409, code: 'LOCATION_SCOPE_DENIED' });
     }
     const fulfillmentTarget = normalizedAction === 'OUT_FOR_DELIVERY' ? 'out_for_delivery' : normalizedAction === 'DELIVERED' ? 'delivered' : null;
+    const legacyOrderProof = orderFromRow(freshOrderRow).fulfillment_proof ?? null;
+    const canonicalFulfillmentProof = fulfillment.proof_json
+      ? parseJSON(fulfillment.proof_json, fulfillment.proof_json)
+      : null;
+    // Legacy order metadata can recover a direct fulfillment transition, but
+    // it must not silently satisfy a fresh courier completion command.
+    const existingProof = canonicalFulfillmentProof;
+    const effectiveProof = normalizedAction === 'DELIVERED'
+      ? resolveDeliveryProof(existingProof || (proofInput !== undefined ? legacyOrderProof : null), proofInput)
+      : proofInput;
     if (normalizedAction === 'DELIVERED') {
-      const existingProof = fulfillment.proof_json ? (() => { try { return JSON.parse(fulfillment.proof_json); } catch { return fulfillment.proof_json; } })() : null;
-      if (existingProof && JSON.stringify(existingProof) !== JSON.stringify(proofInput)) {
-        throw Object.assign(new Error('Delivery proof cannot be changed after capture'), { statusCode: 409, code: 'DELIVERY_PROOF_IMMUTABLE' });
+      if (effectiveProof == null || (typeof effectiveProof === 'string' && !effectiveProof.trim())) {
+        throw Object.assign(new Error('Delivery proof is required before delivery completion'), { statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED' });
       }
+      const proofReference = deliveryProofReference(effectiveProof);
+      assertDeliveryProofInput(effectiveProof);
+      if (!proofReference) throw Object.assign(new Error('Delivery proof type and reference are required'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
     }
+    const current = String(active.status);
+    if (!transitions[current]?.has(normalizedAction)) throw Object.assign(new Error('Cannot move assignment from ' + current + ' to ' + normalizedAction), { statusCode: 409, code: 'INVALID_ASSIGNMENT_TRANSITION' });
     if (fulfillmentTarget) {
       const currentFulfillment = normalizeCoreFulfillmentStatus(fulfillment.status);
       if (!CORE_FULFILLMENT_TRANSITIONS.delivery[currentFulfillment]?.has(fulfillmentTarget)) throw Object.assign(new Error('Cannot move fulfillment from ' + currentFulfillment + ' to ' + fulfillmentTarget), { statusCode: 409, code: 'INVALID_FULFILLMENT_TRANSITION' });
-      db.prepare(`UPDATE fulfillments SET status = ?, last_command_key = ?, updated_by_user_id = ?, updated_at = ?, version = version + 1, proof_json = CASE WHEN ? IS NULL THEN proof_json ELSE ? END WHERE id = ?`).run(fulfillmentTarget, commandKey, actor?.userId || null, now, input.proof === undefined ? null : json(input.proof), input.proof === undefined ? null : json(input.proof), fulfillment.id);
+      db.prepare(`UPDATE fulfillments SET status = ?, last_command_key = ?, updated_by_user_id = ?, updated_at = ?, version = version + 1, proof_json = CASE WHEN ? IS NULL THEN proof_json ELSE ? END WHERE id = ?`).run(fulfillmentTarget, commandKey, actor?.userId || null, now, effectiveProof == null ? null : json(effectiveProof), effectiveProof == null ? null : json(effectiveProof), fulfillment.id);
     }
     db.prepare('UPDATE delivery_assignments SET status = ?, last_command_key = ?, updated_at = ?, version = version + 1 WHERE id = ?').run(normalizedAction, commandKey, now, active.id);
 
@@ -10106,24 +10164,11 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     if (!CORE_FULFILLMENT_TRANSITIONS[type][current]?.has(target)) {
       throw Object.assign(new Error(`Cannot move fulfillment from ${current} to ${target}`), { statusCode: 409, code: 'INVALID_FULFILLMENT_TRANSITION' });
     }
+    let effectiveProof = input.proof;
     if (type === 'delivery' && target === 'delivered') {
-      const proofInput = input.proof === undefined
-        ? (parseJSON(row.proof_json, null) ?? freshOrderJson.fulfillment_proof ?? null)
-        : input.proof;
-      if (proofInput == null || (typeof proofInput === 'string' && !proofInput.trim())) {
-        throw Object.assign(new Error('Delivery proof is required before delivery completion'), {
-          statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED',
-        });
-      }
-      if (typeof proofInput === 'object' && !Array.isArray(proofInput)) {
-        const proofType = String(proofInput.type || proofInput.kind || '').trim().toLowerCase();
-        const proofReference = String(proofInput.reference || proofInput.referenceId || proofInput.reference_id || '').trim();
-        if (!proofType || !proofReference) {
-          throw Object.assign(new Error('Delivery proof type and reference are required'), {
-            statusCode: 400, code: 'DELIVERY_PROOF_INVALID',
-          });
-        }
-      }
+      const existingProof = parseJSON(row.proof_json, null) ?? freshOrderJson.fulfillment_proof ?? null;
+      effectiveProof = resolveDeliveryProof(existingProof, input.proof);
+      assertDeliveryProofInput(effectiveProof);
     }
 
     db.prepare(`
@@ -10135,7 +10180,7 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     `).run(
       target, commandKey, commandFingerprint, actorUserId, now,
       input.trackingReference || input.tracking_reference || null,
-      input.proof === undefined ? null : json(input.proof),
+      effectiveProof == null ? null : json(effectiveProof),
       row.id,
     );
     const updated = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(row.id);
