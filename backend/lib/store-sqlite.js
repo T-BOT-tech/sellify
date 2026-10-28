@@ -64,6 +64,39 @@ function parseJSON(value, fallback) {
   }
 }
 
+function deliveryProofReference(value) {
+  if (typeof value === 'string') return value.trim();
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+  return String(value.reference || value.referenceId || value.reference_id || value.ref || '').trim();
+}
+
+function assertDeliveryProofInput(value) {
+  if (value == null || (typeof value === 'string' && !value.trim())) {
+    throw Object.assign(new Error('Delivery proof is required before delivery completion'), {
+      statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED',
+    });
+  }
+  if (typeof value === 'string') return;
+  if (typeof value !== 'object' || Array.isArray(value) || !deliveryProofReference(value)
+    || !String(value.type || value.kind || '').trim()) {
+    throw Object.assign(new Error('Delivery proof type and reference are required'), {
+      statusCode: 400, code: 'DELIVERY_PROOF_INVALID',
+    });
+  }
+}
+
+function resolveDeliveryProof(existingProof, requestedProof) {
+  const existingReference = deliveryProofReference(existingProof);
+  const requestedReference = deliveryProofReference(requestedProof);
+  if (existingReference && requestedProof !== undefined && existingReference !== requestedReference) {
+    throw Object.assign(new Error('Delivery proof cannot be changed after capture'), {
+      statusCode: 409, code: 'DELIVERY_PROOF_IMMUTABLE',
+    });
+  }
+  // Preserve the first accepted payload, including its type/capture metadata.
+  return existingProof ?? requestedProof;
+}
+
 function json(value) {
   return JSON.stringify(value == null ? null : value);
 }
@@ -9831,7 +9864,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
   try {
     const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
       .get(String(chatId));
-    const freshOrderRow = db.prepare(`SELECT o.server_order_id,
+    const freshOrderRow = db.prepare(`SELECT o.server_order_id, o.order_json,
       (SELECT f.location_id FROM fulfillments f
        WHERE f.server_order_id = o.server_order_id AND f.organization_id = ?
        ORDER BY f.created_at DESC LIMIT 1) AS location_id
@@ -9862,24 +9895,12 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     // Reusing a key with changed/malformed intent must produce the idempotency
     // conflict, not bypass the canonical command-history check.
     if (['CANCELLED','FAILED'].includes(normalizedAction) && !exceptionReason) throw Object.assign(new Error('A reason is required when cancelling or failing a delivery assignment'), { statusCode: 400, code: 'EXCEPTION_REASON_REQUIRED' });
-    if (normalizedAction === 'DELIVERED' && (proofInput == null || (typeof proofInput === 'string' && !proofInput.trim()))) {
-      throw Object.assign(new Error('Delivery proof is required before delivery completion'), { statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED' });
+    if (normalizedAction === 'DELIVERED' && Array.isArray(proofInput)) {
+      throw Object.assign(new Error('Delivery proof must be a string or a proof object'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
     }
-    if (normalizedAction === 'DELIVERED') {
-      if (typeof proofInput === 'object') {
-        if (Array.isArray(proofInput)) {
-          throw Object.assign(new Error('Delivery proof must be a string or a proof object'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
-        }
-        const proofType = String(proofInput.type || proofInput.kind || '').trim().toLowerCase();
-        const proofReference = String(proofInput.reference || proofInput.referenceId || proofInput.reference_id || '').trim();
-        if (!proofType || !proofReference) {
-          throw Object.assign(new Error('Delivery proof type and reference are required'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
-        }
-      } else if (typeof proofInput !== 'string') {
-        throw Object.assign(new Error('Delivery proof must be a non-empty string or a proof object'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
-      }
+    if (normalizedAction === 'DELIVERED' && proofInput !== undefined && typeof proofInput !== 'string' && (typeof proofInput !== 'object' || proofInput === null)) {
+      throw Object.assign(new Error('Delivery proof must be a non-empty string or a proof object'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
     }
-
     const active = db.prepare(`SELECT da.* FROM delivery_assignments da JOIN fulfillments f ON f.id = da.fulfillment_id WHERE f.server_order_id = ? AND da.organization_id = ? AND da.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY') ORDER BY da.updated_at DESC LIMIT 1`).get(String(serverOrderId), organizationId);
     if (!active) throw Object.assign(new Error('No active courier assignment exists'), { statusCode: 409, code: 'ASSIGNMENT_REQUIRED' });
     // Courier ownership is revalidated under the same write lock as the
@@ -9934,16 +9955,25 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
       throw Object.assign(new Error('Canonical order location is outside the organization scope'), { statusCode: 409, code: 'LOCATION_SCOPE_DENIED' });
     }
     const fulfillmentTarget = normalizedAction === 'OUT_FOR_DELIVERY' ? 'out_for_delivery' : normalizedAction === 'DELIVERED' ? 'delivered' : null;
+    const legacyOrderProof = orderFromRow(freshOrderRow).fulfillment_proof ?? null;
+    const existingProof = fulfillment.proof_json
+      ? parseJSON(fulfillment.proof_json, fulfillment.proof_json)
+      : legacyOrderProof;
+    const effectiveProof = normalizedAction === 'DELIVERED'
+      ? resolveDeliveryProof(existingProof, proofInput)
+      : proofInput;
     if (normalizedAction === 'DELIVERED') {
-      const existingProof = fulfillment.proof_json ? (() => { try { return JSON.parse(fulfillment.proof_json); } catch { return fulfillment.proof_json; } })() : null;
-      if (existingProof && JSON.stringify(existingProof) !== JSON.stringify(proofInput)) {
-        throw Object.assign(new Error('Delivery proof cannot be changed after capture'), { statusCode: 409, code: 'DELIVERY_PROOF_IMMUTABLE' });
+      if (effectiveProof == null || (typeof effectiveProof === 'string' && !effectiveProof.trim())) {
+        throw Object.assign(new Error('Delivery proof is required before delivery completion'), { statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED' });
       }
+      const proofReference = deliveryProofReference(effectiveProof);
+      assertDeliveryProofInput(effectiveProof);
+      if (!proofReference) throw Object.assign(new Error('Delivery proof type and reference are required'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
     }
     if (fulfillmentTarget) {
       const currentFulfillment = normalizeCoreFulfillmentStatus(fulfillment.status);
       if (!CORE_FULFILLMENT_TRANSITIONS.delivery[currentFulfillment]?.has(fulfillmentTarget)) throw Object.assign(new Error('Cannot move fulfillment from ' + currentFulfillment + ' to ' + fulfillmentTarget), { statusCode: 409, code: 'INVALID_FULFILLMENT_TRANSITION' });
-      db.prepare(`UPDATE fulfillments SET status = ?, last_command_key = ?, updated_by_user_id = ?, updated_at = ?, version = version + 1, proof_json = CASE WHEN ? IS NULL THEN proof_json ELSE ? END WHERE id = ?`).run(fulfillmentTarget, commandKey, actor?.userId || null, now, input.proof === undefined ? null : json(input.proof), input.proof === undefined ? null : json(input.proof), fulfillment.id);
+      db.prepare(`UPDATE fulfillments SET status = ?, last_command_key = ?, updated_by_user_id = ?, updated_at = ?, version = version + 1, proof_json = CASE WHEN ? IS NULL THEN proof_json ELSE ? END WHERE id = ?`).run(fulfillmentTarget, commandKey, actor?.userId || null, now, effectiveProof == null ? null : json(effectiveProof), effectiveProof == null ? null : json(effectiveProof), fulfillment.id);
     }
     db.prepare('UPDATE delivery_assignments SET status = ?, last_command_key = ?, updated_at = ?, version = version + 1 WHERE id = ?').run(normalizedAction, commandKey, now, active.id);
 
@@ -10132,24 +10162,11 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     if (!CORE_FULFILLMENT_TRANSITIONS[type][current]?.has(target)) {
       throw Object.assign(new Error(`Cannot move fulfillment from ${current} to ${target}`), { statusCode: 409, code: 'INVALID_FULFILLMENT_TRANSITION' });
     }
+    let effectiveProof = input.proof;
     if (type === 'delivery' && target === 'delivered') {
-      const proofInput = input.proof === undefined
-        ? (parseJSON(row.proof_json, null) ?? freshOrderJson.fulfillment_proof ?? null)
-        : input.proof;
-      if (proofInput == null || (typeof proofInput === 'string' && !proofInput.trim())) {
-        throw Object.assign(new Error('Delivery proof is required before delivery completion'), {
-          statusCode: 400, code: 'DELIVERY_PROOF_REQUIRED',
-        });
-      }
-      if (typeof proofInput === 'object' && !Array.isArray(proofInput)) {
-        const proofType = String(proofInput.type || proofInput.kind || '').trim().toLowerCase();
-        const proofReference = String(proofInput.reference || proofInput.referenceId || proofInput.reference_id || '').trim();
-        if (!proofType || !proofReference) {
-          throw Object.assign(new Error('Delivery proof type and reference are required'), {
-            statusCode: 400, code: 'DELIVERY_PROOF_INVALID',
-          });
-        }
-      }
+      const existingProof = parseJSON(row.proof_json, null) ?? freshOrderJson.fulfillment_proof ?? null;
+      effectiveProof = resolveDeliveryProof(existingProof, input.proof);
+      assertDeliveryProofInput(effectiveProof);
     }
 
     db.prepare(`
@@ -10161,7 +10178,7 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     `).run(
       target, commandKey, commandFingerprint, actorUserId, now,
       input.trackingReference || input.tracking_reference || null,
-      input.proof === undefined ? null : json(input.proof),
+      effectiveProof == null ? null : json(effectiveProof),
       row.id,
     );
     const updated = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(row.id);
