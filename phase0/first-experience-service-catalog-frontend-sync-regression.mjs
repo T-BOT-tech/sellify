@@ -96,6 +96,46 @@ assert.match(tenantAuthSource, /const locallySaved = await saveJSONAsync\(STORAG
   'first-offering onboarding must not mark the catalog dirty, report completion, or attempt remote sync if durable local persistence fails');
 assert.match(tenantAuthSource, /const previousProducts = products;[\s\S]*?setProducts\(\[\.\.\.previousProducts, newProd\]\);[\s\S]*?if \(!locallySaved\) \{\s*setProducts\(previousProducts\);/,
   'failed first-offering persistence must roll back in-memory state so retry cannot duplicate the unsaved offering');
+
+// Execute the actual onboarding function with controlled dependencies. A failed
+// durable save must restore the original array and must not mark/sync/complete.
+const addOfferingFunctionSource = tenantAuthSource.match(/export async function addOnboardingProduct\(\) \{[\s\S]*?\n\}/)?.[0];
+assert.ok(addOfferingFunctionSource, 'first-offering function must be extractable for behavioral failure testing');
+const priorOnboardingProducts = [{ id: 'existing-item', name: 'Existing item', item_type: 'product', price: 100 }];
+const onboardingFields = {
+  onboardingProdName: { value: 'Consultation' },
+  onboardingProdPrice: { value: '12.50' },
+  onboardingProdStock: { value: '9' },
+  onboardingItemType: { value: 'service' },
+  onboardingStatus: { textContent: '' },
+};
+const onboardingHarness = {
+  products: priorOnboardingProducts,
+  config: { currencyCode: 'ETB', syncUrl: 'http://127.0.0.1:0', chatId: 'tenant-a', sessionToken: 'session-a' },
+  STORAGE_KEYS: { products: 'products' },
+  document: { getElementById: id => onboardingFields[id] || null },
+  setProducts(next) { onboardingHarness.products = next; },
+  saveJSONAsync: async () => false,
+  toMinorUnits: value => Math.round(Number(value) * 100),
+  uid: () => 'unsaved-consultation',
+  markCatalogDirty: async () => { onboardingHarness.catalogMarkedDirty = true; },
+  showOnboardingDone: () => { onboardingHarness.completed = true; },
+};
+const addOnboardingOffering = vm.runInNewContext(
+  '(' + addOfferingFunctionSource.replace('export async function', 'async function') + ')',
+  onboardingHarness,
+);
+await addOnboardingOffering();
+assert.equal(onboardingHarness.products, priorOnboardingProducts,
+  'failed durable save must restore the exact prior in-memory catalog array');
+assert.deepEqual(onboardingHarness.products, priorOnboardingProducts,
+  'failed durable save must not leave an unsaved offering in the catalog');
+assert.equal(onboardingFields.onboardingStatus.textContent,
+  'Local storage failed. The offering was not saved; retry when local storage is available.');
+assert.equal(onboardingHarness.catalogMarkedDirty, undefined,
+  'failed durable save must not mark the catalog for remote sync');
+assert.equal(onboardingHarness.completed, undefined,
+  'failed durable save must not complete the onboarding step');
 assert.match(tenantAuthSource, /const priceMinor = toMinorUnits\(priceMajor, config\.currencyCode\);[\s\S]*?if \(!Number\.isSafeInteger\(priceMinor\) \|\| priceMinor < 0 \|\| priceMinor > 2147483647\)[\s\S]*?Price is outside the supported range[\s\S]*?price: priceMinor,/,
   'first-offering onboarding must reject prices outside the backend-supported integer minor-unit range before local persistence or sync');
 assert.match((await readFile(new URL('../app/src/storage/json.js', import.meta.url), 'utf8')), /export async function saveJSONAsync[\s\S]*?await idbSet\(key, value\)/,
