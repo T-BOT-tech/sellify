@@ -5760,11 +5760,28 @@ function bookingTimestamp(value, field) {
   }
   return new Date(result).toISOString();
 }
+const SERVICE_BOOKING_FORBIDDEN_AUTHORITY_FIELDS = new Set([
+  'payment_id', 'paymentId', 'order_status', 'orderStatus',
+  'fulfillment_id', 'fulfillmentId', 'inventory_reservation_id',
+  'inventoryReservationId', 'courier_id', 'courierId',
+  'provider_id', 'providerId', 'organization_id', 'organizationId',
+]);
+function assertServiceBookingAuthorityBoundary(input) {
+  for (const field of Object.keys(input || {})) {
+    if (SERVICE_BOOKING_FORBIDDEN_AUTHORITY_FIELDS.has(field)) {
+      throw Object.assign(new Error(`booking input cannot set authority field: ${field}`), {
+        statusCode: 400,
+        code: 'SERVICE_BOOKING_AUTHORITY_FIELD_FORBIDDEN',
+      });
+    }
+  }
+}
 export async function createServiceBooking(chatId, serverOrderId, input = {}, actor = null) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
   const organizationId = String(tenant?.organization_id || tenant?.organizationId || '');
   if (!organizationId) throw Object.assign(new Error('Order organization is required'), { statusCode: 409, code: 'ORDER_ORGANIZATION_REQUIRED' });
+  assertServiceBookingAuthorityBoundary(input);
   const orderId = String(serverOrderId || '').trim();
   const serviceItemId = bookingRequiredText(input.service_item_id ?? input.serviceItemId, 'service_item_id');
   const requestedStart = bookingTimestamp(input.requested_start ?? input.requestedStart, 'requested_start');
@@ -5808,6 +5825,7 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
   ensureDatabase();
   const tenant=await getTenant(chatId), organizationId=String(tenant?.organization_id||tenant?.organizationId||'');
   if(!organizationId) throw Object.assign(new Error('Order organization is required'),{statusCode:409,code:'ORDER_ORGANIZATION_REQUIRED'});
+  assertServiceBookingAuthorityBoundary(input);
   const target=String(input.status||input.next_status||input.nextStatus||'').trim().toUpperCase();
   const commandKey=String(input.idempotencyKey||input.idempotency_key||'').trim();
   if(!commandKey) throw Object.assign(new Error('Idempotency-Key is required'),{statusCode:400,code:'IDEMPOTENCY_KEY_REQUIRED'});
