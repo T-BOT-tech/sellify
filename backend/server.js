@@ -3057,36 +3057,16 @@ async function handleServiceDeliveryAssessment(req, res, chatId, serverOrderId) 
   const session = await requireSession(req, chatId);
   if (req.method !== 'POST') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
   const body = await readBody(req);
-  // Authorization must use the canonical order location, not a caller-selected
-  // location or a session default. The isolation helper requires a location
-  // record (including its organization), not a bare location ID.
-  const canonicalOrder = (await getOrders(chatId)).find(order =>
-    String(order.server_order_id || '') === String(serverOrderId));
-  const requestedLocationId = body.locationId || body.location_id || null;
-  const orderLocationId = requestedLocationId || canonicalOrder?.location_id || session.locationId || null;
-  let authorizationLocation = null;
-  if (canonicalOrder?.location_id) {
-    // Historical orders can retain a location that is now inactive. Resolve
-    // the canonical record by tenant organization rather than the active-only
-    // location list; authorization is about tenant ownership, not active status.
-    authorizationLocation = await getOrganizationLocation(chatId, canonicalOrder.location_id);
-    if (!authorizationLocation) {
-      throw Object.assign(new Error('Canonical order location is not available in tenant scope'), {
-        statusCode: 403, code: 'LOCATION_SCOPE_DENIED',
-      });
-    }
-  }
-  await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:request', {
-    location: authorizationLocation,
-    deniedMessage: 'Logistics service assessment permission required',
-  });
+  // Do not authorize against mutable order/location state before the command
+  // authority resolves a durable replay. The store re-reads tenant/order
+  // bindings inside BEGIN IMMEDIATE, checks command history first, and only
+  // validates current location/role authorization for a new command.
   const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
   if (!idempotencyKey) {
     return sendJSON(res, 400, { error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' } }, req);
   }
   const result = await recordServiceDeliveryAssessment(chatId, serverOrderId, {
     ...body,
-    locationId: orderLocationId,
     idempotencyKey,
   }, session);
   return sendJSON(res, 200, {
