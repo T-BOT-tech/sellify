@@ -9943,6 +9943,9 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
       if (!targetCourierId) throw Object.assign(new Error('A different courier is required to resolve a delivery exception'), {
         statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED',
       });
+      if (!exceptionReason) throw Object.assign(new Error('A reason is required to resolve a delivery exception'), {
+        statusCode: 400, code: 'REASSIGNMENT_REASON_REQUIRED',
+      });
       // For a new command, revalidate target courier membership and role under
       // the write lock so concurrent role revocation cannot authorize a stale
       // reassignment.
