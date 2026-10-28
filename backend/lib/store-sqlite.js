@@ -9231,6 +9231,33 @@ export async function getDeliveryAssignment(chatId, serverOrderId, actor = null)
     LIMIT 1
   `).get(String(serverOrderId), String(tenant.organization_id));
   if (!row) return null;
+  const isCourier = (Array.isArray(actor?.roles) && actor.roles.includes('logistics_courier'))
+    || actor?.role === 'logistics_courier';
+  if (isCourier) {
+    const actorUserId = String(actor?.userId || '').trim();
+    const courierMemberships = db.prepare(`
+      SELECT mr.scope_type, mr.scope_id
+      FROM memberships m
+      JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active'
+      WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active'
+        AND mr.role_id = 'logistics_courier'
+    `).all(actorUserId, String(chatId));
+    if (!courierMemberships.length) {
+      throw Object.assign(new Error('Active logistics courier role is required'), {
+        statusCode: 403, code: 'COURIER_ROLE_REQUIRED',
+      });
+    }
+    if (String(row.courier_user_id) !== actorUserId) {
+      throw Object.assign(new Error('Courier is not assigned to this delivery'), {
+        statusCode: 403, code: 'COURIER_ASSIGNMENT_REQUIRED',
+      });
+    }
+    if (!hasCourierLocationGrant(courierMemberships, row.location_id)) {
+      throw Object.assign(new Error('Courier role is outside the delivery location scope'), {
+        statusCode: 403, code: 'COURIER_SCOPE_DENIED',
+      });
+    }
+  }
   return {
     ...row,
     dispatch: {
