@@ -4,6 +4,19 @@ import fs from 'node:fs';
 const store = fs.readFileSync(new URL('../backend/lib/store-sqlite.js', import.meta.url), 'utf8');
 const server = fs.readFileSync(new URL('../backend/server.js', import.meta.url), 'utf8');
 
+const deliveryHandlerStart = server.indexOf('async function handleDeliveryAssignment(');
+const deliveryHandlerEnd = server.indexOf('async function handleServiceBookings(', deliveryHandlerStart);
+assert.ok(deliveryHandlerStart >= 0 && deliveryHandlerEnd > deliveryHandlerStart,
+  'canonical delivery assignment HTTP handler must remain discoverable');
+const deliveryHandler = server.slice(deliveryHandlerStart, deliveryHandlerEnd);
+assert.ok(deliveryHandler.includes('const session = await requireSession(req, chatId)'),
+  'assignment routes must retain tenant-scoped session authentication');
+const initialAssignmentCall = deliveryHandler.indexOf('assignDeliveryCourier(chatId, serverOrderId');
+assert.ok(initialAssignmentCall >= 0,
+  'initial assignment route must delegate to the canonical assignment service');
+assert.ok(!deliveryHandler.slice(initialAssignmentCall).includes("'logistics:deliveries:assign'"),
+  'initial assignment retries must reach durable replay before mutable route authorization');
+
 assert.match(store, /if \(!applied\.includes\(44\)\)/);
 assert.match(store, /CREATE UNIQUE INDEX idx_delivery_assignments_active_fulfillment/);
 assert.match(store, /last_command_key TEXT/);

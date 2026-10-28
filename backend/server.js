@@ -2993,9 +2993,12 @@ async function handleDeliveryAssignment(req, res, chatId, serverOrderId) {
     return sendJSON(res, 200, { assignment }, req);
   }
 
-  await requireAuthorization(session, tenant, 'logistics', 'logistics:deliveries:assign', {
-    location, deniedMessage: 'Delivery assignment permission required',
-  });
+  // Initial assignment authorization belongs to the canonical service. It
+  // resolves a committed command replay before checking mutable caller role,
+  // location grant, or courier eligibility, so a lost response can be safely
+  // retried without selecting a different courier. Tenant authentication is
+  // still required above, and new commands are authorization-checked inside
+  // assignDeliveryCourier's transaction for logistics:deliveries:assign.
   const assignment = await assignDeliveryCourier(chatId, serverOrderId, body.courierUserId || body.courier_user_id, session, body);
   return sendJSON(res, 200, { assignment }, req);
 }
