@@ -42,6 +42,13 @@ try {
     customer_note: 'Please call first.',
     idempotency_key: 'booking-create-' + suffix,
   };
+  await assert.rejects(
+    store.createServiceBooking(seller.chatId, order.server_order_id, {
+      ...request, payment_id: 'caller-controlled', idempotency_key: 'booking-forbidden-authority-' + suffix,
+    }, { userId: owner.id }),
+    error => error?.code === 'SERVICE_BOOKING_AUTHORITY_FIELD_FORBIDDEN',
+    'service booking must reject caller-supplied payment authority fields',
+  );
   const created = await store.createServiceBooking(seller.chatId, order.server_order_id, request, { userId: owner.id });
   assert.equal(created.replayed, false);
   assert.equal(created.booking.status, 'REQUESTED');
@@ -56,6 +63,14 @@ try {
       ...request, requested_end: '2026-11-01T11:00:00+03:00',
     }, { userId: owner.id }),
     error => error?.code === 'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT',
+  );
+  await assert.rejects(
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, created.booking.id, {
+      status: 'ACCEPTED', expected_version: 1, payment_id: 'caller-controlled',
+      idempotency_key: 'booking-transition-forbidden-authority-' + suffix,
+    }, { userId: owner.id }),
+    error => error?.code === 'SERVICE_BOOKING_AUTHORITY_FIELD_FORBIDDEN',
+    'service booking transitions must reject caller-supplied payment authority fields',
   );
 
   const accepted = await store.transitionServiceBooking(seller.chatId, order.server_order_id, created.booking.id, {
