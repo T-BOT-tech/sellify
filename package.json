@@ -299,6 +299,7 @@
     "test:gap-2-delivery-assignment": "node phase0/gap-2-delivery-assignment-authority-regression.mjs",
     "test:gap-2-delivery-lifecycle": "node phase0/gap-2-delivery-assignment-lifecycle-regression.mjs",
     "test:gap-2-delivery-exception": "node phase0/gap-2-delivery-assignment-lifecycle-regression.mjs",
+    "test:gap-2-reassignment-auth": "node phase0/gap-2-reassignment-auth-regression.mjs",
     "test:gap-2-courier-multi-location": "node phase0/gap-2-courier-multi-location-behavioral-regression.mjs",
     "test:gap-2-dispatch-workload": "node phase0/gap-2-dispatch-workload-regression.mjs",
     "test:gap-2-delivery-frontend": "node phase0/gap-2-delivery-frontend-contract-regression.mjs",
