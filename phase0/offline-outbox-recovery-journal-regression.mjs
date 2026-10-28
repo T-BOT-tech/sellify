@@ -4,6 +4,7 @@ import {
   OUTBOX_RECOVERY_KEY,
   OUTBOX_RECOVERY_COMMIT_KEY,
   getOutboxIndexedDbBaseline,
+  getOutboxRecoveryBaseline,
   mergeOutboxSnapshots,
   resetOutboxIndexedDbBaseline,
   resetOutboxRecoveryBaseline,
@@ -54,6 +55,22 @@ assert.doesNotMatch(outbox, /currentIds\.length === savedIds\.length && currentI
     'a same-ID status/attempt mutation must be preserved while a transaction is in flight');
   assert.equal(sameOutboxSnapshot(before, [{ eventId: 'same-event', status: 'pending', attempts: 0, lastError: null }]), false,
     'adding or clearing metadata is also a mutation even when IDs are unchanged');
+}
+
+// Baselines must not share nested payload references with live event objects.
+// An in-place payload edit otherwise mutates both "before" and "now", hiding
+// the delta from the three-way merge and risking loss of the local change.
+{
+  const liveEvent = { eventId: 'nested-payload', status: 'pending', payload: { amount: 10, details: { sku: 'A' } } };
+  resetOutboxRecoveryBaseline([liveEvent]);
+  liveEvent.payload.details.sku = 'B';
+  const baseline = [{ eventId: 'nested-payload', status: 'pending', payload: { amount: 10, details: { sku: 'A' } } }];
+  const merged = mergeOutboxSnapshots(baseline, [liveEvent], baseline);
+  assert.equal(merged[0].payload.details.sku, 'B',
+    'nested in-place payload edits must remain visible against an immutable baseline');
+  const exposedBaseline = getOutboxRecoveryBaseline();
+  assert.equal(exposedBaseline[0].payload.details.sku, 'A',
+    'reading a baseline must not expose nested references that can mutate its stored snapshot');
 }
 assert.match(hydrate, /restoreRecoveryJournal\(\{/,
   'hydration must use the tested recovery journal implementation');
