@@ -46,10 +46,15 @@ assert.ok(fulfillmentTransition.includes('existingDeliveryProof != null')
     && fulfillmentTransition.includes('DELIVERY_PROOF_IMMUTABLE')
     && fulfillmentTransition.includes('freshOrderJson.fulfillment_proof'),
   'generic fulfillment transitions must not overwrite captured delivery proof, including legacy order proof');
+const existingDeliveryProofSnapshot = fulfillmentTransition.indexOf('const existingDeliveryProof = row?.proof_json');
+const fulfillmentCreation = fulfillmentTransition.indexOf('if (!row) {');
 const fulfillmentReplayBoundary = fulfillmentTransition.indexOf("if (String(row.last_command_key || '') === commandKey)");
-const deliveryProofMutationGuard = fulfillmentTransition.indexOf('const existingDeliveryProof');
+const deliveryProofMutationGuard = fulfillmentTransition.indexOf('if (existingDeliveryProof != null && input.proof !== undefined');
 const fulfillmentPersistenceWrite = fulfillmentTransition.indexOf('UPDATE fulfillments');
-assert.ok(fulfillmentReplayBoundary >= 0
+assert.ok(existingDeliveryProofSnapshot >= 0
+    && fulfillmentCreation > existingDeliveryProofSnapshot,
+  'legacy delivery proof must be snapshotted before a new fulfillment can be seeded from caller input');
+assert.ok(fulfillmentReplayBoundary > fulfillmentCreation
     && deliveryProofMutationGuard > fulfillmentReplayBoundary
     && fulfillmentPersistenceWrite > deliveryProofMutationGuard,
   'delivery proof immutability must be enforced after durable replay and before persistence');
