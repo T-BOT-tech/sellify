@@ -29,6 +29,7 @@ export function normalizeSellerStorefrontChannel(input = {}) {
     enabled: input.enabled !== false,
     displayName: input.displayName ? String(input.displayName) : channelType,
     capabilities: Array.isArray(input.capabilities) ? [...new Set(input.capabilities.map(String))] : [],
+    unsupportedCapabilities: Array.isArray(input.unsupportedCapabilities) ? [...new Set(input.unsupportedCapabilities.map(String))] : [],
     configurationVersion: Number(input.configurationVersion || 1),
   };
 }
@@ -40,6 +41,7 @@ export function buildSellerStorefrontChannelSummary(config) {
     enabled: ['PUBLISHED', 'VERIFIED', 'CONFIGURED', 'PAUSED'].includes(config?.status),
     displayName: config?.displayName || config?.channelType,
     capabilities: config?.enabledCapabilities || [],
+    unsupportedCapabilities: config?.unsupportedCapabilities || [],
     configurationVersion: config?.version || 1,
   });
 }

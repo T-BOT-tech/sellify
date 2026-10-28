@@ -11,7 +11,7 @@
 import { uid } from '../utils/index.js';
 import { STORAGE_KEYS } from '../constants.js';
 import { config, products, setProducts } from '../state.js';
-import { saveJSON } from '../storage/json.js';
+import { saveJSON, saveJSONAsync } from '../storage/json.js';
 // Phase 8 fix (see modularization plan §5, Phase 8): these used to come
 // from '../main.js', which only re-exported them from their real owning
 // module. That made main.js and every feature file that needed a toast,
@@ -21,7 +21,7 @@ import { saveJSON } from '../storage/json.js';
 import { applyStoreBranding } from '../ui/branding.js';
 import { t } from '../ui/i18n.js';
 import { renderAll } from '../ui/render.js';
-import { markCatalogSynced } from '../products/catalog.js';
+import { isCatalogDirty, markCatalogSynced } from '../products/catalog.js';
 import { authHeaders as tenantAuthHeaders } from '../auth/tenant.js';
 
 // IDs are meant to be opaque identifiers (not markup), so restricting them to a
@@ -74,14 +74,31 @@ export function sanitizeRemoteListings(rawList) {
 
 export async function fetchRemoteCatalogAndBranding() {
   if (!config.syncUrl || !config.chatId) return;
+  // A restored tenant-scoped pending snapshot must not be silently replaced by
+  // a background pull before the merchant has synced it.
+  if (isCatalogDirty()) return;
   try {
     const res = await fetch(`${config.syncUrl.replace(/\/$/, '')}/catalog/${config.chatId}`);
     if (!res.ok) return;
     const data = await res.json();
-    if (data.products && data.products.length) {
-      setProducts(sanitizeRemoteProducts(data.products));
-      saveJSON(STORAGE_KEYS.products, products);
-      markCatalogSynced();
+    // An empty array is a valid canonical catalog too (for example, after
+    // the last item was removed). Do not leave a stale local tenant catalog
+    // visible merely because the server currently has zero items.
+    if (Array.isArray(data.products)) {
+      const previousProducts = products;
+      const remoteProducts = sanitizeRemoteProducts(data.products);
+      setProducts(remoteProducts);
+      const saved = await saveJSONAsync(STORAGE_KEYS.products, remoteProducts);
+      if (!saved) {
+        // Keep the prior in-memory catalog and do not acknowledge a remote
+        // refresh that cannot be recovered after a restart.
+        setProducts(previousProducts);
+        return;
+      }
+      if (!(await markCatalogSynced())) {
+        setProducts(previousProducts);
+        return;
+      }
       renderAll();
     }
     if (data.branding) {
@@ -109,8 +126,13 @@ export async function syncCatalog() {
     if (res.status === 409 && data.code === 'CATALOG_STOCK_CONFLICT' || res.status === 409 && data.error?.code === 'CATALOG_STOCK_CONFLICT') {
       if (Array.isArray(data.products)) {
         setProducts(sanitizeRemoteProducts(data.products));
-        saveJSON(STORAGE_KEYS.products, products);
-        markCatalogSynced();
+        const saved = await saveJSONAsync(STORAGE_KEYS.products, products);
+        if (!saved) {
+          throw new Error('Could not persist the refreshed catalog locally; pending sync state was retained.');
+        }
+        if (!(await markCatalogSynced())) {
+          throw new Error('Could not clear the pending catalog snapshot; pending sync state was retained.');
+        }
         renderAll();
       }
       throw new Error('Catalog changed on another device. Your local catalog was refreshed; review your changes before saving again.');
@@ -123,8 +145,11 @@ export async function syncCatalog() {
     }
 
     setProducts(data.products ? sanitizeRemoteProducts(data.products) : products);
-    saveJSON(STORAGE_KEYS.products, products);
-    markCatalogSynced();
+    const saved = await saveJSONAsync(STORAGE_KEYS.products, products);
+    if (!saved) throw new Error('Could not persist the server-confirmed catalog locally; pending sync state was retained.');
+    if (!(await markCatalogSynced())) {
+      throw new Error('Could not clear the pending catalog snapshot; pending sync state was retained.');
+    }
     renderAll();
     return t('catalogSyncedMsg');
   } catch (e) {

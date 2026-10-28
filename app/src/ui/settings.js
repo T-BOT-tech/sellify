@@ -7,7 +7,7 @@
 // which — as elsewhere in this migration — is fine because it's only ever
 // invoked from inside a function body, never at module-init time.
 import { escapeHtml } from '../utils/index.js';
-import { STORAGE_KEYS, CURRENCY_SYMBOLS } from '../constants.js';
+import { STORAGE_KEYS } from '../constants.js';
 import { config, setConfig, currentStaff } from '../state.js';
 import { saveJSON } from '../storage/json.js';
 import {
@@ -155,14 +155,35 @@ export function openSettings() {
 
   const codeSel = document.getElementById('setCurrencyCode');
   const symInput = document.getElementById('setCurrencySymbol');
-  if (config.currencySymbol && !CURRENCY_SYMBOLS[config.currencyCode]) {
-    codeSel.value = 'CUSTOM';
-    symInput.value = config.currencySymbol;
-    symInput.style.display = 'block';
-  } else {
-    codeSel.value = config.currencyCode || 'INR';
-    symInput.value = '';
-    symInput.style.display = 'none';
+  codeSel.dataset.currencyHydrated = 'false';
+  codeSel.dataset.currencyEdited = 'false';
+  codeSel.value = /^[A-Z]{3}$/.test(String(config.currencyCode || '').toUpperCase()) ? String(config.currencyCode).toUpperCase() : 'ETB';
+  symInput.value = config.currencySymbol || '';
+  symInput.style.display = 'block';
+  // A saved device setting is only a cache. Hydrate the active business's
+  // canonical organization currency before treating a selection as intent.
+  if (config.chatId && config.sessionToken) {
+    const activeChatId = String(config.chatId);
+    const activeSessionToken = String(config.sessionToken);
+    const base = (config.syncUrl || window.location.origin).replace(/\/$/, '');
+    fetch(`${base}/tenants/${encodeURIComponent(activeChatId)}`, {
+      headers: { Authorization: `Bearer ${activeSessionToken}` },
+    }).then(async res => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error?.message || `Currency load failed (${res.status})`);
+      if (String(config.chatId) !== activeChatId || String(config.sessionToken) !== activeSessionToken) return;
+      const canonicalCode = String(data?.tenant?.currency || data?.tenant?.branding?.currency || 'ETB').toUpperCase();
+      if (!/^[A-Z]{3}$/.test(canonicalCode)) return;
+      codeSel.dataset.currencyHydrated = 'true';
+      if (codeSel.dataset.currencyEdited !== 'true') {
+        codeSel.value = canonicalCode;
+        setConfig({ ...config, currencyCode: canonicalCode, branding: data.tenant?.branding || config.branding || {} });
+        saveJSON(STORAGE_KEYS.config, config);
+      }
+    }).catch(() => {
+      // Keep cached settings visible offline, but saveSettings will not use
+      // an unverified cached value to change the canonical business currency.
+    });
   }
 
   renderPaymentMethodsSettings();
@@ -345,13 +366,64 @@ export async function saveStorefrontBranding() {
 export function onCurrencyCodeChange() {
   const codeSel = document.getElementById('setCurrencyCode');
   const symInput = document.getElementById('setCurrencySymbol');
-  symInput.style.display = (codeSel.value === 'CUSTOM') ? 'block' : 'none';
+  if (codeSel) codeSel.dataset.currencyEdited = 'true';
+  // A custom display symbol belongs to the previous currency choice.
+  if (symInput) symInput.value = '';
 }
 
-export function saveSettings() {
+export async function saveSettings() {
   const codeSel = document.getElementById('setCurrencyCode');
   const symInput = document.getElementById('setCurrencySymbol');
-  const isCustom = codeSel.value === 'CUSTOM';
+  const requestedCurrency = String(codeSel.value || '').toUpperCase();
+  const currencyWasEdited = codeSel.dataset.currencyEdited === 'true';
+  let canonicalCurrency = /^[A-Z]{3}$/.test(String(config.currencyCode || '').toUpperCase()) ? String(config.currencyCode).toUpperCase() : 'ETB';
+  let canonicalBranding = config.branding || {};
+
+  // Authenticated business currency always comes from the backend. Only an
+  // explicit selector change may request a currency update; stale local
+  // defaults must never silently rewrite an existing organization's currency.
+  if (config.chatId && config.sessionToken) {
+    try {
+      const activeChatId = String(config.chatId);
+      const activeSessionToken = String(config.sessionToken);
+      const base = (config.syncUrl || window.location.origin).replace(/\/$/, '');
+      const response = await fetch(`${base}/tenants/${encodeURIComponent(activeChatId)}`, {
+        headers: { Authorization: `Bearer ${activeSessionToken}` },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error?.message || `Currency load failed (${response.status})`);
+      if (String(config.chatId) !== activeChatId || String(config.sessionToken) !== activeSessionToken) {
+        throw new Error('Active business changed. Reopen Settings and try again.');
+      }
+      canonicalCurrency = String(data?.tenant?.currency || data?.tenant?.branding?.currency || 'ETB').toUpperCase();
+      canonicalBranding = data?.tenant?.branding || canonicalBranding;
+      if (!/^[A-Z]{3}$/.test(canonicalCurrency)) throw new Error('The business has an invalid canonical currency.');
+      if (currencyWasEdited && requestedCurrency && requestedCurrency !== canonicalCurrency) {
+        const update = await fetch(`${base}/tenants/${encodeURIComponent(activeChatId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${activeSessionToken}` },
+          body: JSON.stringify({ branding: { currency: requestedCurrency } }),
+        });
+        const updated = await update.json().catch(() => ({}));
+        if (!update.ok) throw new Error(updated?.error?.message || `Currency update failed (${update.status})`);
+        // A tenant switch may happen while the PATCH is in flight. Do not let
+        // the old tenant's response overwrite the newly active local config.
+        if (String(config.chatId) !== activeChatId || String(config.sessionToken) !== activeSessionToken) {
+          throw new Error('Active business changed. Reopen Settings and try again.');
+        }
+        canonicalCurrency = String(updated?.tenant?.currency || updated?.tenant?.branding?.currency || requestedCurrency).toUpperCase();
+        canonicalBranding = updated?.tenant?.branding || canonicalBranding;
+      }
+    } catch (error) {
+      showToast(error.message || 'Could not verify the business currency. Nothing was saved.');
+      return;
+    }
+  } else if (requestedCurrency && !/^[A-Z]{3}$/.test(requestedCurrency)) {
+    showToast('Choose a valid three-letter currency code.');
+    return;
+  } else if (requestedCurrency) {
+    canonicalCurrency = requestedCurrency;
+  }
 
   const nicheSel = document.getElementById('setNiche');
   const modelSel = document.getElementById('setBusinessModel');
@@ -362,8 +434,9 @@ export function saveSettings() {
     lang: document.getElementById('setLang').value,
     businessModel: modelSel && BUSINESS_MODELS[modelSel.value] ? modelSel.value : (config.businessModel || 'retail'),
     niche: nicheSel ? nicheSel.value : (config.niche || ''),
-    currencyCode: isCustom ? 'CUSTOM' : codeSel.value,
-    currencySymbol: isCustom ? symInput.value.trim() : '',
+    currencyCode: canonicalCurrency,
+    currencySymbol: symInput.value.trim(),
+    branding: canonicalBranding,
     paymentMethods: config.paymentMethods,
     wholesaleEnabled: !!(document.getElementById('setWholesaleEnabled') && document.getElementById('setWholesaleEnabled').checked),
     volumeDiscountEnabled: !!(document.getElementById('setVolumeDiscountEnabled') && document.getElementById('setVolumeDiscountEnabled').checked),

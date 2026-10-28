@@ -19,6 +19,10 @@ assert.equal(created.status, 'CONFIGURED');
 assert.equal(created.botUsername, 'tg1_demo_bot');
 assert.equal(created.credentialRef, 'secret://telegram/tg1-demo');
 assert.equal(created.enabledCapabilities.includes('checkout'), true);
+await assert.rejects(
+  () => upsertTelegramStorefrontConfig(row.chat_id, { enabledCapabilities: ['browse', 'returns'] }, actor),
+  error => error?.code === 'UNSUPPORTED_TELEGRAM_STOREFRONT_CAPABILITY'
+);
 assert.equal(db.prepare('SELECT COUNT(*) AS n FROM telegram_storefront_configs WHERE organization_id=?').get(row.organization_id).n, 1);
 assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name LIKE 'telegram%'`).get().n, 1);
 
@@ -44,7 +48,7 @@ assert.equal(republished.status, 'PUBLISHED');
 
 db.prepare("UPDATE telegram_storefront_configs SET status='CONFIGURED' WHERE organization_id=?").run(row.organization_id);
 await assert.rejects(
-  () => upsertTelegramStorefrontConfig(row.chat_id, { status: 'PUBLISHED' }, actor),
+  () => upsertTelegramStorefrontConfig(row.chat_id, { status: 'VERIFIED' }, actor),
   error => error?.code === 'TELEGRAM_VERIFICATION_REQUIRED'
 );
 

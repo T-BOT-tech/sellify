@@ -63,6 +63,15 @@ try {
     deviceName: 'Service Catalog HTTP regression',
   });
 
+  const otherTenant = await store.createTenantForUser({
+    userId: user.id,
+    sellerName: 'Other Service Catalog HTTP Store',
+    businessType: 'retail',
+    country: 'ET',
+    currency: 'ETB',
+    timezone: 'Africa/Addis_Ababa',
+  });
+
   const port = await freePort();
   const baseUrl = 'http://127.0.0.1:' + port;
   child = spawn(process.execPath, ['backend/server.js'], {
@@ -85,6 +94,122 @@ try {
     Authorization: 'Bearer ' + session.token,
     'Content-Type': 'application/json',
   };
+
+  const tenantPath = '/tenants/' + encodeURIComponent(tenant.chatId);
+  const unauthTenantRead = await fetch(baseUrl + tenantPath);
+  assert.equal(unauthTenantRead.status, 401, 'canonical currency reads must require a tenant session');
+  const tenantRead = await fetch(baseUrl + tenantPath, { headers: authHeaders });
+  assert.equal(tenantRead.status, 200);
+  const tenantReadBody = await tenantRead.json();
+  assert.equal(tenantReadBody.tenant.currency, 'ETB',
+    'tenant settings must read the canonical organization currency, not the local device default');
+  assert.equal(Object.hasOwn(tenantReadBody.tenant, 'apiKey'), false,
+    'tenant currency settings must not expose legacy tenant API credentials');
+
+  const brandingWrite = await fetch(baseUrl + tenantPath, {
+    method: 'PATCH',
+    headers: authHeaders,
+    body: JSON.stringify({ branding: { business_name: 'Currency Regression Brand', primary_color: '#123456' } }),
+  });
+  assert.equal(brandingWrite.status, 200);
+  const currencyWrite = await fetch(baseUrl + tenantPath, {
+    method: 'PATCH',
+    headers: authHeaders,
+    body: JSON.stringify({ branding: { currency: 'usd' } }),
+  });
+  assert.equal(currencyWrite.status, 200, 'an owner may intentionally set currency before monetary records exist');
+  const currencyWriteBody = await currencyWrite.json();
+  assert.equal(currencyWriteBody.tenant.currency, 'USD', 'the update response must report the confirmed canonical currency');
+  assert.equal(currencyWriteBody.tenant.branding.business_name, 'Currency Regression Brand',
+    'currency-only updates must preserve existing branding fields');
+  assert.equal(currencyWriteBody.tenant.branding.primary_color, '#123456');
+  const restoreCurrency = await fetch(baseUrl + tenantPath, {
+    method: 'PATCH',
+    headers: authHeaders,
+    body: JSON.stringify({ branding: { currency: 'ETB' } }),
+  });
+  assert.equal(restoreCurrency.status, 200);
+  assert.equal((await restoreCurrency.json()).tenant.currency, 'ETB');
+  const invalidCurrency = await fetch(baseUrl + tenantPath, {
+    method: 'PATCH',
+    headers: authHeaders,
+    body: JSON.stringify({ branding: { currency: 'ETBB' } }),
+  });
+  assert.equal(invalidCurrency.status, 400, 'currency settings must reject non-three-letter currency codes');
+  assert.equal((await invalidCurrency.json()).error.code, 'INVALID_CURRENCY');
+
+  const templatePath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/business-template';
+  const unauthTemplateRead = await fetch(baseUrl + templatePath);
+  assert.equal(unauthTemplateRead.status, 401, 'business template config must require an authenticated tenant session');
+
+  const templateWrite = await fetch(baseUrl + templatePath, {
+    method: 'PUT',
+    headers: authHeaders,
+    body: JSON.stringify({ templateKey: 'repair' }),
+  });
+  assert.equal(templateWrite.status, 200, 'owner can persist an allowlisted business template');
+  const templateWriteBody = await templateWrite.json();
+  assert.equal(templateWriteBody.businessTemplate.templateKey, 'repair');
+  assert.equal(templateWriteBody.businessTemplate.schemaVersion, 1);
+  assert.deepEqual(templateWriteBody.businessTemplate.config, {});
+
+  const templateRead = await fetch(baseUrl + templatePath, { headers: authHeaders });
+  assert.equal(templateRead.status, 200);
+  assert.equal((await templateRead.json()).businessTemplate.templateKey, 'repair',
+    'template config must be read back from server-owned tenant storage');
+
+  const invalidTemplateWrite = await fetch(baseUrl + templatePath, {
+    method: 'PUT',
+    headers: authHeaders,
+    body: JSON.stringify({ templateKey: 'unsupported-hotel-engine', capabilities: ['reservations', 'deposits'] }),
+  });
+  assert.equal(invalidTemplateWrite.status, 400, 'unknown templates and caller-asserted capabilities must be rejected');
+
+  for (const [label, body] of [
+    ['unsupported schema version', { templateKey: 'repair', schemaVersion: 2 }],
+    ['unsupported snake-case schema version', { template_key: 'repair', schema_version: 2 }],
+    ['caller-supplied capability flags', { templateKey: 'repair', config: { reservations: true } }],
+    ['unknown authority fields', { templateKey: 'repair', paymentStatus: 'PAID' }],
+    ['array configuration', { templateKey: 'repair', config: [] }],
+    ['primitive configuration', { templateKey: 'repair', config: 'reservations-enabled' }],
+  ]) {
+    const response = await fetch(baseUrl + templatePath, {
+      method: 'PUT',
+      headers: authHeaders,
+      body: JSON.stringify(body),
+    });
+    assert.equal(response.status, 400, label + ' must be rejected');
+  }
+  const templateAfterRejectedWrites = await fetch(baseUrl + templatePath, { headers: authHeaders });
+  assert.equal(templateAfterRejectedWrites.status, 200);
+  const unchangedTemplate = (await templateAfterRejectedWrites.json()).businessTemplate;
+  assert.equal(unchangedTemplate.templateKey, 'repair', 'rejected writes must not mutate persisted template identity');
+  assert.equal(unchangedTemplate.schemaVersion, 1);
+  assert.deepEqual(unchangedTemplate.config, {});
+
+  const crossTenantTemplateRead = await fetch(baseUrl + '/tenants/' + encodeURIComponent(otherTenant.chatId) + '/business-template', {
+    headers: authHeaders,
+  });
+  assert.equal(crossTenantTemplateRead.status, 403,
+    'a valid session for one business must not read another business template');
+
+  const crossTenantTemplateWrite = await fetch(baseUrl + '/tenants/' + encodeURIComponent(otherTenant.chatId) + '/business-template', {
+    method: 'PUT',
+    headers: authHeaders,
+    body: JSON.stringify({ templateKey: 'repair' }),
+  });
+  assert.equal(crossTenantTemplateWrite.status, 403,
+    'a valid owner session for one business must not write another business template');
+  const otherTenantTemplateAfterDeniedWrite = await fetch(baseUrl + '/tenants/' + encodeURIComponent(otherTenant.chatId) + '/business-template', {
+    headers: { Authorization: 'Bearer ' + (await store.createSession({
+      userId: user.id,
+      chatId: otherTenant.chatId,
+      deviceName: 'Other Service Catalog HTTP read',
+    })).token },
+  });
+  assert.equal(otherTenantTemplateAfterDeniedWrite.status, 200);
+  assert.equal((await otherTenantTemplateAfterDeniedWrite.json()).businessTemplate, null,
+    'a denied cross-tenant write must leave the other business template unchanged');
   const products = [
     { id: 'consultation-http', name: 'Consultation', price: 25000, currency: 'ETB', item_type: 'service', marketplace_listed: true },
     { id: 'parcel-instant-http', name: 'Instant Parcel Delivery', price: 12000, currency: 'ETB', item_type: 'service',
@@ -104,6 +229,18 @@ try {
   const writeBody = await writeResponse.json();
   assert.equal(writeBody.products.find(item => item.id === 'consultation-http')?.item_type, 'service');
   assert.equal(writeBody.products.find(item => item.id === 'soap-http')?.item_type, 'product');
+
+  const lockedCurrencyWrite = await fetch(baseUrl + tenantPath, {
+    method: 'PATCH',
+    headers: authHeaders,
+    body: JSON.stringify({ branding: { currency: 'USD' } }),
+  });
+  assert.equal(lockedCurrencyWrite.status, 409,
+    'currency changes must be rejected once catalog monetary records exist');
+  assert.equal((await lockedCurrencyWrite.json()).error.code, 'CURRENCY_LOCKED');
+  const currencyAfterLock = await fetch(baseUrl + tenantPath, { headers: authHeaders });
+  assert.equal((await currencyAfterLock.json()).tenant.currency, 'ETB',
+    'a rejected currency change must leave the canonical organization currency unchanged');
 
   // The storefront read path must expose the persisted item type, not merely
   // echo the submitted request payload.
@@ -1259,7 +1396,7 @@ try {
   const otherSeller = await store.getOrCreateUserByTelegram(
     'tracking-isolation-' + Date.now().toString(36), 'Tracking Isolation Seller',
   );
-  const otherTenant = await store.createTenantForUser({
+  const otherSellerTenant = await store.createTenantForUser({
     userId: otherSeller.id,
     sellerName: 'Tracking Isolation Store',
     businessType: 'retail',
@@ -1269,7 +1406,7 @@ try {
   });
   await assert.rejects(
     () => store.getTelegramBuyerFulfillmentExperience(
-      otherTenant.chatId, 'parcel-request-buyer-http', requestedAssessment.marketplace_order_id,
+      otherSellerTenant.chatId, 'parcel-request-buyer-http', requestedAssessment.marketplace_order_id,
     ),
     error => error?.code === 'ORDER_NOT_FOUND',
     'cross-seller/tenant tracking access must fail closed',

@@ -66,6 +66,10 @@ jobs:
         run: npm run test:service-catalog-http
       - name: First-experience service catalog frontend sync regression
         run: npm run test:service-catalog-frontend-sync
+      - name: First-experience ecosystem discovery regression
+        run: npm run test:first-experience-ecosystem-discovery
+      - name: Country-pack onboarding integrity regression
+        run: npm run test:country-pack-onboarding
 
       - name: GAP-1.18I payment verification migration independence regression
         run: npm run gap-1.18:provider-verification-migration-test
@@ -82,6 +86,21 @@ jobs:
         run: npm run gap-1.18:decision-idempotency-test
       - name: GAP-1.18U financial transition idempotency regression
         run: npm run gap-1.18:financial-transition-idempotency-test
+
+      - name: Browser module serving boundary regression
+        run: npm run test:browser-module-serving
+
+      - name: Browser module serving HTTP regression
+        run: npm run test:browser-module-serving-http
+
+      - name: Production server browser module HTTP regression
+        run: npm run test:browser-module-serving-production-http
+
+      - name: Install Chromium for full-app browser smoke regression
+        run: npx playwright install --with-deps chromium
+
+      - name: Full-app browser smoke regression (development and production servers)
+        run: npm run test:browser-module-serving-browser
 
       - name: Syntax check core entrypoints
         run: |

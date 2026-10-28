@@ -81,18 +81,21 @@ import crypto from 'node:crypto';
 import { resolveTelegramBotCredential } from '../app/src/platform/telegram-bot-credential-contract.js';
 import { verifyTelegramBuyerInitDataWithSecret } from '../app/src/platform/telegram-buyer-identity-contract.js';
 import { normalizeTelegramCheckoutContext, buildTelegramPaymentBoundary } from '../app/src/platform/telegram-checkout-contract.js';
+import { TELEGRAM_STOREFRONT_FULFILLMENT_CAPABILITIES } from '../app/src/telegram-storefront-contract.js';
 import { buildSellerStorefrontChannelSummary } from '../app/src/platform/seller-channel-storefront-contract.js';
 import { buildCrossChannelConsistencyContract, evaluateCrossChannelConsistency } from '../app/src/platform/cross-channel-consistency-contract.js';
 import { getDiscoveryProvider, discoverUnified } from './lib/discovery/index.js';
 import { readFile } from 'node:fs/promises';
 import { existsSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { BROWSER_BACKEND_MODULES, BROWSER_SHARED_MODULES } from '../app/browser-backend-modules.mjs';
 import { fileURLToPath } from 'node:url';
 import {
   getOrCreateTenant,
   getOrders,
   getTenantByApiKey,
   getTenant,
+  getBusinessTemplateConfig, saveBusinessTemplateConfig,
   getOrganizationLocation,
   updateTenant,
   listTenants,
@@ -154,6 +157,7 @@ import { PaymentDecisionEngine } from './lib/payments/decision-engine.js';
 import { listPaymentChannels } from './lib/payments/channel-registry.js';
 import { processEventIsolated } from './lib/event-failure-isolation.js';
 import { assertEventTenantScope } from './lib/event-replay.js';
+import { listOnboardingCountryOptions } from './lib/country-pack-onboarding.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -582,7 +586,7 @@ async function handleTelegramStorefrontFulfillment(req, res, chatId, orderId) {
   const config = getTelegramStorefrontConfig(chatId);
   if (!config || config.status !== 'PUBLISHED') return sendJSON(res, 404, { error: { message: 'Telegram storefront is not published', status: 404 } }, req);
   const enabled = new Set(Array.isArray(config.enabledCapabilities) ? config.enabledCapabilities : []);
-  if (![...enabled].some(c => ['tracking','proof_of_delivery','returns'].includes(c))) {
+  if (![...enabled].some(c => TELEGRAM_STOREFRONT_FULFILLMENT_CAPABILITIES.includes(c))) {
     return sendJSON(res, 403, { error: { message: 'Fulfillment capabilities are disabled', status: 403, code: 'TELEGRAM_FULFILLMENT_DISABLED' } }, req);
   }
   const initData = String(req.headers['x-telegram-init-data'] || '').trim();
@@ -707,6 +711,14 @@ async function handleTelegramAuth(req, res) {
     memberships,
     session,
     challenge,
+  }, req);
+}
+
+function handleOnboardingCountryOptions(req, res) {
+  sendJSON(res, 200, {
+    countries: listOnboardingCountryOptions(),
+    authority: 'existing_country_pack_and_country_security_contracts',
+    persistence: 'none',
   }, req);
 }
 
@@ -1836,25 +1848,59 @@ async function handleAuthorizationIamCertification(req, res, chatId) {
   }, req);
 }
 
-async function handleTenantPatch(req, res, chatId) {
-  const body = await readBody(req);
+async function handleBusinessTemplateConfig(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
   const session = await requireSession(req, tenant.chatId);
+  if (req.method === 'GET') {
+    // Any authenticated tenant member may read shared setup context; only
+    // owners may change the canonical tenant's selected template.
+    const businessTemplate = await getBusinessTemplateConfig(chatId);
+    return sendJSON(res, 200, { businessTemplate }, req);
+  }
+  if (req.method !== 'PUT' && req.method !== 'PATCH') {
+    return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+  }
   await requireOwnerRole(session);
+  const body = await readBody(req);
+  const businessTemplate = await saveBusinessTemplateConfig(chatId, body, session);
+  return sendJSON(res, 200, { businessTemplate }, req);
+}
+
+async function handleTenantPatch(req, res, chatId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+  const tenantSettingsView = ({
+    chatId: tenant.chatId,
+    id: tenant.id,
+    createdAt: tenant.createdAt,
+    sellerName: tenant.sellerName,
+    branding: tenant.branding,
+    vendorCode: tenant.vendorCode,
+    organizationId: tenant.organizationId,
+    currency: tenant.currency,
+  });
+  if (req.method === 'GET') return sendJSON(res, 200, { tenant: tenantSettingsView }, req);
+  if (req.method !== 'PATCH') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+  await requireOwnerRole(session);
+  const body = await readBody(req);
 
   const patch = {};
   if (typeof body.sellerName === 'string') patch.sellerName = body.sellerName;
   if (body.branding && typeof body.branding === 'object') {
     const branding = body.branding;
-    const allowed = ['business_name', 'primary_color', 'logo_url'];
+    const allowed = ['business_name', 'primary_color', 'logo_url', 'currency'];
     const clean = {};
     for (const key of allowed) {
       if (branding[key] == null || branding[key] === '') continue;
       if (typeof branding[key] !== 'string') {
         throw Object.assign(new Error(`branding.${key} must be a string`), { statusCode: 400 });
       }
-      clean[key] = branding[key].trim();
+      clean[key] = key === 'currency' ? branding[key].trim().toUpperCase() : branding[key].trim();
+    }
+    if (Object.hasOwn(clean, 'currency') && !/^[A-Z]{3}$/.test(clean.currency)) {
+      throw Object.assign(new Error('Currency must be a three-letter ISO code'), { statusCode: 400, code: 'INVALID_CURRENCY' });
     }
     if (clean.business_name && (clean.business_name.length < 1 || clean.business_name.length > 120)) {
       throw Object.assign(new Error('Brand name must be 1–120 characters'), { statusCode: 400 });
@@ -1882,7 +1928,16 @@ async function handleTenantPatch(req, res, chatId) {
   if (typeof body.vendorCode === 'string' && body.vendorCode.trim()) patch.vendorCode = body.vendorCode.trim();
 
   const updated = await updateTenant(chatId, patch);
-  sendJSON(res, 200, { tenant: updated }, req);
+  sendJSON(res, 200, { tenant: {
+    chatId: updated.chatId,
+    id: updated.id,
+    createdAt: updated.createdAt,
+    sellerName: updated.sellerName,
+    branding: updated.branding,
+    vendorCode: updated.vendorCode,
+    organizationId: updated.organizationId,
+    currency: updated.currency,
+  } }, req);
 }
 
 
@@ -2655,6 +2710,54 @@ const MIME_TYPES = {
   '.webmanifest': 'application/manifest+json',
 };
 
+async function serveBrowserBackendModule(req, res, pathname) {
+  let relativePath;
+  try { relativePath = decodeURIComponent(pathname.slice('/backend/'.length)); }
+  catch { return sendError(res, 400, new Error('Bad request'), req); }
+  if (!BROWSER_BACKEND_MODULES.includes(relativePath)) {
+    return sendError(res, 404, new Error('Not found'), req);
+  }
+  const safeRoot = `${path.resolve(__dirname, 'lib')}${path.sep}`;
+  const filePath = path.resolve(__dirname, relativePath);
+  if (!filePath.startsWith(safeRoot)) return sendError(res, 404, new Error('Not found'), req);
+  try {
+    const data = await readFile(filePath);
+    res.writeHead(200, {
+      'Content-Type': 'application/javascript; charset=utf-8',
+      'Content-Length': data.length,
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'public, max-age=3600',
+    });
+    return res.end(data);
+  } catch {
+    return sendError(res, 404, new Error('Not found'), req);
+  }
+}
+
+async function serveBrowserSharedModule(req, res, pathname) {
+  let relativePath;
+  try { relativePath = decodeURIComponent(pathname.slice('/shared/'.length)); }
+  catch { return sendError(res, 400, new Error('Bad request'), req); }
+  if (!BROWSER_SHARED_MODULES.includes(relativePath)) {
+    return sendError(res, 404, new Error('Not found'), req);
+  }
+  const safeRoot = `${path.resolve(__dirname, '..', 'shared')}${path.sep}`;
+  const filePath = path.resolve(__dirname, '..', 'shared', relativePath);
+  if (!filePath.startsWith(safeRoot)) return sendError(res, 404, new Error('Not found'), req);
+  try {
+    const data = await readFile(filePath);
+    res.writeHead(200, {
+      'Content-Type': 'application/javascript; charset=utf-8',
+      'Content-Length': data.length,
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'public, max-age=3600',
+    });
+    return res.end(data);
+  } catch {
+    return sendError(res, 404, new Error('Not found'), req);
+  }
+}
+
 async function serveStatic(req, res, pathname) {
   // Path-traversal guard: resolve against STATIC_DIR and reject anything
   // that escapes it (e.g. "/../../etc/passwd" after normalization).
@@ -3045,6 +3148,7 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/integrations\/payments\/([^/]+)\/notifications$/, handler: (req, res, m) => handlePaymentProviderNotification(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/auth\/telegram$/, handler: handleTelegramAuth },
   { method: 'POST', pattern: /^\/auth\/migrate-legacy$/, handler: handleLegacyMigration },
+  { method: 'GET', pattern: /^\/auth\/country-packs$/, handler: handleOnboardingCountryOptions },
   { method: 'POST', pattern: /^\/auth\/tenants$/, handler: handleCreateTenant },
   { method: 'GET', pattern: /^\/auth\/tenants$/, handler: handleMyTenants },
   { method: 'POST', pattern: /^\/auth\/select-tenant$/, handler: handleSelectTenant },
@@ -3190,6 +3294,10 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/authorization\/conditions-contract$/, handler: (req, res, m) => handleAuthorizationConditionsContract(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/authorization\/role-matrix$/, handler: (req, res, m) => handleAuthorizationRoleMatrix(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/authorization\/iam-certification$/, handler: (req, res, m) => handleAuthorizationIamCertification(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/business-template$/, handler: (req, res, m) => handleBusinessTemplateConfig(req, res, decodeURIComponent(m[1])) },
+  { method: 'PUT', pattern: /^\/tenants\/([^/]+)\/business-template$/, handler: (req, res, m) => handleBusinessTemplateConfig(req, res, decodeURIComponent(m[1])) },
+  { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/business-template$/, handler: (req, res, m) => handleBusinessTemplateConfig(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)$/, handler: (req, res, m) => handleTenantPatch(req, res, decodeURIComponent(m[1])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)$/, handler: (req, res, m) => handleTenantPatch(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/providers$/, handler: (req, res, m) => handlePaymentProviderMetadata(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/accounts$/, handler: (req, res, m) => handlePaymentAccounts(req, res, decodeURIComponent(m[1])) },
@@ -3293,6 +3401,16 @@ const server = createServer(async (req, res) => {
     return handleConfigJs(req, res);
   }
 
+  // Browser module imports are served only from the explicit read-only allowlist.
+  // This delivers policy/projection source required by the PWA without exposing
+  // the backend tree, server implementation, or persistent data as static files.
+  if (req.method === 'GET' && url.pathname.startsWith('/backend/lib/')) {
+    return serveBrowserBackendModule(req, res, url.pathname);
+  }
+  if (req.method === 'GET' && url.pathname.startsWith('/shared/')) {
+    return serveBrowserSharedModule(req, res, url.pathname);
+  }
+
   // Public storefront route: the viewer itself is static; its only data access is the public catalog GET.
   if (req.method === 'GET' && /^\/store\/[^/]+$/.test(url.pathname)) {
     return serveStatic(req, res, '/store.html');
@@ -3334,4 +3452,3 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`sellify-backend listening on http://localhost:${PORT} (env=${NODE_ENV}, static=${SERVE_STATIC ? STATIC_DIR : 'disabled'})`);
 });
-

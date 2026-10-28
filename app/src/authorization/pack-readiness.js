@@ -22,14 +22,24 @@ function dependencyRows(pack) {
   }));
 }
 
-function readinessFor(pack, resolved) {
+export function readinessFor(pack, resolved, snapshot = null) {
   const dependencies = dependencyRows(pack);
   const missingDependencies = dependencies.filter(item => !item.available);
   if (missingDependencies.length) return 'DEPENDENCY_UNAVAILABLE';
   if (resolved.enabled === null) return 'DECLARATIVE_ONLY';
   if (!resolved.enabled) return 'CONFIGURATION_INACTIVE';
-  const executable = pack.ui_entry_points.length > 0;
-  return executable ? 'READY' : 'JOURNEY_UNAVAILABLE';
+  const lifecycleState = String(snapshot?.lifecycle?.state || 'UNKNOWN').trim().toUpperCase();
+  const readinessState = String(snapshot?.readiness?.state || 'UNKNOWN').trim().toUpperCase();
+  if (readinessState === 'DEPENDENCY_BLOCKED') return 'DEPENDENCY_UNAVAILABLE';
+  if (lifecycleState === 'UNKNOWN' || readinessState === 'UNKNOWN') return 'UNKNOWN';
+  if (lifecycleState === 'ACTIVE' && snapshot?.readiness?.active === true) {
+    return pack.ui_entry_points.length ? 'READY' : 'JOURNEY_UNAVAILABLE';
+  }
+  if (snapshot?.readiness?.eligible === true && ['ELIGIBLE', 'INSTALLED', 'UPGRADE_AVAILABLE'].includes(lifecycleState)) {
+    return 'ELIGIBLE';
+  }
+  if (['NOT_INSTALLED', 'DEACTIVATED'].includes(lifecycleState)) return 'CONFIGURATION_INACTIVE';
+  return 'UNKNOWN';
 }
 
 export async function getPackReadinessModel() {
@@ -59,7 +69,7 @@ export async function getPackReadinessModel() {
       name: pack.name,
       version: pack.version,
       configurationState: resolved.enabled === null ? 'DECLARATIVE_ONLY' : (resolved.enabled ? 'ACTIVE_BY_CONFIG' : 'INACTIVE_BY_CONFIG'),
-      readiness: readinessFor(pack, resolved),
+      readiness: readinessFor(pack, resolved, snapshot),
       lifecycleState,
       configurationLifecycleDivergence,
       dependencies: Object.freeze(dependencies),

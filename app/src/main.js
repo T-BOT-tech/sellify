@@ -27,10 +27,10 @@ import { Theme } from './theme/branding.js';
 // WhatsApp/SMS/native adapter can occupy the same slot later without
 // another inline `if (window.X)` block here.
 import { getActivePlatform, initPlatform } from './platform/index.js';
-import { bootstrapTenantAuth, closeOnboarding, selectOnboardingTenant, createOnboardingTenant, pairThisDevice, showPairing, createDevicePairing, showJoinByInvite, submitStaffInvite, createStaffInvite, addOnboardingProduct, skipOnboardingProduct, finishOnboarding, submitSettingsInvite, switchActiveTenant } from './auth/tenant.js';
+import { bootstrapTenantAuth, closeOnboarding, selectOnboardingTenant, createOnboardingTenant, pairThisDevice, showPairing, createDevicePairing, showJoinByInvite, submitStaffInvite, createStaffInvite, addOnboardingProduct, applyOnboardingBusinessTemplate, toggleOnboardingItemType, skipOnboardingProduct, finishOnboarding, submitSettingsInvite, switchActiveTenant, restoreTenantStateForTenant } from './auth/tenant.js';
 import { renderCustomers, openCustomerModal, closeCustomerModal, saveCustomerModal } from './customers.js';
 export { renderCustomers, openCustomerModal, closeCustomerModal, saveCustomerModal };
-export { bootstrapTenantAuth, closeOnboarding, selectOnboardingTenant, createOnboardingTenant, pairThisDevice, showPairing, createDevicePairing, showJoinByInvite, submitStaffInvite, createStaffInvite, addOnboardingProduct, skipOnboardingProduct, finishOnboarding, submitSettingsInvite, switchActiveTenant };
+export { bootstrapTenantAuth, closeOnboarding, selectOnboardingTenant, createOnboardingTenant, pairThisDevice, showPairing, createDevicePairing, showJoinByInvite, submitStaffInvite, createStaffInvite, addOnboardingProduct, applyOnboardingBusinessTemplate, toggleOnboardingItemType, skipOnboardingProduct, finishOnboarding, submitSettingsInvite, switchActiveTenant };
 
 // Re-exported so window-bridge.js's `import { ... } from './main.js'` keeps
 // working unchanged (Phase 1 keeps every existing onclick="..." wired the
@@ -127,7 +127,7 @@ import {
 import {
   renderCatalog, startProductEdit, cancelProductEdit, saveProductEdit,
   renderProductFormSelects, toggleNewProdTag, onNewProdCategoryChange,
-  addProduct, removeProduct
+  addProduct, removeProduct, restorePendingCatalogForTenant
 } from './products/catalog.js';
 import {
   setCashTendered, updateCartStickyBar, scrollToOrderSummary, onCashInput,
@@ -269,6 +269,7 @@ export {
   saveStockAdjustModal, openReceiveModal, closeReceiveModal, saveReceiveModal, onWarehouseToggle,
   isLogisticsEnabled, nextFulfillmentStatus, isFulfillmentFinal, fulfillmentStatusLabel,
   advanceFulfillmentOrder, selectedFulfillmentType, setSelectedFulfillmentType,
+  canonicalDeliveryAssignment, refreshDeliveryAssignments, transitionDeliveryAssignmentForOrder,
   applyLogisticsUI, renderOrderFulfillmentPicker, setFulfillmentType, renderLogistics,
   restaurantTables, selectedOrderTableId, setSelectedOrderTableId, selectedOrderCourse,
   setSelectedOrderCourse, saveTables, addTable, openTableModal, closeTableModal, saveTableModal,
@@ -517,7 +518,7 @@ renderAll();
 // for zero benefit until Phase 4 lands. Once Phase 4 makes IndexedDB the sole
 // write target, this becomes the step that actually matters, and a loading
 // state may be worth adding then instead of here.
-hydrateFromIndexedDB().then(changed => {
+const ledgerHydrationPromise = hydrateFromIndexedDB().then(changed => {
   if (changed) renderAll();
   // Phase 3 fix (see modularization plan §5, Phase 3): runs after
   // hydration resolves, not before, so it operates on whichever copy of
@@ -534,10 +535,16 @@ hydrateFromIndexedDB().then(changed => {
 // across all browsers). Settings reads ledgerStoragePersisted whenever it's opened.
 requestLedgerStoragePersistence();
 
-tenantAuthPromise.then(result => {
-  if (result?.authenticated && config.chatId && config.syncUrl) return fetchRemoteCatalogAndBranding();
+tenantAuthPromise.then(result => ledgerHydrationPromise.then(async () => {
+  if (result?.authenticated && config.chatId && config.syncUrl) {
+    // Restore tenant-owned offline state only after IndexedDB hydration and
+    // before any background synchronization can consume the shared device cache.
+    await restoreTenantStateForTenant(config.chatId);
+    await restorePendingCatalogForTenant(config.chatId);
+    return fetchRemoteCatalogAndBranding();
+  }
   return null;
-}).catch(() => null);
+})).catch(() => null);
 
 if ('serviceWorker' in navigator) {
   let sellifyServiceWorkerRegistration = null;
