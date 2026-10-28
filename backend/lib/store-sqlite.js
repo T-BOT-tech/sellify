@@ -9935,9 +9935,6 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
         });
       }
     }
-    const current = String(active.status);
-    if (!transitions[current]?.has(normalizedAction)) throw Object.assign(new Error('Cannot move assignment from ' + current + ' to ' + normalizedAction), { statusCode: 409, code: 'INVALID_ASSIGNMENT_TRANSITION' });
-
     if (normalizedAction === 'REASSIGNED') {
       if (!targetCourierId || targetCourierId === String(active.courier_user_id)) throw Object.assign(new Error('A different courier is required for reassignment'), { statusCode: 400, code: 'REASSIGNMENT_TARGET_REQUIRED' });
       const courierGrants = db.prepare(`SELECT mr.scope_type, mr.scope_id FROM memberships m JOIN membership_roles mr ON mr.membership_id = m.id AND mr.status = 'active' WHERE m.user_id = ? AND m.chat_id = ? AND m.status = 'active' AND mr.role_id = 'logistics_courier'`).all(targetCourierId, String(chatId));
@@ -9956,11 +9953,14 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     }
     const fulfillmentTarget = normalizedAction === 'OUT_FOR_DELIVERY' ? 'out_for_delivery' : normalizedAction === 'DELIVERED' ? 'delivered' : null;
     const legacyOrderProof = orderFromRow(freshOrderRow).fulfillment_proof ?? null;
-    const existingProof = fulfillment.proof_json
+    const canonicalFulfillmentProof = fulfillment.proof_json
       ? parseJSON(fulfillment.proof_json, fulfillment.proof_json)
-      : legacyOrderProof;
+      : null;
+    // Legacy order metadata can recover a direct fulfillment transition, but
+    // it must not silently satisfy a fresh courier completion command.
+    const existingProof = canonicalFulfillmentProof;
     const effectiveProof = normalizedAction === 'DELIVERED'
-      ? resolveDeliveryProof(existingProof, proofInput)
+      ? resolveDeliveryProof(existingProof || (proofInput !== undefined ? legacyOrderProof : null), proofInput)
       : proofInput;
     if (normalizedAction === 'DELIVERED') {
       if (effectiveProof == null || (typeof effectiveProof === 'string' && !effectiveProof.trim())) {
@@ -9970,6 +9970,8 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
       assertDeliveryProofInput(effectiveProof);
       if (!proofReference) throw Object.assign(new Error('Delivery proof type and reference are required'), { statusCode: 400, code: 'DELIVERY_PROOF_INVALID' });
     }
+    const current = String(active.status);
+    if (!transitions[current]?.has(normalizedAction)) throw Object.assign(new Error('Cannot move assignment from ' + current + ' to ' + normalizedAction), { statusCode: 409, code: 'INVALID_ASSIGNMENT_TRANSITION' });
     if (fulfillmentTarget) {
       const currentFulfillment = normalizeCoreFulfillmentStatus(fulfillment.status);
       if (!CORE_FULFILLMENT_TRANSITIONS.delivery[currentFulfillment]?.has(fulfillmentTarget)) throw Object.assign(new Error('Cannot move fulfillment from ' + currentFulfillment + ' to ' + fulfillmentTarget), { statusCode: 409, code: 'INVALID_FULFILLMENT_TRANSITION' });
