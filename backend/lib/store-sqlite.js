@@ -9910,9 +9910,10 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     const fulfillmentTarget = normalizedAction === 'OUT_FOR_DELIVERY' ? 'out_for_delivery' : normalizedAction === 'DELIVERED' ? 'delivered' : null;
     // Proof may be supplied through this lifecycle endpoint on any transition;
     // once captured, no transition may replace it before or after delivery.
-    const existingProof = fulfillment.proof_json
+    const persistedAssignmentProof = fulfillment.proof_json
       ? parseJSON(fulfillment.proof_json, fulfillment.proof_json)
-      : (orderFromRow(freshOrderRow).fulfillment_proof ?? null);
+      : null;
+    const existingProof = persistedAssignmentProof ?? (orderFromRow(freshOrderRow).fulfillment_proof ?? null);
     if (existingProof != null && input.proof !== undefined
       && JSON.stringify(existingProof) !== JSON.stringify(input.proof)) {
       throw Object.assign(new Error('Delivery proof cannot be changed after capture'), {
@@ -10051,9 +10052,10 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     let row = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), organizationId);
     // Snapshot proof before creating a fulfillment row: otherwise a new row can
     // be seeded from caller input and hide a conflicting legacy order proof.
-    const existingDeliveryProof = row?.proof_json
+    const persistedDeliveryProof = row?.proof_json
       ? parseJSON(row.proof_json, row.proof_json)
-      : (freshOrderJson.fulfillment_proof ?? null);
+      : null;
+    const existingDeliveryProof = persistedDeliveryProof ?? (freshOrderJson.fulfillment_proof ?? null);
     if (row) {
       const persistedLocationId = row.location_id ? String(row.location_id) : null;
       if (String(persistedLocationId || '') !== String(locationId || '')) {
