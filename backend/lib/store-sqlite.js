@@ -10141,15 +10141,19 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
   const target = normalizeCoreFulfillmentStatus(nextStatus);
   const orderJson = orderFromRow(order);
   const effectiveType = normalizeCoreFulfillmentType(input.fulfillmentType || input.fulfillment_type || orderJson.fulfillment_type || 'delivery');
+  // Command identity is the caller's explicit intent, not mutable canonical
+  // order fallbacks. A retry must resolve durable history before later order
+  // edits (including location, destination, tracking, or proof changes).
   const commandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
-    fulfillment_type: effectiveType,
+    fulfillment_type: input.fulfillmentType === undefined && input.fulfillment_type === undefined
+      ? null : (input.fulfillmentType ?? input.fulfillment_type ?? null),
     target_status: target,
-    destination: input.destination === undefined
-      ? ((effectiveType === 'delivery' ? orderJson.delivery_address : orderJson.pickup_location) ?? null)
-      : input.destination,
-    scheduled_at: input.scheduledAt || input.scheduled_at || orderJson.scheduled_time || null,
-    tracking_reference: input.trackingReference || input.tracking_reference || orderJson.tracking_reference || null,
-    proof: input.proof === undefined ? (orderJson.fulfillment_proof ?? null) : input.proof,
+    destination: input.destination === undefined ? null : input.destination,
+    scheduled_at: input.scheduledAt === undefined && input.scheduled_at === undefined
+      ? null : (input.scheduledAt ?? input.scheduled_at ?? null),
+    tracking_reference: input.trackingReference === undefined && input.tracking_reference === undefined
+      ? null : (input.trackingReference ?? input.tracking_reference ?? null),
+    proof: input.proof === undefined ? null : input.proof,
   })).digest('hex');
   const type = normalizeCoreFulfillmentType(input.fulfillmentType || input.fulfillment_type || orderJson.fulfillment_type || 'delivery');
   if (!CORE_FULFILLMENT_TRANSITIONS[type]) throw Object.assign(new Error('Unsupported fulfillment type'), { statusCode: 400 });
@@ -10201,14 +10205,15 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
       return fulfillmentFromRow(replay);
     }
     const freshCommandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
-      fulfillment_type: effectiveType,
+      fulfillment_type: input.fulfillmentType === undefined && input.fulfillment_type === undefined
+        ? null : (input.fulfillmentType ?? input.fulfillment_type ?? null),
       target_status: target,
-      destination: input.destination === undefined
-        ? ((effectiveType === 'delivery' ? freshOrderJson.delivery_address : freshOrderJson.pickup_location) ?? null)
-        : input.destination,
-      scheduled_at: input.scheduledAt || input.scheduled_at || freshOrderJson.scheduled_time || null,
-      tracking_reference: input.trackingReference || input.tracking_reference || freshOrderJson.tracking_reference || null,
-      proof: input.proof === undefined ? (freshOrderJson.fulfillment_proof ?? null) : input.proof,
+      destination: input.destination === undefined ? null : input.destination,
+      scheduled_at: input.scheduledAt === undefined && input.scheduled_at === undefined
+        ? null : (input.scheduledAt ?? input.scheduled_at ?? null),
+      tracking_reference: input.trackingReference === undefined && input.tracking_reference === undefined
+        ? null : (input.trackingReference ?? input.tracking_reference ?? null),
+      proof: input.proof === undefined ? null : input.proof,
     })).digest('hex');
     if (freshCommandFingerprint !== commandFingerprint) {
       throw Object.assign(new Error('Canonical order fulfillment inputs changed during the command'), {
