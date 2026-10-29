@@ -377,3 +377,9 @@ jobs:
         run: npm run test:gap-2-adversarial-delivery
       - name: GAP-2.12 production readiness regression
         run: npm run test:gap-2-production-readiness
+
+      - name: Phase 14 country-pack cumulative regression
+        run: npm run test:phase14.13
+
+      - name: Phase 14 country-pack final snapshot regression
+        run: npm run test:phase14.15
