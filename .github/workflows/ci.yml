@@ -201,6 +201,9 @@ jobs:
       - name: Phase 17.9 procurement settlement integration regression
         run: npm run phase17.9:procurement-settlement-test
 
+      - name: Phase 17.10 cumulative procurement exit gate
+        run: npm run test:phase17.10
+
       - name: Checkout payment-state clarity and order-total regression
         run: npm run test:checkout-payment-state-clarity
       - name: Order queue order-value labeling regression
