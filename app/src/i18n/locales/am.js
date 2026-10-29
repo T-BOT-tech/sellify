@@ -96,4 +96,6 @@ export default {
     checkoutPaymentStateHint: "ይህን ደረጃ ማጠናቀቅ ትዕዛዙን ወደ ወረፋዎ ያስቀምጣል። የደረሰኝ ፎቶ የድጋፍ ማስረጃ ብቻ ነው፤ ክፍያ መቀበሉን አያረጋግጥም።",
     checkoutNoPaymentMethods: "ምንም የክፍያ ዘዴዎች አልነቁም። ይህን ትዕዛዝ ከማስቀመጥዎ በፊት ቼክአውቱን ይሰርዙ እና በቅንብሮች ውስጥ የክፍያ ዘዴ ያንቁ።",
     checkoutReceiptSaveFailed: "ደረሰኙን ማስቀመጥ አልተቻለም። እንደገና ይሞክሩ ወይም ወደ ቼክአውት ለመመለስ ይህን መስኮት ይዝጉ።",
+    firstSaleAddProduct: "ሽያጭ ለመጀመር ምርት ያክሉ",
+    catalogHasItems: "ካታሎጉ ምርቶች አሉት",
 };

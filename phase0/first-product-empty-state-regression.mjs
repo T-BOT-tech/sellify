@@ -19,4 +19,22 @@ assert.match(catalog, /hasPermission\(currentStaff \? currentStaff\.role : 'owne
 assert.match(permissions, /inventory:add/);
 assert.doesNotMatch(render.slice(filteredIndex, render.indexOf('const restaurant', filteredIndex)), /switchTab\('catalog'\)/,
   'filtered no-match state must not be misrepresented as an empty catalog');
-console.log('First product empty-state regression: 8 PASS');
+
+const home = await read('../app/src/ui/home.js');
+const english = await read('../app/src/i18n/locales/en.js');
+assert.match(home, /products\.length > 0 \? t\('catalogHasItems'\) : t\('firstSaleAddProduct'\)/,
+  'home status must reflect catalog contents rather than connectivity');
+assert.match(home, /navigator\.onLine \? 'online' : 'offline'/,
+  'connectivity status must remain separate from catalog contents');
+assert.match(english, /firstSaleAddProduct\s*:/, 'English fallback must define the empty-catalog message');
+assert.match(english, /catalogHasItems\s*:/, 'English fallback must define the non-empty-catalog message');
+
+// Keep the two Home messages translated in every registered locale, not just English fallback.
+const localeNames = ['am', 'ar', 'en', 'es', 'fr', 'ha', 'hi', 'om', 'pt', 'ru', 'so', 'sw', 'yo'];
+for (const locale of localeNames) {
+  const messages = await read(`../app/src/i18n/locales/${locale}.js`);
+  assert.match(messages, /firstSaleAddProduct\s*:/, `${locale} locale must translate the empty-catalog message`);
+  assert.match(messages, /catalogHasItems\s*:/, `${locale} locale must translate the non-empty-catalog message`);
+}
+
+console.log('First product empty-state and home catalog-status regressions passed for all 13 locales.');

@@ -217,4 +217,6 @@ export default {
     checkoutPaymentStateHint: "Completing this step saves the order to your queue. A receipt photo is supporting evidence only; it does not confirm that a payment was received.",
     checkoutNoPaymentMethods: "No payment methods are enabled. Cancel checkout and enable a payment method in Settings before saving this order.",
     checkoutReceiptSaveFailed: "Receipt could not be saved. Retry, or close this dialog to return to checkout.",
+    firstSaleAddProduct: 'Add a product to start selling',
+    catalogHasItems: 'Catalog has items',
 };

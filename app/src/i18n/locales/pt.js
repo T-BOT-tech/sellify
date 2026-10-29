@@ -12,4 +12,6 @@ export default {
     checkoutNoPaymentMethods: "Nenhum método de pagamento está ativado. Cancele o checkout e ative um método de pagamento nas Configurações antes de guardar este pedido.",
     checkoutReceiptSaveFailed: "Não foi possível guardar o recibo. Tente novamente ou feche esta janela para voltar ao checkout.",
     saveOrderQueue: "Guardar pedido na fila",
+    firstSaleAddProduct: "Adicione um produto para começar a vender",
+    catalogHasItems: "O catálogo contém produtos",
 };
