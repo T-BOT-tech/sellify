@@ -40,8 +40,10 @@ const actor = {
   locationId: null,
 };
 
+const originalProof = { type: 'photo', reference: 'proof-fux42' };
 fulfillment = await transitionOrderFulfillment(chatId, orderId, 'out_for_delivery', actor, {
   idempotencyKey: 'fux42-command-1',
+  proof: originalProof,
 });
 assert.equal(fulfillment.status, 'out_for_delivery');
 assert.equal(fulfillment.fulfillmentType, 'delivery');
@@ -50,13 +52,25 @@ assert.equal(fulfillment.organizationId, tenant.organizationId);
 
 const replay = await transitionOrderFulfillment(chatId, orderId, 'out_for_delivery', actor, {
   idempotencyKey: 'fux42-command-1',
+  proof: originalProof,
 });
 assert.equal(replay.id, fulfillment.id);
 assert.equal(replay.status, 'out_for_delivery');
 
+await assert.rejects(
+  transitionOrderFulfillment(chatId, orderId, 'delivered', actor, {
+    idempotencyKey: 'fux42-proof-overwrite',
+    proof: { type: 'photo', reference: 'tampered-proof' },
+  }),
+  (error) => error?.code === 'DELIVERY_PROOF_IMMUTABLE' && error?.statusCode === 409,
+);
+const unchangedProof = await getOrderFulfillment(chatId, orderId);
+assert.deepEqual(unchangedProof.proof, originalProof,
+  'a rejected proof replacement must leave the previously captured proof unchanged');
+
 fulfillment = await transitionOrderFulfillment(chatId, orderId, 'delivered', actor, {
   idempotencyKey: 'fux42-command-2',
-  proof: { type: 'photo', reference: 'proof-fux42' },
+  proof: originalProof,
 });
 assert.equal(fulfillment.status, 'delivered');
 const balances = await (await import('../backend/lib/store-sqlite.js')).getInventoryBalances(chatId);
