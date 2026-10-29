@@ -238,7 +238,7 @@ const latest = [{ eventId: 'new-command', kind: 'command', status: 'pending' }];
   // The shared journal contains an operation absent from this tab's baseline.
   // If replacement fails, the candidate still must include both that shared
   // operation and the new local operation before IndexedDB can supersede it.
-  const storage = fakeStorage({ [OUTBOX_RECOVERY_KEY]: JSON.stringify(stale) });
+  const storage = fakeStorage({ [OUTBOX_RECOVERY_KEY]: JSON.stringify({ version: 1, snapshotId: 'shared-stale-snapshot', events: stale }) });
   resetOutboxRecoveryBaseline([]);
   resetOutboxIndexedDbBaseline([]);
   storage.setItem = () => { throw new Error('quota exceeded'); };
