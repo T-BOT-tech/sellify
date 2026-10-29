@@ -328,6 +328,7 @@ export function writeOutboxRecoveryJournal(
   const attemptId = newSnapshotId();
   let previousSnapshotId = lastSnapshotId;
   let snapshot = events;
+  let readSucceeded = true;
   try {
     const baseline = Array.isArray(lastSnapshot) ? lastSnapshot : previousEvents;
     if (Array.isArray(baseline)) {
@@ -345,7 +346,8 @@ export function writeOutboxRecoveryJournal(
         // Do not replace a potentially newer shared journal when it cannot be
         // read. The caller still persists through the normal IndexedDB path.
         logger.error('Outbox recovery journal read-before-write failed; preserving shared snapshot', readError);
-        return { written: false, attemptId, previousSnapshotId };
+        readSucceeded = false;
+        return { written: false, attemptId, previousSnapshotId, snapshot: null, readSucceeded };
       }
       snapshot = mergeOutboxSnapshots(baseline, events, shared);
     }
@@ -353,13 +355,13 @@ export function writeOutboxRecoveryJournal(
     lastSnapshot = cloneEvents(snapshot);
     lastSnapshotId = attemptId;
     if (typeof onMerged === 'function') onMerged(snapshot);
-    return { written: true, attemptId, previousSnapshotId };
+    return { written: true, attemptId, previousSnapshotId, snapshot, readSucceeded: true };
   } catch (error) {
     // Keep the last known-good recovery snapshot. Deleting it after a failed
     // replacement can destroy unrelated pending work if IndexedDB also fails
     // or the app exits before the normal persistence path completes.
     logger.error('Outbox recovery journal write failed; preserving previous snapshot', error);
-    return { written: false, attemptId, previousSnapshotId };
+    return { written: false, attemptId, previousSnapshotId, snapshot, readSucceeded };
   }
 }
 
