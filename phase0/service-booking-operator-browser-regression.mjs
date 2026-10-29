@@ -48,7 +48,10 @@ try {
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(error.message));
   page.on('console', message => {
-    if (message.type() === 'error') pageErrors.push(message.text());
+    // The deliberate HTTP 409 below is the version-conflict recovery fixture.
+    if (message.type() === 'error' && !/server responded with a status of 409 \\(Conflict\\)/.test(message.text())) {
+      pageErrors.push(message.text());
+    }
   });
 
   const booking = {
