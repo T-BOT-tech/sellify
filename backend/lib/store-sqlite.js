@@ -8517,6 +8517,15 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
         input.evidence == null ? null : json(input.evidence),
         input.failureCode || input.failure_code || null, now, now, refund.id, tenant.organizationId
       );
+      const marketplaceRefund = db.prepare(
+        'SELECT * FROM marketplace_refunds WHERE id = ? AND organization_id = ?'
+      ).get(refund.id, tenant.organizationId);
+      if (marketplaceRefund) {
+        db.prepare('UPDATE marketplace_refunds SET status = ?, processed_at = ? WHERE id = ? AND organization_id = ?')
+          .run(['FAILED','CANCELLED'].includes(status) ? 'REJECTED' : 'REQUESTED', now, refund.id, tenant.organizationId);
+        db.prepare("UPDATE marketplace_settlements SET status = 'HELD' WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')")
+          .run(marketplaceRefund.seller_order_id);
+      }
       audit(String(chatId), 'payment.refund.result', payment.id, actor?.userId || null, { refundId: refund.id, status: status || 'UNKNOWN' });
       db.exec('COMMIT');
       return normalizePaymentRefund(db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(refund.id));
@@ -8536,6 +8545,28 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
     );
     if (fullRefund) {
       db.prepare('UPDATE payments SET state = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND state IN (\'VERIFIED\',\'RECONCILED\')').run('REFUNDED', now, payment.id, tenant.organizationId);
+    }
+    const marketplaceRefund = db.prepare(
+      'SELECT * FROM marketplace_refunds WHERE id = ? AND organization_id = ?'
+    ).get(refund.id, tenant.organizationId);
+    if (marketplaceRefund) {
+      db.prepare("UPDATE marketplace_refunds SET status = 'PROCESSED', processed_at = ? WHERE id = ? AND organization_id = ?")
+        .run(now, refund.id, tenant.organizationId);
+      const successfulForAllocation = Number(db.prepare(
+        "SELECT COALESCE(SUM(amount_minor),0) AS total FROM payment_refunds WHERE payment_id = ? AND organization_id = ? AND status = 'SUCCEEDED'"
+      ).get(payment.id, tenant.organizationId).total || 0);
+      if (successfulForAllocation >= Number(marketplaceRefund.amount_minor)) {
+        db.prepare("UPDATE marketplace_payment_allocations SET status = 'REFUNDED', updated_at = ? WHERE seller_order_id = ? AND payment_id = ?")
+          .run(now, marketplaceRefund.seller_order_id, payment.id);
+      }
+      const activeAllocations = Number(db.prepare(
+        "SELECT COUNT(*) AS c FROM marketplace_payment_allocations WHERE seller_order_id = ? AND status IN ('ALLOCATED','PARTIAL')"
+      ).get(marketplaceRefund.seller_order_id).c || 0);
+      const outstandingRefunds = Number(db.prepare(
+        "SELECT COUNT(*) AS c FROM marketplace_refunds WHERE seller_order_id = ? AND status IN ('PENDING','REQUESTED')"
+      ).get(marketplaceRefund.seller_order_id).c || 0);
+      db.prepare("UPDATE marketplace_settlements SET status = ? WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')")
+        .run(activeAllocations === 0 && outstandingRefunds === 0 ? 'REVERSED' : 'HELD', marketplaceRefund.seller_order_id);
     }
     db.prepare(`INSERT INTO payment_ledger_entries
       (id,payment_id,organization_id,entry_type,amount_minor,currency,from_state,to_state,actor_id,reason,metadata_json,created_at)
@@ -11063,35 +11094,75 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
         `).run(nowIso(), canonicalSeller.id);
 
         const allocations = db.prepare(`
-          SELECT a.*, p.state AS payment_state
+          SELECT a.*, p.state AS payment_state, p.provider_id AS payment_provider_id,
+                 p.payment_intent_id AS payment_intent_id
           FROM marketplace_payment_allocations a
           LEFT JOIN payments p ON p.id = a.payment_id
           WHERE a.seller_order_id = ? AND a.status IN ('ALLOCATED','PARTIAL')
         `).all(canonicalSeller.id);
+        let refundPending = false;
         for (const allocation of allocations) {
           const paidAndVerified = ['VERIFIED', 'RECONCILED'].includes(String(allocation.payment_state || '').toUpperCase());
           if (!paidAndVerified || Number(allocation.amount_minor) <= 0 || !allocation.payment_id) continue;
+
+          // Use one canonical Payment Core refund identity for each marketplace
+          // allocation. The marketplace row is a projection of that same refund,
+          // not a separate refund authority.
+          const idempotencyKey = `marketplace-cancel:${allocation.seller_order_id}:${allocation.payment_id}`;
+          let canonicalRefund = db.prepare(
+            'SELECT * FROM payment_refunds WHERE organization_id = ? AND idempotency_key = ?'
+          ).get(allocation.organization_id, idempotencyKey);
+          if (!canonicalRefund) {
+            const refundId = crypto.randomUUID();
+            const createdAt = nowIso();
+            db.prepare(`
+              INSERT INTO payment_refunds
+                (id, organization_id, payment_id, payment_intent_id, provider_id, idempotency_key,
+                 amount_minor, currency, status, reason, requested_by_user_id, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTED', ?, NULL, ?, ?)
+            `).run(
+              refundId, allocation.organization_id, allocation.payment_id, allocation.payment_intent_id || null,
+              allocation.payment_provider_id, idempotencyKey, allocation.amount_minor, allocation.currency,
+              'Marketplace order cancellation', createdAt, createdAt
+            );
+            canonicalRefund = db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(refundId);
+            audit(String(chatId), 'payment.refund.requested', allocation.payment_id, null, {
+              refundId, amountMinor: allocation.amount_minor, currency: allocation.currency, idempotencyKey,
+              source: 'marketplace-cancellation',
+            });
+          }
           db.prepare(`
-            INSERT INTO marketplace_refunds
-              (id, marketplace_order_id, seller_order_id, payment_id, organization_id, amount_minor, currency, reason, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
+            INSERT OR IGNORE INTO marketplace_refunds
+              (id, marketplace_order_id, seller_order_id, payment_id, organization_id, amount_minor, currency, reason, status, created_at, processed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
-            crypto.randomUUID(), allocation.marketplace_order_id, allocation.seller_order_id,
+            canonicalRefund.id, allocation.marketplace_order_id, allocation.seller_order_id,
             allocation.payment_id, allocation.organization_id, allocation.amount_minor,
-            allocation.currency, 'Marketplace order cancellation', nowIso()
+            allocation.currency, 'Marketplace order cancellation',
+            canonicalRefund.status === 'SUCCEEDED' ? 'PROCESSED' :
+              ['FAILED','CANCELLED'].includes(canonicalRefund.status) ? 'REJECTED' : 'REQUESTED',
+            nowIso(), canonicalRefund.status === 'SUCCEEDED' ? nowIso() : null
           );
-          db.prepare(`
-            UPDATE marketplace_payment_allocations
-            SET status = 'REFUNDED', updated_at = ?
-            WHERE id = ?
-          `).run(nowIso(), allocation.id);
+          if (canonicalRefund.status === 'SUCCEEDED') {
+            db.prepare(`
+              UPDATE marketplace_payment_allocations SET status = 'REFUNDED', updated_at = ?
+              WHERE id = ?
+            `).run(nowIso(), allocation.id);
+          } else {
+            refundPending = true;
+          }
         }
 
+        // Cancellation is operational; settlement stays held until Payment Core
+        // confirms every allocated amount has actually been refunded.
         db.prepare(`
           UPDATE marketplace_settlements
-          SET status = 'REVERSED'
+          SET status = ?
           WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')
-        `).run(canonicalSeller.id);
+        `).run(refundPending ? 'HELD' : (
+          db.prepare("SELECT COUNT(*) AS c FROM marketplace_payment_allocations WHERE seller_order_id = ? AND status IN ('ALLOCATED','PARTIAL')").get(canonicalSeller.id).c > 0
+            ? 'HELD' : 'REVERSED'
+        ), canonicalSeller.id);
 
         db.prepare(`
           UPDATE marketplace_fulfillments
