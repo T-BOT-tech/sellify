@@ -12,4 +12,6 @@ export default {
     checkoutNoPaymentMethods: "لا توجد طرق دفع مفعّلة. ألغِ عملية إتمام الطلب وفعّل طريقة دفع من الإعدادات قبل حفظ هذا الطلب.",
     checkoutReceiptSaveFailed: "تعذّر حفظ الإيصال. حاول مرة أخرى، أو أغلق هذه النافذة للعودة إلى إتمام الطلب.",
     saveOrderQueue: "حفظ الطلب في قائمة الانتظار",
+    firstSaleAddProduct: "أضف منتجًا لبدء البيع",
+    catalogHasItems: "يحتوي الكتالوج على منتجات",
 };
