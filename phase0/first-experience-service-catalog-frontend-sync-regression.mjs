@@ -128,7 +128,7 @@ assert.ok(retryBusinessTemplateFunctionSource, 'Settings business-template retry
 
 function makeBusinessTemplateRetryHarness(overrides = {}) {
   const harness = {
-    config: { chatId: 'tenant-a', sessionToken: 'token-a', businessTemplate: 'repair' },
+    config: { chatId: 'tenant-a', sessionToken: 'token-a', tenantRole: 'owner', businessTemplate: 'repair' },
     calls: [],
     writes: [],
     configWrites: [],
@@ -169,6 +169,15 @@ assert.equal(retrySuccessHarness.writes[1].value.status, 'synced',
   'manual retry may mark the marker synced only after server acknowledgement');
 assert.equal(retrySuccessHarness.config.businessTemplate, 'repair');
 assert.match(retrySuccessHarness.status.textContent, /synced to the server/i);
+
+const retryNonOwnerHarness = makeBusinessTemplateRetryHarness({
+  config: { chatId: 'tenant-a', sessionToken: 'token-a', tenantRole: 'staff', businessTemplate: 'repair' },
+});
+await retryNonOwnerHarness.retryBusinessTemplateSync();
+assert.equal(retryNonOwnerHarness.calls.length, 0,
+  'non-owner Settings must not create a doomed pending marker or attempt a template write');
+assert.equal(retryNonOwnerHarness.writes.length, 0);
+assert.match(retryNonOwnerHarness.status.textContent, /only the business owner/i);
 
 const retryStorageFailureHarness = makeBusinessTemplateRetryHarness({
   saveJSONAsync: async () => false,
