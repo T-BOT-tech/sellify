@@ -135,7 +135,7 @@ try {
 
   // A successful transition sends the current version and idempotency key, then reloads canonical state.
   await page.getByRole('button', { name: 'ACCEPTED' }).click();
-  await page.getByText('ACCEPTED', { exact: true }).waitFor();
+  await page.locator('.service-booking-card .logistics-status').filter({ hasText: 'ACCEPTED' }).waitFor();
   const patch = calls.find(call => call.method === 'PATCH');
   assert.ok(patch, 'transition sends PATCH');
   assert.equal(patch.body.expected_version, 1);
