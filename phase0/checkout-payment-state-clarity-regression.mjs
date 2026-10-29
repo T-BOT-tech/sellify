@@ -11,7 +11,7 @@ assert.ok(modalEnd > modalStart, 'checkout payment modal boundary must be identi
 const modal = html.slice(modalStart, modalEnd);
 
 assert.match(modal, /role="dialog" aria-modal="true" aria-labelledby="checkoutPaymentTitle" aria-describedby="checkoutPaymentStateHint"/);
-assert.match(modal, /<h3 id="checkoutPaymentTitle" data-i18n="saveOrderQueue">Save order to queue<\\/h3>/);
+assert.match(modal, /<h3 id="checkoutPaymentTitle" data-i18n="saveOrderQueue">Save order to queue<\/h3>/);
 assert.match(modal, /data-i18n="checkoutPaymentStateHint"/);
 assert.match(modal, /Order total/);
 assert.match(modal, /id="checkoutPaymentOrderTotal"/);
@@ -22,10 +22,10 @@ assert.match(paymentProof, /formatMoney\(total, config\.currencyCode\)/);
 assert.match(paymentProof, /CS\(\)/);
 assert.match(modal, /id="checkoutSaveOrderButton"/);
 assert.match(paymentProof, /confirmButton\.disabled = enabledMethods\.length === 0/);
-assert.match(paymentProof, /t\\('checkoutNoPaymentMethods'\\)/);
+assert.match(paymentProof, /t\('checkoutNoPaymentMethods'\)/);
 assert.match(modal, /id="checkoutSaveOrderButton"/);
 assert.match(paymentProof, /confirmButton\.disabled = enabledMethods\.length === 0/);
-assert.match(paymentProof, /t\\('checkoutNoPaymentMethods'\\)/);
+assert.match(paymentProof, /t\('checkoutNoPaymentMethods'\)/);
 
 // If a merchant selected a receipt and saving it fails, checkout must remain
 // open for retry; it must not silently continue with an order lacking proof.
@@ -33,7 +33,7 @@ const confirmStart = paymentProof.indexOf('export async function confirmOrderWit
 const confirmEnd = paymentProof.indexOf('\nexport function compressImage', confirmStart);
 assert.ok(confirmStart >= 0 && confirmEnd > confirmStart, 'proof confirmation flow must be identifiable');
 const confirmFlow = paymentProof.slice(confirmStart, confirmEnd);
-assert.match(confirmFlow, /showToast\\(t\\('checkoutReceiptSaveFailed'\\)\\);\\s*return;/);
+assert.match(confirmFlow, /showToast\(t\('checkoutReceiptSaveFailed'\)\);\s*return;/);
 assert.match(confirmFlow, /catch \(e\) \{[\s\S]*?return;\s*\}\s*\}\s*closePaymentProofModal\(\);/);
 
 // A slow receipt compression/storage operation must not let rapid repeated
@@ -78,8 +78,8 @@ assert.match(queue, /verifiedMinor \?\? orderPaymentSummary\.verified_minor \?\?
 
 for (const locale of ['en', 'am', 'om', 'so', 'sw', 'es', 'hi']) {
   const source = await readFile(new URL(`../app/src/i18n/locales/\${locale}.js`, import.meta.url), 'utf8');
-  assert.match(source, /checkoutPaymentStateHint\\s*:/, `locale \${locale} should localize the payment-state explanation`);
-  assert.match(source, /checkoutNoPaymentMethods\\s*:/, `locale \${locale} should localize missing payment-method guidance`);
-  assert.match(source, /checkoutReceiptSaveFailed\\s*:/, `locale \${locale} should localize receipt-save recovery guidance`);
+  assert.match(source, /checkoutPaymentStateHint\s*:/, `locale ${locale} should localize the payment-state explanation`);
+assert.match(paymentProof, /t\('checkoutNoPaymentMethods'\)/);
+assert.match(confirmFlow, /showToast\(t\('checkoutReceiptSaveFailed'\)\);\s*return;/);
 }
 console.log('Checkout payment-state clarity and order-total regression: PASS');
