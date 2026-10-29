@@ -78,6 +78,7 @@ assert.match(queue, /verifiedMinor \?\? orderPaymentSummary\.verified_minor \?\?
 
 for (const locale of ['en', 'am', 'om', 'so', 'sw', 'es', 'hi', 'ar', 'fr', 'ha', 'pt', 'ru', 'yo']) {
   const source = await readFile(new URL(`../app/src/i18n/locales/${locale}.js`, import.meta.url), 'utf8');
+  assert.match(source, /saveOrderQueue\s*:/, `locale ${locale} should localize the order-save action`);
   assert.match(source, /checkoutPaymentStateHint\s*:/, `locale ${locale} should localize the payment-state explanation`);
   assert.match(source, /checkoutNoPaymentMethods\s*:/, `locale ${locale} should localize missing payment-method guidance`);
   assert.match(source, /checkoutReceiptSaveFailed\s*:/, `locale ${locale} should localize receipt-save recovery guidance`);
