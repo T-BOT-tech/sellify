@@ -113,6 +113,16 @@ try {
     deviceName: 'Lost response regression',
     challengeToken: lostResponseChallenge.token,
   };
+  const invalidCountryAttempt = await fetch(baseUrl + '/auth/tenants', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...lostResponseRequest, country: 'ZZ' }),
+  });
+  assert.equal(invalidCountryAttempt.status, 400,
+    'invalid country validation must fail before consuming the onboarding challenge');
+  assert.equal((await store.listUserMemberships(lostResponseUser.id)).length, 0,
+    'invalid onboarding input must not partially create a tenant or membership');
+
   const firstTenantCreate = await fetch(baseUrl + '/auth/tenants', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
