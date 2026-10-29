@@ -218,7 +218,7 @@ try {
   assert(fulfillmentStart >= 0 && fulfillmentEnd > fulfillmentStart, 'fulfillment inventory consequence source must exist');
   const fulfillmentSource = storeSource.slice(fulfillmentStart, fulfillmentEnd);
   assert.match(fulfillmentSource, /item_type \\?\\? payload\.type/);
-  assert(fulfillmentSource.indexOf("item_type === 'service') continue") < fulfillmentSource.indexOf("if (!locationId) throw"), 'service fulfillment must bypass physical inventory-location requirements');
+  assert(fulfillmentSource.includes("=== 'service') continue") && fulfillmentSource.indexOf("=== 'service') continue") < fulfillmentSource.indexOf("if (!locationId) throw"), 'service fulfillment must bypass physical inventory-location requirements');
 
   const warehouseUiSource = await readFile(new URL('../app/src/warehouse/ui.js', import.meta.url), 'utf8');
   assert.match(warehouseUiSource, /const physicalProducts = products\.filter\(p => p\?\.item_type !== 'service'\)/, 'warehouse inventory list and total must count physical products only');
