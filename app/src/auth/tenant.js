@@ -223,7 +223,7 @@ async function loadBusinessTemplateConfig() {
     if (!stillActive()) return null;
     const saved = data.businessTemplate;
     if (saved) {
-      const next = { ...config, businessTemplate: saved.templateKey, businessTemplateSchemaVersion: saved.schemaVersion || 1 };
+      const next = { ...config, businessTemplate: saved.templateKey, businessTemplateSchemaVersion: saved.schemaVersion || 1, businessTemplateTenantId: chatId };
       setConfig(next);
       saveJSON(STORAGE_KEYS.config, next);
       // A canonical server value wins over any stale local retry marker.
@@ -242,13 +242,92 @@ async function loadBusinessTemplateConfig() {
       body: JSON.stringify({ templateKey: pending.templateKey }),
     });
     if (!stillActive()) return null;
-    const next = { ...config, businessTemplate: pending.templateKey, businessTemplateSchemaVersion: pending.schemaVersion || 1 };
+    const next = { ...config, businessTemplate: pending.templateKey, businessTemplateSchemaVersion: pending.schemaVersion || 1, businessTemplateTenantId: chatId };
     setConfig(next);
     saveJSON(STORAGE_KEYS.config, next);
     await saveJSONAsync(pendingBusinessTemplateKey(chatId), { tenantId: chatId, status: 'synced' });
     return { templateKey: pending.templateKey, schemaVersion: pending.schemaVersion || 1 };
   } catch {
     // Offline or an older backend: retain the tenant-scoped marker for a later retry.
+    return null;
+  }
+}
+
+
+// Explicit recovery action for the case where onboarding could not save the
+// durable retry marker. Server authorization remains authoritative; this UI
+// only retries the selected template through the canonical tenant endpoint.
+export async function retryBusinessTemplateSync() {
+  const status = document.getElementById('settingsBusinessTemplateStatus');
+  const chatId = String(config.chatId || '');
+  const sessionToken = String(config.sessionToken || '');
+  const templateKey = String(config.businessTemplate || '').trim();
+  const supportedTemplates = new Set([
+    'retail-shop', 'barbershop', 'hotel-rooms', 'rental', 'consultation',
+    'repair', 'restaurant', 'wholesale', 'other',
+  ]);
+  if (!chatId || !sessionToken) {
+    if (status) status.textContent = 'Select a signed-in business before retrying business type sync.';
+    return null;
+  }
+  if (String(config.tenantRole || '').toLowerCase() !== 'owner') {
+    if (status) status.textContent = 'Only the business owner can retry business type sync. Ask an owner to run this action.';
+    return null;
+  }
+  if (String(config.businessTemplateTenantId || '') !== chatId) {
+    if (status) status.textContent = 'No business type saved for this business is available to retry. Reload this business or choose its type during onboarding.';
+    return null;
+  }
+  if (!supportedTemplates.has(templateKey)) {
+    if (status) status.textContent = 'No valid saved business type is available to retry. Choose the business type during business setup first.';
+    return null;
+  }
+  const stillActive = () =>
+    String(config.chatId || '') === chatId && String(config.sessionToken || '') === sessionToken;
+  const pendingKey = pendingBusinessTemplateKey(chatId);
+  const pending = {
+    tenantId: chatId,
+    status: 'pending',
+    templateKey,
+    schemaVersion: 1,
+    updatedAt: Date.now(),
+  };
+  let retryQueued = false;
+  try {
+    const persisted = await saveJSONAsync(pendingKey, pending);
+    if (!persisted) throw new Error('Could not save retry state on this device');
+    retryQueued = true;
+    if (!stillActive()) {
+      if (status) status.textContent = 'The active business changed. The saved retry will remain scoped to the original business.';
+      return null;
+    }
+    const response = await request(`/tenants/${encodeURIComponent(chatId)}/business-template`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify({ templateKey }),
+    });
+    if (!stillActive()) {
+      if (status) status.textContent = 'The active business changed before sync completed. Reopen the original business to verify its saved type.';
+      return null;
+    }
+    const saved = response?.businessTemplate;
+    if (!saved || saved.templateKey !== templateKey || Number(saved.schemaVersion || 1) !== 1) {
+      throw new Error('The server did not confirm the selected business type');
+    }
+    const next = { ...config, businessTemplate: saved.templateKey, businessTemplateSchemaVersion: 1, businessTemplateTenantId: chatId };
+    setConfig(next);
+    saveJSON(STORAGE_KEYS.config, next);
+    const markerCleared = await saveJSONAsync(pendingKey, { tenantId: chatId, status: 'synced' });
+    if (status) status.textContent = markerCleared
+      ? 'Business type synced to the server.'
+      : 'Business type synced to the server. This device could not update its retry marker; the server value is still authoritative.';
+    return saved;
+  } catch (error) {
+    if (status) {
+      status.textContent = retryQueued
+        ? 'Business type could not sync yet. A retry is saved on this device; reopen this business while online to retry automatically.'
+        : 'Business type could not sync because this device could not save the retry. Check device storage and try this action again.';
+    }
     return null;
   }
 }
@@ -453,11 +532,11 @@ export async function createOnboardingTenant() {
     await loadCanonicalTenantCurrency();
     // Keep a local copy for fast startup, but make the tenant API authoritative
     // so the chosen template follows the business across paired devices.
-    const nextConfig = { ...config, businessTemplate: selectedTemplate, businessTemplateSchemaVersion: 1 };
+    const templateTenantId = String(config.chatId || '');
+    const nextConfig = { ...config, businessTemplate: selectedTemplate, businessTemplateSchemaVersion: 1, businessTemplateTenantId: templateTenantId };
     setConfig(nextConfig);
     saveJSON(STORAGE_KEYS.config, nextConfig);
     let templateSyncError = null;
-    const templateTenantId = String(config.chatId || '');
     const templateSessionToken = String(config.sessionToken || '');
     const pendingTemplate = {
       tenantId: templateTenantId,
@@ -487,7 +566,7 @@ export async function createOnboardingTenant() {
     }
     showFirstProductStep(sellerName);
     if (templateSyncError && status) {
-      status.textContent = 'Business created, but its template could not sync to the server. Check your connection and retry template setup in Settings.';
+      status.textContent = 'Business created, but its template could not sync to the server. Use Settings → Business type sync to retry.';
     }
   } catch (error) {
     if (status) status.textContent = error.message || 'Could not create the business.';

@@ -1028,6 +1028,9 @@
     </select>
     <div class="niche-hint" data-i18n="businessTypeHint">Pre-fills the categories, units, and tags below to match your kind of business. You can still add your own anytime.</div>
     </div>
+    <div class="settings-section-label">Business type sync</div>
+    <div class="hint" id="settingsBusinessTemplateStatus" role="status" aria-live="polite">If the business type selected during onboarding did not sync, retry it here.</div>
+    <button type="button" class="btn-secondary" id="retryBusinessTemplateSyncButton" onclick="retryBusinessTemplateSync()">Retry business type sync</button>
     <label data-i18n="businessName">Business name</label>
     <input type="text" id="setSellerName" placeholder="Sana's Candles">
     <label data-i18n="syncServerUrl">Sync server URL</label>
