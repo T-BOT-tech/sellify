@@ -99,13 +99,23 @@ function normalizeExternalEvaluation(value) {
     invalid('externalEvaluation.outcome must be FEASIBLE, CONFLICT, or UNKNOWN');
   }
 
+  const authority = optionalText(value.authority, 'externalEvaluation.authority');
+  const referenceId = optionalText(
+    value.referenceId ?? value.reference_id,
+    'externalEvaluation.referenceId',
+  );
+
+  // A FEASIBLE result is only meaningful when its source and durable evidence
+  // reference are identified. The backend separately authenticates authority;
+  // these caller-supplied labels alone do not grant scheduling permission.
+  const normalizedOutcome = outcome === 'FEASIBLE' && (!authority || !referenceId)
+    ? 'UNKNOWN'
+    : outcome;
+
   return Object.freeze({
-    outcome,
-    authority: optionalText(value.authority, 'externalEvaluation.authority'),
-    referenceId: optionalText(
-      value.referenceId ?? value.reference_id,
-      'externalEvaluation.referenceId',
-    ),
+    outcome: normalizedOutcome,
+    authority,
+    referenceId,
   });
 }
 

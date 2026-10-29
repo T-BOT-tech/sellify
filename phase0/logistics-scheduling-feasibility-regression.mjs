@@ -73,6 +73,23 @@ assert.equal(externallyFeasible.reason, 'NO_CONFLICT');
 assert.equal(externallyFeasible.feasible, true);
 assert.equal(externallyFeasible.authorized, false);
 
+// A FEASIBLE label without both source identity and a durable evidence reference
+// must fail closed. These labels still do not authenticate the caller; the
+// canonical backend rejects request-supplied evaluations at its authority boundary.
+for (const externalEvaluation of [
+  { outcome: 'FEASIBLE', authority: 'existing-capacity-authority' },
+  { outcome: 'FEASIBLE', reference_id: 'capacity-check-missing-authority' },
+  { outcome: 'FEASIBLE' },
+]) {
+  const incompleteProvenance = evaluateLogisticsSchedulingFeasibility({
+    request: base,
+    externalEvaluation,
+  });
+  assert.equal(incompleteProvenance.evaluation, 'UNKNOWN');
+  assert.equal(incompleteProvenance.reason, 'EXTERNAL_CAPACITY_UNKNOWN');
+  assert.equal(incompleteProvenance.feasible, false);
+}
+
 const externallyConflicted = evaluateLogisticsSchedulingFeasibility({
   request: base,
   externalEvaluation: {
