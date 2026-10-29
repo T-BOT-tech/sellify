@@ -120,8 +120,82 @@ assert.equal(staleResponseHarness.configWrites.length, 0,
 assert.equal(staleResponseHarness.stateWrites.length, 0);
 assert.equal(staleResponseHarness.localWrites.length, 0);
 
+// Exercise the actual Settings recovery action for the business-template sync.
+const retryBusinessTemplateFunctionSource = tenantAuthSource.match(
+  /export async function retryBusinessTemplateSync\(\) \{[\s\S]*?\n\}/,
+)?.[0];
+assert.ok(retryBusinessTemplateFunctionSource, 'Settings business-template retry function must be extractable for behavioral tests');
+
+function makeBusinessTemplateRetryHarness(overrides = {}) {
+  const harness = {
+    config: { chatId: 'tenant-a', sessionToken: 'token-a', businessTemplate: 'repair' },
+    calls: [],
+    writes: [],
+    configWrites: [],
+    status: { textContent: '' },
+    document: { getElementById: id => id === 'settingsBusinessTemplateStatus' ? harness.status : null },
+    saveJSONAsync: async (key, value) => {
+      harness.writes.push({ key, value });
+      return true;
+    },
+    request: async (url, options = {}) => {
+      harness.calls.push({ url, options });
+      return { businessTemplate: { templateKey: 'repair', schemaVersion: 1, config: {} } };
+    },
+    setConfig: next => { harness.configWrites.push(next); harness.config = next; },
+    saveJSON: (...args) => harness.configWrites.push(args),
+    STORAGE_KEYS: { config: 'config' },
+    Date,
+    ...overrides,
+  };
+  vm.runInNewContext(
+    "const pendingBusinessTemplateKey = chatId => 'ledger_business_template_pending_v1:' + encodeURIComponent(String(chatId));\n"
+      + retryBusinessTemplateFunctionSource
+      + "\nthis.retryBusinessTemplateSync = retryBusinessTemplateSync;",
+    harness,
+  );
+  return harness;
+}
+
+const retrySuccessHarness = makeBusinessTemplateRetryHarness();
+const retrySuccess = await retrySuccessHarness.retryBusinessTemplateSync();
+assert.equal(retrySuccess.templateKey, 'repair');
+assert.equal(retrySuccessHarness.calls.length, 1);
+assert.equal(retrySuccessHarness.calls[0].options.method, 'PUT');
+assert.equal(retrySuccessHarness.calls[0].options.headers.Authorization, 'Bearer token-a');
+assert.equal(retrySuccessHarness.writes[0].value.status, 'pending',
+  'manual retry must persist the tenant-scoped pending marker before calling the server');
+assert.equal(retrySuccessHarness.writes[1].value.status, 'synced',
+  'manual retry may mark the marker synced only after server acknowledgement');
+assert.equal(retrySuccessHarness.config.businessTemplate, 'repair');
+assert.match(retrySuccessHarness.status.textContent, /synced to the server/i);
+
+const retryStorageFailureHarness = makeBusinessTemplateRetryHarness({
+  saveJSONAsync: async () => false,
+});
+await retryStorageFailureHarness.retryBusinessTemplateSync();
+assert.equal(retryStorageFailureHarness.calls.length, 0,
+  'manual retry must not send a server write if it cannot first persist the durable retry marker');
+assert.match(retryStorageFailureHarness.status.textContent, /could not save the retry/i);
+
+const retryNetworkFailureHarness = makeBusinessTemplateRetryHarness({
+  request: async (url, options = {}) => {
+    retryNetworkFailureHarness.calls.push({ url, options });
+    throw new Error('simulated offline retry');
+  },
+});
+await retryNetworkFailureHarness.retryBusinessTemplateSync();
+assert.equal(retryNetworkFailureHarness.writes.length, 1);
+assert.equal(retryNetworkFailureHarness.writes[0].value.status, 'pending',
+  'a failed network retry must retain its durable pending marker');
+assert.match(retryNetworkFailureHarness.status.textContent, /retry is saved/i);
+
 // Guard the real sanitizer implementation used by catalog pull/push. The
 // spread preserves item_type while the following fields normalize ID and price.
+assert.match(onboardingHtml, /id="retryBusinessTemplateSyncButton"[^>]*onclick="retryBusinessTemplateSync\(\)"/,
+  'Settings must expose a manual retry when business-template sync could not be queued or completed');
+assert.match(onboardingHtml, /id="settingsBusinessTemplateStatus"[^>]*role="status"/,
+  'business-template retry must expose an accessible status result');
 assert.match(onboardingHtml, /Choose your business type/,
   'merchant onboarding must make business type selection a primary entry point');
 assert.doesNotMatch(onboardingHtml, /id="onboardingCurrency"/,
@@ -277,6 +351,8 @@ assert.match(tenantAuthSource, /businessTemplateSchemaVersion: 1/,
 const windowAssignment = windowBridgeSource.match(/Object\.assign\(window,\s*\{([\s\S]*?)\n\s*\}\);/)?.[1] || '';
 assert.match(windowAssignment, /\bapplyOnboardingBusinessTemplate\b/,
   'business-template onchange handler must be exposed on window');
+assert.match(windowAssignment, /\\bretryBusinessTemplateSync\\b/,
+  'business-template retry handler must be exposed on window');
 assert.match(windowAssignment, /\btoggleOnboardingItemType\b/,
   'product/service onchange handler must be exposed on window');
 assert.match(onboardingHtml, /id="onboardingAddOfferingButton"[^>]*>Add product</,
