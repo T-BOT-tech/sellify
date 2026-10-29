@@ -25,6 +25,8 @@ jobs:
         run: npm install --ignore-scripts
       - name: GAP-2 canonical delivery assignment authority regression
         run: node phase0/gap-2-delivery-assignment-authority-regression.mjs
+      - name: Logistics service delivery-model contract regression
+        run: npm run test:logistics-service-delivery-model
       - name: Run L18 P2P Delivery product boundary regression
         run: npm run test:logistics-l18
 
