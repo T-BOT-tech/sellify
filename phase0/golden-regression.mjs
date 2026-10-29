@@ -50,7 +50,7 @@ async function waitForHealth(child) {
     }
     await sleep(50);
   }
-  throw new Error(`server did not become healthy; last health check: ${lastHealthFailure}; stdout:\\n${stdout.slice(-4000)}; stderr:\\n${stderr.slice(-4000)}`);
+  throw new Error(`server did not become healthy; last health check: ${lastHealthFailure}; stdout:\n${stdout.slice(-4000)}; stderr:\n${stderr.slice(-4000)}`);
 }
 
 const child = spawn(process.execPath, [path.join(backend, 'server.js')], { cwd: root, env, stdio: ['ignore','pipe','pipe'] });
