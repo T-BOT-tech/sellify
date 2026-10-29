@@ -199,3 +199,41 @@ Preserve the strategy: **Global Core first; country-ready architecture from the 
 5. Select the first evidence-backed gap; implement one minimal fix plus regression on an isolated branch.
 6. Update this backlog only when repository evidence changes.
 7. Do not merge or close PRs without explicit user authorization.
+
+
+## Superseding live implementation snapshot — 29 October 2026, 19:33 UTC
+
+**Current `main` SHA at this snapshot:** `c4aa6bec2a420584185cd6509009c6696ff11fbc` (refresh before further work). This section supersedes earlier PR-state tables above where they conflict; the earlier tables remain historical context.
+
+### Confirmed merges since the older snapshot
+
+| PR | Result | Evidence / scope |
+|---|---|---|
+| #162 | Merged | Telegram storefront verification remains behind the canonical verification boundary. |
+| #164 | Merged | Restaurant payment compatibility payload no longer invents canonical financial state. |
+| #165 | Merged | Marketplace refund lifecycle reconciles through Payment Core; split-refund settlement remains held until all required refunds succeed. |
+| #73 | Merged | Compliance UI prevents duplicate deletion-request submission while a request is pending; this is a UI guard, not server-side idempotency. |
+| #74 | Merged | Contextual IAM role-revocation regression is included in CI. |
+| #166 | Merged | Storefront channel status/configuration-version validation and regression are wired into CI. |
+| #167 | Merged | Legacy `type: 'service'` is normalized to canonical `item_type: 'service'`; opening-balance inventory migration excludes both legacy and canonical service markers. Sellify CI, Repository Security Checks, baseline (24), logistics L18, logistics exit certification, and source-hygiene passed on PR head `6a2b1e1e31fc0aa5e345ca02d829e1b358ecaa8d`; merge commit is the current `main` SHA above. |
+
+### Historical branches requiring no wholesale merge
+
+| PR | Current status | Action |
+|---|---|---|
+| #50 service catalog / 13 locales | Open, conflicting | Reconcile individual behavior against current source; most service/catalog/localization work is already present. Do not merge the branch wholesale. |
+| #51 service opening-balance guard | Open, mergeable | Its gap was addressed more completely by #167, including both aliases and regression coverage; treat as superseded unless a distinct missing behavior is demonstrated. |
+| #52 marketplace settlement/refund | Open, conflicting | Superseded by merged #165; do not merge. |
+| #72 storefront channel contract | Open, conflicting | Superseded by merged #166; do not merge. |
+| #88 Telegram verification error precedence | Open, conflicting | Superseded by merged #162; do not merge. |
+| #153 payment state in order queue | Closed, unmerged | Historical candidate only; inspect current source if the behavior is still relevant. |
+| #158 checkout/payment confirmation clarity | Closed, unmerged | Historical candidate only; inspect current source if the behavior is still relevant. |
+| #84, #85, #86, #87, #90, #94, #95, #98 | Closed, unmerged | Historical candidates only. Their old passing checks do not prove their code is in `main`; do not cherry-pick/reopen wholesale without a current-source gap and focused regression. |
+| #99 this documentation PR | Open, unmerged at this snapshot | Update these docs with the current snapshot, then verify its current head and CI before considering merge. |
+
+### Immediate implementation order
+
+1. Continue current-source reconciliation of the remaining service-catalog PR #50; identify a specific uncovered behavior before changing code.
+2. Review the First Experience/onboarding and Global Commerce documentation against actual current routes, canonical API contracts, and test evidence. Keep product discovery separate from permission/provider activation/readiness.
+3. Revisit the closed outbox/browser-runtime PRs only when a reproducible current-main defect is established. Preserve the existing constraint: do not expose backend source through the browser as a smoke-test workaround.
+4. Report source inspection, regression results, runtime/browser evidence, broader CI, and unverified behavior separately. Do not label static checks as runtime certification.
