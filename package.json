@@ -426,7 +426,7 @@
     "gap-1.18:decision-idempotency-test": "node phase0/gap-1.18Q-payment-decision-idempotency-regression.mjs",
     "gap-1.18:financial-transition-idempotency-test": "node phase0/gap-1.18U-financial-transition-idempotency-regression.mjs",
     "test:service-catalog-http": "node phase0/first-experience-service-catalog-http-regression.mjs",
-    "test:service-catalog-frontend-sync": "node phase0/first-experience-service-catalog-frontend-sync-regression.mjs",
+    "test:service-catalog-frontend-sync": "node phase0/first-experience-service-catalog-frontend-sync-regression.mjs && node phase0/business-template-persistence-regression.mjs",
     "test:offline-outbox-recovery-journal": "node phase0/offline-outbox-recovery-journal-regression.mjs",
     "test:first-experience-returning-merchant": "node phase0/first-experience-returning-merchant-regression.mjs",
     "test:first-experience-add-availability": "node phase0/first-experience-add-availability-regression.mjs",
