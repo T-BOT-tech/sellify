@@ -84,7 +84,7 @@ assert.ok(proofGuardStart >= 0 && proofGuardEnd > proofGuardStart,
   'assignment lifecycle proof guard must remain adjacent to fulfillment persistence');
 const assignmentProofGuard = assignmentLifecycleBody.slice(proofGuardStart, proofGuardEnd);
 assert.ok(assignmentProofGuard.includes('const existingProofForImmutability')
-    && assignmentProofGuard.includes('input.proof !== undefined')
+    && assignmentProofGuard.includes('proofInput !== undefined')
     && assignmentProofGuard.includes('DELIVERY_PROOF_IMMUTABLE')
     && assignmentProofGuard.includes('legacyOrderProof'),
   'all assignment transitions must protect captured proof, including legacy order proof');
