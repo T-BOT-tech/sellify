@@ -33,6 +33,76 @@ try {
   assert.ok(first[0].order_id);
   assert.ok(first[0].payment_id);
 
+  // Restaurant checkout compatibility: caller-reported tender and attached
+  // proof must survive order sync without selecting canonical payment state.
+  // The canonical payment shell remains UNPAID until Payment Core decides otherwise.
+  const restaurantPaymentCases = [
+    {
+      id: 'restaurant-cash-full',
+      cash_tendered: 200,
+      payment_method_id: 'cash',
+      payment_method_name: 'Cash',
+    },
+    {
+      id: 'restaurant-cash-partial',
+      cash_tendered: 100,
+      payment_method_id: 'cash',
+      payment_method_name: 'Cash',
+    },
+    {
+      id: 'restaurant-proof-attached',
+      payment_method_id: 'telebirr',
+      payment_method_name: 'Telebirr',
+      payment_proof: {
+        path: 'opfs://payment_proofs/restaurant-proof.webp',
+        fileName: 'restaurant-proof.webp',
+        sizeBytes: 128,
+      },
+    },
+  ];
+  const paymentsBeforeRestaurantCases = (await store.listPayments(tenant.chatId)).length;
+  for (const restaurantCase of restaurantPaymentCases) {
+    const restaurantOrder = {
+      ...structuredClone(original),
+      ...restaurantCase,
+      items: [{ id: 'coffee', name: 'Coffee', price: 100, qty: 2, currency: 'ETB' }],
+    };
+    const [synced] = await store.saveQueuedOrders(tenant.chatId, [restaurantOrder]);
+    assert.equal(synced.status, 'synced', restaurantCase.id + ' should sync');
+    assert.equal(synced.payment_state, 'UNPAID', restaurantCase.id + ' must not claim payment');
+    assert.ok(synced.payment_id, restaurantCase.id + ' should link canonical payment');
+    const canonicalPayment = await store.getPayment(tenant.chatId, synced.payment_id);
+    const storedRestaurantOrder = (await store.getOrders(tenant.chatId)).find(order => order.id === restaurantCase.id);
+    assert.ok(storedRestaurantOrder, restaurantCase.id + ' should remain retrievable after sync');
+    if (Object.hasOwn(restaurantCase, 'cash_tendered')) {
+      assert.equal(storedRestaurantOrder.cash_tendered, restaurantCase.cash_tendered,
+        restaurantCase.id + ' should preserve reported tender as order data');
+    }
+    if (Object.hasOwn(restaurantCase, 'payment_proof')) {
+      assert.deepEqual(storedRestaurantOrder.payment_proof, restaurantCase.payment_proof,
+        restaurantCase.id + ' should preserve proof evidence without treating it as confirmation');
+    }
+    assert.equal(canonicalPayment.state, 'UNPAID', restaurantCase.id + ' must leave canonical state unpaid');
+    assert.equal(canonicalPayment.metadata.financialStateAuthority, 'PAYMENT_CORE');
+    assert.equal(
+      canonicalPayment.metadata.paymentProofAttached,
+      Boolean(restaurantOrder.payment_proof),
+      restaurantCase.id + ' should preserve proof presence as metadata only',
+    );
+
+    const [retried] = await store.saveQueuedOrders(tenant.chatId, [structuredClone(restaurantOrder)]);
+    assert.equal(retried.status, 'synced', restaurantCase.id + ' exact retry should remain idempotent');
+    assert.equal(retried.order_id, synced.order_id, restaurantCase.id + ' retry must reuse order identity');
+    assert.equal(retried.payment_id, synced.payment_id, restaurantCase.id + ' retry must reuse payment identity');
+    assert.equal(retried.payment_state, 'UNPAID');
+  }
+  assert.equal(
+    (await store.listPayments(tenant.chatId)).length,
+    paymentsBeforeRestaurantCases + restaurantPaymentCases.length,
+    'restaurant cash/proof sync and retries must create exactly one canonical payment per order',
+  );
+
+
   const paymentsAfterFirst = await store.listPayments(tenant.chatId);
   const ordersAfterFirst = await store.getOrders(tenant.chatId);
   assert.equal(ordersAfterFirst.filter(order => order.id === original.id).length, 1);
