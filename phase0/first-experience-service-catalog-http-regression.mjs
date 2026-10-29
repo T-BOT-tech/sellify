@@ -239,6 +239,35 @@ try {
   assert.equal(templateWriteBody.businessTemplate.schemaVersion, 1);
   assert.deepEqual(templateWriteBody.businessTemplate.config, {});
 
+  const templateAuditEvents = await store.listAuditEvents(tenant.chatId, 100, {
+    action: 'tenant.business_template.updated',
+    entityType: 'tenant_business_template',
+  });
+  assert.equal(templateAuditEvents.length, 1,
+    'one accepted template write must append exactly one canonical audit event');
+  assert.equal(templateAuditEvents[0].actorId, String(user.id),
+    'business-template audit evidence must populate the canonical actor_id field, not only metadata');
+  assert.equal(templateAuditEvents[0].metadata.actorUserId, String(user.id));
+  assert.equal(templateAuditEvents[0].metadata.templateKey, 'repair');
+
+  const nonOwnerTemplateWrite = await fetch(baseUrl + templatePath, {
+    method: 'PUT',
+    headers: {
+      Authorization: 'Bearer ' + nonOwnerSession.token,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ templateKey: 'hotel-rooms' }),
+  });
+  assert.equal(nonOwnerTemplateWrite.status, 403,
+    'a staff member may read shared template setup context but must not change the canonical tenant template');
+  const templateAfterNonOwnerWrite = await fetch(baseUrl + templatePath, { headers: authHeaders });
+  assert.equal((await templateAfterNonOwnerWrite.json()).businessTemplate.templateKey, 'repair',
+    'a denied non-owner template write must leave the canonical template unchanged');
+  assert.equal((await store.listAuditEvents(tenant.chatId, 100, {
+    action: 'tenant.business_template.updated',
+    entityType: 'tenant_business_template',
+  })).length, 1, 'a denied template write must not append a successful template-update audit event');
+
   const templateRead = await fetch(baseUrl + templatePath, { headers: authHeaders });
   assert.equal(templateRead.status, 200);
   assert.equal((await templateRead.json()).businessTemplate.templateKey, 'repair',

@@ -6239,6 +6239,9 @@ export async function saveBusinessTemplateConfig(chatId, input = {}, actor = nul
   `).run(key, templateKey, schemaVersion, json(config), actor?.userId ? String(actor.userId) : null, updatedAt);
   audit(key, 'tenant.business_template.updated', 'tenant_business_template', key, {
     templateKey, schemaVersion, actorUserId: actor?.userId ? String(actor.userId) : null,
+  }, {
+    actorId: actor?.userId ? String(actor.userId) : null,
+    deviceId: actor?.deviceId ? String(actor.deviceId) : null,
   });
   return { templateKey, schemaVersion, config, updatedAt };
 }
