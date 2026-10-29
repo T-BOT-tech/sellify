@@ -133,6 +133,29 @@ const assignmentProofSync = await saveQueuedOrders(chatId, [{
 assert.equal(assignmentProofSync[0].status, 'synced');
 const assignmentProofOrderId = assignmentProofSync[0].order_id;
 const db = getDatabaseForTests();
+
+// Legacy rows may predate canonical item_type and carry only type='service'.
+// Their order history must still lock identity against conversion to a product.
+const legacyServiceOrder = await saveQueuedOrders(chatId, [{
+  id: 'local-fux42-legacy-service-history',
+  items: [{ item_id: 'service-type-alias', name: 'Legacy type service', qty: 1, price: 700 }],
+}]);
+assert.equal(legacyServiceOrder[0].status, 'synced');
+const legacyServiceRow = db.prepare('SELECT product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?')
+  .get(chatId, 'service-type-alias');
+const legacyServicePayload = JSON.parse(legacyServiceRow.product_json);
+delete legacyServicePayload.item_type;
+legacyServicePayload.type = 'service';
+db.prepare('UPDATE catalog_products SET product_json = ? WHERE chat_id = ? AND product_id = ?')
+  .run(JSON.stringify(legacyServicePayload), chatId, 'service-type-alias');
+const catalogBeforeTypeChange = (await (await import('../backend/lib/store-sqlite.js')).getCatalog(chatId)).products;
+await assert.rejects(
+  saveCatalog(chatId, catalogBeforeTypeChange.map(item => item.id === 'service-type-alias'
+    ? { ...item, item_type: 'product', type: 'product' }
+    : item)),
+  error => error?.code === 'CATALOG_ITEM_TYPE_LOCKED' && error?.statusCode === 409,
+  'legacy type=service identity must remain locked when existing order history is present',
+);
 const assignmentProof = { type: 'photo', reference: 'assignment-proof-original' };
 const assignmentProofFulfillmentId = 'fux42-assignment-proof-fulfillment';
 const assignmentProofAssignmentId = 'fux42-assignment-proof-assignment';
