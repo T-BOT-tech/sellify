@@ -110,13 +110,19 @@ const onboardingFields = {
   onboardingStatus: { textContent: '' },
 };
 let attemptedLocalSave = null;
+const attemptedLocalSaves = [];
+let failLocalSave = true;
 const onboardingHarness = {
   products: priorOnboardingProducts,
-  config: { currencyCode: 'ETB', syncUrl: 'http://127.0.0.1:0', chatId: 'tenant-a', sessionToken: 'session-a' },
+  config: { currencyCode: 'ETB', syncUrl: '', chatId: 'tenant-a', sessionToken: 'session-a' },
   STORAGE_KEYS: { products: 'products' },
   document: { getElementById: id => onboardingFields[id] || null },
   setProducts(next) { onboardingHarness.products = next; },
-  saveJSONAsync: async (key, value) => { attemptedLocalSave = { key, value }; return false; },
+  saveJSONAsync: async (key, value) => {
+    attemptedLocalSave = { key, value };
+    attemptedLocalSaves.push({ key, value: structuredClone(value) });
+    return !failLocalSave;
+  },
   toMinorUnits: value => Math.round(Number(value) * 100),
   uid: () => 'unsaved-consultation',
   markCatalogDirty: async () => { onboardingHarness.catalogMarkedDirty = true; },
@@ -147,6 +153,27 @@ assert.equal(onboardingHarness.catalogMarkedDirty, undefined,
   'failed durable save must not mark the catalog for remote sync');
 assert.equal(onboardingHarness.completed, undefined,
   'failed durable save must not complete the onboarding step');
+
+// Recover from the same storage failure and retry the actual production
+// function. The failed attempt must not leave a duplicate or hidden offering.
+failLocalSave = false;
+await addOnboardingOffering();
+assert.equal(attemptedLocalSaves.length, 2, 'retry must perform one fresh durable save attempt');
+assert.equal(attemptedLocalSaves[1].key, 'products');
+assert.equal(attemptedLocalSaves[1].value.length, 2,
+  'retry payload must contain exactly the existing item and one proposed offering');
+assert.equal(JSON.stringify(onboardingHarness.products.map(item => item.id)),
+  JSON.stringify(['existing-item', 'unsaved-consultation']),
+  'successful retry must persist exactly one copy of the offering');
+assert.equal(onboardingHarness.products.filter(item => item.id === 'unsaved-consultation').length, 1,
+  'a failed first attempt must not cause duplicate offerings when retried');
+assert.equal(onboardingHarness.catalogMarkedDirty, true,
+  'successful retry may mark the catalog dirty only after local persistence succeeds');
+assert.equal(onboardingHarness.completed, true,
+  'successful retry may complete onboarding after durable local persistence');
+assert.equal(onboardingFields.onboardingStatus.textContent,
+  'Saved on this device. Connect this business to sync the offering.');
+
 assert.match(tenantAuthSource, /const priceMinor = toMinorUnits\(priceMajor, config\.currencyCode\);[\s\S]*?if \(!Number\.isSafeInteger\(priceMinor\) \|\| priceMinor < 0 \|\| priceMinor > 2147483647\)[\s\S]*?Price is outside the supported range[\s\S]*?price: priceMinor,/,
   'first-offering onboarding must reject prices outside the backend-supported integer minor-unit range before local persistence or sync');
 assert.match((await readFile(new URL('../app/src/storage/json.js', import.meta.url), 'utf8')), /export async function saveJSONAsync[\s\S]*?await idbSet\(key, value\)/,
