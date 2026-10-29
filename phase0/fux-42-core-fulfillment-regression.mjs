@@ -148,6 +148,11 @@ delete legacyServicePayload.item_type;
 legacyServicePayload.type = 'service';
 db.prepare('UPDATE catalog_products SET product_json = ? WHERE chat_id = ? AND product_id = ?')
   .run(JSON.stringify(legacyServicePayload), chatId, 'service-type-alias');
+await assert.rejects(
+  appendInventoryMovement(chatId, { productId: 'service-type-alias', quantity: 1, movementType: 'PURCHASE', eventId: 'fux42-legacy-service-movement' }),
+  error => error?.code === 'SERVICE_HAS_NO_INVENTORY' && error?.statusCode === 422,
+  'legacy type=service records must remain excluded from physical inventory movements',
+);
 const catalogBeforeTypeChange = (await (await import('../backend/lib/store-sqlite.js')).getCatalog(chatId)).products;
 await assert.rejects(
   saveCatalog(chatId, catalogBeforeTypeChange.map(item => item.id === 'service-type-alias'

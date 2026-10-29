@@ -5073,7 +5073,7 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
     if (!productId) throw Object.assign(new Error('Procurement purchase-order items must reference catalog products before receiving'), { statusCode: 409, code: 'RECEIPT_PRODUCT_REQUIRED' });
     const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
     if (!product) throw Object.assign(new Error('Purchase-order product is not present in the buyer catalog'), { statusCode: 409, code: 'RECEIPT_PRODUCT_NOT_FOUND' });
-    if (parseJSON(product.product_json, {}).item_type === 'service') {
+    if (String((payload => payload.item_type ?? payload.type ?? '')(parseJSON(product.product_json, {}))).trim().toLowerCase() === 'service') {
       throw Object.assign(new Error('Service catalog items cannot be received into physical inventory'), { statusCode: 422, code: 'SERVICE_HAS_NO_INVENTORY' });
     }
     return { purchaseOrderItemId: itemId, productId, receivedQuantity: quantity, notes: String(x.notes || '').trim().slice(0, 1000) };
@@ -6559,7 +6559,8 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null) 
   }
   const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
   if (!product) throw Object.assign(new Error('Product not found'), { statusCode: 404 });
-  const isService = parseJSON(product.product_json, {}).item_type === 'service';
+  const servicePayload = parseJSON(product.product_json, {});
+  const isService = String(servicePayload.item_type ?? servicePayload.type ?? '').trim().toLowerCase() === 'service';
   const defaultLocation = db.prepare(
     "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
   ).get(String(tenant.organizationId));
@@ -8941,7 +8942,7 @@ function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJ
     if (!product) throw Object.assign(new Error('Fulfillment product not found'), { statusCode: 409, code: 'FULFILLMENT_PRODUCT_NOT_FOUND', productId });
     // Catalog type is server-owned authority. A service fulfills the order
     // without decrementing physical inventory, regardless of client line metadata.
-    if (parseJSON(product.product_json, {}).item_type === 'service') continue;
+    if (String((payload => payload.item_type ?? payload.type ?? '')(parseJSON(product.product_json, {}))).trim().toLowerCase() === 'service') continue;
     const eventId = `fulfillment-sale:${fulfillmentRow.id}:${productId}`;
     const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
     if (existing) {
@@ -11062,7 +11063,7 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
         // Marketplace cancellation restores physical stock only. Services
         // never had a physical deduction, so they must not create a return
         // movement (which the canonical inventory authority correctly rejects).
-        if (parseJSON(productRow.product_json, {}).item_type === 'service') continue;
+        if (String((payload => payload.item_type ?? payload.type ?? '')(parseJSON(productRow.product_json, {}))).trim().toLowerCase() === 'service') continue;
         const tenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(key);
         const defaultLocation = tenant?.organization_id
           ? db.prepare("SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1").get(String(tenant.organization_id))
