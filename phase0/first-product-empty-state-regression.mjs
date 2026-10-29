@@ -29,4 +29,12 @@ assert.match(home, /navigator\.onLine \? 'online' : 'offline'/,
 assert.match(english, /firstSaleAddProduct\s*:/, 'English fallback must define the empty-catalog message');
 assert.match(english, /catalogHasItems\s*:/, 'English fallback must define the non-empty-catalog message');
 
-console.log('First product empty-state and home catalog-status regressions passed.');
+// Keep the two Home messages translated in every registered locale, not just English fallback.
+const localeNames = ['am', 'ar', 'en', 'es', 'fr', 'ha', 'hi', 'om', 'pt', 'ru', 'so', 'sw', 'yo'];
+for (const locale of localeNames) {
+  const messages = await read(`../app/src/i18n/locales/${locale}.js`);
+  assert.match(messages, /firstSaleAddProduct\\s*:/, `${locale} locale must translate the empty-catalog message`);
+  assert.match(messages, /catalogHasItems\\s*:/, `${locale} locale must translate the non-empty-catalog message`);
+}
+
+console.log('First product empty-state and home catalog-status regressions passed for all 13 locales.');
