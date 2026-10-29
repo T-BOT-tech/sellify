@@ -429,7 +429,43 @@ assert.equal(onboardingElements.onboardingAddOfferingButton.textContent, 'Add pr
 
 assert.match(catalogSource, /return \{\s*\.\.\.p,/);
 assert.match(catalogSource, /id:\s*sanitizeId\(p\.id\)/);
-assert.match(catalogSource, /price:\s*Number\.isFinite\(numericPrice\)/);
+assert.match(catalogSource, /const itemType = String\(p\.item_type \|\| p\.type \|\| 'product'\)/);
+assert.match(catalogSource, /item_type: itemType === 'service' \? 'service' : 'product'/,
+  'remote catalog products must normalize the legacy service alias into canonical item_type before inventory/UI use');
+
+// Execute the actual production sanitizer so legacy identity is not tested only by source shape.
+const sanitizeRemoteProductsSource = catalogSource.match(
+  /export function sanitizeRemoteProducts\(rawList\) \{[\s\S]*?\n\}/,
+)?.[0];
+assert.ok(sanitizeRemoteProductsSource, 'remote product sanitizer must remain extractable for behavioral regression');
+const sanitizerContext = {
+  sanitizeId: value => String(value || ''),
+  uid: () => 'generated-id',
+  Number,
+  String,
+  Math,
+};
+vm.runInNewContext(
+  sanitizeRemoteProductsSource.replace('export function sanitizeRemoteProducts', 'function sanitizeRemoteProducts')
+    + '\nglobalThis.sanitizeRemoteProducts = sanitizeRemoteProducts;',
+  sanitizerContext,
+);
+const sanitizedLegacyCatalog = sanitizerContext.sanitizeRemoteProducts([
+  { id: 'legacy-service', type: 'service', price: 100, stock: 8 },
+  { id: 'canonical-service', item_type: 'service', type: 'product', price: 200 },
+  { id: 'canonical-product', item_type: 'product', type: 'service', price: 300 },
+  { id: 'legacy-product', type: 'physical', price: 400 },
+]);
+assert.deepEqual(
+  sanitizedLegacyCatalog.map(product => [product.id, product.item_type]),
+  [
+    ['legacy-service', 'service'],
+    ['canonical-service', 'service'],
+    ['canonical-product', 'product'],
+    ['legacy-product', 'product'],
+  ],
+  'legacy service aliases must normalize while explicit canonical item_type wins conflicts',
+);
 assert.match(catalogSource, /item_type:\s*String\(l\.item_type \|\| 'product'\)[\s\S]*?\? 'service' : 'product'/,
   'cached and remote marketplace listings must normalize item_type with a legacy-safe product default');
 assert.match(marketplaceCheckoutSource, /const listing = marketplaceListings\.find\(l => l\.listing_id === e\.listing\.listing_id\) \|\| e\.listing/,

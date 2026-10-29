@@ -42,9 +42,15 @@ export function sanitizeId(raw) {
 export function sanitizeRemoteProducts(rawList) {
   return (Array.isArray(rawList) ? rawList : []).map(p => {
     const numericPrice = Number(p.price);
+    // Older local/remote records may use the legacy `type: 'service'` field.
+    // Normalize it once at the client trust boundary so the catalog, checkout,
+    // and stock projections all see the canonical item_type field. An explicit
+    // canonical item_type always takes precedence over the legacy alias.
+    const itemType = String(p.item_type || p.type || 'product').trim().toLowerCase();
     return {
       ...p,
       id: sanitizeId(p.id),
+      item_type: itemType === 'service' ? 'service' : 'product',
       // Coerced to a real number: besides keeping totals/arithmetic sane if a
       // synced catalog sends a malformed price, an unescaped non-numeric price
       // would otherwise be inserted as raw text content wherever it's displayed.
