@@ -20,7 +20,7 @@ import { formatMoney } from '../utils/money.js';
 import { isRestaurant } from '../config/niche.js';
 import { escapeHtml, escapeAttr } from '../utils/index.js';
 import { STORAGE_KEYS } from '../constants.js';
-import { products, currentOrder, orderViewMode, setOrderViewModeValue } from '../state.js';
+import { products, currentOrder, currentStaff, orderViewMode, setOrderViewModeValue } from '../state.js';
 import { saveJSON } from '../storage/json.js';
 // Phase 8 fix (see modularization plan §5, Phase 8): these used to come
 // from '../main.js', which only re-exported them from their real owning
@@ -30,6 +30,7 @@ import { saveJSON } from '../storage/json.js';
 // nothing imports main.js back except window-bridge.js.
 import { effectiveUnitPrice } from '../b2b/pricing.js';
 import { t } from '../ui/i18n.js';
+import { hasPermission } from '../auth/permissions.js';
 import { isStockTracked } from '../warehouse/inventory.js';
 import { searchQuery, activeCategory, renderCategoryPills } from './search-filter.js';
 import { modifierNoteMarkup } from './modifiers.js';
@@ -70,7 +71,11 @@ export function renderProducts() {
   }
 
   if (products.length === 0) {
-    list.innerHTML = `<div class="empty">${t('noProducts')}</div>`;
+    const canAddProduct = hasPermission(currentStaff ? currentStaff.role : 'owner', 'inventory:add');
+    const addProductAction = canAddProduct
+      ? `<div class="empty-state-actions"><button type="button" class="btn btn-primary" onclick="switchTab('catalog')">${t('add')}</button></div>`
+      : '';
+    list.innerHTML = `<div class="empty">${t('noProducts')}</div>${addProductAction}`;
     updateOrderSummary();
     return;
   }
