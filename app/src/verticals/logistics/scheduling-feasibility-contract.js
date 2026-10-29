@@ -99,13 +99,23 @@ function normalizeExternalEvaluation(value) {
     invalid('externalEvaluation.outcome must be FEASIBLE, CONFLICT, or UNKNOWN');
   }
 
+  const authority = optionalText(value.authority, 'externalEvaluation.authority');
+  const referenceId = optionalText(
+    value.referenceId ?? value.reference_id,
+    'externalEvaluation.referenceId',
+  );
+
+  // FEASIBLE requires identifiable authority and durable evidence. This is
+  // provenance validation, not authentication: request handlers must still
+  // obtain external evaluations only from a trusted server-side adapter.
+  const normalizedOutcome = outcome === 'FEASIBLE' && (!authority || !referenceId)
+    ? 'UNKNOWN'
+    : outcome;
+
   return Object.freeze({
-    outcome,
-    authority: optionalText(value.authority, 'externalEvaluation.authority'),
-    referenceId: optionalText(
-      value.referenceId ?? value.reference_id,
-      'externalEvaluation.referenceId',
-    ),
+    outcome: normalizedOutcome,
+    authority,
+    referenceId,
   });
 }
 
