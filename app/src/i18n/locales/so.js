@@ -96,7 +96,7 @@ export default {
     checkoutNoPaymentMethods: "Hababka lacag-bixinta lama hawlgelin. Jooji checkout-ka oo ka hawlgeli hab lacag-bixin gudaha Settings ka hor intaadan dalabkan kaydin.",
     checkoutReceiptSaveFailed: "Rasiidka lama kaydin karin. Mar kale isku day, ama xidh daaqaddan si aad ugu noqoto checkout-ka.",
     firstSaleAddProduct: "Ku dar badeecad si aad u bilowdo iibinta",
-    catalogHasItems: "Buugga badeecaduhu wuxuu ka kooban yahay badeecooyin",,
+    catalogHasItems: "Buugga badeecaduhu wuxuu ka kooban yahay badeecooyin",
     serviceBookingsTitle: "Ballamaha adeegga",
     serviceBookingsRefresh: "Cusboonaysii ballamaha",
     serviceBookingsDescription: "Ballamo ku xiran dalabyada adeegga ee rasmiga ah. Server-ku wuxuu xaqiijiyaa tallaabo kasta.",
