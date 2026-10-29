@@ -244,12 +244,15 @@ const latest = [{ eventId: 'new-command', kind: 'command', status: 'pending' }];
   storage.removeItem = () => { removals += 1; };
   const failedWrite = writeOutboxRecoveryJournal(latest, { storage, logger: quietLogger });
   assert.equal(failedWrite.written, false);
+  assert.equal(failedWrite.readSucceeded, true, 'a replacement failure must be distinguished from a read failure');
+  assert.deepEqual(failedWrite.snapshot, latest,
+    'the merged candidate must be returned so the IndexedDB transaction can commit old journal work with local changes');
   assert.equal(removals, 0, 'failed replacement must not delete the last known-good journal');
   assert.deepEqual(JSON.parse(storage.getItem(OUTBOX_RECOVERY_KEY)).events, stale);
 
-  // If IndexedDB commits after the journal replacement failed, its atomic
-  // marker must prevent the stale journal from overriding the committed state.
-  let hydrated = [];
+  // If IndexedDB commits after the journal replacement failed, the transaction
+  // must contain the merged candidate before its marker can supersede the old journal.
+  let hydrated = JSON.parse(JSON.stringify(failedWrite.snapshot));
   const restoredAfterCommit = restoreOutboxRecoveryJournal({
     storage,
     setOutboxEvents: value => { hydrated = value; },
@@ -263,7 +266,7 @@ const latest = [{ eventId: 'new-command', kind: 'command', status: 'pending' }];
     },
   });
   assert.equal(restoredAfterCommit, false, 'a committed IDB update supersedes the journal version that failed to update');
-  assert.deepEqual(hydrated, [], 'successful IDB hydration must keep its newer committed outbox');
+  assert.deepEqual(hydrated, latest, 'the committed merged snapshot must retain local changes and supersede stale journal data');
 }
 
 // A journal written ahead of an interrupted IDB transaction remains recoverable.
@@ -296,7 +299,10 @@ const latest = [{ eventId: 'new-command', kind: 'command', status: 'pending' }];
   storage.getItem = () => { throw new Error('temporary read failure'); };
   let writes = 0;
   storage.setItem = () => { writes += 1; };
-  assert.equal(writeOutboxRecoveryJournal(latest, { storage, logger: quietLogger }).written, false);
+  const readFailed = writeOutboxRecoveryJournal(latest, { storage, logger: quietLogger });
+  assert.equal(readFailed.written, false);
+  assert.equal(readFailed.readSucceeded, false, 'a failed shared read must be explicit so callers can abort an unsafe commit');
+  assert.equal(readFailed.snapshot, null, 'a failed read cannot provide a trustworthy merged candidate');
   assert.equal(writes, 0, 'a failed read must not write a possibly stale replacement snapshot');
 }
 
@@ -427,7 +433,15 @@ for (const raw of ['{broken', JSON.stringify({ eventId: 'not-an-array' }), null]
   }], 'a local deletion must not erase an independently changed shared field');
 }
 
-// Keep the production helper's catch boundaries visible to this contract test.
+// Keep the production persistence boundary visible to this regression.
+assert.match(outbox, /if \(journalWrite\.readSucceeded !== true\)\s*\{\s*throw new Error\('Cannot safely commit outbox while recovery journal is unreadable'\)/,
+  'an unreadable shared journal must abort the IndexedDB transaction rather than commit an unsafe marker');
+assert.match(outbox, /journalSnapshot = journalWrite\.snapshot/,
+  'a failed replacement after a successful read must still commit the merged recovery candidate');
+assert.match(outbox, /if \(journalWrite\?\.written !== true\)[\s\S]*?appendOutboxRecoveryOperations\(outboxEvents\)/,
+  'failed persistence must retain local mutations as append-only recovery operations');
+assert.match(journal, /function writeOutboxRecoveryJournal\([\s\S]*?snapshot, readSucceeded: true/,
+  'the recovery writer must return the merged candidate when the replacement fails');
 assert.doesNotMatch(journal, /storage\.removeItem\(OUTBOX_RECOVERY_KEY\)/, 'failed journal replacement must preserve the last known-good snapshot');
 assert.match(journal, /function parseRecoverySnapshot\(raw\)[\s\S]*?if \(Array\.isArray\(parsed\)\) return \{ events: parsed, snapshotId: null \}/,
   'recovery must continue accepting legacy array snapshots while recognizing versioned journal records');
