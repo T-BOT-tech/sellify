@@ -5,6 +5,7 @@ const moduleSource = await readFile(new URL('../app/src/logistics/service-bookin
 const logisticsSource = await readFile(new URL('../app/src/logistics/ui.js', import.meta.url), 'utf8');
 
 assert.match(moduleSource, /\/service-bookings/);
+assert.match(moduleSource, /item\\.item_type \\|\\| item\\.type/);
 assert.match(moduleSource, /method:\s*'PATCH'/);
 assert.match(moduleSource, /'Idempotency-Key'/);
 assert.match(moduleSource, /expected_version:\s*Number\(button\.dataset\.version\)/);
