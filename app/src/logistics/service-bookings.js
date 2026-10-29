@@ -74,12 +74,12 @@ function renderBookingCard(order, booking) {
 }
 
 export function serviceBookingsWorkspaceShell() {
-  return '<section id="serviceBookingsWorkspace" class="settings-section" aria-label="Service bookings">'
+  return '<section id="serviceBookingsWorkspace" class="settings-section" aria-label="' + escapeAttr(t('serviceBookingsTitle')) + '">'
     + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
-    + '<h3 style="margin:0;">Service bookings</h3>'
-    + '<button type="button" class="btn-secondary" id="serviceBookingsRefresh">Refresh bookings</button></div>'
-    + '<p class="logistics-meta">Appointments attached to canonical service orders. The server validates every action.</p>'
-    + '<div id="serviceBookingsStatus" class="logistics-meta" role="status">Loading service bookings…</div>'
+    + '<h3 style="margin:0;">' + escapeHtml(t('serviceBookingsTitle')) + '</h3>'
+    + '<button type="button" class="btn-secondary" id="serviceBookingsRefresh">' + escapeHtml(t('serviceBookingsRefresh')) + '</button></div>'
+    + '<p class="logistics-meta">' + escapeHtml(t('serviceBookingsDescription')) + '</p>'
+    + '<div id="serviceBookingsStatus" class="logistics-meta" role="status">' + escapeHtml(t('serviceBookingsLoading')) + '</div>'
     + '<div id="serviceBookingsList"></div></section>';
 }
 
