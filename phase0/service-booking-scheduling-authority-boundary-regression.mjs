@@ -64,8 +64,10 @@ assert.equal(unrelated.evaluation, 'UNKNOWN');
 assert.equal(unrelated.feasible, false);
 assert.equal(unrelated.mutation, false);
 
-// Only an explicit result from an existing authoritative capacity source can
-// yield FEASIBLE, and even that is evaluation—not authorization or reservation.
+// A trusted adapter may represent a sourced capacity result as FEASIBLE only
+// when both source identity and a durable reference are present. This pure
+// contract does not authenticate those labels; backend request paths discard
+// caller-supplied evaluations, and FEASIBLE is not authorization or reservation.
 const authoritative = evaluateLogisticsSchedulingFeasibility({
   request: schedulingRequest,
   externalEvaluation: {
