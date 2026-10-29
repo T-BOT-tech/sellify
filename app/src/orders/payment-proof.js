@@ -29,6 +29,7 @@ import { effectiveUnitPrice } from '../b2b/pricing.js';
 import { formatMoney } from '../utils/money.js';
 import { CS } from '../config/currency.js';
 import { showToast } from '../ui/toast.js';
+import { t } from '../ui/i18n.js';
 import { getOrderById } from './queue.js';
 import { saveOrder } from './checkout.js';
 
@@ -158,9 +159,9 @@ export function openPaymentProofModal() {
   const stateHint = document.getElementById('checkoutPaymentStateHint');
   if (confirmButton) confirmButton.disabled = enabledMethods.length === 0;
   if (stateHint && enabledMethods.length === 0) {
-    stateHint.textContent = 'No payment methods are enabled. Cancel checkout and enable a payment method in Settings before saving this order.';
+    stateHint.textContent = t('checkoutNoPaymentMethods');
   } else if (stateHint) {
-    stateHint.textContent = 'Saving creates an order in the queue. Selecting a payment method or attaching a receipt does not confirm payment.';
+    stateHint.textContent = t('checkoutPaymentStateHint');
   }
   pendingProofFile = null;
   pendingProofMeta = null;
@@ -204,7 +205,7 @@ export async function confirmOrderWithProof() {
     const payMethodId = sel?.value || '';
     const selectedMethod = (config.paymentMethods || []).find(pm => pm.id === payMethodId && pm.enabled);
     if (!selectedMethod) {
-      showToast('No enabled payment method is selected. Enable a payment method in Settings and try again.');
+      showToast(t('checkoutNoPaymentMethods'));
       return;
     }
 
@@ -217,7 +218,7 @@ export async function confirmOrderWithProof() {
         // The merchant explicitly selected a receipt. Keep the checkout open
         // and preserve the cart so they can retry instead of silently saving an
         // order without the evidence they intended to attach.
-        showToast('Receipt could not be saved. Retry, or close this dialog to return to checkout.');
+        showToast(t('checkoutReceiptSaveFailed'));
         return;
       }
     }
