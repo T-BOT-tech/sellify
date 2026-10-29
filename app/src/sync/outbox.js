@@ -62,7 +62,14 @@ function persist() {
   return withOutboxPersistenceLock(hasCrossTabLock => {
     if (isIdbUnavailable()) {
       if (hasCrossTabLock) {
-        writeOutboxRecoveryJournal(outboxEvents, { onMerged: merged => setOutboxEvents(merged) });
+        const journalWrite = writeOutboxRecoveryJournal(outboxEvents, { onMerged: merged => setOutboxEvents(merged) });
+        if (journalWrite.written !== true) {
+          try {
+            appendOutboxRecoveryOperations(outboxEvents);
+          } catch (error) {
+            console.error('Append-only outbox fallback failed; the local snapshot is only best-effort', error);
+          }
+        }
       } else {
         try {
           appendOutboxRecoveryOperations(outboxEvents);
