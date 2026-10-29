@@ -13,7 +13,7 @@ export default {
     checkoutReceiptSaveFailed: "Impossible d’enregistrer le reçu. Réessayez ou fermez cette fenêtre pour revenir à la commande.",
     saveOrderQueue: "Enregistrer la commande dans la file d’attente",
     firstSaleAddProduct: "Ajoutez un produit pour commencer à vendre",
-    catalogHasItems: "Le catalogue contient des articles",,
+    catalogHasItems: "Le catalogue contient des articles",
     serviceBookingsTitle: "Réservations de services",
     serviceBookingsRefresh: "Actualiser les réservations",
     serviceBookingsDescription: "Rendez-vous associés aux commandes de services canoniques. Le serveur valide chaque action.",
