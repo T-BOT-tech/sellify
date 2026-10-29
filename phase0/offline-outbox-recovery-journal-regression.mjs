@@ -270,7 +270,7 @@ const latest = [{ eventId: 'new-command', kind: 'command', status: 'pending' }];
     },
   });
   assert.equal(restoredAfterCommit, false, 'a committed IDB update supersedes the journal version that failed to update');
-  assert.deepEqual(hydrated, latest, 'the committed merged snapshot must retain local changes and supersede stale journal data');
+  assert.deepEqual(hydrated, failedWrite.snapshot, 'the committed merged snapshot must retain both local changes and shared journal-only work');
 }
 
 // A journal written ahead of an interrupted IDB transaction remains recoverable.
