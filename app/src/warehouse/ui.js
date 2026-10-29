@@ -14,7 +14,7 @@
 import { escapeHtml, escapeAttr } from '../utils/index.js';
 import { products, warehouseLocations, stockTransactions, inventoryMovements, organizationLocations, config } from '../state.js';
 import {
-  isWarehouseEnabled, isStockTracked, projectedStock, getLowStockProducts, getOutOfStockProducts
+  isWarehouseEnabled, isStockTracked, projectedStock, getLowStockProducts, getOutOfStockProducts, isServiceCatalogItem
 } from './inventory.js';
 import { loadInventoryBalances, loadInventoryMovements, getInventoryBalance, recordCanonicalInventoryMovement } from './ledger.js';
 import { loadOrganizationLocations, selectOrganizationLocation } from './locations.js';
@@ -69,7 +69,7 @@ export function renderWarehouseInventory() {
   const totalEl = document.getElementById('whStatTotal');
   const lowEl = document.getElementById('whStatLow');
   const outEl = document.getElementById('whStatOut');
-  const physicalProducts = products.filter(p => p?.item_type !== 'service');
+  const physicalProducts = products.filter(p => !isServiceCatalogItem(p));
   const low = getLowStockProducts();
   const out = getOutOfStockProducts();
   if (totalEl) totalEl.textContent = physicalProducts.length;
@@ -220,7 +220,7 @@ export function renderWarehouseLocationsList() {
 
 export function warehouseProductOptions(selectedId) {
   return products
-    .filter(p => p?.item_type !== 'service')
+    .filter(p => !isServiceCatalogItem(p))
     .map(p => `<option value="${escapeAttr(p.id)}" ${p.id === selectedId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`)
     .join('');
 }

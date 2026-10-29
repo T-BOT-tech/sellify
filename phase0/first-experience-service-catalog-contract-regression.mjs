@@ -5,9 +5,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 
+// Keep the catalog identity predicate pure so its runtime contract is testable in Node.
+import { isServiceCatalogItem } from '../app/src/warehouse/catalog-item-type.js';
+
 const marketplaceListingsSource = await readFile(new URL('../app/src/marketplace/listings.js', import.meta.url), 'utf8');
 assert.match(marketplaceListingsSource, /item\.item_type === 'service'[\s\S]*?t\('service'\)/,
   'marketplace listing UI must visibly identify service listings using the localized label');
+
+assert.equal(isServiceCatalogItem({ id: 'legacy-service', type: 'service', stock: 9 }), true,
+  'legacy type=service catalog payloads must remain services before canonical normalization');
+assert.equal(isServiceCatalogItem({ id: 'canonical-product', item_type: 'product', type: 'service', stock: 9 }), false,
+  'canonical item_type must take precedence over a conflicting legacy type alias');
 
 const tempDir = await mkdtemp(path.join(os.tmpdir(), 'sellify-service-catalog-'));
 process.env.SELLIFY_DATA_DIR = tempDir;
@@ -221,13 +229,13 @@ try {
   assert(fulfillmentSource.includes("=== 'service') continue") && fulfillmentSource.indexOf("=== 'service') continue") < fulfillmentSource.indexOf("if (!locationId) throw"), 'service fulfillment must bypass physical inventory-location requirements');
 
   const warehouseUiSource = await readFile(new URL('../app/src/warehouse/ui.js', import.meta.url), 'utf8');
-  assert.match(warehouseUiSource, /const physicalProducts = products\.filter\(p => p\?\.item_type !== 'service'\)/, 'warehouse inventory list and total must count physical products only');
+  assert.match(warehouseUiSource, /const physicalProducts = products\.filter\(p => !isServiceCatalogItem\(p\)\)/, 'warehouse inventory list and total must count physical products only using canonical or legacy service identity');
   assert.match(warehouseUiSource, /list\.innerHTML = physicalProducts\.map\(p =>/, 'service items must not render stock adjustment/receiving actions');
-  assert.match(warehouseUiSource, /\.filter\(p => p\?\.item_type !== 'service'\)/, 'stock adjust and receive selectors must exclude services');
+  assert.match(warehouseUiSource, /\.filter\(p => !isServiceCatalogItem\(p\)\)/, 'stock adjust and receive selectors must exclude canonical and legacy services');
 
   const inventorySource = await readFile(new URL('../app/src/warehouse/inventory.js', import.meta.url), 'utf8');
-  assert.match(inventorySource, /if \(p\?\.item_type === 'service'\) return false/);
-  assert.match(inventorySource, /export function projectedStock\(p, locationId = config\.locationId \|\| ''\) \{\s*if \(p\?\.item_type === 'service'\) return null;/);
+  assert.match(inventorySource, /if \(isServiceCatalogItem\(p\)\) return false/);
+  assert.match(inventorySource, /export function projectedStock\(p, locationId = config\.locationId \|\| ''\) \{\s*if \(isServiceCatalogItem\(p\)\) return null;/);
   assert.match(inventorySource, /return stock !== null && stock <= 0;/, 'untracked items and services must not be listed as out of stock');
   const catalogSource = await readFile(new URL('../app/src/products/catalog.js', import.meta.url), 'utf8');
   assert.equal(catalogSource.includes('id="editItemType-${p.id}"'), true, 'existing catalog items expose their canonical type in edit mode');

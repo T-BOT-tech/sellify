@@ -7,6 +7,8 @@ import { saveJSON } from '../storage/json.js';
 import { STORAGE_KEYS } from '../constants.js';
 import { hasPermission } from '../auth/permissions.js';
 import { getInventoryBalance } from './ledger.js';
+import { isServiceCatalogItem } from './catalog-item-type.js';
+export { isServiceCatalogItem } from './catalog-item-type.js';
 
 export function isWarehouseEnabled() {
   return !!config.warehouseEnabled;
@@ -39,15 +41,16 @@ function hasCanonicalInventory(productId) {
   return hasScopedBalance || hasScopedMovement;
 }
 
+
 export function isStockTracked(p) {
   // Services are catalog items, not physical stock. Even if a legacy or
   // stale inventory row exists for the same id, do not present them as stock-tracked.
-  if (p?.item_type === 'service') return false;
+  if (isServiceCatalogItem(p)) return false;
   return typeof p.stock === 'number' || hasCanonicalInventory(p.id);
 }
 
 export function projectedStock(p, locationId = config.locationId || '') {
-  if (p?.item_type === 'service') return null;
+  if (isServiceCatalogItem(p)) return null;
   if (hasCanonicalInventory(p.id)) return getInventoryBalance(p.id, locationId);
   return typeof p.stock === 'number' ? p.stock : null;
 }
