@@ -235,18 +235,20 @@ const latest = [{ eventId: 'new-command', kind: 'command', status: 'pending' }];
 // A failed replacement must preserve the last known-good snapshot. Removing
 // it could lose unrelated pending work if IndexedDB also fails before exit.
 {
-  const storage = fakeStorage();
-  resetOutboxRecoveryBaseline(stale);
-  const initialWrite = writeOutboxRecoveryJournal(stale, { storage, logger: quietLogger });
-  assert.equal(initialWrite.written, true);
+  // The shared journal contains an operation absent from this tab's baseline.
+  // If replacement fails, the candidate still must include both that shared
+  // operation and the new local operation before IndexedDB can supersede it.
+  const storage = fakeStorage({ [OUTBOX_RECOVERY_KEY]: JSON.stringify(stale) });
+  resetOutboxRecoveryBaseline([]);
+  resetOutboxIndexedDbBaseline([]);
   storage.setItem = () => { throw new Error('quota exceeded'); };
   let removals = 0;
   storage.removeItem = () => { removals += 1; };
   const failedWrite = writeOutboxRecoveryJournal(latest, { storage, logger: quietLogger });
   assert.equal(failedWrite.written, false);
   assert.equal(failedWrite.readSucceeded, true, 'a replacement failure must be distinguished from a read failure');
-  assert.deepEqual(failedWrite.snapshot, latest,
-    'the merged candidate must be returned so the IndexedDB transaction can commit old journal work with local changes');
+  assert.deepEqual(failedWrite.snapshot, [latest[0], stale[0]],
+    'the merged candidate must preserve shared journal-only work as well as new local changes');
   assert.equal(removals, 0, 'failed replacement must not delete the last known-good journal');
   assert.deepEqual(JSON.parse(storage.getItem(OUTBOX_RECOVERY_KEY)).events, stale);
 
