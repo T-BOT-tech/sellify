@@ -93,6 +93,26 @@ assert.equal(retryFailureHarness.localWrites.length, 0,
 assert.equal(retryFailureHarness.configWrites.length, 0,
   'failed template retry must not publish an unconfirmed server value to active config');
 
+// A successful HTTP response is not enough: the canonical response must confirm
+// the exact requested template before local config or the pending marker changes.
+const mismatchedRetryHarness = makeTemplateRecoveryHarness({
+  request: async (url, options = {}) => {
+    mismatchedRetryHarness.calls.push({ url, options });
+    if (options.method === 'PUT') {
+      return { businessTemplate: { templateKey: 'hotel-rooms', schemaVersion: 1, config: {} } };
+    }
+    return { businessTemplate: null };
+  },
+});
+const mismatchedRetryResult = await mismatchedRetryHarness.loadBusinessTemplateConfig();
+assert.equal(mismatchedRetryResult, null,
+  'automatic retry must reject a successful response that confirms a different template');
+assert.equal(mismatchedRetryHarness.configWrites.length, 0,
+  'a mismatched canonical response must not update active local configuration');
+assert.equal(mismatchedRetryHarness.stateWrites.length, 0);
+assert.equal(mismatchedRetryHarness.localWrites.length, 0,
+  'a mismatched canonical response must retain the durable pending marker for safe recovery');
+
 // A pending marker belonging to another tenant must never be replayed.
 const wrongTenantHarness = makeTemplateRecoveryHarness({
   loadJSONAsync: async () => ({
