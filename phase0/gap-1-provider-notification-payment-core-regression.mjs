@@ -175,7 +175,14 @@ const maliciousCore = new PaymentCore({
 await assert.rejects(
   maliciousCore.ingestProviderNotification({
     providerId: 'mpesa',
-    rawRequest: { body: {} },
+    rawRequest: {
+      body: {
+        notificationId: 'notif-malicious',
+        accountIdentifier: '600001',
+        transactionId: 'TX-MALICIOUS',
+        reference: 'ORDER-42',
+      },
+    },
   }),
   error => error?.code === 'PAYMENT_NOTIFICATION_AUTHORITY_FIELD_FORBIDDEN'
 );
