@@ -11,4 +11,5 @@ export default {
     checkoutPaymentStateHint: "Ao concluir esta etapa, o pedido será guardado na fila. A foto do recibo é apenas uma evidência de apoio; não confirma que o pagamento foi recebido.",
     checkoutNoPaymentMethods: "Nenhum método de pagamento está ativado. Cancele o checkout e ative um método de pagamento nas Configurações antes de guardar este pedido.",
     checkoutReceiptSaveFailed: "Não foi possível guardar o recibo. Tente novamente ou feche esta janela para voltar ao checkout.",
+    saveOrderQueue: "Guardar pedido na fila",
 };
