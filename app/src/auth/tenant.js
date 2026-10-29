@@ -223,7 +223,7 @@ async function loadBusinessTemplateConfig() {
     if (!stillActive()) return null;
     const saved = data.businessTemplate;
     if (saved) {
-      const next = { ...config, businessTemplate: saved.templateKey, businessTemplateSchemaVersion: saved.schemaVersion || 1 };
+      const next = { ...config, businessTemplate: saved.templateKey, businessTemplateSchemaVersion: saved.schemaVersion || 1, businessTemplateTenantId: chatId };
       setConfig(next);
       saveJSON(STORAGE_KEYS.config, next);
       // A canonical server value wins over any stale local retry marker.
@@ -242,7 +242,7 @@ async function loadBusinessTemplateConfig() {
       body: JSON.stringify({ templateKey: pending.templateKey }),
     });
     if (!stillActive()) return null;
-    const next = { ...config, businessTemplate: pending.templateKey, businessTemplateSchemaVersion: pending.schemaVersion || 1 };
+    const next = { ...config, businessTemplate: pending.templateKey, businessTemplateSchemaVersion: pending.schemaVersion || 1, businessTemplateTenantId: chatId };
     setConfig(next);
     saveJSON(STORAGE_KEYS.config, next);
     await saveJSONAsync(pendingBusinessTemplateKey(chatId), { tenantId: chatId, status: 'synced' });
@@ -272,6 +272,10 @@ export async function retryBusinessTemplateSync() {
   }
   if (String(config.tenantRole || '').toLowerCase() !== 'owner') {
     if (status) status.textContent = 'Only the business owner can retry business type sync. Ask an owner to run this action.';
+    return null;
+  }
+  if (String(config.businessTemplateTenantId || '') !== chatId) {
+    if (status) status.textContent = 'No business type saved for this business is available to retry. Reload this business or choose its type during onboarding.';
     return null;
   }
   if (!supportedTemplates.has(templateKey)) {
@@ -310,7 +314,7 @@ export async function retryBusinessTemplateSync() {
     if (!saved || saved.templateKey !== templateKey || Number(saved.schemaVersion || 1) !== 1) {
       throw new Error('The server did not confirm the selected business type');
     }
-    const next = { ...config, businessTemplate: saved.templateKey, businessTemplateSchemaVersion: 1 };
+    const next = { ...config, businessTemplate: saved.templateKey, businessTemplateSchemaVersion: 1, businessTemplateTenantId: chatId };
     setConfig(next);
     saveJSON(STORAGE_KEYS.config, next);
     const markerCleared = await saveJSONAsync(pendingKey, { tenantId: chatId, status: 'synced' });
@@ -528,11 +532,11 @@ export async function createOnboardingTenant() {
     await loadCanonicalTenantCurrency();
     // Keep a local copy for fast startup, but make the tenant API authoritative
     // so the chosen template follows the business across paired devices.
-    const nextConfig = { ...config, businessTemplate: selectedTemplate, businessTemplateSchemaVersion: 1 };
+    const templateTenantId = String(config.chatId || '');
+    const nextConfig = { ...config, businessTemplate: selectedTemplate, businessTemplateSchemaVersion: 1, businessTemplateTenantId: templateTenantId };
     setConfig(nextConfig);
     saveJSON(STORAGE_KEYS.config, nextConfig);
     let templateSyncError = null;
-    const templateTenantId = String(config.chatId || '');
     const templateSessionToken = String(config.sessionToken || '');
     const pendingTemplate = {
       tenantId: templateTenantId,
