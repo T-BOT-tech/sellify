@@ -98,6 +98,56 @@ try {
     'Content-Type': 'application/json',
   };
 
+  // Simulate a successful tenant creation whose response body is lost to the
+  // client. Retrying the same one-time challenge must recover the original
+  // tenant and issue a fresh session rather than fail or create a duplicate.
+  const lostResponseUser = await store.getOrCreateUserByTelegram(
+    'tenant-create-lost-response-' + Date.now(), 'Tenant Create Lost Response Test');
+  const lostResponseChallenge = await store.createAuthChallenge(lostResponseUser.id);
+  const lostResponseRequest = {
+    sellerName: 'Lost Response Recovery Store',
+    businessType: 'retail',
+    country: 'ET',
+    currency: 'ETB',
+    timezone: 'Africa/Addis_Ababa',
+    deviceName: 'Lost response regression',
+    challengeToken: lostResponseChallenge.token,
+  };
+  const firstTenantCreate = await fetch(baseUrl + '/auth/tenants', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(lostResponseRequest),
+  });
+  assert.equal(firstTenantCreate.status, 201, 'first tenant creation should commit successfully');
+  // Intentionally discard the first response body to model a disconnected client.
+  const recoveredTenantCreate = await fetch(baseUrl + '/auth/tenants', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(lostResponseRequest),
+  });
+  assert.equal(recoveredTenantCreate.status, 200,
+    'retrying a committed tenant creation must replay the canonical tenant instead of rejecting its consumed challenge');
+  const recoveredTenantBody = await recoveredTenantCreate.json();
+  assert.equal(recoveredTenantBody.replayed, true);
+  assert.ok(recoveredTenantBody.session?.token, 'a replay must issue a fresh usable tenant session');
+  assert.equal(recoveredTenantBody.tenant.sellerName, lostResponseRequest.sellerName);
+  const recoveredMemberships = await store.listUserMemberships(lostResponseUser.id);
+  assert.equal(recoveredMemberships.length, 1, 'lost-response recovery must not create a duplicate tenant membership');
+  assert.equal(recoveredMemberships[0].chatId, recoveredTenantBody.tenant.chatId);
+  const creationRequestCount = store.getDatabaseForTests().prepare(
+    'SELECT COUNT(*) AS count FROM tenant_creation_requests WHERE user_id = ?'
+  ).get(String(lostResponseUser.id)).count;
+  assert.equal(creationRequestCount, 1, 'the challenge must have exactly one durable creation result');
+  const changedRetry = await fetch(baseUrl + '/auth/tenants', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...lostResponseRequest, sellerName: 'Different Store Name' }),
+  });
+  assert.equal(changedRetry.status, 409, 'a consumed challenge cannot be reused for a different tenant-creation request');
+  assert.equal((await changedRetry.json()).error?.code, 'TENANT_CREATION_IDEMPOTENCY_CONFLICT');
+  assert.equal((await store.listUserMemberships(lostResponseUser.id)).length, 1,
+    'conflicting retries must not create another tenant');
+
   const tenantPath = '/tenants/' + encodeURIComponent(tenant.chatId);
   const unauthTenantRead = await fetch(baseUrl + tenantPath);
   assert.equal(unauthTenantRead.status, 401, 'canonical currency reads must require a tenant session');
