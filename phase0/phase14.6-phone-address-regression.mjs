@@ -8,5 +8,10 @@ assert.deepEqual(rules.address.hierarchy, ['region', 'zone', 'woreda', 'kebele']
 assert.equal(countryPhoneAddressContract.persistence, 'none');
 assert.equal(countryPhoneAddressContract.ownsCustomerIdentity, false);
 assert.equal(countryPhoneAddressContract.ownsAddressPersistence, false);
-assert.throws(() => resolveCountryPhoneAddressRules('KE'), /Unsupported country/);
+const ke = resolveCountryPhoneAddressRules('KE');
+assert.equal(ke.countryCode, 'KE');
+assert.equal(ke.callingCode, '+254');
+assert.equal(ke.phone.implementation, 'boundary_only');
+assert.equal(ke.address.hierarchy, 'country_defined');
+assert.equal(ke.address.implementation, 'boundary_only');
 console.log('Phase 14.6 Phone / Address Rules Regression: PASS');
