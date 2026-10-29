@@ -10,7 +10,7 @@ assert.match(queue, /\.catch\(\(\)\s*=>\s*\{[\s\S]*?renderQueue\(\);[\s\S]*?retu
 
 // The per-payment projection may remain in memory after a refresh failure.
 // Do not render that state unless a current canonical order summary is available.
-assert.match(queue, /const paymentStateLine = orderPaymentSummary && payment\?\.state/);
+assert.match(queue, /const paymentStateLine = orderPaymentSummary && !orderPaymentSummary\.unavailable && payment\?\.state/);
 assert.match(queue, /: \(o\.server_order_id \? '<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"\/><\/svg> Order payment: checking…<\/div>' : ''\)/);
 
 // Proof is explicitly presented as evidence attached to an order, not as a payment decision.
