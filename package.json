@@ -438,7 +438,8 @@
     "test:browser-module-serving-http": "node phase0/browser-module-serving-http-regression.mjs",
     "test:browser-module-serving-production-http": "node phase0/browser-module-serving-production-http-regression.mjs",
     "test:browser-module-serving-browser": "node phase0/browser-module-serving-browser-smoke.mjs",
-    "test:gap-2-inventory-exactly-once": "node phase0/gap-2-inventory-exactly-once-regression.mjs"
+    "test:gap-2-inventory-exactly-once": "node phase0/gap-2-inventory-exactly-once-regression.mjs",
+    "test:offline-outbox-browser-runtime": "node phase0/offline-outbox-browser-runtime.mjs"
   },
   "engines": {
     "node": ">=24"

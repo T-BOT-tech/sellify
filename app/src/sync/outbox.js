@@ -24,6 +24,34 @@ import {
 // mutations from entries added/updated/removed by another tab.
 initializeOutboxRecoveryBaseline();
 
+// Keep already-open tabs current when another tab commits a recovery-journal
+// snapshot. Merge against this tab's last observed baseline so local pending
+// additions and edits survive; never replace the whole in-memory queue with a
+// potentially stale shared snapshot. The next normal persist still commits the
+// reconciled result through the existing IndexedDB authority.
+let lastObservedSharedOutboxSnapshot = getOutboxRecoveryBaseline() || outboxEvents;
+
+// Keep this observation baseline separate from the persistence journal's
+// baseline. Updating the latter during an in-flight write can make that write's
+// captured local snapshot look like it deleted events added by another tab.
+if (typeof globalThis.addEventListener === 'function') {
+  globalThis.addEventListener('storage', event => {
+    if (event.key !== 'sellify.outbox.recovery.v1' || !event.newValue) return;
+    try {
+      const parsed = JSON.parse(event.newValue);
+      const sharedEvents = Array.isArray(parsed)
+        ? parsed
+        : parsed?.version === 1 && Array.isArray(parsed.events) ? parsed.events : null;
+      if (!sharedEvents) return;
+      const reconciled = mergeOutboxSnapshots(lastObservedSharedOutboxSnapshot, outboxEvents, sharedEvents);
+      lastObservedSharedOutboxSnapshot = sharedEvents;
+      setOutboxEvents(reconciled);
+    } catch (error) {
+      console.error('Outbox cross-tab snapshot reconciliation failed', error);
+    }
+  });
+}
+
 function persist() {
   // Web Locks serialize the full journal + IndexedDB sequence where available.
   // Without Web Locks, perform the localStorage journal read/merge/write from
