@@ -47,6 +47,8 @@ assert.doesNotMatch(client, /providerToken|botToken|secret|credential/i);
 // Payment projection may query and render canonical state, but checkout must not
 // create ledger entries or call PaymentCore directly.
 assert.match(projection, /listPayments/);
+assert.match(projection, /responsePayment\?\.id \?\? responsePayment\?\.paymentId \?\? responsePayment\?\.payment_id/);
+assert.match(projection, /\{ \.\.\.responsePayment, id: String\(responsePaymentId\) \}/);
 assert.match(projection, /refreshCanonicalPaymentStatus/);
 assert.doesNotMatch(checkout, /payment_ledger_entries|payments\/ledger|createPayment\(/);
 
@@ -291,11 +293,20 @@ assert.match(refundFinalBlock, /fullRefund/);
 assert.match(orderQueue, /refreshCanonicalOrderPaymentSummary/);
 assert.match(orderQueue, /getCachedOrderPaymentSummary/);
 assert.match(orderQueue, /Order payment:/);
-assert.match(orderQueue, /orderPaymentSummary\.status/);
-assert.match(orderQueue, /orderPaymentSummary\.verifiedMinor/);
-assert.match(orderQueue, /orderPaymentSummary\.outstandingMinor/);
+assert.match(orderQueue, /const paymentStateLine = orderPaymentSummary && !orderPaymentSummary\.unavailable && payment\?\.state/);
+assert.match(orderQueue, /orderPaymentSummary\?\.status \|\| orderPaymentSummary\?\.payment_status/);
+assert.match(orderQueue, /verifiedMinor \?\? orderPaymentSummary\.verified_minor/);
+assert.match(orderQueue, /outstandingMinor \?\? orderPaymentSummary\.outstanding_minor/);
 assert.match(orderQueue, /ORDER_PAYMENT_SUMMARY_TTL_MS/);
+assert.match(orderQueue, /cached\.unavailable \? \{ unavailable: true \}/);
+assert.match(orderQueue, /orderPaymentSummary\?\.unavailable/);
+assert.match(orderQueue, /Order payment: status unavailable · retry by refreshing/);
+assert.match(orderQueue, /orderPaymentSummaryCache\.set\(key, \{ unavailable: true, receivedAt: Date\.now\(\) \}\)/);
 assert.match(orderQueue, /orderPaymentSummaryInFlight/);
+assert.match(orderQueue, /orderPaymentSummaryVersions/);
+assert.match(orderQueue, /orderPaymentSummaryGlobalVersion/);
+assert.match(orderQueue, /requestKeyVersion !== \(orderPaymentSummaryVersions\.get\(key\) \|\| 0\)/);
+assert.match(orderQueue, /if \(wasInvalidated \|\| globalVersion !== orderPaymentSummaryGlobalVersion[\s\S]*?renderQueue\(\);/);
 
 // Frontend canonical snapshot certification:
 // a successful tenant-scoped payment list replaces the projection snapshot;
