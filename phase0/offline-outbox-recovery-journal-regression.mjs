@@ -109,7 +109,7 @@ assert.ok(outbox.includes("journalSnapshot = merged"),
 assert.ok(outbox.includes("mergeOutboxSnapshots(indexedDbBaseline, journalSnapshot, Array.isArray(storedEvents) ? storedEvents : [])"),
   'the committed IndexedDB snapshot must include entries recovered from an interrupted prior transaction');
 
-assert.ok(idb.includes("typeof additionalWrite.value === 'function'"),
+assert.ok(idb.includes("typeof sidecar.value === 'function'"),
   'the transaction helper must support a commit marker derived after the updater runs');
 assert.ok(idb.includes("export function idbUpdateAndSet(key, updater, sidecarKey, sidecarValue)"),
   'the transaction helper must expose an atomic outbox-plus-marker write');
@@ -163,8 +163,8 @@ assert.doesNotMatch(outbox, /currentIds\.length === savedIds\.length && currentI
 }
 assert.match(hydrate, /restoreRecoveryJournal\(\{/,
   'hydration must use the tested recovery journal implementation');
-assert.match(hydrate, /idbGetAll\(\[\.\.\.Object\.values\(STORAGE_KEYS\), OUTBOX_RECOVERY_COMMIT_KEY\]\)/,
-  'hydration must read the recovery commit marker in the same snapshot as the outbox');
+assert.match(hydrate, /idbGetAll\(\[\.\.\.Object\.values\(STORAGE_KEYS\), OUTBOX_RECOVERY_COMMIT_KEY, OUTBOX_FALLBACK_CHECKPOINT_KEY\]\)/,
+  'hydration must read the recovery commit marker and fallback checkpoint ledger in the same snapshot as the outbox');
 assert.match(hydrate, /apply\(STORAGE_KEYS\.outboxEvents, outboxEvents, v => setOutboxEvents\(v\)\);\s*resetOutboxIndexedDbBaseline\(Array\.isArray\(fromIdb\[STORAGE_KEYS\.outboxEvents\]\)[\s\S]*?restoreOutboxRecoveryJournal\(\{\s*indexedDbCommit: Array\.isArray\(fromIdb\[STORAGE_KEYS\.outboxEvents\]\)[\s\S]*?fromIdb\[OUTBOX_RECOVERY_COMMIT_KEY\]/,
   'successful hydration must compare journal recovery against the atomically loaded IndexedDB commit marker');
 assert.match(hydrate, /if \(isIdbUnavailable\(\)\) \{\s*restoreOutboxRecoveryJournal\(\);/,

@@ -8,6 +8,7 @@ import { saveJSON } from '../storage/json.js';
 import { idbUpdateAndSet, isIdbUnavailable } from '../storage/idb.js';
 import { authHeaders } from '../auth/tenant.js';
 import {
+  appendOutboxRecoveryOperations,
   getOutboxIndexedDbBaseline,
   getOutboxRecoveryBaseline,
   initializeOutboxRecoveryBaseline,
@@ -58,11 +59,17 @@ function persist() {
   // inside the IndexedDB readwrite updater. IndexedDB serializes those updater
   // callbacks across tabs, preventing simultaneous journal read/modify/write
   // from dropping journal-only events.
-  return withOutboxPersistenceLock(() => {
+  return withOutboxPersistenceLock(hasCrossTabLock => {
     if (isIdbUnavailable()) {
-      writeOutboxRecoveryJournal(outboxEvents, {
-        onMerged: merged => setOutboxEvents(merged),
-      });
+      if (hasCrossTabLock) {
+        writeOutboxRecoveryJournal(outboxEvents, { onMerged: merged => setOutboxEvents(merged) });
+      } else {
+        try {
+          appendOutboxRecoveryOperations(outboxEvents);
+        } catch (error) {
+          console.error('Append-only outbox fallback failed; the local snapshot is only best-effort', error);
+        }
+      }
       saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents);
       return;
     }

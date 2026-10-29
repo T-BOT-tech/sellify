@@ -107,11 +107,34 @@ function updateInTransaction(key, updater, additionalWrite = null) {
         nextValue = updater(request.result !== undefined ? request.result : null);
         if (nextValue === undefined) throw new TypeError('idbUpdate updater must return a value');
         store.put(nextValue, key);
-        if (additionalWrite) {
-          const sidecarValue = typeof additionalWrite.value === 'function'
-            ? additionalWrite.value(nextValue)
-            : additionalWrite.value;
-          store.put(sidecarValue, additionalWrite.key);
+        const sidecars = Array.isArray(additionalWrite) ? additionalWrite : additionalWrite ? [additionalWrite] : [];
+        for (const sidecar of sidecars) {
+          if (typeof sidecar.update === 'function') {
+            // Read-modify-write sidecars inside this same transaction. This is
+            // needed for shared ledgers where replacing a previously-read
+            // snapshot could erase another tab's committed entries.
+            const sidecarRequest = store.get(sidecar.key);
+            sidecarRequest.onsuccess = () => {
+              try {
+                const current = sidecarRequest.result !== undefined ? sidecarRequest.result : null;
+                const sidecarValue = sidecar.update(current, nextValue);
+                if (sidecarValue === undefined) throw new TypeError('IndexedDB sidecar updater must return a value');
+                store.put(sidecarValue, sidecar.key);
+              } catch (error) {
+                try { tx.abort(); } catch {}
+                reject(error);
+              }
+            };
+            sidecarRequest.onerror = () => {
+              try { tx.abort(); } catch {}
+              reject(sidecarRequest.error || new Error('IndexedDB sidecar read failed for ' + sidecar.key));
+            };
+          } else {
+            const sidecarValue = typeof sidecar.value === 'function'
+              ? sidecar.value(nextValue)
+              : sidecar.value;
+            store.put(sidecarValue, sidecar.key);
+          }
         }
       } catch (error) {
         try { tx.abort(); } catch {}
@@ -137,10 +160,13 @@ export function idbUpdate(key, updater) {
 // write from a stale journal left behind by a successful commit.
 export function idbUpdateAndSet(key, updater, sidecarKey, sidecarValue) {
   if (!sidecarKey) return Promise.reject(new TypeError('idbUpdateAndSet requires a sidecar key'));
-  // A sidecar factory runs after the updater, still inside the same transaction.
+  // Accept one sidecar for existing callers or multiple sidecars for atomic
+  // outbox + recovery-marker + fallback-checkpoint commits.
+  const sidecars = Array.isArray(sidecarKey) ? sidecarKey : [{ key: sidecarKey, value: sidecarValue }];
+  // Sidecar factories run after the updater, still inside the same transaction.
   // This lets the outbox derive its recovery marker from a journal write that is
   // serialized by the IndexedDB transaction itself when Web Locks are unavailable.
-  return updateInTransaction(key, updater, { key: sidecarKey, value: sidecarValue });
+  return updateInTransaction(key, updater, sidecars);
 }
 
 export function idbSet(key, value) {

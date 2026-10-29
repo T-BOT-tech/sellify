@@ -45,8 +45,12 @@ jobs:
 
       - name: Install root dependencies
         run: npm install --ignore-scripts
-      - name: Install Chromium for outbox browser runtime regression
-        run: npx playwright install --with-deps chromium
+      - name: Install Chromium system dependencies for outbox browser runtime regression
+        timeout-minutes: 10
+        run: npx playwright install-deps chromium
+      - name: Install Chromium browser for outbox browser runtime regression
+        timeout-minutes: 10
+        run: npx playwright install chromium
 
 
       - name: Ecosystem Add menu regression
@@ -76,6 +80,9 @@ jobs:
 
       - name: Offline outbox recovery journal regression
         run: npm run test:offline-outbox-recovery-journal
+
+      - name: Offline outbox localStorage fallback race regression
+        run: npm run test:outbox-localstorage-fallback-race
 
       - name: Offline outbox browser runtime regression
         run: npm run test:offline-outbox-browser-runtime

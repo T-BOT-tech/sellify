@@ -7,6 +7,10 @@
 // cross-tab lock: simultaneous edits to the same event remain last-writer-wins.
 export const OUTBOX_RECOVERY_KEY = 'sellify.outbox.recovery.v1';
 export const OUTBOX_RECOVERY_COMMIT_KEY = 'ledger_outbox_recovery_commit_v1';
+export const OUTBOX_FALLBACK_LOG_PREFIX = 'sellify.outbox.recovery.log.v1:';
+export const OUTBOX_FALLBACK_CHECKPOINT_KEY = 'ledger_outbox_fallback_checkpoint_v1';
+const fallbackWriterId = newSnapshotId();
+let fallbackSequence = 0;
 let lastSnapshot = null;
 let lastSnapshotId = null;
 // Keep the recovery-journal merge baseline separate from IndexedDB's last
@@ -41,7 +45,7 @@ let fallbackPersistencePending = 0;
 export function withOutboxPersistenceLock(callback, lockManager = globalThis.navigator?.locks) {
   if (typeof callback !== 'function') throw new TypeError('Outbox persistence callback is required');
   if (typeof lockManager?.request === 'function') {
-    return lockManager.request('sellify-outbox-persistence-v1', { mode: 'exclusive' }, callback);
+    return lockManager.request('sellify-outbox-persistence-v1', { mode: 'exclusive' }, () => callback(true));
   }
 
   // Preserve the existing synchronous behavior for a standalone synchronous
@@ -49,7 +53,7 @@ export function withOutboxPersistenceLock(callback, lockManager = globalThis.nav
   // is still pending. Otherwise same-tab journal/IDB markers can interleave on
   // browsers without Web Locks even though IDB transactions themselves queue.
   if (fallbackPersistencePending === 0) {
-    const result = callback();
+    const result = callback(false);
     if (!result || typeof result.then !== 'function') return result;
     fallbackPersistencePending += 1;
     const tracked = Promise.resolve(result).finally(() => { fallbackPersistencePending -= 1; });
@@ -58,7 +62,7 @@ export function withOutboxPersistenceLock(callback, lockManager = globalThis.nav
   }
 
   fallbackPersistencePending += 1;
-  const tracked = fallbackPersistenceTail.then(callback).finally(() => { fallbackPersistencePending -= 1; });
+  const tracked = fallbackPersistenceTail.then(() => callback(false)).finally(() => { fallbackPersistencePending -= 1; });
   fallbackPersistenceTail = tracked.catch(() => {});
   return tracked;
 }
@@ -114,6 +118,121 @@ function byId(events) {
 
 function sameValue(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function compareText(left, right) { return left === right ? 0 : left < right ? -1 : 1; }
+
+function compareFallbackRevision(left, right) {
+  if (left.kind !== right.kind) return left.kind === 'delete' ? 1 : -1;
+  return left.counter - right.counter
+    || compareText(left.writerId, right.writerId)
+    || left.sequence - right.sequence;
+}
+
+function readFallbackOperationRecords(storage) {
+  const records = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (typeof key !== 'string' || !key.startsWith(OUTBOX_FALLBACK_LOG_PREFIX)) continue;
+    try {
+      const operation = JSON.parse(storage.getItem(key));
+      const operationId = key.slice(OUTBOX_FALLBACK_LOG_PREFIX.length);
+      if (operation?.version !== 1 || typeof operation.operationId !== 'string'
+          || operation.operationId !== operationId
+          || typeof operation.eventId !== 'string' || !operation.eventId
+          || typeof operation.writerId !== 'string' || !operation.writerId
+          || !Number.isSafeInteger(operation.sequence) || operation.sequence < 1
+          || !Number.isSafeInteger(operation.counter) || operation.counter < 1
+          || !['put', 'delete'].includes(operation.kind)
+          || (operation.kind === 'put' && (!operation.event || operation.event.eventId !== operation.eventId))) continue;
+      records.push({ key, operation });
+    } catch { /* Ignore malformed records without hiding valid records. */ }
+  }
+  return records;
+}
+
+// Each mutation has its own key, avoiding cross-tab read/merge/write races.
+// Deletes are durable tombstones so an older local snapshot cannot resurrect work.
+export function appendOutboxRecoveryOperations(events, {
+  storage = globalThis.localStorage, previousEvents, writerId = fallbackWriterId, logger = console,
+} = {}) {
+  const baseline = Array.isArray(lastSnapshot) ? lastSnapshot : previousEvents;
+  const previous = byId(baseline);
+  const current = byId(events);
+  const ids = [...new Set([...previous.keys(), ...current.keys()])].sort(compareText);
+  const changes = ids.flatMap(eventId => {
+    const before = previous.get(eventId);
+    const now = current.get(eventId);
+    if (before && !now) return [{ eventId, kind: 'delete', event: null }];
+    if (now && (!before || !sameValue(before, now))) return [{ eventId, kind: 'put', event: now }];
+    return [];
+  });
+  const existing = readFallbackOperationRecords(storage);
+  let counter = existing.reduce((max, { operation }) => Math.max(max, operation.counter), 0);
+  const keys = [];
+  try {
+    for (const change of changes) {
+      fallbackSequence += 1;
+      counter += 1;
+      const operationId = `${writerId}:${fallbackSequence}`;
+      const key = `${OUTBOX_FALLBACK_LOG_PREFIX}${operationId}`;
+      storage.setItem(key, JSON.stringify({ version: 1, operationId, writerId,
+        sequence: fallbackSequence, counter, ...change }));
+      keys.push(key);
+    }
+  } catch (error) {
+    logger.error('Outbox append-only fallback write failed; retaining existing records', error);
+    throw error;
+  }
+  lastSnapshot = cloneEvents(events);
+  return { written: true, operationCount: keys.length, keys };
+}
+
+export function restoreOutboxRecoveryOperations({
+  storage = globalThis.localStorage, events = [], setOutboxEvents, saveOutbox, logger = console,
+  checkpointedOperationIds = [],
+} = {}) {
+  try {
+    const allRecords = readFallbackOperationRecords(storage);
+    const checkpointed = new Set(Array.isArray(checkpointedOperationIds) ? checkpointedOperationIds : []);
+    const checkpointedKeys = allRecords.filter(({ operation }) => checkpointed.has(operation.operationId)).map(record => record.key);
+    const records = allRecords.filter(({ operation }) => !checkpointed.has(operation.operationId));
+    if (!records.length) return { restored: false, changed: false, events, keys: [], checkpointedKeys, operationIds: [] };
+    const latest = new Map();
+    for (const { operation } of records) {
+      const current = latest.get(operation.eventId);
+      if (!current || compareFallbackRevision(operation, current) > 0) latest.set(operation.eventId, operation);
+    }
+    const baseline = Array.isArray(events) ? events : [];
+    const resolved = byId(baseline);
+    for (const [eventId, operation] of latest) {
+      if (operation.kind === 'delete') resolved.delete(eventId);
+      else resolved.set(eventId, operation.event);
+    }
+    const result = [];
+    const seen = new Set();
+    for (const event of baseline) if (resolved.has(event.eventId)) {
+      result.push(resolved.get(event.eventId)); seen.add(event.eventId);
+    }
+    for (const [id, event] of [...resolved].filter(([id]) => !seen.has(id)).sort(([a], [b]) => compareText(a, b))) result.push(event);
+    const changed = !sameValue(baseline, result);
+    if (changed) { setOutboxEvents?.(result); saveOutbox?.(result); }
+    lastSnapshot = cloneEvents(result);
+    return { restored: true, changed, events: result, keys: records.map(record => record.key), checkpointedKeys, operationIds: records.map(({ operation }) => operation.operationId) };
+  } catch (error) {
+    logger.error('Outbox append-only fallback replay failed', error);
+    return { restored: false, changed: false, events, keys: [], checkpointedKeys: [], operationIds: [] };
+  }
+}
+
+export function removeOutboxRecoveryOperations(keys, { storage = globalThis.localStorage, logger = console } = {}) {
+  try {
+    for (const key of keys || []) if (typeof key === 'string' && key.startsWith(OUTBOX_FALLBACK_LOG_PREFIX)) storage.removeItem(key);
+    return true;
+  } catch (error) {
+    logger.error('Outbox fallback log cleanup failed; retained records will replay', error);
+    return false;
+  }
 }
 
 // Merge an event using the tab's previous snapshot as the common ancestor.
