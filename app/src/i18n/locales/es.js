@@ -92,4 +92,8 @@ export default {
     packLocalizationAuthority: 'Localization authority',
     packAccessibilityAuthority: 'Accessibility foundation',
     packAccessibilityBoundary: 'Language selection does not change authorization. Screen semantics do not grant permissions; server-side authorization remains authoritative.',
+    orderValue: "Valor de los pedidos",
+    checkoutPaymentStateHint: "Al completar este paso, el pedido se guardará en la cola. La foto del recibo es solo evidencia de apoyo; no confirma que se haya recibido el pago.",
+    checkoutNoPaymentMethods: "No hay métodos de pago habilitados. Cancela el proceso y habilita un método de pago en Configuración antes de guardar este pedido.",
+    checkoutReceiptSaveFailed: "No se pudo guardar el recibo. Inténtalo de nuevo o cierra este diálogo para volver al proceso de compra.",
 };
