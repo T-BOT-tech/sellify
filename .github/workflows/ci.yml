@@ -232,6 +232,8 @@ jobs:
         run: npm run test:gap-1.23-migration-retry
       - name: GAP-1.23 provider notification identity SQLite regression
         run: npm run gap-1.23:provider-notification-identity-test
+      - name: GAP-1 provider notification Payment Core replay regression
+        run: npm run gap-1:provider-notification-core-test
       - name: GAP-1.18 payment provider capability certification regression
         run: npm run gap-1.18:payment-provider-capability-test
       - name: GAP-1.18 durable provider capability evidence regression
