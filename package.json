@@ -186,6 +186,7 @@
     "test:pf-1-payment-frontend-contract": "node phase0/gap-pf-1-payment-frontend-contract-regression.mjs",
     "test:pf-1-payment-frontend-integration": "node phase0/gap-pf-1-payment-frontend-integration-regression.mjs",
     "test:pf-1-payment-frontend-projection": "node phase0/gap-pf-1-payment-frontend-projection-regression.mjs",
+    "test:checkout-payment-state-clarity": "node phase0/checkout-payment-state-clarity-regression.mjs",
     "test:payment-ui-stale-state": "node phase0/payment-ui-stale-state-regression.mjs",
     "test:pf-2-payment-frontend-adversarial": "node phase0/gap-pf-2-payment-frontend-adversarial-regression.mjs",
     "test:phase17.10": "node phase0/phase17.10-cumulative-exit-gate.mjs",
