@@ -5,9 +5,150 @@
 import { STORAGE_KEYS } from '../constants.js';
 import { config, outboxEvents, setOutboxEvents } from '../state.js';
 import { saveJSON } from '../storage/json.js';
+import { idbUpdateAndSet, isIdbUnavailable } from '../storage/idb.js';
 import { authHeaders } from '../auth/tenant.js';
+import {
+  appendOutboxRecoveryOperations,
+  getOutboxIndexedDbBaseline,
+  getOutboxRecoveryBaseline,
+  initializeOutboxRecoveryBaseline,
+  mergeOutboxSnapshots,
+  resetOutboxIndexedDbBaseline,
+  resetOutboxRecoveryBaseline,
+  sameOutboxSnapshot,
+  OUTBOX_RECOVERY_COMMIT_KEY,
+  withOutboxPersistenceLock,
+  writeOutboxRecoveryJournal,
+} from './outbox-recovery-journal.js';
 
-function persist() { saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents); }
+// Capture this tab's starting point so persistence can distinguish local
+// mutations from entries added/updated/removed by another tab.
+initializeOutboxRecoveryBaseline();
+
+// Keep already-open tabs current when another tab commits a recovery-journal
+// snapshot. Merge against this tab's last observed baseline so local pending
+// additions and edits survive; never replace the whole in-memory queue with a
+// potentially stale shared snapshot. The next normal persist still commits the
+// reconciled result through the existing IndexedDB authority.
+let lastObservedSharedOutboxSnapshot = getOutboxRecoveryBaseline() || outboxEvents;
+
+// Keep this observation baseline separate from the persistence journal's
+// baseline. Updating the latter during an in-flight write can make that write's
+// captured local snapshot look like it deleted events added by another tab.
+if (typeof globalThis.addEventListener === 'function') {
+  globalThis.addEventListener('storage', event => {
+    if (event.key !== 'sellify.outbox.recovery.v1' || !event.newValue) return;
+    try {
+      const parsed = JSON.parse(event.newValue);
+      const sharedEvents = Array.isArray(parsed)
+        ? parsed
+        : parsed?.version === 1 && Array.isArray(parsed.events) ? parsed.events : null;
+      if (!sharedEvents) return;
+      const reconciled = mergeOutboxSnapshots(lastObservedSharedOutboxSnapshot, outboxEvents, sharedEvents);
+      lastObservedSharedOutboxSnapshot = sharedEvents;
+      setOutboxEvents(reconciled);
+    } catch (error) {
+      console.error('Outbox cross-tab snapshot reconciliation failed', error);
+    }
+  });
+}
+
+function persist() {
+  // Web Locks serialize the full journal + IndexedDB sequence where available.
+  // Without Web Locks, perform the localStorage journal read/merge/write from
+  // inside the IndexedDB readwrite updater. IndexedDB serializes those updater
+  // callbacks across tabs, preventing simultaneous journal read/modify/write
+  // from dropping journal-only events.
+  return withOutboxPersistenceLock(hasCrossTabLock => {
+    if (isIdbUnavailable()) {
+      if (hasCrossTabLock) {
+        const journalWrite = writeOutboxRecoveryJournal(outboxEvents, { onMerged: merged => setOutboxEvents(merged) });
+        if (journalWrite.written !== true) {
+          try {
+            appendOutboxRecoveryOperations(outboxEvents);
+          } catch (error) {
+            console.error('Append-only outbox fallback failed; the local snapshot is only best-effort', error);
+          }
+        }
+      } else {
+        try {
+          appendOutboxRecoveryOperations(outboxEvents);
+        } catch (error) {
+          console.error('Append-only outbox fallback failed; the local snapshot is only best-effort', error);
+        }
+      }
+      saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents);
+      return;
+    }
+
+    // Capture nested payloads too: the transaction's merge ancestor must not
+    // alias mutable event data that changes while the IDB request is pending.
+    const localEvents = JSON.parse(JSON.stringify(outboxEvents));
+    const indexedDbBaseline = getOutboxIndexedDbBaseline() || localEvents;
+    let journalWrite = null;
+    let journalSnapshot = localEvents;
+    return idbUpdateAndSet(STORAGE_KEYS.outboxEvents, storedEvents => {
+      // This updater runs after the transaction has acquired its readwrite
+      // serialization point. Keep the localStorage read/merge/write here so
+      // tabs without Web Locks cannot race the shared journal replacement.
+      journalWrite = writeOutboxRecoveryJournal(localEvents, {
+        onMerged: merged => {
+          journalSnapshot = merged;
+          setOutboxEvents(merged);
+        },
+      });
+      // A successful read gives us the merged candidate even if localStorage
+      // replacement failed. Commit that candidate with the marker so the old
+      // journal is only considered consumed after its operations reach IDB.
+      // If the shared journal could not be read, abort rather than committing
+      // a marker that might incorrectly supersede unknown recovery data.
+      if (journalWrite.readSucceeded !== true) {
+        throw new Error('Cannot safely commit outbox while recovery journal is unreadable');
+      }
+      journalSnapshot = journalWrite.snapshot;
+      // Include journal-only recoveries in the IDB write. A prior journal may
+      // contain work whose transaction was interrupted; marking this attempt
+      // committed without carrying that work into IDB would make hydration
+      // treat the journal as already consumed and lose those entries on restart.
+      return mergeOutboxSnapshots(indexedDbBaseline, journalSnapshot, Array.isArray(storedEvents) ? storedEvents : []);
+    }, OUTBOX_RECOVERY_COMMIT_KEY, () => ({
+      version: 1,
+      attemptId: journalWrite.attemptId,
+      previousSnapshotId: journalWrite.previousSnapshotId,
+      journalWritten: journalWrite.written,
+    })).then(merged => {
+      resetOutboxIndexedDbBaseline(merged);
+      resetOutboxRecoveryBaseline(merged);
+      // Don't replace newer in-memory mutations that happened while this
+      // transaction was pending; the next queued persist will reconcile them.
+      if (sameOutboxSnapshot(outboxEvents, localEvents)) {
+        setOutboxEvents(merged);
+      }
+    }).catch(error => {
+      console.error('Atomic IndexedDB outbox update failed; falling back to saveJSON', error);
+      // If the transaction failed before its updater ran, still attempt to
+      // preserve the pending work in the recovery journal. A journal written
+      // by an aborted transaction remains recoverable on next hydration.
+      if (!journalWrite) {
+        journalWrite = writeOutboxRecoveryJournal(outboxEvents, {
+          onMerged: mergedEvents => setOutboxEvents(mergedEvents),
+        });
+      }
+      // If the transaction did not commit and the journal was not replaced,
+      // preserve this tab's delta as append-only recovery operations. This
+      // composes with the old journal on restart instead of relying on a
+      // best-effort replacement of the shared snapshot.
+      if (journalWrite?.written !== true) {
+        try {
+          appendOutboxRecoveryOperations(outboxEvents);
+        } catch (recoveryError) {
+          console.error('Append-only outbox recovery after failed persistence was unsuccessful', recoveryError);
+        }
+      }
+      saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents);
+    });
+  });
+}
 
 function commandHeaders(idempotencyKey) {
   return {

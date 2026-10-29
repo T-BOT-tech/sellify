@@ -92,6 +92,83 @@ export function idbGet(key) {
   }));
 }
 
+// Atomically read, reconcile, and write one key inside a single readwrite
+// transaction. The updater must be synchronous: awaiting inside an IndexedDB
+// transaction can let the browser auto-commit before the write is queued.
+function updateInTransaction(key, updater, additionalWrite = null) {
+  if (typeof updater !== 'function') return Promise.reject(new TypeError('idbUpdate requires an updater function'));
+  return idbOpen().then(db => new Promise((resolve, reject) => {
+    let nextValue;
+    const tx = db.transaction(IDB_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(IDB_STORE_NAME);
+    const request = store.get(key);
+    request.onsuccess = () => {
+      try {
+        nextValue = updater(request.result !== undefined ? request.result : null);
+        if (nextValue === undefined) throw new TypeError('idbUpdate updater must return a value');
+        store.put(nextValue, key);
+        const sidecars = Array.isArray(additionalWrite) ? additionalWrite : additionalWrite ? [additionalWrite] : [];
+        for (const sidecar of sidecars) {
+          if (typeof sidecar.update === 'function') {
+            // Read-modify-write sidecars inside this same transaction. This is
+            // needed for shared ledgers where replacing a previously-read
+            // snapshot could erase another tab's committed entries.
+            const sidecarRequest = store.get(sidecar.key);
+            sidecarRequest.onsuccess = () => {
+              try {
+                const current = sidecarRequest.result !== undefined ? sidecarRequest.result : null;
+                const sidecarValue = sidecar.update(current, nextValue);
+                if (sidecarValue === undefined) throw new TypeError('IndexedDB sidecar updater must return a value');
+                store.put(sidecarValue, sidecar.key);
+              } catch (error) {
+                try { tx.abort(); } catch {}
+                reject(error);
+              }
+            };
+            sidecarRequest.onerror = () => {
+              try { tx.abort(); } catch {}
+              reject(sidecarRequest.error || new Error('IndexedDB sidecar read failed for ' + sidecar.key));
+            };
+          } else {
+            const sidecarValue = typeof sidecar.value === 'function'
+              ? sidecar.value(nextValue)
+              : sidecar.value;
+            store.put(sidecarValue, sidecar.key);
+          }
+        }
+      } catch (error) {
+        try { tx.abort(); } catch {}
+        reject(error);
+      }
+    };
+    request.onerror = () => {
+      try { tx.abort(); } catch {}
+      reject(request.error || new Error('IndexedDB update read failed for ' + key));
+    };
+    tx.oncomplete = () => resolve(nextValue);
+    tx.onerror = () => reject(tx.error || new Error('IndexedDB update failed for ' + key));
+    tx.onabort = () => reject(tx.error || new Error('IndexedDB update transaction aborted for ' + key));
+  }));
+}
+
+export function idbUpdate(key, updater) {
+  return updateInTransaction(key, updater);
+}
+
+// Commit an outbox value and its recovery-journal marker in one readwrite
+// transaction so hydration can distinguish a journal ahead of an interrupted
+// write from a stale journal left behind by a successful commit.
+export function idbUpdateAndSet(key, updater, sidecarKey, sidecarValue) {
+  if (!sidecarKey) return Promise.reject(new TypeError('idbUpdateAndSet requires a sidecar key'));
+  // Accept one sidecar for existing callers or multiple sidecars for atomic
+  // outbox + recovery-marker + fallback-checkpoint commits.
+  const sidecars = Array.isArray(sidecarKey) ? sidecarKey : [{ key: sidecarKey, value: sidecarValue }];
+  // Sidecar factories run after the updater, still inside the same transaction.
+  // This lets the outbox derive its recovery marker from a journal write that is
+  // serialized by the IndexedDB transaction itself when Web Locks are unavailable.
+  return updateInTransaction(key, updater, sidecars);
+}
+
 export function idbSet(key, value) {
   return idbOpen().then(db => new Promise((resolve, reject) => {
     const tx = db.transaction(IDB_STORE_NAME, 'readwrite');
@@ -113,9 +190,28 @@ export function idbDelete(key) {
   }));
 }
 
-// Read every key at once. Used by the boot-time hydration step and by the
-// migration routine. Returns a plain object of { key: value }.
+// Read every requested key from one readonly snapshot. Used by boot hydration
+// and migration; callers may rely on related keys coming from the same commit.
 export function idbGetAll(keys) {
-  return Promise.all(keys.map(k => idbGet(k).then(v => [k, v])))
-    .then(pairs => Object.fromEntries(pairs));
+  return idbOpen().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE_NAME, 'readonly');
+    const store = tx.objectStore(IDB_STORE_NAME);
+    const values = {};
+    let rejected = false;
+    for (const key of keys) {
+      const request = store.get(key);
+      request.onsuccess = () => {
+        values[key] = request.result !== undefined ? request.result : null;
+      };
+      request.onerror = () => {
+        if (rejected) return;
+        rejected = true;
+        try { tx.abort(); } catch {}
+        reject(request.error || new Error('IndexedDB get failed for ' + key));
+      };
+    }
+    tx.oncomplete = () => resolve(values);
+    tx.onerror = () => reject(tx.error || new Error('IndexedDB getAll failed'));
+    tx.onabort = () => reject(tx.error || new Error('IndexedDB getAll transaction aborted'));
+  }));
 }

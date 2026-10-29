@@ -427,6 +427,7 @@
     "gap-1.18:financial-transition-idempotency-test": "node phase0/gap-1.18U-financial-transition-idempotency-regression.mjs",
     "test:service-catalog-http": "node phase0/first-experience-service-catalog-http-regression.mjs",
     "test:service-catalog-frontend-sync": "node phase0/first-experience-service-catalog-frontend-sync-regression.mjs",
+    "test:offline-outbox-recovery-journal": "node phase0/offline-outbox-recovery-journal-regression.mjs",
     "test:first-experience-returning-merchant": "node phase0/first-experience-returning-merchant-regression.mjs",
     "test:first-experience-add-availability": "node phase0/first-experience-add-availability-regression.mjs",
     "test:first-experience-home-readiness": "node phase0/first-experience-home-readiness-regression.mjs",
@@ -437,7 +438,9 @@
     "test:browser-module-serving-http": "node phase0/browser-module-serving-http-regression.mjs",
     "test:browser-module-serving-production-http": "node phase0/browser-module-serving-production-http-regression.mjs",
     "test:browser-module-serving-browser": "node phase0/browser-module-serving-browser-smoke.mjs",
-    "test:gap-2-inventory-exactly-once": "node phase0/gap-2-inventory-exactly-once-regression.mjs"
+    "test:gap-2-inventory-exactly-once": "node phase0/gap-2-inventory-exactly-once-regression.mjs",
+    "test:offline-outbox-browser-runtime": "node phase0/offline-outbox-browser-runtime.mjs",
+    "test:outbox-localstorage-fallback-race": "node phase0/outbox-localstorage-fallback-race-regression.mjs"
   },
   "engines": {
     "node": ">=24"
