@@ -56,6 +56,6 @@ export function buildSellerStorefrontChannelSummary(config) {
     displayName: config?.displayName || config?.channelType,
     capabilities: config?.enabledCapabilities || [],
     unsupportedCapabilities: config?.unsupportedCapabilities || [],
-    configurationVersion: config?.version || 1,
+    configurationVersion: config?.version ?? 1,
   });
 }
