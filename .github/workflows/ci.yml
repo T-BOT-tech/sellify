@@ -99,6 +99,8 @@ jobs:
         run: npm run test:service-booking-scheduling-boundary
       - name: Service booking operator workspace regression
         run: npm run test:service-booking-operator-workspace
+      - name: Service booking operator browser interaction regression
+        run: node phase0/service-booking-operator-browser-regression.mjs
       - name: First-experience service catalog HTTP journey regression
         run: npm run test:service-catalog-http
       - name: First-experience service catalog frontend sync regression
