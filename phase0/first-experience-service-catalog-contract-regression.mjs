@@ -230,7 +230,8 @@ try {
 
   const warehouseUiSource = await readFile(new URL('../app/src/warehouse/ui.js', import.meta.url), 'utf8');
   assert.match(warehouseUiSource, /const physicalProducts = products\.filter\(p => !isServiceCatalogItem\(p\)\)/, 'warehouse inventory list and total must count physical products only using canonical or legacy service identity');
-  assert.match(warehouseUiSource, /list\.innerHTML = physicalProducts\.map\(p =>/, 'service items must not render stock adjustment/receiving actions');
+  assert.match(warehouseUiSource, /const displayedProducts = inventoryFilter === 'low' \? low : physicalProducts/, 'the low-stock filter must remain scoped to canonical low-stock products and default to physical inventory');
+  assert.match(warehouseUiSource, /list\.innerHTML = filterHeader \+ displayedProducts\.map\(p =>/, 'service items must not render stock adjustment/receiving actions in either inventory view');
   assert.match(warehouseUiSource, /\.filter\(p => !isServiceCatalogItem\(p\)\)/, 'stock adjust and receive selectors must exclude canonical and legacy services');
 
   const inventorySource = await readFile(new URL('../app/src/warehouse/inventory.js', import.meta.url), 'utf8');
