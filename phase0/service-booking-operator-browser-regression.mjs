@@ -161,7 +161,10 @@ try {
   forceConflict = true;
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'CONFIRMED' }).click();
-  await page.locator('.service-booking-action[data-target="CONFIRMED"]').waitFor();
+  await page.waitForFunction(() => {
+    const button = document.querySelector('.service-booking-action[data-target="CONFIRMED"]');
+    return Boolean(button && !button.disabled);
+  }, null, { timeout: 3000 });
   assert.equal(await page.locator('.service-booking-action[data-target="CONFIRMED"]').isDisabled(), false,
     'failed version-conflict mutation re-enables the control for refresh/retry');
   assert.ok(pageErrors.length === 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
