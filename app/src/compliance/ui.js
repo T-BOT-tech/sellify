@@ -134,21 +134,30 @@ async function saveRetentionPolicy() {
 
 async function createComplianceRequest() {
   if (!allowed()) throw new Error('Compliance management permission required.');
+  const trigger = document.getElementById('complianceNewRequest');
+  if (trigger?.disabled) return;
   const customerId = window.prompt('Customer ID for the deletion request:')?.trim();
   if (!customerId) return;
   const requestChatId = config.chatId;
   const requestSessionToken = config.sessionToken;
-  await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/requests`, {
-    method: 'POST',
-    body: JSON.stringify({
-      requestType: 'DELETION',
-      subjectType: 'customer',
-      subjectId: customerId,
-      reason: 'Customer privacy request',
-    }),
-  });
-  if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
-  await loadComplianceRequests();
+  if (trigger) trigger.disabled = true;
+  try {
+    await request(`/tenants/${encodeURIComponent(requestChatId)}/compliance/requests`, {
+      method: 'POST',
+      body: JSON.stringify({
+        requestType: 'DELETION',
+        subjectType: 'customer',
+        subjectId: customerId,
+        reason: 'Customer privacy request',
+      }),
+    });
+    if (config.chatId !== requestChatId || config.sessionToken !== requestSessionToken) return;
+    await loadComplianceRequests();
+  } finally {
+    if (config.chatId === requestChatId && config.sessionToken === requestSessionToken && trigger) {
+      trigger.disabled = false;
+    }
+  }
 }
 
 async function loadComplianceRequests() {
