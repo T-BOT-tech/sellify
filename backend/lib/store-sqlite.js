@@ -9630,7 +9630,9 @@ export async function evaluateLogisticsSchedulingActivity(chatId, activityId, ac
     "SELECT * FROM logistics_scheduling_activities WHERE organization_id = ? AND id <> ? AND status IN ('SCHEDULED', 'CONFIRMED', 'IN_PROGRESS')"
   ).all(organizationId, String(activityId));
 
-  const externalEvaluation = options.externalEvaluation ?? options.external_evaluation ?? null;
+  // Feasibility options cross a caller-controlled request boundary. Until a trusted
+  // server-side capacity adapter is explicitly wired here, callers cannot assert FEASIBLE.
+  const externalEvaluation = null;
 
   return evaluateLogisticsSchedulingFeasibility({
     request: {
@@ -9768,7 +9770,9 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
           related_movement: row.related_movement_id ? { id: row.related_movement_id } : null,
         },
         existingActivities: existingActivities.map(logisticsSchedulingRow),
-        externalEvaluation: input.externalEvaluation ?? input.external_evaluation ?? null,
+        // Caller-supplied feasibility evidence is not an authenticated capacity authority.
+        // Fail closed until a trusted server-side adapter is explicitly integrated.
+        externalEvaluation: null,
       });
 
       const decision = decideLogisticsScheduling({ evaluation: feasibility });
