@@ -91,4 +91,7 @@ export default {
     packLocalizationAuthority: 'Localization authority',
     packAccessibilityAuthority: 'Accessibility foundation',
     packAccessibilityBoundary: 'Language selection does not change authorization. Screen semantics do not grant permissions; server-side authorization remains authoritative.',
+    orderValue: "Gatii ajajaa",
+    checkoutPaymentStateHint: "Tarkaanfii kana xumuruun ajaja gara tarree eegumsaa keessaniitti kuusa. Suuraan ragaa kaffaltii ragaa deeggarsaati qofa; kaffaltiin fudhatamuu isaa hin mirkaneessu.",
+    checkoutNoPaymentMethods: "Malli kaffaltii tokko illee hin banamne. Ajaja kana kuusuu dura checkout cufaa, qindaa'ina keessatti mala kaffaltii tokko bani.",
 };
