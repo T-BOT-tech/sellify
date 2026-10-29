@@ -49,7 +49,7 @@ try {
   page.on('pageerror', error => pageErrors.push(error.message));
   page.on('console', message => {
     // The deliberate HTTP 409 below is the version-conflict recovery fixture.
-    if (message.type() === 'error' && !/server responded with a status of 409 \\(Conflict\\)/.test(message.text())) {
+    if (message.type() === 'error' && !message.text().includes('409 (Conflict)')) {
       pageErrors.push(message.text());
     }
   });
