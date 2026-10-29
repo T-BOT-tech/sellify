@@ -21,7 +21,8 @@ function serviceOrders() {
     .map(p => String(p.id)));
   return (Array.isArray(orders) ? orders : [])
     .filter(o => o.server_order_id && Array.isArray(o.items)
-      && o.items.some(item => serviceIds.has(String(item.item_id || item.id || item.product_id || item.productId || ''))))
+      && o.items.some(item => String(item.item_type || item.type || '').toLowerCase() === 'service'
+        || serviceIds.has(String(item.item_id || item.id || item.product_id || item.productId || ''))))
     .slice(-40);
 }
 
