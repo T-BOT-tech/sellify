@@ -11,4 +11,5 @@ export default {
     checkoutPaymentStateHint: "Pari igbesẹ yii yoo fi aṣẹ pamọ sinu isinyi rẹ. Fọto risiti jẹ ẹri atilẹyin nikan; ko jẹrisi pe a ti gba isanwo.",
     checkoutNoPaymentMethods: "Ko si ọna isanwo ti a muu ṣiṣẹ. Fagilee igbesẹ yii ki o muu ọna isanwo ṣiṣẹ ninu Eto ṣaaju fifipamọ aṣẹ yii.",
     checkoutReceiptSaveFailed: "A ko le fi risiti pamọ. Gbiyanju lẹẹkansi, tabi pa ferese yii lati pada si checkout.",
+    saveOrderQueue: "Fi aṣẹ pamọ sinu isinyi",
 };
