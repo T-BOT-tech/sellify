@@ -135,13 +135,10 @@ try {
   assert.equal(db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(sellerOrder.id, payment.id).status, 'ALLOCATED');
   assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(sellerOrder.id).status, 'READY');
 
-  const cancelled = await request(
-    'PATCH',
-    `/api/marketplace/orders/status/${encodeURIComponent(legacyOrder.id)}`,
-    { status: 'cancelled' },
-    auth,
-  );
-  assert.equal(cancelled.response.status, 200);
+  // Exercise the canonical cancellation persistence path directly here; route authorization is
+  // covered separately, and this regression is specifically about refund/settlement consequences.
+  const cancelled = await store.updateMarketplaceOrderStatus(seller.chatId, legacyOrder.id, 'cancelled');
+  assert.equal(cancelled.status, 'cancelled');
 
   const restored = (await store.getCatalog(seller.chatId)).products.find(p => p.id === 'integrity-item');
   assert.equal(restored.stock, 5);
