@@ -217,7 +217,7 @@ try {
   const fulfillmentEnd = storeSource.indexOf('\nexport async function selectDeliveryCourier', fulfillmentStart);
   assert(fulfillmentStart >= 0 && fulfillmentEnd > fulfillmentStart, 'fulfillment inventory consequence source must exist');
   const fulfillmentSource = storeSource.slice(fulfillmentStart, fulfillmentEnd);
-  assert.match(fulfillmentSource, /item_type \\?\\? payload\.type/);
+  assert(fulfillmentSource.includes('item_type ?? payload.type'), 'fulfillment inventory guard must recognize legacy service type');
   assert(fulfillmentSource.includes("=== 'service') continue") && fulfillmentSource.indexOf("=== 'service') continue") < fulfillmentSource.indexOf("if (!locationId) throw"), 'service fulfillment must bypass physical inventory-location requirements');
 
   const warehouseUiSource = await readFile(new URL('../app/src/warehouse/ui.js', import.meta.url), 'utf8');
