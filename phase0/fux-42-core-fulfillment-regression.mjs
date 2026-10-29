@@ -22,7 +22,19 @@ const {
 
 const chatId = 'fux42-chat';
 const tenant = await getOrCreateTenant(chatId);
-await saveCatalog(chatId, [{ id: 'product-1', name: 'Test item', price: 500, stock: 5 }]);
+await saveCatalog(chatId, [
+  { id: 'product-1', name: 'Test item', price: 500, stock: 5 },
+  { id: 'service-type-alias', name: 'Legacy type service', price: 700, type: 'service', stock: 9 },
+  { id: 'service-canonical', name: 'Canonical service', price: 800, item_type: 'service', stock: 11 },
+]);
+const initialInventory = await (await import('../backend/lib/store-sqlite.js')).getInventoryBalances(chatId);
+assert.equal(initialInventory.find(row => row.productId === 'service-type-alias'), undefined,
+  'legacy type=service records must not seed canonical opening-balance movements');
+assert.equal(initialInventory.find(row => row.productId === 'service-canonical'), undefined,
+  'canonical item_type=service records must not seed canonical opening-balance movements');
+const normalizedCatalog = await (await import('../backend/lib/store-sqlite.js')).getCatalog(chatId);
+assert.equal(normalizedCatalog.products.find(item => item.id === 'service-type-alias')?.item_type, 'service',
+  'legacy type alias must normalize into canonical item_type');
 await appendInventoryMovement(chatId, { productId: 'product-1', quantity: 5, movementType: 'PURCHASE', eventId: 'fux42-opening-purchase' });
 const syncResult = await saveQueuedOrders(chatId, [{
   id: 'local-fux42-1',
