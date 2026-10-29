@@ -558,7 +558,7 @@ export async function createOnboardingTenant() {
     }
     showFirstProductStep(sellerName);
     if (templateSyncError && status) {
-      status.textContent = 'Business created, but its template could not sync to the server. Check your connection and retry template setup in Settings.';
+      status.textContent = 'Business created, but its template could not sync to the server. Use Settings → Business type sync to retry.';
     }
   } catch (error) {
     if (status) status.textContent = error.message || 'Could not create the business.';
