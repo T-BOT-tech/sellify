@@ -6227,9 +6227,10 @@ export async function saveBusinessTemplateConfig(chatId, input = {}, actor = nul
   const config = {};
   const updatedAt = nowIso();
   // The canonical template write and its audit evidence are one atomic unit.
-  // Otherwise an audit insert failure can return an error after silently
-  // committing a template change, leaving the client uncertain whether retry is safe.
-  db.transaction(() => {
+  // Use the same explicit SQLite transaction protocol as the rest of this store;
+  // DatabaseSync intentionally exposes exec()/prepare(), not a transaction() helper.
+  db.exec('BEGIN IMMEDIATE');
+  try {
     db.prepare(`
       INSERT INTO tenant_business_templates
         (chat_id, template_key, schema_version, config_json, updated_by_user_id, updated_at)
@@ -6247,7 +6248,11 @@ export async function saveBusinessTemplateConfig(chatId, input = {}, actor = nul
       actorId: actor?.userId ? String(actor.userId) : null,
       deviceId: actor?.deviceId ? String(actor.deviceId) : null,
     });
-  })();
+    db.exec('COMMIT');
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
   return { templateKey, schemaVersion, config, updatedAt };
 }
 
