@@ -77,9 +77,9 @@ assert.doesNotMatch(queue, /orderPaymentSummary\.status \|\| 'UNPAID'/);
 assert.match(queue, /verifiedMinor \?\? orderPaymentSummary\.verified_minor \?\? 0/);
 
 for (const locale of ['en', 'am', 'om', 'so', 'sw', 'es', 'hi']) {
-  const source = await readFile(new URL(`../app/src/i18n/locales/\${locale}.js`, import.meta.url), 'utf8');
+  const source = await readFile(new URL(`../app/src/i18n/locales/${locale}.js`, import.meta.url), 'utf8');
   assert.match(source, /checkoutPaymentStateHint\s*:/, `locale ${locale} should localize the payment-state explanation`);
-assert.match(paymentProof, /t\('checkoutNoPaymentMethods'\)/);
-assert.match(confirmFlow, /showToast\(t\('checkoutReceiptSaveFailed'\)\);\s*return;/);
+  assert.match(source, /checkoutNoPaymentMethods\s*:/, `locale ${locale} should localize missing payment-method guidance`);
+  assert.match(source, /checkoutReceiptSaveFailed\s*:/, `locale ${locale} should localize receipt-save recovery guidance`);
 }
 console.log('Checkout payment-state clarity and order-total regression: PASS');
