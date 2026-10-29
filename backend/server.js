@@ -108,7 +108,7 @@ import {
   createMarketplaceOrder,
   listAuditEvents,
   createDatabaseBackup,
-  getOrCreateUserByTelegram, listUserMemberships, listTenantMemberships, ensureMembership, createTenantForUser,
+  getOrCreateUserByTelegram, listUserMemberships, listTenantMemberships, ensureMembership, createTenantForUser, getTenantCreationIdempotency,
   getTelegramStorefrontConfig, upsertTelegramStorefrontConfig, verifyTelegramStorefront,
   createSession, authenticateSessionToken, revokeSession, createAuthChallenge, consumeAuthChallenge,
   listOrganizationLocations, createOrganizationLocation, updateOrganizationLocation,
@@ -724,6 +724,14 @@ function handleOnboardingCountryOptions(req, res) {
 
 async function handleCreateTenant(req, res) {
   const body = await readBody(req);
+  const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
+  const requestHash = crypto.createHash('sha256').update(JSON.stringify({
+    sellerName: String(body.sellerName || '').trim(),
+    businessType: String(body.businessType || 'retail'),
+    country: String(body.country || '').trim().toUpperCase(),
+    currency: body.currency == null ? null : String(body.currency).trim().toUpperCase(),
+    timezone: String(body.timezone || 'UTC'),
+  })).digest('hex');
   let userId;
   try {
     const session = await requireSession(req);
@@ -735,6 +743,20 @@ async function handleCreateTenant(req, res) {
     if (!challenge) throw Object.assign(new Error('Invalid or expired onboarding challenge'), { statusCode: 401 });
     userId = challenge.userId;
   }
+  if (idempotencyKey) {
+    const prior = await getTenantCreationIdempotency(userId, idempotencyKey);
+    if (prior) {
+      if (prior.request_hash !== requestHash) {
+        throw Object.assign(new Error('Idempotency key was reused for a different tenant creation request'), { statusCode: 409, code: 'TENANT_CREATION_IDEMPOTENCY_CONFLICT' });
+      }
+      const tenant = await getTenant(prior.chat_id);
+      const memberships = await listUserMemberships(userId);
+      const membership = memberships.find(item => item.chatId === prior.chat_id);
+      if (!tenant || !membership) throw Object.assign(new Error('Idempotent tenant creation record is incomplete'), { statusCode: 500, code: 'TENANT_CREATION_IDEMPOTENCY_CORRUPT' });
+      const authSession = await createSession({ userId, chatId: prior.chat_id, deviceName: body.deviceName || 'Primary device', ttlMs: SESSION_TTL_MS });
+      return sendJSON(res, 200, { tenant, membership: { chatId: prior.chat_id, tenantId: prior.tenant_id, role: membership.role }, session: authSession, replayed: true }, req);
+    }
+  }
   if (!String(body.sellerName || '').trim()) throw Object.assign(new Error('Business name is required'), { statusCode: 400 });
   const result = await createTenantForUser({
     userId,
@@ -744,6 +766,8 @@ async function handleCreateTenant(req, res) {
     currency: body.currency,
     timezone: body.timezone,
     deviceName: body.deviceName || 'Primary device',
+    idempotencyKey,
+    requestHash,
   });
   const authSession = await createSession({ userId, chatId: result.chatId, deviceName: body.deviceName || 'Primary device', ttlMs: SESSION_TTL_MS });
   sendJSON(res, 201, {

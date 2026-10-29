@@ -76,8 +76,9 @@ try {
     sellerName: 'Created Before Response Loss', businessType: 'retail', country: 'ET',
     timezone: 'Africa/Addis_Ababa', deviceName: 'Response-loss regression',
   });
+  const idempotencyKey = 'tenant-response-loss-create-1';
   await sendAndDropResponse(port, '/auth/tenants', body, {
-    Authorization: `Bearer ${session.token}`, 'Content-Type': 'application/json',
+    Authorization: `Bearer ${session.token}`, 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey,
   });
 
   let memberships = [];
@@ -95,14 +96,24 @@ try {
 
   const retry = await fetch(`${baseUrl}/auth/tenants`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${session.token}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${session.token}`, 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
     body,
   });
-  assert.equal(retry.status, 201, 'a deliberate retry remains an ordinary new-tenant request without an idempotency contract');
+  assert.equal(retry.status, 200, 'a blind retry must replay the original tenant creation');
+  const retryBody = await retry.json();
+  assert.equal(retryBody.replayed, true);
+  assert.equal(retryBody.tenant.chatId, recovered[0].chatId, 'retry must return the original tenant identity');
   const afterRetry = (await (await fetch(`${baseUrl}/auth/tenants`, { headers: { Authorization: `Bearer ${session.token}` } })).json()).memberships;
-  assert.equal(afterRetry.filter(item => item.sellerName === 'Created Before Response Loss').length, 2,
-    'the regression must expose that retrying without recovery would create a duplicate');
-  console.log('PASS: response-loss membership discovery recovers the created tenant; duplicate risk on blind retry is characterized');
+  assert.equal(afterRetry.filter(item => item.sellerName === 'Created Before Response Loss').length, 1,
+    'blind retry must not create a duplicate tenant');
+  const conflict = await fetch(`${baseUrl}/auth/tenants`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${session.token}`, 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify({ ...JSON.parse(body), sellerName: 'Changed Payload' }),
+  });
+  assert.equal(conflict.status, 409, 'reusing a tenant creation key with changed payload must conflict');
+  assert.equal((await conflict.json()).error.code, 'TENANT_CREATION_IDEMPOTENCY_CONFLICT');
+  console.log('PASS: response-loss membership recovery and tenant-creation idempotency');
 } finally {
   if (child) {
     child.kill('SIGTERM');

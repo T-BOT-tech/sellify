@@ -3281,6 +3281,22 @@ if (!applied.includes(39)) {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(76, nowIso());
   }
+  if (!applied.includes(77)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS tenant_creation_idempotency (
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        idempotency_key TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        chat_id TEXT NOT NULL REFERENCES tenants(chat_id) ON DELETE CASCADE,
+        tenant_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, idempotency_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_tenant_creation_idempotency_chat
+        ON tenant_creation_idempotency(chat_id);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(77, nowIso());
+  }
 }
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({
@@ -11612,7 +11628,7 @@ export async function ensureMembership(userId, chatId, role = 'owner') {
   return db.prepare('SELECT * FROM memberships WHERE id = ?').get(id);
 }
 
-export async function createTenantForUser({ userId, sellerName, businessType, country, currency, timezone }) {
+export async function createTenantForUser({ userId, sellerName, businessType, country, currency, timezone, idempotencyKey = '', requestHash = '' }) {
   const countryPack = resolveOnboardingCountry(country);
   ensureDatabase();
   const chatId = `tenant_${crypto.randomUUID()}`;
@@ -11625,6 +11641,12 @@ export async function createTenantForUser({ userId, sellerName, businessType, co
     db.prepare(`INSERT INTO tenants (chat_id, tenant_id, api_key, created_at, seller_name, branding_json, vendor_code) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(chatId, tenantId, apiKey, now, tenant.sellerName, json({ currency: tenant.currency, country: tenant.country, timezone: tenant.timezone }), null);
     ensureCanonicalIdentityForTenant(chatId);
     const membership = await ensureMembership(userId, chatId, 'owner');
+    if (String(idempotencyKey).trim()) {
+      db.prepare(`INSERT INTO tenant_creation_idempotency
+        (user_id, idempotency_key, request_hash, chat_id, tenant_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(String(userId), String(idempotencyKey).trim(), String(requestHash), chatId, tenantId, now);
+    }
     audit(chatId, 'tenant.created_authenticated', 'tenant', chatId, { userId: String(userId), businessType: tenant.businessType });
     db.exec('COMMIT');
     return { chatId, tenantId, membership, tenant: { ...tenant, createdAt: now } };
@@ -11632,6 +11654,22 @@ export async function createTenantForUser({ userId, sellerName, businessType, co
     db.exec('ROLLBACK');
     throw e;
   }
+}
+
+export async function getTenantCreationIdempotency(userId, idempotencyKey) {
+  ensureDatabase();
+  const key = String(idempotencyKey || '').trim();
+  if (!key) return null;
+  return db.prepare('SELECT * FROM tenant_creation_idempotency WHERE user_id = ? AND idempotency_key = ?')
+    .get(String(userId), key);
+}
+
+export async function recordTenantCreationIdempotency({ userId, idempotencyKey, requestHash, chatId, tenantId }) {
+  ensureDatabase();
+  db.prepare(`INSERT INTO tenant_creation_idempotency
+    (user_id, idempotency_key, request_hash, chat_id, tenant_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)`)
+    .run(String(userId), String(idempotencyKey).trim(), String(requestHash), String(chatId), String(tenantId), nowIso());
 }
 
 function createDeviceRow(userId, chatId, name) {
