@@ -121,30 +121,27 @@ export function renderDailySummary() {
     container.innerHTML = '';
     return;
   }
-  // Phase 4 (data integrity in reporting): this used to sum every order
-  // ever stored, regardless of when it was placed — so "Today's Sales"
-  // silently showed all-time revenue once the queue had more than one
-  // day's orders in it (confirmed bug, not theoretical: nothing here ever
-  // pruned or filtered by date). Filtered to created_at falling within the
-  // *device's local* calendar day — orders don't carry a timezone, and a
-  // seller reading this on their own device expects "today" to mean their
-  // own local today, not UTC's.
+  // Reporting semantics: order totals are not proof of collected revenue.
+  // This summary reports today's order value, not confirmed payments. The
+  // date filter also prevents older orders from inflating today's figures.
+  // Orders don't carry a timezone, so "today" follows the device's local
+  // calendar day rather than UTC.
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const startOfTodayMs = startOfToday.getTime();
   const todaysOrders = orders.filter(o => (o.created_at || 0) >= startOfTodayMs);
 
-  const totalRevenue = todaysOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+  const orderValueTotal = todaysOrders.reduce((sum, o) => sum + (o.total || 0), 0);
   const totalOrdersCount = todaysOrders.length;
-  const avgValue = totalOrdersCount > 0 ? (totalRevenue / totalOrdersCount) : 0;
+  const avgOrderValue = totalOrdersCount > 0 ? (orderValueTotal / totalOrdersCount) : 0;
   const queuedCount = todaysOrders.filter(o => o.status !== 'synced').length;
   const syncedCount = todaysOrders.filter(o => o.status === 'synced').length;
 
   container.innerHTML = `
     <div class="summary-grid">
       <div class="summary-card">
-        <div class="label">${t('todaySales')}</div>
-        <div class="val">${CS()}${formatMoney(totalRevenue)}</div>
+        <div class="label">${t('orderValue')}</div>
+        <div class="val">${CS()}${formatMoney(orderValueTotal)}</div>
       </div>
       <div class="summary-card">
         <div class="label">${t('totalOrders')}</div>
@@ -152,7 +149,7 @@ export function renderDailySummary() {
       </div>
       <div class="summary-card">
         <div class="label">${t('avgOrderVal')}</div>
-        <div class="val">${CS()}${formatMoney(avgValue)}</div>
+        <div class="val">${CS()}${formatMoney(avgOrderValue)}</div>
       </div>
       <div class="summary-card">
         <div class="label">${t('queued')} / ${t('synced')}</div>
