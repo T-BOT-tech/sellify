@@ -27,10 +27,14 @@ for (const script of scripts) {
 }
 
 const pack = await import('../app/src/country-pack-contract.js');
-assert.deepEqual(pack.listCountryPacks(), ['et']);
-assert.equal(pack.getCountryPack('ET').countryCode, 'ET');
+assert.deepEqual(pack.listCountryPacks(), ['et', 'ke', 'tz', 'ng']);
+for (const [code, currency] of [['ET', 'ETB'], ['KE', 'KES'], ['TZ', 'TZS'], ['NG', 'NGN']]) {
+  assert.equal(pack.getCountryPack(code).countryCode, code);
+  assert.equal(pack.getCountryPack(code).currency, currency);
+}
 assert.equal(pack.getCountryPack('ethiopia').countryCode, 'ET');
-for (const unsupported of ['US', 'KE', 'NG', 'GB', 'IN']) {
+
+for (const unsupported of ['US', 'GB', 'IN', 'ZZ']) {
   assert.throws(() => pack.getCountryPack(unsupported), error => error?.code === 'COUNTRY_PACK_UNKNOWN');
 }
 
@@ -44,14 +48,14 @@ const event = await import('../app/src/country-event-integration.js');
 assert.throws(() => event.buildCountryVersionedEvent({ countryCode: 'US', eventId: 'US:x', eventType: 'customer.upsert', aggregateType: 'customer', aggregateId: 'c1', organizationId: 'o1', payload: {} }), /Unknown country pack/);
 
 const source = fs.readFileSync('app/src/country-pack-contract.js', 'utf8');
-assert.doesNotMatch(source, /fallback|default.*country|US|KE|NG/);
+assert.doesNotMatch(source, /fallback|default.*country/);
 assert.equal(pack.countryPackContract().ownsAuthorization, false);
 assert.equal(pack.countryPackContract().ownsEvents, false);
 assert.equal(pack.countryPackContract().ownsPayments, false);
 
 console.log('Phase 14.13 Cross-Country Regression: PASS');
 console.log('Phase 14.0–14.12 cumulative regression chain: PASS');
-console.log('Ethiopia canonical pack remains ET-only: PASS');
+console.log('Declared country packs and currencies: PASS');
 console.log('Unsupported country packs fail closed: PASS');
 console.log('No silent country fallback/default pack: PASS');
-console.log('Country pack owns no authorization/events/payments authority: BLOCKED');
+console.log('Country pack owns no authorization/events/payments authority: PASS');

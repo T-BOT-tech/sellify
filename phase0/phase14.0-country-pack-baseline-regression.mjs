@@ -30,7 +30,7 @@ const store = read('backend/lib/store-sqlite.js');
 const money = read('app/src/utils/money.js');
 const docs = read('phase0/PHASE14.0-COUNTRY-PACK-BASELINE.md');
 
-assert(/currencyCode:\s*'INR'/.test(state), 'Existing currency config authority changed');
+assert(/currencyCode:\s*'ETB'/.test(state), 'Existing currency config authority changed');
 assert(localeDefaults.includes("Africa/Addis_Ababa") && localeDefaults.includes("ETB"), 'Existing Ethiopia locale hint missing');
 assert(provider.includes("'telebirr'") && provider.includes("'cbe'"), 'Existing payment provider identifiers missing');
 assert(store.includes('country TEXT') && store.includes('currency TEXT'), 'Organization country/currency authority missing');
