@@ -146,9 +146,26 @@ try {
   const restored = (await store.getCatalog(seller.chatId)).products.find(p => p.id === 'integrity-item');
   assert.equal(restored.stock, 5);
   assert.equal(db.prepare('SELECT status FROM marketplace_inventory_reservations WHERE seller_order_id = ?').get(sellerOrder.id).status, 'released');
+  assert.equal(db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(sellerOrder.id, payment.id).status, 'ALLOCATED',
+    'cancellation must not claim an allocation is refunded before Payment Core confirmation');
+  assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(sellerOrder.id).status, 'HELD',
+    'settlement must remain held while the canonical refund is outstanding');
+  const marketplaceRefund = db.prepare('SELECT * FROM marketplace_refunds WHERE seller_order_id = ?').get(sellerOrder.id);
+  assert.equal(marketplaceRefund.status, 'REQUESTED');
+  const canonicalRefund = db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(marketplaceRefund.id);
+  assert.ok(canonicalRefund, 'marketplace refund must be the same canonical Payment Core refund');
+  assert.equal(canonicalRefund.status, 'REQUESTED');
+
+  const finalizedRefund = await store.finalizePaymentRefund(seller.chatId, canonicalRefund.id, {
+    status: 'SUCCEEDED',
+    providerRefundId: 'phase11-4-confirmed-refund',
+    evidence: { source: 'phase11.4-regression' },
+  }, { userId: sellerUser.id, deviceId: sellerSession.deviceId });
+  assert.equal(finalizedRefund.status, 'SUCCEEDED');
+  assert.equal(db.prepare('SELECT status FROM marketplace_refunds WHERE id = ?').get(marketplaceRefund.id).status, 'PROCESSED');
   assert.equal(db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(sellerOrder.id, payment.id).status, 'REFUNDED');
   assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(sellerOrder.id).status, 'REVERSED');
-  assert.equal(db.prepare('SELECT status FROM marketplace_refunds WHERE seller_order_id = ?').get(sellerOrder.id).status, 'PENDING');
+  assert.equal((await store.getPayment(seller.chatId, payment.id)).state, 'REFUNDED');
 
   const ledgerAfterCancellation = db.prepare(`
     SELECT COALESCE(SUM(quantity), 0) AS quantity
