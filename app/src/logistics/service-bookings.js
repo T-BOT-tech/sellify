@@ -4,7 +4,6 @@ import { config, orders, products } from '../state.js';
 import { authHeaders } from '../auth/tenant.js';
 import { escapeHtml, escapeAttr } from '../utils/index.js';
 
-const TERMINAL = new Set(['COMPLETED', 'REJECTED', 'CANCELLED', 'FAILED']);
 const NEXT = Object.freeze({
   REQUESTED: ['ACCEPTED', 'REJECTED', 'CANCELLED'],
   ACCEPTED: ['CONFIRMED', 'REJECTED', 'CANCELLED'],
@@ -42,7 +41,7 @@ async function requestBookings(order) {
 function canOperate() {
   const roles = Array.isArray(config.contextualRoles) ? config.contextualRoles : [];
   const roleNames = roles.map(r => String(r?.role || '').toLowerCase());
-  return ['owner', 'manager'].includes(String(config.tenantRole || '').toLowerCase())
+  return ['owner', 'manager'].includes(String(config.currentStaffRole || config.authRole || config.tenantRole || '').toLowerCase())
     || roleNames.some(r => ['logistics_manager', 'logistics_dispatcher'].includes(r));
 }
 
