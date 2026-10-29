@@ -1392,6 +1392,76 @@ try {
     'direct completion must not bypass the active assignment lifecycle'
   );
 
+  // A delayed assessment retry after courier assignment must not restore
+  // the earlier NOT_ASSIGNED snapshot or overwrite newer fulfillment state.
+  const serviceRequestBeforeDelayedReplay = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  const assessmentCommandCountBeforeDelayedReplay = new DatabaseSync(dbPath);
+  let delayedReplayCommandCount;
+  let delayedReplayAuditCount;
+  try {
+    delayedReplayCommandCount = assessmentCommandCountBeforeDelayedReplay.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(session.organizationId), 'parcel-request-assessment-accepted-1').count;
+    delayedReplayAuditCount = assessmentCommandCountBeforeDelayedReplay.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, requestOrder.server_order_id).count;
+  } finally {
+    assessmentCommandCountBeforeDelayedReplay.close();
+  }
+  assert.equal(delayedReplayCommandCount, 1, 'the accepted assessment must have one durable command before delayed replay');
+  assert.equal(delayedReplayAuditCount, 1, 'the accepted assessment must have one audit event before delayed replay');
+
+  const delayedAssessmentReplayResponse = await fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+    body: JSON.stringify(assessmentPayload),
+  });
+  assert.equal(delayedAssessmentReplayResponse.status, 200,
+    'delayed exact assessment retry after assignment should still replay');
+  const delayedAssessmentReplayBody = await delayedAssessmentReplayResponse.json();
+  assert.equal(delayedAssessmentReplayBody.replayed, true);
+  assert.equal(delayedAssessmentReplayBody.service_delivery?.assessment?.customer_acceptance?.evidence_reference,
+    'buyer-chat-confirmation-123');
+  assert.deepEqual(
+    (await store.getOrders(tenant.chatId)).find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request,
+    serviceRequestBeforeDelayedReplay,
+    'delayed assessment replay must not overwrite fulfillment state changed after the original assessment',
+  );
+
+  // Multiple simultaneous retries of an already-committed assessment must all
+  // return replay responses without appending command or audit evidence.
+  const concurrentCommittedAssessmentResponses = await Promise.all([1, 2].map(() => fetch(assessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+    body: JSON.stringify(assessmentPayload),
+  })));
+  assert.deepEqual(concurrentCommittedAssessmentResponses.map(response => response.status), [200, 200],
+    'concurrent exact assessment retries should both succeed');
+  const concurrentCommittedAssessmentBodies = await Promise.all(
+    concurrentCommittedAssessmentResponses.map(response => response.json()),
+  );
+  assert.ok(concurrentCommittedAssessmentBodies.every(body => body.replayed === true),
+    'concurrent requests for a committed assessment must both be identified as replays');
+  assert.deepEqual(
+    (await store.getOrders(tenant.chatId)).find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request,
+    serviceRequestBeforeDelayedReplay,
+    'concurrent assessment replays must preserve the later fulfillment state',
+  );
+  const committedReplayCountsDb = new DatabaseSync(dbPath);
+  try {
+    assert.equal(committedReplayCountsDb.prepare(
+      'SELECT COUNT(*) AS count FROM service_delivery_assessment_commands WHERE organization_id = ? AND command_key = ?'
+    ).get(String(session.organizationId), 'parcel-request-assessment-accepted-1').count, 1,
+    'concurrent committed retries must not append duplicate assessment commands');
+    assert.equal(committedReplayCountsDb.prepare(
+      "SELECT COUNT(*) AS count FROM audit_events WHERE chat_id = ? AND action = 'logistics.service_request.assessed' AND entity_id = ?"
+    ).get(tenant.chatId, requestOrder.server_order_id).count, 1,
+    'concurrent committed retries must not append duplicate assessment audit evidence');
+  } finally {
+    committedReplayCountsDb.close();
+  }
+
   // A retry after the original response has been consumed must replay the
   // committed command without appending another command or audit event.
   const assessmentDb = new DatabaseSync(dbPath);
