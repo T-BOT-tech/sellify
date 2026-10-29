@@ -1197,8 +1197,8 @@
 
 <div class="modal-backdrop" id="paymentProofModal">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="checkoutPaymentTitle" aria-describedby="checkoutPaymentStateHint">
-    <h3 id="checkoutPaymentTitle">Review payment method</h3>
-    <p id="checkoutPaymentStateHint" class="hint">Saving creates an order in the queue. Selecting a payment method or attaching a receipt does not confirm payment.</p>
+    <h3 id="checkoutPaymentTitle" data-i18n="saveOrderQueue">Save order to queue</h3>
+    <p id="checkoutPaymentStateHint" class="hint" role="status" data-i18n="checkoutPaymentStateHint" style="margin:0 0 12px;">Completing this step saves the order to your queue. A receipt photo is supporting evidence only; it does not confirm that a payment was received.</p>
     <div class="checkout-payment-total" style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px; margin:12px 0; border:1px solid var(--line); border-radius:8px; font-weight:600;"><span>Order total</span><strong id="checkoutPaymentOrderTotal" aria-live="polite">—</strong></div>
     <label data-i18n="paymentMethod">Payment method</label>
     <select id="orderPayMethod" onchange="onOrderPayMethodChange()" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background: var(--surface); margin-bottom:8px;"></select>
@@ -1210,7 +1210,7 @@
         <img id="proofPreviewImg" style="max-width:100%; border-radius:8px; border:1px solid var(--line);">
       </div>
     </div>
-    <button id="checkoutSaveOrderButton" class="btn-primary close-btn" onclick="confirmOrderWithProof()">Save order to queue</button>
+    <button id="checkoutSaveOrderButton" class="btn-primary close-btn" onclick="confirmOrderWithProof()" data-i18n="saveOrderQueue">Save order to queue</button>
     <button class="btn-secondary close-btn" onclick="closePaymentProofModal()" data-i18n="cancel">Cancel</button>
   </div>
 </div>
