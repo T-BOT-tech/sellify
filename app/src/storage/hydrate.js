@@ -221,6 +221,10 @@ export async function hydrateFromIndexedDB() {
       journalWrite = writeOutboxRecoveryJournal(recoveredEvents, {
         onMerged: merged => { journalSnapshot = merged; setOutboxEvents(merged); },
       });
+      if (journalWrite.readSucceeded !== true) {
+        throw new Error('Cannot migrate outbox fallback while recovery journal is unreadable');
+      }
+      journalSnapshot = journalWrite.snapshot;
       return mergeOutboxSnapshots(indexedDbBaseline, journalSnapshot, Array.isArray(storedEvents) ? storedEvents : []);
     }, [
       { key: OUTBOX_RECOVERY_COMMIT_KEY, value: () => ({
