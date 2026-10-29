@@ -98,17 +98,33 @@ const feasible = await evaluateLogisticsSchedulingActivity(
     },
   },
 );
-assert.equal(feasible.evaluation, 'FEASIBLE');
-assert.equal(feasible.feasible, true);
+assert.equal(feasible.evaluation, 'CONFLICT',
+  'caller-supplied FEASIBLE evidence must not override a canonical overlap conflict');
+assert.equal(feasible.feasible, false);
 assert.equal(feasible.authorized, false);
 assert.equal(feasible.execution, false);
-assert.equal(feasible.externalEvaluation.authority, 'existing-capacity-authority');
+assert.equal(feasible.externalEvaluation, null,
+  'untrusted caller-supplied external evaluation must be discarded until a trusted server adapter exists');
 
 const before = db.prepare(
   'SELECT status, version, last_command_key FROM logistics_scheduling_activities WHERE id = ?'
 ).get(second.id);
 assert.equal(before.status, 'REQUESTED');
 assert.equal(Number(before.version), 1);
+
+await assert.rejects(
+  () => transitionLogisticsSchedulingActivity(chatId, second.id, 'SCHEDULED', actor, {
+    idempotency_key: 'l11.7-untrusted-feasible-transition',
+    expectedVersion: 1,
+    externalEvaluation: {
+      outcome: 'FEASIBLE',
+      authority: 'caller-controlled-capacity-authority',
+      reference_id: 'caller-controlled-capacity-reference',
+    },
+  }),
+  error => error?.code === 'SCHEDULING_FEASIBILITY_CONFLICT',
+  'caller-controlled FEASIBLE evidence must not authorize a conflicting scheduled transition',
+);
 
 const deniedActor = {
   userId: 'l11.7-viewer',
