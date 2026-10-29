@@ -13,7 +13,7 @@ export default {
     checkoutReceiptSaveFailed: "A ko le fi risiti pamọ. Gbiyanju lẹẹkansi, tabi pa ferese yii lati pada si checkout.",
     saveOrderQueue: "Fi aṣẹ pamọ sinu isinyi",
     firstSaleAddProduct: "Fi ọja kan kun láti bẹ̀rẹ̀ títà",
-    catalogHasItems: "Àkójọ ọjà ní àwọn ọjà",,
+    catalogHasItems: "Àkójọ ọjà ní àwọn ọjà",
     serviceBookingsTitle: "Ìforúkọsílẹ̀ iṣẹ́",
     serviceBookingsRefresh: "Tún àwọn ìforúkọsílẹ̀ ṣe",
     serviceBookingsDescription: "Àwọn àkókò ìpàdé tí a so mọ́ àwọn àṣẹ iṣẹ́ tó jẹ́ ojúlówó. Sẹ́fà ń ṣàyẹ̀wò gbogbo ìgbésẹ̀.",
