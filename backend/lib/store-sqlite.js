@@ -6226,23 +6226,28 @@ export async function saveBusinessTemplateConfig(chatId, input = {}, actor = nul
   const schemaVersion = 1;
   const config = {};
   const updatedAt = nowIso();
-  db.prepare(`
-    INSERT INTO tenant_business_templates
-      (chat_id, template_key, schema_version, config_json, updated_by_user_id, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(chat_id) DO UPDATE SET
-      template_key = excluded.template_key,
-      schema_version = excluded.schema_version,
-      config_json = excluded.config_json,
-      updated_by_user_id = excluded.updated_by_user_id,
-      updated_at = excluded.updated_at
-  `).run(key, templateKey, schemaVersion, json(config), actor?.userId ? String(actor.userId) : null, updatedAt);
-  audit(key, 'tenant.business_template.updated', 'tenant_business_template', key, {
-    templateKey, schemaVersion, actorUserId: actor?.userId ? String(actor.userId) : null,
-  }, {
-    actorId: actor?.userId ? String(actor.userId) : null,
-    deviceId: actor?.deviceId ? String(actor.deviceId) : null,
-  });
+  // The canonical template write and its audit evidence are one atomic unit.
+  // Otherwise an audit insert failure can return an error after silently
+  // committing a template change, leaving the client uncertain whether retry is safe.
+  db.transaction(() => {
+    db.prepare(`
+      INSERT INTO tenant_business_templates
+        (chat_id, template_key, schema_version, config_json, updated_by_user_id, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(chat_id) DO UPDATE SET
+        template_key = excluded.template_key,
+        schema_version = excluded.schema_version,
+        config_json = excluded.config_json,
+        updated_by_user_id = excluded.updated_by_user_id,
+        updated_at = excluded.updated_at
+    `).run(key, templateKey, schemaVersion, json(config), actor?.userId ? String(actor.userId) : null, updatedAt);
+    audit(key, 'tenant.business_template.updated', 'tenant_business_template', key, {
+      templateKey, schemaVersion, actorUserId: actor?.userId ? String(actor.userId) : null,
+    }, {
+      actorId: actor?.userId ? String(actor.userId) : null,
+      deviceId: actor?.deviceId ? String(actor.deviceId) : null,
+    });
+  })();
   return { templateKey, schemaVersion, config, updatedAt };
 }
 
