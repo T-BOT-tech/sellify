@@ -142,7 +142,7 @@ export function saveOrder(payMethodId, proofMeta) {
   const resolvedMethodId = String(payMethodId || '').trim();
   const methodMeta = (config.paymentMethods || []).find(pm => pm.id === resolvedMethodId && pm.enabled);
   if (!methodMeta) {
-    showToast('No enabled payment method is selected. Enable a payment method in Settings and try again.');
+    showToast(t('checkoutNoPaymentMethods'));
     return;
   }
 
