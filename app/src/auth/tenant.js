@@ -561,10 +561,14 @@ export async function addOnboardingProduct() {
     ...(itemType === 'product' && stock !== undefined ? { stock } : {}),
     updated_at: Date.now(),
   };
-  setProducts([...products, newProd]);
+  // Keep the in-memory catalog consistent with durable local state. If persistence
+  // fails, restore the prior list so a retry cannot append a duplicate offering.
+  const previousProducts = products;
+  setProducts([...previousProducts, newProd]);
   const locallySaved = await saveJSONAsync(STORAGE_KEYS.products, products);
   if (!locallySaved) {
-    if (status) status.textContent = 'Local storage failed. The offering is only in this session; keep this page open and retry before leaving.';
+    setProducts(previousProducts);
+    if (status) status.textContent = 'Local storage failed. The offering was not saved; retry when local storage is available.';
     return;
   }
   await markCatalogDirty();
