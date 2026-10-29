@@ -580,6 +580,18 @@ try {
     body: JSON.stringify({ status: 'ACCEPTED', expected_version: 1 }),
   });
   assert.ok([403, 404].includes(crossTenantResponse.status), 'cross-tenant route must fail closed');
+  const crossTenantRead = await fetch(foreignTenantUrl, { headers: authHeaders });
+  assert.ok([403, 404].includes(crossTenantRead.status),
+    'a session for the source tenant must not read a booking through another tenant route');
+  const foreignTenantBookingsUrl = baseUrl + '/tenants/' + encodeURIComponent(foreignTenant.chatId)
+    + '/orders/' + encodeURIComponent(serviceOrder.server_order_id) + '/service-bookings';
+  const crossTenantCreate = await fetch(foreignTenantBookingsUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-cross-tenant-create-1' },
+    body: JSON.stringify(bookingRequest),
+  });
+  assert.ok([403, 404].includes(crossTenantCreate.status),
+    'a session for the source tenant must not create a booking through another tenant route');
   const wrongOrderUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
     + '/orders/not-the-canonical-order/service-bookings/' + encodeURIComponent(staleBooking.id);
   const crossOrderResponse = await fetch(wrongOrderUrl, {
