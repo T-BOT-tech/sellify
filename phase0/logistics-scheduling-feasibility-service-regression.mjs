@@ -61,13 +61,12 @@ const first = await createLogisticsSchedulingActivity(chatId, {
   idempotency_key: 'l11.7-create-1',
 }, actor);
 
-await transitionLogisticsSchedulingActivity(
-  chatId,
-  first.id,
-  'SCHEDULED',
-  actor,
-  { idempotency_key: 'l11.7-command-1', expectedVersion: 1 },
-);
+// Seed the existing scheduled activity as canonical fixture state. The test
+// must not use caller-supplied scheduling commands to manufacture FEASIBLE
+// capacity after the production boundary was changed to fail closed.
+db.prepare(
+  "UPDATE logistics_scheduling_activities SET status = 'SCHEDULED', version = 2 WHERE id = ? AND organization_id = ?"
+).run(first.id, organizationId);
 
 const second = await createLogisticsSchedulingActivity(chatId, {
   location_id: locationId,
