@@ -1,101 +1,183 @@
 # Sellify — Next Implementation Plan: First Experience and Global Commerce
 
-**Prepared:** 27 October 2026 (UTC+03:00)  
+**Revised:** 29 October 2026 (UTC+03:00)  
 **Repository:** `T-BOT-tech/sellify`  
-**Planning baseline:** `main` at `17ba6d6262ed2805cc432a2cdf2d884a8e47c010`  
-**Purpose:** Define the next evidence-based implementation sequence after the currently active work, without duplicating open PRs or introducing parallel authorities.
+**Documentation PR:** #99 — `docs/first-experience-global-commerce-plans-20261027`  
+**Last inspected documentation-PR head:** `486dd83f8a2ec335dcce648847bd3e9594983968`  
+**Purpose:** An evidence-led continuation plan based on current GitHub metadata and repository implementation history. This is a plan, not a claim that every feature is merged, certified, or production-ready.
 
-> **Source and confidence note:** At this baseline, the repository contains implementation handoffs, contracts, regressions, and open PR descriptions, but no separately tracked authoritative document named “First Experience” or “Global Commerce OS.” This plan is therefore a repository-grounded continuation plan, not a claim of complete line-by-line coverage against an unavailable external specification. Reconcile it with the original product document if that document is reintroduced into the repo.
+> **Important source boundary:** The live repository evidence available for this update shows that multiple formerly active PRs were closed without being merged. Their branches and passing historical checks do not establish that their code is on `main`. Before implementation, compare the exact current `main` source against the relevant PR diffs and tests. A closed, unmerged PR is neither a completed feature nor automatically a reason to reopen the same work.
 
-## Recommendation in one sentence
+## 1. Current recommendation
 
-Do not start another onboarding feature or country pack yet. First stabilize the active outbox follow-on PR with its current CI failure, then coordinate the overlapping First Experience PRs on their live heads and prove their combined behavior in one current-base integration journey; only after that integration gate passes should the next narrow product implementation be selected from actual uncovered acceptance criteria.
+**Do not start another broad First Experience feature, country pack, or new abstraction yet.** First establish what is actually present on current `main`; review the two current-main payment UX fixes (#153 and #158) against their exact heads and CI; then decide from concrete gaps whether outbox recovery, browser module serving, or onboarding integration needs to be reintroduced as a narrow PR. Only after this source-and-runtime gate should another product slice be selected.
 
-## Live coordination snapshot
+This revises the 27 October sequence: PRs #84–#98 listed as active then are now reported **closed and unmerged** by the live GitHub connector snapshot on 29 October. Do not treat those changes as merged. Do not reopen, cherry-pick, or recreate them wholesale without proving that a required behavior is absent from current `main`.
 
-The following was observed through GitHub on 27 October 2026, around 20:28 UTC+03:00. These are mutable remote facts, not permanent claims; refresh them before acting.
+## 2. Live GitHub coordination snapshot (29 October 2026)
 
-| PR | Current purpose | Observed state / checks | Planning consequence |
-|---|---|---|---|
-| [#84](https://github.com/T-BOT-tech/sellify/pull/84) | Merchant business templates; first physical product or service | Open draft; checks passing | Core onboarding proposal, but does not implement hotel/rental capacity or appointments. |
-| [#85](https://github.com/T-BOT-tech/sellify/pull/85) | Persist template in tenant-owned server storage | Open draft; checks passing; based on an older PR #84 SHA | Restack/rebase before treating the persistence behavior as current-base integration. Behavioral cart-restore coverage is required after rebasing. |
-| [#87](https://github.com/T-BOT-tech/sellify/pull/87) | First Experience entry/readiness, Marketplace discovery, Home, Pack readiness, ecosystem discovery | Open draft; checks passing | Broad overlapping UX branch; coordinate rather than copy into another branch. |
-| [#89](https://github.com/T-BOT-tech/sellify/pull/89) | Country-pack-aware onboarding, 13-language preference, country/currency separation | Open draft; checks passing | Overlaps onboarding routes and tenant/server code. Preserve language/country/currency distinctions and no implied provider readiness. |
-| [#90](https://github.com/T-BOT-tech/sellify/pull/90) | Browser-safe module serving and boot fixes | Open draft; checks passing | Existing home for module-resolution fixes; do not duplicate. |
-| [#86], [#91–#98] | Outbox recovery, concurrency, and browser verification chain | Open, stacked PRs | Keep the chain isolated from First Experience changes. PR #98’s observed head was `6e1d56b…` and its baseline Node 24 check was failing; fix/understand that failure in its own PR chain before treating that work as complete. |
+This snapshot is a point-in-time report, not a substitute for refreshing status immediately before execution.
 
-PR #84, #85, #87, and #89 have concrete file overlap. PR #84 and #87 both change `app/index.html`, `backend/lib/store-sqlite.js`, and `backend/server.js`; PR #84 and #89 both change `app/index.html`, `app/src/auth/tenant.js`, `backend/lib/store-sqlite.js`, `backend/server.js`, and CI/package wiring; PR #87 and #89 both change `app/index.html`, `backend/server.js`, and CI. The exact `gh pr diff --name-only` path lists should be refreshed before any restack. A green check on each PR independently is not evidence that the combined behavior passes.
+| PR | Latest observed status | What it means for implementation |
+|---|---|---|
+| #99 — this documentation PR | Open, unmerged; head `486dd83f8a2ec335dcce648847bd3e9594983968`; base `main` at `17ba6d6262ed2805cc432a2cdf2d884a8e47c010` in its metadata | Documentation branch is stale relative to the newer 29 October source/PR activity; update its documents, but do not merge without user authorization. |
+| #153 — hide stale payment state in order queue | Open, unmerged; head `a11cb59337f4f0a88542f4ba41af569a28a122ac`; base `main` | Current-main focused payment-truth fix. Inspect current checks and regression; cached per-payment state must not be displayed as canonical when canonical order-payment summary refresh fails. |
+| #158 — checkout save vs payment confirmation | Open, unmerged; head `c2af54f86677680a1a752d539b4b92a78dcb4a21`; base `main` | Current-main checkout/payment boundary fix. Inspect current checks and overlap with #153; keep order creation, receipt evidence, and canonical payment confirmation distinct. |
+| #84 — merchant templates / first product or service | Closed, unmerged; head `efcf503016e84e3bed800ad5c32187758b163156` | Historical candidate only. Inspect `main` for the desired template and first-item behavior before deciding whether any narrow part remains. |
+| #85 — persist business template in tenant storage | Closed, unmerged; head `1771fb33e9c5747e7a426bd2fac5eccf932f36fa`; was stacked on #84's branch | Historical candidate only. Never assume tenant persistence or A→B→A cart restoration landed. Verify server code and runtime behavior directly. |
+| #87 — First Experience entry/readiness | Closed, unmerged; head `f467d71023c5880467ddf9e6db10c138ba334a91` | Historical candidate only. Inspect current entry routing, permissions, Home readiness, Marketplace discovery, and Telegram alignment. Do not copy the broad branch without gap evidence. |
+| #89 — active country packs and language/currency onboarding | Closed, unmerged; head `cae982c98935671bf68441fde4491ec964131650` | Historical candidate only. Verify current country choices and validation, 13-language preference, currency defaults, and no implied provider activation. |
+| #90 — browser-safe module serving | Closed, unmerged; head `3bb08d404759a774ffcc4123fdf2a95c88c320ab` | Historical candidate only. Reproduce the full-app browser module graph and check the actual serving allowlist in current `main`; do not expose the backend source tree as a workaround. |
+| #86 and #91–#98 — outbox recovery/serialization/browser chain | All reported closed, unmerged. #98 head `440af94be7ad17c420d35a707dc9d6b7607f7016`; #97 head `249b8a7f96ec6c3b881ae2d37ff25d680b1093ae`; #86 head `3483d5ffea2bb411e8f66c1c6677fe82a47e4c83` | Historical chain only. Do not assume the recovery fixes are on `main`; inspect current outbox/IDB source and run targeted tests before deciding whether to revive or replace any slice. |
+| Other older open PRs | Current search still surfaced PRs such as #50, #52, #61, #62, #71–#74; statuses and dependencies must be refreshed individually | Do not infer merge readiness or current relevance from old PR descriptions. Reconcile with current source, test evidence, and dependency graph. |
 
-## Stage 0 — Close the active verification blocker, without scope mixing
+**Status semantics:** “Closed, unmerged” means the PR did not merge according to the returned metadata. It does not prove the work was discarded, reverted, or absent from another branch. Only comparison against current `main` resolves that question. Historical check results remain tied to their tested SHAs.
 
-**Objective:** Make sure the already-submitted offline recovery work remains reviewable and technically coherent before using its completion as a prerequisite for additional work.
+## 3. Stage 0 — Re-establish the real implementation baseline
 
-1. Refresh PR #98 and its base chain (PR #97 and preceding outbox PRs). Inspect the failing check at the exact current head; do not infer the cause from a prior local commit because the remote head changed after the earlier local validation.
-2. Reproduce the failing baseline check under Node 24 from the exact PR head. If it is a code defect, fix only in the outbox branch chain and rerun the helper, recovery, browser, and CI regressions. If it is an environment/baseline problem, capture the exact error and identify the owner of that baseline rather than weakening the test.
-3. Confirm the fallback PR remains based on the latest intended PR #97 head and that its outbox-only file set does not contain First Experience or country-pack changes.
-4. Do not merge, close, or retarget the PR chain as part of this plan. Merge authority stays with the user.
+This is the immediate first task. Do not start by restacking all historical branches.
 
-**Exit:** Current PR #98 head is known; all required CI checks are green or any remaining external block is explicitly documented; its reviewed diff remains isolated from onboarding work.
+1. Fetch the current `main` SHA and working tree state. Record the exact commit used for all following inspection.
+2. Refresh open PR #153, #158, and #99: head SHA, base SHA, changed paths, reviews, checks, and latest commit. Retrieve check/job details rather than relying on PR-body claims.
+3. Compare current `main` with the closed/unmerged branches that could affect the next user journey: #84/#85/#87/#89 (onboarding), #90 (browser serving), and #86/#91–#98 (outbox). Use targeted diffs and source/test inspection; do not assume any of these landed.
+4. Inspect the current `package.json`, `.github/workflows/ci.yml`, browser harness, relevant test scripts, and canonical runtime modules. Confirm which regressions still run in CI and whether they exercise actual runtime behavior or only source patterns.
+5. Build a compact evidence ledger for each candidate behavior: **present and runtime-verified**, **present but only source-tested**, **missing**, **regressed**, **blocked**, or **not checked**. Include source path, command, runtime, SHA, and output.
+6. Keep separate worktrees/branches for payment, outbox, browser serving, and onboarding. No broad cherry-pick or force-reset; do not merge or close any PR without explicit user authorization.
 
-## Stage 1 — Build a current-base First Experience integration candidate
+**Stage 0 exit:** One authoritative `main` SHA, an accurate PR graph, and a list of real missing/regressed behaviors supported by current evidence.
 
-**Objective:** Verify the combined onboarding journey on a disposable branch based on current `main` and current PR heads, then submit only the resulting missing, non-duplicative changes.
+## 4. Stage 1 — Resolve the current-main payment UX boundary
 
-### 1A. Establish the integration order
+Review #153 and #158 first because they are the most recently observed current-main user-facing fixes and share the payment-truth boundary. Do not presume their checks are green; refresh them at the current heads.
 
-1. Refresh all PR heads, base SHAs, review state, checks, and changed paths. Record a table of changed files and overlapping hunks.
-2. Treat PR #84 as the business-template/first-catalog-item base only if its live head still represents the approved direction.
-3. Restack PR #85 onto the **current PR #84 head**, not merely a branch name or historical base SHA. Re-run PR #85’s authenticated HTTP persistence regression and the A→B→A tenant cart/template behavior. Do not assume a successful template GET/PUT test proves tenant cart restoration.
-4. Compare PR #87 with the current PR #84/#85 implementation. Integrate only non-overlapping user-facing readiness/discovery behavior that is absent after the business setup flow is current. Preserve existing permission, Pack readiness, Marketplace, and Telegram security authorities.
-5. Compare PR #89 with the resulting onboarding tree. Resolve its edits to `app/index.html`, tenant creation, backend routes/store, and CI as a coordinated integration; do not cherry-pick duplicate copies of shared files.
-6. Keep the integration candidate local and disposable until its test suite passes. This is a behavioral baseline, not authorization to merge or rewrite open PRs.
+### 4A. PR #153: stale state suppression
 
-### 1B. Run the combined behavioral acceptance matrix
+Verify that:
+- A canonical order-payment summary is the authority for order-level financial state.
+- When refresh fails, the UI does not continue presenting cached `PAID`, `PARTIAL`, or `UNPAID` state as freshly confirmed truth.
+- A per-payment cached row is not rendered as authoritative when the order-level summary is unavailable.
+- The explicit checking/unavailable state is visible and does not fabricate a success.
+- The regression runs under CI and covers the failed refresh path, not just a source-string match.
 
-Run against Node 24 and a real browser; use controlled fixtures, real app modules, and reloads. Stub only external identity/payment services where necessary and state every stub.
+### 4B. PR #158: checkout evidence and save semantics
 
-| Journey / invariant | Required observable result |
+Verify that:
+- Checkout clearly says it saves an order to the queue; choosing a payment method or attaching a receipt does not confirm payment.
+- Missing/disabled payment methods fail safely rather than silently defaulting to cash.
+- Receipt persistence failure leaves the user able to retry without silently saving an order that omitted selected evidence.
+- Repeated activation during async receipt processing cannot create duplicate local orders.
+- Canonical payment summary refresh is protected from late responses after cache invalidation or tenant changes.
+- Payment adapter identifiers are normalized before projection upsert.
+- Existing order/payment IDs and Payment Core authority remain canonical; no frontend ledger or new payment authority is introduced.
+
+### 4C. Integration and exit gate
+
+Run each focused regression and baseline/security workflow on the exact current PR heads, then test the combined checkout→queue→canonical summary path. Test refresh success, refresh failure, stale late response, no enabled payment method, receipt storage failure, repeated taps, local/unlinked order, and later canonical payment update. Keep order value, local order state, evidence attachment, and verified money received as separate concepts.
+
+**Exit:** All required CI checks pass on exact heads, the combined journey is verified or its blocker is documented, and no stale or caller-reported state is presented as canonical. Merge remains a user decision.
+
+## 5. Stage 2 — Reassess offline outbox recovery only from current source
+
+The former #86–#98 branch chain is now closed/unmerged in the observed metadata. The known historical work included in-flight mutation protection, three-way event merge, deep snapshots, Web Locks serialization, a same-tab no-lock queue, IndexedDB-serialized journal writes, Chromium runtime regression, and localStorage-only append-log recovery. #98's last described change also covered atomically checkpointing fallback operation IDs with the outbox and commit marker, plus cleanup-failure recovery.
+
+Those are historical implementation claims, not proof that current `main` contains them. Inspect the current files and tests before choosing a next action.
+
+### Required reliability matrix
+
+- Web Locks available: concurrent writes serialize the journal and IndexedDB commit marker.
+- Web Locks unavailable: same-tab async persistence is queued; cross-tab writes do not race a shared snapshot replacement.
+- IndexedDB transaction abort: no false commit marker; recovery records remain available; retry or cold-start hydration restores the event.
+- IndexedDB unavailable/blocked: localStorage fallback is explicit and does not claim stronger durability than the storage guarantees.
+- localStorage write/cleanup failure: valid older records are preserved; a cleanup failure cannot cause stale replay to overwrite a newer committed event.
+- Delete/tombstone replay: older snapshots do not resurrect deleted events.
+- Same-event concurrent edits: merge semantics are deterministic and documented; conflicting field behavior is tested.
+- Stale in-flight completion: an older asynchronous result cannot overwrite a newer mutation.
+- Tenant/account switch: pending events cannot be silently rebound to a different tenant.
+- Cold-start/browser reload and two independent browser realms: recovery works using real modules and actual persistence transactions.
+
+Use the existing regression scripts if present, validate that CI still runs them, and add only a missing high-value test. Do not rewrite expected hashes blindly; inspect the source/artifact contract first. Do not weaken the browser test to avoid a genuine regression. If the relevant behavior is absent, create a focused PR from current `main`, not a revival of a whole obsolete stack.
+
+**Exit:** Required Node 24 and real Chromium/browser tests pass on the exact commit; persistence-denial behavior is accurately described; all failures are attributable; no onboarding or payment UX changes are mixed into the outbox patch.
+
+## 6. Stage 3 — Reconstruct and certify First Experience only where it is missing
+
+The historical PRs #84/#85/#87/#89 are closed/unmerged, so use them as evidence and source references—not as active implementation instructions.
+
+### Integration acceptance matrix
+
+| Journey | Required evidence |
 |---|---|
-| New merchant entry | Visitor can discover supported workflows without receiving authenticated or tenant-scoped data. Pairing/auth boundaries remain fail-closed. |
-| Returning merchant | Existing authenticated merchant routes to the correct workspace; setup is not silently restarted or assigned to another business. |
-| Template selection | Selected template is validated and persisted to the server-owned tenant record; unknown keys and client-supplied capability claims are rejected. |
-| First catalog item | Product remains stock-tracked by existing rules; service item persists as canonical `item_type: service` and does not receive physical stock fields or inventory consequences. |
-| Tenant isolation | Tenant A→B clears A’s transient data from B; B→A restores A’s scoped cart/template/notes as designed after reload; B’s data remains independent. Cross-tenant reads/writes fail closed. |
-| Country choice | Only supported active packs are selectable; unknown, candidate-only, regional-only, or empty country is rejected before tenant persistence. Country validation does not implicitly enable tax, payment, or compliance behavior. |
-| Language choice | Existing 13-language catalog is available; saved preference is preserved or falls back to the documented default. Language is not inferred from country or sent as jurisdiction. |
-| Currency | Blank currency may default from the selected active pack; an explicit valid currency choice is preserved. Currency remains its own money authority and is not implied by UI language. |
-| Marketplace/Pack/channel | Purchasable listing, capability metadata, Pack setup/readiness, channel connection, seller registration, and workspace state remain distinct; read-only discovery does not mutate activation or registration. |
-| Home readiness | Connectivity alone does not mean business readiness. Readiness is operation-specific; inventory exceptions are non-applicable when there are no stock-tracked products. |
-| Browser boot | Module requests load in documented full-backend and frontend-only modes without unsafe backend-tree exposure, script 4xxs, or console/page errors. |
+| Visitor / new merchant | Discovery is available without exposing authenticated or tenant-scoped data; pairing/auth remains fail-closed. |
+| Returning merchant | Correct workspace is restored; identity, tenant, and setup are not silently reset. |
+| Business template | Only supported template keys are accepted; selection expresses setup intent, not unimplemented capabilities; tenant persistence is server-authoritative if required. |
+| First catalog item | Product follows existing inventory rules; service remains canonical `item_type: service` and does not create physical stock/inventory consequences. |
+| Tenant A→B→A | No cross-tenant leakage; durable cart/template/notes restore only where contractually intended, including after reload; ephemeral checkout/tender state stays ephemeral. |
+| Country | Only supported active country packs can be selected; unknown, blank, candidate-only, or regional-only values fail before persistence. Country choice does not activate tax, payment, compliance, or providers. |
+| Language | Existing 13-language support and preference/default behavior remain intact. Language is not inferred from country or used as legal jurisdiction. |
+| Currency | Currency remains distinct from language and country identity; country-pack default applies only when appropriate and explicit valid selection is preserved. |
+| Pack / Marketplace / channel | Discovery is read-only. Viewing a capability or pack does not grant permissions, activate a provider, register a seller, connect a channel, or establish operational readiness. |
+| Home readiness | Connectivity is distinct from first-sale/operational readiness; readiness uses existing operation-specific evidence and permissions. |
+| Telegram | Existing Telegram/PWA channel and storefront verification boundaries remain authoritative; a UI discovery action cannot bypass verification or publish state. |
+| Browser boot | Full-backend and frontend-only modes load only approved browser-safe modules; no broad backend source exposure, script 404s, boot errors, or unhandled browser exceptions. |
 
-Use existing regressions first, including `phase0/first-experience-service-catalog-frontend-sync-regression.mjs`, `phase0/first-experience-service-catalog-http-regression.mjs`, country-pack onboarding tests from PR #89, PR #87’s dedicated first-experience tests, and PR #90’s browser-serving tests. Add one compact integration-level regression only for a real gap not covered by existing tests; do not duplicate every component test in a monolithic script.
+### Integration method
 
-### 1C. Produce an evidence-based gap ledger
+1. Run the existing regressions first; confirm their script names in current `package.json` and CI.
+2. Start from current `main`, not an old PR base.
+3. Use historical PR diffs only to identify the smallest missing behavior.
+4. Add one combined browser test only where individual component tests do not cover a real integration risk.
+5. Test at least two tenants, reloads, failure/retry paths, and permission differences.
+6. Label every result **PASS**, **FAIL**, **NOT TESTED**, or **BLOCKED** with SHA, command, Node/browser version, and artifact.
+7. Submit a single narrow PR for a proven gap; do not copy all four closed branches into one mega-PR.
 
-For every acceptance row, label the result **PASS**, **FAIL**, **NOT TESTED**, or **BLOCKED**, with source file, command, runtime/browser, and evidence artifact. Do not describe a feature as “remaining” solely because an older planning document says so; inspect current source and tests first. If all rows pass, the next code task must come from a different, concrete uncovered project requirement—not from speculative feature expansion.
+**Exit:** The first-use journey is verified on current `main`, and every proposed change is linked to a demonstrated gap.
 
-**Stage 1 exit:** Current-base integration test candidate is clean; each changed PR’s behavior is either represented in the combined matrix or explicitly deferred; any new patch is limited to a demonstrated gap. The user reviews/merges PRs.
+## 7. Stage 4 — Global Commerce and country-ready architecture
 
-## Stage 2 — Select one next implementation slice by evidence
+Keep the agreed direction: **Global Core first; country-ready architecture from the beginning; country-by-country commercialization/localization after evidence.** Do not build Sellify as Ethiopia-only, and do not fully localize every market before commercial proof.
 
-After Stage 1, choose only one item in this order:
+- **Language** is UI/content preference; the existing 13-language system is a global platform capability.
+- **Operating country** selects an eligible country pack and its declared defaults; it is not derived from language.
+- **Currency** is a separate money/configuration concern. Do not force currency into the first onboarding step unless the actual flow requires it; preserve explicit choices and define defaults in one canonical configuration path.
+- **Country pack** is declarative composition for currency/localization defaults, tax/invoice references, country-specific validation, compliance requirements, payment compatibility, and local marketplace/logistics adapters. It must not become an independent order/payment/inventory/identity authority.
+- **Provider adapter mapping is not provider activation or certification.** Manual payment and SMS-based payment verification should be evaluated against the existing Payment Core contracts; do not add provider count or a second Ethiopia implementation.
+- **Regional/EAC strategy contracts** do not equal operational readiness for any member country. Use the existing country-priority/sequencing gate before rollout.
+- **First Experience** should route visitors, prospective merchants, and returning merchants into existing workflows; it must not create a new capability registry, onboarding authority, payment core, or sync engine.
+- **Channels** include Telegram and installable PWA, with POS/hardware treated as channels where supported. A channel is not a separate source of truth for commerce state.
+- **Business templates/packs** (retail, services, restaurant, warehouse, logistics, B2B, marketplace, etc.) communicate a starting configuration; only existing canonical capabilities may be advertised as operational.
 
-1. **Onboarding failure/recovery UX**, if the integration matrix finds real failure paths with no clear retry or safe recovery. Cover stale sessions, country/template validation errors, server timeouts, and idempotent retries; keep the server authoritative.
-2. **First-workspace activation clarity**, if users can complete setup but cannot distinguish setup completion from actual operational capability. Present existing readiness evidence and next actions; do not manufacture “ready” from configuration alone.
-3. **Focused operator usability** (accessibility, empty/error state, localization correctness), but only where a measured browser/accessibility regression exposes a gap.
-4. **Country overlays or provider enablement** only after a market has passed separate evidence gates for legal/tax, money/currency, provider support, security, operations, and support. A locale or language choice alone is never a launch/readiness gate.
+**Country-launch exit gate:** Country/legal scope reviewed; currency/money rules tested; provider contracts and certifications are explicit; country validation is enforced server-side; operational support/logistics path exists; localization is reviewed; security and audit regressions pass. No single language or country dropdown selection satisfies this gate.
 
-For the chosen slice: name the canonical authority, preserve the API/data boundary, add a focused regression and CI registration, test the exact journey under Node 24, then submit one narrow PR. No universal onboarding engine, country registry, provider switch, or parallel commerce authority.
+## 8. Stage 5 — Existing-authority service, payments, fulfillment, and logistics
 
-## Non-negotiable product and architecture invariants
+After the prior gates, inspect current routes, migrations, tests, and open PRs before declaring any service/logistics work remaining.
 
-- **Language ≠ country ≠ currency ≠ legal jurisdiction ≠ payment/provider readiness.** A French-speaking merchant may select French UI while operating under a different country and currency. Arabic or Portuguese support is not proof of any country’s tax/provider launch readiness.
-- Localization/i18n is global platform capability. Country packs provide declarative country-specific defaults and references; they do not own translations or imply a legal jurisdiction from language.
-- Country and regional packs remain composition/configuration, not orders, inventory, payments, identity, authorization, audit, events, or persistence authorities.
-- Template choice communicates setup intent only. A label such as hotel, rental, salon, or repair must not promise reservation capacity, deposits, appointment execution, or industry-specific processing absent canonical backend capability.
-- Preserve the authority flow: UI intent → existing client/capability API → canonical backend authority → business operation → audit/evidence.
-- Preserve tenant scoping, role/resource authorization, idempotency, concurrency, and audit invariants in server-side enforcement.
+- Keep the chain **Marketplace Order → Seller Order(s) → Fulfillment(s) → Payment → Settlement → Delivery** consistent with canonical backend records.
+- Service catalog identity is not proof that appointment capacity, booking execution, hotel/rental inventory, or industry-specific workflows exist.
+- A booking/request, customer acceptance, assessment, assignment, delivery proof, and completion are distinct states with explicit authority and evidence.
+- Payment selection, receipt image, reported cash tender, and order value are not verified payment. Payment Core remains the financial-state authority.
+- Settlement reversal must wait for canonical refund confirmation where required; cancellation alone is not proof of funds returned.
+- Logistics assessment/acceptance, courier assignment, delivery evidence, and inventory consequences must use the existing canonical lifecycle, tenant/location authorization, idempotency, and audit contracts.
+- Avoid a second fulfillment lifecycle, parallel inventory/payment authority, universal workflow engine, or generic transport authority.
 
-## How to resume
+## 9. Reporting and change-control rules
 
-Start by refreshing GitHub; capture current PR #98 CI failure and the latest #84/#85/#87/#89/#90 heads and paths. Then execute Stage 0 and Stage 1. Do not repeat planning if the source and PR state have not materially changed. Do not merge or close any PR without explicit user authorization.
+For each implementation, report these separately:
+1. **Source/static inspection**
+2. **Focused local regression**
+3. **Runtime/browser integration**
+4. **Broader baseline/security suite**
+5. **GitHub CI** with exact workflow/run and tested SHA
+6. **Not verified / blocked**
+
+Do not say “passed” without actual output. Do not infer current check state from an old PR description. Do not merge, close, or retarget PRs without explicit authorization. Keep unrelated work isolated and prefer one minimal evidence-backed fix plus one regression.
+
+## 10. How to resume in the next chat
+
+1. Refresh current `main` SHA and PR #99/#153/#158 status/checks.
+2. Compare current `main` with closed/unmerged PR #84/#85/#87/#89/#90 and #86–#98 only where relevant.
+3. Complete the #153/#158 payment UX review and combined journey.
+4. Use the evidence ledger to decide whether outbox or browser serving has a real missing/regressed behavior.
+5. Certify First Experience on current `main` only if a user journey remains uncovered.
+6. Update the companion ordered-task document with evidence, not assumptions.
+7. Keep merge decisions with the user.
