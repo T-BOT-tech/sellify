@@ -92,4 +92,7 @@ export default {
     packLocalizationAuthority: 'Localization authority',
     packAccessibilityAuthority: 'Accessibility foundation',
     packAccessibilityBoundary: 'Language selection does not change authorization. Screen semantics do not grant permissions; server-side authorization remains authoritative.',
+    orderValue: "የትዕዛዞች ዋጋ",
+    checkoutPaymentStateHint: "ይህን ደረጃ ማጠናቀቅ ትዕዛዙን ወደ ወረፋዎ ያስቀምጣል። የደረሰኝ ፎቶ የድጋፍ ማስረጃ ብቻ ነው፤ ክፍያ መቀበሉን አያረጋግጥም።",
+    checkoutNoPaymentMethods: "ምንም የክፍያ ዘዴዎች አልነቁም። ይህን ትዕዛዝ ከማስቀመጥዎ በፊት ቼክአውቱን ይሰርዙ እና በቅንብሮች ውስጥ የክፍያ ዘዴ ያንቁ።",
 };
