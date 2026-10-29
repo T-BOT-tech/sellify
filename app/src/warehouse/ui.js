@@ -35,6 +35,19 @@ import { renderProcurementReceiving, bindProcurementReceivingEvents } from './pr
 // value from outside this module (Rule 1's live-binding pattern, applied at
 // feature scope — see modularization plan §1).
 export let warehouseActiveSubtab = 'inventory';
+let inventoryFilter = 'all';
+
+// J5: Home low-stock navigation opens the canonical Warehouse inventory view.
+export function openLowStockInventory() {
+  inventoryFilter = 'low';
+  switchTab('warehouse');
+  switchWarehouseSubtab('inventory');
+}
+
+export function clearInventoryFilter() {
+  inventoryFilter = 'all';
+  renderWarehouseInventory();
+}
 
 export function applyWarehouseUI() {
   const enabled = isWarehouseEnabled();
@@ -89,7 +102,15 @@ export function renderWarehouseInventory() {
     list.innerHTML = `<div class="empty">No physical products to track yet. Add products in the Catalog tab; services do not require stock tracking.</div>`;
     return;
   }
-  list.innerHTML = physicalProducts.map(p => {
+  const displayedProducts = inventoryFilter === 'low' ? low : physicalProducts;
+  const filterHeader = inventoryFilter === 'low'
+    ? '<div class="hint inventory-filter-status">Showing low-stock items <button type="button" onclick="clearInventoryFilter()">Show all inventory</button></div>'
+    : '';
+  if (displayedProducts.length === 0) {
+    list.innerHTML = filterHeader + '<div class="empty">No low-stock items need attention.</div>';
+    return;
+  }
+  list.innerHTML = filterHeader + displayedProducts.map(p => {
     const tracked = isStockTracked(p);
     const stock = tracked ? projectedStock(p, config.locationId || '') : null;
     let badgeClass = '';
