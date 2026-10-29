@@ -172,6 +172,8 @@ jobs:
         run: npm run test:fux-31-accessibility
       - name: FUX-26 seller storefront channel contract validation regression
         run: npm run fux26:storefront-contract-test
+      - name: First product empty-state regression
+        run: npm run test:first-product-empty-state
       - name: FUX-42 core fulfillment regression
         run: npm run test:fux-42
       - name: FUX-44 frontend fulfillment authority regression
