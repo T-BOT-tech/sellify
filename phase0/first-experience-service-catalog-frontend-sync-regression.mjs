@@ -162,7 +162,8 @@ assert.equal(attemptedLocalSaves.length, 2, 'retry must perform one fresh durabl
 assert.equal(attemptedLocalSaves[1].key, 'products');
 assert.equal(attemptedLocalSaves[1].value.length, 2,
   'retry payload must contain exactly the existing item and one proposed offering');
-assert.deepEqual(onboardingHarness.products.map(item => item.id), ['existing-item', 'unsaved-consultation'],
+assert.equal(JSON.stringify(onboardingHarness.products.map(item => item.id)),
+  JSON.stringify(['existing-item', 'unsaved-consultation']),
   'successful retry must persist exactly one copy of the offering');
 assert.equal(onboardingHarness.products.filter(item => item.id === 'unsaved-consultation').length, 1,
   'a failed first attempt must not cause duplicate offerings when retried');
