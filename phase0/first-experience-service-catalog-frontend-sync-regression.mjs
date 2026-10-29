@@ -447,7 +447,7 @@ const sanitizerContext = {
 };
 vm.runInNewContext(
   sanitizeRemoteProductsSource.replace('export function sanitizeRemoteProducts', 'function sanitizeRemoteProducts')
-    + '\\nglobalThis.sanitizeRemoteProducts = sanitizeRemoteProducts;',
+    + '\nglobalThis.sanitizeRemoteProducts = sanitizeRemoteProducts;',
   sanitizerContext,
 );
 const sanitizedLegacyCatalog = sanitizerContext.sanitizeRemoteProducts([
