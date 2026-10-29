@@ -46,6 +46,6 @@ assert.equal(COUNTRY_COMPLIANCE_BOUNDARY_CONTRACT.ownsAuditStore, false);
 assert.equal(COUNTRY_COMPLIANCE_BOUNDARY_CONTRACT.ownsRegulatoryRules, false);
 assert.equal(COUNTRY_COMPLIANCE_BOUNDARY_CONTRACT.regulatoryStatus, 'country_defined_deferred');
 
-assert.throws(() => resolveCountryComplianceBoundary('KE'), /Unknown country pack/);
+assert.throws(() => resolveCountryComplianceBoundary('ZZ'), /Unknown country pack/);
 
 console.log('Phase 14.8 Ethiopia Compliance Boundary Regression: PASS');
