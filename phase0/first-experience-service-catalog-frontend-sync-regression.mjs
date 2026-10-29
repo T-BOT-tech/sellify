@@ -62,9 +62,9 @@ function makeTemplateRecoveryHarness(overrides = {}) {
     ...overrides,
   };
   vm.runInNewContext(
-    "const pendingBusinessTemplateKey = chatId => 'ledger_business_template_pending_v1:' + encodeURIComponent(String(chatId));\\n"
+    "const pendingBusinessTemplateKey = chatId => 'ledger_business_template_pending_v1:' + encodeURIComponent(String(chatId));\n"
       + loadBusinessTemplateFunctionSource
-      + "\\nthis.loadBusinessTemplateConfig = loadBusinessTemplateConfig;",
+      + "\nthis.loadBusinessTemplateConfig = loadBusinessTemplateConfig;",
     harness,
   );
   return harness;
