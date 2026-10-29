@@ -218,7 +218,7 @@ export default {
     checkoutNoPaymentMethods: "No payment methods are enabled. Cancel checkout and enable a payment method in Settings before saving this order.",
     checkoutReceiptSaveFailed: "Receipt could not be saved. Retry, or close this dialog to return to checkout.",
     firstSaleAddProduct: 'Add a product to start selling',
-    catalogHasItems: 'Catalog has items',,
+    catalogHasItems: 'Catalog has items',
     serviceBookingsTitle: "Service bookings",
     serviceBookingsRefresh: "Refresh bookings",
     serviceBookingsDescription: "Appointments attached to canonical service orders. The server validates every action.",
