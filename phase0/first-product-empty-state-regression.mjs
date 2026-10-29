@@ -33,8 +33,8 @@ assert.match(english, /catalogHasItems\s*:/, 'English fallback must define the n
 const localeNames = ['am', 'ar', 'en', 'es', 'fr', 'ha', 'hi', 'om', 'pt', 'ru', 'so', 'sw', 'yo'];
 for (const locale of localeNames) {
   const messages = await read(`../app/src/i18n/locales/${locale}.js`);
-  assert.match(messages, /firstSaleAddProduct\\s*:/, `${locale} locale must translate the empty-catalog message`);
-  assert.match(messages, /catalogHasItems\\s*:/, `${locale} locale must translate the non-empty-catalog message`);
+  assert.match(messages, /firstSaleAddProduct\s*:/, `${locale} locale must translate the empty-catalog message`);
+  assert.match(messages, /catalogHasItems\s*:/, `${locale} locale must translate the non-empty-catalog message`);
 }
 
 console.log('First product empty-state and home catalog-status regressions passed for all 13 locales.');
