@@ -12,4 +12,6 @@ export default {
     checkoutNoPaymentMethods: "Ko si ọna isanwo ti a muu ṣiṣẹ. Fagilee igbesẹ yii ki o muu ọna isanwo ṣiṣẹ ninu Eto ṣaaju fifipamọ aṣẹ yii.",
     checkoutReceiptSaveFailed: "A ko le fi risiti pamọ. Gbiyanju lẹẹkansi, tabi pa ferese yii lati pada si checkout.",
     saveOrderQueue: "Fi aṣẹ pamọ sinu isinyi",
+    firstSaleAddProduct: "Fi ọja kan kun láti bẹ̀rẹ̀ títà",
+    catalogHasItems: "Àkójọ ọjà ní àwọn ọjà",
 };
