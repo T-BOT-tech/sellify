@@ -94,4 +94,5 @@ export default {
     orderValue: "Thamani ya oda",
     checkoutPaymentStateHint: "Ukikamilisha hatua hii, agizo litahifadhiwa kwenye foleni yako. Picha ya risiti ni ushahidi wa kusaidia tu; haithibitishi kuwa malipo yamepokelewa.",
     checkoutNoPaymentMethods: "Hakuna njia za malipo zilizowezeshwa. Ghairi checkout na uwashe njia ya malipo kwenye Mipangilio kabla ya kuhifadhi agizo hili.",
+    checkoutReceiptSaveFailed: "Risiti haikuweza kuhifadhiwa. Jaribu tena, au funga dirisha hili ili urudi kwenye checkout.",
 };
