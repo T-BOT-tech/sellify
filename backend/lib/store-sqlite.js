@@ -6339,7 +6339,8 @@ export async function saveCatalog(chatId, incomingProducts) {
     for (const product of products) {
       const row = current.get(String(product.id));
       if (!row) { product.stock_revision = 0; continue; }
-      const previousType = parseJSON(row.product_json, {}).item_type === 'service' ? 'service' : 'product';
+      const previousPayload = parseJSON(row.product_json, {});
+      const previousType = String(previousPayload.item_type ?? previousPayload.type ?? '').trim().toLowerCase() === 'service' ? 'service' : 'product';
       const nextType = product.item_type === 'service' ? 'service' : 'product';
       if (previousType !== nextType) {
         const tenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(key);
