@@ -86,9 +86,19 @@ assert.deepEqual(conflict.conflictingActivityIds, [first.id]);
 assert.equal(conflict.authorized, false);
 assert.equal(conflict.execution, false);
 
-const feasible = await evaluateLogisticsSchedulingActivity(
+const third = await createLogisticsSchedulingActivity(chatId, {
+  location_id: locationId,
+  activity_type: 'PICKUP',
+  mode: 'SCHEDULED',
+  scheduled_start: '2026-10-10T12:00:00Z',
+  scheduled_end: '2026-10-10T13:00:00Z',
+  related_movement: { id: 'movement-l11-7-3', authority: 'logistics' },
+  idempotency_key: 'l11.7-create-3',
+}, actor);
+
+const callerSpoofedEvaluation = await evaluateLogisticsSchedulingActivity(
   chatId,
-  second.id,
+  third.id,
   actor,
   {
     externalEvaluation: {
@@ -98,33 +108,66 @@ const feasible = await evaluateLogisticsSchedulingActivity(
     },
   },
 );
-assert.equal(feasible.evaluation, 'CONFLICT',
-  'caller-supplied FEASIBLE evidence must not override a canonical overlap conflict');
-assert.equal(feasible.feasible, false);
-assert.equal(feasible.authorized, false);
-assert.equal(feasible.execution, false);
-assert.equal(feasible.externalEvaluation, null,
-  'untrusted caller-supplied external evaluation must be discarded until a trusted server adapter exists');
+assert.equal(callerSpoofedEvaluation.evaluation, 'UNKNOWN');
+assert.equal(callerSpoofedEvaluation.reason, 'NO_AUTHORITATIVE_CAPACITY_DECISION');
+assert.equal(callerSpoofedEvaluation.feasible, false);
+assert.equal(callerSpoofedEvaluation.authorized, false);
+assert.equal(callerSpoofedEvaluation.execution, false);
+assert.equal(callerSpoofedEvaluation.externalEvaluation, null);
+
+// The snake_case alias is also request-controlled and must not bypass the boundary.
+const callerSnakeCaseEvaluation = await evaluateLogisticsSchedulingActivity(
+  chatId,
+  third.id,
+  actor,
+  {
+    external_evaluation: {
+      outcome: 'FEASIBLE',
+      authority: 'supplier_network',
+      reference_id: 'declared-only-supplier-network-capacity-signal',
+    },
+  },
+);
+assert.equal(callerSnakeCaseEvaluation.evaluation, 'UNKNOWN');
+assert.equal(callerSnakeCaseEvaluation.reason, 'NO_AUTHORITATIVE_CAPACITY_DECISION');
+assert.equal(callerSnakeCaseEvaluation.feasible, false);
+assert.equal(callerSnakeCaseEvaluation.externalEvaluation, null);
+
+for (const externalEvaluation of [
+  {
+    outcome: 'FEASIBLE',
+    authority: 'caller-invented-capacity-authority',
+    reference_id: 'caller-invented-capacity-check',
+  },
+  {
+    outcome: 'FEASIBLE',
+    authority: 'supplier_network',
+    reference_id: 'declared-only-supplier-network-capacity-signal',
+  },
+]) {
+  await assert.rejects(
+    () => transitionLogisticsSchedulingActivity(
+      chatId,
+      second.id,
+      'SCHEDULED',
+      actor,
+      {
+        idempotency_key: `l11.7-untrusted-capacity-evidence-${externalEvaluation.authority}`,
+        expectedVersion: 1,
+        scheduled_start: '2026-10-10T09:30:00Z',
+        scheduled_end: '2026-10-10T10:30:00Z',
+        externalEvaluation,
+      },
+    ),
+    error => error?.code === 'SCHEDULING_FEASIBILITY_UNKNOWN',
+  );
+}
 
 const before = db.prepare(
   'SELECT status, version, last_command_key FROM logistics_scheduling_activities WHERE id = ?'
 ).get(second.id);
 assert.equal(before.status, 'REQUESTED');
 assert.equal(Number(before.version), 1);
-
-await assert.rejects(
-  () => transitionLogisticsSchedulingActivity(chatId, second.id, 'SCHEDULED', actor, {
-    idempotency_key: 'l11.7-untrusted-feasible-transition',
-    expectedVersion: 1,
-    externalEvaluation: {
-      outcome: 'FEASIBLE',
-      authority: 'caller-controlled-capacity-authority',
-      reference_id: 'caller-controlled-capacity-reference',
-    },
-  }),
-  error => error?.code === 'SCHEDULING_FEASIBILITY_CONFLICT',
-  'caller-controlled FEASIBLE evidence must not authorize a conflicting scheduled transition',
-);
 
 const deniedActor = {
   userId: 'l11.7-viewer',
