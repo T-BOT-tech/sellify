@@ -162,6 +162,9 @@ jobs:
       - name: Marketplace refund confirmation integrity regression
         run: npm run phase11.4:marketplace-test
 
+      - name: Procurement receiving service identity regression
+        run: npm run phase17.7:procurement-receiving-test
+
       - name: Checkout payment-state clarity and order-total regression
         run: npm run test:checkout-payment-state-clarity
       - name: Order queue order-value labeling regression
