@@ -13,7 +13,7 @@ export default {
     checkoutReceiptSaveFailed: "Не удалось сохранить чек. Повторите попытку или закройте это окно, чтобы вернуться к оформлению заказа.",
     saveOrderQueue: "Сохранить заказ в очереди",
     firstSaleAddProduct: "Добавьте товар, чтобы начать продажи",
-    catalogHasItems: "В каталоге есть товары",,
+    catalogHasItems: "В каталоге есть товары",
     serviceBookingsTitle: "Бронирования услуг",
     serviceBookingsRefresh: "Обновить бронирования",
     serviceBookingsDescription: "Записи на услуги, связанные с каноническими заказами. Сервер проверяет каждое действие.",
