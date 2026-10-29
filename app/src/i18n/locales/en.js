@@ -213,4 +213,8 @@ export default {
     packLocalizationAuthority: 'Localization authority',
     packAccessibilityAuthority: 'Accessibility foundation',
     packAccessibilityBoundary: 'Language selection does not change authorization. Screen semantics do not grant permissions; server-side authorization remains authoritative.',
+    orderValue: "Order value",
+    checkoutPaymentStateHint: "Completing this step saves the order to your queue. A receipt photo is supporting evidence only; it does not confirm that a payment was received.",
+    checkoutNoPaymentMethods: "No payment methods are enabled. Cancel checkout and enable a payment method in Settings before saving this order.",
+    checkoutReceiptSaveFailed: "Receipt could not be saved. Retry, or close this dialog to return to checkout.",
 };
