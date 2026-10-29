@@ -128,7 +128,7 @@ assert.ok(retryBusinessTemplateFunctionSource, 'Settings business-template retry
 
 function makeBusinessTemplateRetryHarness(overrides = {}) {
   const harness = {
-    config: { chatId: 'tenant-a', sessionToken: 'token-a', tenantRole: 'owner', businessTemplate: 'repair' },
+    config: { chatId: 'tenant-a', sessionToken: 'token-a', tenantRole: 'owner', businessTemplate: 'repair', businessTemplateTenantId: 'tenant-a' },
     calls: [],
     writes: [],
     configWrites: [],
@@ -169,6 +169,19 @@ assert.equal(retrySuccessHarness.writes[1].value.status, 'synced',
   'manual retry may mark the marker synced only after server acknowledgement');
 assert.equal(retrySuccessHarness.config.businessTemplate, 'repair');
 assert.match(retrySuccessHarness.status.textContent, /synced to the server/i);
+
+const staleTenantTemplateHarness = makeBusinessTemplateRetryHarness({
+  config: {
+    chatId: 'tenant-a', sessionToken: 'token-a', tenantRole: 'owner',
+    businessTemplate: 'repair', businessTemplateTenantId: 'tenant-b',
+  },
+});
+await staleTenantTemplateHarness.retryBusinessTemplateSync();
+assert.equal(staleTenantTemplateHarness.calls.length, 0,
+  'a template cached for another tenant must never be written to the active tenant');
+assert.equal(staleTenantTemplateHarness.writes.length, 0,
+  'stale cross-tenant template identity must be rejected before creating a retry marker');
+assert.match(staleTenantTemplateHarness.status.textContent, /no business type saved for this business/i);
 
 const retryNonOwnerHarness = makeBusinessTemplateRetryHarness({
   config: { chatId: 'tenant-a', sessionToken: 'token-a', tenantRole: 'staff', businessTemplate: 'repair' },
@@ -355,6 +368,10 @@ assert.match(tenantAuthSource, /const stillActive = \(\) =>[\s\S]*?if \(!stillAc
   'a tenant/session switch during template recovery must abort before applying or retrying stale tenant data');
 assert.match(tenantAuthSource, /const templateSessionToken = String\(config\.sessionToken \|\| ''\)[\s\S]*?String\(config\.sessionToken \|\| ''\) !== templateSessionToken[\s\S]*?Authorization: `Bearer \$\{templateSessionToken\}`/,
   'onboarding template writes must use the captured tenant session and abort if active identity changes while persistence is pending');
+assert.match(tenantAuthSource, /businessTemplateTenantId: chatId/,
+  'server-hydrated and recovered template cache must retain its canonical tenant binding');
+assert.match(tenantAuthSource, /businessTemplateTenantId: templateTenantId/,
+  'onboarding template cache must be explicitly bound to the tenant created by that onboarding attempt');
 assert.match(tenantAuthSource, /businessTemplateSchemaVersion: 1/,
   'the local template cache must carry an explicit schema version');
 const windowAssignment = windowBridgeSource.match(/Object\.assign\(window,\s*\{([\s\S]*?)\n\s*\}\);/)?.[1] || '';
