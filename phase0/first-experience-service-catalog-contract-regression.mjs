@@ -5,7 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 
-import { isServiceCatalogItem, isStockTracked, projectedStock } from '../app/src/warehouse/inventory.js';
+// Warehouse modules read browser config during module initialization; provide the
+// minimal browser global before importing them so this regression runs in Node 24.
+globalThis.window = { __APP_CONFIG__: {} };
+const { isServiceCatalogItem, isStockTracked, projectedStock } = await import('../app/src/warehouse/inventory.js');
 
 const marketplaceListingsSource = await readFile(new URL('../app/src/marketplace/listings.js', import.meta.url), 'utf8');
 assert.match(marketplaceListingsSource, /item\.item_type === 'service'[\s\S]*?t\('service'\)/,
