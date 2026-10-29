@@ -11,7 +11,7 @@ assert.doesNotMatch(summary, /t\('todaySales'\)/, 'order totals must not be pres
 assert.match(summary, /orderValueTotal\s*=\s*todaysOrders\.reduce/, 'summary should explicitly calculate order value');
 assert.match(summary, /avgOrderValue\s*=\s*totalOrdersCount/, 'average metric should remain average order value');
 
-for (const locale of ['en', 'am', 'om', 'so', 'sw', 'es', 'hi']) {
+for (const locale of ['en', 'am', 'om', 'so', 'sw', 'es', 'hi', 'ar', 'fr', 'ha', 'pt', 'ru', 'yo']) {
   const source = readFileSync(new URL(`../app/src/i18n/locales/${locale}.js`, import.meta.url), 'utf8');
   assert.match(source, /orderValue\s*:/, `locale ${locale} should define the order value label`);
 }
