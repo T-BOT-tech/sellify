@@ -270,6 +270,10 @@ export async function retryBusinessTemplateSync() {
     if (status) status.textContent = 'Select a signed-in business before retrying business type sync.';
     return null;
   }
+  if (String(config.tenantRole || '').toLowerCase() !== 'owner') {
+    if (status) status.textContent = 'Only the business owner can retry business type sync. Ask an owner to run this action.';
+    return null;
+  }
   if (!supportedTemplates.has(templateKey)) {
     if (status) status.textContent = 'No valid saved business type is available to retry. Choose the business type during business setup first.';
     return null;
