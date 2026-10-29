@@ -142,7 +142,7 @@ function normaliseProduct(product) {
   const value = product && typeof product === 'object' ? { ...product } : {};
   value.name = typeof value.name === 'string' ? value.name.trim().slice(0, 200) : '';
   value.price = normalisePrice(value.price);
-  value.item_type = String(value.item_type ?? value.type ?? 'product').trim().toLowerCase() === 'service' ? 'service' : 'product';
+  value.item_type = String(value.item_type || value.type || 'product').trim().toLowerCase() === 'service' ? 'service' : 'product';
   const hasLogisticsDeliveryModel = value.delivery_model !== undefined || value.deliveryModel !== undefined ||
     value.service_profile !== undefined || value.serviceProfile !== undefined;
   if (hasLogisticsDeliveryModel) {
