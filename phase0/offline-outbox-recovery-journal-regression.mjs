@@ -250,7 +250,9 @@ const latest = [{ eventId: 'new-command', kind: 'command', status: 'pending' }];
   assert.deepEqual(failedWrite.snapshot, [latest[0], stale[0]],
     'the merged candidate must preserve shared journal-only work as well as new local changes');
   assert.equal(removals, 0, 'failed replacement must not delete the last known-good journal');
-  assert.deepEqual(JSON.parse(storage.getItem(OUTBOX_RECOVERY_KEY)).events, stale);
+  const preservedJournal = JSON.parse(storage.getItem(OUTBOX_RECOVERY_KEY));
+  assert.deepEqual(preservedJournal.events, stale, 'failed replacement must leave the prior shared events intact');
+  assert.equal(preservedJournal.snapshotId, 'shared-stale-snapshot', 'failed replacement must not advance the shared journal version');
 
   // If IndexedDB commits after the journal replacement failed, the transaction
   // must contain the merged candidate before its marker can supersede the old journal.
