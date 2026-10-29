@@ -13,7 +13,7 @@ export default {
     checkoutReceiptSaveFailed: "An kasa ajiye rasit. Sake gwadawa, ko rufe wannan taga don komawa ga odar.",
     saveOrderQueue: "Ajiye oda a jerin jira",
     firstSaleAddProduct: "Ƙara kaya don fara sayarwa",
-    catalogHasItems: "Akwai kaya a kundin kayayyaki",,
+    catalogHasItems: "Akwai kaya a kundin kayayyaki",
     serviceBookingsTitle: "Ajiyar sabis",
     serviceBookingsRefresh: "Sabunta ajiyoyi",
     serviceBookingsDescription: "Alƙawura da ke haɗe da ingantattun odar sabis. Sabar tana tabbatar da kowane aiki.",
