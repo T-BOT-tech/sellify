@@ -44,7 +44,7 @@ export function renderSellerHome() {
         <span class="home-metric-label">Products</span>
         <strong>${products.length}</strong>
       </button>
-      <button class="home-metric ${lowStock ? 'attention' : ''}" onclick="switchTab('catalog')">
+      <button class="home-metric ${lowStock ? 'attention' : ''}" onclick="openLowStockInventory()">
         <span class="home-metric-label">Low stock</span>
         <strong>${lowStock}</strong>
       </button>
