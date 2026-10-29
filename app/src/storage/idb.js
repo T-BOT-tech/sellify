@@ -107,7 +107,12 @@ function updateInTransaction(key, updater, additionalWrite = null) {
         nextValue = updater(request.result !== undefined ? request.result : null);
         if (nextValue === undefined) throw new TypeError('idbUpdate updater must return a value');
         store.put(nextValue, key);
-        if (additionalWrite) store.put(additionalWrite.value, additionalWrite.key);
+        if (additionalWrite) {
+          const sidecarValue = typeof additionalWrite.value === 'function'
+            ? additionalWrite.value(nextValue)
+            : additionalWrite.value;
+          store.put(sidecarValue, additionalWrite.key);
+        }
       } catch (error) {
         try { tx.abort(); } catch {}
         reject(error);
@@ -132,6 +137,9 @@ export function idbUpdate(key, updater) {
 // write from a stale journal left behind by a successful commit.
 export function idbUpdateAndSet(key, updater, sidecarKey, sidecarValue) {
   if (!sidecarKey) return Promise.reject(new TypeError('idbUpdateAndSet requires a sidecar key'));
+  // A sidecar factory runs after the updater, still inside the same transaction.
+  // This lets the outbox derive its recovery marker from a journal write that is
+  // serialized by the IndexedDB transaction itself when Web Locks are unavailable.
   return updateInTransaction(key, updater, { key: sidecarKey, value: sidecarValue });
 }
 
