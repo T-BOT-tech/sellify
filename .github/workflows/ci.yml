@@ -383,3 +383,6 @@ jobs:
 
       - name: Phase 14 country-pack final snapshot regression
         run: npm run test:phase14.15
+
+      - name: Phase 15 cross-country expansion Node 24 certification
+        run: npm run test:phase15.21
