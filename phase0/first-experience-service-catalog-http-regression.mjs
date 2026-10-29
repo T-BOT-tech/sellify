@@ -1410,13 +1410,42 @@ try {
   assert.equal(commandCountBeforeRetry, 1,
     'the accepted assessment must have exactly one durable command record before replay');
 
+  // This retry happens after the request has advanced through courier assignment
+  // and OUT_FOR_DELIVERY. Replaying the old assessment must not restore its
+  // historical NOT_ASSIGNED snapshot or overwrite current fulfillment state.
+  const assessmentStateBeforeRetry = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  assert.equal(assessmentStateBeforeRetry?.assignment_status, 'OUT_FOR_DELIVERY',
+    'the delayed assessment replay fixture must already be assigned and outbound');
+
   const assessmentRetry = await fetch(assessmentUrl, {
     method: 'POST',
     headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
     body: JSON.stringify(assessmentPayload),
   });
   assert.equal(assessmentRetry.status, 200, 'assessment idempotent retry should succeed');
-  assert.equal((await assessmentRetry.json()).replayed, true, 'assessment retry should be reported as replayed');
+  const assessmentRetryBody = await assessmentRetry.json();
+  assert.equal(assessmentRetryBody.replayed, true, 'assessment retry should be reported as replayed');
+
+  // Two simultaneous retries of the already committed command must both replay,
+  // not race into duplicate command/audit writes.
+  const concurrentAssessmentRetries = await Promise.all([
+    fetch(assessmentUrl, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+      body: JSON.stringify(assessmentPayload),
+    }),
+    fetch(assessmentUrl, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Idempotency-Key': 'parcel-request-assessment-accepted-1' },
+      body: JSON.stringify(assessmentPayload),
+    }),
+  ]);
+  assert.deepEqual(concurrentAssessmentRetries.map(response => response.status), [200, 200],
+    'concurrent exact assessment retries must both resolve successfully');
+  const concurrentAssessmentBodies = await Promise.all(concurrentAssessmentRetries.map(response => response.json()));
+  assert.ok(concurrentAssessmentBodies.every(body => body.replayed === true),
+    'concurrent retries of a committed assessment must both be marked replayed');
 
   const assessmentDbAfterRetry = new DatabaseSync(dbPath);
   try {
@@ -1433,6 +1462,10 @@ try {
   } finally {
     assessmentDbAfterRetry.close();
   }
+  const assessmentStateAfterRetry = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(assessmentStateAfterRetry, assessmentStateBeforeRetry,
+    'single and concurrent delayed assessment replays must preserve later assignment and fulfillment state');
 
   const conflictingAssessmentResponse = await fetch(assessmentUrl, {
     method: 'POST',
