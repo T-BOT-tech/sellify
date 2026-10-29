@@ -122,7 +122,7 @@ assert.equal(staleResponseHarness.localWrites.length, 0);
 
 // Exercise the actual Settings recovery action for the business-template sync.
 const retryBusinessTemplateFunctionSource = tenantAuthSource.match(
-  /export async function retryBusinessTemplateSync\(\) \{[\s\S]*?\n\}/,
+  /async function retryBusinessTemplateSync\(\) \{[\s\S]*?\n\}/,
 )?.[0];
 assert.ok(retryBusinessTemplateFunctionSource, 'Settings business-template retry function must be extractable for behavioral tests');
 
