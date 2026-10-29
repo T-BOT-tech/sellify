@@ -159,9 +159,26 @@ for (const externalEvaluation of [
         externalEvaluation,
       },
     ),
-    error => error?.code === 'SCHEDULING_FEASIBILITY_UNKNOWN',
+    error => error?.code === 'SCHEDULING_FEASIBILITY_CONFLICT',
   );
 }
+
+// A non-overlapping candidate still cannot be scheduled from a caller-supplied
+// FEASIBLE label; without an authenticated capacity authority the result is UNKNOWN.
+await assert.rejects(
+  () => transitionLogisticsSchedulingActivity(chatId, third.id, 'SCHEDULED', actor, {
+    idempotency_key: 'l11.7-untrusted-feasible-nonoverlap',
+    expectedVersion: 1,
+    scheduled_start: '2026-10-10T12:00:00Z',
+    scheduled_end: '2026-10-10T13:00:00Z',
+    externalEvaluation: {
+      outcome: 'FEASIBLE',
+      authority: 'caller-invented-capacity-authority',
+      reference_id: 'caller-invented-capacity-check',
+    },
+  }),
+  error => error?.code === 'SCHEDULING_FEASIBILITY_UNKNOWN',
+);
 
 const before = db.prepare(
   'SELECT status, version, last_command_key FROM logistics_scheduling_activities WHERE id = ?'
