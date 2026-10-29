@@ -54,6 +54,41 @@ assert.match(fulfillmentTransition, /INSERT INTO fulfillment_commands/,
   'successful fulfillment commands must be recorded transactionally');
 assert.match(fulfillmentTransition, /ROLLBACK/,
   'failed fulfillment transitions must roll back the write transaction');
+assert.ok(fulfillmentTransition.includes('existingDeliveryProof != null')
+    && fulfillmentTransition.includes('input.proof !== undefined')
+    && fulfillmentTransition.includes('DELIVERY_PROOF_IMMUTABLE')
+    && fulfillmentTransition.includes('freshOrderJson.fulfillment_proof'),
+  'generic fulfillment transitions must not overwrite captured delivery proof, including legacy order proof');
+const existingDeliveryProofSnapshot = fulfillmentTransition.indexOf('const persistedDeliveryProof = row?.proof_json');
+const fulfillmentCreation = fulfillmentTransition.indexOf('if (!row) {');
+const fulfillmentReplayBoundary = fulfillmentTransition.indexOf("if (String(row.last_command_key || '') === commandKey)");
+const deliveryProofMutationGuard = fulfillmentTransition.indexOf('if (existingDeliveryProof != null && input.proof !== undefined');
+const fulfillmentPersistenceWrite = fulfillmentTransition.indexOf('UPDATE fulfillments');
+assert.ok(existingDeliveryProofSnapshot >= 0
+    && fulfillmentTransition.includes('const existingDeliveryProof = persistedDeliveryProof ?? (freshOrderJson.fulfillment_proof ?? null)')
+    && fulfillmentCreation > existingDeliveryProofSnapshot,
+  'legacy delivery proof must be snapshotted before a new fulfillment can be seeded from caller input');
+assert.ok(fulfillmentReplayBoundary > fulfillmentCreation
+    && deliveryProofMutationGuard > fulfillmentReplayBoundary
+    && fulfillmentPersistenceWrite > deliveryProofMutationGuard,
+  'delivery proof immutability must be enforced after durable replay and before persistence');
+
+const assignmentLifecycleStart = store.indexOf('export async function transitionDeliveryAssignment(');
+const assignmentLifecycleEnd = store.indexOf('export async function transitionOrderFulfillment(', assignmentLifecycleStart + 40);
+assert.ok(assignmentLifecycleStart >= 0 && assignmentLifecycleEnd > assignmentLifecycleStart,
+  'canonical delivery assignment lifecycle must remain explicit');
+const assignmentLifecycleBody = store.slice(assignmentLifecycleStart, assignmentLifecycleEnd);
+const proofGuardStart = assignmentLifecycleBody.indexOf('const fulfillmentTarget =');
+const proofGuardEnd = assignmentLifecycleBody.indexOf('if (fulfillmentTarget)', proofGuardStart);
+assert.ok(proofGuardStart >= 0 && proofGuardEnd > proofGuardStart,
+  'assignment lifecycle proof guard must remain adjacent to fulfillment persistence');
+const assignmentProofGuard = assignmentLifecycleBody.slice(proofGuardStart, proofGuardEnd);
+assert.ok(assignmentProofGuard.includes('const existingProofForImmutability')
+    && assignmentProofGuard.includes('proofInput !== undefined')
+    && assignmentProofGuard.includes('DELIVERY_PROOF_IMMUTABLE')
+    && assignmentProofGuard.includes('legacyOrderProof'),
+  'all assignment transitions must protect captured proof, including legacy order proof');
+
 assert.match(fulfillmentTransition, /applyCoreFulfillmentInventoryConsequence\(key, updated, freshOrderJson, actor\)/,
   'fulfillment inventory consequences must use the order re-read inside the write transaction');
 

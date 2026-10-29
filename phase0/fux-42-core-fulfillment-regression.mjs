@@ -14,6 +14,9 @@ const {
   getOrderFulfillment,
   appendInventoryMovement,
   transitionOrderFulfillment,
+  transitionDeliveryAssignment,
+  getDatabaseForTests,
+  getOrCreateUserByTelegram,
   coreFulfillmentContract,
 } = await import('../backend/lib/store-sqlite.js');
 
@@ -40,8 +43,10 @@ const actor = {
   locationId: null,
 };
 
+const originalProof = { type: 'photo', reference: 'proof-fux42' };
 fulfillment = await transitionOrderFulfillment(chatId, orderId, 'out_for_delivery', actor, {
   idempotencyKey: 'fux42-command-1',
+  proof: originalProof,
 });
 assert.equal(fulfillment.status, 'out_for_delivery');
 assert.equal(fulfillment.fulfillmentType, 'delivery');
@@ -50,19 +55,120 @@ assert.equal(fulfillment.organizationId, tenant.organizationId);
 
 const replay = await transitionOrderFulfillment(chatId, orderId, 'out_for_delivery', actor, {
   idempotencyKey: 'fux42-command-1',
+  proof: originalProof,
 });
 assert.equal(replay.id, fulfillment.id);
 assert.equal(replay.status, 'out_for_delivery');
 
+await assert.rejects(
+  transitionOrderFulfillment(chatId, orderId, 'delivered', actor, {
+    idempotencyKey: 'fux42-proof-overwrite',
+    proof: { type: 'photo', reference: 'tampered-proof' },
+  }),
+  (error) => error?.code === 'DELIVERY_PROOF_IMMUTABLE' && error?.statusCode === 409,
+);
+const unchangedProof = await getOrderFulfillment(chatId, orderId);
+assert.deepEqual(unchangedProof.proof, originalProof,
+  'a rejected proof replacement must leave the previously captured proof unchanged');
+
 fulfillment = await transitionOrderFulfillment(chatId, orderId, 'delivered', actor, {
   idempotencyKey: 'fux42-command-2',
-  proof: { type: 'photo', reference: 'proof-fux42' },
+  proof: originalProof,
 });
 assert.equal(fulfillment.status, 'delivered');
 const balances = await (await import('../backend/lib/store-sqlite.js')).getInventoryBalances(chatId);
 const productBalance = balances.find((row) => row.productId === 'product-1');
 assert.equal(productBalance?.quantity, 9);
 assert.deepEqual(fulfillment.proof, { type: 'photo', reference: 'proof-fux42' });
+
+// Legacy orders may already carry proof in order_json before a fulfillment row
+// exists. A conflicting first fulfillment command must not seed a row with the
+// caller's replacement proof and conceal that legacy evidence.
+const legacyProof = { type: 'photo', reference: 'legacy-proof-fux42' };
+const legacySyncResult = await saveQueuedOrders(chatId, [{
+  id: 'local-fux42-legacy-proof',
+  items: [{ item_id: 'product-1', name: 'Test item', qty: 1, price: 500 }],
+  fulfillment_type: 'delivery',
+  delivery_address: 'Jimma',
+  fulfillment_proof: legacyProof,
+}]);
+assert.equal(legacySyncResult[0].status, 'synced');
+const legacyOrderId = legacySyncResult[0].order_id;
+await assert.rejects(
+  transitionOrderFulfillment(chatId, legacyOrderId, 'out_for_delivery', actor, {
+    idempotencyKey: 'fux42-legacy-proof-overwrite',
+    proof: { type: 'photo', reference: 'replacement-legacy-proof' },
+  }),
+  (error) => error?.code === 'DELIVERY_PROOF_IMMUTABLE' && error?.statusCode === 409,
+);
+assert.equal(await getOrderFulfillment(chatId, legacyOrderId), null,
+  'a rejected legacy-proof replacement must not leave a partially created fulfillment');
+const legacyProofFulfillment = await transitionOrderFulfillment(chatId, legacyOrderId, 'out_for_delivery', actor, {
+  idempotencyKey: 'fux42-legacy-proof-preserve',
+  proof: legacyProof,
+});
+assert.deepEqual(legacyProofFulfillment.proof, legacyProof,
+  'the matching legacy proof may be carried forward without replacement');
+
+// Exercise the separate courier-assignment lifecycle against a persisted proof.
+// The generic fulfillment test above cannot catch an overwrite through this API.
+const assignmentProofSync = await saveQueuedOrders(chatId, [{
+  id: 'local-fux42-assignment-proof',
+  items: [{ item_id: 'product-1', name: 'Test item', qty: 1, price: 500 }],
+  fulfillment_type: 'delivery',
+  delivery_address: 'Jimma',
+}]);
+assert.equal(assignmentProofSync[0].status, 'synced');
+const assignmentProofOrderId = assignmentProofSync[0].order_id;
+const db = getDatabaseForTests();
+const assignmentProof = { type: 'photo', reference: 'assignment-proof-original' };
+const assignmentProofFulfillmentId = 'fux42-assignment-proof-fulfillment';
+const assignmentProofAssignmentId = 'fux42-assignment-proof-assignment';
+const assignmentCourier = await getOrCreateUserByTelegram('fux42-assignment-courier', 'FUX-42 Assignment Courier');
+const assignmentMembershipId = 'fux42-assignment-courier-membership';
+const assignmentNow = new Date().toISOString();
+db.prepare("INSERT INTO memberships (id,user_id,chat_id,role,status,created_at) VALUES (?,?,?,'staff','active',?)")
+  .run(assignmentMembershipId, String(assignmentCourier.id), chatId, assignmentNow);
+db.prepare(`INSERT INTO membership_roles
+  (id,membership_id,role_id,status,scope_type,scope_id,source,created_at)
+  VALUES (?,?,?,'active','ORGANIZATION',?,'FUX_42_PROOF_IMMUTABILITY',?)`)
+  .run('fux42-assignment-courier-role', assignmentMembershipId, 'logistics_courier',
+    String(tenant.organizationId), assignmentNow);
+db.prepare(`INSERT INTO fulfillments
+  (id,server_order_id,organization_id,location_id,fulfillment_type,status,destination_json,proof_json,
+   created_by_user_id,updated_by_user_id,created_at,updated_at,version)
+  VALUES (?,?,?,NULL,'delivery','out_for_delivery',?,?,?, ?,?,?,1)`)
+  .run(assignmentProofFulfillmentId, assignmentProofOrderId, String(tenant.organizationId),
+    JSON.stringify('Jimma'), JSON.stringify(assignmentProof), String(assignmentCourier.id), String(assignmentCourier.id), assignmentNow, assignmentNow);
+db.prepare(`INSERT INTO delivery_assignments
+  (id,fulfillment_id,organization_id,location_id,courier_user_id,status,assignment_key,
+   assigned_by_user_id,assigned_at,updated_at,version,last_command_key)
+  VALUES (?,?,?,NULL,?,'OUT_FOR_DELIVERY',?,?,?, ?,1,NULL)`)
+  .run(assignmentProofAssignmentId, assignmentProofFulfillmentId, String(tenant.organizationId),
+    String(assignmentCourier.id), 'fux42-assignment-proof-key', String(assignmentCourier.id), assignmentNow, assignmentNow);
+const assignmentCourierActor = {
+  userId: String(assignmentCourier.id),
+  role: 'logistics_courier',
+  roles: ['logistics_courier'],
+  chatId,
+};
+await assert.rejects(
+  transitionDeliveryAssignment(chatId, assignmentProofOrderId, 'DELIVERED', assignmentCourierActor, {
+    idempotencyKey: 'fux42-assignment-proof-overwrite',
+    proof: { type: 'photo', reference: 'assignment-proof-tampered' },
+  }),
+  error => error?.code === 'DELIVERY_PROOF_IMMUTABLE' && error?.statusCode === 409,
+  'the courier assignment lifecycle must reject replacement of captured delivery proof',
+);
+const assignmentProofAfterRejection = db.prepare('SELECT status, proof_json FROM fulfillments WHERE id = ?')
+  .get(assignmentProofFulfillmentId);
+assert.equal(assignmentProofAfterRejection.status, 'out_for_delivery',
+  'rejected assignment proof replacement must not advance fulfillment status');
+assert.deepEqual(JSON.parse(assignmentProofAfterRejection.proof_json), assignmentProof,
+  'rejected assignment proof replacement must preserve persisted evidence');
+assert.equal(db.prepare('SELECT status FROM delivery_assignments WHERE id = ?')
+  .get(assignmentProofAssignmentId).status, 'OUT_FOR_DELIVERY',
+  'rejected assignment proof replacement must not advance courier assignment status');
 
 await assert.rejects(
   transitionOrderFulfillment(chatId, orderId, 'pending', actor, { idempotencyKey: 'fux42-invalid' }),
