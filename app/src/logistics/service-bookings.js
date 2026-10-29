@@ -137,7 +137,7 @@ async function transitionBooking(button, root) {
   try {
     const response = await fetch(url, {
       method: 'PATCH',
-      headers: { ...authHeaders(), 'Idempotency-Key': 'service-booking-ui-' + crypto.randomUUID() },
+      headers: { ...authHeaders(), 'Content-Type': 'application/json', 'Idempotency-Key': 'service-booking-ui-' + crypto.randomUUID() },
       body: JSON.stringify({
         status: target,
         expected_version: Number(button.dataset.version),
