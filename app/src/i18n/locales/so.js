@@ -94,4 +94,5 @@ export default {
     orderValue: "Qiimaha dalabka",
     checkoutPaymentStateHint: "Markaad tallaabadan dhammayso, dalabka waxaa lagu kaydinayaa safkaaga. Sawirka rasiidku waa caddayn taageero oo keliya; ma xaqiijinayo in lacag la helay.",
     checkoutNoPaymentMethods: "Hababka lacag-bixinta lama hawlgelin. Jooji checkout-ka oo ka hawlgeli hab lacag-bixin gudaha Settings ka hor intaadan dalabkan kaydin.",
+    checkoutReceiptSaveFailed: "Rasiidka lama kaydin karin. Mar kale isku day, ama xidh daaqaddan si aad ugu noqoto checkout-ka.",
 };
