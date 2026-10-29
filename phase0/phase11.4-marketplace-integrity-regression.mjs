@@ -126,7 +126,7 @@ try {
     orderId: legacyRow.server_order_id,
     amountMinor: 2000,
     currency: 'ETB',
-    state: 'RECEIVED',
+    state: 'UNPAID',
     providerId: 'manual',
     channel: 'manual',
   }, { userId: sellerUser.id, deviceId: sellerSession.deviceId });
@@ -192,11 +192,11 @@ try {
   const splitServerOrder = db.prepare('SELECT server_order_id FROM orders WHERE chat_id = ? AND marketplace_order_id = ? LIMIT 1')
     .get(seller.chatId, splitOrder.json.marketplace_order_id).server_order_id;
   const p1 = await store.createPayment(seller.chatId, {
-    orderId: splitServerOrder, amountMinor: 400, currency: 'ETB', state: 'RECEIVED',
+    orderId: splitServerOrder, amountMinor: 400, currency: 'ETB', state: 'UNPAID',
     providerId: 'manual', channel: 'manual',
   }, { userId: sellerUser.id, deviceId: sellerSession.deviceId });
   const p2 = await store.createPayment(seller.chatId, {
-    orderId: splitServerOrder, amountMinor: 600, currency: 'ETB', state: 'RECEIVED',
+    orderId: splitServerOrder, amountMinor: 600, currency: 'ETB', state: 'UNPAID',
     providerId: 'manual', channel: 'manual',
   }, { userId: sellerUser.id, deviceId: sellerSession.deviceId });
   await store.transitionPayment(seller.chatId, p1.id, 'VERIFIED', { userId: sellerUser.id, deviceId: sellerSession.deviceId });
@@ -206,7 +206,7 @@ try {
   assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(splitSeller.id).status, 'READY');
   await assert.rejects(
     () => store.createPayment(seller.chatId, {
-      orderId: splitServerOrder, amountMinor: 1, currency: 'ETB', state: 'RECEIVED',
+      orderId: splitServerOrder, amountMinor: 1, currency: 'ETB', state: 'UNPAID',
       providerId: 'manual', channel: 'manual',
     }, { userId: sellerUser.id, deviceId: sellerSession.deviceId }),
     error => error?.code === 'MARKETPLACE_PAYMENT_ALLOCATION_EXCEEDED'
