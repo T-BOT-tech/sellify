@@ -142,7 +142,7 @@ function normaliseProduct(product) {
   const value = product && typeof product === 'object' ? { ...product } : {};
   value.name = typeof value.name === 'string' ? value.name.trim().slice(0, 200) : '';
   value.price = normalisePrice(value.price);
-  value.item_type = String(value.item_type || 'product').trim().toLowerCase() === 'service' ? 'service' : 'product';
+  value.item_type = String(value.item_type ?? value.type ?? 'product').trim().toLowerCase() === 'service' ? 'service' : 'product';
   const hasLogisticsDeliveryModel = value.delivery_model !== undefined || value.deliveryModel !== undefined ||
     value.service_profile !== undefined || value.serviceProfile !== undefined;
   if (hasLogisticsDeliveryModel) {
@@ -5688,7 +5688,12 @@ function ensureInventoryOpeningBalances(chatId) {
   if (!location) return;
   const products = db.prepare(
     'SELECT product_id, stock, product_json FROM catalog_products WHERE chat_id = ? AND stock IS NOT NULL'
-  ).all(String(chatId)).filter(product => parseJSON(product.product_json, {}).item_type !== 'service');
+  ).all(String(chatId)).filter(product => {
+    const payload = parseJSON(product.product_json, {});
+    // Legacy catalog payloads used `type`; current catalog identity uses `item_type`.
+    // Treat either service marker as non-stock-tracked during opening-balance migration.
+    return String(payload.item_type ?? payload.type ?? '').trim().toLowerCase() !== 'service';
+  });
   const insert = db.prepare(`
     INSERT OR IGNORE INTO inventory_movements
       (id, event_id, organization_id, location_id, product_id, quantity, movement_type,
