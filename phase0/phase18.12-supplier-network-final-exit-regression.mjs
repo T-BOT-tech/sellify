@@ -23,7 +23,12 @@ assert.match(store, /supplier_network_performance_observations/);
 assert.match(store, /supplier_network_trust_evidence/);
 assert.match(store, /getSupplierNetworkMarketplaceIntegration/);
 assert.doesNotMatch(store, /supplier_network_seller|supplier_network_supplier_identity|supplier_network_identity/);
-assert.doesNotMatch(store, /schema_migrations.*\.run\(39/);
+const migration39Start = store.indexOf('if (!applied.includes(39))');
+const migration39End = store.indexOf('if (!applied.includes(40))', migration39Start);
+assert.ok(migration39Start >= 0 && migration39End > migration39Start, 'Existing migration 39 boundary missing');
+const migration39 = store.slice(migration39Start, migration39End);
+assert.match(migration39, /telegram_storefront_configs/);
+assert.doesNotMatch(migration39, /supplier_network_/);
 
 const integrationStart = store.indexOf('export async function getSupplierNetworkMarketplaceIntegration');
 assert.ok(integrationStart >= 0, 'Marketplace integration authority missing');

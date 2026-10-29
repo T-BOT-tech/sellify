@@ -389,3 +389,6 @@ jobs:
 
       - name: Phase 16 final platform snapshot Node 24 certification
         run: npm run test:phase16.14
+
+      - name: Phase 19 cumulative Discovery Fabric exit certification
+        run: npm run test:phase19.12-cumulative
