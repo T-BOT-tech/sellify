@@ -14,8 +14,11 @@ assert.match(tenantSource,
   /if \(data\.challenge\?\.token\)[\s\S]*?showWizard\(\{ user: data\.user, memberships \}\);\s*return \{ authenticated: false, onboarding: true \};/,
   'multiple memberships must continue through the tenant-selection onboarding state');
 assert.match(tenantSource,
-  /selectOnboardingTenant\(\)[\s\S]*?request\('\/auth\/select-tenant'[\s\S]*?Authorization: `Bearer \$\{config\.sessionToken\}`[\s\S]*?persistAuth\(data, data\.membership\)/,
-  'tenant choice must be submitted using the authenticated session and persist the server-selected membership');
+  /selectOnboardingTenant\(\)[\s\S]*?request\('\/auth\/select-tenant'[\s\S]*?headers: authHeaders\(\)[\s\S]*?persistAuth\(data, data\.membership\)/,
+  'tenant choice must use the current session when available and persist the server-selected membership');
+assert.match(tenantSource,
+  /selectOnboardingTenant\(\)[\s\S]*?challengeToken: typeof window !== 'undefined' \? window\.__SELLIFY_ONBOARDING_CHALLENGE \|\| '' : ''/,
+  'expired-session tenant choice must submit the one-time selection challenge for returning Telegram users');
 assert.match(tenantSource,
   /next\.organizationId = data\.session\.organizationId \|\| next\.organizationId \|\| '';/,
   'workspace organization context must come from the selected session when supplied');

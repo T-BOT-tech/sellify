@@ -344,8 +344,12 @@ export async function selectOnboardingTenant() {
   if (!select?.value) return;
   const data = await request('/auth/select-tenant', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${config.sessionToken}` },
-    body: JSON.stringify({ chatId: select.value, deviceName: 'Telegram Mini App' }),
+    headers: authHeaders(),
+    body: JSON.stringify({
+      chatId: select.value,
+      deviceName: 'Telegram Mini App',
+      challengeToken: typeof window !== 'undefined' ? window.__SELLIFY_ONBOARDING_CHALLENGE || '' : '',
+    }),
   });
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('sellify:tenant-changing'));
   if (config.chatId && !(await preserveTenantState(config.chatId))) {
