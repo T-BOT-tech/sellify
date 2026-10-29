@@ -3,6 +3,7 @@
 import { config, orders, products } from '../state.js';
 import { authHeaders } from '../auth/tenant.js';
 import { escapeHtml, escapeAttr } from '../utils/index.js';
+import { t } from '../ui/i18n.js';
 
 const NEXT = Object.freeze({
   REQUESTED: ['ACCEPTED', 'REJECTED', 'CANCELLED'],
@@ -32,7 +33,7 @@ async function requestBookings(order) {
   const response = await fetch(url, { headers: authHeaders() });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(data?.error?.message || 'Could not load service bookings.');
+    const error = new Error(data?.error?.message || t('serviceBookingsLoadFailed'));
     error.status = response.status;
     throw error;
   }
@@ -88,15 +89,15 @@ export async function refreshServiceBookings(root = document) {
   const list = workspace?.querySelector('#serviceBookingsList');
   if (!workspace || !status || !list) return;
   if (!config.chatId || !config.sessionToken) {
-    status.textContent = 'Sign in to view service bookings.';
+    status.textContent = t('serviceBookingsSignIn');
     list.replaceChildren();
     return;
   }
-  status.textContent = 'Loading service bookings…';
+  status.textContent = t('serviceBookingsLoading');
   list.replaceChildren();
   const candidates = serviceOrders();
   if (!candidates.length) {
-    status.textContent = 'No synced service orders found. Create or sync a service order first.';
+    status.textContent = t('serviceBookingsNoOrders');
     return;
   }
   const results = await Promise.all(candidates.map(async order => {
@@ -110,12 +111,12 @@ export async function refreshServiceBookings(root = document) {
   const denied = results.filter(result => result.error?.status === 403).length;
   const failures = results.filter(result => result.error && result.error.status !== 403).length;
   status.textContent = bookings.length
-    ? bookings.length + ' booking' + (bookings.length === 1 ? '' : 's') + ' loaded.'
+    ? bookings.length + ' ' + t(bookings.length === 1 ? 'serviceBookingSingular' : 'serviceBookingPlural') + ' ' + t('serviceBookingsLoaded')
     : denied === results.length
-      ? 'Your account does not have permission to view these bookings.'
+      ? t('serviceBookingsDenied')
       : failures
-        ? 'Some bookings could not be loaded. Refresh to retry.'
-        : 'No service bookings yet.';
+        ? t('serviceBookingsPartialFailure')
+        : t('serviceBookingsEmpty');
 }
 
 async function transitionBooking(button, root) {
@@ -123,11 +124,11 @@ async function transitionBooking(button, root) {
   let reason = '';
   let completion_note = '';
   if (['REJECTED', 'FAILED', 'CANCELLED'].includes(target)) {
-    reason = window.prompt('Enter a reason for ' + target.toLowerCase() + ':')?.trim() || '';
+    reason = window.prompt(t('serviceBookingReasonPrompt') + ' ' + target.toLowerCase() + ':')?.trim() || '';
     if (!reason) return;
   }
   if (target === 'COMPLETED') {
-    completion_note = window.prompt('Completion note (optional):')?.trim() || '';
+    completion_note = window.prompt(t('serviceBookingCompletionPrompt'))?.trim() || '';
   }
   const orderId = button.dataset.orderId;
   const bookingId = button.dataset.bookingId;
@@ -146,7 +147,7 @@ async function transitionBooking(button, root) {
       }),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data?.error?.message || 'Booking update failed.');
+    if (!response.ok) throw new Error(data?.error?.message || t('serviceBookingUpdateFailed'));
     await refreshServiceBookings(root);
   } catch (error) {
     window.alert(error.message || 'Booking update failed. Refresh and retry.');
