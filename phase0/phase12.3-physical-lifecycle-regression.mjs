@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 
-// The fulfillment lifecycle is browser-facing code. Provide the smallest
-// browser surface needed to exercise the existing module without replacing it
-// with a test-only lifecycle implementation.
+// Exercise the production fulfillment client against a canonical API response.
+// Inventory consequences belong to backend Core Fulfillment, not this UI projection.
 const storage = new Map();
 globalThis.localStorage = {
   getItem(key) { return storage.has(key) ? storage.get(key) : null; },
@@ -10,6 +9,8 @@ globalThis.localStorage = {
   removeItem(key) { storage.delete(key); },
 };
 globalThis.window = globalThis;
+globalThis.addEventListener = () => {};
+globalThis.location = { origin: 'http://sellify.test' };
 globalThis.__APP_CONFIG__ = {};
 globalThis.document = {
   getElementById() { return null; },
@@ -22,134 +23,100 @@ globalThis.document = {
     };
   },
 };
-
-Object.defineProperty(globalThis.navigator, 'onLine', { configurable: true, value: false });
+Object.defineProperty(globalThis.navigator, 'onLine', { configurable: true, value: true });
 
 const state = await import('../app/src/state.js');
-const { config, setConfig, setProducts, setOrders, setStockTransactions, setInventoryMovements, setOutboxEvents } = state;
-const { setIdbUnavailable } = await import('../app/src/storage/idb.js');
-setIdbUnavailable(true);
+const { config, setConfig, setProducts, setOrders, setStockTransactions, setInventoryMovements } = state;
 const { nextFulfillmentStatus, isFulfillmentFinal, advanceFulfillmentOrder } = await import('../app/src/logistics/fulfillment.js');
 
-function resetState() {
-  setConfig({
-    ...config,
-    logisticsEnabled: true,
-    warehouseEnabled: true,
-    chatId: '',
-    sessionToken: '',
-  });
-  setProducts([]);
-  setOrders([]);
-  setStockTransactions([]);
-  setInventoryMovements([]);
-  setOutboxEvents([]);
-}
-
-function product(id, stock = 10) {
-  return { id, name: `Product ${id}`, price: 100, stock };
-}
-
-resetState();
-
-// 1. Delivery lifecycle: pending -> out_for_delivery -> delivered.
-const delivery = {
-  id: 'ORDER-12.3-DELIVERY',
-  fulfillment_type: 'delivery',
-  fulfillment_status: 'pending',
-  stock_deducted: false,
-  items: [{ id: 'P-DELIVERY', qty: 2 }],
+const calls = [];
+globalThis.fetch = async (url, options = {}) => {
+  const body = options.body ? JSON.parse(options.body) : {};
+  calls.push({ url: String(url), method: options.method || 'GET', body, headers: options.headers || {} });
+  if ((options.method || 'GET') !== 'POST') throw new Error('Unexpected fulfillment request method');
+  return {
+    ok: true,
+    status: 200,
+    async json() {
+      return { fulfillment: { status: body.status, fulfillment_type: body.status.includes('pickup') || body.status === 'picked_up' ? 'pickup' : 'delivery' } };
+    },
+  };
 };
-setProducts([product('P-DELIVERY', 10)]);
+
+setConfig({
+  ...config,
+  logisticsEnabled: true,
+  warehouseEnabled: true,
+  chatId: 'tenant-test',
+  sessionToken: 'session-test',
+  syncUrl: 'http://sellify.test',
+  locationId: 'location-test',
+});
+setProducts([{ id: 'P-TEST', name: 'Test product', price: 100, stock: 10 }]);
+setStockTransactions([]);
+setInventoryMovements([]);
+
+function order(id, type) {
+  return {
+    id,
+    server_order_id: `SERVER-${id}`,
+    fulfillment_type: type,
+    fulfillment_status: 'pending',
+    fulfillment_sync_status: 'confirmed',
+    stock_deducted: false,
+    items: [{ id: 'P-TEST', qty: 2 }],
+  };
+}
+
+// Delivery progresses only after the canonical backend confirms each transition.
+const delivery = order('DELIVERY', 'delivery');
 setOrders([delivery]);
-
 assert.equal(nextFulfillmentStatus(delivery), 'out_for_delivery');
-assert.equal(isFulfillmentFinal(delivery.fulfillment_status), false);
-advanceFulfillmentOrder(delivery.id);
+await advanceFulfillmentOrder(delivery.id);
 assert.equal(delivery.fulfillment_status, 'out_for_delivery');
-assert.equal(delivery.stock_deducted, false);
-assert.equal(state.products[0].stock, 10);
-
+assert.equal(delivery.fulfillment_sync_status, 'confirmed');
 assert.equal(nextFulfillmentStatus(delivery), 'delivered');
-advanceFulfillmentOrder(delivery.id);
+await advanceFulfillmentOrder(delivery.id);
 assert.equal(delivery.fulfillment_status, 'delivered');
 assert.equal(isFulfillmentFinal(delivery.fulfillment_status), true);
-assert.equal(delivery.stock_deducted, true);
-assert.equal(state.products[0].stock, 8);
-assert.equal(state.stockTransactions.length, 1);
-assert.equal(state.stockTransactions[0].type, 'sold');
-assert.equal(state.stockTransactions[0].quantity, -2);
-assert.equal(state.inventoryMovements.length, 1);
-assert.equal(state.inventoryMovements[0].movementType, 'SALE');
-assert.equal(state.inventoryMovements[0].referenceType, 'order');
-assert.equal(state.inventoryMovements[0].referenceId, delivery.id);
 
-// 2. Final-state idempotency: advancing a delivered order is a no-op.
-const deliveryStockAfterFinal = state.products[0].stock;
-const deliveryTransactionsAfterFinal = state.stockTransactions.length;
-const deliveryMovementsAfterFinal = state.inventoryMovements.length;
-advanceFulfillmentOrder(delivery.id);
-assert.equal(delivery.fulfillment_status, 'delivered');
-assert.equal(delivery.stock_deducted, true);
-assert.equal(state.products[0].stock, deliveryStockAfterFinal);
-assert.equal(state.stockTransactions.length, deliveryTransactionsAfterFinal);
-assert.equal(state.inventoryMovements.length, deliveryMovementsAfterFinal);
+const requestCountAfterDelivery = calls.length;
+await advanceFulfillmentOrder(delivery.id);
+assert.equal(calls.length, requestCountAfterDelivery, 'final delivery must not issue another transition');
 
-// 3. Pickup lifecycle: pending -> ready_for_pickup -> picked_up.
-resetState();
-const pickup = {
-  id: 'ORDER-12.3-PICKUP',
-  fulfillment_type: 'pickup',
-  fulfillment_status: 'pending',
-  stock_deducted: false,
-  items: [{ id: 'P-PICKUP', qty: 3 }],
-};
-setProducts([product('P-PICKUP', 10)]);
+// Pickup follows its own canonical lifecycle.
+const pickup = order('PICKUP', 'pickup');
 setOrders([pickup]);
-
 assert.equal(nextFulfillmentStatus(pickup), 'ready_for_pickup');
-advanceFulfillmentOrder(pickup.id);
+await advanceFulfillmentOrder(pickup.id);
 assert.equal(pickup.fulfillment_status, 'ready_for_pickup');
-assert.equal(pickup.stock_deducted, false);
-assert.equal(state.products[0].stock, 10);
-
 assert.equal(nextFulfillmentStatus(pickup), 'picked_up');
-advanceFulfillmentOrder(pickup.id);
+await advanceFulfillmentOrder(pickup.id);
 assert.equal(pickup.fulfillment_status, 'picked_up');
 assert.equal(isFulfillmentFinal(pickup.fulfillment_status), true);
-assert.equal(pickup.stock_deducted, true);
-assert.equal(state.products[0].stock, 7);
-assert.equal(state.stockTransactions.length, 1);
-assert.equal(state.stockTransactions[0].quantity, -3);
-assert.equal(state.inventoryMovements.length, 1);
-assert.equal(state.inventoryMovements[0].movementType, 'SALE');
 
-// 4. Duplicate/final transition protection: the second final call cannot
-// create another stock movement or move beyond the terminal state.
-advanceFulfillmentOrder(pickup.id);
-assert.equal(pickup.fulfillment_status, 'picked_up');
-assert.equal(state.products[0].stock, 7);
-assert.equal(state.stockTransactions.length, 1);
-assert.equal(state.inventoryMovements.length, 1);
+const requestCountAfterPickup = calls.length;
+await advanceFulfillmentOrder(pickup.id);
+assert.equal(calls.length, requestCountAfterPickup, 'final pickup must not issue another transition');
 
-// 5. Invalid transition states are rejected by the existing state machine.
-const invalidOrders = [
-  { id: 'INVALID-TYPE', fulfillment_type: 'shipping', fulfillment_status: 'pending' },
-  { id: 'INVALID-STATUS', fulfillment_type: 'delivery', fulfillment_status: 'ready_for_pickup' },
-  { id: 'FINAL-DELIVERY', fulfillment_type: 'delivery', fulfillment_status: 'delivered' },
-  { id: 'FINAL-PICKUP', fulfillment_type: 'pickup', fulfillment_status: 'picked_up' },
-];
-for (const order of invalidOrders) {
-  assert.equal(nextFulfillmentStatus(order), null);
+// The client never fabricates local stock consequences; those are owned by the backend.
+assert.equal(state.products[0].stock, 10);
+assert.equal(state.stockTransactions.length, 0);
+assert.equal(state.inventoryMovements.length, 0);
+assert.equal(calls.length, 4);
+for (const call of calls) {
+  assert.equal(call.method, 'POST');
+  assert.ok(call.headers['Idempotency-Key']);
+  assert.equal(call.body.locationId, 'location-test');
 }
 
-const invalidOrder = { id: 'INVALID-ADVANCE', fulfillment_type: 'delivery', fulfillment_status: 'ready_for_pickup', stock_deducted: false };
-setOrders([invalidOrder]);
-advanceFulfillmentOrder(invalidOrder.id);
-assert.equal(invalidOrder.fulfillment_status, 'ready_for_pickup');
-assert.equal(invalidOrder.stock_deducted, false);
-assert.equal(state.products[0].stock, 7);
-assert.equal(state.stockTransactions.length, 1);
-assert.equal(state.inventoryMovements.length, 1);
+for (const invalid of [
+  { fulfillment_type: 'shipping', fulfillment_status: 'pending' },
+  { fulfillment_type: 'delivery', fulfillment_status: 'ready_for_pickup' },
+  { fulfillment_type: 'delivery', fulfillment_status: 'delivered' },
+  { fulfillment_type: 'pickup', fulfillment_status: 'picked_up' },
+]) {
+  assert.equal(nextFulfillmentStatus(invalid), null);
+}
 
-console.log('Phase 12.3 Physical Lifecycle Regression: PASS');
+console.log('Phase 12.3 Canonical Physical Fulfillment Lifecycle Regression: PASS');
