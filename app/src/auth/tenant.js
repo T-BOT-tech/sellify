@@ -236,17 +236,28 @@ async function loadBusinessTemplateConfig() {
     const pending = await loadJSONAsync(pendingBusinessTemplateKey(chatId), null);
     if (!stillActive()) return null;
     if (!pending || pending.status !== 'pending' || String(pending.tenantId) !== chatId || typeof pending.templateKey !== 'string') return null;
-    await request(`/tenants/${encodeURIComponent(chatId)}/business-template`, {
+    const retryResponse = await request(`/tenants/${encodeURIComponent(chatId)}/business-template`, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${sessionToken}` },
       body: JSON.stringify({ templateKey: pending.templateKey }),
     });
     if (!stillActive()) return null;
-    const next = { ...config, businessTemplate: pending.templateKey, businessTemplateSchemaVersion: pending.schemaVersion || 1, businessTemplateTenantId: chatId };
+    const retrySaved = retryResponse?.businessTemplate;
+    if (!retrySaved
+      || retrySaved.templateKey !== pending.templateKey
+      || Number(retrySaved.schemaVersion || 1) !== 1) {
+      throw new Error('The server did not confirm the pending business template');
+    }
+    const next = {
+      ...config,
+      businessTemplate: retrySaved.templateKey,
+      businessTemplateSchemaVersion: Number(retrySaved.schemaVersion || 1),
+      businessTemplateTenantId: chatId,
+    };
     setConfig(next);
     saveJSON(STORAGE_KEYS.config, next);
     await saveJSONAsync(pendingBusinessTemplateKey(chatId), { tenantId: chatId, status: 'synced' });
-    return { templateKey: pending.templateKey, schemaVersion: pending.schemaVersion || 1 };
+    return retrySaved;
   } catch {
     // Offline or an older backend: retain the tenant-scoped marker for a later retry.
     return null;
