@@ -90,6 +90,15 @@ function persist() {
           setOutboxEvents(merged);
         },
       });
+      // A successful read gives us the merged candidate even if localStorage
+      // replacement failed. Commit that candidate with the marker so the old
+      // journal is only considered consumed after its operations reach IDB.
+      // If the shared journal could not be read, abort rather than committing
+      // a marker that might incorrectly supersede unknown recovery data.
+      if (journalWrite.readSucceeded !== true) {
+        throw new Error('Cannot safely commit outbox while recovery journal is unreadable');
+      }
+      journalSnapshot = journalWrite.snapshot;
       // Include journal-only recoveries in the IDB write. A prior journal may
       // contain work whose transaction was interrupted; marking this attempt
       // committed without carrying that work into IDB would make hydration
@@ -114,9 +123,20 @@ function persist() {
       // preserve the pending work in the recovery journal. A journal written
       // by an aborted transaction remains recoverable on next hydration.
       if (!journalWrite) {
-        writeOutboxRecoveryJournal(outboxEvents, {
+        journalWrite = writeOutboxRecoveryJournal(outboxEvents, {
           onMerged: mergedEvents => setOutboxEvents(mergedEvents),
         });
+      }
+      // If the transaction did not commit and the journal was not replaced,
+      // preserve this tab's delta as append-only recovery operations. This
+      // composes with the old journal on restart instead of relying on a
+      // best-effort replacement of the shared snapshot.
+      if (journalWrite?.written !== true) {
+        try {
+          appendOutboxRecoveryOperations(outboxEvents);
+        } catch (recoveryError) {
+          console.error('Append-only outbox recovery after failed persistence was unsuccessful', recoveryError);
+        }
       }
       saveJSON(STORAGE_KEYS.outboxEvents, outboxEvents);
     });
