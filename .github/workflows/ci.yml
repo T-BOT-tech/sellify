@@ -386,3 +386,6 @@ jobs:
 
       - name: Phase 15 cross-country expansion Node 24 certification
         run: npm run test:phase15.21
+
+      - name: Phase 16 final platform snapshot Node 24 certification
+        run: npm run test:phase16.14
