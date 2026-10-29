@@ -484,7 +484,7 @@ const listingSanitizerContext = {
 };
 vm.runInNewContext(
   sanitizeRemoteListingsSource.replace('export function sanitizeRemoteListings', 'function sanitizeRemoteListings')
-    + '\\nglobalThis.sanitizeRemoteListings = sanitizeRemoteListings;',
+    + '\nglobalThis.sanitizeRemoteListings = sanitizeRemoteListings;',
   listingSanitizerContext,
 );
 const sanitizedLegacyListings = listingSanitizerContext.sanitizeRemoteListings([
