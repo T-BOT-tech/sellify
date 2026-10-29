@@ -36,6 +36,90 @@ assert.match(appSourceForTemplateSync, /async function loadBusinessTemplateConfi
 assert.match(appSourceForTemplateSync, /String\(config\.chatId\) !== chatId \|\| String\(config\.sessionToken\) !== sessionToken/,
   'a late template response from a previous tenant or session must not overwrite the active tenant cache');
 
+const loadBusinessTemplateFunctionSource = tenantAuthSource.match(
+  /async function loadBusinessTemplateConfig\(\) \{[\s\S]*?\n\}/,
+)?.[0];
+assert.ok(loadBusinessTemplateFunctionSource, 'template recovery function must be extractable for behavioral tests');
+
+function makeTemplateRecoveryHarness(overrides = {}) {
+  const harness = {
+    config: { chatId: 'tenant-a', sessionToken: 'token-a', businessTemplate: 'retail-shop' },
+    calls: [],
+    localWrites: [],
+    configWrites: [],
+    stateWrites: [],
+    request: async (url, options = {}) => {
+      harness.calls.push({ url, options });
+      return { businessTemplate: null };
+    },
+    setConfig: next => { harness.configWrites.push(next); harness.config = next; },
+    saveJSON: (...args) => { harness.stateWrites.push(args); },
+    saveJSONAsync: async (...args) => { harness.localWrites.push(args); return true; },
+    loadJSONAsync: async () => ({
+      tenantId: 'tenant-a', status: 'pending', templateKey: 'repair', schemaVersion: 1,
+    }),
+    STORAGE_KEYS: { config: 'config' },
+    ...overrides,
+  };
+  vm.runInNewContext(
+    "const pendingBusinessTemplateKey = chatId => 'ledger_business_template_pending_v1:' + encodeURIComponent(String(chatId));\n"
+      + loadBusinessTemplateFunctionSource
+      + "\nthis.loadBusinessTemplateConfig = loadBusinessTemplateConfig;",
+    harness,
+  );
+  return harness;
+}
+
+// A network failure during the pending-template retry must retain the exact
+// durable pending marker and must not claim the server configuration was saved.
+const retryFailureHarness = makeTemplateRecoveryHarness({
+  request: async (url, options = {}) => {
+    retryFailureHarnessCalls.push({ url, options });
+    if (options.method === 'PUT') throw new Error('offline during template retry');
+    return { businessTemplate: null };
+  },
+});
+const retryFailureHarnessCalls = [];
+retryFailureHarness.calls = retryFailureHarnessCalls;
+retryFailureHarness.loadJSONAsync = async () => ({
+  tenantId: 'tenant-a', status: 'pending', templateKey: 'repair', schemaVersion: 1,
+});
+const retryFailureResult = await retryFailureHarness.loadBusinessTemplateConfig();
+assert.equal(retryFailureResult, null);
+assert.equal(retryFailureHarness.calls.length, 2, 'retry recovery should GET canonical state then attempt one PUT');
+assert.equal(retryFailureHarness.calls[1].options.method, 'PUT');
+assert.equal(retryFailureHarness.localWrites.length, 0,
+  'failed template retry must not mark its durable pending marker synced');
+assert.equal(retryFailureHarness.configWrites.length, 0,
+  'failed template retry must not publish an unconfirmed server value to active config');
+
+// A pending marker belonging to another tenant must never be replayed.
+const wrongTenantHarness = makeTemplateRecoveryHarness({
+  loadJSONAsync: async () => ({
+    tenantId: 'tenant-b', status: 'pending', templateKey: 'hotel-rooms', schemaVersion: 1,
+  }),
+});
+await wrongTenantHarness.loadBusinessTemplateConfig();
+assert.equal(wrongTenantHarness.calls.length, 1,
+  'recovery must not issue a template PUT for a marker owned by a different tenant');
+assert.equal(wrongTenantHarness.configWrites.length, 0);
+
+// A response that arrives after a tenant/session switch must not overwrite the
+// newly active tenant's cached configuration.
+let releaseTemplateRead;
+const staleResponseHarness = makeTemplateRecoveryHarness({
+  request: () => new Promise(resolve => { releaseTemplateRead = resolve; }),
+});
+const staleResponsePromise = staleResponseHarness.loadBusinessTemplateConfig();
+staleResponseHarness.config = { chatId: 'tenant-b', sessionToken: 'token-b', businessTemplate: 'other' };
+releaseTemplateRead({ businessTemplate: { templateKey: 'repair', schemaVersion: 1, config: {} } });
+const staleResponseResult = await staleResponsePromise;
+assert.equal(staleResponseResult, null);
+assert.equal(staleResponseHarness.configWrites.length, 0,
+  'late template responses must not update active config after a tenant/session switch');
+assert.equal(staleResponseHarness.stateWrites.length, 0);
+assert.equal(staleResponseHarness.localWrites.length, 0);
+
 // Guard the real sanitizer implementation used by catalog pull/push. The
 // spread preserves item_type while the following fields normalize ID and price.
 assert.match(onboardingHtml, /Choose your business type/,
