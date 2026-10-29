@@ -158,7 +158,9 @@ export function ticketInnerHtml(o) {
   const payment = o.server_order_id ? getPaymentForOrder(o.server_order_id) : null;
   const orderPaymentSummary = o.server_order_id ? getCachedOrderPaymentSummary(o.server_order_id) : null;
   if (o.server_order_id && !orderPaymentSummary) refreshOrderPaymentSummary(o.server_order_id);
-  const paymentStateLine = payment?.state
+  // A payment row can remain cached after a failed canonical summary refresh.
+  // Do not present that stale per-payment state as current order financial truth.
+  const paymentStateLine = orderPaymentSummary && payment?.state
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Payment Core: ${escapeHtml(String(payment.state).replaceAll('_', ' '))}</div>` : '';
   const orderPaymentLine = orderPaymentSummary
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-card"/></svg> Order payment: ${escapeHtml(String(orderPaymentSummary.status || 'UNPAID'))} · ${CS()}${formatMoney(orderPaymentSummary.verifiedMinor || 0)} paid · ${CS()}${formatMoney(orderPaymentSummary.outstandingMinor || 0)} outstanding</div>`
