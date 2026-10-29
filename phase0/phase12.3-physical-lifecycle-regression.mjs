@@ -10,6 +10,8 @@ globalThis.localStorage = {
   removeItem(key) { storage.delete(key); },
 };
 globalThis.window = globalThis;
+// Payment projection imports register tenant lifecycle listeners at module load.
+globalThis.addEventListener = () => {};
 globalThis.__APP_CONFIG__ = {};
 globalThis.document = {
   getElementById() { return null; },
