@@ -173,6 +173,7 @@ function queueFulfillmentCommand(order, next, reason = 'offline') {
   });
   if (command) {
     order.fulfillment_sync_status = 'queued';
+    order.fulfillment_sync_target = next;
     order.fulfillment_sync_reason = reason;
     saveJSON(STORAGE_KEYS.orders, orders);
     renderLogistics();
@@ -207,6 +208,17 @@ async function requestCanonicalFulfillment(order, next) {
   return data?.fulfillment || null;
 }
 
+function hasReachedFulfillmentTarget(type, canonicalStatus, targetStatus) {
+  const progression = type === 'delivery'
+    ? ['pending', 'out_for_delivery', 'delivered']
+    : type === 'pickup'
+      ? ['pending', 'ready_for_pickup', 'picked_up']
+      : [];
+  const currentIndex = progression.indexOf(String(canonicalStatus || '').toLowerCase());
+  const targetIndex = progression.indexOf(String(targetStatus || '').toLowerCase());
+  return targetIndex >= 0 && currentIndex >= targetIndex;
+}
+
 export async function reconcileQueuedFulfillments() {
   if (!config.chatId || !config.sessionToken || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
   const queued = orders.filter(order =>
@@ -221,7 +233,14 @@ export async function reconcileQueuedFulfillments() {
       );
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data?.fulfillment?.status) continue;
+      // A GET of the current canonical state is not proof that the queued
+      // transition succeeded. Keep the durable command pending until the
+      // canonical state reaches the requested target.
+      const expectedStatus = String(order.fulfillment_sync_target || nextFulfillmentStatus(order) || '').toLowerCase();
+      const canonicalStatus = String(data.fulfillment.status || '').toLowerCase();
+      if (!hasReachedFulfillmentTarget(data.fulfillment.fulfillment_type || order.fulfillment_type, canonicalStatus, expectedStatus)) continue;
       canonicalFulfillmentPatch(order, data.fulfillment);
+      delete order.fulfillment_sync_target;
       delete order.fulfillment_sync_reason;
     } catch {
       // Keep QUEUED/UNKNOWN until a later reconciliation succeeds.
