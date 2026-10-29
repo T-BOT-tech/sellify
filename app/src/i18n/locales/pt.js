@@ -13,7 +13,7 @@ export default {
     checkoutReceiptSaveFailed: "Não foi possível guardar o recibo. Tente novamente ou feche esta janela para voltar ao checkout.",
     saveOrderQueue: "Guardar pedido na fila",
     firstSaleAddProduct: "Adicione um produto para começar a vender",
-    catalogHasItems: "O catálogo contém produtos",,
+    catalogHasItems: "O catálogo contém produtos",
     serviceBookingsTitle: "Agendamentos de serviços",
     serviceBookingsRefresh: "Atualizar agendamentos",
     serviceBookingsDescription: "Compromissos associados a pedidos canônicos de serviço. O servidor valida cada ação.",
