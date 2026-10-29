@@ -224,6 +224,8 @@ jobs:
         run: npm run gap-1.16:payment-routing-test
       - name: GAP-1.17 payment operational timeline retry recovery manual review regression
         run: npm run gap-1.17:payment-operations-test
+      - name: GAP-1.23 payment-evidence migration retry runtime regression
+        run: npm run test:gap-1.23-migration-retry
       - name: GAP-1.23 provider notification identity SQLite regression
         run: npm run gap-1.23:provider-notification-identity-test
       - name: GAP-1.18 payment provider capability certification regression
