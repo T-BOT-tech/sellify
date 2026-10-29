@@ -13,7 +13,7 @@ export default {
     checkoutReceiptSaveFailed: "تعذّر حفظ الإيصال. حاول مرة أخرى، أو أغلق هذه النافذة للعودة إلى إتمام الطلب.",
     saveOrderQueue: "حفظ الطلب في قائمة الانتظار",
     firstSaleAddProduct: "أضف منتجًا لبدء البيع",
-    catalogHasItems: "يحتوي الكتالوج على منتجات",,
+    catalogHasItems: "يحتوي الكتالوج على منتجات",
     serviceBookingsTitle: "حجوزات الخدمات",
     serviceBookingsRefresh: "تحديث الحجوزات",
     serviceBookingsDescription: "مواعيد مرتبطة بطلبات الخدمة المعتمدة. يتحقق الخادم من كل إجراء.",
