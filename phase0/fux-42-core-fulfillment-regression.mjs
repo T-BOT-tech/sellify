@@ -78,6 +78,35 @@ const productBalance = balances.find((row) => row.productId === 'product-1');
 assert.equal(productBalance?.quantity, 9);
 assert.deepEqual(fulfillment.proof, { type: 'photo', reference: 'proof-fux42' });
 
+// Legacy orders may already carry proof in order_json before a fulfillment row
+// exists. A conflicting first fulfillment command must not seed a row with the
+// caller's replacement proof and conceal that legacy evidence.
+const legacyProof = { type: 'photo', reference: 'legacy-proof-fux42' };
+const legacySyncResult = await saveQueuedOrders(chatId, [{
+  id: 'local-fux42-legacy-proof',
+  items: [{ item_id: 'product-1', name: 'Test item', qty: 1, price: 500 }],
+  fulfillment_type: 'delivery',
+  delivery_address: 'Jimma',
+  fulfillment_proof: legacyProof,
+}]);
+assert.equal(legacySyncResult[0].status, 'synced');
+const legacyOrderId = legacySyncResult[0].order_id;
+await assert.rejects(
+  transitionOrderFulfillment(chatId, legacyOrderId, 'out_for_delivery', actor, {
+    idempotencyKey: 'fux42-legacy-proof-overwrite',
+    proof: { type: 'photo', reference: 'replacement-legacy-proof' },
+  }),
+  (error) => error?.code === 'DELIVERY_PROOF_IMMUTABLE' && error?.statusCode === 409,
+);
+assert.equal(await getOrderFulfillment(chatId, legacyOrderId), null,
+  'a rejected legacy-proof replacement must not leave a partially created fulfillment');
+const legacyProofFulfillment = await transitionOrderFulfillment(chatId, legacyOrderId, 'out_for_delivery', actor, {
+  idempotencyKey: 'fux42-legacy-proof-preserve',
+  proof: legacyProof,
+});
+assert.deepEqual(legacyProofFulfillment.proof, legacyProof,
+  'the matching legacy proof may be carried forward without replacement');
+
 await assert.rejects(
   transitionOrderFulfillment(chatId, orderId, 'pending', actor, { idempotencyKey: 'fux42-invalid' }),
   (error) => error?.code === 'INVALID_FULFILLMENT_TRANSITION' && error?.statusCode === 409,
