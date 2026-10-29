@@ -19,7 +19,10 @@ assert.match(moduleSource, /config\.contextualRoles/);
 assert.match(moduleSource, /import \{ t \} from '..\/ui\/i18n\.js'/);
 for (const key of ['serviceBookingsTitle', 'serviceBookingsRefresh', 'serviceBookingsDescription', 'serviceBookingsLoading', 'serviceBookingsSignIn', 'serviceBookingsNoOrders', 'serviceBookingsDenied', 'serviceBookingsPartialFailure', 'serviceBookingsEmpty', 'serviceBookingSingular', 'serviceBookingPlural', 'serviceBookingsLoaded', 'serviceBookingReasonPrompt', 'serviceBookingCompletionPrompt', 'serviceBookingUpdateFailed', 'serviceBookingsLoadFailed']) {
   assert.match(moduleSource, new RegExp(key));
-  for (const localeSource of localeSources) assert.match(localeSource, new RegExp('\\b' + key + '\\s*:'));
+  for (const localeSource of localeSources) {
+    const occurrences = localeSource.match(new RegExp('\\b' + key + '\\s*:', 'g')) || [];
+    assert.equal(occurrences.length, 1, `Expected exactly one ${key} translation per locale`);
+  }
 }
 assert.match(logisticsSource, /serviceBookingsWorkspaceShell/);
 assert.match(logisticsSource, /mountServiceBookingsWorkspace\(list\)/);
