@@ -17,6 +17,10 @@ const {
   evaluateLogisticsSchedulingActivity,
 } = await import('../backend/lib/store-sqlite.js');
 
+const {
+  evaluateLogisticsSchedulingFeasibility,
+} = await import('../app/src/verticals/logistics/scheduling-feasibility-contract.js');
+
 const db = getDatabaseForTests();
 const chatId = 'l11.7-regression-chat';
 const organizationId = 'l11.7-regression-org';
@@ -57,13 +61,12 @@ const first = await createLogisticsSchedulingActivity(chatId, {
   idempotency_key: 'l11.7-create-1',
 }, actor);
 
-await transitionLogisticsSchedulingActivity(
-  chatId,
-  first.id,
-  'SCHEDULED',
-  actor,
-  { idempotency_key: 'l11.7-command-1', expectedVersion: 1 },
-);
+// Seed the existing scheduled activity as canonical fixture state. The test
+// must not use caller-supplied scheduling commands to manufacture FEASIBLE
+// capacity after the production boundary was changed to fail closed.
+db.prepare(
+  "UPDATE logistics_scheduling_activities SET status = 'SCHEDULED', version = 2 WHERE id = ? AND organization_id = ?"
+).run(first.id, organizationId);
 
 const second = await createLogisticsSchedulingActivity(chatId, {
   location_id: locationId,
@@ -239,5 +242,46 @@ assert.equal(decisionContract.conflict_allows_scheduling, false);
 assert.equal(decisionContract.unknown_allows_scheduling, false);
 assert.equal(decisionContract.feasibility_is_authorization, false);
 assert.equal(decisionContract.scheduling_is_execution, false);
+
+// Contract-level provenance validation protects trusted adapters: a bare
+// FEASIBLE label cannot become a positive feasibility result.
+const contractRequest = {
+  organization_id: organizationId,
+  activity_type: 'PICKUP',
+  mode: 'SCHEDULED',
+  requested_start: '2026-10-10T14:00:00Z',
+  requested_end: '2026-10-10T15:00:00Z',
+  scheduled_start: '2026-10-10T14:00:00Z',
+  scheduled_end: '2026-10-10T15:00:00Z',
+  related_movement: { id: 'movement-l11-7-provenance', authority: 'logistics' },
+};
+for (const externalEvaluation of [
+  { outcome: 'FEASIBLE' },
+  { outcome: 'FEASIBLE', authority: 'existing-capacity-service' },
+  { outcome: 'FEASIBLE', referenceId: 'capacity-check-without-authority' },
+]) {
+  const result = evaluateLogisticsSchedulingFeasibility({ request: contractRequest, externalEvaluation });
+  assert.equal(result.evaluation, 'UNKNOWN', 'FEASIBLE without complete provenance must fail closed');
+  assert.equal(result.reason, 'EXTERNAL_CAPACITY_UNKNOWN');
+  assert.equal(result.feasible, false);
+  assert.equal(result.authorized, false);
+  assert.equal(result.execution, false);
+  assert.equal(result.persistence, 'none');
+  assert.equal(result.mutation, false);
+}
+const evidenced = evaluateLogisticsSchedulingFeasibility({
+  request: contractRequest,
+  externalEvaluation: {
+    outcome: 'FEASIBLE',
+    authority: 'existing-capacity-service',
+    referenceId: 'capacity-check-with-provenance',
+  },
+});
+assert.equal(evidenced.evaluation, 'FEASIBLE');
+assert.equal(evidenced.feasible, true);
+assert.equal(evidenced.authorized, false);
+assert.equal(evidenced.execution, false);
+assert.equal(evidenced.persistence, 'none');
+assert.equal(evidenced.mutation, false);
 
 console.log('L11.7 Logistics Scheduling Feasibility Integration Regression: PASS');
