@@ -293,6 +293,7 @@ assert.match(refundFinalBlock, /fullRefund/);
 assert.match(orderQueue, /refreshCanonicalOrderPaymentSummary/);
 assert.match(orderQueue, /getCachedOrderPaymentSummary/);
 assert.match(orderQueue, /Order payment:/);
+assert.match(orderQueue, /const paymentStateLine = orderPaymentSummary && !orderPaymentSummary\.unavailable && payment\?\.state/);
 assert.match(orderQueue, /orderPaymentSummary\?\.status \|\| orderPaymentSummary\?\.payment_status/);
 assert.match(orderQueue, /verifiedMinor \?\? orderPaymentSummary\.verified_minor/);
 assert.match(orderQueue, /outstandingMinor \?\? orderPaymentSummary\.outstanding_minor/);
