@@ -11,4 +11,5 @@ export default {
     checkoutPaymentStateHint: "Kammala wannan mataki zai ajiye odar a jerin jira. Hoton rasit hujja ce ta taimako kawai; ba ya tabbatar da an karɓi kuɗi.",
     checkoutNoPaymentMethods: "Ba a kunna hanyar biyan kuɗi ba. Soke wannan mataki kuma kunna hanyar biyan kuɗi a Saituna kafin ajiye odar.",
     checkoutReceiptSaveFailed: "An kasa ajiye rasit. Sake gwadawa, ko rufe wannan taga don komawa ga odar.",
+    saveOrderQueue: "Ajiye oda a jerin jira",
 };
