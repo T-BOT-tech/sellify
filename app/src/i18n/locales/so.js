@@ -91,4 +91,7 @@ export default {
     packLocalizationAuthority: 'Localization authority',
     packAccessibilityAuthority: 'Accessibility foundation',
     packAccessibilityBoundary: 'Language selection does not change authorization. Screen semantics do not grant permissions; server-side authorization remains authoritative.',
+    orderValue: "Qiimaha dalabka",
+    checkoutPaymentStateHint: "Markaad tallaabadan dhammayso, dalabka waxaa lagu kaydinayaa safkaaga. Sawirka rasiidku waa caddayn taageero oo keliya; ma xaqiijinayo in lacag la helay.",
+    checkoutNoPaymentMethods: "Hababka lacag-bixinta lama hawlgelin. Jooji checkout-ka oo ka hawlgeli hab lacag-bixin gudaha Settings ka hor intaadan dalabkan kaydin.",
 };
