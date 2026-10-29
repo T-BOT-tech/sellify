@@ -253,6 +253,77 @@ async function loadBusinessTemplateConfig() {
   }
 }
 
+
+// Explicit recovery action for the case where onboarding could not save the
+// durable retry marker. Server authorization remains authoritative; this UI
+// only retries the selected template through the canonical tenant endpoint.
+export async function retryBusinessTemplateSync() {
+  const status = document.getElementById('settingsBusinessTemplateStatus');
+  const chatId = String(config.chatId || '');
+  const sessionToken = String(config.sessionToken || '');
+  const templateKey = String(config.businessTemplate || '').trim();
+  const supportedTemplates = new Set([
+    'retail-shop', 'barbershop', 'hotel-rooms', 'rental', 'consultation',
+    'repair', 'restaurant', 'wholesale', 'other',
+  ]);
+  if (!chatId || !sessionToken) {
+    if (status) status.textContent = 'Select a signed-in business before retrying business type sync.';
+    return null;
+  }
+  if (!supportedTemplates.has(templateKey)) {
+    if (status) status.textContent = 'No valid saved business type is available to retry. Choose the business type during business setup first.';
+    return null;
+  }
+  const stillActive = () =>
+    String(config.chatId || '') === chatId && String(config.sessionToken || '') === sessionToken;
+  const pendingKey = pendingBusinessTemplateKey(chatId);
+  const pending = {
+    tenantId: chatId,
+    status: 'pending',
+    templateKey,
+    schemaVersion: 1,
+    updatedAt: Date.now(),
+  };
+  let retryQueued = false;
+  try {
+    const persisted = await saveJSONAsync(pendingKey, pending);
+    if (!persisted) throw new Error('Could not save retry state on this device');
+    retryQueued = true;
+    if (!stillActive()) {
+      if (status) status.textContent = 'The active business changed. The saved retry will remain scoped to the original business.';
+      return null;
+    }
+    const response = await request(`/tenants/${encodeURIComponent(chatId)}/business-template`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify({ templateKey }),
+    });
+    if (!stillActive()) {
+      if (status) status.textContent = 'The active business changed before sync completed. Reopen the original business to verify its saved type.';
+      return null;
+    }
+    const saved = response?.businessTemplate;
+    if (!saved || saved.templateKey !== templateKey || Number(saved.schemaVersion || 1) !== 1) {
+      throw new Error('The server did not confirm the selected business type');
+    }
+    const next = { ...config, businessTemplate: saved.templateKey, businessTemplateSchemaVersion: 1 };
+    setConfig(next);
+    saveJSON(STORAGE_KEYS.config, next);
+    const markerCleared = await saveJSONAsync(pendingKey, { tenantId: chatId, status: 'synced' });
+    if (status) status.textContent = markerCleared
+      ? 'Business type synced to the server.'
+      : 'Business type synced to the server. This device could not update its retry marker; the server value is still authoritative.';
+    return saved;
+  } catch (error) {
+    if (status) {
+      status.textContent = retryQueued
+        ? 'Business type could not sync yet. A retry is saved on this device; reopen this business while online to retry automatically.'
+        : 'Business type could not sync because this device could not save the retry. Check device storage and try this action again.';
+    }
+    return null;
+  }
+}
+
 const tenantStateKey = chatId => `ledger_tenant_state_v1:${encodeURIComponent(String(chatId))}`;
 const tenantStateFields = [
   ['products', () => products, setProducts, STORAGE_KEYS.products, []],
