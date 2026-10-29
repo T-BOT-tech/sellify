@@ -6226,33 +6226,23 @@ export async function saveBusinessTemplateConfig(chatId, input = {}, actor = nul
   const schemaVersion = 1;
   const config = {};
   const updatedAt = nowIso();
-  // The canonical template write and its audit evidence are one atomic unit.
-  // Use the same explicit SQLite transaction protocol as the rest of this store;
-  // DatabaseSync intentionally exposes exec()/prepare(), not a transaction() helper.
-  db.exec('BEGIN IMMEDIATE');
-  try {
-    db.prepare(`
-      INSERT INTO tenant_business_templates
-        (chat_id, template_key, schema_version, config_json, updated_by_user_id, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(chat_id) DO UPDATE SET
-        template_key = excluded.template_key,
-        schema_version = excluded.schema_version,
-        config_json = excluded.config_json,
-        updated_by_user_id = excluded.updated_by_user_id,
-        updated_at = excluded.updated_at
-    `).run(key, templateKey, schemaVersion, json(config), actor?.userId ? String(actor.userId) : null, updatedAt);
-    audit(key, 'tenant.business_template.updated', 'tenant_business_template', key, {
-      templateKey, schemaVersion, actorUserId: actor?.userId ? String(actor.userId) : null,
-    }, {
-      actorId: actor?.userId ? String(actor.userId) : null,
-      deviceId: actor?.deviceId ? String(actor.deviceId) : null,
-    });
-    db.exec('COMMIT');
-  } catch (error) {
-    try { db.exec('ROLLBACK'); } catch {}
-    throw error;
-  }
+  db.prepare(`
+    INSERT INTO tenant_business_templates
+      (chat_id, template_key, schema_version, config_json, updated_by_user_id, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(chat_id) DO UPDATE SET
+      template_key = excluded.template_key,
+      schema_version = excluded.schema_version,
+      config_json = excluded.config_json,
+      updated_by_user_id = excluded.updated_by_user_id,
+      updated_at = excluded.updated_at
+  `).run(key, templateKey, schemaVersion, json(config), actor?.userId ? String(actor.userId) : null, updatedAt);
+  audit(key, 'tenant.business_template.updated', 'tenant_business_template', key, {
+    templateKey, schemaVersion, actorUserId: actor?.userId ? String(actor.userId) : null,
+  }, {
+    actorId: actor?.userId ? String(actor.userId) : null,
+    deviceId: actor?.deviceId ? String(actor.deviceId) : null,
+  });
   return { templateKey, schemaVersion, config, updatedAt };
 }
 
@@ -9640,7 +9630,9 @@ export async function evaluateLogisticsSchedulingActivity(chatId, activityId, ac
     "SELECT * FROM logistics_scheduling_activities WHERE organization_id = ? AND id <> ? AND status IN ('SCHEDULED', 'CONFIRMED', 'IN_PROGRESS')"
   ).all(organizationId, String(activityId));
 
-  const externalEvaluation = options.externalEvaluation ?? options.external_evaluation ?? null;
+  // Feasibility options cross a caller-controlled request boundary. Until a trusted
+  // server-side capacity adapter is explicitly wired here, callers cannot assert FEASIBLE.
+  const externalEvaluation = null;
 
   return evaluateLogisticsSchedulingFeasibility({
     request: {
@@ -9778,7 +9770,9 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
           related_movement: row.related_movement_id ? { id: row.related_movement_id } : null,
         },
         existingActivities: existingActivities.map(logisticsSchedulingRow),
-        externalEvaluation: input.externalEvaluation ?? input.external_evaluation ?? null,
+        // Caller-supplied feasibility evidence is not an authenticated capacity authority.
+        // Fail closed until a trusted server-side adapter is explicitly integrated.
+        externalEvaluation: null,
       });
 
       const decision = decideLogisticsScheduling({ evaluation: feasibility });
