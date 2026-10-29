@@ -738,13 +738,6 @@ try {
   assert.equal(missingBookingKey.status, 400, 'booking mutation must reject a missing idempotency key');
 
 
-  const missingBookingKey = await fetch(bookingsUrl, {
-    method: 'POST',
-    headers: authHeaders,
-    body: JSON.stringify({ ...bookingRequest, requested_start: '2026-11-03T09:00:00+03:00' }),
-  });
-  assert.equal(missingBookingKey.status, 400, 'booking mutation must reject a missing idempotency key');
-
   // Logistics service checkout requires customer pickup/destination details,
   // stores only a truthful intake state, and never claims a courier assignment.
   const missingDeliveryDetails = await fetch(checkoutUrl, {
