@@ -94,4 +94,5 @@ export default {
     orderValue: "Gatii ajajaa",
     checkoutPaymentStateHint: "Tarkaanfii kana xumuruun ajaja gara tarree eegumsaa keessaniitti kuusa. Suuraan ragaa kaffaltii ragaa deeggarsaati qofa; kaffaltiin fudhatamuu isaa hin mirkaneessu.",
     checkoutNoPaymentMethods: "Malli kaffaltii tokko illee hin banamne. Ajaja kana kuusuu dura checkout cufaa, qindaa'ina keessatti mala kaffaltii tokko bani.",
+    checkoutReceiptSaveFailed: "Ragaa kaffaltii kuusuu hin dandeenye. Irra deebi'aa yaalaa, yookaan gara checkout deebi'uuf foddaa kana cufaa.",
 };
