@@ -351,7 +351,7 @@ assert.match(tenantAuthSource, /businessTemplateSchemaVersion: 1/,
 const windowAssignment = windowBridgeSource.match(/Object\.assign\(window,\s*\{([\s\S]*?)\n\s*\}\);/)?.[1] || '';
 assert.match(windowAssignment, /\bapplyOnboardingBusinessTemplate\b/,
   'business-template onchange handler must be exposed on window');
-assert.match(windowAssignment, /\\bretryBusinessTemplateSync\\b/,
+assert.match(windowAssignment, /\bretryBusinessTemplateSync\b/,
   'business-template retry handler must be exposed on window');
 assert.match(windowAssignment, /\btoggleOnboardingItemType\b/,
   'product/service onchange handler must be exposed on window');
