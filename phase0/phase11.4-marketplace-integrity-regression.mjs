@@ -153,6 +153,18 @@ try {
   assert.ok(canonicalRefund, 'marketplace refund must be the same canonical Payment Core refund');
   assert.equal(canonicalRefund.status, 'REQUESTED');
 
+  const failedRefundAttempt = await store.finalizePaymentRefund(seller.chatId, canonicalRefund.id, {
+    status: 'FAILED',
+    failureCode: 'PROVIDER_TEMPORARY_FAILURE',
+    evidence: { source: 'phase11.4-regression', attempt: 'failed' },
+  }, { userId: sellerUser.id, deviceId: sellerSession.deviceId });
+  assert.equal(failedRefundAttempt.status, 'FAILED');
+  assert.equal(db.prepare('SELECT status FROM marketplace_refunds WHERE id = ?').get(marketplaceRefund.id).status, 'REJECTED');
+  assert.equal(db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(sellerOrder.id, payment.id).status, 'ALLOCATED',
+    'failed provider outcome must not mark the allocation refunded');
+  assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(sellerOrder.id).status, 'HELD',
+    'failed refund must keep settlement held');
+
   const finalizedRefund = await store.finalizePaymentRefund(seller.chatId, canonicalRefund.id, {
     status: 'SUCCEEDED',
     providerRefundId: 'phase11-4-confirmed-refund',
