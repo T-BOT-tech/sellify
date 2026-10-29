@@ -262,6 +262,7 @@
     "tg7:telegram-buyer-orders-test": "node phase0/tg7-telegram-buyer-orders-regression.mjs",
     "tg8:telegram-fulfillment-test": "node phase0/tg8-telegram-fulfillment-regression.mjs",
     "tg10:telegram-security-test": "node phase0/tg10-telegram-security-cumulative-regression.mjs",
+    "fux26:storefront-contract-test": "node phase0/fux26-storefront-channel-contract-regression.mjs",
     "fux28:cross-channel-test": "node phase0/fux28-cross-channel-consistency-regression.mjs",
     "fux29:seller-golden-journey-test": "node phase0/fux29-seller-golden-journey-regression.mjs",
     "fux30:multi-channel-adversarial-test": "node phase0/fux30-multi-channel-adversarial-regression.mjs",
