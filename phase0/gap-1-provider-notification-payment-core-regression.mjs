@@ -75,6 +75,9 @@ Object.assign(store, {
   }),
   getPaymentIntent: async () => ({ id: 'intent-1' }),
   listPaymentAccounts: async () => [{ id: 'account-1', accountIdentifier: '600001', providerId: 'mpesa' }],
+  insertPaymentVerification: async (chatId, input) => ({
+    verification: { id: 'verification-1', ...input },
+  }),
   commitPaymentDecision: async (chatId, input) => {
     financialCommitCalls += 1;
     financialCommitKeys.push(input.idempotencyKey);
