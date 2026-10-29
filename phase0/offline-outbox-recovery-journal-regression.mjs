@@ -10,6 +10,7 @@ import {
   resetOutboxRecoveryBaseline,
   sameOutboxSnapshot,
   restoreOutboxRecoveryJournal,
+  withOutboxPersistenceLock,
   writeOutboxRecoveryJournal,
 } from '../app/src/sync/outbox-recovery-journal.js';
 
@@ -20,6 +21,37 @@ const idb = await readFile(new URL('../app/src/storage/idb.js', import.meta.url)
 
 assert.equal(OUTBOX_RECOVERY_KEY, 'sellify.outbox.recovery.v1');
 assert.equal(OUTBOX_RECOVERY_COMMIT_KEY, 'ledger_outbox_recovery_commit_v1');
+
+// Browser Web Locks must serialize the journal write and its matching IDB
+// marker as one exclusive persistence sequence across tabs.
+{
+  let tail = Promise.resolve();
+  let active = 0;
+  let maxActive = 0;
+  const lockManager = {
+    request(name, options, callback) {
+      assert.equal(name, 'sellify-outbox-persistence-v1');
+      assert.equal(options.mode, 'exclusive');
+      const next = tail.then(() => callback());
+      tail = next.catch(() => {});
+      return next;
+    },
+  };
+  const work = () => withOutboxPersistenceLock(async () => {
+    active += 1;
+    maxActive = Math.max(maxActive, active);
+    await new Promise(resolve => setTimeout(resolve, 5));
+    active -= 1;
+  }, lockManager);
+  await Promise.all([work(), work(), work()]);
+  assert.equal(maxActive, 1, 'concurrent persistence callbacks must not overlap under the exclusive lock');
+}
+{
+  let called = false;
+  const result = withOutboxPersistenceLock(() => { called = true; return 'fallback'; }, null);
+  assert.equal(called, true, 'browsers without Web Locks must retain the synchronous fallback path');
+  assert.equal(result, 'fallback');
+}
 assert.match(outbox, /writeOutboxRecoveryJournal\(outboxEvents, \{\s*onMerged: merged => setOutboxEvents\(merged\),?\s*\}\);\s*if \(isIdbUnavailable\(\)\) \{\s*saveJSON\(STORAGE_KEYS\.outboxEvents, outboxEvents\);/,
   'the recovery journal must be written before the IndexedDB path, with localStorage fallback when IndexedDB is unavailable');
 assert.match(idb, /function updateInTransaction\(key, updater, additionalWrite = null\)[\s\S]*?store\.get\(key\)[\s\S]*?nextValue = updater\(request\.result !== undefined \? request\.result : null\)[\s\S]*?store\.put\(nextValue, key\)[\s\S]*?if \(additionalWrite\) store\.put\(additionalWrite\.value, additionalWrite\.key\)/,

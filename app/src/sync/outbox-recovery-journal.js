@@ -26,6 +26,18 @@ function cloneEvents(events) {
   });
 }
 
+// Serialize the recovery-journal + IndexedDB commit sequence across tabs
+// where the browser supports the Web Locks API. The lock must cover both the
+// journal replacement and its matching IndexedDB commit marker; locking only
+// localStorage read/write would still allow commit markers to cross in flight.
+// Browsers without Web Locks retain the existing IndexedDB transaction guard,
+// but cannot guarantee atomic localStorage journal writes across tabs.
+export function withOutboxPersistenceLock(callback, lockManager = globalThis.navigator?.locks) {
+  if (typeof callback !== 'function') throw new TypeError('Outbox persistence callback is required');
+  if (typeof lockManager?.request !== 'function') return callback();
+  return lockManager.request('sellify-outbox-persistence-v1', { mode: 'exclusive' }, callback);
+}
+
 export function initializeOutboxRecoveryBaseline(events) {
   if (Array.isArray(lastSnapshot)) return;
   if (Array.isArray(events)) {
