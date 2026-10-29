@@ -727,12 +727,18 @@ async function handleCreateTenant(req, res) {
   if (!String(body.sellerName || '').trim()) throw Object.assign(new Error('Business name is required'), { statusCode: 400 });
   let userId;
   let creationChallengeToken = null;
+  let session = null;
   try {
-    const session = await requireSession(req);
-    await requireOwnerRole(session);
-    userId = session.userId;
+    session = await requireSession(req);
   } catch (error) {
     if (!body.challengeToken) throw error;
+  }
+  if (session) {
+    // A valid non-owner session must not fall through to challenge-based
+    // onboarding merely because the role check failed.
+    await requireOwnerRole(session);
+    userId = session.userId;
+  } else {
     // Read the challenge without consuming it. The store consumes it in the
     // same transaction that creates the tenant and stores the replay result.
     const challenge = await getAuthChallengeForTenantCreation(body.challengeToken);
