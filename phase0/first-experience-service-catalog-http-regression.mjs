@@ -1071,6 +1071,24 @@ try {
   assert.equal(assessmentResult.service_delivery?.assignment_status, 'NOT_ASSIGNED',
     'customer acceptance must not automatically assign a courier');
 
+  // Tenant A's service-delivery assessment must not be reachable through
+  // Tenant B's route, even when the caller has a valid Tenant A session.
+  const crossTenantAssessmentBefore = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  const crossTenantAssessmentUrl = baseUrl + '/tenants/' + encodeURIComponent(otherTenant.chatId)
+    + '/orders/' + encodeURIComponent(requestOrder.server_order_id) + '/service-delivery-assessment';
+  const crossTenantAssessmentResponse = await fetch(crossTenantAssessmentUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'cross-tenant-service-assessment-denied-1' },
+    body: JSON.stringify(assessmentPayload),
+  });
+  assert.equal(crossTenantAssessmentResponse.status, 403,
+    'a session scoped to one tenant must not assess a service order through another tenant route');
+  const crossTenantAssessmentAfter = (await store.getOrders(tenant.chatId))
+    .find(order => order.server_order_id === requestOrder.server_order_id)?.service_delivery_request;
+  assert.deepEqual(crossTenantAssessmentAfter, crossTenantAssessmentBefore,
+    'cross-tenant assessment denial must leave the canonical service request unchanged');
+
   // Assessment idempotency keys are organization-scoped, not merely embedded
   // in one order's JSON. Reusing a committed key against another order must
   // conflict before validating that second order's assessment payload.
