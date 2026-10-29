@@ -110,7 +110,7 @@ import {
   createDatabaseBackup,
   getOrCreateUserByTelegram, listUserMemberships, listTenantMemberships, ensureMembership, createTenantForUser,
   getTelegramStorefrontConfig, upsertTelegramStorefrontConfig, verifyTelegramStorefront,
-  createSession, authenticateSessionToken, revokeSession, createAuthChallenge, consumeAuthChallenge,
+  createSession, authenticateSessionToken, revokeSession, createAuthChallenge, consumeAuthChallenge, getAuthChallengeForTenantCreation,
   listOrganizationLocations, createOrganizationLocation, updateOrganizationLocation,
   listCustomers, getCustomer, upsertCustomer, updateCustomer,
   listInventoryMovements, getInventoryBalances, appendInventoryMovement,
@@ -724,18 +724,28 @@ function handleOnboardingCountryOptions(req, res) {
 
 async function handleCreateTenant(req, res) {
   const body = await readBody(req);
+  if (!String(body.sellerName || '').trim()) throw Object.assign(new Error('Business name is required'), { statusCode: 400 });
   let userId;
+  let creationChallengeToken = null;
+  let session = null;
   try {
-    const session = await requireSession(req);
-    await requireOwnerRole(session);
-    userId = session.userId;
+    session = await requireSession(req);
   } catch (error) {
     if (!body.challengeToken) throw error;
-    const challenge = await consumeAuthChallenge(body.challengeToken);
+  }
+  if (session) {
+    // A valid non-owner session must not fall through to challenge-based
+    // onboarding merely because the role check failed.
+    await requireOwnerRole(session);
+    userId = session.userId;
+  } else {
+    // Read the challenge without consuming it. The store consumes it in the
+    // same transaction that creates the tenant and stores the replay result.
+    const challenge = await getAuthChallengeForTenantCreation(body.challengeToken);
     if (!challenge) throw Object.assign(new Error('Invalid or expired onboarding challenge'), { statusCode: 401 });
     userId = challenge.userId;
+    creationChallengeToken = body.challengeToken;
   }
-  if (!String(body.sellerName || '').trim()) throw Object.assign(new Error('Business name is required'), { statusCode: 400 });
   const result = await createTenantForUser({
     userId,
     sellerName: body.sellerName,
@@ -743,13 +753,14 @@ async function handleCreateTenant(req, res) {
     country: body.country,
     currency: body.currency,
     timezone: body.timezone,
-    deviceName: body.deviceName || 'Primary device',
+    challengeToken: creationChallengeToken,
   });
   const authSession = await createSession({ userId, chatId: result.chatId, deviceName: body.deviceName || 'Primary device', ttlMs: SESSION_TTL_MS });
-  sendJSON(res, 201, {
+  sendJSON(res, result.replayed ? 200 : 201, {
     tenant: result.tenant,
     membership: { chatId: result.chatId, tenantId: result.tenantId, role: 'owner' },
     session: authSession,
+    ...(result.replayed ? { replayed: true } : {}),
   }, req);
 }
 

@@ -98,6 +98,89 @@ try {
     'Content-Type': 'application/json',
   };
 
+  // Simulate a successful tenant creation whose response body is lost to the
+  // client. Retrying the same one-time challenge must recover the original
+  // tenant and issue a fresh session rather than fail or create a duplicate.
+  const lostResponseUser = await store.getOrCreateUserByTelegram(
+    'tenant-create-lost-response-' + Date.now(), 'Tenant Create Lost Response Test');
+  const lostResponseChallenge = await store.createAuthChallenge(lostResponseUser.id);
+  const lostResponseRequest = {
+    sellerName: 'Lost Response Recovery Store',
+    businessType: 'retail',
+    country: 'ET',
+    currency: 'ETB',
+    timezone: 'Africa/Addis_Ababa',
+    deviceName: 'Lost response regression',
+    challengeToken: lostResponseChallenge.token,
+  };
+  const invalidCountryAttempt = await fetch(baseUrl + '/auth/tenants', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...lostResponseRequest, country: 'ZZ' }),
+  });
+  assert.equal(invalidCountryAttempt.status, 400,
+    'invalid country validation must fail before consuming the onboarding challenge');
+  assert.equal((await store.listUserMemberships(lostResponseUser.id)).length, 0,
+    'invalid onboarding input must not partially create a tenant or membership');
+
+  const firstTenantCreate = await fetch(baseUrl + '/auth/tenants', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(lostResponseRequest),
+  });
+  assert.equal(firstTenantCreate.status, 201, 'first tenant creation should commit successfully');
+  // Intentionally discard the first response body to model a disconnected client.
+  const recoveredTenantCreate = await fetch(baseUrl + '/auth/tenants', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(lostResponseRequest),
+  });
+  assert.equal(recoveredTenantCreate.status, 200,
+    'retrying a committed tenant creation must replay the canonical tenant instead of rejecting its consumed challenge');
+  const recoveredTenantBody = await recoveredTenantCreate.json();
+  assert.equal(recoveredTenantBody.replayed, true);
+  assert.ok(recoveredTenantBody.session?.token, 'a replay must issue a fresh usable tenant session');
+  assert.equal(recoveredTenantBody.tenant.sellerName, lostResponseRequest.sellerName);
+  const recoveredMemberships = await store.listUserMemberships(lostResponseUser.id);
+  assert.equal(recoveredMemberships.length, 1, 'lost-response recovery must not create a duplicate tenant membership');
+  assert.equal(recoveredMemberships[0].chatId, recoveredTenantBody.session.chatId);
+  const creationRequestCount = store.getDatabaseForTests().prepare(
+    'SELECT COUNT(*) AS count FROM tenant_creation_requests WHERE user_id = ?'
+  ).get(String(lostResponseUser.id)).count;
+  assert.equal(creationRequestCount, 1, 'the challenge must have exactly one durable creation result');
+  const changedRetry = await fetch(baseUrl + '/auth/tenants', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...lostResponseRequest, sellerName: 'Different Store Name' }),
+  });
+  assert.equal(changedRetry.status, 409, 'a consumed challenge cannot be reused for a different tenant-creation request');
+  assert.equal((await changedRetry.json()).error?.code, 'TENANT_CREATION_IDEMPOTENCY_CONFLICT');
+  assert.equal((await store.listUserMemberships(lostResponseUser.id)).length, 1,
+    'conflicting retries must not create another tenant');
+
+  // A valid non-owner session must not fall through to the challenge branch
+  // when the owner authorization check fails.
+  const nonOwnerUser = await store.getOrCreateUserByTelegram(
+    'tenant-create-non-owner-' + Date.now(), 'Tenant Create Non-owner Test');
+  await store.ensureMembership(nonOwnerUser.id, tenant.chatId, 'staff');
+  const nonOwnerSession = await store.createSession({
+    userId: nonOwnerUser.id, chatId: tenant.chatId, deviceName: 'Non-owner challenge regression',
+  });
+  const nonOwnerChallenge = await store.createAuthChallenge(nonOwnerUser.id);
+  const nonOwnerCreate = await fetch(baseUrl + '/auth/tenants', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + nonOwnerSession.token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...lostResponseRequest,
+      sellerName: 'Must Not Be Created',
+      challengeToken: nonOwnerChallenge.token,
+    }),
+  });
+  assert.equal(nonOwnerCreate.status, 403,
+    'a valid non-owner session must be denied even if the request also contains an onboarding challenge');
+  assert.equal((await store.listUserMemberships(nonOwnerUser.id)).length, 1,
+    'non-owner challenge fallback must not create a tenant or membership');
+
   const tenantPath = '/tenants/' + encodeURIComponent(tenant.chatId);
   const unauthTenantRead = await fetch(baseUrl + tenantPath);
   assert.equal(unauthTenantRead.status, 401, 'canonical currency reads must require a tenant session');
