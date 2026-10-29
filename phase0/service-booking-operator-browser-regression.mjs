@@ -103,7 +103,7 @@ try {
   }));
   await page.goto(baseUrl);
   await page.evaluate(async () => {
-    const state = await import('/app/src/state.js');
+    const state = await import('/src/state.js');
     state.setConfig({
       ...state.config,
       chatId: 'test-tenant',
@@ -118,7 +118,7 @@ try {
       server_order_id: 'order-1',
       items: [{ item_id: 'service-1', item_type: 'service' }],
     }]);
-    const workspace = await import('/app/src/logistics/service-bookings.js');
+    const workspace = await import('/src/logistics/service-bookings.js');
     document.querySelector('#test-root').innerHTML = workspace.serviceBookingsWorkspaceShell();
     workspace.mountServiceBookingsWorkspace(document);
   });
@@ -144,18 +144,18 @@ try {
 
   // Non-operator roles see the projection but no lifecycle controls.
   await page.evaluate(async () => {
-    const state = await import('/app/src/state.js');
+    const state = await import('/src/state.js');
     state.setConfig({ ...state.config, currentStaffRole: 'cashier', contextualRoles: [] });
-    const workspace = await import('/app/src/logistics/service-bookings.js');
+    const workspace = await import('/src/logistics/service-bookings.js');
     await workspace.refreshServiceBookings(document);
   });
   assert.equal(await page.locator('.service-booking-action').count(), 0, 'cashier has no operator lifecycle controls');
 
   // Restore operator role, force a version conflict, and verify the control recovers for retry.
   await page.evaluate(async () => {
-    const state = await import('/app/src/state.js');
+    const state = await import('/src/state.js');
     state.setConfig({ ...state.config, currentStaffRole: 'owner' });
-    const workspace = await import('/app/src/logistics/service-bookings.js');
+    const workspace = await import('/src/logistics/service-bookings.js');
     await workspace.refreshServiceBookings(document);
   });
   forceConflict = true;
