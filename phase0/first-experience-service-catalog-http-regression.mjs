@@ -133,7 +133,7 @@ try {
   assert.equal(recoveredTenantBody.tenant.sellerName, lostResponseRequest.sellerName);
   const recoveredMemberships = await store.listUserMemberships(lostResponseUser.id);
   assert.equal(recoveredMemberships.length, 1, 'lost-response recovery must not create a duplicate tenant membership');
-  assert.equal(recoveredMemberships[0].chatId, recoveredTenantBody.tenant.chatId);
+  assert.equal(recoveredMemberships[0].chat_id, recoveredTenantBody.tenant.chatId);
   const creationRequestCount = store.getDatabaseForTests().prepare(
     'SELECT COUNT(*) AS count FROM tenant_creation_requests WHERE user_id = ?'
   ).get(String(lostResponseUser.id)).count;
