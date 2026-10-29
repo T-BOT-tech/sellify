@@ -97,7 +97,7 @@ export default {
     checkoutNoPaymentMethods: "ምንም የክፍያ ዘዴዎች አልነቁም። ይህን ትዕዛዝ ከማስቀመጥዎ በፊት ቼክአውቱን ይሰርዙ እና በቅንብሮች ውስጥ የክፍያ ዘዴ ያንቁ።",
     checkoutReceiptSaveFailed: "ደረሰኙን ማስቀመጥ አልተቻለም። እንደገና ይሞክሩ ወይም ወደ ቼክአውት ለመመለስ ይህን መስኮት ይዝጉ።",
     firstSaleAddProduct: "ሽያጭ ለመጀመር ምርት ያክሉ",
-    catalogHasItems: "ካታሎጉ ምርቶች አሉት",,
+    catalogHasItems: "ካታሎጉ ምርቶች አሉት",
     serviceBookingsTitle: "የአገልግሎት ቦታ ምዝገባዎች",
     serviceBookingsRefresh: "ምዝገባዎችን አድስ",
     serviceBookingsDescription: "ከዋና የአገልግሎት ትዕዛዞች ጋር የተያያዙ ቀጠሮዎች። እያንዳንዱን እርምጃ አገልጋዩ ያረጋግጣል።",
