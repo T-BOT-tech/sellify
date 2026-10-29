@@ -25,6 +25,7 @@ import { t } from '../ui/i18n.js';
 import { switchTab } from '../ui/tabs.js';
 import { buildLogisticsOperationalWorkspaceProjection } from '../verticals/logistics/workspace-projection.js';
 import { getLogisticsWorkspaceComposition } from '../verticals/logistics/workspace-contract.js';
+import { serviceBookingsWorkspaceShell, mountServiceBookingsWorkspace } from './service-bookings.js';
 
 export function applyLogisticsUI() {
   const enabled = isLogisticsEnabled();
@@ -281,6 +282,7 @@ export function renderLogistics() {
   let html = renderWorkspaceModeHeader(workspaceRole, visibleAssignments)
     + (courierMode ? '' : filterBar)
     + renderDeliveryWorkloadSummary(visibleAssignments);
+  if (!courierMode) html += serviceBookingsWorkspaceShell();
   if (composition.views.some(view => view.id === 'tracking')) {
     html += renderOperationalWorkspaceSummary(workspace, composition.views.map(view => view.id));
   }
@@ -291,6 +293,7 @@ export function renderLogistics() {
     html += `<div class="settings-section-label">${t('whCompletedFulfillment')}</div>` + done.map(renderCard).join('');
   }
   list.innerHTML = html;
+  if (!courierMode) mountServiceBookingsWorkspace(list);
 
   const statusFilter = list.querySelector('#logistics-status-filter');
   const courierFilter = list.querySelector('#logistics-courier-filter');

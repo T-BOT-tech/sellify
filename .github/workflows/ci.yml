@@ -97,6 +97,8 @@ jobs:
         run: npm run test:service-booking-persistence
       - name: Service booking scheduling authority boundary regression
         run: npm run test:service-booking-scheduling-boundary
+      - name: Service booking operator workspace regression
+        run: npm run test:service-booking-operator-workspace
       - name: First-experience service catalog HTTP journey regression
         run: npm run test:service-catalog-http
       - name: First-experience service catalog frontend sync regression
