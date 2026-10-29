@@ -26,7 +26,10 @@ import { config, currentOrder, products } from '../state.js';
 // imported directly from source, so main.js only imports feature code —
 // nothing imports main.js back except window-bridge.js.
 import { effectiveUnitPrice } from '../b2b/pricing.js';
+import { formatMoney } from '../utils/money.js';
+import { CS } from '../config/currency.js';
 import { showToast } from '../ui/toast.js';
+import { t } from '../ui/i18n.js';
 import { getOrderById } from './queue.js';
 import { saveOrder } from './checkout.js';
 
@@ -140,6 +143,10 @@ export function openPaymentProofModal() {
   }).filter(Boolean);
   if (items.length === 0) return;
 
+  const total = items.reduce((sum, item) => sum + item.qty * item.price, 0);
+  const totalEl = document.getElementById('checkoutPaymentOrderTotal');
+  if (totalEl) totalEl.textContent = `${CS()}${formatMoney(total, config.currencyCode)}`;
+
   const sel = document.getElementById('orderPayMethod');
   const enabledMethods = (config.paymentMethods || []).filter(pm => pm.enabled);
   // pm.id is derived from the user-entered method name (see
@@ -148,6 +155,14 @@ export function openPaymentProofModal() {
   // unchanged, so this was rendering it into an attribute completely
   // unescaped. escapeAttr closes that.
   sel.innerHTML = enabledMethods.map(pm => `<option value="${escapeAttr(pm.id)}">${escapeHtml(pm.name)}</option>`).join('');
+  const confirmButton = document.getElementById('checkoutSaveOrderButton');
+  const stateHint = document.getElementById('checkoutPaymentStateHint');
+  if (confirmButton) confirmButton.disabled = enabledMethods.length === 0;
+  if (stateHint && enabledMethods.length === 0) {
+    stateHint.textContent = t('checkoutNoPaymentMethods');
+  } else if (stateHint) {
+    stateHint.textContent = t('checkoutPaymentStateHint');
+  }
   pendingProofFile = null;
   pendingProofMeta = null;
   document.getElementById('proofCameraInput').value = '';
@@ -171,21 +186,52 @@ export function closePaymentProofModal() {
   document.getElementById('paymentProofModal').style.display = 'none';
 }
 
-export async function confirmOrderWithProof() {
-  const sel = document.getElementById('orderPayMethod');
-  const payMethodId = sel ? sel.value : 'cash';
+let isConfirmingOrderWithProof = false;
 
-  if (pendingProofFile) {
-    try {
-      setPendingProofMeta(await ProofStorage.processAndSaveProof(pendingProofFile, uid()));
-    } catch (e) {
-      console.error('Proof capture failed:', e);
-      setPendingProofMeta(null);
-    }
+export async function confirmOrderWithProof() {
+  // Image compression/storage is asynchronous. Ignore repeated taps while the
+  // first attempt is running so a slow device cannot create duplicate orders.
+  if (isConfirmingOrderWithProof) return;
+  isConfirmingOrderWithProof = true;
+  const confirmButton = document.querySelector('#paymentProofModal button[onclick="confirmOrderWithProof()"]');
+  const wasDisabled = confirmButton?.disabled ?? false;
+  if (confirmButton) {
+    confirmButton.disabled = true;
+    confirmButton.setAttribute('aria-busy', 'true');
   }
 
-  closePaymentProofModal();
-  saveOrder(payMethodId, pendingProofMeta);
+  try {
+    const sel = document.getElementById('orderPayMethod');
+    const payMethodId = sel?.value || '';
+    const selectedMethod = (config.paymentMethods || []).find(pm => pm.id === payMethodId && pm.enabled);
+    if (!selectedMethod) {
+      showToast(t('checkoutNoPaymentMethods'));
+      return;
+    }
+
+    if (pendingProofFile) {
+      try {
+        setPendingProofMeta(await ProofStorage.processAndSaveProof(pendingProofFile, uid()));
+      } catch (e) {
+        console.error('Proof capture failed:', e);
+        setPendingProofMeta(null);
+        // The merchant explicitly selected a receipt. Keep the checkout open
+        // and preserve the cart so they can retry instead of silently saving an
+        // order without the evidence they intended to attach.
+        showToast(t('checkoutReceiptSaveFailed'));
+        return;
+      }
+    }
+
+    closePaymentProofModal();
+    saveOrder(payMethodId, pendingProofMeta);
+  } finally {
+    isConfirmingOrderWithProof = false;
+    if (confirmButton) {
+      confirmButton.disabled = wasDisabled;
+      confirmButton.removeAttribute('aria-busy');
+    }
+  }
 }
 
 export function compressImage(file, maxDimension = 300, quality = 0.7) {
