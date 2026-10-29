@@ -165,6 +165,18 @@ jobs:
       - name: Procurement receiving service identity regression
         run: npm run phase17.7:procurement-receiving-test
 
+      - name: Phase 17.8 Payment Core outbound contract regression
+        run: npm run phase17.8:payment-contract-test
+
+      - name: Phase 17.8 procurement payment association regression
+        run: npm run phase17.8:procurement-payment-test
+
+      - name: Phase 17.9 procurement settlement contract regression
+        run: npm run phase17.9:procurement-settlement-contract-test
+
+      - name: Phase 17.9 procurement settlement integration regression
+        run: npm run phase17.9:procurement-settlement-test
+
       - name: Checkout payment-state clarity and order-total regression
         run: npm run test:checkout-payment-state-clarity
       - name: Order queue order-value labeling regression
