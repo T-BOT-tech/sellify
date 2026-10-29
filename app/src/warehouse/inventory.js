@@ -39,15 +39,20 @@ function hasCanonicalInventory(productId) {
   return hasScopedBalance || hasScopedMovement;
 }
 
+export function isServiceCatalogItem(p) {
+  // Canonical item_type wins when present; type is the legacy persisted alias.
+  return String(p?.item_type ?? p?.type ?? '').trim().toLowerCase() === 'service';
+}
+
 export function isStockTracked(p) {
   // Services are catalog items, not physical stock. Even if a legacy or
   // stale inventory row exists for the same id, do not present them as stock-tracked.
-  if (p?.item_type === 'service') return false;
+  if (isServiceCatalogItem(p)) return false;
   return typeof p.stock === 'number' || hasCanonicalInventory(p.id);
 }
 
 export function projectedStock(p, locationId = config.locationId || '') {
-  if (p?.item_type === 'service') return null;
+  if (isServiceCatalogItem(p)) return null;
   if (hasCanonicalInventory(p.id)) return getInventoryBalance(p.id, locationId);
   return typeof p.stock === 'number' ? p.stock : null;
 }
