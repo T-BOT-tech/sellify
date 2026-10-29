@@ -7,6 +7,8 @@ import { saveJSON } from '../storage/json.js';
 import { STORAGE_KEYS } from '../constants.js';
 import { hasPermission } from '../auth/permissions.js';
 import { getInventoryBalance } from './ledger.js';
+import { isServiceCatalogItem } from './catalog-item-type.js';
+export { isServiceCatalogItem } from './catalog-item-type.js';
 
 export function isWarehouseEnabled() {
   return !!config.warehouseEnabled;
@@ -39,10 +41,6 @@ function hasCanonicalInventory(productId) {
   return hasScopedBalance || hasScopedMovement;
 }
 
-export function isServiceCatalogItem(p) {
-  // Canonical item_type wins when present; type is the legacy persisted alias.
-  return String(p?.item_type ?? p?.type ?? '').trim().toLowerCase() === 'service';
-}
 
 export function isStockTracked(p) {
   // Services are catalog items, not physical stock. Even if a legacy or
