@@ -221,6 +221,42 @@ try {
     error => error?.code === 'MARKETPLACE_PAYMENT_ALLOCATION_EXCEEDED'
   );
 
+  // A multi-payment cancellation must keep settlement held until every
+  // canonical Payment Core refund has succeeded, not just the first one.
+  const splitCancelled = await store.updateMarketplaceOrderStatus(seller.chatId, splitLegacy.id, 'cancelled');
+  assert.equal(splitCancelled.status, 'cancelled');
+  const splitRefunds = db.prepare(
+    'SELECT * FROM marketplace_refunds WHERE seller_order_id = ? ORDER BY payment_id'
+  ).all(splitSeller.id);
+  assert.equal(splitRefunds.length, 2);
+  for (const projectedRefund of splitRefunds) {
+    const canonical = db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(projectedRefund.id);
+    assert.ok(canonical, 'each marketplace refund must reference a canonical Payment Core refund');
+    assert.equal(canonical.status, 'REQUESTED');
+    assert.equal(projectedRefund.status, 'REQUESTED');
+  }
+  assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(splitSeller.id).status, 'HELD');
+
+  const firstSplitRefund = splitRefunds[0];
+  await store.finalizePaymentRefund(seller.chatId, firstSplitRefund.id, {
+    status: 'SUCCEEDED',
+    providerRefundId: 'phase11-4-split-refund-1',
+    evidence: { source: 'phase11.4-regression', split: 1 },
+  }, { userId: sellerUser.id, deviceId: sellerSession.deviceId });
+  assert.equal(db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(splitSeller.id, firstSplitRefund.payment_id).status, 'REFUNDED');
+  assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(splitSeller.id).status, 'HELD',
+    'one successful refund must not reverse settlement while another allocation remains outstanding');
+
+  const secondSplitRefund = splitRefunds[1];
+  await store.finalizePaymentRefund(seller.chatId, secondSplitRefund.id, {
+    status: 'SUCCEEDED',
+    providerRefundId: 'phase11-4-split-refund-2',
+    evidence: { source: 'phase11.4-regression', split: 2 },
+  }, { userId: sellerUser.id, deviceId: sellerSession.deviceId });
+  assert.equal(db.prepare('SELECT status FROM marketplace_payment_allocations WHERE seller_order_id = ? AND payment_id = ?').get(splitSeller.id, secondSplitRefund.payment_id).status, 'REFUNDED');
+  assert.equal(db.prepare('SELECT status FROM marketplace_settlements WHERE seller_order_id = ?').get(splitSeller.id).status, 'REVERSED',
+    'settlement may reverse only after every split allocation refund is confirmed');
+
   db.close();
 
   const racePayload = {
