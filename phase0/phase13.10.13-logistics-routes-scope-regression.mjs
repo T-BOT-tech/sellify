@@ -35,7 +35,7 @@ assert.match(decision, /Route execution is deferred/i);
 assert.match(decision, /route optimization/i);
 
 const forbiddenPatterns = [
-  /(?:new\\s+RouteEngine\\b|class\\s+RouteEngine\\b|createRouteEngine\\s*\\()/i,
+  /(?:new\s+RouteEngine\b|class\s+RouteEngine\b|createRouteEngine\s*\()/i,
   /maps?[-_ ]?(api|provider|sdk)/i,
   /carrier[-_ ]?route/i,
 ];
