@@ -96,7 +96,7 @@ export default {
     checkoutNoPaymentMethods: "Hakuna njia za malipo zilizowezeshwa. Ghairi checkout na uwashe njia ya malipo kwenye Mipangilio kabla ya kuhifadhi agizo hili.",
     checkoutReceiptSaveFailed: "Risiti haikuweza kuhifadhiwa. Jaribu tena, au funga dirisha hili ili urudi kwenye checkout.",
     firstSaleAddProduct: "Ongeza bidhaa ili uanze kuuza",
-    catalogHasItems: "Katalogi ina bidhaa",,
+    catalogHasItems: "Katalogi ina bidhaa",
     serviceBookingsTitle: "Miadi ya huduma",
     serviceBookingsRefresh: "Onyesha upya miadi",
     serviceBookingsDescription: "Miadi iliyounganishwa na maagizo rasmi ya huduma. Seva huthibitisha kila hatua.",
