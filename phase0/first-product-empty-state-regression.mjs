@@ -22,11 +22,11 @@ assert.doesNotMatch(render.slice(filteredIndex, render.indexOf('const restaurant
 
 const home = await read('../app/src/ui/home.js');
 const english = await read('../app/src/i18n/locales/en.js');
-assert.match(home, /products\\.length > 0 \\? t\\('catalogHasItems'\\) : t\\('firstSaleAddProduct'\\)/,
+assert.match(home, /products\.length > 0 \? t\('catalogHasItems'\) : t\('firstSaleAddProduct'\)/,
   'home status must reflect catalog contents rather than connectivity');
-assert.match(home, /navigator\\.onLine \\? 'online' : 'offline'/,
+assert.match(home, /navigator\.onLine \? 'online' : 'offline'/,
   'connectivity status must remain separate from catalog contents');
-assert.match(english, /firstSaleAddProduct\\s*:/, 'English fallback must define the empty-catalog message');
-assert.match(english, /catalogHasItems\\s*:/, 'English fallback must define the non-empty-catalog message');
+assert.match(english, /firstSaleAddProduct\s*:/, 'English fallback must define the empty-catalog message');
+assert.match(english, /catalogHasItems\s*:/, 'English fallback must define the non-empty-catalog message');
 
 console.log('First product empty-state and home catalog-status regressions passed.');
