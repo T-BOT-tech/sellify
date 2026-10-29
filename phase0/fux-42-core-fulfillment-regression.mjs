@@ -139,13 +139,13 @@ db.prepare(`INSERT INTO fulfillments
    created_by_user_id,updated_by_user_id,created_at,updated_at,version)
   VALUES (?,?,?,NULL,'delivery','out_for_delivery',?,?,?, ?,?,?,1)`)
   .run(assignmentProofFulfillmentId, assignmentProofOrderId, String(tenant.organizationId),
-    JSON.stringify('Jimma'), JSON.stringify(assignmentProof), actor.userId, actor.userId, assignmentNow, assignmentNow);
+    JSON.stringify('Jimma'), JSON.stringify(assignmentProof), String(assignmentCourier.id), String(assignmentCourier.id), assignmentNow, assignmentNow);
 db.prepare(`INSERT INTO delivery_assignments
   (id,fulfillment_id,organization_id,location_id,courier_user_id,status,assignment_key,
    assigned_by_user_id,assigned_at,updated_at,version,last_command_key)
   VALUES (?,?,?,NULL,?,'OUT_FOR_DELIVERY',?,?,?, ?,1,NULL)`)
   .run(assignmentProofAssignmentId, assignmentProofFulfillmentId, String(tenant.organizationId),
-    String(assignmentCourier.id), 'fux42-assignment-proof-key', actor.userId, assignmentNow, assignmentNow);
+    String(assignmentCourier.id), 'fux42-assignment-proof-key', String(assignmentCourier.id), assignmentNow, assignmentNow);
 const assignmentCourierActor = {
   userId: String(assignmentCourier.id),
   role: 'logistics_courier',
