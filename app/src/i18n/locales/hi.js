@@ -97,7 +97,7 @@ export default {
     checkoutNoPaymentMethods: "कोई भुगतान विधि सक्षम नहीं है। इस ऑर्डर को सहेजने से पहले चेकआउट रद्द करें और सेटिंग्स में भुगतान विधि सक्षम करें।",
     checkoutReceiptSaveFailed: "रसीद सहेजी नहीं जा सकी। फिर से प्रयास करें या चेकआउट पर लौटने के लिए यह संवाद बंद करें।",
     firstSaleAddProduct: "बेचना शुरू करने के लिए एक उत्पाद जोड़ें",
-    catalogHasItems: "कैटलॉग में उत्पाद हैं",,
+    catalogHasItems: "कैटलॉग में उत्पाद हैं",
     serviceBookingsTitle: "सेवा बुकिंग",
     serviceBookingsRefresh: "बुकिंग रीफ़्रेश करें",
     serviceBookingsDescription: "मुख्य सेवा ऑर्डर से जुड़ी अपॉइंटमेंट। सर्वर हर कार्रवाई की पुष्टि करता है।",
