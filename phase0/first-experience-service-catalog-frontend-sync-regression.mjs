@@ -466,8 +466,43 @@ assert.deepEqual(
   ],
   'legacy service aliases must normalize while explicit canonical item_type wins conflicts',
 );
-assert.match(catalogSource, /item_type:\s*String\(l\.item_type \|\| 'product'\)[\s\S]*?\? 'service' : 'product'/,
-  'cached and remote marketplace listings must normalize item_type with a legacy-safe product default');
+assert.match(catalogSource, /item_type:\s*String\(l\.item_type \|\| l\.type \|\| 'product'\)[\s\S]*?\? 'service' : 'product'/,
+  'cached and remote marketplace listings must normalize the legacy service alias while preferring canonical item_type');
+
+// Execute the actual listing sanitizer against legacy and conflicting records,
+// matching the production sanitizer rather than relying on source-shape checks.
+const sanitizeRemoteListingsSource = catalogSource.match(
+  /export function sanitizeRemoteListings\(rawList\) \{[\s\S]*?\n\}/,
+)?.[0];
+assert.ok(sanitizeRemoteListingsSource, 'remote marketplace listing sanitizer must remain extractable for behavioral regression');
+const listingSanitizerContext = {
+  sanitizeId: value => String(value || ''),
+  uid: () => 'generated-listing-id',
+  Number,
+  String,
+  Math,
+};
+vm.runInNewContext(
+  sanitizeRemoteListingsSource.replace('export function sanitizeRemoteListings', 'function sanitizeRemoteListings')
+    + '\\nglobalThis.sanitizeRemoteListings = sanitizeRemoteListings;',
+  listingSanitizerContext,
+);
+const sanitizedLegacyListings = listingSanitizerContext.sanitizeRemoteListings([
+  { listing_id: 'legacy-service-listing', type: 'service', price: 100 },
+  { listing_id: 'canonical-service-listing', item_type: 'service', type: 'product', price: 200 },
+  { listing_id: 'canonical-product-listing', item_type: 'product', type: 'service', price: 300 },
+  { listing_id: 'legacy-product-listing', type: 'physical', price: 400 },
+]);
+assert.deepEqual(
+  sanitizedLegacyListings.map(listing => [listing.listing_id, listing.item_type]),
+  [
+    ['legacy-service-listing', 'service'],
+    ['canonical-service-listing', 'service'],
+    ['canonical-product-listing', 'product'],
+    ['legacy-product-listing', 'product'],
+  ],
+  'marketplace listing sanitizer must preserve legacy service identity and canonical item_type precedence',
+);
 assert.match(marketplaceCheckoutSource, /const listing = marketplaceListings\.find\(l => l\.listing_id === e\.listing\.listing_id\) \|\| e\.listing/,
   'checkout must resolve the current listing after a marketplace refresh instead of trusting a stale cart snapshot');
 assert.match(marketplaceCheckoutSource, /item_type:\s*listing\.item_type === 'service' \? 'service' : 'product'/,
