@@ -10115,8 +10115,17 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     const canonicalFulfillmentProof = fulfillment.proof_json
       ? parseJSON(fulfillment.proof_json, fulfillment.proof_json)
       : null;
-    // Legacy order metadata can recover a direct fulfillment transition, but
-    // it must not silently satisfy a fresh courier completion command.
+    // Proof may be supplied on any lifecycle transition. Once captured in
+    // either the fulfillment row or legacy order metadata, it cannot be replaced.
+    const existingProofForImmutability = canonicalFulfillmentProof ?? legacyOrderProof;
+    if (existingProofForImmutability != null && proofInput !== undefined
+      && JSON.stringify(existingProofForImmutability) !== JSON.stringify(proofInput)) {
+      throw Object.assign(new Error('Delivery proof cannot be changed after capture'), {
+        statusCode: 409, code: 'DELIVERY_PROOF_IMMUTABLE',
+      });
+    }
+    // Legacy order metadata may inform the immutable comparison above, but it
+    // does not silently satisfy a fresh courier completion command.
     const existingProof = canonicalFulfillmentProof;
     const effectiveProof = normalizedAction === 'DELIVERED'
       ? resolveDeliveryProof(existingProof || (proofInput !== undefined ? legacyOrderProof : null), proofInput)
@@ -10266,6 +10275,12 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     }
 
     let row = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?').get(String(serverOrderId), organizationId);
+    // Snapshot proof before creating a fulfillment row: otherwise a new row can
+    // be seeded from caller input and hide a conflicting legacy order proof.
+    const persistedDeliveryProof = row?.proof_json
+      ? parseJSON(row.proof_json, row.proof_json)
+      : null;
+    const existingDeliveryProof = persistedDeliveryProof ?? (freshOrderJson.fulfillment_proof ?? null);
     if (row) {
       const persistedLocationId = row.location_id ? String(row.location_id) : null;
       if (String(persistedLocationId || '') !== String(locationId || '')) {
@@ -10307,6 +10322,16 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
       db.exec('COMMIT');
       return fulfillmentFromRow(row);
     }
+    // Delivery proof is immutable once captured, regardless of whether the
+    // caller uses the courier-assignment lifecycle or generic fulfillment API.
+    // Keep this check after durable replay so a legitimate retry stays replayable.
+    if (existingDeliveryProof != null && input.proof !== undefined
+      && JSON.stringify(existingDeliveryProof) !== JSON.stringify(input.proof)) {
+      throw Object.assign(new Error('Delivery proof cannot be changed after capture'), {
+        statusCode: 409, code: 'DELIVERY_PROOF_IMMUTABLE',
+      });
+    }
+
     if (row.fulfillment_type !== type) throw Object.assign(new Error('Fulfillment type cannot change'), { statusCode: 409, code: 'FULFILLMENT_TYPE_IMMUTABLE' });
     const current = normalizeCoreFulfillmentStatus(row.status);
     // Assignment lifecycle owns progress whenever an active courier assignment
