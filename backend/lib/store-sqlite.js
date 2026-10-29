@@ -3281,6 +3281,23 @@ if (!applied.includes(39)) {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(76, nowIso());
   }
+
+  // A one-time onboarding challenge must survive a lost HTTP response without
+  // creating a second tenant or making the merchant start over.
+  if (!applied.includes(77)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS tenant_creation_requests (
+        challenge_token_hash TEXT PRIMARY KEY REFERENCES auth_challenges(token_hash) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        chat_id TEXT NOT NULL UNIQUE REFERENCES tenants(chat_id) ON DELETE CASCADE,
+        request_fingerprint TEXT NOT NULL,
+        result_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_tenant_creation_requests_user ON tenant_creation_requests(user_id, created_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(77, nowIso());
+  }
 }
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({
@@ -11637,7 +11654,7 @@ export async function ensureMembership(userId, chatId, role = 'owner') {
   return db.prepare('SELECT * FROM memberships WHERE id = ?').get(id);
 }
 
-export async function createTenantForUser({ userId, sellerName, businessType, country, currency, timezone }) {
+export async function createTenantForUser({ userId, sellerName, businessType, country, currency, timezone, challengeToken = null }) {
   const countryPack = resolveOnboardingCountry(country);
   ensureDatabase();
   const chatId = `tenant_${crypto.randomUUID()}`;
@@ -11645,14 +11662,65 @@ export async function createTenantForUser({ userId, sellerName, businessType, co
   const now = nowIso();
   const apiKey = crypto.randomBytes(32).toString('hex');
   const tenant = { sellerName: String(sellerName || '').trim(), businessType: String(businessType || 'retail'), country: countryPack.countryCode, currency: normaliseCurrency(currency, countryPack.currency), timezone: String(timezone || 'UTC') };
+  const challengeTokenHash = challengeToken ? hashToken(challengeToken) : null;
+  const requestFingerprint = crypto.createHash('sha256').update(json({
+    sellerName: tenant.sellerName,
+    businessType: tenant.businessType,
+    country: tenant.country,
+    currency: tenant.currency,
+    timezone: tenant.timezone,
+  })).digest('hex');
+
   db.exec('BEGIN IMMEDIATE');
   try {
+    if (challengeTokenHash) {
+      // Check replay under the same write lock as first-time creation so two
+      // retries cannot race into separate tenants.
+      const prior = db.prepare(`SELECT user_id, request_fingerprint, result_json
+        FROM tenant_creation_requests WHERE challenge_token_hash = ?`).get(challengeTokenHash);
+      if (prior) {
+        if (String(prior.user_id) !== String(userId) || prior.request_fingerprint !== requestFingerprint) {
+          throw Object.assign(new Error('Tenant creation challenge was already used for a different request'), {
+            statusCode: 409, code: 'TENANT_CREATION_IDEMPOTENCY_CONFLICT',
+          });
+        }
+        const replay = parseJSON(prior.result_json, null);
+        if (!replay || String(replay.chatId || '') !== String(db.prepare(
+          'SELECT chat_id FROM tenant_creation_requests WHERE challenge_token_hash = ?'
+        ).get(challengeTokenHash)?.chat_id || '')) {
+          throw Object.assign(new Error('Stored tenant creation result is invalid'), { statusCode: 500, code: 'TENANT_CREATION_RESULT_INVALID' });
+        }
+        db.exec('COMMIT');
+        return { ...replay, replayed: true };
+      }
+
+      const challenge = db.prepare('SELECT user_id, expires_at, used_at FROM auth_challenges WHERE token_hash = ?')
+        .get(challengeTokenHash);
+      if (!challenge || String(challenge.user_id) !== String(userId)
+          || challenge.used_at || Date.parse(challenge.expires_at) <= Date.now()) {
+        throw Object.assign(new Error('Invalid or expired onboarding challenge'), { statusCode: 401, code: 'INVALID_ONBOARDING_CHALLENGE' });
+      }
+    }
+
     db.prepare(`INSERT INTO tenants (chat_id, tenant_id, api_key, created_at, seller_name, branding_json, vendor_code) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(chatId, tenantId, apiKey, now, tenant.sellerName, json({ currency: tenant.currency, country: tenant.country, timezone: tenant.timezone }), null);
     ensureCanonicalIdentityForTenant(chatId);
     const membership = await ensureMembership(userId, chatId, 'owner');
     audit(chatId, 'tenant.created_authenticated', 'tenant', chatId, { userId: String(userId), businessType: tenant.businessType });
+    const result = { chatId, tenantId, membership, tenant: { ...tenant, createdAt: now } };
+    if (challengeTokenHash) {
+      const consumed = db.prepare('UPDATE auth_challenges SET used_at = ? WHERE token_hash = ? AND used_at IS NULL')
+        .run(nowIso(), challengeTokenHash);
+      if (consumed.changes !== 1) {
+        throw Object.assign(new Error('Invalid or expired onboarding challenge'), { statusCode: 401, code: 'INVALID_ONBOARDING_CHALLENGE' });
+      }
+      db.prepare(`INSERT INTO tenant_creation_requests
+        (challenge_token_hash, user_id, chat_id, request_fingerprint, result_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)`).run(
+        challengeTokenHash, String(userId), chatId, requestFingerprint, json(result), nowIso(),
+      );
+    }
     db.exec('COMMIT');
-    return { chatId, tenantId, membership, tenant: { ...tenant, createdAt: now } };
+    return result;
   } catch (e) {
     db.exec('ROLLBACK');
     throw e;
@@ -12146,6 +12214,19 @@ export async function createAuthChallenge(userId, ttlMs = 5 * 60_000) {
   const expires = new Date(now.getTime() + ttlMs);
   db.prepare('INSERT INTO auth_challenges (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)').run(hashToken(token), String(userId), now.toISOString(), expires.toISOString());
   return { token, expiresAt: expires.toISOString() };
+}
+
+export async function getAuthChallengeForTenantCreation(token) {
+  ensureDatabase();
+  if (typeof token !== 'string' || !token) return null;
+  const hash = hashToken(token);
+  const row = db.prepare('SELECT user_id, expires_at, used_at FROM auth_challenges WHERE token_hash = ?').get(hash);
+  if (!row || Date.parse(row.expires_at) <= Date.now()) return null;
+  if (row.used_at) {
+    const replay = db.prepare('SELECT user_id FROM tenant_creation_requests WHERE challenge_token_hash = ?').get(hash);
+    if (!replay || String(replay.user_id) !== String(row.user_id)) return null;
+  }
+  return { userId: row.user_id };
 }
 
 export async function consumeAuthChallenge(token) {
