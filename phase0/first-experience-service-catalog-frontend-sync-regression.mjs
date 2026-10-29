@@ -109,13 +109,14 @@ const onboardingFields = {
   onboardingItemType: { value: 'service' },
   onboardingStatus: { textContent: '' },
 };
+let attemptedLocalSave = null;
 const onboardingHarness = {
   products: priorOnboardingProducts,
   config: { currencyCode: 'ETB', syncUrl: 'http://127.0.0.1:0', chatId: 'tenant-a', sessionToken: 'session-a' },
   STORAGE_KEYS: { products: 'products' },
   document: { getElementById: id => onboardingFields[id] || null },
   setProducts(next) { onboardingHarness.products = next; },
-  saveJSONAsync: async () => false,
+  saveJSONAsync: async (key, value) => { attemptedLocalSave = { key, value }; return false; },
   toMinorUnits: value => Math.round(Number(value) * 100),
   uid: () => 'unsaved-consultation',
   markCatalogDirty: async () => { onboardingHarness.catalogMarkedDirty = true; },
@@ -126,6 +127,16 @@ const addOnboardingOffering = vm.runInNewContext(
   onboardingHarness,
 );
 await addOnboardingOffering();
+assert.equal(attemptedLocalSave?.key, 'products',
+  'the first-offering path must attempt to persist the catalog under its canonical local-storage key');
+assert.equal(attemptedLocalSave?.value?.length, 2,
+  'the failed persistence attempt must contain the original catalog plus the proposed offering');
+assert.equal(attemptedLocalSave?.value?.[1]?.name, 'Consultation',
+  'the persistence attempt must contain the offering the merchant submitted');
+assert.equal(attemptedLocalSave?.value?.[1]?.item_type, 'service',
+  'service onboarding must persist service identity rather than silently converting to a product');
+assert.equal(Object.hasOwn(attemptedLocalSave?.value?.[1] || {}, 'stock'), false,
+  'service onboarding must not persist a physical-stock field');
 assert.equal(onboardingHarness.products, priorOnboardingProducts,
   'failed durable save must restore the exact prior in-memory catalog array');
 assert.deepEqual(onboardingHarness.products, priorOnboardingProducts,
