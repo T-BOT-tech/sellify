@@ -148,6 +148,29 @@ try {
   assert.equal((await store.listUserMemberships(lostResponseUser.id)).length, 1,
     'conflicting retries must not create another tenant');
 
+  // A valid non-owner session must not fall through to the challenge branch
+  // when the owner authorization check fails.
+  const nonOwnerUser = await store.getOrCreateUserByTelegram(
+    'tenant-create-non-owner-' + Date.now(), 'Tenant Create Non-owner Test');
+  await store.ensureMembership(nonOwnerUser.id, tenant.chatId, 'staff');
+  const nonOwnerSession = await store.createSession({
+    userId: nonOwnerUser.id, chatId: tenant.chatId, deviceName: 'Non-owner challenge regression',
+  });
+  const nonOwnerChallenge = await store.createAuthChallenge(nonOwnerUser.id);
+  const nonOwnerCreate = await fetch(baseUrl + '/auth/tenants', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + nonOwnerSession.token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...lostResponseRequest,
+      sellerName: 'Must Not Be Created',
+      challengeToken: nonOwnerChallenge.token,
+    }),
+  });
+  assert.equal(nonOwnerCreate.status, 403,
+    'a valid non-owner session must be denied even if the request also contains an onboarding challenge');
+  assert.equal((await store.listUserMemberships(nonOwnerUser.id)).length, 1,
+    'non-owner challenge fallback must not create a tenant or membership');
+
   const tenantPath = '/tenants/' + encodeURIComponent(tenant.chatId);
   const unauthTenantRead = await fetch(baseUrl + tenantPath);
   assert.equal(unauthTenantRead.status, 401, 'canonical currency reads must require a tenant session');
