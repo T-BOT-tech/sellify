@@ -34,5 +34,10 @@ assert.equal(
   true,
   'summary enabled state should normalize status consistently',
 );
+assert.throws(
+  () => buildSellerStorefrontChannelSummary({ channelType: 'telegram', status: 'VERIFIED', version: 0 }),
+  /Invalid seller storefront configuration version/,
+  'summary projection must not convert an invalid zero version into the default',
+);
 
 console.log('Seller storefront channel contract validation regression: PASS');
