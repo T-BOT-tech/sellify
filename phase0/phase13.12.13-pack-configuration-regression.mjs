@@ -34,11 +34,17 @@ assert.equal(Object.isFrozen(warehouse), true);
 const restaurant = getVerticalPackConfiguration({
   packId: 'restaurant',
   config: { ...base, businessModel: 'retail' },
-  organizationConfig: { businessModel: 'restaurant' },
+  organizationConfig: { restaurantEnabled: true, organizationId: 'ORG-1' },
   locationConfig: {},
   organizationId: 'ORG-1',
 });
-assert.equal(restaurant.enabled, true);
+assert.equal(restaurant.enabled, true, 'an explicit restaurant pack flag enables the pack');
+const restaurantIdentityOnly = getVerticalPackConfiguration({
+  packId: 'restaurant',
+  config: { ...base, businessModel: 'restaurant' },
+});
+assert.equal(restaurantIdentityOnly.enabled, false,
+  'business identity/presentation alone must not activate the Restaurant pack');
 
 const logistics = getVerticalPackConfiguration({ packId: 'logistics', config: base });
 assert.equal(logistics.enabled, false);
@@ -76,7 +82,8 @@ assert.deepEqual(contract.precedence, [
 ]);
 assert.equal(contract.packs.agriculture.activation, 'declarative_only');
 assert.equal(contract.packs.agriculture.feature_flag, null);
-assert.equal(contract.packs.restaurant.feature_flag, 'businessModel');
+assert.equal(contract.packs.restaurant.activation, 'feature_flag');
+assert.equal(contract.packs.restaurant.feature_flag, 'restaurantEnabled');
 assert.equal(contract.packs.warehouse.feature_flag, 'warehouseEnabled');
 assert.equal(contract.packs.logistics.feature_flag, 'logisticsEnabled');
 assert.equal(contract.duplicate_configuration_authority, false);
@@ -84,6 +91,7 @@ assert.equal(contract.persistence, 'existing_config_store_only');
 
 const stateSource = fs.readFileSync(new URL('../app/src/state.js', import.meta.url), 'utf8');
 assert.match(stateSource, /export let config = loadJSON\(STORAGE_KEYS\.config/);
+assert.match(stateSource, /restaurantEnabled: false/);
 assert.match(stateSource, /warehouseEnabled: false/);
 assert.match(stateSource, /logisticsEnabled: false/);
 assert.match(stateSource, /businessModel: 'retail'/);
