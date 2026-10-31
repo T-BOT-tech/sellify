@@ -36,6 +36,47 @@ assert.match(appSourceForTemplateSync, /async function loadBusinessTemplateConfi
 assert.match(appSourceForTemplateSync, /String\(config\.chatId\) !== chatId \|\| String\(config\.sessionToken\) !== sessionToken/,
   'a late template response from a previous tenant or session must not overwrite the active tenant cache');
 
+
+const onboardingCatalogGuidanceFunctionSource = tenantAuthSource.match(
+  /export function toggleOnboardingItemType\(itemType\) \{[\s\S]*?\n\}/,
+)?.[0];
+assert.ok(onboardingCatalogGuidanceFunctionSource, 'onboarding catalog guidance must remain in the existing item-type flow');
+
+function makeOnboardingGuidanceHarness(templateKey, itemType) {
+  const elements = {
+    onboardingProdStockWrap: { style: {} },
+    onboardingItemNameLabel: { textContent: '' },
+    onboardingProdName: { placeholder: '' },
+    onboardingAddOfferingButton: { textContent: '' },
+    onboardingOfferingGuidance: { textContent: '' },
+    onboardingBusinessTemplate: { value: templateKey },
+  };
+  const harness = {
+    config: { businessTemplate: templateKey },
+    document: { getElementById: id => elements[id] || null },
+  };
+  vm.runInNewContext(
+    onboardingCatalogGuidanceFunctionSource + '\\nthis.toggleOnboardingItemType = toggleOnboardingItemType;',
+    harness,
+  );
+  harness.toggleOnboardingItemType(itemType);
+  return elements;
+}
+
+const repairServiceGuidance = makeOnboardingGuidanceHarness('repair', 'service');
+assert.match(repairServiceGuidance.onboardingOfferingGuidance.textContent, /diagnostics, repair, or maintenance/i);
+assert.match(repairServiceGuidance.onboardingOfferingGuidance.textContent, /Spare parts and services can coexist/i);
+assert.equal(repairServiceGuidance.onboardingProdStockWrap.style.display, 'none');
+const repairProductGuidance = makeOnboardingGuidanceHarness('repair', 'product');
+assert.match(repairProductGuidance.onboardingOfferingGuidance.textContent, /spare parts or accessories/i);
+assert.equal(repairProductGuidance.onboardingProdStockWrap.style.display, '');
+const rentalGuidance = makeOnboardingGuidanceHarness('rental', 'service');
+assert.match(rentalGuidance.onboardingOfferingGuidance.textContent, /does not itself create a booking/i);
+const genericServiceGuidance = makeOnboardingGuidanceHarness('other', 'service');
+assert.match(genericServiceGuidance.onboardingOfferingGuidance.textContent, /Physical products and services can coexist/i);
+assert.match(onboardingHtml, /id="onboardingOfferingGuidance" class="hint" role="status" aria-live="polite"/,
+  'contextual catalog guidance must be accessible and must not replace the canonical catalog');
+
 const loadBusinessTemplateFunctionSource = tenantAuthSource.match(
   /async function loadBusinessTemplateConfig\(\) \{[\s\S]*?\n\}/,
 )?.[0];
