@@ -38,7 +38,10 @@ export const PACK_JOURNEY_COMPOSITION = Object.freeze({
   }),
   warehouse: Object.freeze({
     journeys: Object.freeze([
-      { id: 'warehouse-operations', label: 'Warehouse operations', status: 'COMPOSED', entry: 'warehouse' },
+      // "inventory" is the Pack-declared entry; the existing app tab is
+      // "warehouse". Resolve the manifest entry instead of pretending the
+      // internal tab id is itself a declared Pack entry.
+      { id: 'warehouse-operations', label: 'Warehouse operations', status: 'COMPOSED', entry: 'inventory' },
     ]),
     capabilityJourneys: Object.freeze({
       'warehouse-inventory': 'warehouse-operations',
@@ -65,6 +68,18 @@ export const PACK_JOURNEY_COMPOSITION = Object.freeze({
   }),
 });
 
+// Pack manifests expose product entry names, while switchTab() accepts existing
+// workspace tab ids. Keep this projection explicit and read-only.
+export const PACK_JOURNEY_ENTRY_TO_TAB = Object.freeze({
+  tables: 'tables',
+  kitchen: 'kitchen',
+  inventory: 'warehouse',
+  receiving: 'warehouse',
+  transactions: 'warehouse',
+  locations: 'warehouse',
+  logistics: 'logistics',
+});
+
 const PACKS = Object.freeze([AGRICULTURE_PACK, RESTAURANT_PACK, WAREHOUSE_PACK, LOGISTICS_PACK]);
 
 function esc(v) {
@@ -84,12 +99,22 @@ export function getPackJourneyCompositionModel() {
       locationId: config.locationId || null,
     });
     const composition = getComposition(pack.pack_id);
-    const journeys = composition.journeys.map(journey => ({
-      ...journey,
-      capabilities: pack.capabilities.filter(capability => composition.capabilityJourneys[capability] === journey.id),
-      declaredEntry: journey.entry,
-      entryDeclaredByPack: journey.entry ? pack.ui_entry_points.includes(journey.entry) : false,
-    }));
+    const journeys = composition.journeys.map(journey => {
+      const entryDeclaredByPack = Boolean(journey.entry && pack.ui_entry_points.includes(journey.entry));
+      const resolvedTab = entryDeclaredByPack ? (PACK_JOURNEY_ENTRY_TO_TAB[journey.entry] || null) : null;
+      const executable = Boolean(entryDeclaredByPack && resolvedTab);
+      return {
+        ...journey,
+        status: journey.entry
+          ? (executable ? 'COMPOSED' : 'JOURNEY_UNAVAILABLE')
+          : journey.status,
+        capabilities: pack.capabilities.filter(capability => composition.capabilityJourneys[capability] === journey.id),
+        declaredEntry: journey.entry,
+        entryDeclaredByPack,
+        resolvedTab,
+        executable,
+      };
+    });
     return Object.freeze({
       packId: pack.pack_id,
       name: pack.name,
@@ -119,9 +144,9 @@ export function renderPackJourneyComposition(containerId = 'fux-pack-journey-com
           </div>
           ${pack.journeys.map(journey => `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--line);">
             <div><strong>${esc(journey.label)}</strong> <span class="status-badge">${esc(journey.status)}</span></div>
-            <div class="hint">Journey entry: ${journey.declaredEntry ? esc(journey.declaredEntry) : 'none declared'}</div>
+            <div class="hint">Journey entry: ${journey.declaredEntry ? esc(journey.declaredEntry) : 'none declared'}${journey.resolvedTab ? ` · workspace tab: ${esc(journey.resolvedTab)}` : ''}</div>
             <div class="hint">Capabilities: ${journey.capabilities.map(esc).join(', ') || '—'}</div>
-            ${journey.declaredEntry && journey.entryDeclaredByPack ? `<button class="fux-action" type="button" data-journey-tab="${esc(journey.declaredEntry)}"><strong>Open journey surface</strong><small>Existing workspace entry</small></button>` : '<div class="hint">No executable journey entry is declared by the current Pack contract.</div>'}
+            ${journey.executable ? `<button class="fux-action" type="button" data-journey-tab="${esc(journey.resolvedTab)}"><strong>Open journey surface</strong><small>Existing workspace entry</small></button>` : '<div class="hint">No executable journey entry is declared by the current Pack contract.</div>'}
           </div>`).join('')}
         </article>`).join('')}
       </div>
