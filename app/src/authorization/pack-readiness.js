@@ -6,6 +6,7 @@ import { getPackLifecycleSnapshot } from '../experience/pack-lifecycle-client.js
 import { hasPermission } from '../auth/permissions.js';
 import { CORE_AUTHORITIES } from '../verticals/contract.js';
 import { getVerticalPackConfiguration } from '../verticals/configuration.js';
+import { PACK_JOURNEY_ENTRY_TO_TAB } from '../experience/pack-journey-composition.js';
 import { AGRICULTURE_PACK } from '../verticals/agriculture/pack.js';
 import { RESTAURANT_PACK } from '../verticals/restaurant/pack.js';
 import { WAREHOUSE_PACK } from '../verticals/warehouse/pack.js';
@@ -33,7 +34,8 @@ export function readinessFor(pack, resolved, snapshot = null) {
   if (readinessState === 'DEPENDENCY_BLOCKED') return 'DEPENDENCY_UNAVAILABLE';
   if (lifecycleState === 'UNKNOWN' || readinessState === 'UNKNOWN') return 'UNKNOWN';
   if (lifecycleState === 'ACTIVE' && snapshot?.readiness?.active === true) {
-    return pack.ui_entry_points.length ? 'READY' : 'JOURNEY_UNAVAILABLE';
+    const hasExecutableJourney = pack.ui_entry_points.some(entry => Boolean(PACK_JOURNEY_ENTRY_TO_TAB[entry]));
+    return hasExecutableJourney ? 'READY' : 'JOURNEY_UNAVAILABLE';
   }
   if (snapshot?.readiness?.eligible === true && ['ELIGIBLE', 'INSTALLED', 'UPGRADE_AVAILABLE'].includes(lifecycleState)) {
     return 'ELIGIBLE';
@@ -74,7 +76,14 @@ export async function getPackReadinessModel() {
       configurationLifecycleDivergence,
       dependencies: Object.freeze(dependencies),
       missingDependencies: Object.freeze(dependencies.filter(item => !item.available).map(item => item.name)),
-      journeyAvailability: Object.freeze(pack.ui_entry_points.length ? pack.ui_entry_points.map(entry => ({ entry, status: 'ENTRY_DECLARED' })) : []),
+      journeyAvailability: Object.freeze(pack.ui_entry_points.map(entry => {
+        const workspaceTab = PACK_JOURNEY_ENTRY_TO_TAB[entry] || null;
+        return Object.freeze({
+          entry,
+          workspaceTab,
+          status: workspaceTab ? 'ENTRY_EXECUTABLE' : 'ENTRY_UNRESOLVED',
+        });
+      })),
       authority: resolved.authority,
       authorizationAuthority: 'backend/lib/authorization.js',
     });
