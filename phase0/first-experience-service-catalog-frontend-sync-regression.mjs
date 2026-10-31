@@ -56,7 +56,7 @@ function makeOnboardingGuidanceHarness(templateKey, itemType) {
     document: { getElementById: id => elements[id] || null },
   };
   vm.runInNewContext(
-    onboardingCatalogGuidanceFunctionSource + '\\nthis.toggleOnboardingItemType = toggleOnboardingItemType;',
+    onboardingCatalogGuidanceFunctionSource.replace(/^export /, '') + '\nthis.toggleOnboardingItemType = toggleOnboardingItemType;',
     harness,
   );
   harness.toggleOnboardingItemType(itemType);
