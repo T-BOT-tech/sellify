@@ -30,7 +30,7 @@ assert.match(tenantSource, /\.\.\.\(category \? \{ category \} : \{\}\)/);
 assert.match(tenantSource, /\.\.\.\(unit \? \{ unit \} : \{\}\)/);
 assert.match(tenantSource, /item_type: itemType/);
 assert.match(tenantSource, /itemType === 'product' && stock !== undefined/);
-assert.match(mainSource, /export \\{[^}]*applyOnboardingOfferingTemplate[^}]*populateOnboardingOfferingTemplates[^}]*\\}/s, 'onboarding offering handlers must be re-exported from main.js');
+assert.match(mainSource, /export \{[^}]*applyOnboardingOfferingTemplate[^}]*populateOnboardingOfferingTemplates[^}]*\}/s, 'onboarding offering handlers must be re-exported from main.js');
 assert.match(bridgeSource, /applyOnboardingOfferingTemplate, populateOnboardingOfferingTemplates/, 'inline onboarding handlers must be exposed on window');
 assert.match(html, /onboardingOfferingTemplate/);
 assert.match(html, /onboardingProdCategory/);
