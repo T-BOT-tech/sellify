@@ -47,6 +47,18 @@ const restaurantIdentityOnly = getVerticalPackConfiguration({
 });
 assert.equal(restaurantIdentityOnly.enabled, false,
   'business identity/presentation alone must not activate the Restaurant pack');
+const restaurantStringFalse = getVerticalPackConfiguration({
+  packId: 'restaurant',
+  config: { ...base, restaurantEnabled: 'false' },
+});
+assert.equal(restaurantStringFalse.enabled, false,
+  'string values must not activate a Pack through JavaScript truthiness');
+const warehouseStringTrue = getVerticalPackConfiguration({
+  packId: 'warehouse',
+  config: { ...base, warehouseEnabled: 'true' },
+});
+assert.equal(warehouseStringTrue.enabled, false,
+  'Pack activation must require an explicit boolean true, not a string');
 assert.equal(VERTICAL_PACK_MANIFESTS.restaurant.configuration.niche_switch, 'config.restaurantEnabled=true',
   'the shared Restaurant manifest must name the same explicit activation flag as the configuration contract');
 assert.notEqual(VERTICAL_PACK_MANIFESTS.restaurant.configuration.niche_switch, 'config.businessModel=restaurant',
