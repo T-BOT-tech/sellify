@@ -420,3 +420,33 @@ The plan is succeeding when:
 - existing work is preserved where it creates value and changed where it blocks Sellify's intended future.
 
 **Final operating principle:** Maximize reusable business capability, distribution reach, country/channel flexibility, and commercial payoff—without multiplying the underlying systems.
+
+
+## 18. Verified execution update — 2026-10-31
+
+This section records completed implementation evidence so the next execution continues from repository reality rather than treating earlier priorities as untouched.
+
+### Completed and merged
+
+- **PR #192 — reusable product/service starter suggestions**: merged. Offering suggestions are reusable defaults; selected values remain ordinary canonical catalog fields and do not activate Packs, create bookings, reserve stock, or assert readiness.
+- **PR #193 — expose offering-template handlers**: merged. The onboarding UI's inline handlers are exposed through the existing main/window bridge.
+- **PR #194 — selected business-template precedence**: merged. The current onboarding selection takes precedence over stale cached tenant template configuration; regression coverage uses a selected Repair template against stale Retail config.
+- **PR #195 — payment evidence submission boundary**: merged at `a7e1df54e3a39a09eae2b08feeea1a5b3f27dd66`. The authenticated `POST /tenants/:chatId/payments/evidence` route and existing payment client method reuse `PaymentCore.submitEvidence()`. CI and Repository Security Checks passed on the exact pre-merge head `66a7a75c2d582dfbb172846a2d9c15f5b7ec21e0`; the real HTTP/SQLite regression verified evidence insertion, duplicate replay, unchanged UNPAID state, and unchanged ledger.
+
+### Payment readiness — evidence-based status
+
+- The manual provider is adapter-contract-certified only. This does **not** mean an external payment network or live operation has been certified.
+- Telebirr, CBE, M-Pesa, and Bank of Abyssinia remain registered as unconfigured providers until their operational adapters and required controls are separately implemented and proven.
+- Country/provider mapping is not operational provider activation.
+- SMS text submitted through the new endpoint is untrusted evidence. The endpoint reports `RECEIVED` or `DUPLICATE`, `verificationStatus: NOT_PERFORMED`, and `paymentStateMutated: false`. It does not authenticate the sender, verify a transaction, mark a payment paid, or write a ledger transition.
+- Therefore the completed work is **evidence intake**, not end-to-end SMS-based payment verification and not a launch-readiness certification.
+
+### Next payment implementation boundary
+
+1. Identify the existing merchant-facing canonical Payment Core payment/intent journey and how it becomes available after an order is synchronized. Do not wire the legacy local order-proof object directly into canonical financial state.
+2. Provide a merchant-facing way to submit evidence against the correct canonical payment intent and inspect its evidence status, reusing the new API and existing payment projections.
+3. Keep human review and provider verification distinct. A submitted SMS or receipt must never itself authorize a VERIFIED state. Any accepted manual confirmation must be an explicit, authorized, auditable Payment Core decision with invariant checks, idempotency, and canonical ledger effects.
+4. Implement provider-specific operational integrations only when credentials, authentication, transaction lookup, amount/currency/account/reference binding, freshness, replay handling, and real provider certification evidence are available. Keep unsupported providers fail-closed.
+5. Preserve the existing provider registry, Payment Core, evidence authority, decision engine, invariant gate, and ledger. Do not add a second payment authority or expand the provider count merely to improve apparent coverage.
+
+The same operating rule applies: implement against current code and exact test evidence; update this record only when work has actually landed and been verified.
