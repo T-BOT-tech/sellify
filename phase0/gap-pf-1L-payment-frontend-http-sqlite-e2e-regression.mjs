@@ -291,7 +291,7 @@ try {
     lang: 'en',
     currencyCode: 'ETB',
   });
-  const { queryPaymentStatus, submitPaymentEvidence } = await import('../app/src/payments/client.js');
+  const { queryPaymentStatus, submitPaymentEvidence, listPaymentEvidence } = await import('../app/src/payments/client.js');
 
   // SMS text is stored as untrusted evidence only. Replaying the same evidence
   // is deduplicated and must not verify the payment or add a ledger entry.
@@ -310,6 +310,16 @@ try {
   assert.equal(evidenceResponse.verificationStatus, 'NOT_PERFORMED');
   assert.equal(evidenceResponse.paymentStateMutated, false);
   assert.equal(evidenceResponse.evidence.evidenceType, 'SMS_TEXT');
+  assert.equal(Object.hasOwn(evidenceResponse.evidence, 'rawPayload'), false,
+    'evidence submission response must not echo raw SMS/receipt payloads');
+  const listedEvidence = await listPaymentEvidence(paymentA.id);
+  assert.equal(listedEvidence.length, evidenceBefore.length + 1);
+  const listedSms = listedEvidence.find(item => item.id === evidenceResponse.evidence.id);
+  assert.equal(listedSms.evidenceType, 'SMS_TEXT');
+  assert.equal(listedSms.status, 'RECEIVED');
+  assert.equal(Object.hasOwn(listedSms, 'rawPayload'), false);
+  assert.equal(Object.hasOwn(listedSms, 'normalizedPayload'), false);
+  assert.equal(Object.hasOwn(listedSms, 'fingerprint'), false);
   assert.equal((await store.getPayment(tenantA.chatId, paymentA.id)).state, 'UNPAID');
   assert.equal((await store.listPaymentLedger(tenantA.chatId, paymentA.id)).length, ledgerBeforeEvidence.length);
   assert.equal((await store.listPaymentEvidence(tenantA.chatId, paymentA.id)).length, evidenceBefore.length + 1);

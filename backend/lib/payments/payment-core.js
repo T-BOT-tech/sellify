@@ -324,6 +324,35 @@ export class PaymentCore {
     }, command.actor || null);
   }
 
+  async listEvidence(command = {}) {
+    this.#authorize(command, 'payments:view');
+    const chatId = String(command.chatId || '').trim();
+    const paymentId = String(command.paymentId || command.payment_id || '').trim();
+    if (!chatId || !paymentId) {
+      throw Object.assign(new Error('chatId and paymentId are required'), { statusCode: 400, code: 'PAYMENT_CONTEXT_REQUIRED' });
+    }
+    const rows = await this.store.listPaymentEvidence(chatId, paymentId);
+    if (rows === null) {
+      throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    }
+    // Evidence payloads may contain private SMS/receipt content. Expose only
+    // review metadata; never return raw/normalized payloads or fingerprints.
+    return {
+      evidence: rows.map(row => ({
+        id: row.id,
+        paymentId: row.paymentId || null,
+        paymentIntentId: row.paymentIntentId || null,
+        providerId: row.providerId,
+        channel: row.channel,
+        evidenceType: row.evidenceType,
+        externalReference: row.externalReference || null,
+        status: row.status,
+        observedAt: row.observedAt || null,
+        receivedAt: row.receivedAt,
+      })),
+    };
+  }
+
   // GAP-1.11: query provider status through the adapter boundary, normalize
   // the result into canonical evidence/verification, and only then allow the
   // existing invariant/decision/ledger machinery to change Payment state.

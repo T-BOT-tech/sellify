@@ -2243,6 +2243,22 @@ async function handlePaymentRefundHistory(req, res, chatId, paymentId) {
   }), req);
 }
 
+async function handlePaymentEvidenceList(req, res, chatId, paymentId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+  await requireAuthorization(session, tenant, 'payments', 'payments:view', {
+    deniedMessage: 'Payment evidence view permission required',
+  });
+  const result = await paymentCore.listEvidence({
+    chatId,
+    paymentId,
+    organizationId: tenant.organizationId,
+    actor: session,
+  });
+  return sendJSON(res, 200, result, req);
+}
+
 async function handlePaymentEvidenceSubmission(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -2257,8 +2273,21 @@ async function handlePaymentEvidenceSubmission(req, res, chatId) {
     organizationId: tenant.organizationId,
     actor: session,
   });
+  const evidence = submitted.evidence ? {
+    id: submitted.evidence.id,
+    paymentId: submitted.evidence.paymentId || null,
+    paymentIntentId: submitted.evidence.paymentIntentId || null,
+    providerId: submitted.evidence.providerId,
+    channel: submitted.evidence.channel,
+    evidenceType: submitted.evidence.evidenceType,
+    externalReference: submitted.evidence.externalReference || null,
+    status: submitted.evidence.status,
+    observedAt: submitted.evidence.observedAt || null,
+    receivedAt: submitted.evidence.receivedAt,
+  } : null;
   return sendJSON(res, submitted.duplicate ? 200 : 202, {
-    ...submitted,
+    evidence,
+    duplicate: Boolean(submitted.duplicate),
     accepted: true,
     status: submitted.duplicate ? 'DUPLICATE' : 'RECEIVED',
     verificationStatus: 'NOT_PERFORMED',
@@ -3319,6 +3348,7 @@ const ROUTES = [
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/business-template$/, handler: (req, res, m) => handleBusinessTemplateConfig(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)$/, handler: (req, res, m) => handleTenantPatch(req, res, decodeURIComponent(m[1])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)$/, handler: (req, res, m) => handleTenantPatch(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/evidence$/, handler: (req, res, m) => handlePaymentEvidenceList(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/evidence$/, handler: (req, res, m) => handlePaymentEvidenceSubmission(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/providers$/, handler: (req, res, m) => handlePaymentProviderMetadata(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/accounts$/, handler: (req, res, m) => handlePaymentAccounts(req, res, decodeURIComponent(m[1])) },
