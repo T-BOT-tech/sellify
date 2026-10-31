@@ -48,6 +48,17 @@ export async function submitPaymentEvidence(body = {}) {
   });
   return data && typeof data === 'object' ? data : { status: 'UNKNOWN' };
 }
+export async function submitManualPaymentEvidenceReview(paymentId, evidenceId, body = {}, { idempotencyKey } = {}) {
+  const key = requiredIdempotencyKey(idempotencyKey || body.idempotencyKey || body.idempotency_key);
+  const payment = String(paymentId || '').trim();
+  const evidence = String(evidenceId || '').trim();
+  if (!payment || !evidence) throw Object.assign(new Error('paymentId and evidenceId are required'), { code: 'PAYMENT_EVIDENCE_CONTEXT_REQUIRED', status: 400 });
+  return request(buildPaymentPath(config.chatId, '/' + encodeURIComponent(payment) + '/evidence/' + encodeURIComponent(evidence) + '/review'), {
+    method: 'POST',
+    headers: { 'Idempotency-Key': key },
+    body: JSON.stringify({ ...body, paymentId: payment, evidenceId: evidence, idempotencyKey: key }),
+  });
+}
 export async function createPayment(body, { idempotencyKey } = {}) {
   const headers = { 'Idempotency-Key': requiredIdempotencyKey(idempotencyKey) };
   const data = await request(buildPaymentPath(config.chatId), { method: 'POST', headers, body: JSON.stringify(normalizePaymentMutation(body)) });
