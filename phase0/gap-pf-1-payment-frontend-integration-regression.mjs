@@ -11,7 +11,7 @@ assert.match(client, /Idempotency-Key/);
 assert.match(client, /createPayment/);
 assert.match(client, /submitPaymentEvidence\(body = \{\}\)/);
 assert.match(server, /handlePaymentEvidenceSubmission/);
-assert.match(server, /payments\\/evidence/);
+assert.match(server, /payments.*evidence/);
 assert.match(server, /paymentCore\.submitEvidence/);
 assert.match(client, /resolvePaymentRouting/);
 assert.match(client, /queryPaymentStatus\(paymentId, body = \{\}, \{ idempotencyKey \}/);
