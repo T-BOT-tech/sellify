@@ -67,15 +67,9 @@ export function getPackActivationExperienceModel({ pack, readiness = null, entit
   const persistedLifecycleState = typeof lifecycle?.state === 'string' && lifecycle.state.trim()
     ? lifecycle.state.trim().toUpperCase()
     : null;
-  const lifecycleState = persistedLifecycleState || (readinessState === 'READY'
-    ? 'ACTIVE'
-    : readinessState === 'CONFIGURATION_INACTIVE'
-      ? 'DEACTIVATED'
-      : readinessState === 'DECLARATIVE_ONLY'
-        ? 'UNKNOWN'
-        : readinessState === 'DEPENDENCY_UNAVAILABLE'
-          ? 'DEPENDENCY_BLOCKED'
-          : 'UNKNOWN');
+  // Lifecycle truth is server-owned. Readiness and local configuration may
+  // explain why a Pack is blocked, but must never synthesize persisted state.
+  const lifecycleState = persistedLifecycleState || 'UNKNOWN';
   const installationStatus = persistedLifecycleState
     ? (persistedLifecycleState === 'NOT_INSTALLED' ? 'NOT_INSTALLED' : 'INSTALLED')
     : 'UNKNOWN';
