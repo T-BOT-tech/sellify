@@ -31,7 +31,7 @@ import { t } from '../ui/i18n.js';
 import { patchList, renderStatus } from '../ui/render.js';
 import { showUndoToast } from '../ui/toast.js';
 import { getPaymentForOrder, refreshCanonicalOrderPaymentSummary } from '../payments/projection.js';
-import { listPaymentEvidence, submitPaymentEvidence, getPayment } from '../payments/client.js';
+import { listPaymentEvidence, submitPaymentEvidence, submitManualPaymentEvidenceReview, getPayment, paymentCommandKey } from '../payments/client.js';
 
 // Order-level financial truth is fetched from Payment Core, not reconstructed
 // from the local payment projection. Keep a short-lived UI cache so rendering
@@ -270,7 +270,7 @@ function evidencePanelMessage(panel, message, isError = false) {
   status.style.color = isError ? 'var(--danger, #b42318)' : '';
 }
 
-function renderPaymentEvidenceRows(panel, rows) {
+function renderPaymentEvidenceRows(panel, rows, canReview = false) {
   const list = panel.querySelector('[data-evidence-list]');
   if (!list) return;
   if (!rows.length) {
@@ -281,7 +281,10 @@ function renderPaymentEvidenceRows(panel, rows) {
     const label = [row.evidenceType, row.channel, row.status].filter(Boolean).join(' · ');
     const reference = row.externalReference ? `<div class="hint">Reference: ${escapeHtml(row.externalReference)}</div>` : '';
     const time = row.receivedAt ? `<div class="hint">Received: ${escapeHtml(row.receivedAt)}</div>` : '';
-    return `<div style="padding:10px 0;border-bottom:1px solid var(--line)"><strong>${escapeHtml(label)}</strong>${reference}${time}<div class="hint">Evidence only — not payment verification.</div></div>`;
+    const review = canReview && row.id && row.paymentId
+      ? `<button type="button" class="btn-secondary" data-review-evidence="${escapeHtml(String(row.id))}">Review evidence</button>`
+      : '';
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--line)"><strong>${escapeHtml(label)}</strong>${reference}${time}<div class="hint">Evidence only — not payment verification.</div>${review}</div>`;
   }).join('');
 }
 
@@ -302,6 +305,34 @@ export async function openPaymentEvidencePanel(localOrderId) {
       <p class="hint">Evidence is unverified input. Recording a receipt or SMS does not mark this payment as paid.</p>
       <div data-evidence-status class="hint" role="status">Loading canonical payment and evidence…</div>
       <div data-evidence-list></div>
+      <form data-manual-review-form hidden style="margin:16px 0;padding:12px;border:1px solid var(--line);border-radius:8px">
+        <h4>Manual payment review</h4>
+        <p class="hint">Only confirm after independently checking the receiving account or authoritative bank/payment record. A submitted SMS or receipt alone is not proof.</p>
+        <div data-review-evidence-label class="hint"></div>
+        <label for="manualReviewOutcome">Review outcome</label>
+        <select id="manualReviewOutcome" name="outcome" required>
+          <option value="CONFIRM">Confirm payment after independent verification</option>
+          <option value="INCONCLUSIVE">Inconclusive — do not change payment state</option>
+        </select>
+        <label for="manualReviewAmount">Observed amount (minor units)</label>
+        <input id="manualReviewAmount" name="observedAmountMinor" type="number" min="1" step="1" inputmode="numeric">
+        <label for="manualReviewCurrency">Observed currency</label>
+        <input id="manualReviewCurrency" name="observedCurrency" type="text" maxlength="3" autocomplete="off">
+        <label for="manualReviewReceiver">Receiving account identifier</label>
+        <input id="manualReviewReceiver" name="observedReceiverAccount" type="text" maxlength="200" autocomplete="off">
+        <label for="manualReviewReference">Bank/payment transaction reference</label>
+        <input id="manualReviewReference" name="observedReference" type="text" maxlength="200" autocomplete="off">
+        <label for="manualReviewObservedAt">Transaction observation time</label>
+        <input id="manualReviewObservedAt" name="observedAt" type="datetime-local">
+        <label for="manualReviewReason">Review reason / audit note</label>
+        <textarea id="manualReviewReason" name="reason" rows="2" maxlength="1000" required style="width:100%;box-sizing:border-box"></textarea>
+        <label style="display:flex;gap:8px;align-items:flex-start;margin:10px 0">
+          <input name="attestation" type="checkbox" value="true">
+          <span>I independently checked the receiving account/payment record and attest that the observed transaction matches this payment.</span>
+        </label>
+        <button class="btn-primary" type="submit" data-manual-review-submit>Submit review</button>
+        <button class="btn-secondary" type="button" data-manual-review-cancel>Cancel review</button>
+      </form>
       <form data-evidence-form style="margin-top:16px">
         <label for="paymentEvidenceChannel">Evidence channel</label>
         <select id="paymentEvidenceChannel" name="channel" required>
@@ -328,6 +359,84 @@ export async function openPaymentEvidencePanel(localOrderId) {
   const form = panel.querySelector('[data-evidence-form]');
   const submitButton = panel.querySelector('[data-evidence-submit]');
   const canSubmit = hasPermission(currentStaff ? currentStaff.role : 'owner', 'payments:accept');
+  const reviewForm = panel.querySelector('[data-manual-review-form]');
+  const evidenceList = panel.querySelector('[data-evidence-list]');
+  let selectedEvidenceId = '';
+  if (canSubmit) {
+    evidenceList.addEventListener('click', event => {
+      const button = event.target.closest('[data-review-evidence]');
+      if (!button) return;
+      selectedEvidenceId = String(button.dataset.reviewEvidence || '').trim();
+      if (!selectedEvidenceId) return;
+      reviewForm.hidden = false;
+      reviewForm.dataset.idempotencyKey = '';
+      reviewForm.querySelector('[data-review-evidence-label]').textContent = 'Selected evidence: ' + selectedEvidenceId;
+      evidencePanelMessage(panel, 'Review the transaction against an independent receiving-account/payment record.');
+    });
+    reviewForm.querySelector('[data-manual-review-cancel]').addEventListener('click', () => {
+      reviewForm.hidden = true;
+      reviewForm.reset();
+      reviewForm.dataset.idempotencyKey = '';
+      selectedEvidenceId = '';
+    });
+    reviewForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      const submit = reviewForm.querySelector('[data-manual-review-submit]');
+      if (!submit || submit.disabled || !selectedEvidenceId) return;
+      const outcome = reviewForm.elements.outcome.value;
+      const reason = String(reviewForm.elements.reason.value || '').trim();
+      if (!reason) {
+        evidencePanelMessage(panel, 'Enter a review reason for the audit record.', true);
+        return;
+      }
+      if (outcome === 'CONFIRM' && (!reviewForm.elements.attestation.checked ||
+          !String(reviewForm.elements.observedAmountMinor.value || '').trim() ||
+          !String(reviewForm.elements.observedCurrency.value || '').trim() ||
+          !String(reviewForm.elements.observedReceiverAccount.value || '').trim() ||
+          !String(reviewForm.elements.observedReference.value || '').trim() ||
+          !String(reviewForm.elements.observedAt.value || '').trim())) {
+        evidencePanelMessage(panel, 'Confirmation requires explicit attestation and the independently observed amount, currency, receiver account, reference, and time.', true);
+        return;
+      }
+      submit.disabled = true;
+      evidencePanelMessage(panel, 'Submitting manual review to Payment Core…');
+      try {
+        payment = await getPayment(payment.id);
+        const intentId = payment?.paymentIntentId || payment?.payment_intent_id || payment?.intent?.id;
+        const providerId = payment?.providerId || payment?.provider_id;
+        if (!intentId || !providerId) throw new Error('Canonical payment intent/provider context is unavailable. No review was submitted.');
+        if (!reviewForm.dataset.idempotencyKey) {
+          const nonce = globalThis.crypto?.randomUUID?.() || (Date.now() + '-' + Math.random().toString(16).slice(2));
+          reviewForm.dataset.idempotencyKey = paymentCommandKey('manual-payment-review', payment.id + ':' + selectedEvidenceId + ':' + nonce);
+        }
+        const result = await submitManualPaymentEvidenceReview(payment.id, selectedEvidenceId, {
+          outcome,
+          reason,
+          attestation: outcome === 'CONFIRM' && reviewForm.elements.attestation.checked,
+          ...(outcome === 'CONFIRM' ? {
+            observedAmountMinor: Number(reviewForm.elements.observedAmountMinor.value),
+            observedCurrency: String(reviewForm.elements.observedCurrency.value || '').trim().toUpperCase(),
+            observedReceiverAccount: String(reviewForm.elements.observedReceiverAccount.value || '').trim(),
+            observedReference: String(reviewForm.elements.observedReference.value || '').trim(),
+            observedAt: new Date(reviewForm.elements.observedAt.value).toISOString(),
+          } : {}),
+        }, { idempotencyKey: reviewForm.dataset.idempotencyKey });
+        reviewForm.hidden = true;
+        reviewForm.reset();
+        reviewForm.dataset.idempotencyKey = '';
+        selectedEvidenceId = '';
+        evidencePanelMessage(panel, result?.finalized
+          ? 'Payment verified by the canonical Payment Core decision. Order/payment state was updated by the backend.'
+          : 'Review recorded without changing payment state. Additional verification may be required.');
+        renderPaymentEvidenceRows(panel, await listPaymentEvidence(payment.id), canSubmit);
+      } catch (error) {
+        evidencePanelMessage(panel, error?.message || 'Could not submit manual payment review.', true);
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  }
+
   if (!canSubmit) form.remove();
   else form.addEventListener('submit', async event => {
     event.preventDefault();
@@ -355,7 +464,7 @@ export async function openPaymentEvidencePanel(localOrderId) {
       });
       form.reset();
       evidencePanelMessage(panel, result?.duplicate ? 'Evidence was already recorded. Payment state was not changed.' : 'Evidence recorded. Verification was not performed and payment state was not changed.');
-      renderPaymentEvidenceRows(panel, await listPaymentEvidence(payment.id));
+      renderPaymentEvidenceRows(panel, await listPaymentEvidence(payment.id), canSubmit);
     } catch (error) {
       evidencePanelMessage(panel, error?.message || 'Could not record evidence.', true);
     } finally {
@@ -368,12 +477,13 @@ export async function openPaymentEvidencePanel(localOrderId) {
     // Refresh the canonical payment by id so the intent/provider association
     // comes from Payment Core rather than local receipt metadata.
     payment = await getPayment(payment.id);
-    renderPaymentEvidenceRows(panel, await listPaymentEvidence(payment.id));
+    renderPaymentEvidenceRows(panel, await listPaymentEvidence(payment.id), canSubmit);
     const intentId = payment?.paymentIntentId || payment?.payment_intent_id || payment?.intent?.id;
     const providerId = payment?.providerId || payment?.provider_id;
     if (!intentId || !providerId) {
       form.remove();
-      evidencePanelMessage(panel, 'Evidence can be reviewed, but this payment lacks the canonical intent/provider association needed to submit more evidence.');
+      reviewForm.remove();
+      evidencePanelMessage(panel, 'Evidence can be viewed, but this payment lacks the canonical intent/provider association needed for manual review or new evidence.');
     } else {
       if (submitButton) submitButton.disabled = false;
       evidencePanelMessage(panel, 'Evidence history loaded. Any new evidence remains unverified until a separate authorized Payment Core decision.');
@@ -382,7 +492,8 @@ export async function openPaymentEvidencePanel(localOrderId) {
     // Fail closed: don't leave a submit path available when canonical context
     // or evidence history could not be loaded.
     form.remove();
-    renderPaymentEvidenceRows(panel, []);
+    reviewForm.remove();
+    renderPaymentEvidenceRows(panel, [], canSubmit);
     evidencePanelMessage(panel, error?.message || 'Could not load payment evidence.', true);
   }
 }

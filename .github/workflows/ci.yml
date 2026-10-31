@@ -339,6 +339,8 @@ jobs:
         run: npm run test:pf-1-payment-frontend-contract
       - name: PF-1 payment frontend integration regression
         run: npm run test:pf-1-payment-frontend-integration
+      - name: GAP-1 manual payment evidence review decision regression
+        run: node phase0/gap-1-provider-confirmation-finalization-regression.mjs
       - name: PF-1 payment frontend projection regression
         run: npm run test:pf-1-payment-frontend-projection
       - name: PF-2 payment frontend adversarial certification regression

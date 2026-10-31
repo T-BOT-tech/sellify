@@ -308,6 +308,311 @@ export class PaymentCore {
     };
   }
 
+  // Manual review is an explicit, authorized attestation—not a parser for untrusted SMS/receipt text.
+  // It reuses canonical evidence binding, invariants, verification persistence, and the decision/commit path.
+  async reviewManualEvidence(command = {}) {
+    this.#authorize(command, 'payments:accept');
+    const chatId = String(command.chatId || '').trim();
+    const paymentId = String(command.paymentId || command.payment_id || '').trim();
+    const evidenceId = String(command.evidenceId || command.evidence_id || '').trim();
+    const idempotencyKey = String(command.idempotencyKey || command.idempotency_key || '').trim();
+    const outcome = String(command.outcome || '').trim().toUpperCase();
+    const reason = String(command.reason || '').trim();
+    if (!chatId || !paymentId || !evidenceId || !idempotencyKey || !outcome || !reason) {
+      throw Object.assign(new Error('chatId, paymentId, evidenceId, idempotencyKey, outcome and reason are required'), {
+        statusCode: 400, code: 'MANUAL_PAYMENT_REVIEW_CONTEXT_REQUIRED',
+      });
+    }
+    if (!['CONFIRM', 'INCONCLUSIVE'].includes(outcome)) {
+      throw Object.assign(new Error('Manual review outcome must be CONFIRM or INCONCLUSIVE'), {
+        statusCode: 400, code: 'MANUAL_PAYMENT_REVIEW_OUTCOME_INVALID',
+      });
+    }
+    const actorId = String(command.actor?.userId || command.actor?.id || '').trim() || null;
+    const normalizedReviewRequest = {
+      chatId, paymentId, evidenceId, outcome, reason,
+      attestation: command.attestation === true,
+      observedAmountMinor: command.observedAmountMinor ?? command.observed_amount_minor ?? null,
+      observedCurrency: String(command.observedCurrency || command.observed_currency || '').trim().toUpperCase(),
+      observedReceiverAccount: String(command.observedReceiverAccount || command.observed_receiver_account || '').trim(),
+      observedReference: String(command.observedReference || command.observed_reference || '').trim(),
+      observedTransactionId: String(command.observedTransactionId || command.observed_transaction_id || '').trim() || null,
+      observedAt: String(command.observedAt || command.observed_at || '').trim(),
+      actorId,
+    };
+    const requestHash = createHash('sha256').update(JSON.stringify(normalizedReviewRequest)).digest('hex');
+    if (typeof this.store.getPaymentIdempotency !== 'function' ||
+        typeof this.store.insertPaymentIdempotency !== 'function' ||
+        typeof this.store.updatePaymentIdempotencyProgress !== 'function' ||
+        typeof this.store.completePaymentIdempotency !== 'function') {
+      throw Object.assign(new Error('Durable manual-review idempotency is unavailable'), {
+        statusCode: 503, code: 'MANUAL_PAYMENT_IDEMPOTENCY_UNAVAILABLE',
+      });
+    }
+    let reviewIdempotency = await this.store.getPaymentIdempotency(chatId, idempotencyKey, 'MANUAL_EVIDENCE_REVIEW');
+    if (reviewIdempotency && String(reviewIdempotency.request_hash || reviewIdempotency.requestHash || '') !== requestHash) {
+      throw Object.assign(new Error('Idempotency key was already used with a different manual review request'), {
+        statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE',
+      });
+    }
+    if (reviewIdempotency && Number(reviewIdempotency.response_status ?? reviewIdempotency.responseStatus) === 200) {
+      try { return JSON.parse(reviewIdempotency.response_json || reviewIdempotency.responseJson || '{}'); }
+      catch {
+        throw Object.assign(new Error('Stored manual-review replay response is invalid'), {
+          statusCode: 500, code: 'MANUAL_PAYMENT_REPLAY_RESPONSE_INVALID',
+        });
+      }
+    }
+    let reviewInitialState = null;
+    let pendingCommitInput = null;
+    let pendingReviewResult = null;
+    if (reviewIdempotency) {
+      try {
+        const pending = JSON.parse(reviewIdempotency.response_json || reviewIdempotency.responseJson || '{}');
+        reviewInitialState = String(pending.initialState || '').trim().toUpperCase() || null;
+        pendingCommitInput = pending.preparedCommit || null;
+        pendingReviewResult = pending.preparedReview || null;
+      } catch {}
+    }
+    if (typeof this.store.listPaymentEvidence !== 'function') {
+      throw Object.assign(new Error('Canonical payment evidence lookup is unavailable'), {
+        statusCode: 503, code: 'PAYMENT_EVIDENCE_UNAVAILABLE',
+      });
+    }
+    if (!this.invariantGate || !this.decisionEngine) {
+      throw Object.assign(new Error('Canonical payment invariant and decision engines are required for manual review'), {
+        statusCode: 503, code: 'PAYMENT_REVIEW_DECISION_PATH_UNAVAILABLE',
+      });
+    }
+
+    const payment = await this.store.getPayment(chatId, paymentId);
+    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    if (reviewIdempotency && pendingCommitInput && pendingReviewResult) {
+      const committed = await this.store.commitPaymentDecision(chatId, pendingCommitInput, command.actor || null);
+      const replayResult = { ...pendingReviewResult, payment: committed };
+      await this.store.completePaymentIdempotency(chatId, {
+        idempotencyKey, commandType: 'MANUAL_EVIDENCE_REVIEW', requestHash,
+        responseJson: JSON.stringify(replayResult), resourceType: 'payment', resourceId: paymentId,
+      });
+      return replayResult;
+    }
+    if (!reviewIdempotency) {
+      try {
+        reviewIdempotency = await this.store.insertPaymentIdempotency(chatId, {
+          idempotencyKey,
+          commandType: 'MANUAL_EVIDENCE_REVIEW',
+          requestHash,
+          responseStatus: 102,
+          responseJson: JSON.stringify({ initialState: String(payment.state || '').trim().toUpperCase() }),
+          resourceType: 'payment',
+          resourceId: paymentId,
+        });
+        reviewInitialState = String(payment.state || '').trim().toUpperCase() || null;
+      } catch (error) {
+        reviewIdempotency = await this.store.getPaymentIdempotency(chatId, idempotencyKey, 'MANUAL_EVIDENCE_REVIEW');
+        if (!reviewIdempotency) throw error;
+        if (String(reviewIdempotency.request_hash || reviewIdempotency.requestHash || '') !== requestHash) {
+          throw Object.assign(new Error('Idempotency key was already used with a different manual review request'), {
+            statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE',
+          });
+        }
+        try {
+          const pending = JSON.parse(reviewIdempotency.response_json || reviewIdempotency.responseJson || '{}');
+          reviewInitialState = String(pending.initialState || '').trim().toUpperCase() || null;
+        } catch {}
+      }
+    }
+    const intent = payment.paymentIntentId
+      ? await this.store.getPaymentIntent(chatId, payment.paymentIntentId)
+      : null;
+    if (!intent) throw Object.assign(new Error('Payment intent not found'), { statusCode: 404, code: 'PAYMENT_INTENT_NOT_FOUND' });
+    const accounts = await this.store.listPaymentAccounts(chatId, { status: 'all' });
+    const paymentAccount = accounts.find(account => String(account.id) === String(payment.paymentAccountId));
+    if (!paymentAccount) throw Object.assign(new Error('Payment account not found'), { statusCode: 404, code: 'PAYMENT_ACCOUNT_NOT_FOUND' });
+
+    const rows = await this.store.listPaymentEvidence(chatId, paymentId);
+    const evidence = (rows || []).find(row => String(row.id) === evidenceId);
+    if (!evidence || String(evidence.paymentId || '') !== paymentId) {
+      throw Object.assign(new Error('Evidence is not bound to the requested payment'), {
+        statusCode: 404, code: 'PAYMENT_EVIDENCE_NOT_FOUND',
+      });
+    }
+    if (String(evidence.paymentIntentId || '') !== String(intent.id) ||
+        String(evidence.providerId || '').toLowerCase() !== String(payment.providerId || '').toLowerCase() ||
+        String(paymentAccount.providerId || '').toLowerCase() !== String(payment.providerId || '').toLowerCase()) {
+      throw Object.assign(new Error('Evidence, intent, provider and payment account must match the canonical payment'), {
+        statusCode: 409, code: 'MANUAL_PAYMENT_REVIEW_BINDING_MISMATCH',
+      });
+    }
+
+    let verification;
+    if (outcome === 'CONFIRM') {
+      if (command.attestation !== true) {
+        throw Object.assign(new Error('Explicit reviewer attestation is required to confirm payment'), {
+          statusCode: 400, code: 'MANUAL_PAYMENT_ATTESTATION_REQUIRED',
+        });
+      }
+      const observedAmountMinor = Number(command.observedAmountMinor ?? command.observed_amount_minor);
+      const observedCurrency = String(command.observedCurrency || command.observed_currency || '').trim().toUpperCase();
+      const observedReceiverAccount = String(command.observedReceiverAccount || command.observed_receiver_account || '').trim();
+      const observedReference = String(command.observedReference || command.observed_reference || '').trim();
+      const observedAt = String(command.observedAt || command.observed_at || '').trim();
+      if (!Number.isSafeInteger(observedAmountMinor) || observedAmountMinor <= 0 ||
+          !observedCurrency || !observedReceiverAccount || !observedReference ||
+          !observedAt || !Number.isFinite(Date.parse(observedAt))) {
+        throw Object.assign(new Error('Confirmed manual payment requires observed amount, currency, receiver account, reference and valid observation time'), {
+          statusCode: 400, code: 'MANUAL_PAYMENT_OBSERVATION_REQUIRED',
+        });
+      }
+      verification = {
+        result: 'MATCH',
+        confidence: 1,
+        observedAmountMinor,
+        observedCurrency,
+        observedReceiverAccount,
+        observedReference,
+        observedTransactionId: String(command.observedTransactionId || command.observed_transaction_id || '').trim() || null,
+        observedAt,
+        reasonCodes: ['MANUAL_REVIEWER_ATTESTED'],
+        rawResult: { source: 'authorized-manual-review', attested: true, reason },
+      };
+    } else {
+      verification = {
+        result: 'UNVERIFIABLE',
+        confidence: null,
+        observedAmountMinor: null,
+        observedCurrency: null,
+        observedReceiverAccount: null,
+        observedReference: null,
+        observedTransactionId: null,
+        observedAt: null,
+        reasonCodes: ['MANUAL_REVIEW_INCONCLUSIVE'],
+        rawResult: { source: 'authorized-manual-review', attested: false, reason },
+      };
+    }
+
+    const boundVerification = {
+      ...verification,
+      paymentId,
+      paymentIntentId: intent.id,
+      evidenceId,
+      providerId: payment.providerId,
+    };
+    const invariants = this.invariantGate.evaluate({
+      payment,
+      paymentIntent: intent,
+      paymentAccount,
+      evidence,
+      verification: boundVerification,
+      now: this.clock(),
+    });
+    const decision = this.decisionEngine.decide({ verification, invariants, payment });
+    const mayCommit = outcome === 'CONFIRM' &&
+      verification.result === 'MATCH' &&
+      invariants.passed === true &&
+      decision.targetState === 'VERIFIED';
+
+    const verifierVersion = 'manual-review-v1-' +
+      createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 16);
+    const persistedVerificationResult = await this.store.insertPaymentVerification(chatId, {
+      ...boundVerification,
+      result: mayCommit ? 'MATCH' : (outcome === 'INCONCLUSIVE' ? 'UNVERIFIABLE' : 'MISMATCH'),
+      reasonCodes: [...new Set([...(decision.reasonCodes || []), ...verification.reasonCodes, ...(invariants.reasonCodes || [])])],
+      verifier: 'payment-core.manual-review',
+      verifierVersion,
+    }, command.actor || null);
+    const persistedVerification = persistedVerificationResult.verification || persistedVerificationResult;
+
+    const manualReviewDecisionId = 'manual-review-' + createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 32);
+    if (!mayCommit) {
+      const persistedDecision = await this.store.insertPaymentDecision(chatId, {
+        id: manualReviewDecisionId,
+        paymentId,
+        paymentIntentId: intent.id,
+        evidenceId,
+        verificationId: persistedVerification.id,
+        decision: outcome === 'INCONCLUSIVE' ? 'RETRY_VERIFICATION' : (decision.decision || 'RETRY_VERIFICATION'),
+        targetState: null,
+        reasonCodes: [...new Set([...(decision.reasonCodes || []), ...verification.reasonCodes, ...(invariants.reasonCodes || [])])],
+        invariantResults: invariants,
+        decisionSource: 'PAYMENT_CORE',
+        metadata: { reviewMode: 'manual', outcome, reason },
+      }, command.actor || null);
+      const reviewResult = {
+        finalized: false,
+        paymentStateMutated: false,
+        financialEffect: false,
+        status: outcome === 'INCONCLUSIVE' ? 'INCONCLUSIVE' : 'NOT_CONFIRMED',
+        payment,
+        evidence: { id: evidenceId, paymentId, paymentIntentId: intent.id, providerId: payment.providerId },
+        verification: persistedVerification,
+        decision: persistedDecision,
+        invariants,
+      };
+      await this.store.completePaymentIdempotency(chatId, {
+        idempotencyKey, commandType: 'MANUAL_EVIDENCE_REVIEW', requestHash,
+        responseJson: JSON.stringify(reviewResult), resourceType: 'payment', resourceId: paymentId,
+      });
+      return reviewResult;
+    }
+
+    const commitInput = {
+      paymentId,
+      expectedState: reviewInitialState || payment.state,
+      targetState: 'VERIFIED',
+      idempotencyKey,
+      verification: persistedVerification,
+      decision: {
+        id: manualReviewDecisionId,
+        paymentIntentId: intent.id,
+        evidenceId,
+        verificationId: persistedVerification.id,
+        decision: 'ACCEPT',
+        targetState: 'VERIFIED',
+        reasonCodes: [...new Set([...(decision.reasonCodes || []), ...verification.reasonCodes])],
+        invariantResults: invariants,
+        decisionSource: 'PAYMENT_CORE',
+        entryType: 'VERIFIED',
+        reason,
+        metadata: {
+          reviewMode: 'manual',
+          reviewerId: command.actor?.userId || command.actor?.id || null,
+          evidenceId,
+          source: 'authorized-manual-review',
+        },
+      },
+    };
+    const preparedReview = {
+      finalized: true,
+      paymentStateMutated: true,
+      financialEffect: true,
+      status: 'VERIFIED',
+      payment: null,
+      evidence: { id: evidenceId, paymentId, paymentIntentId: intent.id, providerId: payment.providerId },
+      verification: persistedVerification,
+      decision,
+      invariants,
+    };
+    await this.store.updatePaymentIdempotencyProgress(chatId, {
+      idempotencyKey,
+      commandType: 'MANUAL_EVIDENCE_REVIEW',
+      requestHash,
+      responseJson: JSON.stringify({
+        initialState: reviewInitialState || String(payment.state || '').trim().toUpperCase(),
+        preparedCommit: commitInput,
+        preparedReview,
+      }),
+    });
+    const committed = await this.store.commitPaymentDecision(chatId, commitInput, command.actor || null);
+
+    const reviewResult = { ...preparedReview, payment: committed };
+    await this.store.completePaymentIdempotency(chatId, {
+      idempotencyKey, commandType: 'MANUAL_EVIDENCE_REVIEW', requestHash,
+      responseJson: JSON.stringify(reviewResult), resourceType: 'payment', resourceId: paymentId,
+    });
+    return reviewResult;
+  }
+
   async submitEvidence(command = {}) {
     this.#authorize(command, 'payments:accept');
     const chatId = String(command.chatId || '').trim();

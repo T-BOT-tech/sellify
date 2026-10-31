@@ -2243,6 +2243,25 @@ async function handlePaymentRefundHistory(req, res, chatId, paymentId) {
   }), req);
 }
 
+async function handleManualPaymentEvidenceReview(req, res, chatId, paymentId, evidenceId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+  await requireAuthorization(session, tenant, 'payments', 'payments:accept', {
+    deniedMessage: 'Manual payment confirmation permission required',
+  });
+  const body = await readBody(req);
+  const result = await paymentCore.reviewManualEvidence({
+    ...body,
+    chatId,
+    paymentId,
+    evidenceId,
+    organizationId: tenant.organizationId,
+    actor: session,
+  });
+  return sendJSON(res, result.finalized ? 200 : 202, result, req);
+}
+
 async function handlePaymentEvidenceList(req, res, chatId, paymentId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -3349,6 +3368,7 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/tenants\/([^/]+)$/, handler: (req, res, m) => handleTenantPatch(req, res, decodeURIComponent(m[1])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)$/, handler: (req, res, m) => handleTenantPatch(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/evidence$/, handler: (req, res, m) => handlePaymentEvidenceList(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/([^/]+)\/evidence\/([^/]+)\/review$/, handler: (req, res, m) => handleManualPaymentEvidenceReview(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/evidence$/, handler: (req, res, m) => handlePaymentEvidenceSubmission(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/providers$/, handler: (req, res, m) => handlePaymentProviderMetadata(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/accounts$/, handler: (req, res, m) => handlePaymentAccounts(req, res, decodeURIComponent(m[1])) },
