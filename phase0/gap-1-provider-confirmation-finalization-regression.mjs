@@ -146,6 +146,13 @@ const manualStore = {
     manualIdempotency.set(key, row);
     return row;
   },
+  updatePaymentIdempotencyProgress: async (_chatId, input) => {
+    const row = manualIdempotency.get(input.commandType + ':' + input.idempotencyKey);
+    assert.ok(row, 'manual review reservation must exist before checkpoint');
+    assert.equal(row.request_hash, input.requestHash);
+    row.response_json = input.responseJson;
+    return row;
+  },
   completePaymentIdempotency: async (_chatId, input) => {
     const key = input.commandType + ':' + input.idempotencyKey;
     const row = manualIdempotency.get(key);
@@ -253,6 +260,13 @@ const interruptedStore = {
     interruptedIdempotency.set(key, row);
     return row;
   },
+  updatePaymentIdempotencyProgress: async (_chatId, input) => {
+    const row = interruptedIdempotency.get(input.commandType + ':' + input.idempotencyKey);
+    assert.ok(row, 'interrupted review reservation must exist before checkpoint');
+    assert.equal(row.request_hash, input.requestHash);
+    row.response_json = input.responseJson;
+    return row;
+  },
   completePaymentIdempotency: async (_chatId, input) => {
     const row = interruptedIdempotency.get(input.commandType + ':' + input.idempotencyKey);
     assert.ok(row, 'interrupted review reservation must remain durable');
@@ -285,7 +299,9 @@ const interruptedStore = {
 };
 const interruptedCore = new PaymentCore({
   store: interruptedStore,
-  invariantGate: { evaluate: () => ({ passed: true, reasonCodes: [], checks: ['amount', 'currency', 'receiver'] }) },
+  invariantGate: { evaluate: ({ payment: currentPayment }) => currentPayment.state === 'PENDING'
+    ? ({ passed: true, reasonCodes: [], checks: ['amount', 'currency', 'receiver'] })
+    : ({ passed: false, reasonCodes: ['PAYMENT_NOT_PENDING'], checks: ['payment-state'] }) },
   decisionEngine: { decide: ({ verification, invariants }) => ({
     decision: verification.result === 'MATCH' && invariants.passed ? 'ACCEPT' : 'RETRY_VERIFICATION',
     targetState: verification.result === 'MATCH' && invariants.passed ? 'VERIFIED' : null,

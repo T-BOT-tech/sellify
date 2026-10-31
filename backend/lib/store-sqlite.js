@@ -7571,6 +7571,28 @@ export async function insertPaymentIdempotency(chatId, input = {}) {
   );
   return getPaymentIdempotency(chatId, input.idempotencyKey || input.idempotency_key, input.commandType || input.command_type);
 }
+export async function updatePaymentIdempotencyProgress(chatId, input = {}) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const key = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  const commandType = String(input.commandType || input.command_type || '').trim();
+  const requestHash = String(input.requestHash || input.request_hash || '').trim();
+  if (!key || !commandType || !requestHash) {
+    throw Object.assign(new Error('Idempotency key, command type and request hash are required'), {
+      statusCode: 400, code: 'IDEMPOTENCY_CONTEXT_REQUIRED',
+    });
+  }
+  const result = db.prepare(`UPDATE payment_idempotency_keys
+    SET response_json = ?
+    WHERE organization_id = ? AND idempotency_key = ? AND command_type = ? AND request_hash = ? AND response_status = 102`)
+    .run(String(input.responseJson ?? input.response_json ?? '{}'), organizationId, key, commandType, requestHash);
+  if (result.changes !== 1) {
+    throw Object.assign(new Error('Pending manual review reservation is missing, completed, or bound to another request'), {
+      statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE',
+    });
+  }
+  return getPaymentIdempotency(chatId, key, commandType);
+}
 export async function completePaymentIdempotency(chatId, input = {}) {
   ensureDatabase();
   const { organizationId } = await resolvePaymentContext(chatId);

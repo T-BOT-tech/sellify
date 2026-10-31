@@ -343,6 +343,7 @@ export class PaymentCore {
     const requestHash = createHash('sha256').update(JSON.stringify(normalizedReviewRequest)).digest('hex');
     if (typeof this.store.getPaymentIdempotency !== 'function' ||
         typeof this.store.insertPaymentIdempotency !== 'function' ||
+        typeof this.store.updatePaymentIdempotencyProgress !== 'function' ||
         typeof this.store.completePaymentIdempotency !== 'function') {
       throw Object.assign(new Error('Durable manual-review idempotency is unavailable'), {
         statusCode: 503, code: 'MANUAL_PAYMENT_IDEMPOTENCY_UNAVAILABLE',
@@ -363,10 +364,14 @@ export class PaymentCore {
       }
     }
     let reviewInitialState = null;
+    let pendingCommitInput = null;
+    let pendingReviewResult = null;
     if (reviewIdempotency) {
       try {
         const pending = JSON.parse(reviewIdempotency.response_json || reviewIdempotency.responseJson || '{}');
         reviewInitialState = String(pending.initialState || '').trim().toUpperCase() || null;
+        pendingCommitInput = pending.preparedCommit || null;
+        pendingReviewResult = pending.preparedReview || null;
       } catch {}
     }
     if (typeof this.store.listPaymentEvidence !== 'function') {
@@ -382,6 +387,15 @@ export class PaymentCore {
 
     const payment = await this.store.getPayment(chatId, paymentId);
     if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    if (reviewIdempotency && pendingCommitInput && pendingReviewResult) {
+      const committed = await this.store.commitPaymentDecision(chatId, pendingCommitInput, command.actor || null);
+      const replayResult = { ...pendingReviewResult, payment: committed };
+      await this.store.completePaymentIdempotency(chatId, {
+        idempotencyKey, commandType: 'MANUAL_EVIDENCE_REVIEW', requestHash,
+        responseJson: JSON.stringify(replayResult), resourceType: 'payment', resourceId: paymentId,
+      });
+      return replayResult;
+    }
     if (!reviewIdempotency) {
       try {
         reviewIdempotency = await this.store.insertPaymentIdempotency(chatId, {
@@ -542,7 +556,7 @@ export class PaymentCore {
       return reviewResult;
     }
 
-    const committed = await this.store.commitPaymentDecision(chatId, {
+    const commitInput = {
       paymentId,
       expectedState: reviewInitialState || payment.state,
       targetState: 'VERIFIED',
@@ -567,19 +581,31 @@ export class PaymentCore {
           source: 'authorized-manual-review',
         },
       },
-    }, command.actor || null);
-
-    const reviewResult = {
+    };
+    const preparedReview = {
       finalized: true,
       paymentStateMutated: true,
       financialEffect: true,
       status: 'VERIFIED',
-      payment: committed,
+      payment: null,
       evidence: { id: evidenceId, paymentId, paymentIntentId: intent.id, providerId: payment.providerId },
       verification: persistedVerification,
       decision,
       invariants,
     };
+    await this.store.updatePaymentIdempotencyProgress(chatId, {
+      idempotencyKey,
+      commandType: 'MANUAL_EVIDENCE_REVIEW',
+      requestHash,
+      responseJson: JSON.stringify({
+        initialState: reviewInitialState || String(payment.state || '').trim().toUpperCase(),
+        preparedCommit: commitInput,
+        preparedReview,
+      }),
+    });
+    const committed = await this.store.commitPaymentDecision(chatId, commitInput, command.actor || null);
+
+    const reviewResult = { ...preparedReview, payment: committed };
     await this.store.completePaymentIdempotency(chatId, {
       idempotencyKey, commandType: 'MANUAL_EVIDENCE_REVIEW', requestHash,
       responseJson: JSON.stringify(reviewResult), resourceType: 'payment', resourceId: paymentId,
