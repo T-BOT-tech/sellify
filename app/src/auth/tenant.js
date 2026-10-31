@@ -235,7 +235,19 @@ async function loadBusinessTemplateConfig() {
     // infer server intent from the general device config cache.
     const pending = await loadJSONAsync(pendingBusinessTemplateKey(chatId), null);
     if (!stillActive()) return null;
-    if (!pending || pending.status !== 'pending' || String(pending.tenantId) !== chatId || typeof pending.templateKey !== 'string') return null;
+    if (!pending || pending.status !== 'pending' || String(pending.tenantId) !== chatId || typeof pending.templateKey !== 'string') {
+      // A successful canonical read with no saved template means the active
+      // tenant has no template. Do not leak a previous tenant's cached choice
+      // into this tenant's setup guidance; offline failures return through the
+      // catch above and deliberately retain the cache for later recovery.
+      const next = { ...config };
+      delete next.businessTemplate;
+      delete next.businessTemplateSchemaVersion;
+      delete next.businessTemplateTenantId;
+      setConfig(next);
+      saveJSON(STORAGE_KEYS.config, next);
+      return null;
+    }
     const retryResponse = await request(`/tenants/${encodeURIComponent(chatId)}/business-template`, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${sessionToken}` },
