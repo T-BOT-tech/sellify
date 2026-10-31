@@ -6,6 +6,7 @@ import {
   isVerticalPackConfiguration,
 } from '../app/src/verticals/configuration.js';
 import { buildBusinessTemplatePackRecommendation } from '../app/src/experience/ecosystem-discovery.js';
+import { VERTICAL_PACK_MANIFESTS } from '../shared/vertical-pack-manifests.js';
 
 const base = {
   businessModel: 'retail',
@@ -46,6 +47,10 @@ const restaurantIdentityOnly = getVerticalPackConfiguration({
 });
 assert.equal(restaurantIdentityOnly.enabled, false,
   'business identity/presentation alone must not activate the Restaurant pack');
+assert.equal(VERTICAL_PACK_MANIFESTS.restaurant.configuration.niche_switch, 'config.restaurantEnabled=true',
+  'the shared Restaurant manifest must name the same explicit activation flag as the configuration contract');
+assert.notEqual(VERTICAL_PACK_MANIFESTS.restaurant.configuration.niche_switch, 'config.businessModel=restaurant',
+  'the shared manifest must not imply that restaurant business identity activates the Pack');
 
 const restaurantRecommendation = buildBusinessTemplatePackRecommendation('restaurant');
 assert.equal(restaurantRecommendation.packId, 'restaurant');
