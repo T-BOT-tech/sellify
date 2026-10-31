@@ -2243,6 +2243,29 @@ async function handlePaymentRefundHistory(req, res, chatId, paymentId) {
   }), req);
 }
 
+async function handlePaymentEvidenceSubmission(req, res, chatId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+  await requireAuthorization(session, tenant, 'payments', 'payments:accept', {
+    deniedMessage: 'Payment evidence submission permission required',
+  });
+  const body = await readBody(req);
+  const submitted = await paymentCore.submitEvidence({
+    ...body,
+    chatId,
+    organizationId: tenant.organizationId,
+    actor: session,
+  });
+  return sendJSON(res, submitted.duplicate ? 200 : 202, {
+    ...submitted,
+    accepted: true,
+    status: submitted.duplicate ? 'DUPLICATE' : 'RECEIVED',
+    verificationStatus: 'NOT_PERFORMED',
+    paymentStateMutated: false,
+  }, req);
+}
+
 async function handlePaymentConfirmationFinalization(req, res, chatId, attemptId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -3296,6 +3319,7 @@ const ROUTES = [
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/business-template$/, handler: (req, res, m) => handleBusinessTemplateConfig(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)$/, handler: (req, res, m) => handleTenantPatch(req, res, decodeURIComponent(m[1])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)$/, handler: (req, res, m) => handleTenantPatch(req, res, decodeURIComponent(m[1])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/evidence$/, handler: (req, res, m) => handlePaymentEvidenceSubmission(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/providers$/, handler: (req, res, m) => handlePaymentProviderMetadata(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/payments\/accounts$/, handler: (req, res, m) => handlePaymentAccounts(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/payments\/accounts$/, handler: (req, res, m) => handlePaymentAccounts(req, res, decodeURIComponent(m[1])) },
