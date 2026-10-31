@@ -236,6 +236,82 @@ await assert.rejects(
   error => error?.code === 'IDEMPOTENCY_KEY_REUSE'
 );
 
+
+const interruptedCalls = [];
+const interruptedIdempotency = new Map();
+const interruptedPayment = { ...payment, state: payment.state };
+let failFirstCompletion = true;
+const committedByKey = new Map();
+let financialEffects = 0;
+const interruptedStore = {
+  ...manualStore,
+  getPaymentIdempotency: async (_chatId, key, commandType) => interruptedIdempotency.get(commandType + ':' + key) || null,
+  insertPaymentIdempotency: async (_chatId, input) => {
+    const key = input.commandType + ':' + input.idempotencyKey;
+    if (interruptedIdempotency.has(key)) throw Object.assign(new Error('duplicate idempotency key'), { code: 'IDEMPOTENCY_KEY_REUSE' });
+    const row = { ...input, request_hash: input.requestHash, response_status: input.responseStatus, response_json: input.responseJson };
+    interruptedIdempotency.set(key, row);
+    return row;
+  },
+  completePaymentIdempotency: async (_chatId, input) => {
+    const row = interruptedIdempotency.get(input.commandType + ':' + input.idempotencyKey);
+    assert.ok(row, 'interrupted review reservation must remain durable');
+    if (failFirstCompletion) {
+      failFirstCompletion = false;
+      throw new Error('simulated completion-write interruption after canonical commit');
+    }
+    row.response_status = 200;
+    row.response_json = input.responseJson;
+    return row;
+  },
+  getPayment: async () => interruptedPayment,
+  insertPaymentVerification: async (_chatId, input) => {
+    interruptedCalls.push(['verification', input]);
+    return { verification: { id: 'interrupted-verification-1', ...input } };
+  },
+  insertPaymentDecision: async (_chatId, input) => {
+    interruptedCalls.push(['decision', input]);
+    return { id: 'interrupted-decision-1', ...input };
+  },
+  commitPaymentDecision: async (_chatId, input) => {
+    interruptedCalls.push(['commit-attempt', input]);
+    if (!committedByKey.has(input.idempotencyKey)) {
+      financialEffects += 1;
+      committedByKey.set(input.idempotencyKey, { ...interruptedPayment, state: input.targetState });
+    }
+    Object.assign(interruptedPayment, committedByKey.get(input.idempotencyKey));
+    return committedByKey.get(input.idempotencyKey);
+  },
+};
+const interruptedCore = new PaymentCore({
+  store: interruptedStore,
+  invariantGate: { evaluate: () => ({ passed: true, reasonCodes: [], checks: ['amount', 'currency', 'receiver'] }) },
+  decisionEngine: { decide: ({ verification, invariants }) => ({
+    decision: verification.result === 'MATCH' && invariants.passed ? 'ACCEPT' : 'RETRY_VERIFICATION',
+    targetState: verification.result === 'MATCH' && invariants.passed ? 'VERIFIED' : null,
+    reasonCodes: [],
+  }) },
+});
+const interruptedCommand = {
+  ...manualReviewCommand,
+  paymentId: interruptedPayment.id,
+  idempotencyKey: 'manual-review-interrupted-completion',
+};
+await assert.rejects(
+  interruptedCore.reviewManualEvidence(interruptedCommand),
+  /simulated completion-write interruption/
+);
+assert.equal(interruptedPayment.state, 'VERIFIED',
+  'canonical financial commit may succeed before the idempotency response is cached');
+const interruptedRetry = await interruptedCore.reviewManualEvidence(interruptedCommand);
+assert.equal(interruptedRetry.finalized, true,
+  'retry after completion-write interruption must recover the completed canonical decision');
+assert.equal(interruptedPayment.state, 'VERIFIED');
+assert.equal(financialEffects, 1,
+  'retry after a post-commit interruption must not apply a second financial effect');
+assert.equal(interruptedCalls.filter(call => call[0] === 'commit-attempt').length, 2,
+  'retry may re-enter the canonical idempotent commit path to recover its result');
+
 await assert.rejects(
   manualCore.reviewManualEvidence({
     chatId: 'canonical-chat',
