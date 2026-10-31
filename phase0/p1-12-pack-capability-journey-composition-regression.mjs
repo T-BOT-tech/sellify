@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const source = await readFile(new URL('../app/src/experience/pack-journey-composition.js', import.meta.url), 'utf8');
+const workspaceSource = await readFile(new URL('../app/src/experience/pack-workspace.js', import.meta.url), 'utf8');
 const workspace = await readFile(new URL('../app/src/experience/pack-workspace.js', import.meta.url), 'utf8');
 const manifests = await readFile(new URL('../shared/vertical-pack-manifests.js', import.meta.url), 'utf8');
 const tabs = await readFile(new URL('../app/src/ui/tabs.js', import.meta.url), 'utf8');
@@ -16,6 +17,8 @@ assert.match(source, /'logistics-proof': 'logistics-fulfillment'/);
 assert.match(source, /status: 'DECLARATIVE_ONLY'/);
 assert.match(source, /status: 'COMPOSED'/);
 assert.match(source, /PACK_JOURNEY_ENTRY_TO_TAB/);
+assert.match(workspaceSource, /PACK_JOURNEY_ENTRY_TO_TAB/);
+assert.doesNotMatch(workspaceSource, /const ENTRY_TO_TAB = Object\\.freeze/);
 assert.match(source, /inventory: 'warehouse'/);
 assert.match(source, /entryDeclaredByPack/);
 assert.match(source, /resolvedTab/);
