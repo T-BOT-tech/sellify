@@ -10,7 +10,11 @@ assert.match(source, /READY/);
 assert.match(source, /CORE_AUTHORITIES/);
 assert.match(source, /backend\/lib\/authorization\.js/);
 assert.match(source, /settings:configure/);
-assert.doesNotMatch(source, /pack-journey-composition/);
+assert.match(source, /PACK_JOURNEY_ENTRY_TO_TAB/);
+assert.match(source, /hasExecutableJourney/);
+assert.match(source, /ENTRY_EXECUTABLE/);
+assert.match(source, /ENTRY_UNRESOLVED/);
+assert.match(source, /workspaceTab/);
 
 const settings = fs.readFileSync(new URL('../app/src/ui/settings.js', import.meta.url), 'utf8');
 assert.match(settings, /renderPackReadinessPanel/);
