@@ -51,8 +51,9 @@ const applyFunctionSource = tenantSource.match(
   /export function applyOnboardingOfferingTemplate\(templateKey\) \{[\s\S]*?\n\}/,
 )?.[0];
 assert.ok(populateFunctionSource && applyFunctionSource, 'onboarding offering handlers must be available for behavior tests');
-const selector = {
-  value: 'repair',
+const businessSelector = { value: 'repair' };
+const offeringSelector = {
+  value: '',
   options: [],
   replaceChildren(...options) { this.options = options; },
 };
@@ -60,9 +61,9 @@ const nameInput = { value: '', dataset: {} };
 const categoryInput = { value: '' };
 const unitInput = { value: '' };
 const elements = {
-  onboardingBusinessTemplate: selector,
+  onboardingBusinessTemplate: businessSelector,
   onboardingItemType: { value: 'service' },
-  onboardingOfferingTemplate: selector,
+  onboardingOfferingTemplate: offeringSelector,
   onboardingProdName: nameInput,
   onboardingProdCategory: categoryInput,
   onboardingProdUnit: unitInput,
