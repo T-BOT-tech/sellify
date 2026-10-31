@@ -137,7 +137,7 @@ import {
   checkoutTelegramWebApp, recordTelegramSentOrder, saveOrder
 } from './orders/checkout.js';
 import {
-  renderDailySummary, renderQueue, ticketInnerHtml, createTicketNode, updateTicketNode,
+  renderDailySummary, renderQueue, openPaymentEvidencePanel, ticketInnerHtml, createTicketNode, updateTicketNode,
   removeTicketNode, getOrderById, deleteOrder, undoDeleteOrder, finalizeOrderDelete, advanceMarketplaceOrderStatus, cancelMarketplaceOrder
 } from './orders/queue.js';
 import {
@@ -161,7 +161,7 @@ export {
   setCashTendered, updateCartStickyBar, scrollToOrderSummary, onCashInput,
   updateChangeDisplay, changeQty, updateOrderSummary,
   checkoutTelegramWebApp, recordTelegramSentOrder, saveOrder,
-  renderDailySummary, renderQueue, ticketInnerHtml, createTicketNode, updateTicketNode,
+  renderDailySummary, renderQueue, openPaymentEvidencePanel, ticketInnerHtml, createTicketNode, updateTicketNode,
   removeTicketNode, getOrderById, deleteOrder, undoDeleteOrder, finalizeOrderDelete, advanceMarketplaceOrderStatus, cancelMarketplaceOrder,
   formatReceiptText, copyReceipt, fallbackCopy, shareReceipt, printReceipt,
   drawCanvasReceipt, generateAndShareImageReceipt, downloadImageFile,
