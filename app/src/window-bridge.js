@@ -57,7 +57,7 @@ import {
   renderKitchen, renderLogistics, renderMarketplace, renderNicheSelect,
   renderOrderAccountSelect, renderOrderCourseSelect, renderOrderFulfillmentPicker, renderOrderTableSelect,
   renderPaymentMethodsSettings, renderPricingTiersSettings, renderProductFormSelects, renderProducts,
-  renderQueue, renderStatus, renderTables, renderVolumeDiscountSettings,
+  renderQueue, renderStatus, renderTables, openPaymentEvidencePanel, openPaymentEvidencePanel, renderVolumeDiscountSettings,
   renderWarehouseInventory, renderWarehouseLocationsList, renderWarehouseReceiving, renderWarehouseTransactions,
   requestLedgerStoragePersistence, runLedgerMigration, sanitizeId, sanitizeRemoteListings,
   sanitizeRemoteProducts, saveAccountModal, saveB2BAccounts, saveJSON,
