@@ -77,9 +77,9 @@ function mergeKnown(target, source) {
 function resolveEnabled(packId, config) {
   const rule = PACK_RULES[packId];
   if (rule.activation === 'declarative_only') return null;
-  return config[rule.feature_flag] === undefined
-    ? rule.default_enabled
-    : Boolean(config[rule.feature_flag]);
+  // A Pack is enabled only by an explicit boolean true. Values such as the
+  // string "false" must never become activation through JavaScript truthiness.
+  return config[rule.feature_flag] === true;
 }
 
 export function getVerticalPackConfiguration({
