@@ -9,6 +9,10 @@ const server = fs.readFileSync('backend/server.js', 'utf8');
 assert.match(client, /requiredIdempotencyKey/);
 assert.match(client, /Idempotency-Key/);
 assert.match(client, /createPayment/);
+assert.match(client, /submitPaymentEvidence\(body = \{\}\)/);
+assert.match(server, /handlePaymentEvidenceSubmission/);
+assert.match(server, /payments.*evidence/);
+assert.match(server, /paymentCore\.submitEvidence/);
 assert.match(client, /resolvePaymentRouting/);
 assert.match(client, /queryPaymentStatus\(paymentId, body = \{\}, \{ idempotencyKey \}/);
 assert.match(client, /transitionPaymentLifecycle/);
@@ -51,7 +55,10 @@ try {
   setConfig({chatId:'tenant-runtime',syncUrl:'http://sellify.test',sessionToken:'session-runtime'});
   globalThis.fetch=async (url,options={})=>{
     captured.push({url:String(url),options});
-    return {ok:true,status:200,json:async()=>({status:'MATCH',payment:{id:'payment-runtime',state:'VERIFIED'}})};
+    const data=String(url).endsWith('/payments/evidence')
+      ? {status:'RECEIVED',accepted:true,verificationStatus:'NOT_PERFORMED',paymentStateMutated:false}
+      : {status:'MATCH',payment:{id:'payment-runtime',state:'VERIFIED'}};
+    return {ok:true,status:200,json:async()=>data};
   };
   const frontend=await import('../app/src/payments/client.js');
   await assert.rejects(
@@ -68,7 +75,28 @@ try {
   assert.equal(captured[0].options.headers.Authorization,'Bearer session-runtime');
   assert.equal(captured[0].options.headers['Idempotency-Key'],'stable-status-key');
   assert.deepEqual(JSON.parse(captured[0].options.body),{reason:'retry after lost response'});
+
   assert.equal(response.payment.state,'VERIFIED');
+  const evidenceResponse=await frontend.submitPaymentEvidence({
+    paymentIntentId:'intent-runtime',
+    providerId:'telebirr',
+    channel:'sms',
+    evidenceType:'SMS_TEXT',
+    payload:{text:'Paid ETB 1,500 reference SMS-123'},
+  });
+  assert.equal(captured.length,2);
+  assert.equal(captured[1].url,'http://sellify.test/tenants/tenant-runtime/payments/evidence');
+  assert.equal(captured[1].options.method,'POST');
+  assert.equal(captured[1].options.headers.Authorization,'Bearer session-runtime');
+  assert.deepEqual(JSON.parse(captured[1].options.body),{
+    paymentIntentId:'intent-runtime',
+    providerId:'telebirr',
+    channel:'sms',
+    evidenceType:'SMS_TEXT',
+    payload:{text:'Paid ETB 1,500 reference SMS-123'},
+  });
+  assert.equal(evidenceResponse.status,'RECEIVED');
+
 } finally {
   globalThis.fetch=originalFetch;
   if(originalWindow===undefined) delete globalThis.window; else globalThis.window=originalWindow;

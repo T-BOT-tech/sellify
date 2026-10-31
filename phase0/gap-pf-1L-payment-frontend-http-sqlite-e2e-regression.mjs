@@ -291,7 +291,34 @@ try {
     lang: 'en',
     currencyCode: 'ETB',
   });
-  const { queryPaymentStatus } = await import('../app/src/payments/client.js');
+  const { queryPaymentStatus, submitPaymentEvidence } = await import('../app/src/payments/client.js');
+
+  // SMS text is stored as untrusted evidence only. Replaying the same evidence
+  // is deduplicated and must not verify the payment or add a ledger entry.
+  const evidencePayload = {
+    paymentIntentId: createdA.intent.id,
+    paymentId: paymentA.id,
+    providerId: 'telebirr',
+    channel: 'sms',
+    evidenceType: 'SMS_TEXT',
+    payload: { text: 'Paid ETB 1,500 reference SMS-' + randomUUID() },
+  };
+  const evidenceBefore = await store.listPaymentEvidence(tenantA.chatId, paymentA.id);
+  const ledgerBeforeEvidence = await store.listPaymentLedger(tenantA.chatId, paymentA.id);
+  const evidenceResponse = await submitPaymentEvidence(evidencePayload);
+  assert.equal(evidenceResponse.status, 'RECEIVED');
+  assert.equal(evidenceResponse.verificationStatus, 'NOT_PERFORMED');
+  assert.equal(evidenceResponse.paymentStateMutated, false);
+  assert.equal(evidenceResponse.evidence.evidenceType, 'SMS_TEXT');
+  assert.equal((await store.getPayment(tenantA.chatId, paymentA.id)).state, 'UNPAID');
+  assert.equal((await store.listPaymentLedger(tenantA.chatId, paymentA.id)).length, ledgerBeforeEvidence.length);
+  assert.equal((await store.listPaymentEvidence(tenantA.chatId, paymentA.id)).length, evidenceBefore.length + 1);
+  const duplicateEvidenceResponse = await submitPaymentEvidence(evidencePayload);
+  assert.equal(duplicateEvidenceResponse.status, 'DUPLICATE');
+  assert.equal(duplicateEvidenceResponse.duplicate, true);
+  assert.equal((await store.listPaymentEvidence(tenantA.chatId, paymentA.id)).length, evidenceBefore.length + 1);
+  assert.equal((await store.listPaymentLedger(tenantA.chatId, paymentA.id)).length, ledgerBeforeEvidence.length);
+  assert.equal((await store.getPayment(tenantA.chatId, paymentA.id)).state, 'UNPAID');
 
   const idempotencyKey = 'pf-http-lost-response-' + randomUUID();
   const statusPath = '/tenants/' + encodeURIComponent(tenantA.chatId) +
