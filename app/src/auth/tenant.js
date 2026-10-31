@@ -629,7 +629,7 @@ export function populateOnboardingOfferingTemplates() {
   const select = document.getElementById('onboardingOfferingTemplate');
   if (!select) return [];
   const itemType = document.getElementById('onboardingItemType')?.value === 'service' ? 'service' : 'product';
-  const businessTemplate = String(config.businessTemplate || document.getElementById('onboardingBusinessTemplate')?.value || 'other');
+  const businessTemplate = String(document.getElementById('onboardingBusinessTemplate')?.value || config.businessTemplate || 'other');
   const templates = getOfferingTemplates({ businessTemplate, itemType });
   select.replaceChildren(
     new Option('Choose a starter suggestion (optional)', ''),
@@ -640,7 +640,7 @@ export function populateOnboardingOfferingTemplates() {
 
 export function applyOnboardingOfferingTemplate(templateKey) {
   const itemType = document.getElementById('onboardingItemType')?.value === 'service' ? 'service' : 'product';
-  const businessTemplate = String(config.businessTemplate || document.getElementById('onboardingBusinessTemplate')?.value || 'other');
+  const businessTemplate = String(document.getElementById('onboardingBusinessTemplate')?.value || config.businessTemplate || 'other');
   const template = getOfferingTemplate({ businessTemplate, itemType, templateKey });
   if (!template) return null;
   const nameInput = document.getElementById('onboardingProdName');
@@ -664,7 +664,7 @@ export function toggleOnboardingItemType(itemType) {
   const addButton = document.getElementById('onboardingAddOfferingButton');
   const guidance = document.getElementById('onboardingOfferingGuidance');
   const templateSelect = document.getElementById('onboardingBusinessTemplate');
-  const templateKey = String(config.businessTemplate || templateSelect?.value || 'other');
+  const templateKey = String(templateSelect?.value || config.businessTemplate || 'other');
   if (typeof populateOnboardingOfferingTemplates === 'function') populateOnboardingOfferingTemplates();
   const guidanceByTemplate = {
     'retail-shop': {
