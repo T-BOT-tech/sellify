@@ -24,7 +24,8 @@ const tenantSource = await readFile(new URL('../app/src/auth/tenant.js', import.
 const html = await readFile(new URL('../app/index.html', import.meta.url), 'utf8');
 assert.match(tenantSource, /getOfferingTemplates/);
 assert.match(tenantSource, /getOfferingTemplate/);
-assert.match(tenantSource, /category,\s*unit/);
+assert.match(tenantSource, /\.\.\.\(category \? \{ category \} : \{\}\)/);
+assert.match(tenantSource, /\.\.\.\(unit \? \{ unit \} : \{\}\)/);
 assert.match(tenantSource, /item_type: itemType/);
 assert.match(tenantSource, /itemType === 'product' && stock !== undefined/);
 assert.match(html, /onboardingOfferingTemplate/);
