@@ -17,7 +17,7 @@ export const VERTICAL_PACK_MANIFESTS = Object.freeze({
   restaurant: Object.freeze({
     pack_id: 'restaurant', name: 'Restaurant', version: '0.1.0',
     capabilities: Object.freeze(['table-management','kitchen-management','restaurant-order-context']),
-    configuration: Object.freeze({ implementation: 'existing', tables_module: 'app/src/restaurant/tables.js', kitchen_module: 'app/src/restaurant/kitchen.js', kitchen_bridge: 'app/src/verticals/restaurant/kitchen-integration.js', recipe_ingredient_bridge: 'app/src/verticals/restaurant/recipe-ingredient-bridge.js', inventory_consumption_bridge: 'app/src/verticals/restaurant/inventory-consumption.js', order_payment_bridge: 'app/src/verticals/restaurant/order-payment-compatibility.js', niche_switch: 'config.businessModel=restaurant' }),
+    configuration: Object.freeze({ implementation: 'existing', tables_module: 'app/src/restaurant/tables.js', kitchen_module: 'app/src/restaurant/kitchen.js', kitchen_bridge: 'app/src/verticals/restaurant/kitchen-integration.js', recipe_ingredient_bridge: 'app/src/verticals/restaurant/recipe-ingredient-bridge.js', inventory_consumption_bridge: 'app/src/verticals/restaurant/inventory-consumption.js', order_payment_bridge: 'app/src/verticals/restaurant/order-payment-compatibility.js', niche_switch: 'config.restaurantEnabled=true' }),
     permissions: Object.freeze(['tables:manage','tables:status','kitchen:manage']),
     domain_entities: Object.freeze(['Table','KitchenTicket','Recipe','Preparation']),
     core_dependencies: Object.freeze(['commerce','inventory','payments','customers','locations','fulfillment','audit']),
