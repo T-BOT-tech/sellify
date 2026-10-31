@@ -35,6 +35,12 @@ export async function getPayment(paymentId) {
   const data = await request(buildPaymentPath(config.chatId, '/' + encodeURIComponent(paymentId)));
   return normalizePaymentResponse(data);
 }
+export async function listPaymentEvidence(paymentId) {
+  const id = String(paymentId || '').trim();
+  if (!id) throw Object.assign(new Error('paymentId is required'), { code: 'PAYMENT_REQUIRED', status: 400 });
+  const data = await request(buildPaymentPath(config.chatId, '/' + encodeURIComponent(id) + '/evidence'));
+  return Array.isArray(data.evidence) ? data.evidence : [];
+}
 export async function submitPaymentEvidence(body = {}) {
   const data = await request(buildPaymentPath(config.chatId, '/evidence'), {
     method: 'POST',
