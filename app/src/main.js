@@ -27,10 +27,10 @@ import { Theme } from './theme/branding.js';
 // WhatsApp/SMS/native adapter can occupy the same slot later without
 // another inline `if (window.X)` block here.
 import { getActivePlatform, initPlatform } from './platform/index.js';
-import { bootstrapTenantAuth, closeOnboarding, selectOnboardingTenant, createOnboardingTenant, pairThisDevice, showPairing, createDevicePairing, showJoinByInvite, submitStaffInvite, createStaffInvite, addOnboardingProduct, applyOnboardingBusinessTemplate, toggleOnboardingItemType, skipOnboardingProduct, finishOnboarding, submitSettingsInvite, switchActiveTenant, restoreTenantStateForTenant, retryBusinessTemplateSync } from './auth/tenant.js';
+import { bootstrapTenantAuth, closeOnboarding, selectOnboardingTenant, createOnboardingTenant, pairThisDevice, showPairing, createDevicePairing, showJoinByInvite, submitStaffInvite, createStaffInvite, addOnboardingProduct, applyOnboardingBusinessTemplate, applyOnboardingOfferingTemplate, populateOnboardingOfferingTemplates, toggleOnboardingItemType, skipOnboardingProduct, finishOnboarding, submitSettingsInvite, switchActiveTenant, restoreTenantStateForTenant, retryBusinessTemplateSync } from './auth/tenant.js';
 import { renderCustomers, openCustomerModal, closeCustomerModal, saveCustomerModal } from './customers.js';
 export { renderCustomers, openCustomerModal, closeCustomerModal, saveCustomerModal };
-export { bootstrapTenantAuth, closeOnboarding, selectOnboardingTenant, createOnboardingTenant, pairThisDevice, showPairing, createDevicePairing, showJoinByInvite, submitStaffInvite, createStaffInvite, addOnboardingProduct, applyOnboardingBusinessTemplate, toggleOnboardingItemType, skipOnboardingProduct, finishOnboarding, submitSettingsInvite, switchActiveTenant, retryBusinessTemplateSync };
+export { bootstrapTenantAuth, closeOnboarding, selectOnboardingTenant, createOnboardingTenant, pairThisDevice, showPairing, createDevicePairing, showJoinByInvite, submitStaffInvite, createStaffInvite, addOnboardingProduct, applyOnboardingBusinessTemplate, applyOnboardingOfferingTemplate, populateOnboardingOfferingTemplates, toggleOnboardingItemType, skipOnboardingProduct, finishOnboarding, submitSettingsInvite, switchActiveTenant, retryBusinessTemplateSync };
 
 // Re-exported so window-bridge.js's `import { ... } from './main.js'` keeps
 // working unchanged (Phase 1 keeps every existing onclick="..." wired the
