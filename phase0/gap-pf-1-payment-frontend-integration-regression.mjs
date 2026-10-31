@@ -17,6 +17,12 @@ assert.match(server, /paymentCore\.submitEvidence/);
 assert.ok(client.includes('listPaymentEvidence(paymentId)'));
 assert.ok(server.includes('handlePaymentEvidenceList'));
 assert.ok(server.includes('paymentCore.listEvidence'));
+assert.match(client, /submitManualPaymentEvidenceReview/);
+assert.match(server, /handleManualPaymentEvidenceReview/);
+assert.match(server, /paymentCore\.reviewManualEvidence/);
+assert.match(queue, /data-manual-review-form/);
+assert.match(queue, /independently checking the receiving account/);
+assert.match(queue, /paymentCommandKey\('manual-payment-review'/);
 assert.ok(server.includes('Payment evidence view permission required'));
 assert.match(queue, /openPaymentEvidencePanel\(localOrderId\)/);
 assert.match(queue, /listPaymentEvidence\(payment\.id\)/);
@@ -72,9 +78,11 @@ try {
   setConfig({chatId:'tenant-runtime',syncUrl:'http://sellify.test',sessionToken:'session-runtime'});
   globalThis.fetch=async (url,options={})=>{
     captured.push({url:String(url),options});
-    const data=String(url).endsWith('/payments/evidence')
-      ? {status:'RECEIVED',accepted:true,verificationStatus:'NOT_PERFORMED',paymentStateMutated:false}
-      : {status:'MATCH',payment:{id:'payment-runtime',state:'VERIFIED'}};
+    const data=String(url).endsWith('/review')
+      ? {finalized:false,status:'INCONCLUSIVE',paymentStateMutated:false}
+      : String(url).endsWith('/payments/evidence')
+        ? {status:'RECEIVED',accepted:true,verificationStatus:'NOT_PERFORMED',paymentStateMutated:false}
+        : {status:'MATCH',payment:{id:'payment-runtime',state:'VERIFIED'}};
     return {ok:true,status:200,json:async()=>data};
   };
   const frontend=await import('../app/src/payments/client.js');
@@ -113,6 +121,25 @@ try {
     payload:{text:'Paid ETB 1,500 reference SMS-123'},
   });
   assert.equal(evidenceResponse.status,'RECEIVED');
+
+  const manualReview=await frontend.submitManualPaymentEvidenceReview(
+    'payment-runtime','evidence-runtime',
+    {outcome:'INCONCLUSIVE',reason:'Independent statement not available'},
+    {idempotencyKey:'manual-review-runtime-key'},
+  );
+  assert.equal(captured.length,3);
+  assert.equal(captured[2].url,'http://sellify.test/tenants/tenant-runtime/payments/payment-runtime/evidence/evidence-runtime/review');
+  assert.equal(captured[2].options.method,'POST');
+  assert.equal(captured[2].options.headers.Authorization,'Bearer session-runtime');
+  assert.equal(captured[2].options.headers['Idempotency-Key'],'manual-review-runtime-key');
+  assert.deepEqual(JSON.parse(captured[2].options.body),{
+    outcome:'INCONCLUSIVE',
+    reason:'Independent statement not available',
+    paymentId:'payment-runtime',
+    evidenceId:'evidence-runtime',
+    idempotencyKey:'manual-review-runtime-key',
+  });
+  assert.equal(manualReview.status,'INCONCLUSIVE');
 
 } finally {
   globalThis.fetch=originalFetch;
