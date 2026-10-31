@@ -31,6 +31,7 @@ import { t } from '../ui/i18n.js';
 import { patchList, renderStatus } from '../ui/render.js';
 import { showUndoToast } from '../ui/toast.js';
 import { getPaymentForOrder, refreshCanonicalOrderPaymentSummary } from '../payments/projection.js';
+import { listPaymentEvidence, submitPaymentEvidence, getPayment } from '../payments/client.js';
 
 // Order-level financial truth is fetched from Payment Core, not reconstructed
 // from the local payment projection. Keep a short-lived UI cache so rendering
@@ -222,6 +223,8 @@ export function ticketInnerHtml(o) {
   const proofBtn = (o.payment_proof && hasPermission(currentStaff ? currentStaff.role : 'owner', 'payments:view_proof'))
     ? `<button type="button" class="ticket-act-btn" onclick="viewPaymentProof('${o.id}')"><svg class="icon icon-sm"><use href="#i-paperclip"/></svg> Proof</button>` : '';
   const disabledAttr = o._deleting ? ' disabled' : '';
+  const paymentEvidenceBtn = o.server_order_id && payment?.id && hasPermission(currentStaff ? currentStaff.role : 'owner', 'payments:view')
+    ? `<button type="button" class="ticket-act-btn" data-payment-evidence-order="${escapeHtml(String(o.id))}"><svg class="icon icon-sm"><use href="#i-card"/></svg> Payment evidence</button>` : '';
 
   return `
     <div class="ticket-head">
@@ -246,16 +249,152 @@ export function ticketInnerHtml(o) {
       <button type="button" class="ticket-act-btn" onclick="copyReceipt('${o.id}')"${disabledAttr}><svg class="icon icon-sm"><use href="#i-paperclip"/></svg> ${t('copy')}</button>
       <button type="button" class="ticket-act-btn" onclick="printReceipt('${o.id}')"${disabledAttr}><svg class="icon icon-sm"><use href="#i-print"/></svg> ${t('print')}</button>
       ${proofBtn}
+      ${paymentEvidenceBtn}
       ${o.is_marketplace && MARKETPLACE_NEXT[o.status] ? `<button type="button" class="ticket-act-btn" onclick="advanceMarketplaceOrderStatus('${o.id}')"${disabledAttr}>Next: ${escapeHtml(MARKETPLACE_NEXT[o.status].replaceAll('_', ' '))}</button>` : ''}
       ${o.is_marketplace && ['queued','confirmed','preparing'].includes(o.status) ? `<button type="button" class="ticket-act-btn danger" onclick="cancelMarketplaceOrder('${o.id}')"${disabledAttr}>Cancel</button>` : ''}
       <button type="button" class="ticket-act-btn danger" onclick="deleteOrder('${o.id}')"${disabledAttr}><svg class="icon icon-sm"><use href="#i-trash"/></svg> ${t('delete')}</button>
     </div>`;
 }
 
+
+const PAYMENT_EVIDENCE_PANEL_ID = 'sellifyPaymentEvidencePanel';
+
+function closePaymentEvidencePanel() {
+  document.getElementById(PAYMENT_EVIDENCE_PANEL_ID)?.remove();
+}
+
+function evidencePanelMessage(panel, message, isError = false) {
+  const status = panel.querySelector('[data-evidence-status]');
+  if (!status) return;
+  status.textContent = message;
+  status.style.color = isError ? 'var(--danger, #b42318)' : '';
+}
+
+function renderPaymentEvidenceRows(panel, rows) {
+  const list = panel.querySelector('[data-evidence-list]');
+  if (!list) return;
+  if (!rows.length) {
+    list.textContent = 'No evidence has been recorded for this payment yet.';
+    return;
+  }
+  list.innerHTML = rows.map(row => {
+    const label = [row.evidenceType, row.channel, row.status].filter(Boolean).join(' · ');
+    const reference = row.externalReference ? `<div class="hint">Reference: ${escapeHtml(row.externalReference)}</div>` : '';
+    const time = row.receivedAt ? `<div class="hint">Received: ${escapeHtml(row.receivedAt)}</div>` : '';
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--line)"><strong>${escapeHtml(label)}</strong>${reference}${time}<div class="hint">Evidence only — not payment verification.</div></div>`;
+  }).join('');
+}
+
+export async function openPaymentEvidencePanel(localOrderId) {
+  const order = getOrderById(localOrderId);
+  const serverOrderId = String(order?.server_order_id || '').trim();
+  let payment = serverOrderId ? getPaymentForOrder(serverOrderId) : null;
+  if (!order || !serverOrderId || !payment?.id) return;
+  closePaymentEvidencePanel();
+
+  const panel = document.createElement('div');
+  panel.id = PAYMENT_EVIDENCE_PANEL_ID;
+  panel.className = 'modal-backdrop';
+  panel.style.display = 'flex';
+  panel.innerHTML = `
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="paymentEvidenceTitle" style="max-height:85vh;overflow:auto">
+      <h3 id="paymentEvidenceTitle">Payment evidence</h3>
+      <p class="hint">Evidence is unverified input. Recording a receipt or SMS does not mark this payment as paid.</p>
+      <div data-evidence-status class="hint" role="status">Loading canonical payment and evidence…</div>
+      <div data-evidence-list></div>
+      <form data-evidence-form style="margin-top:16px">
+        <label for="paymentEvidenceChannel">Evidence channel</label>
+        <select id="paymentEvidenceChannel" name="channel" required>
+          <option value="manual">Manual receipt/reference</option>
+          <option value="sms">SMS text</option>
+        </select>
+        <label for="paymentEvidenceType">Evidence type</label>
+        <select id="paymentEvidenceType" name="evidenceType" required>
+          <option value="RECEIPT_REFERENCE">Receipt/reference</option>
+          <option value="SMS_TEXT">SMS text</option>
+        </select>
+        <label for="paymentEvidenceReference">Transaction/reference number (optional)</label>
+        <input id="paymentEvidenceReference" name="externalReference" type="text" maxlength="200" autocomplete="off">
+        <label for="paymentEvidencePayload">Receipt details or SMS text</label>
+        <textarea id="paymentEvidencePayload" name="payload" rows="4" maxlength="4000" required style="width:100%;box-sizing:border-box"></textarea>
+        <p class="hint">Do not enter PINs, passwords, or one-time security codes. A merchant review is not provider authentication.</p>
+        <button class="btn-primary" type="submit" data-evidence-submit disabled>Record evidence</button>
+      </form>
+      <button class="btn-secondary close-btn" type="button" data-evidence-close>Close</button>
+    </section>`;
+  document.body.appendChild(panel);
+  panel.querySelector('[data-evidence-close]').addEventListener('click', closePaymentEvidencePanel);
+  panel.addEventListener('click', event => { if (event.target === panel) closePaymentEvidencePanel(); });
+  const form = panel.querySelector('[data-evidence-form]');
+  const submitButton = panel.querySelector('[data-evidence-submit]');
+  const canSubmit = hasPermission(currentStaff ? currentStaff.role : 'owner', 'payments:accept');
+  if (!canSubmit) form.remove();
+  else form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const submit = panel.querySelector('[data-evidence-submit]');
+    if (!submit || submit.disabled) return;
+    submit.disabled = true;
+    evidencePanelMessage(panel, 'Recording evidence…');
+    try {
+      // Re-read Payment Core immediately before submission; never rely on a
+      // stale order projection for the payment/intent/provider association.
+      payment = await getPayment(payment.id);
+      const intentId = payment?.paymentIntentId || payment?.payment_intent_id || payment?.intent?.id;
+      const providerId = payment?.providerId || payment?.provider_id;
+      if (!intentId || !providerId) throw new Error('This canonical payment has no available payment intent/provider association. Evidence was not submitted.');
+      const payloadText = String(form.elements.payload.value || '').trim();
+      if (!payloadText) throw new Error('Enter the receipt details or SMS text first.');
+      const result = await submitPaymentEvidence({
+        paymentId: payment.id,
+        paymentIntentId: intentId,
+        providerId,
+        channel: form.elements.channel.value,
+        evidenceType: form.elements.evidenceType.value,
+        externalReference: String(form.elements.externalReference.value || '').trim() || null,
+        payload: { text: payloadText },
+      });
+      form.reset();
+      evidencePanelMessage(panel, result?.duplicate ? 'Evidence was already recorded. Payment state was not changed.' : 'Evidence recorded. Verification was not performed and payment state was not changed.');
+      renderPaymentEvidenceRows(panel, await listPaymentEvidence(payment.id));
+    } catch (error) {
+      evidencePanelMessage(panel, error?.message || 'Could not record evidence.', true);
+    } finally {
+      const latestIntentId = payment?.paymentIntentId || payment?.payment_intent_id || payment?.intent?.id;
+      const latestProviderId = payment?.providerId || payment?.provider_id;
+      submit.disabled = !latestIntentId || !latestProviderId;
+    }
+  });
+  try {
+    // Refresh the canonical payment by id so the intent/provider association
+    // comes from Payment Core rather than local receipt metadata.
+    payment = await getPayment(payment.id);
+    renderPaymentEvidenceRows(panel, await listPaymentEvidence(payment.id));
+    const intentId = payment?.paymentIntentId || payment?.payment_intent_id || payment?.intent?.id;
+    const providerId = payment?.providerId || payment?.provider_id;
+    if (!intentId || !providerId) {
+      form.remove();
+      evidencePanelMessage(panel, 'Evidence can be reviewed, but this payment lacks the canonical intent/provider association needed to submit more evidence.');
+    } else {
+      if (submitButton) submitButton.disabled = false;
+      evidencePanelMessage(panel, 'Evidence history loaded. Any new evidence remains unverified until a separate authorized Payment Core decision.');
+    }
+  } catch (error) {
+    // Fail closed: don't leave a submit path available when canonical context
+    // or evidence history could not be loaded.
+    form.remove();
+    renderPaymentEvidenceRows(panel, []);
+    evidencePanelMessage(panel, error?.message || 'Could not load payment evidence.', true);
+  }
+}
+
 export function createTicketNode(o) {
   const div = document.createElement('div');
   div.className = 'ticket ticket-enter';
   div.innerHTML = ticketInnerHtml(o);
+  div.addEventListener('click', event => {
+    const button = event.target.closest('[data-payment-evidence-order]');
+    if (button) openPaymentEvidencePanel(button.dataset.paymentEvidenceOrder);
+  });
   requestAnimationFrame(() => div.classList.remove('ticket-enter'));
   return div;
 }
