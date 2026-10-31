@@ -93,7 +93,7 @@ assert.equal(calls.some(call => call[0] === 'commit'), true);
 
 const commit = calls.find(call => call[0] === 'commit');
 assert.equal(commit[2].targetState, 'VERIFIED');
-assert.equal(commit[2].verification.providerTransactionId, 'TX-42');
+assert.equal(commit[2].verification.observedTransactionId, 'TX-42');
 assert.equal(commit[2].decision.decisionSource, 'PAYMENT_CORE');
 assert.equal(commit[2].decision.metadata.confirmationAttemptId, 'attempt-1');
 
