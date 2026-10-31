@@ -359,7 +359,9 @@ export async function openPaymentEvidencePanel(localOrderId) {
     } catch (error) {
       evidencePanelMessage(panel, error?.message || 'Could not record evidence.', true);
     } finally {
-      submit.disabled = false;
+      const latestIntentId = payment?.paymentIntentId || payment?.payment_intent_id || payment?.intent?.id;
+      const latestProviderId = payment?.providerId || payment?.provider_id;
+      submit.disabled = !latestIntentId || !latestProviderId;
     }
   });
   try {
