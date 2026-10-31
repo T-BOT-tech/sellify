@@ -36,4 +36,58 @@ assert.match(html, /onboardingOfferingTemplate/);
 assert.match(html, /onboardingProdCategory/);
 assert.match(html, /onboardingProdUnit/);
 assert.match(tenantSource, /does not itself create a booking|does not itself create a reservation|catalog entry does not itself create a booking/);
+
+
+// The onboarding selector belongs to the business currently being created. A
+// cached template from an already-selected tenant must not override that
+// explicit selection when suggesting or applying the first offering.
+assert.match(tenantSource, /String\(document\.getElementById\('onboardingBusinessTemplate'\)\?\.value \|\| config\.businessTemplate \|\| 'other'\)/,
+  'the visible onboarding business-template choice must take precedence over stale tenant config');
+
+const populateFunctionSource = tenantSource.match(
+  /export function populateOnboardingOfferingTemplates\(\) \{[\s\S]*?\n\}/,
+)?.[0];
+const applyFunctionSource = tenantSource.match(
+  /export function applyOnboardingOfferingTemplate\(templateKey\) \{[\s\S]*?\n\}/,
+)?.[0];
+assert.ok(populateFunctionSource && applyFunctionSource, 'onboarding offering handlers must be available for behavior tests');
+const businessSelector = { value: 'repair' };
+const offeringSelector = {
+  value: '',
+  options: [],
+  replaceChildren(...options) { this.options = options; },
+};
+const nameInput = { value: '', dataset: {} };
+const categoryInput = { value: '' };
+const unitInput = { value: '' };
+const elements = {
+  onboardingBusinessTemplate: businessSelector,
+  onboardingItemType: { value: 'service' },
+  onboardingOfferingTemplate: offeringSelector,
+  onboardingProdName: nameInput,
+  onboardingProdCategory: categoryInput,
+  onboardingProdUnit: unitInput,
+};
+const offeringHarness = {
+  config: { businessTemplate: 'retail-shop' },
+  document: { getElementById: id => elements[id] || null },
+  getOfferingTemplates,
+  getOfferingTemplate,
+  Option: class Option { constructor(text, value) { this.text = text; this.value = value; } },
+};
+const executablePopulate = populateFunctionSource.replace(/^export /, '');
+const executableApply = applyFunctionSource.replace(/^export /, '');
+const vm = await import('node:vm');
+vm.default.runInNewContext(
+  executablePopulate + '\n' + executableApply
+    + '\nthis.populate = populateOnboardingOfferingTemplates; this.apply = applyOnboardingOfferingTemplate;',
+  offeringHarness,
+);
+const suggestedTemplates = offeringHarness.populate();
+assert.ok(suggestedTemplates.some(item => item.key === 'diagnostics'),
+  'selected repair business must show repair service suggestions despite stale cached retail-shop config');
+assert.equal(offeringHarness.apply('diagnostics')?.category, 'Repair services',
+  'applying a starter suggestion must use the selected onboarding business template');
+assert.equal(categoryInput.value, 'Repair services');
+
 console.log('Reusable offering starter-template regression passed.');
