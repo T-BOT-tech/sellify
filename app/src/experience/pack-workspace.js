@@ -7,20 +7,11 @@ import { AGRICULTURE_PACK } from '../verticals/agriculture/pack.js';
 import { RESTAURANT_PACK } from '../verticals/restaurant/pack.js';
 import { WAREHOUSE_PACK } from '../verticals/warehouse/pack.js';
 import { LOGISTICS_PACK } from '../verticals/logistics/pack.js';
-import { renderPackJourneyComposition } from './pack-journey-composition.js';
+import { PACK_JOURNEY_ENTRY_TO_TAB, renderPackJourneyComposition } from './pack-journey-composition.js';
 import { getLogisticsWorkspaceComposition } from '../verticals/logistics/workspace-contract.js';
 import { getPackUxStateProjection } from './pack-activation-contract.js';
 
 const PACKS = Object.freeze([AGRICULTURE_PACK, RESTAURANT_PACK, WAREHOUSE_PACK, LOGISTICS_PACK]);
-const ENTRY_TO_TAB = Object.freeze({
-  tables: 'tables',
-  kitchen: 'kitchen',
-  inventory: 'warehouse',
-  receiving: 'warehouse',
-  transactions: 'warehouse',
-  locations: 'warehouse',
-  logistics: 'logistics',
-});
 
 function esc(v) {
   return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -44,7 +35,7 @@ export function getPackWorkspaceModel(lifecycles = new Map()) {
     const entries = pack.ui_entry_points.map(entry => ({
       entry,
       label: label(entry),
-      tab: ENTRY_TO_TAB[entry] || null,
+      tab: PACK_JOURNEY_ENTRY_TO_TAB[entry] || null,
     }));
     return Object.freeze({
       packId: pack.pack_id,

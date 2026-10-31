@@ -16,6 +16,8 @@ assert.match(source, /'logistics-proof': 'logistics-fulfillment'/);
 assert.match(source, /status: 'DECLARATIVE_ONLY'/);
 assert.match(source, /status: 'COMPOSED'/);
 assert.match(source, /PACK_JOURNEY_ENTRY_TO_TAB/);
+assert.match(workspace, /PACK_JOURNEY_ENTRY_TO_TAB/);
+assert.equal(workspace.includes('const ENTRY_TO_TAB'), false);
 assert.match(source, /inventory: 'warehouse'/);
 assert.match(source, /entryDeclaredByPack/);
 assert.match(source, /resolvedTab/);
