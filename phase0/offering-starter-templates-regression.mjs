@@ -21,6 +21,8 @@ assert.equal(getOfferingTemplates({ businessTemplate: 'repair', itemType: 'servi
 assert.equal(getOfferingTemplates({ businessTemplate: 'repair', itemType: 'product' }).find(item => item.key === 'spare-part')?.unit, 'piece');
 
 const tenantSource = await readFile(new URL('../app/src/auth/tenant.js', import.meta.url), 'utf8');
+const mainSource = await readFile(new URL('../app/src/main.js', import.meta.url), 'utf8');
+const bridgeSource = await readFile(new URL('../app/src/window-bridge.js', import.meta.url), 'utf8');
 const html = await readFile(new URL('../app/index.html', import.meta.url), 'utf8');
 assert.match(tenantSource, /getOfferingTemplates/);
 assert.match(tenantSource, /getOfferingTemplate/);
@@ -28,6 +30,8 @@ assert.match(tenantSource, /\.\.\.\(category \? \{ category \} : \{\}\)/);
 assert.match(tenantSource, /\.\.\.\(unit \? \{ unit \} : \{\}\)/);
 assert.match(tenantSource, /item_type: itemType/);
 assert.match(tenantSource, /itemType === 'product' && stock !== undefined/);
+assert.match(mainSource, /export \\{[^}]*applyOnboardingOfferingTemplate[^}]*populateOnboardingOfferingTemplates[^}]*\\}/s, 'onboarding offering handlers must be re-exported from main.js');
+assert.match(bridgeSource, /applyOnboardingOfferingTemplate, populateOnboardingOfferingTemplates/, 'inline onboarding handlers must be exposed on window');
 assert.match(html, /onboardingOfferingTemplate/);
 assert.match(html, /onboardingProdCategory/);
 assert.match(html, /onboardingProdUnit/);
