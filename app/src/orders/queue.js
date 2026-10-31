@@ -318,7 +318,7 @@ export async function openPaymentEvidencePanel(localOrderId) {
         <label for="paymentEvidencePayload">Receipt details or SMS text</label>
         <textarea id="paymentEvidencePayload" name="payload" rows="4" maxlength="4000" required style="width:100%;box-sizing:border-box"></textarea>
         <p class="hint">Do not enter PINs, passwords, or one-time security codes. A merchant review is not provider authentication.</p>
-        <button class="btn-primary" type="submit" data-evidence-submit>Record evidence</button>
+        <button class="btn-primary" type="submit" data-evidence-submit disabled>Record evidence</button>
       </form>
       <button class="btn-secondary close-btn" type="button" data-evidence-close>Close</button>
     </section>`;
@@ -326,25 +326,28 @@ export async function openPaymentEvidencePanel(localOrderId) {
   panel.querySelector('[data-evidence-close]').addEventListener('click', closePaymentEvidencePanel);
   panel.addEventListener('click', event => { if (event.target === panel) closePaymentEvidencePanel(); });
   const form = panel.querySelector('[data-evidence-form]');
+  const submitButton = panel.querySelector('[data-evidence-submit]');
   const canSubmit = hasPermission(currentStaff ? currentStaff.role : 'owner', 'payments:accept');
   if (!canSubmit) form.remove();
   else form.addEventListener('submit', async event => {
     event.preventDefault();
     const submit = panel.querySelector('[data-evidence-submit]');
+    if (!submit || submit.disabled) return;
     submit.disabled = true;
     evidencePanelMessage(panel, 'Recording evidence…');
     try {
-      if (!payment?.paymentIntentId && !payment?.payment_intent_id) {
-        payment = await getPayment(payment.id);
-      }
+      // Re-read Payment Core immediately before submission; never rely on a
+      // stale order projection for the payment/intent/provider association.
+      payment = await getPayment(payment.id);
       const intentId = payment?.paymentIntentId || payment?.payment_intent_id || payment?.intent?.id;
-      if (!intentId) throw new Error('This canonical payment has no available payment intent. Evidence was not submitted.');
+      const providerId = payment?.providerId || payment?.provider_id;
+      if (!intentId || !providerId) throw new Error('This canonical payment has no available payment intent/provider association. Evidence was not submitted.');
       const payloadText = String(form.elements.payload.value || '').trim();
       if (!payloadText) throw new Error('Enter the receipt details or SMS text first.');
       const result = await submitPaymentEvidence({
         paymentId: payment.id,
         paymentIntentId: intentId,
-        providerId: payment.providerId || payment.provider_id,
+        providerId,
         channel: form.elements.channel.value,
         evidenceType: form.elements.evidenceType.value,
         externalReference: String(form.elements.externalReference.value || '').trim() || null,
@@ -370,9 +373,13 @@ export async function openPaymentEvidencePanel(localOrderId) {
       form.remove();
       evidencePanelMessage(panel, 'Evidence can be reviewed, but this payment lacks the canonical intent/provider association needed to submit more evidence.');
     } else {
+      if (submitButton) submitButton.disabled = false;
       evidencePanelMessage(panel, 'Evidence history loaded. Any new evidence remains unverified until a separate authorized Payment Core decision.');
     }
   } catch (error) {
+    // Fail closed: don't leave a submit path available when canonical context
+    // or evidence history could not be loaded.
+    form.remove();
     renderPaymentEvidenceRows(panel, []);
     evidencePanelMessage(panel, error?.message || 'Could not load payment evidence.', true);
   }
