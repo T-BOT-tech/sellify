@@ -11,6 +11,7 @@ import { toMinorUnits } from '../utils/money.js';
 import { markCatalogDirty } from '../products/catalog.js';
 import { guessLocationDefaults } from '../config/locale-defaults.js';
 import { t } from '../ui/i18n.js';
+import { getOfferingTemplates, getOfferingTemplate } from '../catalog/offering-templates.js';
 import { TRANSLATIONS } from '../i18n/translations.js';
 
 function baseUrl() {
@@ -613,6 +614,7 @@ function showFirstProductStep(sellerName) {
   if (heading) heading.textContent = sellerName || '';
   const status = document.getElementById('onboardingStatus');
   if (status) status.textContent = '';
+  toggleOnboardingItemType(document.getElementById('onboardingItemType')?.value || 'product');
 }
 
 export function applyOnboardingBusinessTemplate(template) {
@@ -621,6 +623,37 @@ export function applyOnboardingBusinessTemplate(template) {
   const businessType = option?.dataset?.businessType || 'other';
   const legacyType = document.getElementById('onboardingBusinessType');
   if (legacyType) legacyType.value = businessType;
+}
+
+export function populateOnboardingOfferingTemplates() {
+  const select = document.getElementById('onboardingOfferingTemplate');
+  if (!select) return [];
+  const itemType = document.getElementById('onboardingItemType')?.value === 'service' ? 'service' : 'product';
+  const businessTemplate = String(config.businessTemplate || document.getElementById('onboardingBusinessTemplate')?.value || 'other');
+  const templates = getOfferingTemplates({ businessTemplate, itemType });
+  select.replaceChildren(
+    new Option('Choose a starter suggestion (optional)', ''),
+    ...templates.map(template => new Option(template.label, template.key)),
+  );
+  return templates;
+}
+
+export function applyOnboardingOfferingTemplate(templateKey) {
+  const itemType = document.getElementById('onboardingItemType')?.value === 'service' ? 'service' : 'product';
+  const businessTemplate = String(config.businessTemplate || document.getElementById('onboardingBusinessTemplate')?.value || 'other');
+  const template = getOfferingTemplate({ businessTemplate, itemType, templateKey });
+  if (!template) return null;
+  const nameInput = document.getElementById('onboardingProdName');
+  const categoryInput = document.getElementById('onboardingProdCategory');
+  const unitInput = document.getElementById('onboardingProdUnit');
+  const previousSuggestion = String(nameInput?.dataset?.templateSuggestedName || '');
+  if (nameInput && (!nameInput.value.trim() || nameInput.value.trim() === previousSuggestion)) {
+    nameInput.value = template.name || '';
+  }
+  if (nameInput) nameInput.dataset.templateSuggestedName = template.name || '';
+  if (categoryInput) categoryInput.value = template.category;
+  if (unitInput) unitInput.value = template.unit;
+  return template;
 }
 
 export function toggleOnboardingItemType(itemType) {
@@ -632,6 +665,7 @@ export function toggleOnboardingItemType(itemType) {
   const guidance = document.getElementById('onboardingOfferingGuidance');
   const templateSelect = document.getElementById('onboardingBusinessTemplate');
   const templateKey = String(config.businessTemplate || templateSelect?.value || 'other');
+  if (typeof populateOnboardingOfferingTemplates === 'function') populateOnboardingOfferingTemplates();
   const guidanceByTemplate = {
     'retail-shop': {
       product: 'Start with an item you sell. You can add services to this same catalog later.',
@@ -686,6 +720,8 @@ export async function addOnboardingProduct() {
   const itemType = document.getElementById('onboardingItemType')?.value === 'service' ? 'service' : 'product';
   const status = document.getElementById('onboardingStatus');
   const name = nameInput?.value.trim();
+  const category = document.getElementById('onboardingProdCategory')?.value.trim();
+  const unit = document.getElementById('onboardingProdUnit')?.value.trim();
   const priceMajor = parseFloat(priceInput?.value);
   if (!name || !Number.isFinite(priceMajor) || priceMajor < 0) {
     if (status) status.textContent = 'Enter an item name and a valid price.';
@@ -702,6 +738,8 @@ export async function addOnboardingProduct() {
     id: uid(),
     name,
     item_type: itemType,
+    ...(category ? { category } : {}),
+    ...(unit ? { unit } : {}),
     price: priceMinor,
     _priceMinor: true,
     ...(itemType === 'product' && stock !== undefined ? { stock } : {}),

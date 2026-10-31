@@ -963,8 +963,14 @@
         <option value="service">Service</option>
       </select>
       <div id="onboardingOfferingGuidance" class="hint" role="status" aria-live="polite">Add a physical product. You can add services to this same catalog later.</div>
+      <label for="onboardingOfferingTemplate">Starter suggestion (optional)</label>
+      <select id="onboardingOfferingTemplate" onchange="applyOnboardingOfferingTemplate(this.value)"><option value="">Choose a starter suggestion (optional)</option></select>
       <label for="onboardingProdName" id="onboardingItemNameLabel">Product name</label>
       <input id="onboardingProdName" type="text" placeholder="Coffee">
+      <label for="onboardingProdCategory">Category (optional)</label>
+      <input id="onboardingProdCategory" type="text" placeholder="General">
+      <label for="onboardingProdUnit">Unit (optional)</label>
+      <input id="onboardingProdUnit" type="text" placeholder="piece">
       <label for="onboardingProdPrice">Price</label>
       <input id="onboardingProdPrice" type="number" min="0" step="0.01" placeholder="125">
       <div id="onboardingProdStockWrap">
