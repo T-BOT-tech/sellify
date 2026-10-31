@@ -55,7 +55,10 @@ try {
   setConfig({chatId:'tenant-runtime',syncUrl:'http://sellify.test',sessionToken:'session-runtime'});
   globalThis.fetch=async (url,options={})=>{
     captured.push({url:String(url),options});
-    return {ok:true,status:200,json:async()=>({status:'MATCH',payment:{id:'payment-runtime',state:'VERIFIED'}})};
+    const data=String(url).endsWith('/payments/evidence')
+      ? {status:'RECEIVED',accepted:true,verificationStatus:'NOT_PERFORMED',paymentStateMutated:false}
+      : {status:'MATCH',payment:{id:'payment-runtime',state:'VERIFIED'}};
+    return {ok:true,status:200,json:async()=>data};
   };
   const frontend=await import('../app/src/payments/client.js');
   await assert.rejects(
