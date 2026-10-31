@@ -473,8 +473,11 @@ const onboardingElements = {
   onboardingItemNameLabel: { textContent: 'Product name' },
   onboardingProdName: { placeholder: 'Coffee' },
   onboardingAddOfferingButton: { textContent: 'Add product' },
+  onboardingOfferingGuidance: { textContent: '' },
+  onboardingBusinessTemplate: { value: 'other' },
 };
 const onboardingUiContext = {
+  config: { businessTemplate: 'other' },
   document: { getElementById: id => onboardingElements[id] || null },
 };
 vm.runInNewContext(itemTypeToggleMatch[0].replace(/^export /, ''), onboardingUiContext);
