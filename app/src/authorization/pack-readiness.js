@@ -31,7 +31,11 @@ export function readinessFor(pack, resolved, snapshot = null) {
   if (!resolved.enabled) return 'CONFIGURATION_INACTIVE';
   const lifecycleState = String(snapshot?.lifecycle?.state || 'UNKNOWN').trim().toUpperCase();
   const readinessState = String(snapshot?.readiness?.state || 'UNKNOWN').trim().toUpperCase();
-  if (readinessState === 'DEPENDENCY_BLOCKED') return 'DEPENDENCY_UNAVAILABLE';
+  if (readinessState === 'DEPENDENCY_BLOCKED' || lifecycleState === 'DEPENDENCY_BLOCKED') return 'DEPENDENCY_UNAVAILABLE';
+  // Preserve canonical blocked lifecycle states instead of collapsing them to
+  // generic UNKNOWN when the separate readiness snapshot is incomplete.
+  if (lifecycleState === 'RECOVERY_REQUIRED') return 'RECOVERY_REQUIRED';
+  if (lifecycleState === 'UPGRADE_BLOCKED') return 'UPGRADE_BLOCKED';
   if (lifecycleState === 'UNKNOWN' || readinessState === 'UNKNOWN') return 'UNKNOWN';
   if (lifecycleState === 'ACTIVE' && snapshot?.readiness?.active === true) {
     const hasExecutableJourney = pack.ui_entry_points.some(entry => Boolean(PACK_JOURNEY_ENTRY_TO_TAB[entry]));
