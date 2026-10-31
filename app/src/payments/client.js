@@ -35,6 +35,13 @@ export async function getPayment(paymentId) {
   const data = await request(buildPaymentPath(config.chatId, '/' + encodeURIComponent(paymentId)));
   return normalizePaymentResponse(data);
 }
+export async function submitPaymentEvidence(body = {}) {
+  const data = await request(buildPaymentPath(config.chatId, '/evidence'), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return data && typeof data === 'object' ? data : { status: 'UNKNOWN' };
+}
 export async function createPayment(body, { idempotencyKey } = {}) {
   const headers = { 'Idempotency-Key': requiredIdempotencyKey(idempotencyKey) };
   const data = await request(buildPaymentPath(config.chatId), { method: 'POST', headers, body: JSON.stringify(normalizePaymentMutation(body)) });
