@@ -665,7 +665,7 @@ export function toggleOnboardingItemType(itemType) {
   const guidance = document.getElementById('onboardingOfferingGuidance');
   const templateSelect = document.getElementById('onboardingBusinessTemplate');
   const templateKey = String(config.businessTemplate || templateSelect?.value || 'other');
-  populateOnboardingOfferingTemplates();
+  if (typeof populateOnboardingOfferingTemplates === 'function') populateOnboardingOfferingTemplates();
   const guidanceByTemplate = {
     'retail-shop': {
       product: 'Start with an item you sell. You can add services to this same catalog later.',
