@@ -299,7 +299,7 @@ const interruptedStore = {
 };
 const interruptedCore = new PaymentCore({
   store: interruptedStore,
-  invariantGate: { evaluate: ({ payment: currentPayment }) => currentPayment.state === 'PENDING'
+  invariantGate: { evaluate: ({ payment: currentPayment }) => currentPayment.state === 'UNPAID'
     ? ({ passed: true, reasonCodes: [], checks: ['amount', 'currency', 'receiver'] })
     : ({ passed: false, reasonCodes: ['PAYMENT_NOT_PENDING'], checks: ['payment-state'] }) },
   decisionEngine: { decide: ({ verification, invariants }) => ({
