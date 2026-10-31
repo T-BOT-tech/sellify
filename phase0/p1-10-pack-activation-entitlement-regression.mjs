@@ -12,7 +12,8 @@ for (const pack of packs) {
   assert.ok(pack.pack_id && pack.version);
   assert.ok(Array.isArray(pack.capabilities));
 }
-assert.equal(getVerticalPackConfiguration({ packId:'restaurant', config:{businessModel:'restaurant'} }).enabled, true);
+assert.equal(getVerticalPackConfiguration({ packId:'restaurant', config:{businessModel:'restaurant'} }).enabled, false);
+assert.equal(getVerticalPackConfiguration({ packId:'restaurant', config:{businessModel:'restaurant',restaurantEnabled:true} }).enabled, true);
 assert.equal(getVerticalPackConfiguration({ packId:'warehouse', config:{warehouseEnabled:true} }).enabled, true);
 assert.equal(getVerticalPackConfiguration({ packId:'logistics', config:{logisticsEnabled:true} }).enabled, true);
 assert.equal(getVerticalPackConfiguration({ packId:'agriculture', config:{} }).enabled, null);
