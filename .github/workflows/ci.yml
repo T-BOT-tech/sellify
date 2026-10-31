@@ -392,3 +392,5 @@ jobs:
 
       - name: Phase 19 cumulative Discovery Fabric exit certification
         run: npm run test:phase19.12-cumulative
+      - name: Phase 20 cumulative Cross-Border Commerce exit certification
+        run: npm run test:phase20.12

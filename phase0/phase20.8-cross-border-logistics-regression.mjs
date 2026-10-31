@@ -20,7 +20,7 @@ const verifiedCarrier = {
   evidence: {
     capabilities: ['delivery', 'tracking', 'cross_border'],
     status: 'AVAILABLE',
-    source: 'carrier',
+    source: 'provider',
     evidence_mode: 'verified',
     geography: 'ET-KE',
     verified_by: 'operator-1',
@@ -84,7 +84,7 @@ await pass('provider capability must include cross-border and delivery', () => {
       evidence: {
         capabilities: ['delivery'],
         status: 'AVAILABLE',
-        source: 'carrier',
+        source: 'provider',
         evidence_mode: 'verified',
         verified_by: 'operator-1',
         verified_at: '2026-09-15T10:00:00Z',
@@ -162,7 +162,7 @@ await pass('forbidden provider selection execution fields fail closed', () => {
       evidence: { ...verifiedCarrier.evidence, credentials: 'forbidden' },
     }],
     selectedProviderId: 'carrier-et-ke',
-  }), /selection cannot contain|not a verified feasible candidate/);
+  }), /selection cannot contain|not a verified feasible candidate|capability contract cannot contain credentials/);
 });
 
 await pass('no database/store/provider execution references', async () => {
