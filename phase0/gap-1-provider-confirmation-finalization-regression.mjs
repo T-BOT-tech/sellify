@@ -50,9 +50,9 @@ const store = {
     calls.push(['accounts', chatId]);
     return [{ id: 'account-1', accountIdentifier: '600001', providerId: 'mpesa' }];
   },
-  insertPaymentVerification: async () => {
-    calls.push(['verification']);
-    return { verification: { id: 'verification-1' } };
+  insertPaymentVerification: async (_chatId, input) => {
+    calls.push(['verification', input]);
+    return { verification: { id: 'verification-1', ...input } };
   },
   insertPaymentDecision: async () => {
     calls.push(['decision']);
