@@ -477,7 +477,7 @@ export async function openPaymentEvidencePanel(localOrderId) {
     // Refresh the canonical payment by id so the intent/provider association
     // comes from Payment Core rather than local receipt metadata.
     payment = await getPayment(payment.id);
-    renderPaymentEvidenceRows(panel, await listPaymentEvidence(payment.id));
+    renderPaymentEvidenceRows(panel, await listPaymentEvidence(payment.id), canSubmit);
     const intentId = payment?.paymentIntentId || payment?.payment_intent_id || payment?.intent?.id;
     const providerId = payment?.providerId || payment?.provider_id;
     if (!intentId || !providerId) {
