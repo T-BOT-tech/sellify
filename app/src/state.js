@@ -36,6 +36,7 @@ export let config = loadJSON(STORAGE_KEYS.config, {
   paymentMethods: DEFAULT_PAYMENT_METHODS.map(pm => ({ ...pm })),
   wholesaleEnabled: false,
   volumeDiscountEnabled: false,
+  restaurantEnabled: false,
   warehouseEnabled: false,
   logisticsEnabled: false
 });
@@ -43,6 +44,7 @@ if (config.niche === undefined) config.niche = '';
 if (!config.businessModel) config.businessModel = 'retail';
 if (config.wholesaleEnabled === undefined) config.wholesaleEnabled = false;
 if (config.volumeDiscountEnabled === undefined) config.volumeDiscountEnabled = false;
+if (config.restaurantEnabled === undefined) config.restaurantEnabled = false;
 if (config.warehouseEnabled === undefined) config.warehouseEnabled = false;
 if (config.logisticsEnabled === undefined) config.logisticsEnabled = false;
 if (!config.syncUrl && defaultSyncServerUrl) {

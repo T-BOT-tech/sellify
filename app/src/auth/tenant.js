@@ -235,7 +235,19 @@ async function loadBusinessTemplateConfig() {
     // infer server intent from the general device config cache.
     const pending = await loadJSONAsync(pendingBusinessTemplateKey(chatId), null);
     if (!stillActive()) return null;
-    if (!pending || pending.status !== 'pending' || String(pending.tenantId) !== chatId || typeof pending.templateKey !== 'string') return null;
+    if (!pending || pending.status !== 'pending' || String(pending.tenantId) !== chatId || typeof pending.templateKey !== 'string') {
+      // A successful canonical read with no saved template means the active
+      // tenant has no template. Do not leak a previous tenant's cached choice
+      // into this tenant's setup guidance; offline failures return through the
+      // catch above and deliberately retain the cache for later recovery.
+      const next = { ...config };
+      delete next.businessTemplate;
+      delete next.businessTemplateSchemaVersion;
+      delete next.businessTemplateTenantId;
+      setConfig(next);
+      saveJSON(STORAGE_KEYS.config, next);
+      return null;
+    }
     const retryResponse = await request(`/tenants/${encodeURIComponent(chatId)}/business-template`, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${sessionToken}` },
@@ -617,6 +629,50 @@ export function toggleOnboardingItemType(itemType) {
   const nameLabel = document.getElementById('onboardingItemNameLabel');
   const nameInput = document.getElementById('onboardingProdName');
   const addButton = document.getElementById('onboardingAddOfferingButton');
+  const guidance = document.getElementById('onboardingOfferingGuidance');
+  const templateSelect = document.getElementById('onboardingBusinessTemplate');
+  const templateKey = String(config.businessTemplate || templateSelect?.value || 'other');
+  const guidanceByTemplate = {
+    'retail-shop': {
+      product: 'Start with an item you sell. You can add services to this same catalog later.',
+      service: 'Add a service you offer. Physical products and services can live in the same catalog.',
+    },
+    barbershop: {
+      product: 'Add a retail item if you sell one; services such as haircuts can share this catalog.',
+      service: 'Examples: haircut, wash, styling, or beard trim. You can also sell physical products here.',
+    },
+    'hotel-rooms': {
+      product: 'Add an item you sell on-site if needed; services can share this catalog.',
+      service: 'Examples: room stay or another guest service. This records a catalog offering, not a reservation.',
+    },
+    rental: {
+      product: 'Add an item sold outright if you offer one; rental services can share this catalog.',
+      service: 'Examples: equipment or vehicle rental. This catalog entry does not itself create a booking.',
+    },
+    consultation: {
+      product: 'Add a physical item if you sell one; professional services can share this catalog.',
+      service: 'Examples: consultation, assessment, or advisory session. You can add products too.',
+    },
+    repair: {
+      product: 'Examples: spare parts or accessories. Repair services can share this same catalog.',
+      service: 'Examples: diagnostics, repair, or maintenance. Spare parts and services can coexist here.',
+    },
+    restaurant: {
+      product: 'Add a menu item or packaged product. Other services can also be represented in the catalog.',
+      service: 'Add a service offering if relevant. Menu items and services use the existing shared catalog.',
+    },
+    wholesale: {
+      product: 'Start with a product sold by unit, case, or bulk quantity. Services can share the catalog.',
+      service: 'Add a service offered to business customers; wholesale products can remain in the same catalog.',
+    },
+    other: {
+      product: 'Add a physical product. You can add services to this same catalog later.',
+      service: 'Add a service. Physical products and services can coexist in the same catalog.',
+    },
+  };
+  const guidanceText = guidanceByTemplate[templateKey]?.[isService ? 'service' : 'product']
+    || guidanceByTemplate.other[isService ? 'service' : 'product'];
+  if (guidance) guidance.textContent = guidanceText;
   if (stockWrap) stockWrap.style.display = isService ? 'none' : '';
   if (nameLabel) nameLabel.textContent = isService ? 'Service name' : 'Product name';
   if (nameInput) nameInput.placeholder = isService ? 'Haircut or consultation' : 'Coffee';

@@ -5,6 +5,8 @@ import {
   verticalConfigurationContract,
   isVerticalPackConfiguration,
 } from '../app/src/verticals/configuration.js';
+import { buildBusinessTemplatePackRecommendation } from '../app/src/experience/ecosystem-discovery.js';
+import { VERTICAL_PACK_MANIFESTS } from '../shared/vertical-pack-manifests.js';
 
 const base = {
   businessModel: 'retail',
@@ -34,11 +36,46 @@ assert.equal(Object.isFrozen(warehouse), true);
 const restaurant = getVerticalPackConfiguration({
   packId: 'restaurant',
   config: { ...base, businessModel: 'retail' },
-  organizationConfig: { businessModel: 'restaurant' },
+  organizationConfig: { restaurantEnabled: true, organizationId: 'ORG-1' },
   locationConfig: {},
   organizationId: 'ORG-1',
 });
-assert.equal(restaurant.enabled, true);
+assert.equal(restaurant.enabled, true, 'an explicit restaurant pack flag enables the pack');
+const restaurantIdentityOnly = getVerticalPackConfiguration({
+  packId: 'restaurant',
+  config: { ...base, businessModel: 'restaurant' },
+});
+assert.equal(restaurantIdentityOnly.enabled, false,
+  'business identity/presentation alone must not activate the Restaurant pack');
+const restaurantStringFalse = getVerticalPackConfiguration({
+  packId: 'restaurant',
+  config: { ...base, restaurantEnabled: 'false' },
+});
+assert.equal(restaurantStringFalse.enabled, false,
+  'string values must not activate a Pack through JavaScript truthiness');
+const warehouseStringTrue = getVerticalPackConfiguration({
+  packId: 'warehouse',
+  config: { ...base, warehouseEnabled: 'true' },
+});
+assert.equal(warehouseStringTrue.enabled, false,
+  'Pack activation must require an explicit boolean true, not a string');
+assert.equal(VERTICAL_PACK_MANIFESTS.restaurant.configuration.niche_switch, 'config.restaurantEnabled=true',
+  'the shared Restaurant manifest must name the same explicit activation flag as the configuration contract');
+assert.notEqual(VERTICAL_PACK_MANIFESTS.restaurant.configuration.niche_switch, 'config.businessModel=restaurant',
+  'the shared manifest must not imply that restaurant business identity activates the Pack');
+assert.equal(VERTICAL_PACK_MANIFESTS.warehouse.configuration.niche_switch, 'config.warehouseEnabled=true',
+  'the shared Warehouse manifest must agree with the Warehouse configuration contract');
+assert.equal(VERTICAL_PACK_MANIFESTS.logistics.configuration.niche_switch, 'config.logisticsEnabled=true',
+  'the shared Logistics manifest must agree with the Logistics configuration contract');
+
+const restaurantRecommendation = buildBusinessTemplatePackRecommendation('restaurant');
+assert.equal(restaurantRecommendation.packId, 'restaurant');
+assert.match(restaurantRecommendation.description, /review its requirements and current readiness/i);
+assert.equal(buildBusinessTemplatePackRecommendation('repair'), null,
+  'templates without a direct existing Pack match must not receive speculative recommendations');
+assert.match(fs.readFileSync(new URL('../app/src/experience/ecosystem-discovery.js', import.meta.url), 'utf8'),
+  /Recommendation is navigation guidance only; it never activates or configures a Pack/,
+  'business-template Pack recommendations must remain non-activating guidance');
 
 const logistics = getVerticalPackConfiguration({ packId: 'logistics', config: base });
 assert.equal(logistics.enabled, false);
@@ -76,7 +113,8 @@ assert.deepEqual(contract.precedence, [
 ]);
 assert.equal(contract.packs.agriculture.activation, 'declarative_only');
 assert.equal(contract.packs.agriculture.feature_flag, null);
-assert.equal(contract.packs.restaurant.feature_flag, 'businessModel');
+assert.equal(contract.packs.restaurant.activation, 'feature_flag');
+assert.equal(contract.packs.restaurant.feature_flag, 'restaurantEnabled');
 assert.equal(contract.packs.warehouse.feature_flag, 'warehouseEnabled');
 assert.equal(contract.packs.logistics.feature_flag, 'logisticsEnabled');
 assert.equal(contract.duplicate_configuration_authority, false);
@@ -84,6 +122,7 @@ assert.equal(contract.persistence, 'existing_config_store_only');
 
 const stateSource = fs.readFileSync(new URL('../app/src/state.js', import.meta.url), 'utf8');
 assert.match(stateSource, /export let config = loadJSON\(STORAGE_KEYS\.config/);
+assert.match(stateSource, /restaurantEnabled: false/);
 assert.match(stateSource, /warehouseEnabled: false/);
 assert.match(stateSource, /logisticsEnabled: false/);
 assert.match(stateSource, /businessModel: 'retail'/);

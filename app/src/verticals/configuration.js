@@ -15,9 +15,8 @@ const PACK_RULES = Object.freeze({
     default_enabled: null,
   }),
   restaurant: Object.freeze({
-    activation: 'business_model',
-    feature_flag: 'businessModel',
-    enabled_value: 'restaurant',
+    activation: 'feature_flag',
+    feature_flag: 'restaurantEnabled',
     default_enabled: false,
   }),
   warehouse: Object.freeze({
@@ -34,6 +33,7 @@ const PACK_RULES = Object.freeze({
 
 const CONFIG_KEYS = Object.freeze([
   'businessModel',
+  'restaurantEnabled',
   'niche',
   'wholesaleEnabled',
   'volumeDiscountEnabled',
@@ -77,10 +77,9 @@ function mergeKnown(target, source) {
 function resolveEnabled(packId, config) {
   const rule = PACK_RULES[packId];
   if (rule.activation === 'declarative_only') return null;
-  if (rule.activation === 'business_model') return config.businessModel === rule.enabled_value;
-  return config[rule.feature_flag] === undefined
-    ? rule.default_enabled
-    : Boolean(config[rule.feature_flag]);
+  // A Pack is enabled only by an explicit boolean true. Values such as the
+  // string "false" must never become activation through JavaScript truthiness.
+  return config[rule.feature_flag] === true;
 }
 
 export function getVerticalPackConfiguration({
