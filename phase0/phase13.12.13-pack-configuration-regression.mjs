@@ -5,6 +5,7 @@ import {
   verticalConfigurationContract,
   isVerticalPackConfiguration,
 } from '../app/src/verticals/configuration.js';
+import { buildBusinessTemplatePackRecommendation } from '../app/src/experience/ecosystem-discovery.js';
 
 const base = {
   businessModel: 'retail',
@@ -45,6 +46,15 @@ const restaurantIdentityOnly = getVerticalPackConfiguration({
 });
 assert.equal(restaurantIdentityOnly.enabled, false,
   'business identity/presentation alone must not activate the Restaurant pack');
+
+const restaurantRecommendation = buildBusinessTemplatePackRecommendation('restaurant');
+assert.equal(restaurantRecommendation.packId, 'restaurant');
+assert.match(restaurantRecommendation.description, /review its requirements and current readiness/i);
+assert.equal(buildBusinessTemplatePackRecommendation('repair'), null,
+  'templates without a direct existing Pack match must not receive speculative recommendations');
+assert.match(fs.readFileSync(new URL('../app/src/experience/ecosystem-discovery.js', import.meta.url), 'utf8'),
+  /Recommendation is navigation guidance only; it never activates or configures a Pack/,
+  'business-template Pack recommendations must remain non-activating guidance');
 
 const logistics = getVerticalPackConfiguration({ packId: 'logistics', config: base });
 assert.equal(logistics.enabled, false);
