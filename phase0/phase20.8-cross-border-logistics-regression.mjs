@@ -162,7 +162,7 @@ await pass('forbidden provider selection execution fields fail closed', () => {
       evidence: { ...verifiedCarrier.evidence, credentials: 'forbidden' },
     }],
     selectedProviderId: 'carrier-et-ke',
-  }), /selection cannot contain|not a verified feasible candidate/);
+  }), /selection cannot contain|not a verified feasible candidate|capability contract cannot contain credentials/);
 });
 
 await pass('no database/store/provider execution references', async () => {
