@@ -51,6 +51,10 @@ assert.equal(VERTICAL_PACK_MANIFESTS.restaurant.configuration.niche_switch, 'con
   'the shared Restaurant manifest must name the same explicit activation flag as the configuration contract');
 assert.notEqual(VERTICAL_PACK_MANIFESTS.restaurant.configuration.niche_switch, 'config.businessModel=restaurant',
   'the shared manifest must not imply that restaurant business identity activates the Pack');
+assert.equal(VERTICAL_PACK_MANIFESTS.warehouse.configuration.niche_switch, 'config.warehouseEnabled=true',
+  'the shared Warehouse manifest must agree with the Warehouse configuration contract');
+assert.equal(VERTICAL_PACK_MANIFESTS.logistics.configuration.niche_switch, 'config.logisticsEnabled=true',
+  'the shared Logistics manifest must agree with the Logistics configuration contract');
 
 const restaurantRecommendation = buildBusinessTemplatePackRecommendation('restaurant');
 assert.equal(restaurantRecommendation.packId, 'restaurant');
