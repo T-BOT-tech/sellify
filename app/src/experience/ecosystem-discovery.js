@@ -1,13 +1,25 @@
 // Stage 5 — Marketplace and ecosystem discovery composition.
 // This is a read-only index over existing contracts and routes. It does not
 // purchase, register sellers, activate capabilities/Packs, or connect channels.
-import { currentStaff } from '../state.js';
+import { config, currentStaff } from '../state.js';
 import { hasPermission } from '../auth/permissions.js';
 import { discoverPlatformSurface } from '../platform/capability-discovery.js';
 import { openAddSettings } from '../ui/add-menu.js';
 import { escapeHtml } from '../utils/index.js';
 
-export function buildEcosystemDiscoveryModel(surface = discoverPlatformSurface()) {
+export function buildBusinessTemplatePackRecommendation(templateKey = config.businessTemplate) {
+  // Recommendation is navigation guidance only; it never activates or configures a Pack.
+  if (templateKey === 'restaurant') {
+    return Object.freeze({
+      packId: 'restaurant',
+      title: 'Restaurant Pack may fit this business',
+      description: 'Review its requirements and current readiness before deciding whether to enable it.',
+    });
+  }
+  return null;
+}
+
+export function buildEcosystemDiscoveryModel(surface = discoverPlatformSurface(), templateKey = config.businessTemplate) {
   const capabilities = (Array.isArray(surface?.capabilities) ? surface.capabilities : [])
     .map(item => ({
       capability: String(item.capability || ''),
@@ -29,6 +41,7 @@ export function buildEcosystemDiscoveryModel(surface = discoverPlatformSurface()
   return Object.freeze({
     capabilities: Object.freeze(capabilities.map(Object.freeze)),
     integrations: Object.freeze(integrations.map(Object.freeze)),
+    packRecommendation: buildBusinessTemplatePackRecommendation(templateKey),
     sellerRegistration: 'UNAVAILABLE',
     execution: 'none',
     persistence: 'none',
@@ -55,6 +68,11 @@ export function renderEcosystemDiscovery(containerId = 'marketEcosystemDiscovery
   if (!root) return;
   const model = buildEcosystemDiscoveryModel();
   const canConfigure = hasPermission(currentStaff?.role || 'staff', 'settings:configure');
+  const recommendation = model.packRecommendation;
+  const recommendationMarkup = recommendation
+    ? '<p class="hint" data-pack-recommendation="' + escapeHtml(recommendation.packId) + '"><strong>'
+      + escapeHtml(recommendation.title) + '</strong><br>' + escapeHtml(recommendation.description) + '</p>'
+    : '';
   root.innerHTML = `
     <section class="ecosystem-discovery" aria-labelledby="ecosystem-discovery-title">
       <header>
@@ -75,6 +93,7 @@ export function renderEcosystemDiscovery(containerId = 'marketEcosystemDiscovery
         <article class="ecosystem-discovery-card">
           <h4>Packs</h4>
           <p>Review requirements and canonical lifecycle in Pack settings. Discovery does not configure or activate a Pack.</p>
+          ${recommendationMarkup}
           <button type="button" data-ecosystem-action="packs" ${canConfigure ? '' : 'disabled'}>Review Pack readiness</button>
           ${canConfigure ? '' : '<small>Settings access is not available for the current role.</small>'}
         </article>
