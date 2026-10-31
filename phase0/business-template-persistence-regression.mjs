@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -96,6 +96,15 @@ try {
   );
   assert.equal((await store.getBusinessTemplateConfig(tenant.chatId)).templateKey, 'repair');
   assert.equal(auditCount(), 2);
+
+  // Tenant-switch regression: a successful canonical read with no template
+  // must clear a prior tenant's cached selection, while transport failures keep
+  // the existing retry/recovery behavior in the catch path.
+  const tenantSource = await readFile(new URL('../app/src/auth/tenant.js', import.meta.url), 'utf8');
+  assert.match(tenantSource, /if \(!pending \|\| pending\.status !== 'pending' \|\| String\(pending\.tenantId\) !== chatId \|\| typeof pending\.templateKey !== 'string'\) \{[\s\S]*?delete next\.businessTemplate;[\s\S]*?delete next\.businessTemplateSchemaVersion;[\s\S]*?delete next\.businessTemplateTenantId;[\s\S]*?setConfig\(next\);[\s\S]*?saveJSON\(STORAGE_KEYS\.config, next\);/,
+    'missing canonical template must clear stale tenant-scoped cache');
+  assert.match(tenantSource, /catch \{\s*\/\/ Offline or an older backend: retain the tenant-scoped marker for a later retry\./,
+    'offline failures must retain retry recovery instead of clearing cached state');
 
   console.log('Business template persistence regression: PASS');
   console.log('Template upsert + audit atomicity: PASS');
