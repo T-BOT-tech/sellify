@@ -136,6 +136,26 @@ await assert.rejects(
 
 
 const manualCalls = [];
+const manualIdempotency = new Map();
+const manualStore = {
+  getPaymentIdempotency: async (_chatId, key, commandType) => manualIdempotency.get(commandType + ':' + key) || null,
+  insertPaymentIdempotency: async (_chatId, input) => {
+    const key = input.commandType + ':' + input.idempotencyKey;
+    if (manualIdempotency.has(key)) throw Object.assign(new Error('duplicate idempotency key'), { code: 'IDEMPOTENCY_KEY_REUSE' });
+    const row = { ...input, request_hash: input.requestHash, response_status: input.responseStatus, response_json: input.responseJson };
+    manualIdempotency.set(key, row);
+    return row;
+  },
+  completePaymentIdempotency: async (_chatId, input) => {
+    const key = input.commandType + ':' + input.idempotencyKey;
+    const row = manualIdempotency.get(key);
+    assert.ok(row, 'manual review reservation must exist before completion');
+    assert.equal(row.request_hash, input.requestHash);
+    row.response_status = 200;
+    row.response_json = input.responseJson;
+    return row;
+  },
+};
 const manualEvidence = {
   id: 'evidence-manual-1',
   paymentId: payment.id,
@@ -144,7 +164,7 @@ const manualEvidence = {
   evidenceType: 'SMS_TEXT',
   rawPayload: { text: 'untrusted SMS must not be copied into verification rawResult' },
 };
-const manualStore = {
+Object.assign(manualStore, {
   getPayment: async () => payment,
   getPaymentIntent: async () => ({ id: 'intent-1', amountMinor: 12500, currency: 'ETB' }),
   listPaymentAccounts: async () => [{ id: 'account-1', providerId: 'mpesa', accountIdentifier: '600001' }],
@@ -161,7 +181,7 @@ const manualStore = {
     manualCalls.push(['commit', input]);
     return { ...payment, state: input.targetState };
   },
-};
+});
 const manualCore = new PaymentCore({
   store: manualStore,
   invariantGate: {
@@ -178,7 +198,7 @@ const manualCore = new PaymentCore({
     }),
   },
 });
-const manualResult = await manualCore.reviewManualEvidence({
+const manualReviewCommand = {
   chatId: 'canonical-chat',
   paymentId: payment.id,
   evidenceId: manualEvidence.id,
@@ -192,7 +212,8 @@ const manualResult = await manualCore.reviewManualEvidence({
   observedReference: 'BANK-REF-42',
   observedAt: '2026-10-31T18:00:00.000Z',
   actor: { userId: 'reviewer-1' },
-});
+};
+const manualResult = await manualCore.reviewManualEvidence(manualReviewCommand);
 assert.equal(manualResult.finalized, true);
 assert.equal(manualResult.payment.state, 'VERIFIED');
 const manualVerificationCall = manualCalls.find(call => call[0] === 'verification');
@@ -205,6 +226,15 @@ assert.equal(manualCommit[1].targetState, 'VERIFIED');
 assert.equal(manualCommit[1].idempotencyKey, 'manual-review-idempotency-1');
 assert.equal(manualCommit[1].decision.decisionSource, 'PAYMENT_CORE');
 assert.equal(manualCommit[1].decision.metadata.reviewerId, 'reviewer-1');
+const manualCallCountAfterFirstReview = manualCalls.length;
+const manualReplay = await manualCore.reviewManualEvidence(manualReviewCommand);
+assert.deepEqual(manualReplay, manualResult, 'identical manual-review retry must return the stored result');
+assert.equal(manualCalls.length, manualCallCountAfterFirstReview,
+  'identical retry must not create another verification, decision, or financial commit');
+await assert.rejects(
+  manualCore.reviewManualEvidence({ ...manualReviewCommand, reason: 'Different payload under the same key' }),
+  error => error?.code === 'IDEMPOTENCY_KEY_REUSE'
+);
 
 await assert.rejects(
   manualCore.reviewManualEvidence({

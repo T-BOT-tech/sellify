@@ -7519,6 +7519,21 @@ export async function insertPaymentDecision(chatId, input = {}, actor = null) {
     }
   }
   const id = String(input.id || crypto.randomUUID()); const now = nowIso();
+  const existingDecision = db.prepare('SELECT * FROM payment_decisions WHERE id = ? AND organization_id = ?').get(id, organizationId);
+  if (existingDecision) {
+    const sameBinding = String(existingDecision.payment_id) === paymentId &&
+      String(existingDecision.payment_intent_id || '') === String(decisionIntentId || '') &&
+      String(existingDecision.evidence_id || '') === String(decisionEvidenceId || '') &&
+      String(existingDecision.verification_id || '') === String(decisionVerificationId || '') &&
+      String(existingDecision.decision || '').toUpperCase() === String(input.decision || '').toUpperCase() &&
+      String(existingDecision.target_state || '') === String(input.targetState || input.target_state || '');
+    if (!sameBinding) {
+      throw Object.assign(new Error('Decision id is already bound to a different payment review'), {
+        statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE',
+      });
+    }
+    return paymentDecisionFromRow(existingDecision);
+  }
   const decisionSource = String(input.decisionSource || input.decision_source || 'PAYMENT_CORE').trim().toUpperCase();
   if (decisionSource !== 'PAYMENT_CORE') {
     throw Object.assign(new Error('Payment decisions must originate from Payment Core'), {
@@ -7555,6 +7570,31 @@ export async function insertPaymentIdempotency(chatId, input = {}) {
     input.resourceType || input.resource_type || null, input.resourceId || input.resource_id || null, now, input.expiresAt || input.expires_at || null
   );
   return getPaymentIdempotency(chatId, input.idempotencyKey || input.idempotency_key, input.commandType || input.command_type);
+}
+export async function completePaymentIdempotency(chatId, input = {}) {
+  ensureDatabase();
+  const { organizationId } = await resolvePaymentContext(chatId);
+  const key = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  const commandType = String(input.commandType || input.command_type || '').trim();
+  const requestHash = String(input.requestHash || input.request_hash || '').trim();
+  if (!key || !commandType || !requestHash) {
+    throw Object.assign(new Error('Idempotency key, command type and request hash are required'), {
+      statusCode: 400, code: 'IDEMPOTENCY_CONTEXT_REQUIRED',
+    });
+  }
+  const result = db.prepare(`UPDATE payment_idempotency_keys
+    SET response_status = 200, response_json = ?, resource_type = COALESCE(?, resource_type),
+        resource_id = COALESCE(?, resource_id)
+    WHERE organization_id = ? AND idempotency_key = ? AND command_type = ? AND request_hash = ?`)
+    .run(String(input.responseJson ?? input.response_json ?? '{}'),
+      input.resourceType || input.resource_type || null, input.resourceId || input.resource_id || null,
+      organizationId, key, commandType, requestHash);
+  if (result.changes !== 1) {
+    throw Object.assign(new Error('Manual review idempotency reservation is missing or bound to another request'), {
+      statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE',
+    });
+  }
+  return getPaymentIdempotency(chatId, key, commandType);
 }
 export async function beginPaymentStatusQuery(chatId, input = {}) {
   ensureDatabase();

@@ -328,6 +328,47 @@ export class PaymentCore {
         statusCode: 400, code: 'MANUAL_PAYMENT_REVIEW_OUTCOME_INVALID',
       });
     }
+    const actorId = String(command.actor?.userId || command.actor?.id || '').trim() || null;
+    const normalizedReviewRequest = {
+      chatId, paymentId, evidenceId, outcome, reason,
+      attestation: command.attestation === true,
+      observedAmountMinor: command.observedAmountMinor ?? command.observed_amount_minor ?? null,
+      observedCurrency: String(command.observedCurrency || command.observed_currency || '').trim().toUpperCase(),
+      observedReceiverAccount: String(command.observedReceiverAccount || command.observed_receiver_account || '').trim(),
+      observedReference: String(command.observedReference || command.observed_reference || '').trim(),
+      observedTransactionId: String(command.observedTransactionId || command.observed_transaction_id || '').trim() || null,
+      observedAt: String(command.observedAt || command.observed_at || '').trim(),
+      actorId,
+    };
+    const requestHash = createHash('sha256').update(JSON.stringify(normalizedReviewRequest)).digest('hex');
+    if (typeof this.store.getPaymentIdempotency !== 'function' ||
+        typeof this.store.insertPaymentIdempotency !== 'function' ||
+        typeof this.store.completePaymentIdempotency !== 'function') {
+      throw Object.assign(new Error('Durable manual-review idempotency is unavailable'), {
+        statusCode: 503, code: 'MANUAL_PAYMENT_IDEMPOTENCY_UNAVAILABLE',
+      });
+    }
+    let reviewIdempotency = await this.store.getPaymentIdempotency(chatId, idempotencyKey, 'MANUAL_EVIDENCE_REVIEW');
+    if (reviewIdempotency && String(reviewIdempotency.request_hash || reviewIdempotency.requestHash || '') !== requestHash) {
+      throw Object.assign(new Error('Idempotency key was already used with a different manual review request'), {
+        statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE',
+      });
+    }
+    if (reviewIdempotency && Number(reviewIdempotency.response_status ?? reviewIdempotency.responseStatus) === 200) {
+      try { return JSON.parse(reviewIdempotency.response_json || reviewIdempotency.responseJson || '{}'); }
+      catch {
+        throw Object.assign(new Error('Stored manual-review replay response is invalid'), {
+          statusCode: 500, code: 'MANUAL_PAYMENT_REPLAY_RESPONSE_INVALID',
+        });
+      }
+    }
+    let reviewInitialState = null;
+    if (reviewIdempotency) {
+      try {
+        const pending = JSON.parse(reviewIdempotency.response_json || reviewIdempotency.responseJson || '{}');
+        reviewInitialState = String(pending.initialState || '').trim().toUpperCase() || null;
+      } catch {}
+    }
     if (typeof this.store.listPaymentEvidence !== 'function') {
       throw Object.assign(new Error('Canonical payment evidence lookup is unavailable'), {
         statusCode: 503, code: 'PAYMENT_EVIDENCE_UNAVAILABLE',
@@ -341,6 +382,32 @@ export class PaymentCore {
 
     const payment = await this.store.getPayment(chatId, paymentId);
     if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    if (!reviewIdempotency) {
+      try {
+        reviewIdempotency = await this.store.insertPaymentIdempotency(chatId, {
+          idempotencyKey,
+          commandType: 'MANUAL_EVIDENCE_REVIEW',
+          requestHash,
+          responseStatus: 102,
+          responseJson: JSON.stringify({ initialState: String(payment.state || '').trim().toUpperCase() }),
+          resourceType: 'payment',
+          resourceId: paymentId,
+        });
+        reviewInitialState = String(payment.state || '').trim().toUpperCase() || null;
+      } catch (error) {
+        reviewIdempotency = await this.store.getPaymentIdempotency(chatId, idempotencyKey, 'MANUAL_EVIDENCE_REVIEW');
+        if (!reviewIdempotency) throw error;
+        if (String(reviewIdempotency.request_hash || reviewIdempotency.requestHash || '') !== requestHash) {
+          throw Object.assign(new Error('Idempotency key was already used with a different manual review request'), {
+            statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE',
+          });
+        }
+        try {
+          const pending = JSON.parse(reviewIdempotency.response_json || reviewIdempotency.responseJson || '{}');
+          reviewInitialState = String(pending.initialState || '').trim().toUpperCase() || null;
+        } catch {}
+      }
+    }
     const intent = payment.paymentIntentId
       ? await this.store.getPaymentIntent(chatId, payment.paymentIntentId)
       : null;
@@ -442,8 +509,10 @@ export class PaymentCore {
     }, command.actor || null);
     const persistedVerification = persistedVerificationResult.verification || persistedVerificationResult;
 
+    const manualReviewDecisionId = 'manual-review-' + createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 32);
     if (!mayCommit) {
       const persistedDecision = await this.store.insertPaymentDecision(chatId, {
+        id: manualReviewDecisionId,
         paymentId,
         paymentIntentId: intent.id,
         evidenceId,
@@ -455,7 +524,7 @@ export class PaymentCore {
         decisionSource: 'PAYMENT_CORE',
         metadata: { reviewMode: 'manual', outcome, reason },
       }, command.actor || null);
-      return {
+      const reviewResult = {
         finalized: false,
         paymentStateMutated: false,
         financialEffect: false,
@@ -466,15 +535,21 @@ export class PaymentCore {
         decision: persistedDecision,
         invariants,
       };
+      await this.store.completePaymentIdempotency(chatId, {
+        idempotencyKey, commandType: 'MANUAL_EVIDENCE_REVIEW', requestHash,
+        responseJson: JSON.stringify(reviewResult), resourceType: 'payment', resourceId: paymentId,
+      });
+      return reviewResult;
     }
 
     const committed = await this.store.commitPaymentDecision(chatId, {
       paymentId,
-      expectedState: payment.state,
+      expectedState: reviewInitialState || payment.state,
       targetState: 'VERIFIED',
       idempotencyKey,
       verification: persistedVerification,
       decision: {
+        id: manualReviewDecisionId,
         paymentIntentId: intent.id,
         evidenceId,
         verificationId: persistedVerification.id,
@@ -494,7 +569,7 @@ export class PaymentCore {
       },
     }, command.actor || null);
 
-    return {
+    const reviewResult = {
       finalized: true,
       paymentStateMutated: true,
       financialEffect: true,
@@ -505,6 +580,11 @@ export class PaymentCore {
       decision,
       invariants,
     };
+    await this.store.completePaymentIdempotency(chatId, {
+      idempotencyKey, commandType: 'MANUAL_EVIDENCE_REVIEW', requestHash,
+      responseJson: JSON.stringify(reviewResult), resourceType: 'payment', resourceId: paymentId,
+    });
+    return reviewResult;
   }
 
   async submitEvidence(command = {}) {
