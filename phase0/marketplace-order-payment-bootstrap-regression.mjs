@@ -1,0 +1,216 @@
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { createServer as createNetServer } from 'node:net';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+const tempDir = await mkdtemp(path.join(os.tmpdir(), 'sellify-marketplace-payment-bootstrap-'));
+process.env.SELLIFY_DATA_DIR = tempDir;
+process.env.SELLIFY_DB_PATH = path.join(tempDir, 'sellify.sqlite');
+process.env.SELLIFY_BACKUP_DIR = path.join(tempDir, 'backups');
+process.env.NODE_ENV = 'test';
+
+let child;
+let output = '';
+const localValues = new Map();
+globalThis.localStorage = {
+  getItem(key) { return localValues.has(key) ? localValues.get(key) : null; },
+  setItem(key, value) { localValues.set(key, String(value)); },
+  removeItem(key) { localValues.delete(key); },
+  clear() { localValues.clear(); },
+};
+
+function makeElement() {
+  return {
+    style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+    children: [], className: '', innerHTML: '', textContent: '', value: '',
+    appendChild(node) { this.children.push(node); return node; },
+    insertBefore(node) { this.children.push(node); return node; },
+    remove() {}, setAttribute() {}, getAttribute() { return null; },
+    addEventListener() {}, removeEventListener() {}, querySelector() { return null; },
+    querySelectorAll() { return []; }, replaceChildren() { this.children = []; },
+    focus() {},
+  };
+}
+const essentialElements = new Map(['brandName', 'statusPill', 'statusText', 'queueBadge'].map(id => [id, makeElement()]));
+globalThis.document = {
+  documentElement: makeElement(),
+  body: makeElement(),
+  title: 'Sellify test',
+  getElementById(id) { return essentialElements.get(id) || null; },
+  querySelector() { return null; },
+  querySelectorAll() { return []; },
+  createElement() { return makeElement(); },
+};
+globalThis.window = {
+  document: globalThis.document,
+  localStorage: globalThis.localStorage,
+  location: { origin: 'http://127.0.0.1' },
+  addEventListener() {}, removeEventListener() {}, dispatchEvent() {},
+};
+globalThis.CustomEvent = class CustomEvent {
+  constructor(type, init = {}) { this.type = type; this.detail = init.detail; }
+};
+
+async function freePort() {
+  const server = createNetServer();
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const port = server.address().port;
+  await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  return port;
+}
+
+async function waitForHealth(baseUrl) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (child?.exitCode !== null && child?.exitCode !== undefined) {
+      throw new Error('Backend exited before payment bootstrap regression: ' + output);
+    }
+    try {
+      const response = await fetch(baseUrl + '/health');
+      if (response.ok) return;
+    } catch {}
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error('Backend did not become healthy: ' + output);
+}
+
+try {
+  const store = await import('../backend/lib/store-sqlite.js');
+  const user = await store.getOrCreateUserByTelegram(
+    'marketplace-payment-bootstrap-' + Date.now(),
+    'Marketplace Payment Bootstrap Regression',
+  );
+  const tenant = await store.createTenantForUser({
+    userId: user.id,
+    sellerName: 'Marketplace Payment Bootstrap Store',
+    businessType: 'retail',
+    country: 'ET',
+    currency: 'ETB',
+    timezone: 'Africa/Addis_Ababa',
+  });
+  const session = await store.createSession({
+    userId: user.id,
+    chatId: tenant.chatId,
+    deviceName: 'Marketplace payment bootstrap regression',
+  });
+  await store.saveCatalog(tenant.chatId, [{
+    id: 'bootstrap-service',
+    name: 'Bootstrap Service',
+    price: 2500,
+    item_type: 'service',
+    marketplace_listed: true,
+  }]);
+  const account = await store.createPaymentAccount(tenant.chatId, {
+    providerId: 'manual',
+    accountIdentifier: 'BOOTSTRAP-' + Date.now(),
+  }, { userId: user.id, deviceId: session.deviceId });
+  await store.upsertPaymentRoutingPolicy(tenant.chatId, {
+    channel: 'manual',
+    providerId: 'manual',
+    priority: 10,
+    status: 'ACTIVE',
+    currencies: ['ETB'],
+    requiredCapabilities: [],
+    reason: 'First merchant marketplace payment bootstrap regression',
+  }, { userId: user.id, deviceId: session.deviceId });
+
+  const port = await freePort();
+  const baseUrl = 'http://127.0.0.1:' + port;
+  window.location.origin = baseUrl;
+  child = spawn(process.execPath, ['backend/server.js'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      HOST: '127.0.0.1',
+      PORT: String(port),
+      CORS_ALLOWED_ORIGINS: baseUrl,
+      RATE_LIMIT_MAX_WRITES: '500',
+      RATE_LIMIT_MAX_READS: '1000',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  child.stdout.on('data', chunk => { output += chunk.toString(); });
+  child.stderr.on('data', chunk => { output += chunk.toString(); });
+  await waitForHealth(baseUrl);
+
+  const checkout = await store.createMarketplaceOrder({
+    buyer_id: 'marketplace-payment-bootstrap-buyer',
+    buyer_identity: 'marketplace-payment-bootstrap-buyer',
+    customer_name: 'Marketplace Bootstrap Buyer',
+    items: [{ seller_id: tenant.chatId, item_id: 'bootstrap-service', qty: 1 }],
+    idempotency_key: 'marketplace-payment-bootstrap-checkout',
+  });
+  const canonicalOrder = (await store.getOrders(tenant.chatId)).find(order =>
+    order.marketplace_order_id === checkout.marketplace_order_id);
+  assert.ok(canonicalOrder?.server_order_id, 'marketplace checkout must create the canonical seller order');
+
+  const state = await import('../app/src/state.js');
+  state.setConfig({
+    ...state.config,
+    chatId: tenant.chatId,
+    tenantId: tenant.chatId,
+    sessionToken: session.token,
+    sessionExpiresAt: session.expiresAt,
+    syncUrl: baseUrl,
+    currencyCode: 'ETB',
+    sellerName: tenant.sellerName,
+  });
+  state.setOrders([]);
+
+  const { syncOrders } = await import('../app/src/sync/orders.js');
+  await syncOrders();
+
+  const db = store.getDatabaseForTests();
+  const firstPayments = db.prepare(
+    'SELECT id, state, amount_minor, currency, order_id FROM payments WHERE organization_id = ? AND order_id = ?'
+  ).all(String(tenant.organizationId), String(canonicalOrder.server_order_id));
+  assert.equal(firstPayments.length, 1,
+    'pulling a marketplace seller order must create one canonical Payment Core payment when a route is eligible');
+  assert.equal(firstPayments[0].state, 'UNPAID',
+    'payment bootstrap must not infer buyer payment or verification from marketplace checkout');
+  assert.equal(Number(firstPayments[0].amount_minor), 2500);
+  assert.equal(firstPayments[0].currency, 'ETB');
+
+  const allocation = db.prepare(
+    'SELECT payment_id, status, amount_minor FROM marketplace_payment_allocations WHERE marketplace_order_id = ?'
+  ).get(String(checkout.marketplace_order_id));
+  assert.equal(allocation.payment_id, firstPayments[0].id,
+    'new Payment Core payment must link to the existing marketplace allocation');
+  assert.equal(Number(allocation.amount_minor), 2500);
+  const settlement = db.prepare(
+    'SELECT status FROM marketplace_settlements WHERE marketplace_order_id = ?'
+  ).get(String(checkout.marketplace_order_id));
+  assert.equal(settlement.status, 'PENDING',
+    'payment creation alone must not make marketplace settlement ready');
+
+  // A repeated server-order pull must reuse the existing canonical payment,
+  // not create another payment or allocation.
+  await syncOrders();
+  assert.equal(db.prepare(
+    'SELECT COUNT(*) AS count FROM payments WHERE organization_id = ? AND order_id = ?'
+  ).get(String(tenant.organizationId), String(canonicalOrder.server_order_id)).count, 1);
+  assert.equal(db.prepare(
+    'SELECT COUNT(*) AS count FROM marketplace_payment_allocations WHERE marketplace_order_id = ? AND payment_id IS NOT NULL'
+  ).get(String(checkout.marketplace_order_id)).count, 1);
+
+  console.log('Marketplace order → Payment Core bootstrap regression: PASS');
+  console.log('Canonical order pull creates one UNPAID payment, links allocation, preserves PENDING settlement, and reuses payment on repeat pull: PASS');
+} catch (error) {
+  console.error(error);
+  if (output) console.error('Backend output:\n' + output);
+  process.exitCode = 1;
+} finally {
+  if (child && child.exitCode === null) {
+    child.kill('SIGTERM');
+    await Promise.race([
+      new Promise(resolve => child.once('exit', resolve)),
+      new Promise(resolve => setTimeout(resolve, 3000)),
+    ]);
+    if (child.exitCode === null) child.kill('SIGKILL');
+  }
+  await rm(tempDir, { recursive: true, force: true });
+}
