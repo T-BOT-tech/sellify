@@ -9,9 +9,32 @@ const client = read('app/src/payments/client.js');
 const server = read('backend/server.js');
 const paymentProof = read('app/src/orders/payment-proof.js');
 
+const storeImportEnd = server.indexOf("from './lib/store-sqlite.js'");
+const storeImportStart = server.lastIndexOf('import {', storeImportEnd);
+assert.ok(storeImportStart >= 0 && storeImportEnd > storeImportStart);
+assert.match(server.slice(storeImportStart, storeImportEnd), /createPaymentWithIntent/,
+  'HTTP Payment Core must import the canonical payment-with-intent store operation');
+const paymentCoreStart = server.indexOf('const paymentCore = new PaymentCore');
+const paymentCoreStoreEnd = server.indexOf('providerRegistry:', paymentCoreStart);
+assert.ok(paymentCoreStart >= 0 && paymentCoreStoreEnd > paymentCoreStart);
+assert.match(server.slice(paymentCoreStart, paymentCoreStoreEnd), /createPaymentWithIntent/,
+  'Payment Core store adapter must wire the canonical payment-with-intent operation');
+
 assert.match(syncOrders, /ensurePaymentForSyncedOrder/);
 assert.match(syncOrders, /server_order_id: result\\.order_id/);
 assert.match(syncOrders, /await ensurePaymentForSyncedOrder\\(order\\)/);
+const pullStart = syncOrders.indexOf('async function pullServerOrders()');
+const pullEnd = syncOrders.indexOf('async function pullNewOrders()', pullStart);
+assert.ok(pullStart >= 0 && pullEnd > pullStart, 'server-order pull path must remain explicit');
+const serverOrderPull = syncOrders.slice(pullStart, pullEnd);
+assert.match(serverOrderPull, /order\\?\.is_marketplace/,
+  'server-origin marketplace orders must be recognized separately from local queued orders');
+assert.match(serverOrderPull, /getPaymentForOrder\\(serverOrderId\\)/,
+  'marketplace payment bootstrap must skip orders with an existing canonical payment');
+assert.match(serverOrderPull, /ensurePaymentForSyncedOrder\\(order\\)/,
+  'pulled marketplace orders without a payment must reuse the existing Payment Core bootstrap');
+assert.ok(serverOrderPull.indexOf('await refreshPaymentProjection()') < serverOrderPull.indexOf('ensurePaymentForSyncedOrder(order)'),
+  'payment bootstrap must inspect the refreshed canonical payment projection first');
 assert.match(syncOrders, /Canonical payment\\/status refresh deferred/);
 
 assert.match(projection, /listPayments\\(\\{ orderId: serverOrderId, limit: 10 \\}\\)/);
