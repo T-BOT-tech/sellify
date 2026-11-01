@@ -46,15 +46,14 @@ assert.match(catalogItemType, /p\?\.item_type \?\? p\?\.type/,
   'service identity must preserve canonical item_type and legacy type fallback');
 
 console.log('First-experience Home readiness regression: PASS');
-
 const actionStart = workspace.indexOf('export function getWorkspacePrimaryAction(');
-const actionEnd = workspace.indexOf('\\n}', actionStart);
+const actionEnd = workspace.indexOf('\n}', actionStart);
 assert.ok(actionStart >= 0 && actionEnd > actionStart, 'workspace must expose a pure first-action selector');
 const actionHelper = workspace.slice(actionStart, actionEnd + 2)
   .replace('export function getWorkspacePrimaryAction(', 'function getWorkspacePrimaryAction(');
 const actionContext = {};
 vm.createContext(actionContext);
-vm.runInContext(actionHelper + '\\nglobalThis.getWorkspacePrimaryAction = getWorkspacePrimaryAction;', actionContext);
+vm.runInContext(actionHelper + '\nglobalThis.getWorkspacePrimaryAction = getWorkspacePrimaryAction;', actionContext);
 const getWorkspacePrimaryAction = actionContext.getWorkspacePrimaryAction;
 assert.equal(getWorkspacePrimaryAction([]).tab, 'catalog',
   'a merchant without catalog offerings must be directed to create the first offering');
@@ -64,7 +63,7 @@ assert.equal(getWorkspacePrimaryAction([{ item_type: 'service' }]).tab, 'order',
   'a merchant with a service offering must be able to proceed to order-taking');
 assert.equal(getWorkspacePrimaryAction([{ item_type: 'product' }]).title, 'Take an order',
   'a merchant with an existing product offering must be directed to selling');
-assert.match(workspace, /const primaryAction = getWorkspacePrimaryAction\\(products\\)/,
+assert.match(workspace, /const primaryAction = getWorkspacePrimaryAction\(products\)/,
   'the live workspace must derive its primary action from the current catalog projection');
 assert.match(workspace, /Manage offerings/,
   'the catalog action must use product/service-neutral language');
