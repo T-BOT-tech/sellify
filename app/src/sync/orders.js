@@ -44,6 +44,25 @@ async function pullServerOrders() {
     saveJSON(STORAGE_KEYS.orders, orders);
     renderAll();
     await refreshPaymentProjection();
+
+    // Marketplace checkout creates canonical seller orders directly on the
+    // backend, so those orders never pass through the local queued-order sync
+    // acknowledgement below. Bootstrap Payment Core only when a pulled
+    // marketplace order has no canonical payment projection yet. The existing
+    // helper remains responsible for route eligibility, idempotent creation,
+    // and status-query authority; no payment success is inferred here.
+    const marketplaceOrders = incoming.filter(order =>
+      order?.is_marketplace && String(order?.server_order_id || order?.serverOrderId || '').trim());
+    for (const order of marketplaceOrders) {
+      const serverOrderId = String(order.server_order_id || order.serverOrderId).trim();
+      if (getPaymentForOrder(serverOrderId)) continue;
+      try {
+        await ensurePaymentForSyncedOrder(order);
+      } catch (error) {
+        console.warn('[Payment] Marketplace order payment bootstrap deferred:', error?.code || error?.message || error);
+      }
+    }
+
     renderAll();
   } catch (e) {
     console.log('[Sync] Pulling server order feed failed (will retry next sync):', e);
