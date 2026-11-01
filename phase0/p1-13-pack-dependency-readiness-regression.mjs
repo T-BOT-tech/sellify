@@ -1,6 +1,34 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { readinessFor } from '../app/src/authorization/pack-readiness.js';
+
+// The readiness projection imports shared browser modules, so install a small
+// deterministic DOM/storage shim before loading that graph in Node.
+globalThis.window = {
+  __APP_CONFIG__: {},
+  matchMedia: () => ({ addEventListener() {} }),
+  addEventListener() {},
+  removeEventListener() {},
+  dispatchEvent() {},
+};
+globalThis.localStorage = {
+  getItem() { return null; },
+  setItem() {},
+  removeItem() {},
+};
+const rootStyle = { removeProperty() {}, setProperty() {} };
+const rootElement = { style: rootStyle, setAttribute() {} };
+globalThis.document = {
+  documentElement: rootElement,
+  head: { appendChild() {} },
+  querySelector() { return null; },
+  querySelectorAll() { return []; },
+  getElementById() { return null; },
+  addEventListener() {},
+  removeEventListener() {},
+  createElement() { return { setAttribute() {}, addEventListener() {}, remove() {} }; },
+};
+globalThis.getComputedStyle = () => ({ getPropertyValue() { return ''; } });
+const { readinessFor } = await import('../app/src/authorization/pack-readiness.js');
 
 const source = fs.readFileSync(new URL('../app/src/authorization/pack-readiness.js', import.meta.url), 'utf8');
 assert.match(source, /DEPENDENCY_UNAVAILABLE/);
