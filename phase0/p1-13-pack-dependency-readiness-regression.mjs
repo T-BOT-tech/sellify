@@ -21,7 +21,11 @@ globalThis.document = {
   documentElement: rootElement,
   head: { appendChild() {} },
   querySelector() { return null; },
-  createElement() { return { setAttribute() {} }; },
+  querySelectorAll() { return []; },
+  getElementById() { return null; },
+  addEventListener() {},
+  removeEventListener() {},
+  createElement() { return { setAttribute() {}, addEventListener() {}, remove() {} }; },
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue() { return ''; } });
 const { readinessFor } = await import('../app/src/authorization/pack-readiness.js');
