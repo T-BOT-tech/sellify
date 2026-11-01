@@ -6,6 +6,9 @@ import fs from 'node:fs';
 globalThis.window = {
   __APP_CONFIG__: {},
   matchMedia: () => ({ addEventListener() {} }),
+  addEventListener() {},
+  removeEventListener() {},
+  dispatchEvent() {},
 };
 globalThis.localStorage = {
   getItem() { return null; },
