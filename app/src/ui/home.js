@@ -28,7 +28,7 @@ export function renderSellerHome() {
         <h2>${business}</h2>
         <p>${products.length > 0 ? t('catalogHasItems') : t('firstSaleAddProduct')}</p>
       </div>
-      <div class="seller-home-status ${navigator.onLine ? 'online' : 'offline'}">${navigator.onLine ? 'Online' : 'Offline'}</div>
+      <div class="seller-home-status ${navigator.onLine ? 'online' : 'offline'}">${navigator.onLine ? 'Online — setup readiness not assessed' : 'Offline — setup readiness unknown'}</div>
     </div>
 
     <div class="seller-home-metrics">
