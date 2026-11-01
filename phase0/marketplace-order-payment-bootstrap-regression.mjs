@@ -184,8 +184,8 @@ try {
   assert.equal(firstPayments[0].currency, 'ETB');
 
   const initialSummary = await getOrderPaymentSummary(canonicalOrder.server_order_id);
-  assert.equal(initialSummary.status, 'UNPAID');
-  assert.equal(Number(initialSummary.outstandingMinor), 2500,
+  assert.equal(initialSummary.summary.status, 'UNPAID');
+  assert.equal(Number(initialSummary.summary.outstandingMinor), 2500,
     'canonical order payment summary must report the full obligation outstanding before verification');
 
   const payment = await store.getPayment(tenant.chatId, firstPayments[0].id);
@@ -284,9 +284,9 @@ try {
   'verified payment may make settlement ready, but does not claim it has settled');
 
   const verifiedSummary = await getOrderPaymentSummary(canonicalOrder.server_order_id);
-  assert.equal(verifiedSummary.status, 'PAID');
-  assert.equal(Number(verifiedSummary.verifiedMinor), 2500);
-  assert.equal(Number(verifiedSummary.outstandingMinor), 0,
+  assert.equal(verifiedSummary.summary.status, 'PAID');
+  assert.equal(Number(verifiedSummary.summary.verifiedMinor), 2500);
+  assert.equal(Number(verifiedSummary.summary.outstandingMinor), 0,
     'canonical order summary must reflect the Payment Core decision, not local UI inference');
 
   const refundPath = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
