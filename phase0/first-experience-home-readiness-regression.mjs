@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';\nimport vm from 'node:vm';
-import { readFile } from 'node:fs/promises';
+import assert from 'node:assert/strict';import { readFile } from 'node:fs/promises';
 
 const [legacyHome, workspace, inventory, catalogItemType] = await Promise.all([
   readFile(new URL('../app/src/ui/home.js', import.meta.url), 'utf8'),
