@@ -382,10 +382,31 @@ try {
   assert.equal(secondTemplateResponse.status, 200,
     'second business must accept its own canonical business-template configuration');
 
+  // Confirm the server has actually attached both tenants to the same
+  // authenticated identity before testing the UI projection.
+  const membershipsResponse = await fetch(baseUrl + '/auth/tenants', {
+    headers: { Authorization: 'Bearer ' + config.sessionToken },
+  });
+  assert.equal(membershipsResponse.status, 200, 'authenticated owner must be able to list business memberships');
+  const membershipsBody = await membershipsResponse.json();
+  assert.equal((membershipsBody.memberships || []).length, 2,
+    'both canonical businesses must be active memberships for the same identity');
+
   // Exercise the actual Settings switcher and its server-issued session
   // exchange, then verify that the first business projection is not carried
-  // into the second tenant.
+  // into the second tenant. Capture the actual UI request as well as the
+  // server response so a swallowed best-effort error cannot hide a failure.
+  const tenantListResponsePromise = page.waitForResponse(response =>
+    response.url().endsWith('/auth/tenants') && response.request().method() === 'GET',
+    { timeout: 15000 },
+  );
   await page.locator('#gearSettingsBtn').click();
+  const tenantListResponse = await tenantListResponsePromise;
+  assert.equal(tenantListResponse.status(), 200,
+    'Settings tenant switcher must successfully retrieve authenticated memberships');
+  const tenantListBody = await tenantListResponse.json();
+  assert.equal((tenantListBody.memberships || []).length, 2,
+    'Settings tenant switcher must receive both canonical memberships');
   await page.locator('#tenantSwitcherControls').waitFor({ state: 'visible', timeout: 15000 });
   await page.locator('#tenantSwitcherSelect').selectOption(secondChatId);
   await Promise.all([
