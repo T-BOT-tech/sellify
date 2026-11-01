@@ -28,11 +28,11 @@ function recoveryFor(row, online) {
 }
 
 export function getPackRecoveryModel({ online = navigator.onLine } = {}) {
-  return getPackReadinessModel().map(row => Object.freeze({
+  return getPackReadinessModel().then(rows => rows.map(row => Object.freeze({
     ...row,
     recovery: recoveryFor(row, online),
     online: Boolean(online),
-  }));
+  })));
 }
 
 export function renderPackRecoveryPanel(containerId = 'packRecoveryPanel') {
@@ -46,8 +46,12 @@ export function renderPackRecoveryPanel(containerId = 'packRecoveryPanel') {
     el.innerHTML = '<div class="hint">PERMISSION_DENIED — Pack recovery evidence is restricted to an authorized administrator.</div>';
     return;
   }
-  const rows = getPackRecoveryModel();
-  el.innerHTML = `
+  const activeChatId = String(config.chatId);
+  const activeSessionToken = String(config.sessionToken);
+  getPackRecoveryModel().then(rows => {
+    // Do not let a slow readiness response repaint Settings after a tenant switch.
+    if (String(config.chatId) !== activeChatId || String(config.sessionToken) !== activeSessionToken) return;
+    el.innerHTML = `
     <div class="settings-section-label" style="margin-top:16px;">Pack recovery &amp; failure handling</div>
     <div class="hint">Read-only recovery guidance. Retry/recovery never implies Pack activation, authorization, or canonical business success.</div>
     <div style="overflow:auto;margin-top:10px;">
@@ -67,5 +71,9 @@ export function renderPackRecoveryPanel(containerId = 'packRecoveryPanel') {
       </table>
     </div>
     <div class="hint" style="margin-top:10px;"><strong>Boundary:</strong> configuration failure, dependency failure, offline/UNKNOWN, and authorization denial remain distinct. Canonical server confirmation is required before any business mutation is considered successful.</div>
-  `;
+    `;
+  }).catch(() => {
+    if (String(config.chatId) !== activeChatId || String(config.sessionToken) !== activeSessionToken) return;
+    el.innerHTML = '<div class="settings-section-label" style="margin-top:16px;">Pack recovery &amp; failure handling</div><div class="hint">UNKNOWN — canonical Pack readiness could not be reconciled.</div>';
+  });
 }
