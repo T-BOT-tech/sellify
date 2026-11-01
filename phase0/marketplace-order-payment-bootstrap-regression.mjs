@@ -41,6 +41,8 @@ globalThis.document = {
   getElementById(id) { return essentialElements.get(id) || null; },
   querySelector() { return null; },
   querySelectorAll() { return []; },
+  addEventListener() {},
+  removeEventListener() {},
   createElement() { return makeElement(); },
 };
 globalThis.window = {
