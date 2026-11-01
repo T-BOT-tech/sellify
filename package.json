@@ -450,7 +450,8 @@
     "test:gap-2-inventory-exactly-once": "node phase0/gap-2-inventory-exactly-once-regression.mjs",
     "test:offline-outbox-browser-runtime": "node phase0/offline-outbox-browser-runtime.mjs",
     "test:outbox-localstorage-fallback-race": "node phase0/outbox-localstorage-fallback-race-regression.mjs",
-    "test:service-booking-operator-workspace": "node phase0/service-booking-operator-workspace-regression.mjs"
+    "test:service-booking-operator-workspace": "node phase0/service-booking-operator-workspace-regression.mjs",
+    "test:first-merchant-to-first-checkout": "node phase0/first-merchant-to-first-checkout-regression.mjs"
   },
   "engines": {
     "node": ">=24"
