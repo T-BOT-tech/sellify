@@ -167,7 +167,7 @@ try {
   const db = store.getDatabaseForTests();
   const firstPayments = db.prepare(
     'SELECT id, state, amount_minor, currency, order_id FROM payments WHERE organization_id = ? AND order_id = ?'
-  ).all(String(tenant.organizationId), String(canonicalOrder.server_order_id));
+  ).all(String(session.organizationId), String(canonicalOrder.server_order_id));
   assert.equal(firstPayments.length, 1,
     'pulling a marketplace seller order must create one canonical Payment Core payment when a route is eligible');
   assert.equal(firstPayments[0].state, 'UNPAID',
@@ -192,7 +192,7 @@ try {
   await syncOrders();
   assert.equal(db.prepare(
     'SELECT COUNT(*) AS count FROM payments WHERE organization_id = ? AND order_id = ?'
-  ).get(String(tenant.organizationId), String(canonicalOrder.server_order_id)).count, 1);
+  ).get(String(session.organizationId), String(canonicalOrder.server_order_id)).count, 1);
   assert.equal(db.prepare(
     'SELECT COUNT(*) AS count FROM marketplace_payment_allocations WHERE marketplace_order_id = ? AND payment_id IS NOT NULL'
   ).get(String(checkout.marketplace_order_id)).count, 1);
