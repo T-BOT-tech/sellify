@@ -59,6 +59,13 @@ function currentRole() {
   return String(currentStaff?.role || 'staff').toLowerCase();
 }
 
+export function getWorkspacePrimaryAction(offerings = []) {
+  const hasOfferings = Array.isArray(offerings) && offerings.length > 0;
+  return Object.freeze(hasOfferings
+    ? { tab: 'order', title: 'Take an order', description: 'Start a new sale' }
+    : { tab: 'catalog', title: 'Add your first offering', description: 'Create a product or service before taking an order' });
+}
+
 export function renderWorkspace() {
   const root = document.getElementById('sellerHome');
   if (!root) return;
@@ -77,6 +84,7 @@ export function renderWorkspace() {
   const state = connectivityState();
   const business = config.sellerName || t('setupBusiness');
   const role = roleLabel(currentRole());
+  const primaryAction = getWorkspacePrimaryAction(products);
 
   root.innerHTML = `
     <section class="fux-workspace" aria-labelledby="fux-workspace-title">
@@ -117,11 +125,11 @@ export function renderWorkspace() {
           <h3 id="fux-actions-title">Next actions</h3>
         </div>
         <div class="fux-action-list">
-          <button class="fux-action primary" type="button" onclick="switchTab('order')">
-            <strong>Take an order</strong><small>Start a new sale</small>
+          <button class="fux-action primary" type="button" onclick="switchTab('${primaryAction.tab}')">
+            <strong>${primaryAction.title}</strong><small>${primaryAction.description}</small>
           </button>
           <button class="fux-action" type="button" onclick="switchTab('catalog')">
-            <strong>Manage catalog</strong><small>${products.length} products</small>
+            <strong>Manage offerings</strong><small>${products.length} offerings</small>
           </button>
           <button class="fux-action" type="button" onclick="switchTab('queue')">
             <strong>Review work</strong><small>Orders and synchronization</small>
