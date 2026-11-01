@@ -454,7 +454,8 @@
     "test:first-merchant-to-first-checkout": "node phase0/first-merchant-to-first-checkout-regression.mjs",
     "test:first-experience-onboarding-browser": "node phase0/first-experience-onboarding-browser-regression.mjs",
     "test:marketplace-order-payment-bootstrap": "node phase0/marketplace-order-payment-bootstrap-regression.mjs",
-    "test:p1-13": "node phase0/p1-13-pack-dependency-readiness-regression.mjs"
+    "test:p1-13": "node phase0/p1-13-pack-dependency-readiness-regression.mjs",
+    "test:p1-14": "node phase0/p1-14-pack-recovery-regression.mjs"
   },
   "engines": {
     "node": ">=24"
