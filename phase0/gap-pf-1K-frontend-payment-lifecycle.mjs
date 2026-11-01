@@ -19,6 +19,21 @@ const paymentCoreStoreEnd = server.indexOf('providerRegistry:', paymentCoreStart
 assert.ok(paymentCoreStart >= 0 && paymentCoreStoreEnd > paymentCoreStart);
 assert.match(server.slice(paymentCoreStart, paymentCoreStoreEnd), /createPaymentWithIntent/,
   'Payment Core store adapter must wire the canonical payment-with-intent operation');
+const paymentCoreStoreAdapter = server.slice(paymentCoreStart, paymentCoreStoreEnd);
+const requiredHttpStoreOperations = [
+  'getOrderPaymentSummary',
+  'getPaymentRefundByIdempotencyKey',
+  'getPaymentRefunds',
+  'createPaymentRefundRequest',
+  'finalizePaymentRefund',
+  'certifyPaymentProviderCapability',
+];
+for (const operation of requiredHttpStoreOperations) {
+  assert.match(server.slice(storeImportStart, storeImportEnd), new RegExp('\\\\b' + operation + '\\\\b'),
+    'HTTP server must import Payment Core store operation ' + operation);
+  assert.match(paymentCoreStoreAdapter, new RegExp('\\\\b' + operation + '\\\\b'),
+    'Payment Core adapter must wire store operation ' + operation);
+}
 
 assert.match(syncOrders, /ensurePaymentForSyncedOrder/);
 assert.match(syncOrders, /server_order_id: result\\.order_id/);
