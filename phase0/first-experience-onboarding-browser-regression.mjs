@@ -146,10 +146,19 @@ try {
   const failedRequests = [];
   const badResponses = [];
   const consoleErrors = [];
+  let selectTenantResponseStatus = null;
+  let selectTenantResponseBodyPromise = null;
   page.on('pageerror', error => pageErrors.push(error.stack || error.message));
   page.on('requestfailed', request => failedRequests.push(request.url() + ' :: ' + (request.failure()?.errorText || 'request failed')));
   page.on('response', response => {
     if (response.status() >= 400) badResponses.push(response.status() + ' ' + response.url());
+    if (new URL(response.url()).pathname === '/auth/select-tenant'
+      && response.request().method() === 'POST') {
+      selectTenantResponseStatus = response.status();
+      // Read the response body immediately: switchActiveTenant reloads the
+      // page as soon as its own fetch has consumed this response.
+      selectTenantResponseBodyPromise = response.json().catch(error => ({ __readError: error.message }));
+    }
   });
   page.on('console', message => {
     if (message.type() === 'error') consoleErrors.push(message.text());
@@ -439,19 +448,17 @@ try {
   assert.ok(renderedTenantOptions.some(option => option.value === secondChatId),
     'Settings tenant switcher must include the second business');
   await page.locator('#tenantSwitcherSelect').selectOption(secondChatId);
-  const selectTenantResponsePromise = page.waitForResponse(response =>
-    new URL(response.url()).pathname === '/auth/select-tenant'
-      && response.request().method() === 'POST',
-    { timeout: 15000 },
-  );
   await Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }),
     page.locator('#tenantSwitcherControls button').click(),
   ]);
-  const selectTenantResponse = await selectTenantResponsePromise;
-  assert.equal(selectTenantResponse.status(), 200,
+  assert.equal(selectTenantResponseStatus, 200,
     'Settings switcher must exchange the current session for a server-issued second-tenant session');
-  const selectTenantBody = await selectTenantResponse.json();
+  assert.ok(selectTenantResponseBodyPromise,
+    'Settings switcher must issue the canonical /auth/select-tenant request');
+  const selectTenantBody = await selectTenantResponseBodyPromise;
+  assert.ok(!selectTenantBody.__readError,
+    'the canonical tenant-selection response body must be captured before reload: ' + (selectTenantBody.__readError || ''));
   assert.ok(selectTenantBody.session?.token && selectTenantBody.session?.expiresAt,
     'tenant selection must return a token and expiry for the second tenant');
   const secondActiveConfig = await readPersistedBrowserConfig(page);
