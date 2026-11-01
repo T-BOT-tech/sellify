@@ -45,4 +45,17 @@ assert.match(catalogItemType, /export function isServiceCatalogItem\(p\)/,
 assert.match(catalogItemType, /p\?\.item_type \?\? p\?\.type/,
   'service identity must preserve canonical item_type and legacy type fallback');
 
-console.log('First-experience Home readiness regression: PASS');
+assert.ok(workspace.includes('export function getWorkspacePrimaryAction('),
+  'workspace must expose a catalog-driven primary action selector');
+assert.ok(workspace.includes("tab: 'catalog', title: 'Add your first offering'"),
+  'an empty catalog must direct the merchant to add the first offering');
+assert.ok(workspace.includes("tab: 'order', title: 'Take an order'"),
+  'a non-empty catalog must direct the merchant to take an order');
+assert.ok(workspace.includes('const primaryAction = getWorkspacePrimaryAction(products)'),
+  'the live workspace must derive its primary action from the current catalog projection');
+assert.ok(workspace.includes("onclick=\"switchTab('${primaryAction.tab}')\""),
+  'the primary action must navigate to the selected next step');
+assert.ok(workspace.includes('Manage offerings'),
+  'the catalog action must use product/service-neutral language');
+
+console.log('First-experience Home readiness and first-offering activation regression: PASS');
