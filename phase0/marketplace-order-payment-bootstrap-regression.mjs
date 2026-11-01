@@ -289,6 +289,92 @@ try {
   assert.equal(Number(verifiedSummary.summary.outstandingMinor), 0,
     'canonical order summary must reflect the Payment Core decision, not local UI inference');
 
+  const paymentPath = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/payments/' + encodeURIComponent(payment.id);
+  const settlementInput = {
+    idempotencyKey: 'marketplace-provider-settlement-1',
+    grossAmountMinor: 2500,
+    providerFeeMinor: 25,
+    sellifyFeeMinor: 25,
+    currency: 'ETB',
+    reason: 'Marketplace payment provider settlement regression.',
+  };
+  const settlementResponse = await fetch(paymentPath + '/settlement', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + session.token,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': settlementInput.idempotencyKey,
+    },
+    body: JSON.stringify(settlementInput),
+  });
+  assert.equal(settlementResponse.status, 200, 'canonical Payment Core settlement creation must succeed over HTTP');
+  const settlementBody = await settlementResponse.json();
+  assert.equal(settlementBody.settlement.status, 'PENDING');
+  assert.equal(Number(settlementBody.settlement.grossAmountMinor), 2500);
+  assert.equal(Number(settlementBody.settlement.providerFeeMinor), 25);
+  assert.equal(Number(settlementBody.settlement.sellifyFeeMinor), 25);
+  assert.equal(Number(settlementBody.settlement.netAmountMinor), 2450);
+  assert.equal((await store.getPayment(tenant.chatId, payment.id)).state, 'VERIFIED',
+    'settlement creation must not mutate payment verification');
+
+  const settlementReplayResponse = await fetch(paymentPath + '/settlement', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + session.token,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': settlementInput.idempotencyKey,
+    },
+    body: JSON.stringify(settlementInput),
+  });
+  assert.equal(settlementReplayResponse.status, 200);
+  const settlementReplay = await settlementReplayResponse.json();
+  assert.equal(settlementReplay.duplicate, true);
+  assert.equal(settlementReplay.settlement.id, settlementBody.settlement.id,
+    'settlement creation replay must return the same canonical settlement');
+
+  const ledgerBeforeSettlementFinalize = await store.listPaymentLedger(tenant.chatId, payment.id);
+  const finalizeSettlementResponse = await fetch(paymentPath + '/settlement/finalize', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + session.token,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      settlementId: settlementBody.settlement.id,
+      status: 'SETTLED',
+      settlementReference: 'SELLIFY-SETTLEMENT-' + settlementBody.settlement.id,
+      providerSettlementReference: 'PROVIDER-SETTLEMENT-' + settlementBody.settlement.id,
+      reason: 'Provider settlement independently confirmed for regression.',
+    }),
+  });
+  assert.equal(finalizeSettlementResponse.status, 200,
+    'explicit provider settlement confirmation must use the canonical HTTP operation');
+  const finalizedSettlement = await finalizeSettlementResponse.json();
+  assert.equal(finalizedSettlement.settlement.status, 'SETTLED');
+  assert.equal(finalizedSettlement.financialEffect, false,
+    'settlement confirmation records evidence; it does not claim Sellify moved funds');
+  assert.equal(finalizedSettlement.paymentStateMutated, false);
+  assert.equal((await store.getPayment(tenant.chatId, payment.id)).state, 'VERIFIED',
+    'provider settlement confirmation must not rewrite the payment decision');
+  const ledgerAfterSettlementFinalize = await store.listPaymentLedger(tenant.chatId, payment.id);
+  assert.deepEqual(
+    ledgerAfterSettlementFinalize.map(entry => entry.id),
+    ledgerBeforeSettlementFinalize.map(entry => entry.id),
+    'settlement confirmation must not add or rewrite payment confirmation ledger entries',
+  );
+  const settlementHistoryResponse = await fetch(paymentPath + '/settlement', {
+    headers: { Authorization: 'Bearer ' + session.token },
+  });
+  assert.equal(settlementHistoryResponse.status, 200);
+  const settlementHistory = await settlementHistoryResponse.json();
+  assert.equal(settlementHistory.settlements?.length, 1);
+  assert.equal(settlementHistory.settlements[0].status, 'SETTLED');
+  assert.equal(db.prepare(
+    'SELECT status FROM marketplace_settlements WHERE marketplace_order_id = ?'
+  ).get(String(checkout.marketplace_order_id)).status, 'READY',
+  'provider settlement must not imply that the marketplace seller payout is settled');
+
   const refundPath = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
     + '/payments/' + encodeURIComponent(payment.id) + '/refund';
   const refundResponse = await fetch(refundPath, {
@@ -343,7 +429,8 @@ try {
 
   console.log('Marketplace order → Payment Core bootstrap regression: PASS');
   console.log('Canonical order pull creates one UNPAID Payment Core payment and links marketplace allocation: PASS');
-  console.log('SMS evidence remains unverified until authorized manual review; Payment Core verification, allocation, settlement readiness, and review idempotency: PASS');
+  console.log('SMS evidence remains unverified until authorized manual review; Payment Core verification and allocation: PASS');
+  console.log('Provider settlement HTTP create/replay/finalize/history preserves payment ledger and does not imply marketplace payout completion: PASS');
 } catch (error) {
   console.error(error);
   if (output) console.error('Backend output:\n' + output);
