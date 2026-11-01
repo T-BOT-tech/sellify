@@ -195,11 +195,27 @@ try {
   ).get(String(created.session.organizationId), String(locationId), 'first-sale-item');
   assert.equal(Number(balance.quantity), 4, 'canonical stock balance must reflect one completed checkout');
 
-  const payments = await store.listPayments(chatId);
-  assert.ok(payments.length > 0, 'checkout must create canonical payment state for the order');
-  assert.ok(payments.every(payment =>
-    !['VERIFIED', 'RECONCILED'].includes(String(payment.state || '').toUpperCase())),
-  'checkout alone must not claim payment verification or reconciliation without payment evidence');
+  const paymentAllocation = db.prepare(
+    'SELECT payment_id, amount_minor, currency, status FROM marketplace_payment_allocations WHERE marketplace_order_id = ?'
+  ).get(String(checkoutBody.marketplace_order_id));
+  assert.ok(paymentAllocation, 'checkout must create the canonical marketplace payment allocation');
+  assert.equal(paymentAllocation.payment_id, null,
+    'checkout must not fabricate a Payment Core payment before payment initiation');
+  assert.equal(paymentAllocation.status, 'UNPAID',
+    'new checkout allocation must remain unpaid until canonical payment processing advances it');
+  assert.equal(Number(paymentAllocation.amount_minor), 2500,
+    'payment allocation amount must match the canonical checkout total');
+  assert.equal(paymentAllocation.currency, 'ETB',
+    'payment allocation currency must match the seller country configuration');
+
+  const settlement = db.prepare(
+    'SELECT status, amount_minor, currency FROM marketplace_settlements WHERE marketplace_order_id = ?'
+  ).get(String(checkoutBody.marketplace_order_id));
+  assert.ok(settlement, 'checkout must create the canonical pending settlement record');
+  assert.equal(settlement.status, 'PENDING',
+    'checkout must not represent an unsettled order as settled');
+  assert.equal(Number(settlement.amount_minor), 2500);
+  assert.equal(settlement.currency, 'ETB');
 
   console.log('First merchant-to-first-checkout HTTP journey: PASS');
   console.log('Canonical onboarding → template → catalog persistence → checkout replay → order/payment/inventory evidence: PASS');
