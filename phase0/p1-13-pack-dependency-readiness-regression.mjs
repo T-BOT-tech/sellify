@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { readinessFor } from '../app/src/authorization/pack-readiness.js';
 
 const source = fs.readFileSync(new URL('../app/src/authorization/pack-readiness.js', import.meta.url), 'utf8');
 assert.match(source, /DEPENDENCY_UNAVAILABLE/);
@@ -15,6 +16,20 @@ assert.match(source, /hasExecutableJourney/);
 assert.match(source, /ENTRY_EXECUTABLE/);
 assert.match(source, /ENTRY_UNRESOLVED/);
 assert.match(source, /workspaceTab/);
+
+const lifecycleProjectionPack = { core_dependencies: ['inventory'], ui_entry_points: ['inventory'] };
+assert.equal(readinessFor(lifecycleProjectionPack, { enabled: true }, {
+  lifecycle: { state: 'RECOVERY_REQUIRED' },
+  readiness: { state: 'UNKNOWN', active: false },
+}), 'RECOVERY_REQUIRED', 'canonical recovery lifecycle state must not collapse to generic UNKNOWN');
+assert.equal(readinessFor(lifecycleProjectionPack, { enabled: true }, {
+  lifecycle: { state: 'UPGRADE_BLOCKED' },
+  readiness: { state: 'UNKNOWN', active: false },
+}), 'UPGRADE_BLOCKED', 'canonical upgrade-blocked lifecycle state must remain visible in readiness projection');
+assert.equal(readinessFor(lifecycleProjectionPack, { enabled: true }, {
+  lifecycle: { state: 'DEPENDENCY_BLOCKED' },
+  readiness: { state: 'UNKNOWN', active: false },
+}), 'DEPENDENCY_UNAVAILABLE', 'canonical dependency-blocked lifecycle state must remain visible');
 
 const settings = fs.readFileSync(new URL('../app/src/ui/settings.js', import.meta.url), 'utf8');
 assert.match(settings, /renderPackReadinessPanel/);
