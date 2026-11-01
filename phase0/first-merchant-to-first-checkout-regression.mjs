@@ -128,11 +128,17 @@ try {
   // Seed opening stock through the existing inventory ledger. The sale must
   // flow through marketplace checkout and canonical inventory movement logic.
   const locations = await store.listOrganizationLocations(chatId);
-  const location = locations.find(item => item.is_default) || locations[0];
-  assert.ok(location?.id, 'new merchant must have a canonical default inventory location');
-  await store.recordInventoryMovement(chatId, {
+  let locationId = locations?.find(item => item.code === 'DEFAULT')?.id;
+  if (!locationId) {
+    const createdLocation = await store.createOrganizationLocation(chatId, {
+      code: 'DEFAULT', name: 'Default Inventory Location', type: 'STORE',
+    });
+    locationId = createdLocation.id;
+  }
+  assert.ok(locationId, 'new merchant must have a canonical default inventory location');
+  await store.appendInventoryMovement(chatId, {
     productId: 'first-sale-item',
-    locationId: String(location.id),
+    locationId: String(locationId),
     quantity: 5,
     movementType: 'OPENING_BALANCE',
     referenceType: 'first-merchant-sale-regression',
@@ -186,7 +192,7 @@ try {
   assert.equal(saleMovements, 1, 'first checkout must decrement stock exactly once despite replay');
   const balance = db.prepare(
     'SELECT COALESCE(SUM(quantity), 0) AS quantity FROM inventory_movements WHERE organization_id = ? AND location_id = ? AND product_id = ?'
-  ).get(String(created.session.organizationId), String(location.id), 'first-sale-item');
+  ).get(String(created.session.organizationId), String(locationId), 'first-sale-item');
   assert.equal(Number(balance.quantity), 4, 'canonical stock balance must reflect one completed checkout');
 
   const payments = await store.listPayments(chatId);
