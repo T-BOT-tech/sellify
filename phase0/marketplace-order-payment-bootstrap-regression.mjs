@@ -164,6 +164,11 @@ try {
   state.setOrders([]);
 
   const { syncOrders } = await import('../app/src/sync/orders.js');
+  const {
+    submitPaymentEvidence,
+    listPaymentEvidence,
+    submitManualPaymentEvidenceReview,
+  } = await import('../app/src/payments/client.js');
   await syncOrders();
 
   const db = store.getDatabaseForTests();
@@ -189,6 +194,73 @@ try {
   assert.equal(settlement.status, 'PENDING',
     'payment creation alone must not make marketplace settlement ready');
 
+  const payment = await store.getPayment(tenant.chatId, firstPayments[0].id);
+  assert.equal(payment.state, 'UNPAID');
+  assert.ok(payment.paymentIntentId, 'Payment Core bootstrap must expose its canonical intent');
+  const evidenceReference = 'MARKETPLACE-RECEIPT-' + Date.now();
+  const submitted = await submitPaymentEvidence({
+    paymentId: payment.id,
+    paymentIntentId: payment.paymentIntentId,
+    providerId: payment.providerId,
+    channel: 'sms',
+    evidenceType: 'SMS_TEXT',
+    externalReference: evidenceReference,
+    payload: { text: 'Payment received ETB 25.00. Reference ' + evidenceReference },
+  });
+  assert.equal(submitted.status, 'RECEIVED');
+  assert.equal(submitted.verificationStatus, 'NOT_PERFORMED');
+  assert.equal(submitted.paymentStateMutated, false);
+  const evidenceRows = await listPaymentEvidence(payment.id);
+  const evidence = evidenceRows.find(row => row.id === submitted.evidence?.id);
+  assert.ok(evidence, 'merchant evidence list must expose the submitted evidence on the canonical payment');
+  assert.equal(evidence.status, 'RECEIVED');
+  assert.equal((await store.getPayment(tenant.chatId, payment.id)).state, 'UNPAID',
+    'SMS evidence intake alone must not mutate canonical payment state');
+
+  const reviewInput = {
+    outcome: 'CONFIRM',
+    reason: 'Independently matched the receiving account and transaction reference.',
+    attestation: true,
+    observedAmountMinor: 2500,
+    observedCurrency: 'ETB',
+    observedReceiverAccount: account.accountIdentifier,
+    observedReference: evidenceReference,
+    observedAt: new Date().toISOString(),
+  };
+  const review = await submitManualPaymentEvidenceReview(
+    payment.id,
+    evidence.id,
+    reviewInput,
+    { idempotencyKey: 'marketplace-order-manual-review-1' },
+  );
+  assert.equal(review.finalized, true,
+    'authorized manual review must finalize through the canonical Payment Core decision path');
+  assert.equal(review.payment?.state, 'VERIFIED');
+  assert.equal((await store.getPayment(tenant.chatId, payment.id)).state, 'VERIFIED');
+
+  const verifiedAllocation = db.prepare(
+    'SELECT payment_id, status FROM marketplace_payment_allocations WHERE marketplace_order_id = ?'
+  ).get(String(checkout.marketplace_order_id));
+  assert.equal(verifiedAllocation.payment_id, payment.id);
+  assert.equal(verifiedAllocation.status, 'ALLOCATED',
+    'only the canonical verified payment may allocate marketplace proceeds');
+  assert.equal(db.prepare(
+    'SELECT status FROM marketplace_settlements WHERE marketplace_order_id = ?'
+  ).get(String(checkout.marketplace_order_id)).status, 'READY',
+  'verified payment may make settlement ready, but does not claim it has settled');
+
+  const replayReview = await submitManualPaymentEvidenceReview(
+    payment.id,
+    evidence.id,
+    reviewInput,
+    { idempotencyKey: 'marketplace-order-manual-review-1' },
+  );
+  assert.equal(replayReview.finalized, true);
+  assert.equal(db.prepare(
+    'SELECT COUNT(*) AS count FROM payment_verifications WHERE payment_id = ?'
+  ).get(payment.id).count, 1,
+  'replaying manual review must not duplicate canonical payment verification');
+
   // A repeated server-order pull must reuse the existing canonical payment,
   // not create another payment or allocation.
   await syncOrders();
@@ -200,7 +272,8 @@ try {
   ).get(String(checkout.marketplace_order_id)).count, 1);
 
   console.log('Marketplace order → Payment Core bootstrap regression: PASS');
-  console.log('Canonical order pull creates one UNPAID payment, links allocation, preserves PENDING settlement, and reuses payment on repeat pull: PASS');
+  console.log('Canonical order pull creates one UNPAID Payment Core payment and links marketplace allocation: PASS');
+  console.log('SMS evidence remains unverified until authorized manual review; Payment Core verification, allocation, settlement readiness, and review idempotency: PASS');
 } catch (error) {
   console.error(error);
   if (output) console.error('Backend output:\n' + output);
