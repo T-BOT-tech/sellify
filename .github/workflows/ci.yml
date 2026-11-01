@@ -107,6 +107,10 @@ jobs:
         run: npm run test:service-catalog-frontend-sync
       - name: First-experience ecosystem discovery regression
         run: npm run test:first-experience-ecosystem-discovery
+      - name: First-experience returning merchant regression
+        run: npm run test:first-experience-returning-merchant
+      - name: First-experience Home readiness regression
+        run: npm run test:first-experience-home-readiness
       - name: Country-pack onboarding integrity regression
         run: npm run test:country-pack-onboarding
 

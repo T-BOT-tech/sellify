@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [legacyHome, workspace, inventory] = await Promise.all([
+const [legacyHome, workspace, inventory, catalogItemType] = await Promise.all([
   readFile(new URL('../app/src/ui/home.js', import.meta.url), 'utf8'),
   readFile(new URL('../app/src/experience/workspace.js', import.meta.url), 'utf8'),
   readFile(new URL('../app/src/warehouse/inventory.js', import.meta.url), 'utf8'),
+  readFile(new URL('../app/src/warehouse/catalog-item-type.js', import.meta.url), 'utf8'),
 ]);
 
 assert.doesNotMatch(legacyHome, /Ready to sell/,
@@ -37,7 +38,11 @@ assert.match(workspace, /Server freshness metadata is not supplied\./,
   'the UI must not fabricate server freshness evidence');
 assert.match(inventory, /stock <= \(p\.reorder_point \|\| 0\)/,
   'low-stock projection must use the existing item reorder point');
-assert.match(inventory, /if \(p\?\.item_type === 'service'\) return false/,
-  'services must not be treated as physical stock');
+assert.match(inventory, /isServiceCatalogItem\(p\)/,
+  'inventory applicability must use the shared catalog item identity contract');
+assert.match(catalogItemType, /export function isServiceCatalogItem\(p\)/,
+  'the shared catalog identity contract must identify service items');
+assert.match(catalogItemType, /p\?\.item_type \?\? p\?\.type/,
+  'service identity must preserve canonical item_type and legacy type fallback');
 
 console.log('First-experience Home readiness regression: PASS');
