@@ -117,6 +117,8 @@ jobs:
         run: npm run test:first-experience-onboarding-browser
       - name: First-experience Home readiness regression
         run: npm run test:first-experience-home-readiness
+      - name: First-workspace catalog activation regression
+        run: npm run test:first-experience-workspace-activation
       - name: P1-13 Pack dependency readiness regression
         run: npm run test:p1-13
       - name: Country-pack onboarding integrity regression
