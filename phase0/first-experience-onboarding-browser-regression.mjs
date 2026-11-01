@@ -211,7 +211,12 @@ try {
   // than treating the first-run in-memory state as proof of persistence.
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 20000 });
   await page.locator('#onboardingModal').waitFor({ state: 'hidden', timeout: 15000 });
-  await page.waitForFunction(() => typeof window.switchTab === 'function', { timeout: 10000 });
+  try {
+    await page.waitForFunction(() => typeof window.switchTab === 'function', null, { timeout: 10000 });
+  } catch (error) {
+    throw new Error('Application bridge did not restore after reload. URL: ' + page.url()
+      + '; page errors: ' + pageErrors.join(' | ') + '; cause: ' + error.message);
+  }
   const restoredConfig = await page.evaluate(() => {
     try { return JSON.parse(localStorage.getItem('ledger_config') || '{}'); } catch { return {}; }
   });
