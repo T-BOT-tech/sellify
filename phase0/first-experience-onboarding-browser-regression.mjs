@@ -403,13 +403,30 @@ try {
 
   // Exercise the actual Settings switcher and its server-issued session
   // exchange, then verify that the first business projection is not carried
-  // into the second tenant. Capture the actual UI request as well as the
-  // server response so a swallowed best-effort error cannot hide a failure.
+  // into the second tenant. Assert both the canonical API membership state
+  // and the actual rendered Settings controls so swallowed errors cannot hide failure.
   await page.locator('#gearSettingsBtn').click();
-  await page.locator('#settingsModal.open').waitFor({ state: 'visible', timeout: 10000 });
+  try {
+    await page.locator('#settingsModal.open').waitFor({ state: 'visible', timeout: 10000 });
+  } catch (error) {
+    const settingsDiagnostics = await page.evaluate(() => ({
+      url: location.href,
+      button: document.getElementById('gearSettingsBtn')?.outerHTML,
+      openSettingsType: typeof window.openSettings,
+      modalClass: document.getElementById('settingsModal')?.className,
+      modalDisplay: document.getElementById('settingsModal') ? getComputedStyle(document.getElementById('settingsModal')).display : null,
+      tenantControlsDisplay: document.getElementById('tenantSwitcherControls')?.style.display,
+      bodyText: (document.body?.innerText || '').slice(0, 1600),
+    })).catch(e => ({ evaluateError: e.message }));
+    throw new Error('Settings did not open from its real header button. '
+      + 'page errors: ' + pageErrors.join(' | ')
+      + '; console errors: ' + consoleErrors.join(' | ')
+      + '; diagnostics: ' + JSON.stringify(settingsDiagnostics)
+      + '; cause: ' + error.message);
+  }
   // renderTenantSwitcher is intentionally best-effort in Settings. Waiting for
-  // its actual rendered control proves the browser request completed and the
-  // UI received both memberships; the canonical API count above independently
+  // its rendered control proves the browser request completed and the UI
+  // received both memberships; the canonical API count above independently
   // proves the server-side membership state.
   await page.locator('#tenantSwitcherControls').waitFor({ state: 'visible', timeout: 15000 });
   const renderedTenantOptions = await page.locator('#tenantSwitcherSelect option').evaluateAll(
