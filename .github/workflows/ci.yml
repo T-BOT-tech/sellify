@@ -119,6 +119,8 @@ jobs:
         run: npm run test:first-experience-home-readiness
       - name: P1-13 Pack dependency readiness regression
         run: npm run test:p1-13
+      - name: P1-14 Pack recovery regression
+        run: npm run test:p1-14
       - name: Country-pack onboarding integrity regression
         run: npm run test:country-pack-onboarding
 
