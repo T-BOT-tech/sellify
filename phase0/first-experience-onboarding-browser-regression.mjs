@@ -320,8 +320,8 @@ try {
   const restoredConfig = await readPersistedBrowserConfig(page);
   assert.equal(String(restoredConfig.chatId), String(config.chatId),
     'reload must restore the same canonical active tenant');
-  assert.equal(restoredConfig.sessionToken, config.sessionToken,
-    'reload must restore the authenticated tenant session');
+  assert.ok(restoredConfig.sessionToken,
+    'reload must restore an authenticated tenant session (the backend may rotate the device token)');
   assert.equal(restoredConfig.businessTemplate, 'retail-shop',
     'reload must retain the selected business template for the same tenant');
   await page.evaluate(() => window.switchTab('order'));
@@ -332,8 +332,17 @@ try {
 
   // Re-read canonical server state after the browser restart boundary; a
   // surviving local projection alone must not be mistaken for backend truth.
+  const restoredMembershipsResponse = await fetch(baseUrl + '/auth/tenants', {
+    headers: { Authorization: 'Bearer ' + restoredConfig.sessionToken },
+  });
+  assert.equal(restoredMembershipsResponse.status, 200,
+    'the session restored after reload must authenticate against the tenant membership API');
+  const restoredMemberships = await restoredMembershipsResponse.json();
+  assert.ok((restoredMemberships.memberships || []).some(membership => String(membership.chatId) === String(config.chatId)),
+    'the restored session must retain access to the same canonical tenant');
+
   const reloadedCatalog = await fetch(baseUrl + '/catalog/' + encodeURIComponent(config.chatId), {
-    headers: { Authorization: 'Bearer ' + config.sessionToken },
+    headers: { Authorization: 'Bearer ' + restoredConfig.sessionToken },
   });
   assert.equal(reloadedCatalog.status, 200, 'canonical catalog must remain readable after browser reload');
   const reloadedCatalogBody = await reloadedCatalog.json();
@@ -350,7 +359,7 @@ try {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: 'Bearer ' + config.sessionToken,
+      Authorization: 'Bearer ' + restoredConfig.sessionToken,
     },
     body: JSON.stringify({
       sellerName: 'Browser Second Business',
@@ -385,7 +394,7 @@ try {
   // Confirm the server has actually attached both tenants to the same
   // authenticated identity before testing the UI projection.
   const membershipsResponse = await fetch(baseUrl + '/auth/tenants', {
-    headers: { Authorization: 'Bearer ' + config.sessionToken },
+    headers: { Authorization: 'Bearer ' + restoredConfig.sessionToken },
   });
   assert.equal(membershipsResponse.status, 200, 'authenticated owner must be able to list business memberships');
   const membershipsBody = await membershipsResponse.json();
