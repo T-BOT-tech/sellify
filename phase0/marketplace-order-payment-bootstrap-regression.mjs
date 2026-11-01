@@ -33,7 +33,7 @@ function makeElement() {
     focus() {},
   };
 }
-const essentialElements = new Map(['brandName', 'statusPill', 'statusText', 'queueBadge'].map(id => [id, makeElement()]));
+const essentialElements = new Map(['brandName', 'statusPill', 'statusText', 'queueBadge', 'catalogList'].map(id => [id, makeElement()]));
 globalThis.document = {
   documentElement: makeElement(),
   body: makeElement(),
