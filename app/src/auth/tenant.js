@@ -456,7 +456,10 @@ export async function selectOnboardingTenant() {
     return;
   }
   await clearSharedTenantCaches();
-  persistAuth(data, data.membership);
+  const persistedAuth = persistAuth(data, data.membership);
+  if (!(await saveJSONAsync(STORAGE_KEYS.config, persistedAuth))) {
+    throw new Error('Could not durably save the selected business session before reloading.');
+  }
   await loadCanonicalTenantCurrency();
   await loadBusinessTemplateConfig();
   closeOnboarding();
