@@ -871,6 +871,12 @@ export async function submitStaffInvite() {
 // branch on getActivePlatform().id internally (or the exchange should move
 // onto the adapter itself, e.g. platform.silentAuth(request)), not before.
 export async function bootstrapTenantAuth() {
+  // IndexedDB is the primary store; hydrate the durable config before deciding
+  // whether a returning multi-tenant user needs to select a business again.
+  const persistedConfig = await loadJSONAsync(STORAGE_KEYS.config, null);
+  if (persistedConfig && typeof persistedConfig === 'object' && !Array.isArray(persistedConfig)) {
+    setConfig({ ...config, ...persistedConfig });
+  }
   if (config.sessionToken && config.sessionExpiresAt && Date.parse(config.sessionExpiresAt) > Date.now() + 30_000) {
     await loadCanonicalTenantCurrency();
     await loadBusinessTemplateConfig();
