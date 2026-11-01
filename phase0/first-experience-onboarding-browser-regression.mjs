@@ -439,12 +439,43 @@ try {
   assert.ok(renderedTenantOptions.some(option => option.value === secondChatId),
     'Settings tenant switcher must include the second business');
   await page.locator('#tenantSwitcherSelect').selectOption(secondChatId);
+  const selectTenantResponsePromise = page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/auth/select-tenant'
+      && response.request().method() === 'POST',
+    { timeout: 15000 },
+  );
   await Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }),
     page.locator('#tenantSwitcherControls button').click(),
   ]);
-  await page.locator('#onboardingModal').waitFor({ state: 'hidden', timeout: 15000 });
+  const selectTenantResponse = await selectTenantResponsePromise;
+  assert.equal(selectTenantResponse.status(), 200,
+    'Settings switcher must exchange the current session for a server-issued second-tenant session');
+  const selectTenantBody = await selectTenantResponse.json();
+  assert.ok(selectTenantBody.session?.token && selectTenantBody.session?.expiresAt,
+    'tenant selection must return a token and expiry for the second tenant');
   const secondActiveConfig = await readPersistedBrowserConfig(page);
+  const secondBootDiagnostics = await page.evaluate(() => {
+    let localConfig = {};
+    try { localConfig = JSON.parse(localStorage.getItem('ledger_config') || '{}'); } catch {}
+    const modal = document.getElementById('onboardingModal');
+    return {
+      onboardingDisplay: modal ? getComputedStyle(modal).display : 'missing',
+      onboardingStyle: modal?.getAttribute('style') || '',
+      localChatId: localConfig.chatId || '',
+      localSessionExpiresAt: localConfig.sessionExpiresAt || '',
+      localSessionTokenPresent: Boolean(localConfig.sessionToken),
+    };
+  });
+  assert.equal(String(secondActiveConfig.chatId), secondChatId,
+    'Settings switcher must persist the second canonical tenant before returning to the workspace');
+  assert.equal(secondActiveConfig.sessionToken, selectTenantBody.session.token,
+    'the persisted second-tenant session must be the exact server-issued token');
+  assert.equal(secondActiveConfig.sessionExpiresAt, selectTenantBody.session.expiresAt,
+    'the persisted second-tenant session expiry must match the server response');
+  assert.equal(secondBootDiagnostics.onboardingDisplay, 'none',
+    'a valid server-issued tenant session must keep the onboarding wizard closed after reload: '
+      + JSON.stringify(secondBootDiagnostics));
   assert.equal(String(secondActiveConfig.chatId), secondChatId,
     'Settings switcher must activate the second canonical tenant');
   assert.equal(secondActiveConfig.businessTemplate, 'repair',
