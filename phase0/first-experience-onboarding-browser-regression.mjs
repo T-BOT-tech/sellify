@@ -80,6 +80,9 @@ try {
       NODE_ENV: 'test',
       CORS_ALLOWED_ORIGINS: baseUrl,
       RATE_LIMIT_MAX_WRITES: '500',
+      // The real PWA loads hundreds of ES modules; the reload must not trip
+      // the backend's production per-IP read budget inside this isolated test.
+      RATE_LIMIT_MAX_READS: '5000',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
