@@ -61,6 +61,55 @@ async function waitForCatalogItem(baseUrl, chatId, token, itemName) {
   throw new Error('First catalog item was not persisted through browser sync; last HTTP status=' + lastStatus);
 }
 
+async function readPersistedBrowserConfig(page) {
+  return page.evaluate(async () => {
+    const fallback = () => {
+      try { return JSON.parse(localStorage.getItem('ledger_config') || '{}'); } catch { return {}; }
+    };
+    return new Promise(resolve => {
+      let settled = false;
+      const finish = value => {
+        if (settled) return;
+        settled = true;
+        resolve(value && typeof value === 'object' ? value : fallback());
+      };
+      const timer = setTimeout(() => finish(fallback()), 2000);
+      try {
+        const request = indexedDB.open('ledger_db', 1);
+        request.onerror = () => { clearTimeout(timer); finish(fallback()); };
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
+        };
+        request.onsuccess = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains('kv')) {
+            db.close();
+            clearTimeout(timer);
+            finish(fallback());
+            return;
+          }
+          const tx = db.transaction('kv', 'readonly');
+          const get = tx.objectStore('kv').get('ledger_config');
+          get.onsuccess = () => {
+            clearTimeout(timer);
+            db.close();
+            finish(get.result || fallback());
+          };
+          get.onerror = () => {
+            clearTimeout(timer);
+            db.close();
+            finish(fallback());
+          };
+        };
+      } catch {
+        clearTimeout(timer);
+        finish(fallback());
+      }
+    });
+  });
+}
+
 try {
   const store = await import('../backend/lib/store-sqlite.js');
   const user = await store.getOrCreateUserByTelegram(
@@ -268,9 +317,7 @@ try {
       + '; browser diagnostics: ' + JSON.stringify(diagnostics)
       + '; cause: ' + error.message);
   }
-  const restoredConfig = await page.evaluate(() => {
-    try { return JSON.parse(localStorage.getItem('ledger_config') || '{}'); } catch { return {}; }
-  });
+  const restoredConfig = await readPersistedBrowserConfig(page);
   assert.equal(String(restoredConfig.chatId), String(config.chatId),
     'reload must restore the same canonical active tenant');
   assert.equal(restoredConfig.sessionToken, config.sessionToken,
@@ -346,7 +393,7 @@ try {
     page.locator('#tenantSwitcherControls button').click(),
   ]);
   await page.locator('#onboardingModal').waitFor({ state: 'hidden', timeout: 15000 });
-  const secondActiveConfig = await page.evaluate(() => JSON.parse(localStorage.getItem('ledger_config') || '{}'));
+  const secondActiveConfig = await readPersistedBrowserConfig(page);
   assert.equal(String(secondActiveConfig.chatId), secondChatId,
     'Settings switcher must activate the second canonical tenant');
   assert.equal(secondActiveConfig.businessTemplate, 'repair',
@@ -372,7 +419,7 @@ try {
     page.locator('#tenantSwitcherControls button').click(),
   ]);
   await page.locator('#onboardingModal').waitFor({ state: 'hidden', timeout: 15000 });
-  const firstRestoredConfig = await page.evaluate(() => JSON.parse(localStorage.getItem('ledger_config') || '{}'));
+  const firstRestoredConfig = await readPersistedBrowserConfig(page);
   assert.equal(String(firstRestoredConfig.chatId), firstChatId,
     'switching back must restore the first canonical tenant');
   assert.equal(firstRestoredConfig.businessTemplate, 'retail-shop',
