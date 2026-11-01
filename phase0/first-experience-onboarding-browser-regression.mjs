@@ -396,18 +396,22 @@ try {
   // exchange, then verify that the first business projection is not carried
   // into the second tenant. Capture the actual UI request as well as the
   // server response so a swallowed best-effort error cannot hide a failure.
-  const tenantListResponsePromise = page.waitForResponse(response =>
-    response.url().endsWith('/auth/tenants') && response.request().method() === 'GET',
-    { timeout: 15000 },
-  );
   await page.locator('#gearSettingsBtn').click();
-  const tenantListResponse = await tenantListResponsePromise;
-  assert.equal(tenantListResponse.status(), 200,
-    'Settings tenant switcher must successfully retrieve authenticated memberships');
-  const tenantListBody = await tenantListResponse.json();
-  assert.equal((tenantListBody.memberships || []).length, 2,
-    'Settings tenant switcher must receive both canonical memberships');
+  await page.locator('#settingsModal.open').waitFor({ state: 'visible', timeout: 10000 });
+  // renderTenantSwitcher is intentionally best-effort in Settings. Waiting for
+  // its actual rendered control proves the browser request completed and the
+  // UI received both memberships; the canonical API count above independently
+  // proves the server-side membership state.
   await page.locator('#tenantSwitcherControls').waitFor({ state: 'visible', timeout: 15000 });
+  const renderedTenantOptions = await page.locator('#tenantSwitcherSelect option').evaluateAll(
+    options => options.map(option => ({ value: option.value, label: option.textContent })),
+  );
+  assert.equal(renderedTenantOptions.length, 2,
+    'Settings tenant switcher must render both canonical memberships');
+  assert.ok(renderedTenantOptions.some(option => option.value === firstChatId),
+    'Settings tenant switcher must include the first business');
+  assert.ok(renderedTenantOptions.some(option => option.value === secondChatId),
+    'Settings tenant switcher must include the second business');
   await page.locator('#tenantSwitcherSelect').selectOption(secondChatId);
   await Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }),
