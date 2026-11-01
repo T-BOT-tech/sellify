@@ -14,7 +14,7 @@ import { authHeaders as tenantAuthHeaders } from '../auth/tenant.js';
 import { applyStoreBranding } from '../ui/branding.js';
 import { t } from '../ui/i18n.js';
 import { renderAll } from '../ui/render.js';
-import { refreshPaymentProjection, ensurePaymentForSyncedOrder } from '../payments/projection.js';
+import { refreshPaymentProjection, ensurePaymentForSyncedOrder, getPaymentForOrder } from '../payments/projection.js';
 
 // Seller sync is authenticated with a tenant-scoped device session.
 // Tenant-wide API keys are not sent by the PWA.
