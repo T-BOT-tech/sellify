@@ -219,9 +219,17 @@ try {
   assert.equal(templateBody.businessTemplate?.templateKey, 'retail-shop',
     'selected template must persist on the canonical backend, not only in local UI state');
 
-  // Reload the real application in the same browser context. This exercises
-  // persisted device state and the returning-merchant auth bootstrap rather
-  // than treating the first-run in-memory state as proof of persistence.
+  // Complete the actual first-run journey before testing a returning session.
+  // The Done screen intentionally keeps onboarding open until the merchant
+  // chooses "Start selling"; a raw reload here would only reopen the wizard.
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }),
+    page.getByRole('button', { name: 'Start selling' }).click(),
+  ]);
+  await page.locator('#onboardingModal').waitFor({ state: 'hidden', timeout: 15000 });
+
+  // Reload once more in the same browser context. This independently exercises
+  // persisted device state and returning-merchant auth bootstrap.
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 20000 });
   await page.locator('#onboardingModal').waitFor({ state: 'hidden', timeout: 15000 });
   try {
