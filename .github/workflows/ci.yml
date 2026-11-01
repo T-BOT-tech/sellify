@@ -111,6 +111,8 @@ jobs:
         run: npm run test:first-experience-ecosystem-discovery
       - name: First-experience returning merchant regression
         run: npm run test:first-experience-returning-merchant
+      - name: First-experience onboarding browser regression
+        run: npm run test:first-experience-onboarding-browser
       - name: First-experience Home readiness regression
         run: npm run test:first-experience-home-readiness
       - name: Country-pack onboarding integrity regression
