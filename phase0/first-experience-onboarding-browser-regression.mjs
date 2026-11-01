@@ -278,9 +278,96 @@ try {
   assert.equal(reloadedItem.item_type, 'product');
   assert.equal(Number(reloadedItem.price), 2500);
 
-  assert.deepEqual(pageErrors, [], 'onboarding, reload, and returning-merchant flow must not throw uncaught errors');
-  console.log('First Experience browser onboarding → first catalog item: PASS');
-  console.log('Real backend tenant creation, template persistence, and catalog sync: PASS');
+  // Create a second business through the authenticated owner API contract.
+  // This creates a real membership for the same identity; no test-only
+  // membership insertion or direct database mutation is used.
+  const firstChatId = String(config.chatId);
+  const secondCreateResponse = await fetch(baseUrl + '/auth/tenants', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + config.sessionToken,
+    },
+    body: JSON.stringify({
+      sellerName: 'Browser Second Business',
+      businessType: 'services',
+      country: 'ET',
+      timezone: 'Africa/Addis_Ababa',
+      deviceName: 'First Experience multi-business regression',
+    }),
+  });
+  assert.equal(secondCreateResponse.status, 201,
+    'an authenticated owner must be able to create another business for the same identity');
+  const secondCreateBody = await secondCreateResponse.json();
+  const secondChatId = String(secondCreateBody.membership?.chatId || secondCreateBody.session?.chatId || '');
+  const secondSessionToken = String(secondCreateBody.session?.token || '');
+  assert.ok(secondChatId && secondChatId !== firstChatId, 'second business must have a distinct canonical tenant identity');
+  assert.ok(secondSessionToken, 'second business creation must issue a tenant-scoped session');
+
+  const secondTemplateResponse = await fetch(
+    baseUrl + '/tenants/' + encodeURIComponent(secondChatId) + '/business-template',
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + secondSessionToken,
+      },
+      body: JSON.stringify({ templateKey: 'repair' }),
+    },
+  );
+  assert.equal(secondTemplateResponse.status, 200,
+    'second business must accept its own canonical business-template configuration');
+
+  // Exercise the actual Settings switcher and its server-issued session
+  // exchange, then verify that the first business projection is not carried
+  // into the second tenant.
+  await page.locator('#gearSettingsBtn').click();
+  await page.locator('#tenantSwitcherControls').waitFor({ state: 'visible', timeout: 15000 });
+  await page.locator('#tenantSwitcherSelect').selectOption(secondChatId);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }),
+    page.locator('#tenantSwitcherControls button').click(),
+  ]);
+  await page.locator('#onboardingModal').waitFor({ state: 'hidden', timeout: 15000 });
+  const secondActiveConfig = await page.evaluate(() => JSON.parse(localStorage.getItem('ledger_config') || '{}'));
+  assert.equal(String(secondActiveConfig.chatId), secondChatId,
+    'Settings switcher must activate the second canonical tenant');
+  assert.equal(secondActiveConfig.businessTemplate, 'repair',
+    'switching must hydrate the second tenant template rather than retain the first tenant template');
+  await page.evaluate(() => window.switchTab('order'));
+  assert.equal(await page.locator('#productList').getByText('Browser First Product', { exact: true }).count(), 0,
+    'the first business product must not leak into the second business UI');
+  const secondCatalogResponse = await fetch(baseUrl + '/catalog/' + encodeURIComponent(secondChatId), {
+    headers: { Authorization: 'Bearer ' + secondActiveConfig.sessionToken },
+  });
+  assert.equal(secondCatalogResponse.status, 200, 'second tenant canonical catalog must be readable');
+  const secondCatalog = await secondCatalogResponse.json();
+  assert.equal((secondCatalog.products || []).some(product => product.name === 'Browser First Product'), false,
+    'the first business product must not exist in the second tenant canonical catalog');
+
+  // Switch back using the same real Settings UI and confirm first-tenant data
+  // and template are restored from their own canonical scope.
+  await page.locator('#gearSettingsBtn').click();
+  await page.locator('#tenantSwitcherControls').waitFor({ state: 'visible', timeout: 15000 });
+  await page.locator('#tenantSwitcherSelect').selectOption(firstChatId);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }),
+    page.locator('#tenantSwitcherControls button').click(),
+  ]);
+  await page.locator('#onboardingModal').waitFor({ state: 'hidden', timeout: 15000 });
+  const firstRestoredConfig = await page.evaluate(() => JSON.parse(localStorage.getItem('ledger_config') || '{}'));
+  assert.equal(String(firstRestoredConfig.chatId), firstChatId,
+    'switching back must restore the first canonical tenant');
+  assert.equal(firstRestoredConfig.businessTemplate, 'retail-shop',
+    'switching back must restore the first tenant template');
+  await page.evaluate(() => window.switchTab('order'));
+  await page.locator('#productList').getByText('Browser First Product', { exact: true })
+    .waitFor({ state: 'visible', timeout: 15000 });
+
+  assert.deepEqual(pageErrors, [], 'onboarding, reload, and multi-tenant switching must not throw uncaught errors');
+  console.log('First Experience browser onboarding → first catalog item → reload: PASS');
+  console.log('Real Settings tenant switching, session exchange, and tenant isolation: PASS');
+  console.log('Canonical template and catalog state restored independently per tenant: PASS');
 } catch (error) {
   console.error(error);
   if (output) console.error('Backend output:\n' + output);
