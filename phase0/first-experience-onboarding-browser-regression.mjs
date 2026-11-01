@@ -143,9 +143,54 @@ try {
   await page.locator('#onboardingAddOfferingButton').click();
   await page.locator('#onboardingDone').waitFor({ state: 'visible', timeout: 10000 });
 
-  const config = await page.evaluate(() => JSON.parse(localStorage.getItem('ledger_config') || '{}'));
-  assert.ok(config.chatId, 'onboarding UI must persist the canonical tenant identity');
-  assert.ok(config.sessionToken, 'onboarding UI must persist the issued tenant session');
+  const config = await page.evaluate(async () => {
+    const localFallback = () => {
+      try { return JSON.parse(localStorage.getItem('ledger_config') || '{}'); } catch { return {}; }
+    };
+    return await new Promise(resolve => {
+      let settled = false;
+      const finish = value => {
+        if (settled) return;
+        settled = true;
+        resolve(value && typeof value === 'object' ? value : localFallback());
+      };
+      const timer = setTimeout(() => finish(localFallback()), 2000);
+      try {
+        const request = indexedDB.open('ledger_db', 1);
+        request.onerror = () => { clearTimeout(timer); finish(localFallback()); };
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
+        };
+        request.onsuccess = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains('kv')) {
+            db.close();
+            clearTimeout(timer);
+            finish(localFallback());
+            return;
+          }
+          const tx = db.transaction('kv', 'readonly');
+          const get = tx.objectStore('kv').get('ledger_config');
+          get.onsuccess = () => {
+            clearTimeout(timer);
+            db.close();
+            finish(get.result || localFallback());
+          };
+          get.onerror = () => {
+            clearTimeout(timer);
+            db.close();
+            finish(localFallback());
+          };
+        };
+      } catch {
+        clearTimeout(timer);
+        finish(localFallback());
+      }
+    });
+  });
+  assert.ok(config.chatId, 'onboarding UI must persist the canonical tenant identity in IndexedDB/local fallback');
+  assert.ok(config.sessionToken, 'onboarding UI must persist the issued tenant session in IndexedDB/local fallback');
   assert.equal(config.businessTemplate, 'retail-shop', 'selected business template must remain in the active UI context');
 
   const item = await waitForCatalogItem(baseUrl, config.chatId, config.sessionToken, 'Browser First Product');
