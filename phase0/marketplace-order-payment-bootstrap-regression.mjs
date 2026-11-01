@@ -168,6 +168,7 @@ try {
     submitPaymentEvidence,
     listPaymentEvidence,
     submitManualPaymentEvidenceReview,
+    getOrderPaymentSummary,
   } = await import('../app/src/payments/client.js');
   await syncOrders();
 
@@ -182,6 +183,33 @@ try {
   assert.equal(Number(firstPayments[0].amount_minor), 2500);
   assert.equal(firstPayments[0].currency, 'ETB');
 
+  const initialSummary = await getOrderPaymentSummary(canonicalOrder.server_order_id);
+  assert.equal(initialSummary.summary.status, 'UNPAID');
+  assert.equal(Number(initialSummary.summary.outstandingMinor), 2500,
+    'canonical order payment summary must report the full obligation outstanding before verification');
+
+  const payment = await store.getPayment(tenant.chatId, firstPayments[0].id);
+  const unpaidRefundResponse = await fetch(
+    baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId) + '/payments/' + encodeURIComponent(payment.id) + '/refund',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + session.token,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': 'marketplace-unpaid-refund-guard',
+      },
+      body: JSON.stringify({
+        idempotencyKey: 'marketplace-unpaid-refund-guard',
+        amountMinor: 100,
+        currency: 'ETB',
+        reason: 'Regression: an unpaid payment must not be refunded.',
+      }),
+    },
+  );
+  assert.equal(unpaidRefundResponse.status, 409,
+    'refund command against an unpaid payment must fail closed through Payment Core');
+  assert.equal((await unpaidRefundResponse.json()).error?.code, 'PAYMENT_NOT_REFUNDABLE');
+
   const allocation = db.prepare(
     'SELECT payment_id, status, amount_minor FROM marketplace_payment_allocations WHERE marketplace_order_id = ?'
   ).get(String(checkout.marketplace_order_id));
@@ -194,7 +222,6 @@ try {
   assert.equal(settlement.status, 'PENDING',
     'payment creation alone must not make marketplace settlement ready');
 
-  const payment = await store.getPayment(tenant.chatId, firstPayments[0].id);
   assert.equal(payment.state, 'UNPAID');
   assert.ok(payment.paymentIntentId, 'Payment Core bootstrap must expose its canonical intent');
   const evidenceReference = 'MARKETPLACE-RECEIPT-' + Date.now();
@@ -255,6 +282,42 @@ try {
     'SELECT status FROM marketplace_settlements WHERE marketplace_order_id = ?'
   ).get(String(checkout.marketplace_order_id)).status, 'READY',
   'verified payment may make settlement ready, but does not claim it has settled');
+
+  const verifiedSummary = await getOrderPaymentSummary(canonicalOrder.server_order_id);
+  assert.equal(verifiedSummary.summary.status, 'PAID');
+  assert.equal(Number(verifiedSummary.summary.verifiedMinor), 2500);
+  assert.equal(Number(verifiedSummary.summary.outstandingMinor), 0,
+    'canonical order summary must reflect the Payment Core decision, not local UI inference');
+
+  const refundPath = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
+    + '/payments/' + encodeURIComponent(payment.id) + '/refund';
+  const refundResponse = await fetch(refundPath, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + session.token,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'marketplace-unsupported-refund-1',
+    },
+    body: JSON.stringify({
+      idempotencyKey: 'marketplace-unsupported-refund-1',
+      amountMinor: 100,
+      currency: 'ETB',
+      reason: 'Regression: manual provider does not execute automated refunds.',
+    }),
+  });
+  assert.equal(refundResponse.status, 200, 'unsupported provider refund must be recorded as an unknown outcome, not a financial success');
+  const refundBody = await refundResponse.json();
+  assert.equal(refundBody.supported, false);
+  assert.equal(refundBody.status, 'UNKNOWN');
+  assert.equal(refundBody.refund?.status, 'UNKNOWN');
+
+  const refundHistoryResponse = await fetch(refundPath, {
+    headers: { Authorization: 'Bearer ' + session.token },
+  });
+  assert.equal(refundHistoryResponse.status, 200, 'canonical refund history must be readable');
+  const refundHistory = await refundHistoryResponse.json();
+  assert.equal(refundHistory.refunds?.length, 1);
+  assert.equal(refundHistory.refunds[0].status, 'UNKNOWN');
 
   const replayReview = await submitManualPaymentEvidenceReview(
     payment.id,
