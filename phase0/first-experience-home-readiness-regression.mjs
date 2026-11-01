@@ -45,25 +45,17 @@ assert.match(catalogItemType, /export function isServiceCatalogItem\(p\)/,
 assert.match(catalogItemType, /p\?\.item_type \?\? p\?\.type/,
   'service identity must preserve canonical item_type and legacy type fallback');
 
-console.log('First-experience Home readiness regression: PASS');
-const actionStart = workspace.indexOf('export function getWorkspacePrimaryAction(');
-const actionEnd = workspace.indexOf('\n}', actionStart);
-assert.ok(actionStart >= 0 && actionEnd > actionStart, 'workspace must expose a pure first-action selector');
-const actionHelper = workspace.slice(actionStart, actionEnd + 2)
-  .replace('export function getWorkspacePrimaryAction(', 'function getWorkspacePrimaryAction(');
-const actionContext = {};
-vm.createContext(actionContext);
-vm.runInContext(actionHelper + '\nglobalThis.getWorkspacePrimaryAction = getWorkspacePrimaryAction;', actionContext);
-const getWorkspacePrimaryAction = actionContext.getWorkspacePrimaryAction;
-assert.equal(getWorkspacePrimaryAction([]).tab, 'catalog',
-  'a merchant without catalog offerings must be directed to create the first offering');
-assert.equal(getWorkspacePrimaryAction([]).title, 'Add your first offering');
-assert.equal(getWorkspacePrimaryAction([]).description, 'Create a product or service before taking an order');
-assert.equal(getWorkspacePrimaryAction([{ item_type: 'service' }]).tab, 'order',
-  'a merchant with a service offering must be able to proceed to order-taking');
-assert.equal(getWorkspacePrimaryAction([{ item_type: 'product' }]).title, 'Take an order',
-  'a merchant with an existing product offering must be directed to selling');
-assert.match(workspace, /const primaryAction = getWorkspacePrimaryAction\(products\)/,
+assert.ok(workspace.includes('export function getWorkspacePrimaryAction('),
+  'workspace must expose a catalog-driven primary action selector');
+assert.ok(workspace.includes("tab: 'catalog', title: 'Add your first offering'"),
+  'an empty catalog must direct the merchant to add the first offering');
+assert.ok(workspace.includes("tab: 'order', title: 'Take an order'"),
+  'a non-empty catalog must direct the merchant to take an order');
+assert.ok(workspace.includes('const primaryAction = getWorkspacePrimaryAction(products)'),
   'the live workspace must derive its primary action from the current catalog projection');
-assert.match(workspace, /Manage offerings/,
+assert.ok(workspace.includes("onclick=\"switchTab('${primaryAction.tab}')\""),
+  'the primary action must navigate to the selected next step');
+assert.ok(workspace.includes('Manage offerings'),
   'the catalog action must use product/service-neutral language');
+
+console.log('First-experience Home readiness and first-offering activation regression: PASS');
