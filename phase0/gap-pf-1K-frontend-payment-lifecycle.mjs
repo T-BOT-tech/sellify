@@ -28,10 +28,11 @@ const requiredHttpStoreOperations = [
   'finalizePaymentRefund',
   'certifyPaymentProviderCapability',
 ];
+const storeImportSource = server.slice(storeImportStart, storeImportEnd);
 for (const operation of requiredHttpStoreOperations) {
-  assert.match(server.slice(storeImportStart, storeImportEnd), new RegExp('\\\\b' + operation + '\\\\b'),
+  assert.ok(storeImportSource.includes(operation),
     'HTTP server must import Payment Core store operation ' + operation);
-  assert.match(paymentCoreStoreAdapter, new RegExp('\\\\b' + operation + '\\\\b'),
+  assert.ok(paymentCoreStoreAdapter.includes(operation),
     'Payment Core adapter must wire store operation ' + operation);
 }
 
