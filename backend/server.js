@@ -120,7 +120,7 @@ import {
   createServiceBooking, transitionServiceBooking, listServiceBookings,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
   createComplianceRequest, getComplianceRequest, listComplianceRequests, resolveComplianceRequest, buildComplianceExport,
-  listPaymentAccounts, createPaymentAccount, createPayment, createPaymentWithIntent, getPayment, getPaymentIdempotency, getPaymentIntent, listPayments, listPaymentLedger, listPaymentEvidence, listPaymentVerifications, listPaymentDecisions, reconcilePayment, recordPaymentReconciliation, listPaymentReconciliations, insertPaymentEvidence, insertProviderNotificationEvidence, getPaymentAccountForProviderNotification, resolvePaymentIntentForProviderEvidence, createPaymentConfirmationAttempt, updatePaymentConfirmationAttempt, getPaymentConfirmationAttempt, getPaymentConfirmationAttemptByProviderTransaction, insertPaymentVerification, insertPaymentDecision, commitPaymentDecision, beginPaymentStatusQuery, markPaymentStatusQueryProviderStarted, completePaymentStatusQuery, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
+  listPaymentAccounts, createPaymentAccount, createPayment, createPaymentWithIntent, getPayment, getPaymentIdempotency, insertPaymentIdempotency, updatePaymentIdempotencyProgress, completePaymentIdempotency, getPaymentIntent, listPayments, listPaymentLedger, listPaymentEvidence, listPaymentVerifications, listPaymentDecisions, reconcilePayment, recordPaymentReconciliation, listPaymentReconciliations, insertPaymentEvidence, insertProviderNotificationEvidence, getPaymentAccountForProviderNotification, resolvePaymentIntentForProviderEvidence, createPaymentConfirmationAttempt, updatePaymentConfirmationAttempt, getPaymentConfirmationAttempt, getPaymentConfirmationAttemptByProviderTransaction, insertPaymentVerification, insertPaymentDecision, commitPaymentDecision, beginPaymentStatusQuery, markPaymentStatusQueryProviderStarted, completePaymentStatusQuery, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
   listCustomerPricing, getCustomerPricing, upsertCustomerPricing, updateCustomerPricing,
   listQuotes, getQuote, createQuote, transitionQuote,
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, createPurchaseOrderFromProcurementAward, transitionPurchaseOrder,
@@ -169,6 +169,9 @@ const paymentCore = new PaymentCore({
   store: {
     getPayment,
     getPaymentIdempotency,
+    insertPaymentIdempotency,
+    updatePaymentIdempotencyProgress,
+    completePaymentIdempotency,
     getPaymentIntent,
     createPaymentWithIntent,
     listPaymentAccounts,

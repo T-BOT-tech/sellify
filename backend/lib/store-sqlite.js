@@ -7862,7 +7862,7 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
       const verificationEvidenceId = String(v.evidenceId || v.evidence_id || '').trim() || null;
       const verificationProviderId = String(v.providerId || v.provider_id || row.provider_id || '').trim().toLowerCase();
       if (!verificationEvidenceId) throw Object.assign(new Error('Decision verification requires evidenceId'), { statusCode: 409, code: 'VERIFICATION_EVIDENCE_REQUIRED' });
-      const evidenceRow = db.prepare('SELECT payment_id, payment_intent_id, provider_id, provider_transaction_id FROM payment_evidence WHERE id = ? AND organization_id = ?').get(verificationEvidenceId, organizationId);
+      const evidenceRow = db.prepare('SELECT payment_id, payment_intent_id, provider_id, provider_transaction_id, external_reference FROM payment_evidence WHERE id = ? AND organization_id = ?').get(verificationEvidenceId, organizationId);
       if (!evidenceRow) throw Object.assign(new Error('Decision verification evidence not found'), { statusCode: 409, code: 'VERIFICATION_EVIDENCE_NOT_FOUND' });
       if (String(evidenceRow.payment_id || '') !== paymentId || String(evidenceRow.payment_intent_id || '') !== verificationPaymentIntentId || String(evidenceRow.provider_id || '').toLowerCase() !== verificationProviderId) {
         throw Object.assign(new Error('Verification is not bound to the decision payment context'), { statusCode: 409, code: 'VERIFICATION_CONTEXT_MISMATCH' });
@@ -7907,7 +7907,7 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
           });
         }
 
-        const expectedReference = String(row.external_reference || '').trim();
+        const expectedReference = String(row.external_reference || evidenceRow.external_reference || '').trim();
         const observedReference = String(v.observedReference || v.observed_reference || '').trim();
         if (expectedReference && (!observedReference || expectedReference !== observedReference)) {
           throw Object.assign(new Error('Verification reference does not match payment obligation'), {
@@ -7917,28 +7917,41 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
 
         const observedTransactionId = String(v.observedTransactionId || v.observed_transaction_id || '').trim();
         const evidenceTransactionId = String(evidenceRow.provider_transaction_id || '').trim();
-        if (!observedTransactionId || !evidenceTransactionId || observedTransactionId !== evidenceTransactionId) {
+        const attestedManualReview = String(v.verifier || '') === 'payment-core.manual-review'
+          && String(v.verifierVersion || '').startsWith('manual-review-v1-')
+          && Array.isArray(v.reasonCodes)
+          && v.reasonCodes.includes('MANUAL_REVIEWER_ATTESTED');
+        // Caller-submitted SMS/receipt evidence commonly has no provider
+        // transaction ID. A trusted, explicitly attested manual review may
+        // still commit after the other financial invariants pass, but if
+        // either side has a transaction ID it must bind exactly as before.
+        const manualReviewWithoutTransactionIdentity = attestedManualReview
+          && !observedTransactionId && !evidenceTransactionId;
+        if (!manualReviewWithoutTransactionIdentity &&
+            (!observedTransactionId || !evidenceTransactionId || observedTransactionId !== evidenceTransactionId)) {
           throw Object.assign(new Error('Verification transaction identity is not bound to evidence'), {
             statusCode: 409, code: 'VERIFICATION_TRANSACTION_MISMATCH',
           });
         }
 
-        const reusedTransaction = db.prepare(`
-          SELECT id, payment_id
-          FROM payment_verifications
-          WHERE organization_id = ?
-            AND provider_id = ?
-            AND observed_transaction_id = ?
-            AND payment_id <> ?
-          ORDER BY created_at DESC
-          LIMIT 1
-        `).get(organizationId, verificationProviderId, observedTransactionId, paymentId);
-        if (reusedTransaction) {
-          throw Object.assign(new Error('Provider transaction identity is already bound to another payment'), {
-            statusCode: 409, code: 'PROVIDER_TRANSACTION_DUPLICATE',
-            paymentId: reusedTransaction.payment_id,
-            verificationId: reusedTransaction.id,
-          });
+        if (observedTransactionId && evidenceTransactionId) {
+          const reusedTransaction = db.prepare(`
+            SELECT id, payment_id
+            FROM payment_verifications
+            WHERE organization_id = ?
+              AND provider_id = ?
+              AND observed_transaction_id = ?
+              AND payment_id <> ?
+            ORDER BY created_at DESC
+            LIMIT 1
+          `).get(organizationId, verificationProviderId, observedTransactionId, paymentId);
+          if (reusedTransaction) {
+            throw Object.assign(new Error('Provider transaction identity is already bound to another payment'), {
+              statusCode: 409, code: 'PROVIDER_TRANSACTION_DUPLICATE',
+              paymentId: reusedTransaction.payment_id,
+              verificationId: reusedTransaction.id,
+            });
+          }
         }
       }
 
