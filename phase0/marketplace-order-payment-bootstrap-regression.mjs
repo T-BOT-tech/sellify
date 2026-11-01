@@ -168,8 +168,8 @@ try {
     submitPaymentEvidence,
     listPaymentEvidence,
     submitManualPaymentEvidenceReview,
+    getOrderPaymentSummary,
   } = await import('../app/src/payments/client.js');
-  const { refreshCanonicalOrderPaymentSummary } = await import('../app/src/payments/projection.js');
   await syncOrders();
 
   const db = store.getDatabaseForTests();
@@ -183,7 +183,7 @@ try {
   assert.equal(Number(firstPayments[0].amount_minor), 2500);
   assert.equal(firstPayments[0].currency, 'ETB');
 
-  const initialSummary = await refreshCanonicalOrderPaymentSummary(canonicalOrder.server_order_id);
+  const initialSummary = await getOrderPaymentSummary(canonicalOrder.server_order_id);
   assert.equal(initialSummary.status, 'UNPAID');
   assert.equal(Number(initialSummary.outstandingMinor), 2500,
     'canonical order payment summary must report the full obligation outstanding before verification');
@@ -283,7 +283,7 @@ try {
   ).get(String(checkout.marketplace_order_id)).status, 'READY',
   'verified payment may make settlement ready, but does not claim it has settled');
 
-  const verifiedSummary = await refreshCanonicalOrderPaymentSummary(canonicalOrder.server_order_id);
+  const verifiedSummary = await getOrderPaymentSummary(canonicalOrder.server_order_id);
   assert.equal(verifiedSummary.status, 'PAID');
   assert.equal(Number(verifiedSummary.verifiedMinor), 2500);
   assert.equal(Number(verifiedSummary.outstandingMinor), 0,
