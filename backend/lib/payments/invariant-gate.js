@@ -99,7 +99,13 @@ export class InvariantGate {
       required: true, available: receiverAvailable, expected: receiverExpected || null, observed: receiverObserved || null,
     }));
 
-    const referenceExpected = String(payment?.externalReference || '').trim();
+    // A manually attested review has no provider transaction identifier
+    // unless the submitted evidence already carries one. In that case the
+    // observed identifier must still bind exactly; otherwise the independent
+    // amount/currency/receiver/reference/time checks are the review contract.
+    const manualReviewAttested = verification?.rawResult?.source === 'authorized-manual-review'
+      && verification?.rawResult?.attested === true;
+    const referenceExpected = String(payment?.externalReference || evidence?.externalReference || '').trim();
     const referenceObserved = String(verification?.observedReference || '').trim();
     const referenceRequired = Boolean(referenceExpected);
     checks.push(check('REFERENCE_MATCH',
@@ -108,12 +114,20 @@ export class InvariantGate {
 
     const transactionObserved = String(verification?.observedTransactionId || '').trim();
     const evidenceTransaction = String(evidence?.providerTransactionId || '').trim();
-    checks.push(check('TRANSACTION_ID_PRESENT', Boolean(transactionObserved), {
-      required: true, observed: transactionObserved || null,
-    }));
+    const transactionBindingRequired = !manualReviewAttested || Boolean(evidenceTransaction);
+    const manualReviewWithoutProviderTransaction = manualReviewAttested && !evidenceTransaction;
+    checks.push(check('TRANSACTION_ID_PRESENT',
+      Boolean(transactionObserved) || manualReviewWithoutProviderTransaction, {
+        required: transactionBindingRequired, observed: transactionObserved || null,
+      }));
     checks.push(check('TRANSACTION_EVIDENCE_BINDING',
-      Boolean(transactionObserved && evidenceTransaction && transactionObserved === evidenceTransaction),
-      { required: true, expected: evidenceTransaction || null, observed: transactionObserved || null }));
+      Boolean(transactionObserved && evidenceTransaction && transactionObserved === evidenceTransaction)
+        || manualReviewWithoutProviderTransaction,
+      {
+        required: transactionBindingRequired,
+        expected: evidenceTransaction || null,
+        observed: transactionObserved || null,
+      }));
 
     checks.push(check('INTENT_NOT_EXPIRED',
       !paymentIntent?.expiresAt || new Date(paymentIntent.expiresAt).getTime() > new Date(now).getTime(),
