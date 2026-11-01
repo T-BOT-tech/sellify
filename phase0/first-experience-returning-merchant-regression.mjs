@@ -8,6 +8,12 @@ assert.match(tenantSource,
   /if \(config\.sessionToken && config\.sessionExpiresAt && Date\.parse\(config\.sessionExpiresAt\) > Date\.now\(\) \+ 30_000\) \{[\s\S]*?return \{ authenticated: true \};\s*\}/,
   'an unexpired tenant session must bypass first-run onboarding');
 assert.match(tenantSource,
+  /export async function bootstrapTenantAuth\(\) \{[\s\S]*?loadJSONAsync\(STORAGE_KEYS\.config, null\)[\s\S]*?setConfig\(\{ \.\.\.config, \.\.\.persistedConfig \}\);[\s\S]*?if \(config\.sessionToken/,
+  'returning-merchant bootstrap must hydrate IndexedDB-backed config before deciding whether to show onboarding');
+assert.match(tenantSource,
+  /export async function switchActiveTenant\(\)[\s\S]*?const persistedAuth = persistAuth\(data, data\.membership\);[\s\S]*?await saveJSONAsync\(STORAGE_KEYS\.config, persistedAuth\)[\s\S]*?window\.location\.reload\(\);/,
+  'tenant switching must durably persist the server-issued session before reloading');
+assert.match(tenantSource,
   /if \(data\.session && memberships\.length === 1\) \{[\s\S]*?persistAuth\(data, memberships\[0\]\);[\s\S]*?return \{ authenticated: true \};\s*\}/,
   'a Telegram user with exactly one authorized business must persist that membership and continue directly');
 assert.match(tenantSource,
