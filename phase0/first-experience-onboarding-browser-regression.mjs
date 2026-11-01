@@ -206,7 +206,40 @@ try {
   assert.equal(templateBody.businessTemplate?.templateKey, 'retail-shop',
     'selected template must persist on the canonical backend, not only in local UI state');
 
-  assert.deepEqual(pageErrors, [], 'onboarding and first-offering browser flow must not throw uncaught errors');
+  // Reload the real application in the same browser context. This exercises
+  // persisted device state and the returning-merchant auth bootstrap rather
+  // than treating the first-run in-memory state as proof of persistence.
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 20000 });
+  await page.locator('#onboardingModal').waitFor({ state: 'hidden', timeout: 15000 });
+  await page.waitForFunction(() => typeof window.switchTab === 'function', { timeout: 10000 });
+  const restoredConfig = await page.evaluate(() => {
+    try { return JSON.parse(localStorage.getItem('ledger_config') || '{}'); } catch { return {}; }
+  });
+  assert.equal(String(restoredConfig.chatId), String(config.chatId),
+    'reload must restore the same canonical active tenant');
+  assert.equal(restoredConfig.sessionToken, config.sessionToken,
+    'reload must restore the authenticated tenant session');
+  assert.equal(restoredConfig.businessTemplate, 'retail-shop',
+    'reload must retain the selected business template for the same tenant');
+  await page.evaluate(() => window.switchTab('order'));
+  const restoredProduct = page.locator('#productList').getByText('Browser First Product', { exact: true });
+  await restoredProduct.waitFor({ state: 'visible', timeout: 15000 });
+  assert.equal(await restoredProduct.textContent(), 'Browser First Product',
+    'the first catalog item must remain visible in the real application after reload');
+
+  // Re-read canonical server state after the browser restart boundary; a
+  // surviving local projection alone must not be mistaken for backend truth.
+  const reloadedCatalog = await fetch(baseUrl + '/catalog/' + encodeURIComponent(config.chatId), {
+    headers: { Authorization: 'Bearer ' + config.sessionToken },
+  });
+  assert.equal(reloadedCatalog.status, 200, 'canonical catalog must remain readable after browser reload');
+  const reloadedCatalogBody = await reloadedCatalog.json();
+  const reloadedItem = reloadedCatalogBody.products.find(product => product.name === 'Browser First Product');
+  assert.ok(reloadedItem, 'canonical catalog must still contain the first offering after reload');
+  assert.equal(reloadedItem.item_type, 'product');
+  assert.equal(Number(reloadedItem.price), 2500);
+
+  assert.deepEqual(pageErrors, [], 'onboarding, reload, and returning-merchant flow must not throw uncaught errors');
   console.log('First Experience browser onboarding → first catalog item: PASS');
   console.log('Real backend tenant creation, template persistence, and catalog sync: PASS');
 } catch (error) {
