@@ -191,10 +191,9 @@ try {
 
   const payments = await store.listPayments(chatId);
   assert.ok(payments.length > 0, 'checkout must create canonical payment state for the order');
-  assert.ok(!payments.some(payment =>
-    String(payment.status || '').toUpperCase() === 'SUCCEEDED'
-      && !payment.evidence_id && !payment.provider_transaction_id),
-  'checkout alone must not fabricate verified payment evidence or provider confirmation');
+  assert.ok(payments.every(payment =>
+    !['VERIFIED', 'RECONCILED'].includes(String(payment.state || '').toUpperCase())),
+  'checkout alone must not claim payment verification or reconciliation without payment evidence');
 
   console.log('First merchant-to-first-checkout HTTP journey: PASS');
   console.log('Canonical onboarding → template → catalog persistence → checkout replay → order/payment/inventory evidence: PASS');
