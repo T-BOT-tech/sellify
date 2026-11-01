@@ -1,9 +1,26 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-// The browser module graph reads APP_CONFIG at import time; provide the minimal
-// browser global before dynamically loading the readiness projection in Node.
-globalThis.window = { __APP_CONFIG__: {} };
+// The readiness projection imports shared browser modules, so install a small
+// deterministic DOM/storage shim before loading that graph in Node.
+globalThis.window = {
+  __APP_CONFIG__: {},
+  matchMedia: () => ({ addEventListener() {} }),
+};
+globalThis.localStorage = {
+  getItem() { return null; },
+  setItem() {},
+  removeItem() {},
+};
+const rootStyle = { removeProperty() {}, setProperty() {} };
+const rootElement = { style: rootStyle, setAttribute() {} };
+globalThis.document = {
+  documentElement: rootElement,
+  head: { appendChild() {} },
+  querySelector() { return null; },
+  createElement() { return { setAttribute() {} }; },
+};
+globalThis.getComputedStyle = () => ({ getPropertyValue() { return ''; } });
 const { readinessFor } = await import('../app/src/authorization/pack-readiness.js');
 
 const source = fs.readFileSync(new URL('../app/src/authorization/pack-readiness.js', import.meta.url), 'utf8');
