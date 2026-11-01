@@ -234,7 +234,14 @@ try {
     { idempotencyKey: 'marketplace-order-manual-review-1' },
   );
   assert.equal(review.finalized, true,
-    'authorized manual review must finalize through the canonical Payment Core decision path');
+    'authorized manual review must finalize through the canonical Payment Core decision path: '
+      + JSON.stringify({
+        status: review.status,
+        reasonCodes: review.invariants?.reasonCodes,
+        invariants: review.invariants,
+        decision: review.decision,
+        verification: review.verification,
+      }));
   assert.equal(review.payment?.state, 'VERIFIED');
   assert.equal((await store.getPayment(tenant.chatId, payment.id)).state, 'VERIFIED');
 
