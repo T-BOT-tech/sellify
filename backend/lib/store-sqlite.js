@@ -7917,28 +7917,41 @@ export async function commitPaymentDecision(chatId, input = {}, actor = null) {
 
         const observedTransactionId = String(v.observedTransactionId || v.observed_transaction_id || '').trim();
         const evidenceTransactionId = String(evidenceRow.provider_transaction_id || '').trim();
-        if (!observedTransactionId || !evidenceTransactionId || observedTransactionId !== evidenceTransactionId) {
+        const attestedManualReview = String(v.verifier || '') === 'payment-core.manual-review'
+          && String(v.verifierVersion || '').startsWith('manual-review-v1-')
+          && Array.isArray(v.reasonCodes)
+          && v.reasonCodes.includes('MANUAL_REVIEWER_ATTESTED');
+        // Caller-submitted SMS/receipt evidence commonly has no provider
+        // transaction ID. A trusted, explicitly attested manual review may
+        // still commit after the other financial invariants pass, but if
+        // either side has a transaction ID it must bind exactly as before.
+        const manualReviewWithoutTransactionIdentity = attestedManualReview
+          && !observedTransactionId && !evidenceTransactionId;
+        if (!manualReviewWithoutTransactionIdentity &&
+            (!observedTransactionId || !evidenceTransactionId || observedTransactionId !== evidenceTransactionId)) {
           throw Object.assign(new Error('Verification transaction identity is not bound to evidence'), {
             statusCode: 409, code: 'VERIFICATION_TRANSACTION_MISMATCH',
           });
         }
 
-        const reusedTransaction = db.prepare(`
-          SELECT id, payment_id
-          FROM payment_verifications
-          WHERE organization_id = ?
-            AND provider_id = ?
-            AND observed_transaction_id = ?
-            AND payment_id <> ?
-          ORDER BY created_at DESC
-          LIMIT 1
-        `).get(organizationId, verificationProviderId, observedTransactionId, paymentId);
-        if (reusedTransaction) {
-          throw Object.assign(new Error('Provider transaction identity is already bound to another payment'), {
-            statusCode: 409, code: 'PROVIDER_TRANSACTION_DUPLICATE',
-            paymentId: reusedTransaction.payment_id,
-            verificationId: reusedTransaction.id,
-          });
+        if (observedTransactionId && evidenceTransactionId) {
+          const reusedTransaction = db.prepare(`
+            SELECT id, payment_id
+            FROM payment_verifications
+            WHERE organization_id = ?
+              AND provider_id = ?
+              AND observed_transaction_id = ?
+              AND payment_id <> ?
+            ORDER BY created_at DESC
+            LIMIT 1
+          `).get(organizationId, verificationProviderId, observedTransactionId, paymentId);
+          if (reusedTransaction) {
+            throw Object.assign(new Error('Provider transaction identity is already bound to another payment'), {
+              statusCode: 409, code: 'PROVIDER_TRANSACTION_DUPLICATE',
+              paymentId: reusedTransaction.payment_id,
+              verificationId: reusedTransaction.id,
+            });
+          }
         }
       }
 
