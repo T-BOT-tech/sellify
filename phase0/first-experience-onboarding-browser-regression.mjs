@@ -91,7 +91,17 @@ try {
   const context = await browser.newContext();
   const page = await context.newPage();
   const pageErrors = [];
+  const failedRequests = [];
+  const badResponses = [];
+  const consoleErrors = [];
   page.on('pageerror', error => pageErrors.push(error.stack || error.message));
+  page.on('requestfailed', request => failedRequests.push(request.url() + ' :: ' + (request.failure()?.errorText || 'request failed')));
+  page.on('response', response => {
+    if (response.status() >= 400) badResponses.push(response.status() + ' ' + response.url());
+  });
+  page.on('console', message => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
 
   // Keep the UI and business APIs real. Only the external Telegram identity
   // handshake is represented by a deterministic challenge fixture; the token
@@ -214,8 +224,21 @@ try {
   try {
     await page.waitForFunction(() => typeof window.switchTab === 'function', null, { timeout: 10000 });
   } catch (error) {
+    const diagnostics = await page.evaluate(() => ({
+      readyState: document.readyState,
+      scripts: [...document.scripts].map(script => script.src || '[inline]'),
+      moduleResources: performance.getEntriesByType('resource')
+        .map(entry => entry.name).filter(name => /\\.js(?:$|\\?)/.test(name)),
+      bridgeType: typeof window.switchTab,
+      bodyText: (document.body?.innerText || '').slice(0, 1200),
+    })).catch(e => ({ evaluateError: e.message }));
     throw new Error('Application bridge did not restore after reload. URL: ' + page.url()
-      + '; page errors: ' + pageErrors.join(' | ') + '; cause: ' + error.message);
+      + '; page errors: ' + pageErrors.join(' | ')
+      + '; console errors: ' + consoleErrors.join(' | ')
+      + '; failed requests: ' + failedRequests.join(' | ')
+      + '; bad responses: ' + badResponses.join(' | ')
+      + '; browser diagnostics: ' + JSON.stringify(diagnostics)
+      + '; cause: ' + error.message);
   }
   const restoredConfig = await page.evaluate(() => {
     try { return JSON.parse(localStorage.getItem('ledger_config') || '{}'); } catch { return {}; }
