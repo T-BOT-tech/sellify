@@ -1,0 +1,14 @@
+{
+  "name": "Sellify UI Evaluation",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-24-bookworm",
+  "forwardPorts": [8787],
+  "portsAttributes": {
+    "8787": {
+      "label": "Sellify application preview",
+      "onAutoForward": "openBrowser",
+      "visibility": "private"
+    }
+  },
+  "postCreateCommand": "npm install --ignore-scripts",
+  "remoteUser": "node"
+}
