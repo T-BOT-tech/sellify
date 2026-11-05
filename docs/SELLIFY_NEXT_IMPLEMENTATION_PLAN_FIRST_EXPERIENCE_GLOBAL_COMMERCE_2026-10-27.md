@@ -219,3 +219,22 @@ Do not say “passed” without actual output. Do not infer current check state 
 2. Review the First Experience/onboarding and Global Commerce documentation against actual current routes, canonical API contracts, and test evidence. Keep product discovery separate from permission/provider activation/readiness.
 3. Revisit the closed outbox/browser-runtime PRs only when a reproducible current-main defect is established. Preserve the existing constraint: do not expose backend source through the browser as a smoke-test workaround.
 4. Report source inspection, regression results, runtime/browser evidence, broader CI, and unverified behavior separately. Do not label static checks as runtime certification.
+
+
+## Superseding implementation checkpoint — 30 October 2026
+
+The earlier 29 October ordering is superseded by `docs/SELLIFY_LIVE_IMPLEMENTATION_STATUS_2026-10-30.md`.
+
+**Inspected main:** `4d459ab890b86ebdc1235303325f66aa8e8be804`.
+
+1. Do not continue treating #153/#158 as outstanding payment UX work. They are closed/unmerged historical branches; #159 and #160 merged the checkout/payment-state clarity and 13-locale copy, while #164/#165 strengthened payment authority/refund behavior.
+2. Do not restart the old First Experience, browser-serving, or offline-outbox branch chains. The PR #188 candidate baseline passed the named service-catalog/business-template persistence, service-booking, outbox recovery/browser runtime, browser-module HTTP, production HTTP, and full-app Chromium smoke steps. The complete cross-component First Experience journey is still only partially certified.
+3. Merged #168 and #170–#183 added/closed substantial merchant UX, service booking operator, legacy service identity, Warehouse, procurement, J5 low-stock, and diagnostics work.
+4. Merged #184–#187 wired Phase 14, Phase 15, Phase 16, and Phase 19 cumulative/final certification gates into CI.
+5. The only current open PR in the inspected recent-PR snapshot is #188. It adds Phase 20.12 to baseline CI but its current candidate failed at Phase 20.8 because the test fixture supplies unsupported provider-capability evidence source `carrier`; the contract permits `provider`, `adapter`, `network`, `manual`, or `sellify`. Security, Logistics L18, and Logistics L1–L21 exit certification passed on that candidate. Phase 20.9–20.11 were not reached.
+
+**Immediate execution:** correct the Phase 20.8 fixture, rerun `npm run test:phase20.8`, `npm run test:phase20.12`, then verify all exact-head CI/security jobs on #188. Do not merge without authorization.
+
+**After the blocker:** certify the integrated First Experience browser journey (new merchant → setup → first item → reload → tenant A/B/A → first sale → Home readiness), then collect deployment and country-launch evidence. Country pack tests do not by themselves prove a production country launch.
+
+See the live status document for exact run IDs, candidate SHA, pass/fail boundaries, and the revised task ledger.
