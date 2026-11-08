@@ -2,6 +2,8 @@
 // This is deliberately a composition surface over existing canonical modules;
 // it owns no supplier, procurement, order, or inventory state.
 import { config, currentStaff, orders, products } from '../state.js';
+import { getWorkspaceActivationAction } from './workspace-activation.js';
+export { getWorkspaceActivationAction } from './workspace-activation.js';
 import { UI_STATES } from './state-contract.js';
 import { statusClass } from '../design-system/index.js';
 import { t } from '../ui/i18n.js';
@@ -59,6 +61,7 @@ function currentRole() {
   return String(currentStaff?.role || 'staff').toLowerCase();
 }
 
+
 export function renderWorkspace() {
   const root = document.getElementById('sellerHome');
   if (!root) return;
@@ -77,6 +80,10 @@ export function renderWorkspace() {
   const state = connectivityState();
   const business = config.sellerName || t('setupBusiness');
   const role = roleLabel(currentRole());
+  const activationAction = getWorkspaceActivationAction({
+    offeringCount: products.length,
+    canAddOffering: hasPermission(currentRole(), 'inventory:add'),
+  });
 
   root.innerHTML = `
     <section class="fux-workspace" aria-labelledby="fux-workspace-title">
@@ -117,12 +124,19 @@ export function renderWorkspace() {
           <h3 id="fux-actions-title">Next actions</h3>
         </div>
         <div class="fux-action-list">
+          ${activationAction === 'TAKE_ORDER' ? `
           <button class="fux-action primary" type="button" onclick="switchTab('order')">
             <strong>Take an order</strong><small>Start a new sale</small>
           </button>
           <button class="fux-action" type="button" onclick="switchTab('catalog')">
-            <strong>Manage catalog</strong><small>${products.length} products</small>
-          </button>
+            <strong>Manage catalog</strong><small>${products.length} offerings</small>
+          </button>` : activationAction === 'SET_UP_CATALOG' ? `
+          <button class="fux-action primary" type="button" onclick="switchTab('catalog'); requestAnimationFrame(() => document.getElementById('newProdName')?.focus());">
+            <strong>Set up your catalog</strong><small>Add your first product or service before taking an order</small>
+          </button>` : `
+          <div class="fux-action" role="status">
+            <strong>Catalog setup needed</strong><small>Ask a business owner or manager to add the first product or service before taking an order.</small>
+          </div>`}
           <button class="fux-action" type="button" onclick="switchTab('queue')">
             <strong>Review work</strong><small>Orders and synchronization</small>
           </button>
