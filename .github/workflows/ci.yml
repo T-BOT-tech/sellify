@@ -392,6 +392,9 @@ jobs:
       - name: GAP-2.12 production readiness regression
         run: npm run test:gap-2-production-readiness
 
+      - name: Country evidence source registry regression
+        run: npm run test:country-evidence-source-registry
+
       - name: Phase 14 country-pack cumulative regression
         run: npm run test:phase14.13
 
