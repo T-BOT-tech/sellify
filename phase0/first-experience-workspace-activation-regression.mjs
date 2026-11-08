@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { getWorkspaceActivationAction } from '../app/src/experience/workspace.js';
+
+// workspace.js reaches browser configuration through its imports. This regression
+// tests the pure action selector in Node, so provide the minimum config before import.
+globalThis.window ||= { __APP_CONFIG__: {} };
+const { getWorkspaceActivationAction } = await import('../app/src/experience/workspace.js');
 
 const source = await readFile(new URL('../app/src/experience/workspace.js', import.meta.url), 'utf8');
 
