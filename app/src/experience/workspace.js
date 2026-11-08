@@ -2,6 +2,8 @@
 // This is deliberately a composition surface over existing canonical modules;
 // it owns no supplier, procurement, order, or inventory state.
 import { config, currentStaff, orders, products } from '../state.js';
+import { getWorkspaceActivationAction } from './workspace-activation.js';
+export { getWorkspaceActivationAction } from './workspace-activation.js';
 import { UI_STATES } from './state-contract.js';
 import { statusClass } from '../design-system/index.js';
 import { t } from '../ui/i18n.js';
@@ -59,10 +61,6 @@ function currentRole() {
   return String(currentStaff?.role || 'staff').toLowerCase();
 }
 
-export function getWorkspaceActivationAction({ offeringCount = 0, canAddOffering = false } = {}) {
-  if (Number(offeringCount) > 0) return 'TAKE_ORDER';
-  return canAddOffering ? 'SET_UP_CATALOG' : 'CATALOG_SETUP_REQUIRED';
-}
 
 export function renderWorkspace() {
   const root = document.getElementById('sellerHome');
