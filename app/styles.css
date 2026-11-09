@@ -1805,6 +1805,15 @@
   .fux-card-grid { grid-template-columns:1fr; }
   .fux-workspace-header { align-items:flex-start; }
 }
+@media (max-width:420px) {
+  .fux-workspace-header { gap:.5rem; }
+  .fux-workspace-header > div { min-width:0; flex:1 1 0; }
+  .fux-workspace-header h2 {
+    font-size:clamp(1.125rem, 5vw, 1.35rem);
+    line-height:1.2;
+    overflow-wrap:anywhere;
+  }
+}
 
 .fux-procurement-summary { border:1px solid var(--border-soft); border-radius:.9rem; background:var(--surface); padding:1rem; }
 .fux-summary-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.75rem; }
