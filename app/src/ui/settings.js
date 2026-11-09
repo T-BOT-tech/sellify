@@ -124,7 +124,19 @@ export function applyBusinessModelUI() {
   updateKitchenBadge();
 }
 
+function updateBusinessTemplateSyncVisibility() {
+  const wrap = document.getElementById('businessTemplateSyncWrap');
+  if (!wrap) return;
+  // Template retry is meaningful only after a canonical business session
+  // exists. Do not show a recovery action on the no-business onboarding state.
+  const hasActiveBusiness = Boolean(
+    String(config.chatId || '').trim() && String(config.sessionToken || '').trim()
+  );
+  wrap.style.display = hasActiveBusiness ? '' : 'none';
+}
+
 export function openSettings() {
+  updateBusinessTemplateSyncVisibility();
   document.getElementById('setSellerName').value = config.sellerName || '';
   document.getElementById('setSyncUrl').value = config.syncUrl || '';
   document.getElementById('setLang').value = getLang();
