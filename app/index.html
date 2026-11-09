@@ -1045,73 +1045,83 @@
     <div class="hint" data-i18n="syncUrlHint">Where queued orders sync to. Only needed when you're back online — orders queue locally either way.</div>
 
     <hr style="margin:18px 0;border:none;border-top:1px solid var(--line);">
-    <div id="roleAccessPanel" style="margin-bottom:18px;"></div>
-    <div id="membershipAdministrationPanel" style="margin-bottom:18px;"></div>
-    <div id="rolePermissionMatrixPanel" style="margin-bottom:18px;"></div>
-    <div id="scopeContextPanel" style="margin-bottom:18px;"></div>
-    <div id="conditionsApprovalPanel" style="margin-bottom:18px;"></div>
-    <div id="approvalDelegationPanel" style="margin-bottom:18px;"></div>
-    <div id="iamCertificationPanel" style="margin-bottom:18px;"></div>
-    <div id="packEntitlementPanel" style="margin-bottom:18px;"></div>
-    <div id="packReadinessPanel" style="margin-bottom:18px;"></div>
-    <div id="packRecoveryPanel" style="margin-bottom:18px;"></div>
-    <div id="packAuditPanel" style="margin-bottom:18px;"></div>
-    <div id="packSecurityPanel" style="margin-bottom:18px;"></div>
-    <div id="packAccessibilityLocalizationPanel" style="margin-bottom:18px;"></div>
-    <div id="packAnalyticsPanel" style="margin-bottom:18px;"></div>
-    <div id="packExperimentationPanel" style="margin-bottom:18px;"></div>
-    <div id="packTraceabilityPanel" style="margin-bottom:18px;"></div>
-    <div id="compliancePanel" style="margin-bottom:18px;"></div>
-    <div id="sellerStorefrontChannelsPanel" style="margin-bottom:18px;"><div id="telegramStorefrontPanel"></div></div>
+    <details class="settings-advanced-group">
+      <summary>Roles, permissions &amp; capabilities</summary>
+      <div class="settings-advanced-content">
+        <div id="roleAccessPanel" style="margin-bottom:18px;"></div>
+        <div id="membershipAdministrationPanel" style="margin-bottom:18px;"></div>
+        <div id="rolePermissionMatrixPanel" style="margin-bottom:18px;"></div>
+        <div id="scopeContextPanel" style="margin-bottom:18px;"></div>
+        <div id="conditionsApprovalPanel" style="margin-bottom:18px;"></div>
+        <div id="approvalDelegationPanel" style="margin-bottom:18px;"></div>
+        <div id="iamCertificationPanel" style="margin-bottom:18px;"></div>
+        <div id="packEntitlementPanel" style="margin-bottom:18px;"></div>
+        <div id="packReadinessPanel" style="margin-bottom:18px;"></div>
+        <div id="packRecoveryPanel" style="margin-bottom:18px;"></div>
+        <div id="packAuditPanel" style="margin-bottom:18px;"></div>
+        <div id="packSecurityPanel" style="margin-bottom:18px;"></div>
+        <div id="packAccessibilityLocalizationPanel" style="margin-bottom:18px;"></div>
+        <div id="packAnalyticsPanel" style="margin-bottom:18px;"></div>
+        <div id="packExperimentationPanel" style="margin-bottom:18px;"></div>
+        <div id="packTraceabilityPanel" style="margin-bottom:18px;"></div>
+        <div id="compliancePanel" style="margin-bottom:18px;"></div>
+        <div id="sellerStorefrontChannelsPanel" style="margin-bottom:18px;"><div id="telegramStorefrontPanel"></div></div>
+      </div>
+    </details>
     <hr style="margin:18px 0;border:none;border-top:1px solid var(--line);">
-    <div class="settings-section-label">Storefront branding</div>
-    <div class="hint">Customize what customers see on your public store. Changes are saved to this business and can be updated anytime.</div>
-    <label>Storefront name</label>
-    <input type="text" id="setBrandName" placeholder="Your business name" maxlength="120" oninput="updateBrandingPreview()">
-    <label>Primary color</label>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-      <input type="color" id="setBrandColor" value="#00897b" onchange="document.getElementById('setBrandColorText').value=this.value.toUpperCase(); updateBrandingPreview()" style="width:56px;height:42px;padding:3px;margin:0;">
-      <input type="text" id="setBrandColorText" placeholder="#00897b" maxlength="7" oninput="updateBrandingPreview()" style="flex:1;margin:0;text-transform:uppercase;">
-    </div>
-    <label>Logo URL <span class="hint">(optional)</span></label>
-    <input type="url" id="setBrandLogoUrl" placeholder="https://example.com/logo.png" maxlength="2048" oninput="updateBrandingPreview()">
-    <div id="brandingPreview" class="branding-preview" aria-live="polite"></div>
-    <div id="brandingSaveStatus" class="hint" style="margin-top:6px;min-height:20px;"></div>
-    <button type="button" class="btn-secondary" style="width:100%;margin-top:4px;" onclick="saveStorefrontBranding()">Save storefront branding</button>
-    <hr style="margin:18px 0;border:none;border-top:1px solid var(--line);">
-    <label>Devices</label>
-    <div class="hint">Owners and managers can create a one-time code to pair another browser or POS device.</div>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <select id="pairingRole" style="flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);">
-        <option value="cashier">Cashier</option><option value="staff">Staff</option><option value="manager">Manager</option>
-      </select>
-      <button class="btn-secondary" onclick="createDevicePairing(document.getElementById('pairingRole').value)">Add device</button>
-    </div>
-    <div id="pairingAdminStatus" class="hint" style="margin-top:8px;word-break:break-all;"></div>
-
-    <div id="deviceListWrap" style="display:none;margin-top:14px;">
-      <label>Paired devices</label>
-      <div id="deviceList"></div>
-      <div id="deviceListStatus" class="hint" style="margin-top:6px;"></div>
-    </div>
-
-    <div class="hint" style="margin-top:14px;">Invite a staff member to join with their own Telegram account instead of pairing a device.</div>
-    <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
-      <select id="staffInviteRole" style="flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);">
-        <option value="cashier">Cashier</option><option value="staff">Staff</option><option value="manager">Manager</option>
-      </select>
-      <button class="btn-secondary" onclick="createStaffInvite(document.getElementById('staffInviteRole').value)">Invite staff</button>
-    </div>
-
-    <div class="hint" style="margin-top:14px;">Been invited to join another business? Enter the code below — this doesn't affect your access here.</div>
-    <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
-      <input id="settingsInviteCode" type="text" autocomplete="one-time-code" placeholder="Paste invite code" style="flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);">
-      <button class="btn-secondary" onclick="submitSettingsInvite()">Join</button>
-    </div>
-    <div id="settingsInviteStatus" class="hint" style="margin-top:8px;word-break:break-all;"></div>
+    <details class="settings-advanced-group">
+      <summary>Storefront, devices &amp; team</summary>
+      <div class="settings-advanced-content">
+        <div class="settings-section-label">Storefront branding</div>
+        <div class="hint">Customize what customers see on your public store. Changes are saved to this business and can be updated anytime.</div>
+        <label>Storefront name</label>
+        <input type="text" id="setBrandName" placeholder="Your business name" maxlength="120" oninput="updateBrandingPreview()">
+        <label>Primary color</label>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+          <input type="color" id="setBrandColor" value="#00897b" onchange="document.getElementById('setBrandColorText').value=this.value.toUpperCase(); updateBrandingPreview()" style="width:56px;height:42px;padding:3px;margin:0;">
+          <input type="text" id="setBrandColorText" placeholder="#00897b" maxlength="7" oninput="updateBrandingPreview()" style="flex:1;margin:0;text-transform:uppercase;">
+        </div>
+        <label>Logo URL <span class="hint">(optional)</span></label>
+        <input type="url" id="setBrandLogoUrl" placeholder="https://example.com/logo.png" maxlength="2048" oninput="updateBrandingPreview()">
+        <div id="brandingPreview" class="branding-preview" aria-live="polite"></div>
+        <div id="brandingSaveStatus" class="hint" style="margin-top:6px;min-height:20px;"></div>
+        <button type="button" class="btn-secondary" style="width:100%;margin-top:4px;" onclick="saveStorefrontBranding()">Save storefront branding</button>
+        <hr style="margin:18px 0;border:none;border-top:1px solid var(--line);">
+        <label>Devices</label>
+        <div class="hint">Owners and managers can create a one-time code to pair another browser or POS device.</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <select id="pairingRole" style="flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);">
+            <option value="cashier">Cashier</option><option value="staff">Staff</option><option value="manager">Manager</option>
+          </select>
+          <button class="btn-secondary" onclick="createDevicePairing(document.getElementById('pairingRole').value)">Add device</button>
+        </div>
+        <div id="pairingAdminStatus" class="hint" style="margin-top:8px;word-break:break-all;"></div>
+        <div id="deviceListWrap" style="display:none;margin-top:14px;">
+          <label>Paired devices</label>
+          <div id="deviceList"></div>
+          <div id="deviceListStatus" class="hint" style="margin-top:6px;"></div>
+        </div>
+        <div class="hint" style="margin-top:14px;">Invite a staff member to join with their own Telegram account instead of pairing a device.</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+          <select id="staffInviteRole" style="flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);">
+            <option value="cashier">Cashier</option><option value="staff">Staff</option><option value="manager">Manager</option>
+          </select>
+          <button class="btn-secondary" onclick="createStaffInvite(document.getElementById('staffInviteRole').value)">Invite staff</button>
+        </div>
+        <div class="hint" style="margin-top:14px;">Been invited to join another business? Enter the code below — this doesn't affect your access here.</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+          <input id="settingsInviteCode" type="text" autocomplete="one-time-code" placeholder="Paste invite code" style="flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);">
+          <button class="btn-secondary" onclick="submitSettingsInvite()">Join</button>
+        </div>
+        <div id="settingsInviteStatus" class="hint" style="margin-top:8px;word-break:break-all;"></div>
+      </div>
+    </details>
 
     <hr style="margin:18px 0; border:none; border-top:1px solid var(--line);">
 
+    <details class="settings-advanced-group">
+      <summary>Payments, pricing &amp; operations</summary>
+      <div class="settings-advanced-content">
     <label data-i18n="currency">Currency</label>
     <select id="setCurrencyCode" onchange="onCurrencyCodeChange()" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background: var(--surface); margin-bottom:4px;">
       <option value="ETB" selected>Br ETB — Ethiopian Birr</option>
@@ -1189,14 +1199,21 @@
       <span data-i18n="logisticsEnable">Enable Logistics (pickup + delivery)</span>
     </label>
     <div class="hint" data-i18n="logisticsEnableHint">Adds a pickup/delivery choice at checkout and a Logistics tab to track and advance fulfillment. Marking an order delivered/picked up deducts warehouse stock automatically, if warehouse tracking is on.</div>
+      </div>
+    </details>
 
     <hr style="margin:18px 0; border:none; border-top:1px solid var(--line);">
 
+    <details class="settings-advanced-group">
+      <summary>Data &amp; storage</summary>
+      <div class="settings-advanced-content">
     <div class="settings-section-label" data-i18n="dataStorageSection">Data &amp; storage</div>
     <div id="storagePersistInfo" class="hint" style="margin-bottom:6px;"></div>
     <div id="storageQuotaInfo" class="hint" style="margin-bottom:12px;"></div>
     <button type="button" class="btn-secondary" style="width:100%; margin-bottom:4px;" onclick="exportLedgerData()" data-i18n="exportDataButton">Export my data</button>
     <div class="hint" data-i18n="exportDataHint">Downloads a redacted JSON backup of your products, orders, staff, and settings. PINs, sync credentials, and payment proof are excluded.</div>
+      </div>
+    </details>
 
     <button class="btn-primary close-btn" onclick="saveSettings()" data-i18n="save">Save</button>
   </div>
