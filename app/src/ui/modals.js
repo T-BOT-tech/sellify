@@ -12,6 +12,11 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeImageModal();
     if (typeof closePinModal === 'function') closePinModal();
+
+    // Settings is safe to dismiss without implying that server-side business
+    // changes were rolled back. The explicit Save action remains available.
+    const settings = document.getElementById('settingsModal');
+    if (settings?.classList.contains('open')) settings.classList.remove('open');
   }
 });
 
