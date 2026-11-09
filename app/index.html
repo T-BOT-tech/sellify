@@ -594,7 +594,7 @@
   </section>
 
   <div class="modal-backdrop" id="organizationLocationModal" style="display:none;">
-    <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="organizationLocationModalTitle">
       <h3 id="organizationLocationModalTitle">Add business location</h3>
       <input type="hidden" id="organizationLocationId">
       <label for="organizationLocationCode">Code</label><input id="organizationLocationCode" maxlength="40" placeholder="e.g. MAIN">
@@ -766,8 +766,8 @@
 </nav>
 
 <div class="modal-backdrop" id="moreSheet">
-  <div class="modal" role="dialog" aria-modal="true">
-    <h3 data-i18n="moreNav">More</h3>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="moreSheetTitle">
+    <h3 id="moreSheetTitle" data-i18n="moreNav">More</h3>
     <div class="more-sheet-list">
   <button id="navQueue" onclick="switchTab('queue')">
     <svg class="icon"><use href="#i-inbox"/></svg><span data-i18n="queueNav">Queue</span><span class="queue-count" id="queueBadge" style="display:none;">0</span>
@@ -832,8 +832,8 @@
 
 
 <div class="modal-backdrop" id="customerModal" style="display:none;">
-  <div class="modal" role="dialog" aria-modal="true" style="max-height:85vh;overflow-y:auto;">
-    <h3>Customer</h3>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="customerModalTitle" style="max-height:85vh;overflow-y:auto;">
+    <h3 id="customerModalTitle">Customer</h3>
     <label for="customerNameInput">Name</label><input id="customerNameInput" placeholder="Name">
     <label for="customerPhoneInput">Phone</label><input id="customerPhoneInput" placeholder="Phone" type="tel">
     <label for="customerEmailInput">Email</label><input id="customerEmailInput" placeholder="Email" type="email">
@@ -849,8 +849,8 @@
 </div>
 
 <div class="modal-backdrop" id="marketCheckoutModal" style="display:none;">
-  <div class="modal" role="dialog" aria-modal="true" style="max-height:85vh; overflow-y:auto;">
-    <h3 style="margin-top:0;"><svg class="icon"><use href="#i-cart"/></svg> Multi-Vendor Cart Review</h3>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="marketCheckoutModalTitle" style="max-height:85vh; overflow-y:auto;">
+    <h3 id="marketCheckoutModalTitle" style="margin-top:0;"><svg class="icon"><use href="#i-cart"/></svg> Multi-Vendor Cart Review</h3>
     <p style="font-size:12px; color:var(--ink-soft); margin-bottom:12px;">Your order will be split automatically into sub-tickets for each merchant.</p>
     <div id="marketCartGroupedContainer"></div>
     <div style="background:var(--paper-dim); padding:12px; border-radius:8px; margin:12px 0; font-family:var(--mono);">
@@ -880,8 +880,8 @@
 </div>
 
 <div class="modal-backdrop" id="pinModal" style="display:none;">
-  <div class="modal" role="dialog" aria-modal="true">
-    <h3 style="margin-top:0;"><svg class="icon"><use href="#i-key"/></svg> Switch Staff Station</h3>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pinModalTitle">
+    <h3 id="pinModalTitle" style="margin-top:0;"><svg class="icon"><use href="#i-key"/></svg> Switch Staff Station</h3>
     <p style="font-size:12px; color:var(--ink-soft); margin-bottom:12px;">Switches which staff profile this device is using. This is a local convenience for a shared device, not a login — anyone with the device can still see this screen.</p>
     <label for="pinStaffSelect">Select Staff Profile</label>
     <select id="pinStaffSelect" style="width:100%; padding:10px 12px; margin-bottom:12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background: var(--surface); font-weight:600;">
@@ -1242,8 +1242,8 @@
 </div>
 
 <div class="modal-backdrop" id="tableTransferModal" style="display:none;">
-  <div class="modal" role="dialog" aria-modal="true">
-    <h3 style="margin-top:0;"><svg class="icon"><use href="#i-refresh"/></svg> Transfer table</h3>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tableTransferModalTitle">
+    <h3 id="tableTransferModalTitle" style="margin-top:0;"><svg class="icon"><use href="#i-refresh"/></svg> Transfer table</h3>
     <p style="font-size:12px; color:var(--ink-soft); margin-bottom:12px;">Move this table's open order to another free table.</p>
     <div id="tableTransferList"></div>
     <button class="btn-secondary" onclick="closeTableTransferModal()" style="margin-top:12px;">Cancel</button>
@@ -1271,8 +1271,8 @@
 </div>
 
 <div class="modal-backdrop" id="stockAdjustModal" style="display:none;">
-  <div class="modal" role="dialog" aria-modal="true">
-    <h3 style="margin-top:0;"><svg class="icon"><use href="#i-box"/></svg> <span data-i18n="whAdjustStock">Adjust stock</span></h3>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="stockAdjustModalTitle">
+    <h3 id="stockAdjustModalTitle" style="margin-top:0;"><svg class="icon"><use href="#i-box"/></svg> <span data-i18n="whAdjustStock">Adjust stock</span></h3>
     <label data-i18n="whProduct">Product</label>
     <select id="stockAdjustProduct" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background: var(--surface);" onchange="onStockAdjustProductChange()"></select>
     <div class="hint" id="stockAdjustCurrentStock"></div>
@@ -1292,8 +1292,8 @@
 </div>
 
 <div class="modal-backdrop" id="receiveStockModal" style="display:none;">
-  <div class="modal" role="dialog" aria-modal="true">
-    <h3 style="margin-top:0;"><svg class="icon"><use href="#i-inbox"/></svg> <span data-i18n="whReceiveStock">Receive stock</span></h3>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="receiveStockModalTitle">
+    <h3 id="receiveStockModalTitle" style="margin-top:0;"><svg class="icon"><use href="#i-inbox"/></svg> <span data-i18n="whReceiveStock">Receive stock</span></h3>
     <label data-i18n="whProduct">Product</label>
     <select id="receiveProduct" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background: var(--surface);"></select>
     <label data-i18n="whQuantity">Quantity received</label>
