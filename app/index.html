@@ -1035,11 +1035,13 @@
     </select>
     <div class="niche-hint" data-i18n="businessTypeHint">Pre-fills the categories, units, and tags below to match your kind of business. You can still add your own anytime.</div>
     </div>
-    <div class="settings-section-label">Business type sync</div>
-    <div class="hint" id="settingsBusinessTemplateStatus" role="status" aria-live="polite">If the business type selected during onboarding did not sync, retry it here.</div>
-    <button type="button" class="btn-secondary" id="retryBusinessTemplateSyncButton" onclick="retryBusinessTemplateSync()">Retry business type sync</button>
+    <div id="businessTemplateSyncWrap" style="display:none;">
+      <div class="settings-section-label">Business type sync</div>
+      <div class="hint" id="settingsBusinessTemplateStatus" role="status" aria-live="polite">If the business type selected during onboarding did not sync, retry it here.</div>
+      <button type="button" class="btn-secondary" id="retryBusinessTemplateSyncButton" onclick="retryBusinessTemplateSync()">Retry business type sync</button>
+    </div>
     <label data-i18n="businessName">Business name</label>
-    <input type="text" id="setSellerName" placeholder="Sana's Candles">
+    <input type="text" id="setSellerName" placeholder="e.g. Your business name">
     <label data-i18n="syncServerUrl">Sync server URL</label>
     <input type="text" id="setSyncUrl" placeholder="https://your-server.example.com">
     <div class="hint" data-i18n="syncUrlHint">Where queued orders sync to. Only needed when you're back online — orders queue locally either way.</div>
