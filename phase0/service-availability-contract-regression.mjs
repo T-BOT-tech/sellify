@@ -54,7 +54,7 @@ const unknownWindow = assessServiceResourceCommitWindow({
   timeZone: 'Africa/Addis_Ababa', workingHours: [], exceptions: [],
   start: '2026-11-01T06:00:00.000Z', end: '2026-11-01T07:00:00.000Z',
 });
-assert.equal(unknownWindow.state, 'OUTSIDE_DECLARED_HOURS');
+assert.equal(unknownWindow.state, 'UNKNOWN');
 const crossDate = assessServiceResourceCommitWindow({
   timeZone: 'Africa/Addis_Ababa',
   workingHours: [{ weekday: 0, startTime: '08:00', endTime: '23:59' }],
