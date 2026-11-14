@@ -78,6 +78,15 @@ try {
   assert.equal(updateReplay.replayed, true);
   assert.equal(updateReplay.resource.version, 2);
 
+  const clearedLocation = await store.updateServiceResource(seller.chatId, created.resource.id, {
+    location_id: null,
+    expected_version: 2,
+    idempotency_key: 'service-resource-clear-location-' + suffix,
+  }, { userId: owner.id });
+  assert.equal(clearedLocation.resource.locationId, null,
+    'an explicit null location patch must clear the prior location binding');
+  assert.equal(clearedLocation.resource.version, 3);
+
   await assert.rejects(
     store.updateServiceResource(seller.chatId, created.resource.id, {
       name: 'Stale update', expected_version: 1,
@@ -91,6 +100,12 @@ try {
   const allResources = await store.listServiceResources(seller.chatId, { includeInactive: true });
   assert.equal(allResources.length, 1);
   assert.equal(allResources[0].id, created.resource.id);
+  assert.equal(allResources[0].locationId, null);
+  const locationScopedList = await store.listServiceResources(seller.chatId, {
+    includeInactive: true, locationId: location.id,
+  });
+  assert.equal(locationScopedList.length, 1,
+    'organization-wide resources remain visible in a location-scoped list');
 
   const secondUser = await store.getOrCreateUserByTelegram('resource-other-' + suffix, 'Other Owner');
   const secondSeller = await store.createTenantForUser({
@@ -111,7 +126,7 @@ try {
     "SELECT action, organization_id, chat_id FROM audit_events WHERE entity_type = 'service_resource' AND entity_id = ? ORDER BY id"
   ).all(created.resource.id);
   assert.deepEqual(audit.map(row => row.action), [
-    'services.resource.created', 'services.resource.updated',
+    'services.resource.created', 'services.resource.updated', 'services.resource.updated',
   ]);
   assert.ok(audit.every(row => row.organization_id === seller.organizationId && row.chat_id === seller.chatId));
 
