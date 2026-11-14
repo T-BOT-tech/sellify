@@ -41,8 +41,6 @@ function parseInstant(value, field) {
 }
 
 function intervalContains(interval, startMinute, endMinute) {
-  const start = Number(interval.startTime ?? interval.start_time?.slice(0, 5).replace(':', '.'));
-  const end = Number(interval.endTime ?? interval.end_time?.slice(0, 5).replace(':', '.'));
   const toMinutes = value => {
     if (typeof value === 'string' && /^\d{2}:\d{2}$/.test(value)) {
       const [h, m] = value.split(':').map(Number);
@@ -52,7 +50,7 @@ function intervalContains(interval, startMinute, endMinute) {
   };
   const startValue = toMinutes(interval.startTime ?? interval.start_time);
   const endValue = toMinutes(interval.endTime ?? interval.end_time);
-  return Number.isFinite(start) && Number.isFinite(end) &&
+  return Number.isFinite(startValue) && Number.isFinite(endValue) &&
     startValue <= startMinute && endMinute <= endValue;
 }
 
