@@ -117,6 +117,49 @@ try {
     'SELECT COUNT(*) AS count FROM service_resource_commitments WHERE booking_id=?'
   ).get(created.booking.id).count, 1, 'confirmation replay must not duplicate resource commitment');
 
+  const competingBookings = await Promise.all(['one','two'].map(label => store.createServiceBooking(
+    seller.chatId, order.server_order_id, {
+      ...request,
+      requested_start: '2026-11-02T10:00:00+03:00',
+      requested_end: '2026-11-02T11:00:00+03:00',
+      idempotency_key: 'booking-race-create-' + label + '-' + suffix,
+    }, { userId: owner.id },
+  )));
+  for (const item of competingBookings) {
+    await store.transitionServiceBooking(seller.chatId, order.server_order_id, item.booking.id, {
+      status: 'ACCEPTED', expected_version: 1,
+      idempotency_key: 'booking-race-accept-' + item.booking.id,
+    }, { userId: owner.id });
+  }
+  const raceResults = await Promise.allSettled(competingBookings.map(item =>
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, item.booking.id, {
+      status: 'CONFIRMED', resource_id: serviceResource.id, expected_version: 2,
+      idempotency_key: 'booking-race-confirm-' + item.booking.id,
+    }, { userId: owner.id }),
+  ));
+  assert.equal(raceResults.filter(result => result.status === 'fulfilled').length, 1,
+    'BEGIN IMMEDIATE must serialize competing confirmations so exactly one resource commitment wins');
+  assert.equal(raceResults.filter(result => result.status === 'rejected' && result.reason?.code === 'SERVICE_BOOKING_RESOURCE_CONFLICT').length, 1,
+    'the competing appointment must fail with an explicit resource conflict');
+  const winnerIndex = raceResults.findIndex(result => result.status === 'fulfilled');
+  const loserIndex = 1 - winnerIndex;
+  const winner = competingBookings[winnerIndex].booking;
+  const loser = competingBookings[loserIndex].booking;
+  await store.transitionServiceBooking(seller.chatId, order.server_order_id, winner.id, {
+    status: 'CANCELLED', expected_version: 3, reason: 'Customer cancelled',
+    idempotency_key: 'booking-race-release-' + suffix,
+  }, { userId: owner.id });
+  const afterRelease = await store.transitionServiceBooking(seller.chatId, order.server_order_id, loser.id, {
+    status: 'CONFIRMED', resource_id: serviceResource.id, expected_version: 2,
+    idempotency_key: 'booking-race-retry-after-release-' + suffix,
+  }, { userId: owner.id });
+  assert.equal(afterRelease.booking.status, 'CONFIRMED',
+    'a released resource interval must be eligible for a later confirmation');
+  const raceCommitments = store.getDatabaseForTests().prepare(
+    'SELECT status FROM service_resource_commitments WHERE resource_id=? AND booking_id IN (?,?) ORDER BY booking_id'
+  ).all(serviceResource.id, winner.id, loser.id);
+  assert.deepEqual(raceCommitments.map(item => item.status).sort(), ['ACTIVE','RELEASED']);
+
   // Booking lifecycle is not authority to mutate canonical order, payment, or
   // fulfillment state, and must not manufacture a logistics activity.
   const canonicalOrderAfterConfirmation = (await store.getOrders(seller.chatId)).find(item =>
