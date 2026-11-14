@@ -80,4 +80,5 @@ export default {
     serviceResourceRevokeProvider: "Отозвать доступ исполнителя",
     serviceResourceProviderAssignFailed: "Не удалось обновить доступ исполнителя.",
     serviceResourceNoProviderMembers: "Нет подходящих сотрудников.",
+    serviceResourceProviderDescription: "Просматривайте назначенные вам сервисные ресурсы и обновляйте заявленные часы работы. Доступность не подтверждается, пока не проверены существующие обязательства.",
 };
