@@ -27,10 +27,10 @@ function serviceOrders() {
     .slice(-40);
 }
 
-async function requestBookings(order) {
-  const url = apiBase() + '/tenants/' + encodeURIComponent(config.chatId)
+async function requestBookings(order, context) {
+  const url = context.baseUrl + '/tenants/' + encodeURIComponent(context.tenantId)
     + '/orders/' + encodeURIComponent(order.server_order_id) + '/service-bookings';
-  const response = await fetch(url, { headers: authHeaders() });
+  const response = await fetch(url, { headers: context.headers });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = new Error(data?.error?.message || t('serviceBookingsLoadFailed'));
@@ -93,17 +93,31 @@ export async function refreshServiceBookings(root = document) {
     list.replaceChildren();
     return;
   }
+  const sequence = Number(workspace.dataset.refreshSequence || 0) + 1;
+  workspace.dataset.refreshSequence = String(sequence);
+  const tenantId = String(config.chatId);
+  const sessionToken = String(config.sessionToken);
+  const context = { tenantId, baseUrl: apiBase(), headers: authHeaders() };
   status.textContent = t('serviceBookingsLoading');
   list.replaceChildren();
   const candidates = serviceOrders();
   if (!candidates.length) {
-    status.textContent = t('serviceBookingsNoOrders');
+    if (workspace.dataset.refreshSequence === String(sequence)
+        && String(config.chatId) === tenantId && String(config.sessionToken) === sessionToken) {
+      status.textContent = t('serviceBookingsNoOrders');
+    }
     return;
   }
   const results = await Promise.all(candidates.map(async order => {
-    try { return { order, bookings: await requestBookings(order) }; }
+    try { return { order, bookings: await requestBookings(order, context) }; }
     catch (error) { return { order, error }; }
   }));
+  // Ignore responses from an older refresh or a tenant/session that is no
+  // longer active. A late response must not repaint another tenant's workspace.
+  if (!workspace.isConnected
+      || workspace.dataset.refreshSequence !== String(sequence)
+      || String(config.chatId) !== tenantId
+      || String(config.sessionToken) !== sessionToken) return;
   const bookings = results.flatMap(result => result.bookings
     ? result.bookings.map(booking => ({ order: result.order, booking }))
     : []);
