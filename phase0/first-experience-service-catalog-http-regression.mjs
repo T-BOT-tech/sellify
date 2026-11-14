@@ -440,10 +440,19 @@ try {
   assert.equal(bookingAcceptBody.booking.status, 'ACCEPTED');
   assert.equal(bookingAcceptBody.booking.version, 2);
 
+  const httpServiceResource = await store.createServiceResource(tenant.chatId, {
+    resource_type: 'PROVIDER', name: 'HTTP Consultation Provider',
+    service_item_id: 'consultation-http', idempotency_key: 'service-booking-http-resource',
+  }, { userId: owner.id });
+  await store.setServiceResourceAvailability(tenant.chatId, httpServiceResource.resource.id, {
+    expected_version: 0, idempotency_key: 'service-booking-http-resource-hours',
+    working_hours: [{ weekday: 1, start_time: '09:00', end_time: '17:00' }],
+    exceptions: [],
+  }, { userId: owner.id });
   const bookingConfirm = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
     method: 'PATCH',
     headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
-    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2, resource_id: httpServiceResource.resource.id }),
   });
   assert.equal(bookingConfirm.status, 200, 'authorized merchant should confirm an accepted appointment');
   const bookingConfirmBody = await bookingConfirm.json();
@@ -455,7 +464,7 @@ try {
   const bookingConfirmReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
     method: 'PATCH',
     headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
-    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2, resource_id: httpServiceResource.resource.id }),
   });
   assert.equal(bookingConfirmReplay.status, 200, 'exact confirmation retry should replay successfully');
   const bookingConfirmReplayBody = await bookingConfirmReplay.json();
