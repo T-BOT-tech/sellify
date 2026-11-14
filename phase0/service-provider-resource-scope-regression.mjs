@@ -110,16 +110,15 @@ try {
   const revokedSession = await store.authenticateSessionToken(session.token);
   assert.equal(revokedSession.contextualRoles.some(item => item.role === 'service_provider'), false);
 
-  // Pack deactivation also removes the provider role from authenticated context.
-  db.prepare("UPDATE pack_lifecycle SET state='DEACTIVATED', updated_at=?, version=version+1 WHERE organization_id=? AND pack_id='service'")
-    .run(new Date().toISOString(), organizationId);
+  // Reassign while the Service Pack is active, then verify deactivation gates
+  // the role out of the authenticated session projection.
   await store.assignMembershipContextualRole({
     actorUserId: owner.id, chatId: tenant.chatId, membershipId: membership.id,
     role: 'service_provider', scopeType: 'RESOURCE', scopeId: resource.id,
-  }).catch(error => {
-    // Assignment correctly refuses to restore a role while the Pack is inactive.
-    assert.ok(error);
   });
+  assert.ok((await store.authenticateSessionToken(session.token)).contextualRoles.some(item => item.role === 'service_provider'));
+  db.prepare("UPDATE pack_lifecycle SET state='DEACTIVATED', updated_at=?, version=version+1 WHERE organization_id=? AND pack_id='service'")
+    .run(new Date().toISOString(), organizationId);
   const inactivePackSession = await store.authenticateSessionToken(session.token);
   assert.equal(inactivePackSession.contextualRoles.some(item => item.role === 'service_provider'), false);
 
