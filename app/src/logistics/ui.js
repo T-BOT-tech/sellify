@@ -155,7 +155,8 @@ function renderOperationalWorkspaceSummary(workspace, views) {
   const trackingRows = views.includes('tracking')
     ? workspace.tracking.slice(0, 8).map(record =>
       `<div class="logistics-meta"><strong>${escapeHtml(record.server_order_id || record.order_id || 'Order')}</strong> ·
-       ${escapeHtml(record.fulfillment_status || 'unknown')}
+       ${escapeHtml(record.fulfillment_status || record.assignment_status || 'unknown')}
+       ${record.unresolved_order ? ' · Order details not loaded' : ''}
        ${record.shipment_id ? ' · Shipment ' + escapeHtml(record.shipment_id) : ''}
        ${record.tracking_reference ? ' · Tracking ' + escapeHtml(record.tracking_reference) : ''}</div>`).join('')
     : '';
@@ -204,11 +205,6 @@ export function renderLogistics() {
     const assignment = canonicalDeliveryAssignment(o);
     return !!assignment && String(assignment.courier_user_id || '') === courierId;
   }).slice(0, 20);
-
-  if (pending.length === 0 && done.length === 0) {
-    list.innerHTML = `<div class="empty">${t('whNoLogisticsOrders')}</div>`;
-    return;
-  }
 
   const renderCard = (o) => {
     const isDelivery = o.fulfillment_type === 'delivery';
@@ -271,14 +267,20 @@ export function renderLogistics() {
       <button type="button" class="btn-secondary" id="logistics-filter-apply">Filter</button>
       <button type="button" class="btn-secondary" id="logistics-filter-clear">Clear</button>
     </div>`;
-  const workspace = buildLogisticsOperationalWorkspaceProjection({
-    orders: courierMode ? pending.concat(done) : orders,
-    assignments: visibleAssignments,
-  });
-  const composition = getLogisticsWorkspaceComposition(workspaceRole);
   const visibleAssignments = courierMode
     ? canonicalAssignments.filter(a => String(a.courier_user_id || '') === courierId)
     : canonicalAssignments;
+  const workspaceOrders = courierMode
+    ? orders.filter(order => {
+      const assignment = canonicalDeliveryAssignment(order);
+      return !!assignment && String(assignment.courier_user_id || '') === courierId;
+    })
+    : orders;
+  const workspace = buildLogisticsOperationalWorkspaceProjection({
+    orders: workspaceOrders,
+    assignments: visibleAssignments,
+  });
+  const composition = getLogisticsWorkspaceComposition(workspaceRole);
   let html = renderWorkspaceModeHeader(workspaceRole, visibleAssignments)
     + (courierMode ? '' : filterBar)
     + renderDeliveryWorkloadSummary(visibleAssignments);
