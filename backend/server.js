@@ -621,7 +621,8 @@ async function handleTelegramStorefrontServiceAppointments(req, res, chatId, mar
   const config = getTelegramStorefrontConfig(chatId);
   if (!config || config.status !== 'PUBLISHED') return sendJSON(res, 404, { error: { message: 'Telegram storefront is not published', status: 404 } }, req);
   const enabled = new Set(Array.isArray(config.enabledCapabilities) ? config.enabledCapabilities : []);
-  if (!enabled.has('order_status') || ((req.method === 'POST' || req.method !== 'PATCH') && !enabled.has('service_appointments'))) {
+  const existingBookingCancellation = req.method === 'PATCH' && !!bookingId;
+  if (!enabled.has('order_status') || (!existingBookingCancellation && !enabled.has('service_appointments'))) {
     return sendJSON(res, 403, { error: { message: 'Service appointment self-service is disabled', status: 403, code: 'TELEGRAM_SERVICE_APPOINTMENTS_DISABLED' } }, req);
   }
   const initData = String(req.headers['x-telegram-init-data'] || '').trim();
