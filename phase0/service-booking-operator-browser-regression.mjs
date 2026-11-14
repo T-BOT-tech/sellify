@@ -89,7 +89,7 @@ try {
     });
   });
 
-  await page.route('**/tenants/test-tenant/service-resources/provider-resource-1/availability', async route => {
+  await page.route('**/service-resources/provider-resource-1/availability', async route => {
     if (route.request().method() === 'GET') {
       await route.fulfill({
         status: 200, contentType: 'application/json',
