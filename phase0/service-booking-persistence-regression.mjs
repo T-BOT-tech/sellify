@@ -64,6 +64,13 @@ try {
     error => error?.code === 'SERVICE_BOOKING_AUTHORITY_FIELD_FORBIDDEN',
     'service booking must reject caller-supplied payment authority fields',
   );
+  await assert.rejects(
+    store.createServiceBooking(seller.chatId, order.server_order_id, {
+      ...request, resource_id: serviceResource.id, idempotency_key: 'booking-create-with-resource-' + suffix,
+    }, { userId: owner.id }),
+    error => error?.code === 'SERVICE_BOOKING_RESOURCE_INVALID',
+    'request preparation must not pre-commit a resource',
+  );
   const created = await store.createServiceBooking(seller.chatId, order.server_order_id, request, { userId: owner.id });
   assert.equal(created.replayed, false);
   assert.equal(created.booking.status, 'REQUESTED');
