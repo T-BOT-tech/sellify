@@ -620,6 +620,11 @@
           <input id="sourcingSearch" type="search" placeholder="Search suppliers, categories or capabilities" style="flex:1;margin-bottom:0;">
           <button id="sourcingSearchBtn" class="btn-secondary" type="button" style="width:auto;margin-top:0;">Search</button>
         </div>
+        <div class="form-grid" style="margin-top:8px;">
+          <label>Capacity available from<input id="sourcingAvailabilityFrom" type="datetime-local" style="display:block;width:100%;box-sizing:border-box;"></label>
+          <label>Capacity available through<input id="sourcingAvailabilityTo" type="datetime-local" style="display:block;width:100%;box-sizing:border-box;"></label>
+        </div>
+        <div class="muted">Optional time-window filter. Both dates are required together. Results use supplier-declared active capacity signals; they do not reserve a slot or confirm availability.</div>
         <div id="sourcingDiscoveryResults" style="margin-top:10px;"></div>
         <div id="sourcingIntelligenceSummary" class="sync-note" style="margin-top:10px;display:none;"></div>
         <div id="sourcingRelationshipList" style="margin-top:10px;"></div>
