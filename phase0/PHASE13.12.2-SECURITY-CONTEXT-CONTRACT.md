@@ -123,3 +123,13 @@ Phase 13.12.2 passes when the repository has an explicit, validated security
 context contract that can carry the existing identity/scope and observability
 fields into the canonical authorization boundary without creating a competing
 authority.
+
+## Subsequent resource-context extension
+
+The canonical evaluator now accepts an optional sixth argument:
+
+```text
+authorize(actor, organization, location, resource, action, resourceContext)
+```
+
+Existing five-argument call sites remain compatible. Resource-scoped contextual roles are executable only when the server resolves a canonical Service Resource and supplies a context whose resource type is `service_resource`, resource ID, organization ID, and location ID match the requested operation and the membership scope. Arbitrary resource scopes remain non-executable. The context is a resolved request input, not a new identity or persistence authority.
