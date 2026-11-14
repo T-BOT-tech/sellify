@@ -76,11 +76,16 @@ function capacityMatches(candidate, context) {
   }
   const productId = norm(context.productId);
   const capabilityCode = upper(context.capabilityCode);
+  const capabilityIds = asArray(candidate.capabilities)
+    .filter(item => upper(item.code) === capabilityCode)
+    .map(item => norm(item.id))
+    .filter(Boolean);
   const unit = norm(context.unit);
   const relevant = signals.filter(signal => {
     if (temporalRequested && (productId || capabilityCode)) {
       const productSubjectMatch = productId && upper(signal.subjectType) === 'PRODUCT' && norm(signal.subjectId) === productId;
-      const capabilitySubjectMatch = capabilityCode && upper(signal.subjectType) === 'CAPABILITY' && upper(signal.subjectId) === capabilityCode;
+      const capabilitySubjectMatch = capabilityCode && upper(signal.subjectType) === 'CAPABILITY'
+        && (upper(signal.subjectId) === capabilityCode || capabilityIds.includes(norm(signal.subjectId)));
       if (!productSubjectMatch && !capabilitySubjectMatch) return false;
     } else if (!temporalRequested && productId && norm(signal.subjectId) !== productId) {
       return false;
