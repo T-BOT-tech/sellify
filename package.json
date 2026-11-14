@@ -467,7 +467,8 @@
     "test:service-availability-contract": "node phase0/service-availability-contract-regression.mjs",
     "test:service-availability-api": "node phase0/service-availability-api-regression.mjs",
     "test:service-window-assessment": "node phase0/service-window-assessment-regression.mjs",
-    "test:service-provider-resource-scope": "node phase0/service-provider-resource-scope-regression.mjs"
+    "test:service-provider-resource-scope": "node phase0/service-provider-resource-scope-regression.mjs",
+    "tg11:telegram-service-appointments-test": "node phase0/tg11-telegram-buyer-service-appointments-regression.mjs"
   },
   "engines": {
     "node": ">=24"
