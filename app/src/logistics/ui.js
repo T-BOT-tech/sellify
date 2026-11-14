@@ -281,7 +281,7 @@ export function renderLogistics() {
     assignments: visibleAssignments,
   });
   const composition = getLogisticsWorkspaceComposition(workspaceRole);
-  const representedServerOrders = new Set(workspaceOrders.map(order => String(order.server_order_id || '')).filter(Boolean));
+  const representedServerOrders = new Set(pending.concat(done).map(order => String(order.server_order_id || '')).filter(Boolean));
   const assignmentOnly = visibleAssignments.filter(assignment =>
     assignment.server_order_id && !representedServerOrders.has(String(assignment.server_order_id))
   );
