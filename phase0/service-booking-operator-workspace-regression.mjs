@@ -18,7 +18,7 @@ assert.match(moduleSource, /escapeHtml\(booking\.status_reason\)/);
 assert.match(moduleSource, /\['REJECTED', 'FAILED', 'CANCELLED'\]/);
 assert.match(moduleSource, /config\.contextualRoles/);
 const canOperateSource = moduleSource.slice(moduleSource.indexOf('function canOperate'), moduleSource.indexOf('function renderBookingCard'));
-assert.match(canOperateSource, /role === 'owner' \\|\\| role === 'manager'/);
+assert.ok(canOperateSource.includes("role === 'owner' || role === 'manager'"));
 assert.doesNotMatch(canOperateSource, /logistics_manager|logistics_dispatcher/);
 const bookingHandler = serverSource.slice(serverSource.indexOf('async function handleServiceBookings'), serverSource.indexOf('async function handleServiceDeliveryAssessment'));
 assert.match(bookingHandler, /service:booking:view/);
