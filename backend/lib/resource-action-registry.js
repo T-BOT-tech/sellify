@@ -75,8 +75,8 @@ const DEFINITIONS = [
   // remain vocabulary-only until their own policy and evidence contracts exist.
   ['service', 'service_resource', 'view', 'service:service_resource:view'],
   ['service', 'service_resource', 'manage', 'service:service_resource:manage'],
-  ['service', 'resource_availability', 'view', null],
-  ['service', 'resource_availability', 'manage', null],
+  ['service', 'resource_availability', 'view', 'service:resource_availability:view'],
+  ['service', 'resource_availability', 'manage', 'service:resource_availability:manage'],
   ['service', 'appointment_feasibility', 'view', null],
   ['service', 'appointment_feasibility', 'assess', null],
 ];
@@ -119,7 +119,7 @@ export function listResourceActions({ packId = null, resource = null } = {}) {
 
 export function resourceActionRegistryContract() {
   return freeze({
-    authority: 'backend/lib/authorization.js authorize(actor, organization, location, resource, action)',
+    authority: 'backend/lib/authorization.js authorize(actor, organization, location, resource, action, resourceContext)',
     persistence: 'none',
     evaluator: 'none',
     permission_store: 'none',
