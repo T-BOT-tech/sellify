@@ -177,7 +177,17 @@ export async function searchSupplierNetwork() {
   if (!results || !can('supplier-network:discovery:discover')) return;
   results.innerHTML = '<div class="empty">Searching supplier network…</div>';
   try {
-    const data = await request(`/api/discovery?chatId=${encodeURIComponent(config.chatId)}&providers=supplier-network&search=${encodeURIComponent(q)}&limit=25`);
+    const fromInput = document.getElementById('sourcingAvailabilityFrom')?.value || '';
+  const toInput = document.getElementById('sourcingAvailabilityTo')?.value || '';
+  if (Boolean(fromInput) !== Boolean(toInput)) throw new Error('Enter both availability start and end, or leave both empty.');
+  if (fromInput && new Date(fromInput).getTime() > new Date(toInput).getTime()) throw new Error('Availability end must be after the start.');
+  const availabilityFrom = fromInput ? new Date(fromInput).toISOString() : '';
+  const availabilityTo = toInput ? new Date(toInput).toISOString() : '';
+  const params = new URLSearchParams({
+    chatId: config.chatId, providers: 'supplier-network', search: q, limit: '25',
+    ...(availabilityFrom ? { availabilityFrom, availabilityTo } : {}),
+  });
+  const data = await request(`/api/discovery?${params.toString()}`);
     const rows = data.candidates || [];
     lastSourcingCandidates = rows;
     lastSourcingOpportunities = Array.isArray(data.opportunities) ? data.opportunities : [];
@@ -191,7 +201,12 @@ export async function searchSupplierNetwork() {
             : '')
           + '</div>'
         : '';
-      return `<div class="table-card account-card"><div class="account-name">${esc(r.organization?.name || r.organizationName || r.displayName)} · match ${esc(r.score ?? '')}</div><div class="account-contact">${esc(r.profile?.serviceSummary || '')}</div><div class="account-notes">${esc(r.profile?.description || r.description || r.explanation || '')}</div>${supplierActions}</div>`;
+      const capacityRows = Array.isArray(r.availability?.capacitySignals) ? r.availability.capacitySignals : [];
+      const capacityHtml = capacityRows.length ? `<div class="account-notes"><strong>Declared capacity signals</strong>${capacityRows.map(signal => {
+        const window = signal.periodStart && signal.periodEnd ? `${signal.periodStart} → ${signal.periodEnd}` : 'No defined period';
+        return `<div>${esc(signal.subjectType)} · ${esc(signal.subjectId)} · ${esc(signal.quantity)} ${esc(signal.unit)} · ${esc(signal.availability)} · ${esc(window)} · ${esc(signal.source || 'DECLARED')}</div>`;
+      }).join('')}</div>` : '';
+      return `<div class="table-card account-card"><div class="account-name">${esc(r.organization?.name || r.organizationName || r.displayName)} · match ${esc(r.score ?? '')}</div><div class="account-contact">${esc(r.profile?.serviceSummary || '')}</div><div class="account-notes">${esc(r.profile?.description || r.description || r.explanation || '')}</div>${capacityHtml}<div class="muted">Capacity is supplier-declared; a match is not a reservation, verification, supplier selection or authorization.</div>${supplierActions}</div>`;
     }).join('');
     results.innerHTML = opportunityCards + (rows.length ? supplierCards : '<div class="empty">No matching suppliers found.</div>');
   } catch (error) { results.innerHTML = `<div class="empty">${esc(error.message)}</div>`; }
