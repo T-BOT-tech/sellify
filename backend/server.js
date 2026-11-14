@@ -3266,7 +3266,7 @@ async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId 
   if (req.method === 'PATCH') {
     const target = String(body.status || body.next_status || body.nextStatus || '').trim().toUpperCase();
     authorizationAction = target === 'CONFIRMED'
-      ? 'logistics:scheduling:confirm'
+      ? 'service:appointment:commit'
       : target === 'CANCELLED'
         ? 'logistics:scheduling:cancel'
         : 'logistics:scheduling:manage';
