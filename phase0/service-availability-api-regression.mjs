@@ -26,6 +26,7 @@ assert.match(contract, /WORKING_HOURS_OVERLAP/);
 assert.match(contract, /SERVICE_AVAILABILITY_EXCEPTION_DUPLICATE/);
 assert.match(contract, /RESOURCE_COMMITMENTS_NOT_EVALUATED/);
 assert.match(ui, /service-resource-availability/);
+assert.match(ui, /availability\.timeZone/, 'availability editor must consume the canonical camelCase timeZone field');
 
 const localeNames = ['en', 'am', 'om', 'so', 'sw', 'es', 'hi', 'fr', 'ar', 'ha', 'yo', 'ru', 'pt'];
 const localeKeys = [
