@@ -207,6 +207,16 @@ try {
     'Idempotency-Key': 'phase11-4-delivery-checkout',
   });
   assert.equal(deliveryCheckout.response.status, 200);
+  const deliveryCheckoutReplay = await request('POST', '/api/marketplace/checkout', deliveryPayload, {
+    'Idempotency-Key': 'phase11-4-delivery-checkout',
+  });
+  assert.equal(deliveryCheckoutReplay.response.status, 200);
+  assert.equal(deliveryCheckoutReplay.json.marketplace_order_id, deliveryCheckout.json.marketplace_order_id);
+  const deliveryCheckoutMovements = db.prepare(`
+    SELECT * FROM inventory_movements
+    WHERE organization_id = ? AND product_id = 'delivery-integrity-item'
+  `).all(sellerSession.organizationId);
+  assert.equal(deliveryCheckoutMovements.length, 1, 'delivery checkout replay must not add another SALE');
   const deliveryMaster = db.prepare('SELECT * FROM marketplace_orders WHERE id = ?')
     .get(deliveryCheckout.json.marketplace_order_id);
   const deliveryLegacyOrder = (await store.getOrders(seller.chatId))
