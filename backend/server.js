@@ -3277,6 +3277,25 @@ async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId 
       ? 'Service booking request permission required'
       : 'Service booking lifecycle permission required',
   });
+  if (req.method === 'PATCH' && String(body.status || body.next_status || body.nextStatus || '').trim().toUpperCase() === 'CONFIRMED') {
+    const resourceId = String(body.resource_id || body.resourceId || '').trim();
+    if (!resourceId) return sendJSON(res, 400, { error: { message: 'A Service Resource is required to confirm this appointment', status: 400, code: 'SERVICE_BOOKING_RESOURCE_REQUIRED' } }, req);
+    const resource = (await listServiceResources(chatId, { includeInactive: true }))
+      .find(item => String(item.id) === resourceId);
+    if (!resource) return sendJSON(res, 404, { error: { message: 'Service Resource not found', status: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' } }, req);
+    const resourceLocation = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
+    if (resource.locationId && !resourceLocation) throw Object.assign(new Error('Service Resource location is not available in tenant scope'), { statusCode:403, code:'LOCATION_SCOPE_DENIED' });
+    await requireAuthorization(session, tenant, 'service_resource', 'service:service_resource:manage', {
+      location: resourceLocation,
+      resourceContext: {
+        resourceType: 'service_resource',
+        resourceId: resource.id,
+        organizationId: resource.organizationId,
+        locationId: resource.locationId,
+      },
+      deniedMessage: 'Service Resource management permission required to commit an appointment',
+    });
+  }
 
   if (req.method === 'POST') {
     const result = await createServiceBooking(chatId, serverOrderId, { ...body, idempotencyKey }, session);
