@@ -164,4 +164,5 @@ export default {
     serviceResourceRevokeProvider: "የአቅራቢ መዳረሻን አስወግድ",
     serviceResourceProviderAssignFailed: "የአቅራቢ መዳረሻን ማዘመን አልተቻለም።",
     serviceResourceNoProviderMembers: "ብቁ የሰራተኛ አባልነቶች የሉም።",
+    serviceResourceProviderDescription: "የተመደቡልዎትን የአገልግሎት ሀብቶች ይመልከቱ እና የተገለጹ የሥራ ሰዓቶቻቸውን ያዘምኑ። ነባር ቁርጠኝነቶች እስኪመረመሩ ድረስ ተገኝነት አይረጋገጥም።",
 };
