@@ -82,7 +82,7 @@ try {
         resources: resourcesAvailable || providerMode ? [{
           id: 'provider-resource-1', name: 'Provider One', resourceType: 'PROVIDER',
           status: 'ACTIVE', version: 1, organizationId: 'test-org',
-          locationId: null, serviceItemId: 'service-1',
+          locationId: null, serviceItemId: 'consultation',
         }] : [],
         state: 'READY', authority: 'service_resource_registry',
         scope: providerMode ? 'ASSIGNED_RESOURCES' : 'ORGANIZATION',
