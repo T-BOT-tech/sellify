@@ -81,4 +81,12 @@ export default {
     serviceResourceProviderAssignFailed: "Não foi possível atualizar o acesso do prestador.",
     serviceResourceNoProviderMembers: "Não há membros da equipa elegíveis.",
     serviceResourceProviderDescription: "Consulte os recursos de serviço atribuídos a si e mantenha os horários declarados. A disponibilidade não é confirmada até que os compromissos existentes sejam verificados.",
+    serviceBookingSelectResource: "Recurso do serviço",
+    serviceBookingNoEligibleResource: "Não há recurso ativo com horário declarado configurado para este serviço.",
+    serviceBookingResourceRequired: "Selecione um recurso do serviço antes de confirmar o agendamento.",
+    serviceBookingAssignedResource: "Recurso atribuído",
+    serviceBookingResourceUnknown: "Compromisso do recurso DESCONHECIDO — é necessária revisão.",
+    serviceBookingResourceReleased: "Horário do recurso liberado",
+    serviceResourceAvailabilityConfigured: "Horário configurado",
+    serviceResourceAvailabilityNotConfigured: "Horário não configurado",
 };
