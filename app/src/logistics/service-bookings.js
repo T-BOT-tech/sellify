@@ -9,6 +9,7 @@ import { assessServiceResourceDeclaredWindow, serviceLocalDateTimeToIso } from '
 let mountedServiceBookingsWorkspace = null;
 let mountedServiceBookingsTenant = null;
 const serviceBookingsHandlerRoots = new WeakSet();
+let serviceResourceCache = [];
 
 const NEXT = Object.freeze({
   REQUESTED: ['ACCEPTED', 'REJECTED', 'CANCELLED'],
@@ -58,21 +59,46 @@ function renderBookingCard(order, booking) {
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? String(value || '—') : parsed.toLocaleString();
   };
-  const actions = canOperate() ? transitions.map(target =>
-    '<button type="button" class="btn-secondary service-booking-action" data-order-id="' + escapeAttr(order.server_order_id)
+  const eligibleResources = serviceResourceCache.filter(resource =>
+    String(resource.status || '').toUpperCase() === 'ACTIVE'
+    && resource.availabilityConfigured === true
+    && (!resource.serviceItemId || String(resource.serviceItemId) === String(booking.service_item_id)));
+  const actionButton = target => '<button type="button" class="btn-secondary service-booking-action" data-order-id="' + escapeAttr(order.server_order_id)
     + '" data-booking-id="' + escapeAttr(booking.id) + '" data-version="' + escapeAttr(booking.version)
-    + '" data-target="' + escapeAttr(target) + '">' + escapeHtml(target.replaceAll('_', ' ')) + '</button>'
-  ).join('') : '';
+    + '" data-target="' + escapeAttr(target) + '">' + escapeHtml(target.replaceAll('_', ' ')) + '</button>';
+  const actions = canOperate() ? transitions.map(target => {
+    if (target !== 'CONFIRMED') return actionButton(target);
+    if (!eligibleResources.length) {
+      return '<div class="logistics-meta" role="status">' + escapeHtml(t('serviceBookingNoEligibleResource')) + '</div>';
+    }
+    const options = '<option value="">' + escapeHtml(t('serviceBookingSelectResource')) + '</option>' + eligibleResources
+      .map(resource => '<option value="' + escapeAttr(resource.id) + '">' + escapeHtml(resource.name || resource.id) + '</option>')
+      .join('');
+    return '<label class="service-booking-resource-choice">' + escapeHtml(t('serviceBookingSelectResource'))
+      + '<select class="service-booking-resource-select" data-booking-id="' + escapeAttr(booking.id) + '" required>' + options + '</select></label>'
+      + actionButton(target);
+  }).join('') : '';
+  const assignedResource = booking.service_resource_id
+    ? serviceResourceCache.find(resource => String(resource.id) === String(booking.service_resource_id))
+    : null;
+  const resourceEvidence = booking.resource_commitment_state === 'UNKNOWN'
+    ? '<div class="logistics-meta" role="status">' + escapeHtml(t('serviceBookingResourceUnknown')) + '</div>'
+    : booking.resource_commitment_state === 'COMMITTED'
+      ? '<div class="logistics-meta">' + escapeHtml(t('serviceBookingAssignedResource')) + ': ' + escapeHtml(assignedResource?.name || booking.service_resource_id) + '</div>'
+      : booking.resource_commitment_state === 'RELEASED'
+        ? '<div class="logistics-meta">' + escapeHtml(t('serviceBookingResourceReleased')) + ': ' + escapeHtml(assignedResource?.name || booking.service_resource_id) + '</div>'
+        : '';
   return '<article class="logistics-card service-booking-card">'
     + '<div class="logistics-top"><strong>' + escapeHtml(booking.service_item_id || 'Service')
     + '</strong><span class="logistics-status">' + escapeHtml(status.replaceAll('_', ' ')) + '</span></div>'
     + '<div class="logistics-meta">Order ' + escapeHtml(order.server_order_id) + ' · ' + escapeHtml(mode || 'appointment')
     + ' · v' + escapeHtml(booking.version) + '</div>'
     + '<div class="logistics-meta">' + escapeHtml(date(booking.requested_start)) + ' – ' + escapeHtml(date(booking.requested_end)) + '</div>'
+    + resourceEvidence
     + (booking.customer_note ? '<div class="logistics-meta">' + escapeHtml(booking.customer_note) + '</div>' : '')
     + (booking.status_reason ? '<div class="logistics-meta">Reason: ' + escapeHtml(booking.status_reason) + '</div>' : '')
     + (booking.completion_note ? '<div class="logistics-meta">Completion: ' + escapeHtml(booking.completion_note) + '</div>' : '')
-    + (actions ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">' + actions + '</div>' : '')
+    + (actions ? '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:end;margin-top:8px;">' + actions + '</div>' : '')
     + '</article>';
 }
 
@@ -171,11 +197,13 @@ async function refreshServiceResources(root = document) {
     if (workspace.isConnected === false || workspace.dataset.resourceRefreshSequence !== String(sequence)
         || String(config.chatId) !== tenantId || String(config.sessionToken) !== sessionToken) return;
     const resources = Array.isArray(data.resources) ? data.resources : [];
+    serviceResourceCache = resources;
     list.innerHTML = resources.map(serviceResourceCard).join('');
     status.textContent = resources.length ? t('serviceResourceReady') : t('serviceResourceEmpty');
   } catch (error) {
     if (workspace.dataset.resourceRefreshSequence !== String(sequence)
         || String(config.chatId) !== tenantId || String(config.sessionToken) !== sessionToken) return;
+    serviceResourceCache = [];
     status.textContent = error.status === 403 ? t('serviceBookingsDenied')
       : !navigator.onLine ? t('serviceResourceUnknownStale') : t('serviceResourceLoadFailed');
   }
@@ -205,6 +233,7 @@ async function saveServiceResource(button, root) {
     if (!response.ok) throw new Error(data?.error?.message || t('serviceResourceSaveFailed'));
     form.reset();
     await refreshServiceResources(root);
+    await refreshServiceBookings(root);
   } catch (error) {
     status.textContent = error.message || t('serviceResourceSaveFailed');
   } finally {
@@ -225,6 +254,7 @@ async function updateServiceResource(button, root, patch) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data?.error?.message || t('serviceResourceSaveFailed'));
     await refreshServiceResources(root);
+    await refreshServiceBookings(root);
   } catch (error) {
     status.textContent = error.message || t('serviceResourceSaveFailed');
   } finally {
@@ -410,6 +440,10 @@ async function saveServiceResourceAvailability(button, root) {
     panel.dataset.workingHours = JSON.stringify(data.availability?.workingHours || workingHours);
     panel.dataset.exceptions = JSON.stringify(data.availability?.exceptions || exceptions);
     status.textContent = t('serviceAvailabilitySavedDeclaration');
+    serviceResourceCache = serviceResourceCache.map(resource => String(resource.id) === String(button.dataset.resourceId)
+      ? { ...resource, availabilityConfigured: workingHours.length > 0 || exceptions.length > 0 }
+      : resource);
+    await refreshServiceBookings(root);
   } catch (error) {
     status.textContent = error.message || t('serviceAvailabilitySaveFailed');
   } finally { button.disabled = false; }
@@ -500,6 +534,15 @@ async function transitionBooking(button, root) {
   const target = button.dataset.target;
   let reason = '';
   let completion_note = '';
+  let service_resource_id = null;
+  if (target === 'CONFIRMED') {
+    const card = button.closest('.service-booking-card');
+    service_resource_id = card?.querySelector('.service-booking-resource-select')?.value || null;
+    if (!service_resource_id) {
+      window.alert(t('serviceBookingResourceRequired'));
+      return;
+    }
+  }
   if (['REJECTED', 'FAILED', 'CANCELLED'].includes(target)) {
     reason = window.prompt(t('serviceBookingReasonPrompt') + ' ' + target.toLowerCase() + ':')?.trim() || '';
     if (!reason) return;
@@ -519,6 +562,7 @@ async function transitionBooking(button, root) {
       body: JSON.stringify({
         status: target,
         expected_version: Number(button.dataset.version),
+        ...(service_resource_id ? { service_resource_id } : {}),
         ...(reason ? { reason } : {}),
         ...(completion_note ? { completion_note } : {}),
       }),
@@ -531,6 +575,7 @@ async function transitionBooking(button, root) {
     button.disabled = false;
   }
 }
+
 
 export function mountServiceBookingsWorkspace(root = document) {
   const workspace = root.querySelector('#serviceBookingsWorkspace');
@@ -552,7 +597,7 @@ export function mountServiceBookingsWorkspace(root = document) {
       const availabilitySave = event.target.closest('.service-availability-save');
       const windowAssess = event.target.closest('.service-window-assess');
       const createResource = event.target.closest('#serviceResourceCreate');
-      if (refresh) { refreshServiceBookings(root); refreshServiceResources(root); }
+      if (refresh) refreshServiceResources(root).finally(() => refreshServiceBookings(root));
       if (action) transitionBooking(action, root);
       if (resourceToggle) updateServiceResource(resourceToggle, root, { status: resourceToggle.dataset.status });
       if (resourceAvailability) openServiceResourceAvailability(resourceAvailability, root);
@@ -580,7 +625,7 @@ export function mountServiceBookingsWorkspace(root = document) {
   if (tenantKey && (mountedServiceBookingsWorkspace !== workspace || mountedServiceBookingsTenant !== tenantKey)) {
     mountedServiceBookingsWorkspace = workspace;
     mountedServiceBookingsTenant = tenantKey;
-    refreshServiceBookings(root);
-    refreshServiceResources(root);
+    serviceResourceCache = [];
+    refreshServiceResources(root).finally(() => refreshServiceBookings(root));
   }
 }
