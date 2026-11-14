@@ -28,10 +28,27 @@ try {
   insertSeller.run(`tg7-so-1-${x}`,`tg7-order-1-${x}`,tenant.chatId,`SO-TG7-1-${x}`,org,'ETB',12500,'confirmed',now,now);
   insertOrder.run(`tg7-order-2-${x}`,'telegram-user-7','Buyer','','ETB',9000,'queued','hash2',null,now,now);
   insertSeller.run(`tg7-so-2-${x}`,`tg7-order-2-${x}`,otherTenant.chatId,`SO-TG7-2-${x}`,db.prepare('SELECT organization_id FROM tenants WHERE chat_id=?').get(otherTenant.chatId).organization_id,'ETB',9000,'queued',now,now);
+  const canonicalSellerOrderId=`SO-TG7-1-${x}`;
+  const serverOrderId=`server-tg7-1-${x}`;
+  db.prepare("INSERT INTO orders (chat_id,local_id,server_order_id,order_json,total_minor,created_at,status,delivered_to_device,marketplace_order_id,is_marketplace) VALUES (?,?,?,?,?,?,?,?,?,1)")
+    .run(tenant.chatId,canonicalSellerOrderId,serverOrderId,JSON.stringify({
+      id:canonicalSellerOrderId,marketplace_order_id:`tg7-order-1-${x}`,is_marketplace:true,
+      status:'confirmed',total:12500,currency:'ETB',created_at:Date.now(),
+      items:[{item_id:'tg7-service',item_type:'service',name:'TG7 Consultation',qty:1,price:12500}],
+    }),12500,Date.now(),'confirmed',1,`tg7-order-1-${x}`);
+  const requested=await store.createServiceBooking(tenant.chatId,serverOrderId,{
+    service_item_id:'tg7-service',requested_start:'2026-11-20T09:00:00+03:00',
+    requested_end:'2026-11-20T10:00:00+03:00',idempotency_key:`tg7-booking-${x}`,
+  });
+  assert.equal(requested.booking.status,'REQUESTED');
   const orders=await store.listTelegramBuyerOrders(tenant.chatId,'telegram-user-7',20);
   assert.equal(orders.length,1);
   assert.equal(orders[0].marketplace_order_id,`tg7-order-1-${x}`);
   assert.equal(orders[0].sellers[0].seller_order_id,`SO-TG7-1-${x}`);
+  assert.equal(orders[0].sellers[0].service_items[0].id,'tg7-service');
+  assert.equal(orders[0].sellers[0].service_appointments[0].id,requested.booking.id);
+  assert.equal(orders[0].sellers[0].service_appointments[0].status,'REQUESTED');
+  assert.equal(orders[0].sellers[0].time_zone,'Africa/Addis_Ababa');
   const empty=await store.listTelegramBuyerOrders(tenant.chatId,'telegram-user-missing',20);
   assert.deepEqual(empty,[]);
   console.log('TG-7 Telegram buyer order history/self-service regression: PASS');
