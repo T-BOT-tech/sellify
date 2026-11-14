@@ -12,12 +12,15 @@ assert.match(moduleSource, /method:\s*'PATCH'/);
 assert.match(moduleSource, /'Idempotency-Key'/);
 assert.match(moduleSource, /expected_version:\s*Number\(button\.dataset\.version\)/);
 assert.match(moduleSource, /response\.ok/);
+assert.match(moduleSource, /serviceResourceEndpoint\(\)/);
+assert.match(moduleSource, /resource_id/);
+assert.match(moduleSource, /target !== 'CONFIRMED' \|\| canCommit/);
 assert.match(moduleSource, /escapeHtml\(booking\.customer_note\)/);
 assert.match(moduleSource, /escapeHtml\(booking\.status_reason\)/);
 assert.match(moduleSource, /\['REJECTED', 'FAILED', 'CANCELLED'\]/);
 assert.match(moduleSource, /config\.contextualRoles/);
 assert.match(moduleSource, /import \{ t \} from '..\/ui\/i18n\.js'/);
-for (const key of ['serviceBookingsTitle', 'serviceBookingsRefresh', 'serviceBookingsDescription', 'serviceBookingsLoading', 'serviceBookingsSignIn', 'serviceBookingsNoOrders', 'serviceBookingsDenied', 'serviceBookingsPartialFailure', 'serviceBookingsEmpty', 'serviceBookingSingular', 'serviceBookingPlural', 'serviceBookingsLoaded', 'serviceBookingReasonPrompt', 'serviceBookingCompletionPrompt', 'serviceBookingUpdateFailed', 'serviceBookingsLoadFailed']) {
+for (const key of ['serviceBookingsTitle', 'serviceBookingsRefresh', 'serviceBookingsDescription', 'serviceBookingsLoading', 'serviceBookingsSignIn', 'serviceBookingsNoOrders', 'serviceBookingsDenied', 'serviceBookingsPartialFailure', 'serviceBookingsEmpty', 'serviceBookingSingular', 'serviceBookingPlural', 'serviceBookingsLoaded', 'serviceBookingReasonPrompt', 'serviceBookingCompletionPrompt', 'serviceBookingUpdateFailed', 'serviceBookingsLoadFailed', 'serviceBookingChooseResource']) {
   assert.match(moduleSource, new RegExp(key));
   for (const localeSource of localeSources) {
     const occurrences = localeSource.match(new RegExp('\\b' + key + '\\s*:', 'g')) || [];
