@@ -244,8 +244,7 @@ async function openServiceResourceAvailability(button, root) {
   const card = button.closest('.service-resource-card');
   if (!card) return;
   let panel = card.querySelector('.service-resource-availability-panel');
-  if (panel && !forceRefresh) { panel.remove(); return; }
-  if (panel) panel.remove();
+  if (panel) { panel.remove(); return; }
   panel = document.createElement('section');
   panel.className = 'service-resource-availability-panel';
   panel.style.cssText = 'display:grid;gap:8px;margin-top:10px;';
