@@ -134,3 +134,12 @@ Phase 13.12.3 passes when:
 Next controlled subphase:
 
 **Phase 13.12.4 — Cross-Pack Role Matrix**
+
+## Subsequent Service availability policy extension
+
+The Service Pack registry was extended additively from 42 to 48 entries across five packs. The two existing Service Resource Availability entries now map to the canonical Phase 10.3 permissions:
+
+- `service:resource_availability:view`
+- `service:resource_availability:manage`
+
+Manager receives organization-level availability permissions. The contextual-only `service_provider` role receives these availability permissions plus Service Resource view, but only when the central evaluator receives an exact, organization-bound `service_resource` context. Appointment-feasibility actions remain vocabulary-only. No new evaluator, permission store, or domain authority was introduced.
