@@ -212,7 +212,7 @@ try {
   const deliveryLegacyOrder = (await store.getOrders(seller.chatId))
     .find(order => order.marketplace_order_id === deliveryMaster.id);
   const deliveryOrderRow = db.prepare(
-    'SELECT server_order_id FROM orders WHERE chat_id = ? AND marketplace_order_id = ? LIMIT 1'
+    'SELECT server_order_id, is_marketplace, marketplace_order_id FROM orders WHERE chat_id = ? AND marketplace_order_id = ? LIMIT 1'
   ).get(seller.chatId, deliveryMaster.id);
   assert.ok(deliveryLegacyOrder?.is_marketplace, 'Marketplace order marker must survive into Core Order projection');
   assert.ok(deliveryOrderRow?.server_order_id);
