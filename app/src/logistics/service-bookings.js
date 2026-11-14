@@ -528,9 +528,9 @@ async function transitionBooking(button, root) {
           && (!resource.serviceItemId || String(resource.serviceItemId) === String(button.dataset.serviceItemId || '')));
       if (!eligible.length) throw new Error(t('serviceResourceEmpty'));
       const options = eligible.map((resource, index) => (index + 1) + '. ' + resource.name
-        + (resource.locationId ? ' · ' + resource.locationId : '')).join('\\n');
+        + (resource.locationId ? ' · ' + resource.locationId : '')).join('\n');
       const selected = window.prompt(t('serviceBookingChooseResource') + '\\n' + options + '\\n0. Cancel');
-      if (selected == null || selected.trim() === '0') return;
+      if (selected == null || selected.trim() === '0') { button.disabled = false; return; }
       const index = Number(selected) - 1;
       if (!Number.isInteger(index) || index < 0 || index >= eligible.length) {
         throw new Error(t('serviceBookingChooseResource'));
