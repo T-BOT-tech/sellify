@@ -69,6 +69,7 @@ try {
   const calls = [];
   let forceConflict = false;
   let providerMode = false;
+  let resourcesAvailable = false;
   await page.route('**/tenants/test-tenant/service-resources**', async route => {
     if (route.request().method() !== 'GET') {
       await route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Method not allowed' } }) });
@@ -78,11 +79,11 @@ try {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        resources: [{
+        resources: resourcesAvailable || providerMode ? [{
           id: 'provider-resource-1', name: 'Provider One', resourceType: 'PROVIDER',
           status: 'ACTIVE', version: 1, organizationId: 'test-org',
           locationId: null, serviceItemId: 'service-1',
-        }],
+        }] : [],
         state: 'READY', authority: 'service_resource_registry',
         scope: providerMode ? 'ASSIGNED_RESOURCES' : 'ORGANIZATION',
       }),
@@ -177,6 +178,8 @@ try {
   await page.getByRole('button', { name: 'REJECTED' }).click();
   assert.equal(calls.filter(call => call.method === 'PATCH').length, 0, 'cancelled reason prompt does not mutate booking');
 
+  // Make an eligible resource available before the booking reaches ACCEPTED.
+  resourcesAvailable = true;
   // A successful transition sends the current version and idempotency key, then reloads canonical state.
   await page.getByRole('button', { name: 'ACCEPTED' }).click();
   await page.locator('.service-booking-card .logistics-status').filter({ hasText: 'ACCEPTED' }).waitFor();
