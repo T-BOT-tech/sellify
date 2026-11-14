@@ -164,4 +164,12 @@ export default {
     serviceResourceProviderAssignFailed: "Hayyama dhiyeessaa haaromsuun hin danda'amne.",
     serviceResourceNoProviderMembers: "Miseensota hojjettoota ulaagaa guutan hin jiran.",
     serviceResourceProviderDescription: "Qabeenya tajaajilaa siif ramadame ilaali; sa'aatii hojii isaa ibsame haaromsi. Qabamtoonni duraanii hanga hin ilaalamnetti argamuun hin mirkanoofne.",
+    serviceBookingSelectResource: "Qabeenya tajaajilaa",
+    serviceBookingNoEligibleResource: "Tajaajila kanaaf qabeenyi hojii sa'aatii ibsame qabu hin jiru.",
+    serviceBookingResourceRequired: "Beellama mirkaneessuu dura qabeenya tajaajilaa filadhu.",
+    serviceBookingAssignedResource: "Qabeenya ramadame",
+    serviceBookingResourceUnknown: "Ramaddiin qabeenyaa UNKNOWN dha — qorannoon barbaachisa.",
+    serviceBookingResourceReleased: "Yeroon qabeenyaa gadhiifame",
+    serviceResourceAvailabilityConfigured: "Sagantaan qophaa'e",
+    serviceResourceAvailabilityNotConfigured: "Sagantaan hin qophoofne",
 };
