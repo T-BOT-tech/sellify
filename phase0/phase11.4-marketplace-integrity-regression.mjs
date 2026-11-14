@@ -80,6 +80,12 @@ try {
       price: 1000,
       stock: 5,
       marketplace_listed: true,
+    }, {
+      id: 'delivery-integrity-item',
+      name: 'Delivery Integrity Item',
+      price: 750,
+      stock: 5,
+      marketplace_listed: true,
     }]);
 
   const payload = {
@@ -188,6 +194,94 @@ try {
     SELECT COUNT(*) AS c FROM inventory_movements
     WHERE event_id = ?
   `).get(`marketplace-cancel:${master.id}:${seller.chatId}:integrity-item`).c, 1);
+
+  // Marketplace delivery uses the canonical Logistics assignment lifecycle,
+  // but checkout already owns the physical SALE inventory consequence.
+  const deliveryPayload = {
+    buyer_id: 'phase11-4-delivery-buyer',
+    customer_name: 'Delivery Integrity Buyer',
+    customer_phone: '0911111111',
+    items: [{ seller_id: seller.chatId, item_id: 'delivery-integrity-item', qty: 2 }],
+  };
+  const deliveryCheckout = await request('POST', '/api/marketplace/checkout', deliveryPayload, {
+    'Idempotency-Key': 'phase11-4-delivery-checkout',
+  });
+  assert.equal(deliveryCheckout.response.status, 200);
+  const deliveryMaster = db.prepare('SELECT * FROM marketplace_orders WHERE id = ?')
+    .get(deliveryCheckout.json.marketplace_order_id);
+  const deliveryLegacyOrder = (await store.getOrders(seller.chatId))
+    .find(order => order.marketplace_order_id === deliveryMaster.id);
+  const deliveryOrderRow = db.prepare(
+    'SELECT server_order_id FROM orders WHERE chat_id = ? AND marketplace_order_id = ? LIMIT 1'
+  ).get(seller.chatId, deliveryMaster.id);
+  assert.ok(deliveryLegacyOrder?.is_marketplace, 'Marketplace order marker must survive into Core Order projection');
+  assert.ok(deliveryOrderRow?.server_order_id);
+
+  const defaultLocation = db.prepare(
+    "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
+  ).get(sellerSession.organizationId);
+  assert.ok(defaultLocation?.id);
+  const courierUser = await store.getOrCreateUserByTelegram('phase11-4-marketplace-courier', 'Marketplace Courier');
+  const courierMembershipId = `membership-${courierUser.id}-${seller.chatId}`;
+  const courierNow = new Date().toISOString();
+  db.prepare('INSERT INTO memberships (id,user_id,chat_id,role,status,created_at) VALUES (?,?,?,\'logistics_courier\',\'active\',?)')
+    .run(courierMembershipId, String(courierUser.id), seller.chatId, courierNow);
+  db.prepare(`
+    INSERT INTO membership_roles (id,membership_id,role_id,status,scope_type,scope_id,source,created_at)
+    VALUES (?,?,?,'active','ORGANIZATION',NULL,'PHASE13_10_24_REGRESSION',?)
+  `).run(`role-${courierUser.id}-${seller.chatId}`, courierMembershipId, 'logistics_courier', courierNow);
+
+  const dispatcherActor = {
+    userId: String(sellerUser.id), role: 'owner', organizationId: String(sellerSession.organizationId),
+    chatId: seller.chatId, deviceId: sellerSession.deviceId, locationId: defaultLocation.id,
+  };
+  const courierActor = {
+    userId: String(courierUser.id), role: 'logistics_courier', roles: ['logistics_courier'],
+    organizationId: String(sellerSession.organizationId), chatId: seller.chatId,
+    deviceId: 'phase13-10-24-courier-device',
+  };
+  const assigned = await store.assignDeliveryCourier(
+    seller.chatId, deliveryOrderRow.server_order_id, courierUser.id, dispatcherActor,
+    { locationId: defaultLocation.id, assignmentKey: 'phase13-10-24-marketplace-assignment' },
+  );
+  assert.equal(assigned.status, 'ASSIGNED');
+  const accepted = await store.transitionDeliveryAssignment(
+    seller.chatId, deliveryOrderRow.server_order_id, 'ACCEPTED', courierActor,
+    { idempotencyKey: 'phase13-10-24-marketplace-accept' },
+  );
+  assert.equal(accepted.status, 'ACCEPTED');
+  const started = await store.transitionDeliveryAssignment(
+    seller.chatId, deliveryOrderRow.server_order_id, 'OUT_FOR_DELIVERY', courierActor,
+    { idempotencyKey: 'phase13-10-24-marketplace-start' },
+  );
+  assert.equal(started.status, 'OUT_FOR_DELIVERY');
+  const completed = await store.transitionDeliveryAssignment(
+    seller.chatId, deliveryOrderRow.server_order_id, 'DELIVERED', courierActor,
+    {
+      idempotencyKey: 'phase13-10-24-marketplace-delivered',
+      proof: { type: 'CUSTOMER_CONFIRMATION', reference: 'marketplace-delivery-proof-1' },
+    },
+  );
+  assert.equal(completed.status, 'DELIVERED');
+
+  const marketplaceDeliveryMovements = db.prepare(`
+    SELECT * FROM inventory_movements
+    WHERE organization_id = ? AND product_id = 'delivery-integrity-item'
+    ORDER BY created_at, id
+  `).all(sellerSession.organizationId);
+  assert.equal(marketplaceDeliveryMovements.length, 1,
+    'Marketplace checkout SALE must remain the only inventory movement after courier completion');
+  assert.equal(marketplaceDeliveryMovements[0].movement_type, 'SALE');
+  assert.equal(marketplaceDeliveryMovements[0].reference_type, 'marketplace_order');
+  assert.equal(Number((await store.getCatalog(seller.chatId)).products.find(p => p.id === 'delivery-integrity-item').stock), 3);
+  await assert.rejects(
+    () => store.transitionOrderFulfillment(
+      seller.chatId, deliveryOrderRow.server_order_id, 'out_for_delivery', dispatcherActor,
+      { idempotencyKey: 'phase13-10-24-marketplace-generic-fulfillment' },
+    ),
+    error => error?.code === 'MARKETPLACE_CORE_FULFILLMENT_UNSUPPORTED' && error?.statusCode === 409,
+    'generic Core Fulfillment mutation must reject Marketplace orders explicitly',
+  );
 
   // Split-payment hardening: two payments may cover one seller allocation,
   // but verified value may never exceed the canonical seller-order amount.
