@@ -236,6 +236,10 @@ try {
   assert.equal(await page.locator('.service-resource-availability').count(), 1, 'Provider can configure assigned resource availability');
   await page.locator('.service-resource-availability').click();
   await page.locator('.service-resource-availability-panel').waitFor();
+  await page.waitForFunction(() => {
+    const panel = document.querySelector('.service-resource-availability-panel');
+    return panel && /declaration only|Declared|Empty|Could not load/i.test(panel.innerText);
+  }, null, { timeout: 5000 });
   assert.match(await page.locator('.service-resource-availability-panel').innerText(), /declaration only|Declared/i);
   assert.ok(pageErrors.length === 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
 
