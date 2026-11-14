@@ -133,6 +133,7 @@ function openTelegramServiceAppointmentDialog({marketplaceOrderId,sellerOrderId,
   const sendButton = dialog.querySelector('[data-send-request]');
   let lastAssessment = null;
   let activeCreateKey = null;
+  let activeCreateStorageKey = null;
   const readWindow = () => {
     if (!timeZone) throw new Error('Seller timezone is not configured. The request was not sent.');
     const start = serviceLocalDateTimeToIso(form.elements.start.value,timeZone);
@@ -160,16 +161,20 @@ function openTelegramServiceAppointmentDialog({marketplaceOrderId,sellerOrderId,
     sendButton.disabled=true; stateEl.textContent='Sending appointment request…';
     try {
       const payload={...readWindow(),appointment_mode:form.elements.mode.value,customer_note:form.elements.note.value.trim()};
-      const storageKey='sellify:telegram-service-appointment:'+marketplaceOrderId+':'+sellerOrderId+':'+serviceItemId+':'+payload.requested_start+':'+payload.requested_end;
-      activeCreateKey=activeCreateKey||sessionStorage.getItem(storageKey)||buyerRequestKey('create');
-      sessionStorage.setItem(storageKey,activeCreateKey);
+      const storageKey='sellify:telegram-service-appointment:'+marketplaceOrderId+':'+sellerOrderId+':'+serviceItemId+':'+encodeURIComponent(JSON.stringify(payload));
+      if(activeCreateStorageKey!==storageKey){
+        let storedKey=null; try{storedKey=sessionStorage.getItem(storageKey)}catch{}
+        activeCreateKey=storedKey||buyerRequestKey('create');
+        activeCreateStorageKey=storageKey;
+      }
+      try{sessionStorage.setItem(storageKey,activeCreateKey)}catch{}
       const response=await fetch(telegramAppointmentBase(marketplaceOrderId),{
         method:'POST',headers:telegramBuyerHeaders({'Idempotency-Key':activeCreateKey}),
         body:JSON.stringify(payload),
       });
       const data=await response.json().catch(()=>({}));
       if(!response.ok) throw new Error(data?.error?.message||'Appointment request could not be sent.');
-      sessionStorage.removeItem(storageKey);
+      try{sessionStorage.removeItem(storageKey)}catch{}
       dialog.close(); dialog.remove();
       await loadTelegramOrders();
       const state=document.getElementById('ordersState');
