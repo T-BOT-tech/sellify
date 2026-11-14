@@ -220,6 +220,19 @@ jobs:
       - name: J5 canonical low-stock journey regression
         run: npm run test:j5-canonical-low-stock-journey
 
+      - name: TG-1 Telegram seller storefront capability regression
+        run: npm run tg1:telegram-storefront-test
+      - name: TG-5 Telegram buyer identity regression
+        run: npm run tg5:telegram-buyer-test
+      - name: TG-6 Telegram checkout boundary regression
+        run: npm run tg6:telegram-checkout-test
+      - name: TG-7 Telegram buyer order history regression
+        run: npm run tg7:telegram-buyer-orders-test
+      - name: TG-8 Telegram fulfillment/tracking regression
+        run: npm run tg8:telegram-fulfillment-test
+      - name: TG-11 Telegram buyer Service appointment self-service regression
+        run: npm run tg11:telegram-service-appointments-test
+
       - name: Run baseline regression
         run: npm run phase0:test
 
