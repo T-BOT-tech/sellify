@@ -78,6 +78,11 @@ const DEFINITIONS = [
   ['service', 'service_resource', 'manage', 'service:service_resource:manage'],
   ['service', 'resource_availability', 'view', 'service:resource_availability:view'],
   ['service', 'resource_availability', 'manage', 'service:resource_availability:manage'],
+  ['service', 'service_booking', 'view', 'service:booking:view'],
+  ['service', 'service_booking', 'request', 'service:booking:request'],
+  ['service', 'service_booking', 'manage', 'service:booking:manage'],
+  ['service', 'service_booking', 'confirm', 'service:booking:confirm'],
+  ['service', 'service_booking', 'cancel', 'service:booking:cancel'],
   ['service', 'appointment_feasibility', 'view', null],
   ['service', 'appointment_feasibility', 'assess', null],
 ];
