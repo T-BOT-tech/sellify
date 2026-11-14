@@ -68,6 +68,18 @@ try {
   };
   const calls = [];
   let forceConflict = false;
+  await page.route('**/tenants/test-tenant/service-resources**', async route => {
+    if (route.request().method() !== 'GET') {
+      await route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Method not allowed' } }) });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ resources: [], state: 'READY', authority: 'service_resource_registry' }),
+    });
+  });
+
   await page.route('**/tenants/test-tenant/orders/order-1/service-bookings**', async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -127,6 +139,9 @@ try {
   });
 
   await page.locator('.service-booking-card').waitFor();
+  await page.locator('#serviceResourceForm').waitFor();
+  await page.locator('#serviceResourcesStatus').filter({ hasText: 'No service resources yet' }).waitFor();
+
   assert.equal(await page.locator('.service-booking-action').count(), 3, 'owner sees valid REQUESTED transitions');
   assert.equal(await page.locator('.service-booking-card img').count(), 0, 'customer note is escaped rather than parsed as markup');
   assert.match(await page.locator('.service-booking-card').innerText(), /<img src=x onerror=alert\(1\)>customer note/);
