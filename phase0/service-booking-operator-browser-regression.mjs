@@ -68,6 +68,7 @@ try {
   };
   const calls = [];
   let forceConflict = false;
+  let providerMode = false;
   await page.route('**/tenants/test-tenant/service-resources**', async route => {
     if (route.request().method() !== 'GET') {
       await route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Method not allowed' } }) });
@@ -76,8 +77,33 @@ try {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ resources: [], state: 'READY', authority: 'service_resource_registry' }),
+      body: JSON.stringify({
+        resources: providerMode ? [{
+          id: 'provider-resource-1', name: 'Provider One', resourceType: 'PROVIDER',
+          status: 'ACTIVE', version: 1, organizationId: 'test-org',
+          locationId: null, serviceItemId: null,
+        }] : [],
+        state: 'READY', authority: 'service_resource_registry',
+        scope: providerMode ? 'ASSIGNED_RESOURCES' : 'ORGANIZATION',
+      }),
     });
+  });
+
+  await page.route('**/tenants/test-tenant/service-resources/provider-resource-1/availability', async route => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          availability: {
+            state: 'DECLARED', timezone: 'Africa/Addis_Ababa',
+            workingHours: [], exceptions: [], version: 1,
+          },
+          state: 'DECLARED', authority: 'service_resource_availability',
+        }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Method not allowed' } }) });
   });
 
   await page.route('**/tenants/test-tenant/orders/order-1/service-bookings**', async route => {
@@ -185,6 +211,32 @@ try {
   }, null, { timeout: 3000 });
   assert.equal(await page.locator('.service-booking-action[data-target="CONFIRMED"]').isDisabled(), false,
     'failed version-conflict mutation re-enables the control for refresh/retry');
+  assert.ok(pageErrors.length === 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
+
+
+  // Provider workspace is resource-scoped: no booking lifecycle or resource administration.
+  providerMode = true;
+  await page.evaluate(async () => {
+    const state = await import('/src/state.js');
+    state.setConfig({
+      ...state.config,
+      currentStaffRole: 'staff',
+      contextualRoles: [{ role: 'service_provider', scopeType: 'RESOURCE', scopeId: 'provider-resource-1' }],
+    });
+    const workspace = await import('/src/logistics/service-bookings.js');
+    document.querySelector('#test-root').innerHTML = workspace.serviceBookingsWorkspaceShell();
+    workspace.mountServiceBookingsWorkspace(document);
+  });
+  await page.locator('.service-resource-card').filter({ hasText: 'Provider One' }).waitFor();
+  assert.equal(await page.locator('.service-booking-card').count(), 0, 'Provider does not see customer booking workspace');
+  assert.equal(await page.locator('#serviceResourceForm').count(), 0, 'Provider cannot create resources');
+  assert.equal(await page.locator('.service-resource-rename').count(), 0, 'Provider cannot rename resources');
+  assert.equal(await page.locator('.service-resource-toggle').count(), 0, 'Provider cannot activate or deactivate resources');
+  assert.equal(await page.locator('.service-resource-providers').count(), 0, 'Provider cannot assign other providers');
+  assert.equal(await page.locator('.service-resource-availability').count(), 1, 'Provider can configure assigned resource availability');
+  await page.locator('.service-resource-availability').click();
+  await page.locator('.service-resource-availability-panel').waitFor();
+  assert.match(await page.locator('.service-resource-availability-panel').innerText(), /declaration only|Declared/i);
   assert.ok(pageErrors.length === 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
 
   console.log('Service booking operator browser regression: PASS');
