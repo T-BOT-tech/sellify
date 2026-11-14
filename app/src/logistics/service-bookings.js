@@ -419,17 +419,21 @@ async function saveServiceResourceAvailability(button, root) {
 }
 
 export function serviceBookingsWorkspaceShell() {
-  return '<section id="serviceBookingsWorkspace" class="settings-section" aria-label="' + escapeAttr(t('serviceBookingsTitle')) + '">'
-    + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
-    + '<h3 style="margin:0;">' + escapeHtml(t('serviceBookingsTitle')) + '</h3>'
-    + '<button type="button" class="btn-secondary" id="serviceBookingsRefresh">' + escapeHtml(t('serviceBookingsRefresh')) + '</button></div>'
-    + '<p class="logistics-meta">' + escapeHtml(t('serviceBookingsDescription')) + '</p>'
-    + '<div id="serviceBookingsStatus" class="logistics-meta" role="status">' + escapeHtml(t('serviceBookingsLoading')) + '</div>'
-    + '<div id="serviceBookingsList"></div>'
+  const providerOnly = hasServiceProviderResourceScope() && !canManageServiceResources();
+  return '<section id="serviceBookingsWorkspace" class="settings-section" aria-label="' + escapeAttr(t(providerOnly ? 'serviceResourceTitle' : 'serviceBookingsTitle')) + '">'
+    + (providerOnly
+      ? '<h3 style="margin:0;">' + escapeHtml(t('serviceResourceTitle')) + '</h3>'
+        + '<p class="logistics-meta">' + escapeHtml(t('serviceResourceProviderDescription')) + '</p>'
+      : '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
+        + '<h3 style="margin:0;">' + escapeHtml(t('serviceBookingsTitle')) + '</h3>'
+        + '<button type="button" class="btn-secondary" id="serviceBookingsRefresh">' + escapeHtml(t('serviceBookingsRefresh')) + '</button></div>'
+        + '<p class="logistics-meta">' + escapeHtml(t('serviceBookingsDescription')) + '</p>'
+        + '<div id="serviceBookingsStatus" class="logistics-meta" role="status">' + escapeHtml(t('serviceBookingsLoading')) + '</div>'
+        + '<div id="serviceBookingsList"></div>')
     + (canAccessServiceResources()
       ? '<section class="settings-section" aria-label="' + escapeAttr(t('serviceResourceTitle')) + '">'
-        + '<h4>' + escapeHtml(t('serviceResourceTitle')) + '</h4>'
-        + '<p class="logistics-meta">' + escapeHtml(t('serviceResourceDescription')) + '</p>'
+        + (providerOnly ? '' : '<h4>' + escapeHtml(t('serviceResourceTitle')) + '</h4>')
+        + (providerOnly ? '' : '<p class="logistics-meta">' + escapeHtml(t('serviceResourceDescription')) + '</p>')
         + (canManageServiceResources()
           ? '<form id="serviceResourceForm" class="settings-form" style="display:grid;gap:8px;">'
             + '<input name="name" maxlength="120" required placeholder="' + escapeAttr(t('serviceResourceName')) + '">'
