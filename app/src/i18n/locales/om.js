@@ -128,4 +128,10 @@ export default {
     serviceResourceActivate: "Hojiirra oolchi",
     serviceResourceDeactivate: "Hojii irraa dhaabi",
     serviceResourceUnknownStale: "Argamummaan hin beekamu ykn odeeffannoon dulloomeera. Itti hin hirkatin dura haaromsi.",
+    serviceResourceAllServices: "Tajaajiloota hunda",
+    serviceResourceOrganizationWide: "Dhaabbata guutuu",
+    serviceResourceTypeProvider: "Dhiyeessaa / hojjetaa",
+    serviceResourceTypeFacility: "Dhaabbata / kutaa",
+    serviceResourceTypeEquipment: "Meeshaa",
+    serviceResourceTypeOther: "Kan biraa",
 };
