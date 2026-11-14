@@ -29,8 +29,8 @@ export default {
     serviceBookingReasonPrompt: "Saisissez un motif pour",
     serviceBookingCompletionPrompt: "Note de fin (facultative) :",
     serviceBookingUpdateFailed: "Échec de la mise à jour de la réservation.",
-    serviceBookingsLoadFailed: "Impossible de charger les réservations de services."
-,    serviceResourceTitle: "Ressources de service",
+    serviceBookingsLoadFailed: "Impossible de charger les réservations de services.",
+    serviceResourceTitle: "Ressources de service",
     serviceResourceDescription: "Gérez les prestataires, locaux et équipements. Ce registre ne confirme ni la disponibilité ni les rendez-vous.",
     serviceResourceName: "Nom de la ressource",
     serviceResourceDescriptionField: "Description (facultative)",
@@ -45,7 +45,6 @@ export default {
     serviceResourceActivate: "Activer",
     serviceResourceDeactivate: "Désactiver",
     serviceResourceUnknownStale: "Disponibilité inconnue ou obsolète. Actualisez avant de vous y fier.",
-    serviceResourceTitle: "Ressources de service",
     serviceResourceAllServices: "Tous les services",
     serviceResourceOrganizationWide: "Toute l’organisation",
     serviceResourceTypeProvider: "Prestataire / personnel",
