@@ -462,13 +462,14 @@ try {
   const bookingConfirmBody = await bookingConfirm.json();
   assert.equal(bookingConfirmBody.booking.status, 'CONFIRMED');
   assert.equal(bookingConfirmBody.booking.version, 3);
+  assert.equal(bookingConfirmBody.booking.resource_id, appointmentResource.id);
 
   // Exact HTTP replay returns the durable transition result; the same key
   // with a different target must conflict rather than conceal a second command.
   const bookingConfirmReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
     method: 'PATCH',
     headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
-    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+    body: JSON.stringify({ status: 'CONFIRMED', resource_id: appointmentResource.id, expected_version: 2 }),
   });
   assert.equal(bookingConfirmReplay.status, 200, 'exact confirmation retry should replay successfully');
   const bookingConfirmReplayBody = await bookingConfirmReplay.json();
