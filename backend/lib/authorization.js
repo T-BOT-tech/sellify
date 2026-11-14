@@ -220,6 +220,9 @@ export function authorize(actor, organization, location, resource, action, resou
   const role = cleanRole(actor.role);
   const permission = cleanAction(action);
   if (!role || !permission || !resource) return AUTHZ.DENY;
+  // Service Provider is a contextual role only. It must never become a base
+  // membership role that bypasses its resource-scoped assignment.
+  if (role === 'service_provider') return AUTHZ.DENY;
 
   // Resolve the canonical organization before evaluating scoped contextual roles.
   const actorOrganizationId = actor.organizationId == null ? null : String(actor.organizationId);
