@@ -278,4 +278,11 @@ export default {
     serviceAvailabilityOutsideDeclaredHours: "Outside declared working hours.",
     serviceAvailabilityAssessmentUnknown: "Assessment unknown.",
     serviceAvailabilityCommitmentsNotChecked: "Existing appointments and resource commitments were not checked; availability is unconfirmed.",
+    serviceResourceManageProviders: "Manage providers",
+    serviceResourceSelectProvider: "Select provider",
+    serviceResourceAssignProvider: "Assign provider",
+    serviceResourceProviderAssigned: "Provider assigned to this resource.",
+    serviceResourceRevokeProvider: "Revoke provider access",
+    serviceResourceProviderAssignFailed: "Could not update provider access.",
+    serviceResourceNoProviderMembers: "No eligible staff memberships.",
 };
