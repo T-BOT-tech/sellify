@@ -112,6 +112,13 @@ check('Service Provider permissions require exact resource-scoped context', () =
   assert.equal(authorize(provider, organization, { id: 'loc-b', organizationId: 'org-a' }, 'service_resource', 'service:resource_availability:view', context), AUTHZ.DENY);
 });
 
+check('Only manager and owner receive Service appointment commitment policy', () => {
+  assert.equal(authorize(actor('manager'), organization, null, 'service_appointment', 'service:appointment:commit'), AUTHZ.ALLOW);
+  assert.equal(authorize(actor('owner'), organization, null, 'service_appointment', 'service:appointment:commit'), AUTHZ.ALLOW);
+  assert.equal(authorize(actor('service_provider'), organization, null, 'service_appointment', 'service:appointment:commit'), AUTHZ.DENY);
+  assert.equal(authorize(actor('logistics_dispatcher'), organization, null, 'service_appointment', 'service:appointment:commit'), AUTHZ.DENY);
+});
+
 check('Manager and owner retain organization-level Service availability authority', () => {
   assert.equal(authorize(actor('manager'), organization, null, 'service_resource', 'service:resource_availability:view'), AUTHZ.ALLOW);
   assert.equal(authorize(actor('manager'), organization, null, 'service_resource', 'service:resource_availability:manage'), AUTHZ.ALLOW);
