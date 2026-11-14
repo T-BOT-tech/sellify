@@ -129,4 +129,10 @@ export default {
     serviceResourceActivate: "सक्रिय करें",
     serviceResourceDeactivate: "निष्क्रिय करें",
     serviceResourceUnknownStale: "उपलब्धता अज्ञात या पुरानी है। भरोसा करने से पहले रीफ़्रेश करें।",
+    serviceResourceAllServices: "सभी सेवाएँ",
+    serviceResourceOrganizationWide: "पूरे संगठन में",
+    serviceResourceTypeProvider: "प्रदाता / कर्मचारी",
+    serviceResourceTypeFacility: "सुविधा / कमरा",
+    serviceResourceTypeEquipment: "उपकरण",
+    serviceResourceTypeOther: "अन्य",
 };
