@@ -24,6 +24,11 @@ assert.equal(request.appointment_mode, 'REMOTE');
 assert.equal(request.order_authority, 'canonical_commerce_order');
 assert.equal(request.payment_authority, 'payment_core');
 assert.equal(request.persistence, 'none');
+assert.throws(() => normalizeServiceBookingRequest({
+  order_id: 'order-service-100', service_item_id: 'consultation',
+  requested_start: '2026-11-01T09:00:00Z', requested_end: '2026-11-01T10:00:00Z',
+  service_resource_id: 'resource-1',
+}), error => error?.code === 'SERVICE_BOOKING_AUTHORITY_FIELD_FORBIDDEN');
 
 assert.deepEqual(SERVICE_BOOKING_STATUSES, [
   'REQUESTED', 'ACCEPTED', 'CONFIRMED', 'IN_PROGRESS',
