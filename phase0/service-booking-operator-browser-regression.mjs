@@ -82,7 +82,11 @@ try {
           id: 'provider-resource-1', name: 'Provider One', resourceType: 'PROVIDER',
           status: 'ACTIVE', version: 1, organizationId: 'test-org',
           locationId: null, serviceItemId: null,
-        }] : [],
+        }] : [{
+          id: 'owner-resource-1', name: 'Consultation Resource', resourceType: 'PROVIDER',
+          status: 'ACTIVE', version: 1, organizationId: 'test-org', locationId: null,
+          serviceItemId: 'consultation', availabilityConfigured: true, availabilityVersion: 1,
+        }],
         state: 'READY', authority: 'service_resource_registry',
         scope: providerMode ? 'ASSIGNED_RESOURCES' : 'ORGANIZATION',
       }),
@@ -126,10 +130,19 @@ try {
       }
       assert.equal(request.headers()['idempotency-key'].startsWith('service-booking-ui-'), true);
       const body = request.postDataJSON();
-      assert.equal(body.expected_version, 1);
-      assert.equal(body.status, 'ACCEPTED');
-      booking.status = body.status;
-      booking.version = 2;
+      assert.equal(body.expected_version, booking.version);
+      if (body.status === 'ACCEPTED') {
+        booking.status = body.status;
+        booking.version = 2;
+      } else if (body.status === 'CONFIRMED') {
+        assert.equal(body.service_resource_id, 'owner-resource-1');
+        booking.status = body.status;
+        booking.version = 3;
+        booking.service_resource_id = body.service_resource_id;
+        booking.resource_commitment_state = 'COMMITTED';
+      } else {
+        assert.fail('Unexpected booking transition: ' + body.status);
+      }
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ booking: { ...booking } }) });
       return;
     }
@@ -195,6 +208,15 @@ try {
   });
   assert.equal(await page.locator('.service-booking-action').count(), 0, 'cashier has no operator lifecycle controls');
 
+  // Confirmation requires an explicit resource selection; no request is sent without one.
+  page.once('dialog', dialog => {
+    assert.match(dialog.message(), /Select a service resource/);
+    dialog.accept();
+  });
+  await page.getByRole('button', { name: 'CONFIRMED' }).click();
+  assert.equal(calls.filter(call => call.method === 'PATCH').length, 1,
+    'missing resource selection must not submit a confirmation command');
+
   // Restore operator role, force a version conflict, and verify the control recovers for retry.
   await page.evaluate(async () => {
     const state = await import('/src/state.js');
@@ -203,6 +225,7 @@ try {
     await workspace.refreshServiceBookings(document);
   });
   forceConflict = true;
+  await page.locator('.service-booking-resource-select').selectOption('owner-resource-1');
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'CONFIRMED' }).click();
   await page.waitForFunction(() => {
