@@ -443,7 +443,7 @@ try {
   const httpServiceResource = await store.createServiceResource(tenant.chatId, {
     resource_type: 'PROVIDER', name: 'HTTP Consultation Provider',
     service_item_id: 'consultation-http', idempotency_key: 'service-booking-http-resource',
-  }, { userId: owner.id });
+  }, { userId: user.id });
   await store.setServiceResourceAvailability(tenant.chatId, httpServiceResource.resource.id, {
     expected_version: 0, idempotency_key: 'service-booking-http-resource-hours',
     working_hours: [{ weekday: 1, start_time: '09:00', end_time: '17:00' }],
