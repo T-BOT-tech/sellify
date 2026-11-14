@@ -159,6 +159,7 @@ export default {
     serviceAvailabilityCommitmentsNotChecked: "No se comprobaron citas ni compromisos existentes; la disponibilidad no está confirmada.",
     serviceResourceManageProviders: "Administrar proveedores",
     serviceResourceSelectProvider: "Seleccionar proveedor",
+    serviceBookingChooseResource: "Elige un recurso activo para esta cita (introduce su número):",
     serviceResourceAssignProvider: "Asignar proveedor",
     serviceResourceProviderAssigned: "Proveedor asignado a este recurso.",
     serviceResourceRevokeProvider: "Revocar acceso del proveedor",
