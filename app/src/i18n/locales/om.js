@@ -156,4 +156,11 @@ export default {
     serviceAvailabilityOutsideDeclaredHours: "Sa'aatii hojii ibsame ala jira.",
     serviceAvailabilityAssessmentUnknown: "Madaalliin hin beekamu.",
     serviceAvailabilityCommitmentsNotChecked: "Beellamoonni fi qabeenyi duraan qabaman hin ilaalamne; argamuun hin mirkanoofne.",
+    serviceResourceManageProviders: "Dhiyeessitoota bulchi",
+    serviceResourceSelectProvider: "Dhiyeessaa filadhu",
+    serviceResourceAssignProvider: "Dhiyeessaa ramadi",
+    serviceResourceProviderAssigned: "Dhiyeessaan qabeenya kanaaf ramadameera.",
+    serviceResourceRevokeProvider: "Hayyama dhiyeessaa haqii",
+    serviceResourceProviderAssignFailed: "Hayyama dhiyeessaa haaromsuun hin danda'amne.",
+    serviceResourceNoProviderMembers: "Miseensota hojjettoota ulaagaa guutan hin jiran.",
 };
