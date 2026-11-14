@@ -281,10 +281,23 @@ try {
     WHERE organization_id = ? AND product_id = 'delivery-integrity-item'
     ORDER BY created_at, id
   `).all(sellerSession.organizationId);
-  assert.equal(marketplaceDeliveryMovements.length, 1,
-    'Marketplace checkout SALE must remain the only inventory movement after courier completion');
-  assert.equal(marketplaceDeliveryMovements[0].movement_type, 'SALE');
-  assert.equal(marketplaceDeliveryMovements[0].reference_type, 'marketplace_order');
+  const marketplaceDeliverySales = marketplaceDeliveryMovements.filter(row =>
+    String(row.movement_type).toUpperCase() === 'SALE'
+  );
+  assert.equal(marketplaceDeliverySales.length, 1,
+    'Marketplace checkout SALE must remain the only SALE after courier completion; movements='
+      + JSON.stringify(marketplaceDeliveryMovements.map(row => ({
+        event_id: row.event_id, movement_type: row.movement_type,
+        reference_type: row.reference_type, reference_id: row.reference_id,
+        quantity: row.quantity,
+      }))));
+  assert.equal(marketplaceDeliverySales[0].reference_type, 'marketplace_order');
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS c FROM inventory_movements
+    WHERE organization_id = ? AND product_id = 'delivery-integrity-item'
+      AND movement_type = 'SALE' AND reference_type = 'fulfillment'
+  `).get(sellerSession.organizationId).c, 0,
+    'Marketplace courier completion must not append a Core Fulfillment SALE');
   assert.equal(Number((await store.getCatalog(seller.chatId)).products.find(p => p.id === 'delivery-integrity-item').stock), 3);
   await assert.rejects(
     () => store.transitionOrderFulfillment(
