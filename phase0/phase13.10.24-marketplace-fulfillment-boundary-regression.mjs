@@ -6,8 +6,10 @@ const inventoryStart = store.indexOf('function applyCoreFulfillmentInventoryCons
 const inventoryEnd = store.indexOf('\nfunction hasCourierLocationGrant', inventoryStart);
 assert.ok(inventoryStart >= 0 && inventoryEnd > inventoryStart, 'canonical inventory consequence must remain discoverable');
 const inventory = store.slice(inventoryStart, inventoryEnd);
-assert.match(inventory, /orderJson\?\.is_marketplace === true \|\| orderJson\?\.marketplace_order_id/,
+assert.match(inventory, /if \(marketplaceOrder\) return \[\]/,
   'Marketplace checkout is the canonical SALE owner; courier completion must not deduct again');
+
+assert.match(store, /function isCanonicalMarketplaceOrderRow\(orderRow\)/, 'Marketplace classification must use canonical SQL order markers');
 
 const transitionStart = store.indexOf('export async function transitionOrderFulfillment(');
 const transitionEnd = store.indexOf('export function coreFulfillmentContract()', transitionStart);
