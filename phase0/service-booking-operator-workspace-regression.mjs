@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 const moduleSource = await readFile(new URL('../app/src/logistics/service-bookings.js', import.meta.url), 'utf8');
 const logisticsSource = await readFile(new URL('../app/src/logistics/ui.js', import.meta.url), 'utf8');
+const serverSource = await readFile(new URL('../backend/server.js', import.meta.url), 'utf8');
 const localeNames = ['en', 'am', 'om', 'so', 'sw', 'es', 'hi', 'fr', 'ar', 'ha', 'yo', 'ru', 'pt'];
 const localeSources = await Promise.all(localeNames.map(locale => readFile(new URL('../app/src/i18n/locales/' + locale + '.js', import.meta.url), 'utf8')));
 
