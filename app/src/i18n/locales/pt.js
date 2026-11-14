@@ -75,6 +75,7 @@ export default {
     serviceAvailabilityCommitmentsNotChecked: "Os agendamentos e compromissos existentes não foram verificados; a disponibilidade não está confirmada.",
     serviceResourceManageProviders: "Gerir prestadores",
     serviceResourceSelectProvider: "Selecionar prestador",
+    serviceBookingChooseResource: "Escolha um recurso ativo para este agendamento (introduza o respetivo número):",
     serviceResourceAssignProvider: "Atribuir prestador",
     serviceResourceProviderAssigned: "Prestador atribuído a este recurso.",
     serviceResourceRevokeProvider: "Revogar acesso do prestador",
