@@ -128,4 +128,10 @@ export default {
     serviceResourceActivate: "Dhaqaaji",
     serviceResourceDeactivate: "Jooji",
     serviceResourceUnknownStale: "Helitaanku lama yaqaan ama xogtu waa duug. Cusboonaysii ka hor intaadan ku tiirsanaan.",
+    serviceResourceAllServices: "Dhammaan adeegyada",
+    serviceResourceOrganizationWide: "Ururka oo dhan",
+    serviceResourceTypeProvider: "Bixiye / shaqaale",
+    serviceResourceTypeFacility: "Xarun / qol",
+    serviceResourceTypeEquipment: "Qalab",
+    serviceResourceTypeOther: "Kale",
 };
