@@ -23,8 +23,8 @@ assert.doesNotMatch(registrySource, /CREATE TABLE|INSERT INTO|UPDATE\s+.*permiss
 const { RESOURCE_ACTION_REGISTRY, getResourceAction, listResourceActions, resourceActionRegistryContract } =
   await import('../backend/lib/resource-action-registry.js');
 
-assert.equal(RESOURCE_ACTION_REGISTRY.length, 48);
-assert.equal(new Set(RESOURCE_ACTION_REGISTRY.map((entry) => entry.key)).size, 48);
+assert.equal(RESOURCE_ACTION_REGISTRY.length, 53);
+assert.equal(new Set(RESOURCE_ACTION_REGISTRY.map((entry) => entry.key)).size, 53);
 
 for (const packId of ['agriculture', 'restaurant', 'warehouse', 'logistics', 'service']) {
   assert.ok(listResourceActions({ packId }).length > 0, `${packId} registry missing`);
@@ -64,6 +64,12 @@ assert.equal(getResourceAction('service', 'service_resource', 'view').permission
 assert.equal(getResourceAction('service', 'service_resource', 'manage').permission, 'service:service_resource:manage');
 assert.equal(getResourceAction('service', 'resource_availability', 'view').permission, 'service:resource_availability:view');
 assert.equal(getResourceAction('service', 'resource_availability', 'manage').permission, 'service:resource_availability:manage');
+assert.equal(getResourceAction('service', 'service_booking', 'view').permission, 'service:booking:view');
+assert.equal(getResourceAction('service', 'service_booking', 'request').permission, 'service:booking:request');
+assert.equal(getResourceAction('service', 'service_booking', 'manage').permission, 'service:booking:manage');
+assert.equal(getResourceAction('service', 'service_booking', 'confirm').permission, 'service:booking:confirm');
+assert.equal(getResourceAction('service', 'service_booking', 'cancel').permission, 'service:booking:cancel');
+
 assert.equal(getResourceAction('service', 'appointment_feasibility', 'assess').permission, null);
 assert.equal(listResourceActions({ packId: 'service' }).length, 6);
 
@@ -73,7 +79,7 @@ assert.equal(contract.authority.includes('authorize(actor, organization, locatio
 assert.equal(contract.persistence, 'none');
 assert.equal(contract.evaluator, 'none');
 assert.equal(contract.permission_store, 'none');
-assert.equal(contract.registry_entries, 48);
+assert.equal(contract.registry_entries, 53);
 assert.equal(contract.packs.length, 5);
 
 // Phase 10.3 remains the only policy implementation.
