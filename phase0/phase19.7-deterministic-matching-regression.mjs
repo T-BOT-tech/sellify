@@ -73,6 +73,14 @@ const temporalCandidate = {
   }],
 };
 assert.equal(evaluateDiscoveryMatch(temporalCandidate, windowContext).eligible, true, 'overlapping LIMITED declared capacity qualifies');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], availability: 'AVAILABLE' }],
+}, windowContext).eligible, true, 'overlapping AVAILABLE declared capacity qualifies');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], status: 'INACTIVE' }],
+}, windowContext).eligible, false, 'inactive capacity is excluded');
 for (const availability of ['UNAVAILABLE', 'ON_REQUEST']) {
   const result = evaluateDiscoveryMatch({
     ...temporalCandidate,
