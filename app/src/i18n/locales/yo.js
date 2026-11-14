@@ -29,8 +29,8 @@ export default {
     serviceBookingReasonPrompt: "Tẹ ìdí fún",
     serviceBookingCompletionPrompt: "Àkọsílẹ̀ ìparí (àṣàyàn):",
     serviceBookingUpdateFailed: "Ìmúdójúìwọ̀n ìforúkọsílẹ̀ kùnà.",
-    serviceBookingsLoadFailed: "A kò lè gbé àwọn ìforúkọsílẹ̀ iṣẹ́ wá."
-,    serviceResourceTitle: "Àwọn ohun èlò iṣẹ́",
+    serviceBookingsLoadFailed: "A kò lè gbé àwọn ìforúkọsílẹ̀ iṣẹ́ wá.",
+    serviceResourceTitle: "Àwọn ohun èlò iṣẹ́",
     serviceResourceDescription: "Ṣàkóso àwọn olùpèsè iṣẹ́, àwọn ibi àti ohun èlò. Àkọsílẹ̀ yìí kò jẹ́rìí sí wíwà tàbí ìpàdé.",
     serviceResourceName: "Orúkọ ohun èlò",
     serviceResourceDescriptionField: "Àlàyé (àṣàyàn)",
