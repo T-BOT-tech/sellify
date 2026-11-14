@@ -80,4 +80,5 @@ export default {
     serviceResourceRevokeProvider: "Revogar acesso do prestador",
     serviceResourceProviderAssignFailed: "Não foi possível atualizar o acesso do prestador.",
     serviceResourceNoProviderMembers: "Não há membros da equipa elegíveis.",
+    serviceResourceProviderDescription: "Consulte os recursos de serviço atribuídos a si e mantenha os horários declarados. A disponibilidade não é confirmada até que os compromissos existentes sejam verificados.",
 };
