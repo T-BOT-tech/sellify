@@ -448,7 +448,7 @@ try {
     expected_version: 0, idempotency_key: 'service-booking-http-resource-hours',
     working_hours: [{ weekday: 1, start_time: '09:00', end_time: '17:00' }],
     exceptions: [],
-  }, { userId: owner.id });
+  }, { userId: user.id });
   const bookingConfirm = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
     method: 'PATCH',
     headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
