@@ -39,6 +39,9 @@ assert.match(server, /SERVICE_BOOKING_RESOURCE_REQUIRED/);
 assert.match(ui, /service-booking-resource-select/);
 assert.match(ui, /resource_id: resourceId/);
 assert.match(ui, /serviceBookingNoEligibleResource/);
+assert.match(ui, /serviceResourcesForBookingState = 'UNKNOWN'/);
+assert.match(ui, /serviceResourceUnknownStale/);
+assert.match(ui, /serviceResourcesForBookingState !== 'READY'/);
 assert.match(ui, /return role === 'owner' \|\| role === 'manager'/);
 assert.ok(!/logistics_manager|logistics_dispatcher/.test(ui),
   'Logistics contextual roles must not operate Service Booking lifecycle or UI');
