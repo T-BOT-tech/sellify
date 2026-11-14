@@ -185,6 +185,7 @@ export async function searchSupplierNetwork() {
   const unit = document.getElementById('sourcingCapacityUnit')?.value?.trim() || '';
   if (Boolean(fromInput) !== Boolean(toInput)) throw new Error('Enter both availability start and end, or leave both empty.');
   if (productId && capabilityCode) throw new Error('Choose a product reference or a capability code, not both.');
+  if (minimumQuantity && (!Number.isFinite(Number(minimumQuantity)) || Number(minimumQuantity) <= 0)) throw new Error('Minimum quantity must be a positive number.');
   if (minimumQuantity && !unit) throw new Error('A unit is required when filtering by minimum quantity.');
   if (fromInput && !productId && !capabilityCode) throw new Error('A product reference ID or capability code is required for a time-window search.');
   if (fromInput && (!Number.isFinite(new Date(fromInput).getTime()) || !Number.isFinite(new Date(toInput).getTime()) || new Date(fromInput).getTime() > new Date(toInput).getTime())) throw new Error('Enter a valid availability window with end after start.');
