@@ -105,6 +105,7 @@ check('Service Provider permissions require exact resource-scoped context', () =
   assert.equal(authorize(provider, organization, location, 'service_resource', 'service:service_resource:view', context), AUTHZ.ALLOW);
   assert.equal(authorize(provider, organization, location, 'service_resource', 'service:service_resource:manage', context), AUTHZ.DENY);
   assert.equal(authorize(provider, organization, location, 'service_resource', 'service:resource_availability:view', { ...context, resourceId: 'service-resource-b' }), AUTHZ.DENY);
+  assert.equal(authorize(provider, organization, location, 'delivery', 'service:resource_availability:view', context), AUTHZ.DENY);
   assert.equal(authorize(provider, organization, location, 'service_resource', 'service:resource_availability:view', { ...context, organizationId: 'org-b' }), AUTHZ.DENY);
   assert.equal(authorize(provider, organization, location, 'service_resource', 'service:resource_availability:view', { ...context, resourceType: 'logistics_delivery' }), AUTHZ.DENY);
   assert.equal(authorize({ ...provider, contextualRoles: [{ role: 'logistics_courier', scopeType: 'RESOURCE', scopeId: 'service-resource-a' }] }, organization, location, 'service_resource', 'service:resource_availability:view', context), AUTHZ.DENY);
