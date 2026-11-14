@@ -17,6 +17,13 @@ assert.match(moduleSource, /escapeHtml\(booking\.customer_note\)/);
 assert.match(moduleSource, /escapeHtml\(booking\.status_reason\)/);
 assert.match(moduleSource, /\['REJECTED', 'FAILED', 'CANCELLED'\]/);
 assert.match(moduleSource, /config\.contextualRoles/);
+const canOperateSource = moduleSource.slice(moduleSource.indexOf('function canOperate'), moduleSource.indexOf('function renderBookingCard'));
+assert.match(canOperateSource, /role === 'owner' \\|\\| role === 'manager'/);
+assert.doesNotMatch(canOperateSource, /logistics_manager|logistics_dispatcher/);
+const bookingHandler = serverSource.slice(serverSource.indexOf('async function handleServiceBookings'), serverSource.indexOf('async function handleServiceDeliveryAssessment'));
+assert.match(bookingHandler, /service:booking:view/);
+assert.match(bookingHandler, /service:booking:request/);
+assert.doesNotMatch(bookingHandler, /logistics:scheduling:/);
 assert.match(moduleSource, /import \{ t \} from '..\/ui\/i18n\.js'/);
 for (const key of ['serviceBookingsTitle', 'serviceBookingsRefresh', 'serviceBookingsDescription', 'serviceBookingsLoading', 'serviceBookingsSignIn', 'serviceBookingsNoOrders', 'serviceBookingsDenied', 'serviceBookingsPartialFailure', 'serviceBookingsEmpty', 'serviceBookingSingular', 'serviceBookingPlural', 'serviceBookingsLoaded', 'serviceBookingReasonPrompt', 'serviceBookingCompletionPrompt', 'serviceBookingUpdateFailed', 'serviceBookingsLoadFailed']) {
   assert.match(moduleSource, new RegExp(key));
