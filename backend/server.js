@@ -3271,11 +3271,15 @@ async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId 
         ? 'logistics:scheduling:cancel'
         : 'logistics:scheduling:manage';
   }
-  await requireAuthorization(session, tenant, 'scheduling', authorizationAction, {
+  const authorizationResource = authorizationAction === 'service:appointment:commit'
+    ? 'service_appointment' : 'scheduling';
+  await requireAuthorization(session, tenant, authorizationResource, authorizationAction, {
     location: authorizationLocation,
     deniedMessage: authorizationAction === 'logistics:scheduling:request'
       ? 'Service booking request permission required'
-      : 'Service booking lifecycle permission required',
+      : authorizationAction === 'service:appointment:commit'
+        ? 'Service appointment commitment permission required'
+        : 'Service booking lifecycle permission required',
   });
 
   if (req.method === 'POST') {
