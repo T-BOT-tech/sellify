@@ -23,7 +23,7 @@ Canonical capability
 
 ## Existing roles preserved
 
-The matrix uses only the existing Phase 10.3 roles:
+The matrix preserves the six existing Core membership roles:
 
 - owner
 - manager
@@ -32,7 +32,7 @@ The matrix uses only the existing Phase 10.3 roles:
 - buyer
 - viewer
 
-No role was added, renamed, split, or promoted.
+It additionally models `service_provider` as a contextual-only role. It is not a base membership role and is executable only for an exact Service Resource context.
 
 ## Current policy result
 
@@ -43,6 +43,7 @@ No role was added, renamed, split, or promoted.
 | Restaurant | Recipe / Preparation have no central permission | all roles `DENY` |
 | Warehouse | `inventory:view`, `inventory:add`, `inventory:edit` | `owner`, `manager`, `cashier`, `staff` according to existing permissions; `buyer`, `viewer` remain `DENY` |
 | Logistics | no named central Logistics-specific permission exists | `owner` is `ALLOW` through the existing `*` wildcard; all other roles remain `DENY` |
+| Service | `service:service_resource:view`, `service:service_resource:manage`, `service:resource_availability:view`, `service:resource_availability:manage` | `owner` / `manager` retain organization-level access; `service_provider` gets view + availability management only with an exact assigned-resource context |
 
 **Important:** Agriculture and Logistics are not granted named permissions by this phase. The existing Phase 10.3 `owner` wildcard (`*`) already authorizes arbitrary non-empty action keys, so the matrix records that existing behavior rather than falsely reporting `DENY`. No non-owner role is broadened.
 
@@ -67,7 +68,7 @@ Added:
 - `test:phase13.12.4`
 - updated `SELLIFY_AI_HANDOFF.md`
 
-The implementation derives 6 existing roles × 42 registered resource/actions = **252 matrix rows**.
+The implementation derives 7 role entries × 48 registered resource/actions = **336 matrix rows**.
 
 It has no database access, no permission persistence, no role store, and no authorization evaluator.
 
@@ -78,6 +79,7 @@ It has no database access, no permission persistence, no role store, and no auth
 3. Vocabulary-only registry entries remain `DENY` until a deliberate central policy change exists.
 4. Existing role permissions are not broadened.
 5. Organization mismatch remains denied by the existing authority.
+6. `service_provider` cannot operate without an exact Service Resource context and never receives Logistics or resource-metadata management permissions.
 6. Location mismatch remains denied by the existing authority when a location is supplied.
 7. No vertical pack receives its own RBAC, role, permission, tenant, or audit authority.
 8. Phase 13.13 configuration is not pulled forward.
@@ -87,8 +89,8 @@ It has no database access, no permission persistence, no role store, and no auth
 
 Phase 13.12.4 passes when:
 
-- all six existing roles are represented;
-- all 42 Phase 13.12.3 registry entries are represented for every role;
+- all six Core roles plus contextual-only `service_provider` are represented;
+- all 48 registry entries are represented for every role;
 - current central permission grants are preserved exactly;
 - vocabulary-only capabilities do not broaden non-owner access and preserve the existing owner wildcard;
 - organization/location boundary behavior remains delegated to the existing authority;
