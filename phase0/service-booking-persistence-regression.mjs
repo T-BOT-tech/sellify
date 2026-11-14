@@ -67,6 +67,7 @@ try {
   assert.equal(created.replayed, false);
   assert.equal(created.booking.status, 'REQUESTED');
   assert.equal(created.booking.version, 1);
+  assert.equal(created.booking.resource_commitment_state, 'NOT_COMMITTED');
   assert.equal(created.booking.requested_start, '2026-11-01T06:00:00.000Z');
 
   const replay = await store.createServiceBooking(seller.chatId, order.server_order_id, request, { userId: owner.id });
@@ -112,6 +113,19 @@ try {
   assert.equal(confirmed.booking.version, 3);
   assert.equal(confirmed.booking.service_resource_id, resource.id);
   assert.equal(confirmed.booking.resource_commitment_state, 'COMMITTED');
+  const confirmedReplay = await store.transitionServiceBooking(seller.chatId, order.server_order_id, created.booking.id, {
+    status: 'CONFIRMED', expected_version: 2, service_resource_id: resource.id,
+    idempotency_key: 'booking-confirm-' + suffix,
+  }, { userId: owner.id });
+  assert.equal(confirmedReplay.replayed, true);
+  assert.equal(confirmedReplay.booking.service_resource_id, resource.id);
+  await assert.rejects(
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, created.booking.id, {
+      status: 'CONFIRMED', expected_version: 2, service_resource_id: 'different-resource',
+      idempotency_key: 'booking-confirm-' + suffix,
+    }, { userId: owner.id }),
+    error => error?.code === 'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT',
+  );
 
   // Booking lifecycle is not authority to mutate canonical order, payment, or
   // fulfillment state, and must not manufacture a logistics activity.
@@ -146,6 +160,8 @@ try {
   const listed = await store.listServiceBookings(seller.chatId, order.server_order_id);
   assert.equal(listed.length, 1);
   assert.equal(listed[0].id, created.booking.id);
+  assert.equal(listed[0].service_resource_id, resource.id);
+  assert.equal(listed[0].resource_commitment_state, 'COMMITTED');
 
   const secondUser = await store.getOrCreateUserByTelegram('booking-other-' + suffix, 'Other Seller');
   const secondSeller = await store.createTenantForUser({
@@ -160,10 +176,13 @@ try {
   );
 
   const db = store.getDatabaseForTests();
-  const audit = db.prepare("SELECT action FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ? ORDER BY id").all(created.booking.id);
+  const audit = db.prepare("SELECT action,metadata_json FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ? ORDER BY id").all(created.booking.id);
   assert.deepEqual(audit.map(row => row.action), [
     'services.booking.requested', 'services.booking.accepted', 'services.booking.confirmed',
   ], 'booking mutations and audit evidence must be committed together');
+  const confirmationMetadata = JSON.parse(audit.at(-1).metadata_json);
+  assert.equal(confirmationMetadata.service_resource_id, resource.id);
+  assert.equal(confirmationMetadata.resource_commitment, 'COMMITTED');
 
   // Execution evidence is server-authored and follows the booking lifecycle.
   const executionBooking = await store.createServiceBooking(seller.chatId, order.server_order_id, {
