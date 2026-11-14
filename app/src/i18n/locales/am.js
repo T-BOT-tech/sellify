@@ -129,4 +129,10 @@ export default {
     serviceResourceActivate: "አግብር",
     serviceResourceDeactivate: "አቦዝን",
     serviceResourceUnknownStale: "ተገኝነት ያልታወቀ ወይም ያረጀ ነው። ከመተማመንዎ በፊት ያድሱ።",
+    serviceResourceAllServices: "ሁሉም አገልግሎቶች",
+    serviceResourceOrganizationWide: "በድርጅቱ አቀፍ",
+    serviceResourceTypeProvider: "አቅራቢ / ሰራተኛ",
+    serviceResourceTypeFacility: "ተቋም / ክፍል",
+    serviceResourceTypeEquipment: "መሳሪያ",
+    serviceResourceTypeOther: "ሌላ",
 };
