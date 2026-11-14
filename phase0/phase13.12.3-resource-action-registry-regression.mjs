@@ -51,8 +51,6 @@ for (const key of [
   'logistics:route:manage',
   'logistics:delivery:manage',
   'logistics:return:manage',
-  'service:resource_availability:view',
-  'service:resource_availability:manage',
   'service:appointment_feasibility:view',
   'service:appointment_feasibility:assess',
 ]) {
@@ -64,13 +62,14 @@ for (const key of [
 
 assert.equal(getResourceAction('service', 'service_resource', 'view').permission, 'service:service_resource:view');
 assert.equal(getResourceAction('service', 'service_resource', 'manage').permission, 'service:service_resource:manage');
-assert.equal(getResourceAction('service', 'resource_availability', 'view').permission, null);
+assert.equal(getResourceAction('service', 'resource_availability', 'view').permission, 'service:resource_availability:view');
+assert.equal(getResourceAction('service', 'resource_availability', 'manage').permission, 'service:resource_availability:manage');
 assert.equal(getResourceAction('service', 'appointment_feasibility', 'assess').permission, null);
 assert.equal(listResourceActions({ packId: 'service' }).length, 6);
 
 
 const contract = resourceActionRegistryContract();
-assert.equal(contract.authority.includes('authorize(actor, organization, location, resource, action)'), true);
+assert.equal(contract.authority.includes('authorize(actor, organization, location, resource, action, resourceContext)'), true);
 assert.equal(contract.persistence, 'none');
 assert.equal(contract.evaluator, 'none');
 assert.equal(contract.permission_store, 'none');
@@ -78,12 +77,12 @@ assert.equal(contract.registry_entries, 48);
 assert.equal(contract.packs.length, 5);
 
 // Phase 10.3 remains the only policy implementation.
-assert.match(authSource, /export function authorize\(actor, organization, location, resource, action\)/);
+assert.match(authSource, /export function authorize\(actor, organization, location, resource, action, resourceContext = null\)/);
 assert.match(handoffSource, /Phase 13\.12\.2/);
 
 console.log('Phase 13.12.3 Resource / Action Registry Regression: PASS');
 console.log('Canonical Phase 10.3 authorization authority preserved: PASS');
 console.log('Agriculture / Restaurant / Warehouse / Logistics / Service vocabulary registered: PASS');
-console.log('Service resource and feasibility vocabulary remains policy-neutral: PASS');
+console.log('Service availability maps to central policy; appointment feasibility remains vocabulary-only: PASS');
 console.log('Central permission mappings preserved without new evaluator/store: PASS');
 console.log('No duplicate authorization authority introduced: BLOCKED');
