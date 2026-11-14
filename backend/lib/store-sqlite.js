@@ -6291,7 +6291,8 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
       const orderRow = db.prepare('SELECT * FROM orders WHERE chat_id=? AND server_order_id=?').get(String(chatId), String(serverOrderId));
       if (!orderRow) throw Object.assign(new Error('Canonical order not found'), { statusCode:404, code:'ORDER_NOT_FOUND' });
       const order = orderFromRow(orderRow);
-      if (resource.location_id && String(resource.location_id) !== String(order.location_id || '')) throw Object.assign(new Error('Service Resource location does not match the canonical order location'), { statusCode:409, code:'SERVICE_BOOKING_RESOURCE_LOCATION_MISMATCH' });
+      const orderLocationId = order.location_id ?? order.locationId ?? orderRow.location_id ?? null;
+      if (resource.location_id && String(resource.location_id) !== String(orderLocationId || '')) throw Object.assign(new Error('Service Resource location does not match the canonical order location'), { statusCode:409, code:'SERVICE_BOOKING_RESOURCE_LOCATION_MISMATCH' });
       const schedule = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=? AND organization_id=? AND chat_id=?').get(String(resourceId), organizationId, String(chatId));
       if (!schedule) throw Object.assign(new Error('Service Resource has no declared working hours'), { statusCode:409, code:'SERVICE_RESOURCE_SCHEDULE_UNKNOWN' });
       const organization = db.prepare('SELECT timezone FROM organizations WHERE id=?').get(organizationId);
