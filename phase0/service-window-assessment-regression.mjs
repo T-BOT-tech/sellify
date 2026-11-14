@@ -61,4 +61,19 @@ assert.equal(serviceLocalDateTimeToIso('2026-11-16T09:00', zone), '2026-11-16T06
 assert.throws(() => serviceLocalDateTimeToIso('2026-03-29T02:30', 'Europe/Paris'),
   { code: 'SERVICE_WINDOW_LOCAL_TIME_AMBIGUOUS' });
 
-console.log('SC-03.3 Service Resource Declared Window Assessment Regression: PASS');
+
+const uiSource = await (await import('node:fs/promises')).readFile(new URL('../app/src/logistics/service-bookings.js', import.meta.url), 'utf8');
+assert.match(uiSource, /assessServiceResourceDeclaredWindow/);
+assert.match(uiSource, /serviceLocalDateTimeToIso/);
+assert.match(uiSource, /service-window-assess/);
+assert.match(uiSource, /serviceAvailabilityCommitmentsNotChecked/);
+const localeNames = ['en', 'am', 'om', 'so', 'sw', 'es', 'hi', 'fr', 'ar', 'ha', 'yo', 'ru', 'pt'];
+for (const locale of localeNames) {
+  const source = await (await import('node:fs/promises')).readFile(new URL('../app/src/i18n/locales/' + locale + '.js', import.meta.url), 'utf8');
+  for (const key of ['serviceAvailabilityAssessWindow', 'serviceAvailabilityStart', 'serviceAvailabilityEnd', 'serviceAvailabilityAssess', 'serviceAvailabilityWithinDeclaredHours', 'serviceAvailabilityOutsideDeclaredHours', 'serviceAvailabilityAssessmentUnknown', 'serviceAvailabilityCommitmentsNotChecked']) {
+    const occurrences = source.match(new RegExp('\\\\b' + key + '\\\\s*:', 'g')) || [];
+    assert.equal(occurrences.length, 1, locale + ' must define ' + key + ' exactly once');
+  }
+}
+
+console.log('SC-03.3 Service Resource Declared Window Assessment + UI Regression: PASS');
