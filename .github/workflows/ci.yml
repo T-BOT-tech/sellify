@@ -128,6 +128,8 @@ jobs:
         run: npm run test:service-booking-contract
       - name: Service booking persistence regression
         run: npm run test:service-booking-persistence
+      - name: SC-03.4 atomic Service Booking resource commitment regression
+        run: npm run test:service-booking-resource-commitment
       - name: Service booking scheduling authority boundary regression
         run: npm run test:service-booking-scheduling-boundary
       - name: Service booking operator workspace regression
