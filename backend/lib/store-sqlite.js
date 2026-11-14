@@ -4298,7 +4298,7 @@ export async function discoverSupplierNetwork(chatId, input={}, actor=null){
   }
   results.sort((a,b)=>b.matchScore-a.matchScore||a.organizationName.localeCompare(b.organizationName)||a.organizationId.localeCompare(b.organizationId));
   const out=results.slice(0,n);
-  audit(String(chatId),'supplier.network.discovery.performed','supplier_network_discovery',String(buyerOrg),{filters:{search:q||null,productId:productId||null,capabilityCode:capabilityCode||null,countryCode:countryCode||null,geoCode:geoCode||null,currency:currency||null,minimumQuantity:minQty,wholesale,bulkOrder:bulk,qualificationType:qualificationType||null},resultCount:out.length},{organizationId:buyerOrg,actorId:actor?.userId||null});
+  audit(String(chatId),'supplier.network.discovery.performed','supplier_network_discovery',String(buyerOrg),{filters:{search:q||null,productId:productId||null,capabilityCode:capabilityCode||null,countryCode:countryCode||null,geoCode:geoCode||null,currency:currency||null,minimumQuantity:minQty,wholesale,bulkOrder:bulk,qualificationType:qualificationType||null,unit:String(input.unit||'').trim()||null,availabilityFrom:input.availabilityFrom||input.availability_from||null,availabilityTo:input.availabilityTo||input.availability_to||null},resultCount:out.length},{organizationId:buyerOrg,actorId:actor?.userId||null});
   return out;
 }
 
