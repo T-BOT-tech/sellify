@@ -27,6 +27,20 @@ try {
   const order = (await store.getOrders(seller.chatId)).find(item =>
     item.is_marketplace && item.items?.some(line => line.item_id === 'consultation'));
   assert.ok(order?.server_order_id, 'service booking must link to the canonical seller order');
+  const serviceResourceResult = await store.createServiceResource(seller.chatId, {
+    name: 'Consultation Room A', resource_type: 'FACILITY', service_item_id: 'consultation',
+    idempotency_key: 'service-resource-create-' + suffix,
+  }, { userId: owner.id });
+  const serviceResource = serviceResourceResult.resource;
+  const schedule = await store.setServiceResourceAvailability(seller.chatId, serviceResource.id, {
+    expected_version: 0,
+    idempotency_key: 'service-resource-hours-' + suffix,
+    working_hours: [0,1,2,3,4,5,6].map(weekday => ({
+      weekday, start_time: '08:00', end_time: '18:00',
+    })),
+    exceptions: [],
+  }, { userId: owner.id });
+  assert.equal(schedule.availability.version, 1);
   const canonicalOrderStateBefore = {
     status: order.status ?? null,
     payment_status: order.payment_status ?? null,
@@ -85,9 +99,23 @@ try {
   assert.equal(acceptedReplay.booking.status, 'ACCEPTED');
 
   const confirmed = await store.transitionServiceBooking(seller.chatId, order.server_order_id, created.booking.id, {
-    status: 'CONFIRMED', expected_version: 2, idempotency_key: 'booking-confirm-' + suffix,
+    status: 'CONFIRMED', resource_id: serviceResource.id, expected_version: 2, idempotency_key: 'booking-confirm-' + suffix,
   }, { userId: owner.id });
   assert.equal(confirmed.booking.version, 3);
+  assert.equal(confirmed.booking.resource_id, serviceResource.id);
+  const confirmationReplay = await store.transitionServiceBooking(seller.chatId, order.server_order_id, created.booking.id, {
+    status: 'CONFIRMED', resource_id: serviceResource.id, expected_version: 2, idempotency_key: 'booking-confirm-' + suffix,
+  }, { userId: owner.id });
+  assert.equal(confirmationReplay.replayed, true);
+  assert.equal(confirmationReplay.booking.resource_id, serviceResource.id);
+  const committedRow = store.getDatabaseForTests().prepare(
+    "SELECT * FROM service_resource_commitments WHERE booking_id=? AND status='ACTIVE'"
+  ).get(created.booking.id);
+  assert.ok(committedRow, 'confirmation must atomically create one active resource commitment');
+  assert.equal(committedRow.resource_id, serviceResource.id);
+  assert.equal(store.getDatabaseForTests().prepare(
+    'SELECT COUNT(*) AS count FROM service_resource_commitments WHERE booking_id=?'
+  ).get(created.booking.id).count, 1, 'confirmation replay must not duplicate resource commitment');
 
   // Booking lifecycle is not authority to mutate canonical order, payment, or
   // fulfillment state, and must not manufacture a logistics activity.
@@ -152,7 +180,7 @@ try {
     status: 'ACCEPTED', expected_version: 1, idempotency_key: 'booking-execution-accept-' + suffix,
   }, { userId: owner.id });
   const executionConfirm = await store.transitionServiceBooking(seller.chatId, order.server_order_id, executionBooking.booking.id, {
-    status: 'CONFIRMED', expected_version: 2, idempotency_key: 'booking-execution-confirm-' + suffix,
+    status: 'CONFIRMED', resource_id: serviceResource.id, expected_version: 2, idempotency_key: 'booking-execution-confirm-' + suffix,
   }, { userId: owner.id });
   assert.equal(executionConfirm.booking.status, 'CONFIRMED');
   const started = await store.transitionServiceBooking(seller.chatId, order.server_order_id, executionBooking.booking.id, {
@@ -253,7 +281,7 @@ try {
     status: 'ACCEPTED', expected_version: 1, idempotency_key: 'booking-failure-accept-' + suffix,
   }, { userId: owner.id });
   await store.transitionServiceBooking(seller.chatId, order.server_order_id, failureBooking.booking.id, {
-    status: 'CONFIRMED', expected_version: 2, idempotency_key: 'booking-failure-confirm-' + suffix,
+    status: 'CONFIRMED', resource_id: serviceResource.id, expected_version: 2, idempotency_key: 'booking-failure-confirm-' + suffix,
   }, { userId: owner.id });
   await assert.rejects(
     store.transitionServiceBooking(seller.chatId, order.server_order_id, failureBooking.booking.id, {
