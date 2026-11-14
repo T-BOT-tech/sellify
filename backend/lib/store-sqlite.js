@@ -6275,8 +6275,9 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
   const completionNote = input.completion_note == null && input.completionNote == null
     ? null : bookingRequiredText(input.completion_note ?? input.completionNote,'completion_note',500);
   const rawResourceId = input.resource_id ?? input.resourceId;
-  if (target === 'CONFIRMED' && !String(rawResourceId ?? '').trim()) throw Object.assign(new Error('A Service Resource is required to confirm this appointment'), { statusCode:400, code:'SERVICE_BOOKING_RESOURCE_REQUIRED' });
-  const resourceId = target === 'CONFIRMED' ? bookingRequiredText(rawResourceId, 'resource_id') : null;
+  const resourceId = target === 'CONFIRMED' && String(rawResourceId ?? '').trim()
+    ? bookingRequiredText(rawResourceId, 'resource_id')
+    : null;
   if (target !== 'CONFIRMED' && (input.resource_id != null || input.resourceId != null)) throw Object.assign(new Error('resource_id is only valid when confirming a Service Booking'), { statusCode:400, code:'SERVICE_BOOKING_RESOURCE_INVALID' });
   if(target!=='COMPLETED'&&completionNote!==null) throw Object.assign(new Error('completion_note is only valid when completing a service booking'),{statusCode:400,code:'SERVICE_BOOKING_COMPLETION_NOTE_INVALID'});
   const fingerprint=crypto.createHash('sha256').update(JSON.stringify({booking_id:String(bookingId),order_id:String(serverOrderId),status:target,expected_version:expectedVersion,reason,completion_note:completionNote,resource_id:resourceId})).digest('hex');
@@ -6293,6 +6294,7 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
     }
     if(!SERVICE_BOOKING_TRANSITIONS[String(row.status)]?.has(target)) throw Object.assign(new Error(`Service booking transition ${row.status} -> ${target} is not allowed`),{statusCode:409,code:'SERVICE_BOOKING_TRANSITION_INVALID'});
     if(Number(row.version)!==expectedVersion) throw Object.assign(new Error('Service booking version conflict'),{statusCode:409,code:'SERVICE_BOOKING_VERSION_CONFLICT'});
+    if (target === 'CONFIRMED' && !resourceId) throw Object.assign(new Error('A Service Resource is required to confirm this appointment'), { statusCode:400, code:'SERVICE_BOOKING_RESOURCE_REQUIRED' });
     let committedResource = null;
     if (target === 'CONFIRMED') {
       const resource = db.prepare("SELECT * FROM service_resources WHERE id=? AND organization_id=? AND chat_id=? AND status='ACTIVE'")
