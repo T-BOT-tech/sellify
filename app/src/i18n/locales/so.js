@@ -164,4 +164,12 @@ export default {
     serviceResourceProviderAssignFailed: "Lama cusboonaysiin karin gelitaanka bixiyaha.",
     serviceResourceNoProviderMembers: "Ma jiraan xubno shaqaale oo ku habboon.",
     serviceResourceProviderDescription: "Eeg ilaha adeegga ee laguu qoondeeyay oo cusboonaysii saacadaha shaqada ee la sheegay. Helitaanka lama xaqiijinayo ilaa ballamaha jira la hubiyo.",
+    serviceBookingSelectResource: "Khayraadka adeegga",
+    serviceBookingNoEligibleResource: "Ma jiro khayraad firfircoon oo jadwal shaqo loo dejiyey adeeggan.",
+    serviceBookingResourceRequired: "Dooro khayraad adeeg ka hor intaadan xaqiijin ballanta.",
+    serviceBookingAssignedResource: "Khayraadka loo qoondeeyey",
+    serviceBookingResourceUnknown: "Ballan-qaadka khayraadka lama yaqaan — dib-u-eegis ayaa loo baahan yahay.",
+    serviceBookingResourceReleased: "Waqtigii khayraadka waa la sii daayey",
+    serviceResourceAvailabilityConfigured: "Jadwalka waa la dejiyey",
+    serviceResourceAvailabilityNotConfigured: "Jadwalka lama dejin",
 };
