@@ -51,8 +51,6 @@ for (const key of [
   'logistics:route:manage',
   'logistics:delivery:manage',
   'logistics:return:manage',
-  'service:service_resource:view',
-  'service:service_resource:manage',
   'service:resource_availability:view',
   'service:resource_availability:manage',
   'service:appointment_feasibility:view',
@@ -64,7 +62,12 @@ for (const key of [
   assert.equal(entry.policyDefined, false);
 }
 
+assert.equal(getResourceAction('service', 'service_resource', 'view').permission, 'service:service_resource:view');
+assert.equal(getResourceAction('service', 'service_resource', 'manage').permission, 'service:service_resource:manage');
+assert.equal(getResourceAction('service', 'resource_availability', 'view').permission, null);
+assert.equal(getResourceAction('service', 'appointment_feasibility', 'assess').permission, null);
 assert.equal(listResourceActions({ packId: 'service' }).length, 6);
+
 
 const contract = resourceActionRegistryContract();
 assert.equal(contract.authority.includes('authorize(actor, organization, location, resource, action)'), true);
