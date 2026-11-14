@@ -29,7 +29,7 @@ export default {
     serviceBookingReasonPrompt: "Informe um motivo para",
     serviceBookingCompletionPrompt: "Nota de conclusão (opcional):",
     serviceBookingUpdateFailed: "Falha ao atualizar o agendamento.",
-    serviceBookingsLoadFailed: "Não foi possível carregar os agendamentos de serviços."
+    serviceBookingsLoadFailed: "Não foi possível carregar os agendamentos de serviços.",
     serviceResourceTitle: "Recursos de serviço",
     serviceResourceDescription: "Gira prestadores, instalações e equipamentos. Este registo não confirma disponibilidade nem marcações.",
     serviceResourceName: "Nome do recurso",
