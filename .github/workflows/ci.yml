@@ -180,6 +180,10 @@ jobs:
 
       - name: Marketplace refund confirmation integrity regression
         run: npm run phase11.4:marketplace-test
+      - name: Phase 13.10.24 Logistics workspace projection regression
+        run: npm run test:phase13.10.24-workspace-projection
+      - name: Phase 13.10.24 Marketplace fulfillment boundary regression
+        run: npm run test:phase13.10.24-marketplace-boundary
 
       - name: Phase 17.1 procurement demand contract regression
         run: npm run phase17.1:procurement-demand-contract-test
