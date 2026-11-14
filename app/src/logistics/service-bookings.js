@@ -259,7 +259,7 @@ async function openServiceResourceAvailability(button, root) {
   } finally { button.disabled = false; }
 }
 
-async function assessServiceResourceWindow(button) {
+function assessServiceResourceWindow(button) {
   const panel = button.closest('.service-resource-availability-panel');
   if (!panel) return;
   const output = panel.querySelector('.service-window-assessment-result');
@@ -283,7 +283,7 @@ async function assessServiceResourceWindow(button) {
   }
 }
 
-function saveServiceResourceAvailability(button, root) {
+async function saveServiceResourceAvailability(button, root) {
   const panel = button.closest('.service-resource-availability-panel');
   if (!panel) return;
   let workingHours, exceptions;
