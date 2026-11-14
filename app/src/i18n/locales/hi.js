@@ -160,6 +160,8 @@ export default {
     serviceResourceManageProviders: "प्रदाता प्रबंधित करें",
     serviceResourceSelectProvider: "प्रदाता चुनें",
     serviceBookingChooseResource: "इस अपॉइंटमेंट के लिए सक्रिय संसाधन चुनें (उसका नंबर दर्ज करें):",
+    serviceBookingConfirmResource: "अपॉइंटमेंट की पुष्टि करें",
+    serviceBookingCancelResource: "रद्द करें",
     serviceResourceAssignProvider: "प्रदाता नियुक्त करें",
     serviceResourceProviderAssigned: "प्रदाता को इस संसाधन के लिए नियुक्त किया गया।",
     serviceResourceRevokeProvider: "प्रदाता की पहुँच रद्द करें",
