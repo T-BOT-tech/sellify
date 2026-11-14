@@ -26,11 +26,20 @@ ok('Sourcing productization surfaces are mounted', () => {
 });
 
 ok('Supplier discovery UI uses the unified Discovery boundary', () => {
-  assert.match(sourcing, /\/api\/discovery\?chatId=/);
-  assert.match(sourcing, /providers=supplier-network/);
+  assert.match(sourcing, /\/api\/discovery\?/);
+  assert.match(sourcing, /providers: 'supplier-network'/);
   assert.doesNotMatch(sourcing, /\/supplier-network\/discovery\?search=/);
   assert.match(server, /handleUnifiedDiscovery/);
   assert.match(server, /discoverUnified/);
+});
+
+ok('Supplier capacity time-window search is surfaced in the operational UI', () => {
+  assert.match(html, /id="sourcingAvailabilityFrom"/);
+  assert.match(html, /id="sourcingAvailabilityTo"/);
+  assert.match(sourcing, /availabilityFrom/);
+  assert.match(sourcing, /availabilityTo/);
+  assert.match(sourcing, /Capacity is supplier-declared/);
+  assert.match(sourcing, /not a reservation, verification, supplier selection or authorization/);
 });
 
 ok('Procurement UI actions map to existing canonical routes', () => {
