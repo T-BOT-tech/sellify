@@ -38,7 +38,7 @@ Each registry entry contains:
 - canonical `authorizationAuthority`
 - `policyDefined`
 
-The registry now contains **48** entries across five packs: Agriculture, Restaurant, Warehouse, Logistics, and Service.
+The registry now contains **53** entries across five packs: Agriculture, Restaurant, Warehouse, Logistics, and Service.
 
 ### Agriculture
 
@@ -136,7 +136,7 @@ Next controlled subphase:
 
 ## Subsequent Service availability policy extension
 
-The Service Pack registry was extended additively from 42 to 53 entries across five packs. The two existing Service Resource Availability entries now map to the canonical Phase 10.3 permissions:
+The Service Pack registry was extended additively from 48 to 53 entries across five packs. The two existing Service Resource Availability entries now map to the canonical Phase 10.3 permissions:
 
 - `service:resource_availability:view`
 - `service:resource_availability:manage`
