@@ -80,4 +80,5 @@ export default {
     serviceResourceRevokeProvider: "إلغاء وصول مقدم الخدمة",
     serviceResourceProviderAssignFailed: "تعذر تحديث وصول مقدم الخدمة.",
     serviceResourceNoProviderMembers: "لا توجد عضويات موظفين مؤهلة.",
+    serviceResourceProviderDescription: "اعرض موارد الخدمة المخصصة لك وحدّث ساعات العمل المعلنة لها. لا يتم تأكيد التوفر حتى تتم مراجعة الالتزامات الحالية.",
 };
