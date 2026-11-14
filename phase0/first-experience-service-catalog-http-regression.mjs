@@ -446,7 +446,11 @@ try {
   }, { userId: user.id });
   await store.setServiceResourceAvailability(tenant.chatId, httpServiceResource.resource.id, {
     expected_version: 0, idempotency_key: 'service-booking-http-resource-hours',
-    working_hours: [{ weekday: 1, start_time: '09:00', end_time: '17:00' }],
+    working_hours: [
+      { weekday: 0, start_time: '09:00', end_time: '17:00' },
+      { weekday: 1, start_time: '09:00', end_time: '17:00' },
+      { weekday: 4, start_time: '09:00', end_time: '17:00' },
+    ],
     exceptions: [],
   }, { userId: user.id });
   const bookingConfirm = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
@@ -604,7 +608,7 @@ try {
   const failedBooking = (await failedBookingCreate.json()).booking;
   for (const step of [
     { status: 'ACCEPTED', expected_version: 1, key: 'service-booking-http-fail-accept-1' },
-    { status: 'CONFIRMED', expected_version: 2, key: 'service-booking-http-fail-confirm-1' },
+    { status: 'CONFIRMED', expected_version: 2, resource_id: httpServiceResource.resource.id, key: 'service-booking-http-fail-confirm-1' },
     {
       status: 'IN_PROGRESS',
       expected_version: 3,
@@ -820,7 +824,7 @@ try {
   const completedBooking = (await completedBookingCreate.json()).booking;
   for (const step of [
     { status: 'ACCEPTED', expected_version: 1, key: 'service-booking-http-complete-accept-1' },
-    { status: 'CONFIRMED', expected_version: 2, key: 'service-booking-http-complete-confirm-1' },
+    { status: 'CONFIRMED', expected_version: 2, resource_id: httpServiceResource.resource.id, key: 'service-booking-http-complete-confirm-1' },
     { status: 'IN_PROGRESS', expected_version: 3, key: 'service-booking-http-complete-start-1' },
   ]) {
     const response = await fetch(bookingsUrl + '/' + encodeURIComponent(completedBooking.id), {
