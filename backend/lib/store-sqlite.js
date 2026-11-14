@@ -4270,12 +4270,14 @@ export async function discoverSupplierNetwork(chatId, input={}, actor=null){
     if(countryCode){areaMatches=areas.filter(r=>String(r.country_code).toUpperCase()===countryCode); if(areaMatches.length){score+=10;matches.push({dimension:'COUNTRY',reason:'Service country match',countryCode});}}
     if(geoCode){const gm=areaMatches.filter(r=>String(r.geo_code)===geoCode); if(gm.length){score+=15;matches.push({dimension:'GEOGRAPHY',reason:'Service area match',geoCode});} else if(countryCode) areaMatches=[];}
     let capacityMatches=capacities;
-    if(productId) capacityMatches=capacityMatches.filter(r=>r.subject_type==='PRODUCT'&&String(r.subject_id)===productId);
-    if(capabilityCode) {
-      const requestedCapability = capabilities.find(item => String(item.code).toUpperCase() === capabilityCode);
-      capacityMatches = requestedCapability
-        ? capacityMatches.filter(r => r.subject_type === 'CAPABILITY' && String(r.subject_id) === String(requestedCapability.id))
-        : [];
+    if(productId || capabilityCode) {
+      const requestedCapability = capabilityCode
+        ? capabilities.find(item => String(item.code).toUpperCase() === capabilityCode)
+        : null;
+      capacityMatches = capacityMatches.filter(r =>
+        (productId && r.subject_type === 'PRODUCT' && String(r.subject_id) === productId)
+        || (requestedCapability && r.subject_type === 'CAPABILITY' && String(r.subject_id) === String(requestedCapability.id))
+      );
     }
     if(minQty!=null){capacityMatches=capacityMatches.filter(r=>Number(r.quantity)>=minQty); if(capacityMatches.length){score+=10;matches.push({dimension:'CAPACITY',reason:'Declared capacity meets requested minimum',minimumQuantity:minQty});}}
     else if(capacities.length){score+=5;matches.push({dimension:'CAPACITY',reason:'Declared capacity signal available'});}
