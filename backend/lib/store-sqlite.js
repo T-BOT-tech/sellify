@@ -8996,14 +8996,19 @@ export async function getOrderFulfillment(chatId, serverOrderId) {
   return fulfillmentFromRow(row);
 }
 
-function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJson, actor = null) {
+function isCanonicalMarketplaceOrderRow(orderRow) {
+  return Number(orderRow?.is_marketplace) === 1
+    || Boolean(String(orderRow?.marketplace_order_id || '').trim());
+}
+
+function applyCoreFulfillmentInventoryConsequence(chatId, fulfillmentRow, orderJson, actor = null, marketplaceOrder = false) {
   const terminal = fulfillmentRow.fulfillment_type === 'delivery'
     ? fulfillmentRow.status === 'delivered'
     : fulfillmentRow.status === 'picked_up';
   if (!terminal) return [];
   // Marketplace checkout already records the canonical SALE movement. Courier
   // completion updates fulfillment/proof only and must not deduct that sale again.
-  if (orderJson?.is_marketplace === true || orderJson?.marketplace_order_id) return [];
+  if (marketplaceOrder) return [];
   const items = Array.isArray(orderJson?.items) ? orderJson.items : [];
   const quantitiesByProduct = new Map();
   for (const item of items) {
@@ -10307,7 +10312,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
       audit(String(chatId), 'delivery.assignment.reassigned', 'delivery_assignment', result.id, { orderId: String(serverOrderId), previousCourierUserId: String(active.courier_user_id), courierUserId: targetCourierId, commandKey }, { organizationId, locationId, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
     } else if (normalizedAction === 'DELIVERED') {
       const updatedFulfillment = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(fulfillment.id);
-      const inventoryMovements = applyCoreFulfillmentInventoryConsequence(String(chatId), updatedFulfillment, orderFromRow(freshOrderRow), actor);
+      const inventoryMovements = applyCoreFulfillmentInventoryConsequence(String(chatId), updatedFulfillment, orderFromRow(freshOrderRow), actor, isCanonicalMarketplaceOrderRow(freshOrderRow));
       audit(String(chatId), 'delivery.assignment.delivered', 'delivery_assignment', active.id, { orderId: String(serverOrderId), from: current, to: normalizedAction, commandKey, proofAttached: true, inventoryMovementIds: inventoryMovements.map(item => item.id) }, { organizationId, locationId: active.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
     } else {
       audit(String(chatId), 'delivery.assignment.' + normalizedAction.toLowerCase(), 'delivery_assignment', active.id, { orderId: String(serverOrderId), from: current, to: normalizedAction, commandKey, ...(exceptionReason ? { exceptionReason } : {}) }, { organizationId, locationId: active.location_id, actorId: actor?.userId || null, deviceId: actor?.deviceId || null });
@@ -10397,7 +10402,7 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     // Marketplace orders retain their own lifecycle. Delivery Assignment is
     // the supported Logistics bridge; generic Core Fulfillment mutations are
     // explicitly rejected. Existing committed commands still replay above.
-    if (freshOrderJson?.is_marketplace === true || freshOrderJson?.marketplace_order_id) {
+    if (isCanonicalMarketplaceOrderRow(freshOrderRow)) {
       throw Object.assign(new Error('Marketplace orders must use the Marketplace/Logistics fulfillment path'), {
         statusCode: 409, code: 'MARKETPLACE_CORE_FULFILLMENT_UNSUPPORTED',
       });
@@ -10536,7 +10541,7 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
       INSERT INTO fulfillment_commands (organization_id, command_key, server_order_id, command_fingerprint, created_at)
       VALUES (?, ?, ?, ?, ?)
     `).run(organizationId, commandKey, String(serverOrderId), commandFingerprint, now);
-    const inventoryMovements = applyCoreFulfillmentInventoryConsequence(key, updated, freshOrderJson, actor);
+    const inventoryMovements = applyCoreFulfillmentInventoryConsequence(key, updated, freshOrderJson, actor, isCanonicalMarketplaceOrderRow(freshOrderRow));
     audit(key, 'fulfillment.transitioned', 'fulfillment', row.id, {
       orderId: String(serverOrderId), from: current, to: target, commandKey,
       inventoryMovementIds: inventoryMovements.map(item => item.id),
