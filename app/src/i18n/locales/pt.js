@@ -76,6 +76,8 @@ export default {
     serviceResourceManageProviders: "Gerir prestadores",
     serviceResourceSelectProvider: "Selecionar prestador",
     serviceBookingChooseResource: "Escolha um recurso ativo para este agendamento (introduza o respetivo número):",
+    serviceBookingConfirmResource: "Confirmar agendamento",
+    serviceBookingCancelResource: "Cancelar",
     serviceResourceAssignProvider: "Atribuir prestador",
     serviceResourceProviderAssigned: "Prestador atribuído a este recurso.",
     serviceResourceRevokeProvider: "Revogar acesso do prestador",
