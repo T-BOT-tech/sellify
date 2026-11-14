@@ -159,6 +159,7 @@ export default {
     serviceAvailabilityCommitmentsNotChecked: "ነባር ቀጠሮዎችና የሀብት ቁርጠኝነቶች አልተመረመሩም፤ ተገኝነት አልተረጋገጠም።",
     serviceResourceManageProviders: "አቅራቢዎችን አስተዳድር",
     serviceResourceSelectProvider: "አቅራቢ ይምረጡ",
+    serviceBookingChooseResource: "ለዚህ ቀጠሮ ንቁ ሀብት ይምረጡ (ቁጥሩን ያስገቡ):",
     serviceResourceAssignProvider: "አቅራቢ መድብ",
     serviceResourceProviderAssigned: "አቅራቢው ለዚህ ሀብት ተመድቧል።",
     serviceResourceRevokeProvider: "የአቅራቢ መዳረሻን አስወግድ",
