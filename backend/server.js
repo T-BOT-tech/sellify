@@ -642,7 +642,7 @@ async function handleTelegramStorefrontServiceAppointments(req, res, chatId, mar
         chatId:String(chatId),organizationId:tenant.organizationId,
         action:'telegram.storefront.service_appointment_action_failed',
         entityType:'telegram_buyer_service_appointment',entityId:bookingId?String(bookingId):String(marketplaceOrderId),
-        metadata:{code:error.code||'TELEGRAM_SERVICE_APPOINTMENT_FAILED',buyer_identity_hash:crypto.createHash('sha256').update(String(initData)).digest('hex')},
+        metadata:{code:error.code||'TELEGRAM_SERVICE_APPOINTMENT_FAILED',init_data_hash:crypto.createHash('sha256').update(String(initData)).digest('hex')},
       });
     } catch {}
     throw error;
