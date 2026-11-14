@@ -114,7 +114,7 @@ export async function refreshServiceBookings(root = document) {
   }));
   // Ignore responses from an older refresh or a tenant/session that is no
   // longer active. A late response must not repaint another tenant's workspace.
-  if (!workspace.isConnected
+  if (workspace.isConnected === false
       || workspace.dataset.refreshSequence !== String(sequence)
       || String(config.chatId) !== tenantId
       || String(config.sessionToken) !== sessionToken) return;
@@ -172,14 +172,23 @@ async function transitionBooking(button, root) {
 export function mountServiceBookingsWorkspace(root = document) {
   const workspace = root.querySelector('#serviceBookingsWorkspace');
   if (!workspace) return;
-  if (!workspace.dataset.handlersBound) {
-    workspace.dataset.handlersBound = '1';
-    workspace.addEventListener('click', event => {
+  // The Logistics list re-renders after unrelated assignment updates. Keep
+  // the delegated handler on the stable list root and avoid refetching all
+  // bookings on every render.
+  if (root.dataset && root.dataset.serviceBookingsHandlersBound !== '1') {
+    root.dataset.serviceBookingsHandlersBound = '1';
+    root.addEventListener('click', event => {
       const refresh = event.target.closest('#serviceBookingsRefresh');
       const action = event.target.closest('.service-booking-action');
       if (refresh) refreshServiceBookings(root);
       if (action) transitionBooking(action, root);
     });
   }
-  refreshServiceBookings(root);
+  const tenantKey = config.chatId && config.sessionToken
+    ? String(config.chatId) + ':' + String(config.sessionToken)
+    : '';
+  if (tenantKey && root.dataset?.serviceBookingsTenant !== tenantKey) {
+    root.dataset.serviceBookingsTenant = tenantKey;
+    refreshServiceBookings(root);
+  }
 }
