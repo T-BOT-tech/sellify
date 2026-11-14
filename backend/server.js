@@ -632,7 +632,6 @@ async function handleTelegramStorefrontServiceAppointments(req, res, chatId, mar
   try {
     const secret = await resolveTelegramBotCredential(config.credentialRef);
     const verified = verifyTelegramBuyerInitDataWithSecret(initData,secret,TELEGRAM_AUTH_MAX_AGE_SEC);
-    const actor = { buyerIdentityHash: crypto.createHash('sha256').update(String(verified.telegramUserId)).digest('hex') };
     if (req.method === 'POST' && assessmentOnly) {
       const assessment = await assessTelegramBuyerServiceAppointmentWindow(chatId,verified.telegramUserId,marketplaceOrderId,sellerOrderId,body);
       return sendJSON(res,200,{assessment},req);
@@ -640,7 +639,7 @@ async function handleTelegramStorefrontServiceAppointments(req, res, chatId, mar
     if (req.method === 'POST' && !bookingId && !assessmentOnly) {
       const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
       if (!idempotencyKey) return sendJSON(res,400,{error:{message:'Idempotency-Key is required',status:400,code:'IDEMPOTENCY_KEY_REQUIRED'}},req);
-      const result = await createTelegramBuyerServiceBooking(chatId,verified.telegramUserId,marketplaceOrderId,sellerOrderId,{...body,idempotencyKey},actor);
+      const result = await createTelegramBuyerServiceBooking(chatId,verified.telegramUserId,marketplaceOrderId,sellerOrderId,{...body,idempotencyKey});
       return sendJSON(res,result.replayed?200:201,{booking:telegramBuyerServiceBookingProjection(result.booking),replayed:result.replayed},req);
     }
     if (req.method === 'PATCH' && bookingId) {
