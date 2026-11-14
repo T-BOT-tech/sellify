@@ -5935,7 +5935,8 @@ function serviceResourceFromRow(row) {
     serviceItemId: row.service_item_id || null,
     locationId: row.location_id || null,
     status: row.status,
-    availabilityConfigured: Number(row.availability_version || 0) > 0,
+    availabilityConfigured: Number(row.availability_version || 0) > 0
+      && (parseJSON(row.availability_working_hours_json, []).length > 0 || parseJSON(row.availability_exceptions_json, []).length > 0),
     availabilityVersion: Number(row.availability_version || 0),
     metadata: parseJSON(row.metadata_json, {}),
     version: Number(row.version || 1),
@@ -5997,7 +5998,9 @@ export async function listServiceResources(chatId, { includeInactive = false, se
   if (serviceItemId) { clauses.push('service_item_id = ?'); params.push(String(serviceItemId)); }
   if (locationId) { clauses.push('(location_id IS NULL OR location_id = ?)'); params.push(String(locationId)); }
   const joinedClauses = clauses.map(clause => clause.replace(/^(organization_id|chat_id|status|service_item_id|location_id)/, 'r.$1'));
-  return db.prepare(`SELECT r.*, a.version AS availability_version
+  return db.prepare(`SELECT r.*, a.version AS availability_version,
+      a.working_hours_json AS availability_working_hours_json,
+      a.exceptions_json AS availability_exceptions_json
     FROM service_resources r
     LEFT JOIN service_resource_availability a
       ON a.resource_id=r.id AND a.organization_id=r.organization_id AND a.chat_id=r.chat_id
