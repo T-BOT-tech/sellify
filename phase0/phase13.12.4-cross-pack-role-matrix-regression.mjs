@@ -99,6 +99,8 @@ check('Service Provider permissions require exact resource-scoped context', () =
   const location = { id: 'loc-a', organizationId: 'org-a' };
   assert.equal(authorize(provider, organization, location, 'service_resource', 'service:resource_availability:view'), AUTHZ.DENY);
   assert.equal(authorize(provider, organization, location, 'service_resource', 'service:resource_availability:view', context), AUTHZ.ALLOW);
+  assert.equal(authorize({ ...provider, contextualRoles: [{ role: 'service_provider', scopeType: 'ORGANIZATION', scopeId: null }] }, organization, location, 'service_resource', 'service:resource_availability:view', context), AUTHZ.DENY);
+  assert.equal(authorize({ ...provider, contextualRoles: [{ role: 'service_provider', scopeType: 'LOCATION', scopeId: 'loc-a' }] }, organization, location, 'service_resource', 'service:resource_availability:view', context), AUTHZ.DENY);
   assert.equal(authorize(provider, organization, location, 'service_resource', 'service:resource_availability:manage', context), AUTHZ.ALLOW);
   assert.equal(authorize(provider, organization, location, 'service_resource', 'service:service_resource:view', context), AUTHZ.ALLOW);
   assert.equal(authorize(provider, organization, location, 'service_resource', 'service:service_resource:manage', context), AUTHZ.DENY);
