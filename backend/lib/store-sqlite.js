@@ -6089,6 +6089,17 @@ export async function updateServiceResource(chatId, resourceId, input = {}, acto
       return { resource: serviceResourceFromRow(row), replayed: true };
     }
     if (Number(row.version) !== expectedVersion) throw Object.assign(new Error('Service resource version conflict'), { statusCode: 409, code: 'SERVICE_RESOURCE_VERSION_CONFLICT' });
+    const hasActiveCommitments = Boolean(db.prepare(`SELECT 1 FROM service_resource_commitments
+      WHERE organization_id=? AND resource_id=? AND status='ACTIVE' LIMIT 1`).get(String(organizationId),String(resourceId)));
+    if (hasActiveCommitments && (
+      values.status !== String(row.status)
+      || String(refs.serviceItemId || '') !== String(row.service_item_id || '')
+      || String(refs.locationId || '') !== String(row.location_id || '')
+    )) {
+      throw Object.assign(new Error('A resource with active appointments cannot be deactivated, reassigned, or moved'), {
+        statusCode:409, code:'SERVICE_RESOURCE_HAS_ACTIVE_COMMITMENTS',
+      });
+    }
     const now = nowIso(), actorId = actor?.userId || actor?.user_id || null, nextVersion = expectedVersion + 1;
     const changed = db.prepare(`UPDATE service_resources SET
       resource_type=?,name=?,description=?,service_item_id=?,location_id=?,status=?,metadata_json=?,
@@ -6179,6 +6190,21 @@ export async function setServiceResourceAvailability(chatId, resourceId, input =
       .get(String(resourceId),String(organizationId),String(chatId));
     const currentVersion = Number(current?.version || 0);
     if (currentVersion !== expectedVersion) throw Object.assign(new Error('Service availability version conflict'), { statusCode:409, code:'SERVICE_AVAILABILITY_VERSION_CONFLICT' });
+    const activeCommitments = db.prepare(`SELECT starts_at,ends_at FROM service_resource_commitments
+      WHERE organization_id=? AND chat_id=? AND resource_id=? AND status='ACTIVE'`).all(
+      String(organizationId),String(chatId),String(resourceId),
+    );
+    for (const commitment of activeCommitments) {
+      const assessment = assessServiceResourceCommitWindow({
+        timeZone, workingHours: working.entries, exceptions,
+        start: commitment.starts_at, end: commitment.ends_at,
+      });
+      if (assessment.state !== 'WITHIN_DECLARED_HOURS') {
+        throw Object.assign(new Error('Working-hours changes would invalidate an existing confirmed appointment'), {
+          statusCode:409, code:'SERVICE_AVAILABILITY_CONFLICTS_WITH_COMMITMENTS',
+        });
+      }
+    }
     const now = nowIso(), nextVersion = currentVersion + 1, actorId = actor?.userId || actor?.user_id || null;
     db.prepare(`INSERT INTO service_resource_availability
       (resource_id,organization_id,chat_id,timezone,working_hours_json,exceptions_json,version,updated_by,updated_at)
