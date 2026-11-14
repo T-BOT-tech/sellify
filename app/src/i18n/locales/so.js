@@ -164,5 +164,4 @@ export default {
     serviceResourceProviderAssignFailed: "Lama cusboonaysiin karin gelitaanka bixiyaha.",
     serviceResourceNoProviderMembers: "Ma jiraan xubno shaqaale oo ku habboon.",
     serviceResourceProviderDescription: "Eeg ilaha adeegga ee laguu qoondeeyay oo cusboonaysii saacadaha shaqada ee la sheegay. Helitaanka lama xaqiijinayo ilaa ballamaha jira la hubiyo.",
-    serviceResourceProviderDescription: "Eeg ilaha adeegga ee laguu qoondeeyay oo cusboonaysii saacadaha shaqada ee la sheegay. Helitaanka lama xaqiijinayo ilaa ballamaha jira la hubiyo.",
 };
