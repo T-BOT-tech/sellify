@@ -286,4 +286,12 @@ export default {
     serviceResourceProviderAssignFailed: "Could not update provider access.",
     serviceResourceNoProviderMembers: "No eligible staff memberships.",
     serviceResourceProviderDescription: "View your assigned service resources and maintain their declared working hours. Availability is not confirmed until existing commitments are checked.",
+    serviceBookingSelectResource: "Service resource",
+    serviceBookingNoEligibleResource: "No active resource with a declared schedule is configured for this service.",
+    serviceBookingResourceRequired: "Select a service resource before confirming this appointment.",
+    serviceBookingAssignedResource: "Assigned resource",
+    serviceBookingResourceUnknown: "Resource commitment UNKNOWN — review required.",
+    serviceBookingResourceReleased: "Resource slot released",
+    serviceResourceAvailabilityConfigured: "Schedule configured",
+    serviceResourceAvailabilityNotConfigured: "Schedule not configured",
 };
