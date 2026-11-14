@@ -155,6 +155,10 @@ try {
     status:'CONFIRMED',resource_id:resource.id,expected_version:2,idempotency_key:'tg11-manager-confirm-'+suffix,
   },owner);
   assert.equal(confirmed.booking.status,'CONFIRMED');
+  const buyerHistoryAfterConfirm=await request(`/api/telegram-storefront/${encodeURIComponent(tenant.chatId)}/orders`,{headers:authHeaders});
+  const publicAppointment=buyerHistoryAfterConfirm.body.orders[0].sellers[0].service_appointments[0];
+  assert.equal(publicAppointment.status,'CONFIRMED');
+  assert.equal(publicAppointment.resource_id,undefined,'buyer order history must not expose the committed resource ID');
   const afterConfirm=await request(baseUrl+'/assessment',{
     method:'POST',headers:authHeaders,body:JSON.stringify(windowBody),
   });
