@@ -98,6 +98,29 @@ try {
   assert.equal(acceptedReplay.replayed, true);
   assert.equal(acceptedReplay.booking.status, 'ACCEPTED');
 
+  await assert.rejects(
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, created.booking.id, {
+      status: 'CONFIRMED', expected_version: 2, idempotency_key: 'booking-confirm-no-resource-' + suffix,
+    }, { userId: owner.id }),
+    error => error?.code === 'SERVICE_BOOKING_RESOURCE_REQUIRED',
+    'a booking must not be confirmed without selecting a Service Resource',
+  );
+  const outsideBooking = await store.createServiceBooking(seller.chatId, order.server_order_id, {
+    ...request, requested_start: '2026-11-01T19:00:00+03:00',
+    requested_end: '2026-11-01T20:00:00+03:00',
+    idempotency_key: 'booking-outside-hours-create-' + suffix,
+  }, { userId: owner.id });
+  await store.transitionServiceBooking(seller.chatId, order.server_order_id, outsideBooking.booking.id, {
+    status: 'ACCEPTED', expected_version: 1, idempotency_key: 'booking-outside-hours-accept-' + suffix,
+  }, { userId: owner.id });
+  await assert.rejects(
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, outsideBooking.booking.id, {
+      status: 'CONFIRMED', resource_id: serviceResource.id, expected_version: 2,
+      idempotency_key: 'booking-outside-hours-confirm-' + suffix,
+    }, { userId: owner.id }),
+    error => error?.code === 'SERVICE_BOOKING_OUTSIDE_DECLARED_HOURS',
+    'declared hours must be re-evaluated inside the confirmation transaction',
+  );
   const confirmed = await store.transitionServiceBooking(seller.chatId, order.server_order_id, created.booking.id, {
     status: 'CONFIRMED', resource_id: serviceResource.id, expected_version: 2, idempotency_key: 'booking-confirm-' + suffix,
   }, { userId: owner.id });
