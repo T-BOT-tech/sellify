@@ -46,4 +46,10 @@ export default {
     serviceResourceDeactivate: "Désactiver",
     serviceResourceUnknownStale: "Disponibilité inconnue ou obsolète. Actualisez avant de vous y fier.",
     serviceResourceTitle: "Ressources de service",
+    serviceResourceAllServices: "Tous les services",
+    serviceResourceOrganizationWide: "Toute l’organisation",
+    serviceResourceTypeProvider: "Prestataire / personnel",
+    serviceResourceTypeFacility: "Établissement / salle",
+    serviceResourceTypeEquipment: "Équipement",
+    serviceResourceTypeOther: "Autre",
 };
