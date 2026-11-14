@@ -164,4 +164,5 @@ export default {
     serviceResourceRevokeProvider: "प्रदाता की पहुँच रद्द करें",
     serviceResourceProviderAssignFailed: "प्रदाता की पहुँच अपडेट नहीं हो सकी।",
     serviceResourceNoProviderMembers: "कोई पात्र कर्मचारी सदस्य नहीं हैं।",
+    serviceResourceProviderDescription: "आपको सौंपे गए सेवा संसाधन देखें और उनके घोषित कार्य समय अपडेट करें। मौजूदा प्रतिबद्धताओं की जाँच होने तक उपलब्धता की पुष्टि नहीं होती।",
 };
