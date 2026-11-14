@@ -76,6 +76,8 @@ export default {
     serviceResourceManageProviders: "Управление исполнителями",
     serviceResourceSelectProvider: "Выбрать исполнителя",
     serviceBookingChooseResource: "Выберите активный ресурс для этой записи (введите его номер):",
+    serviceBookingConfirmResource: "Подтвердить запись",
+    serviceBookingCancelResource: "Отмена",
     serviceResourceAssignProvider: "Назначить исполнителя",
     serviceResourceProviderAssigned: "Исполнитель назначен на этот ресурс.",
     serviceResourceRevokeProvider: "Отозвать доступ исполнителя",
