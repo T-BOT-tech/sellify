@@ -73,4 +73,11 @@ export default {
     serviceAvailabilityOutsideDeclaredHours: "Yana wajen lokutan aiki da aka bayyana.",
     serviceAvailabilityAssessmentUnknown: "Ba a san sakamakon kimantawa ba.",
     serviceAvailabilityCommitmentsNotChecked: "Ba a duba alƙawura ko amfani da kayan aiki na yanzu ba; ba a tabbatar da samuwa ba.",
+    serviceResourceManageProviders: "Sarrafa masu bayar da sabis",
+    serviceResourceSelectProvider: "Zaɓi mai bayar da sabis",
+    serviceResourceAssignProvider: "Sanya mai bayar da sabis",
+    serviceResourceProviderAssigned: "An sanya mai bayar da sabis ga wannan albarkatu.",
+    serviceResourceRevokeProvider: "Soke damar mai bayar da sabis",
+    serviceResourceProviderAssignFailed: "An kasa sabunta damar mai bayar da sabis.",
+    serviceResourceNoProviderMembers: "Babu ma'aikatan da suka cancanta.",
 };
