@@ -122,7 +122,7 @@ function openTelegramServiceAppointmentDialog({marketplaceOrderId,sellerOrderId,
       <div data-assessment-state class="state" role="status" aria-live="polite">Choose a time and check its current feasibility.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button type="button" class="fulfillment-btn" data-check-time>Check time</button>
-        <button type="button" class="submit" data-send-request>Send request</button>
+        <button type="button" class="submit" data-send-request disabled>Send request</button>
         <button type="button" class="fulfillment-btn" data-close-dialog>Close</button>
       </div>
     </form>`;
@@ -134,6 +134,8 @@ function openTelegramServiceAppointmentDialog({marketplaceOrderId,sellerOrderId,
   form.addEventListener('submit',event=>event.preventDefault());
   let activeCreateKey = null;
   let activeCreateStorageKey = null;
+  let assessedWindowKey = null;
+  const windowKey = window => JSON.stringify({service_item_id:serviceItemId,requested_start:window.requested_start,requested_end:window.requested_end});
   const readWindow = () => {
     if (!timeZone) throw new Error('Seller timezone is not configured. The request was not sent.');
     const start = serviceLocalDateTimeToIso(form.elements.start.value,timeZone);
@@ -151,16 +153,24 @@ function openTelegramServiceAppointmentDialog({marketplaceOrderId,sellerOrderId,
       const data=await response.json().catch(()=>({}));
       if(!response.ok) throw new Error(data?.error?.message||'Could not check appointment feasibility.');
       const assessmentState=data.assessment?.state;
+      assessedWindowKey=windowKey(payload);
+      sendButton.disabled=false;
       if(assessmentState==='FEASIBLE') stateEl.textContent='Potentially feasible: a resource window appears to fit. This is not a reservation or confirmation.';
       else if(assessmentState==='UNAVAILABLE') stateEl.textContent='No current resource window appears free. You may still send a request for seller review; it will not be confirmed.';
       else stateEl.textContent='Availability is UNKNOWN. You may still send a request for seller review; no slot is reserved.';
-    } catch(error) { stateEl.textContent=error.message||'Availability is UNKNOWN. The request has not been sent.'; }
+    } catch(error) { assessedWindowKey=null; sendButton.disabled=true; stateEl.textContent=error.message||'Availability is UNKNOWN. The request has not been sent.'; }
     finally { checkButton.disabled=false; }
   });
+  [form.elements.start,form.elements.end].forEach(input=>input.addEventListener('input',()=>{
+    assessedWindowKey=null; sendButton.disabled=true;
+    stateEl.textContent='Time changed. Check the new time before sending the request.';
+  }));
   sendButton.addEventListener('click',async()=>{
     sendButton.disabled=true; stateEl.textContent='Sending appointment request…';
     try {
-      const payload={...readWindow(),appointment_mode:form.elements.mode.value,customer_note:form.elements.note.value.trim()};
+      const appointmentWindow=readWindow();
+      if(assessedWindowKey!==windowKey(appointmentWindow)) throw new Error('Check the selected time before sending the appointment request.');
+      const payload={...appointmentWindow,appointment_mode:form.elements.mode.value,customer_note:form.elements.note.value.trim()};
       const storageKey='sellify:telegram-service-appointment:'+marketplaceOrderId+':'+sellerOrderId+':'+serviceItemId+':'+encodeURIComponent(JSON.stringify(payload));
       if(activeCreateStorageKey!==storageKey){
         let storedKey=null; try{storedKey=sessionStorage.getItem(storageKey)}catch{}
