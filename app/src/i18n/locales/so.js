@@ -156,4 +156,11 @@ export default {
     serviceAvailabilityOutsideDeclaredHours: "Waxay ka baxsan tahay saacadaha shaqada ee la sheegay.",
     serviceAvailabilityAssessmentUnknown: "Qiimeyntu lama yaqaan.",
     serviceAvailabilityCommitmentsNotChecked: "Ballamaha jira iyo qoondeynta kheyraadka lama hubin; helitaankuna lama xaqiijin.",
+    serviceResourceManageProviders: "Maamul bixiyeyaasha",
+    serviceResourceSelectProvider: "Dooro bixiye",
+    serviceResourceAssignProvider: "U qoondee bixiye",
+    serviceResourceProviderAssigned: "Bixiyaha waxaa loo qoondeeyay kheyraadkan.",
+    serviceResourceRevokeProvider: "Ka noqo gelitaanka bixiyaha",
+    serviceResourceProviderAssignFailed: "Lama cusboonaysiin karin gelitaanka bixiyaha.",
+    serviceResourceNoProviderMembers: "Ma jiraan xubno shaqaale oo ku habboon.",
 };
