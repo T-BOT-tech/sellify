@@ -88,17 +88,27 @@ function serviceResourceEndpoint() {
 }
 
 function serviceResourceCatalogOptions() {
-  return '<option value="">All service items</option>' + (Array.isArray(products) ? products : [])
+  return '<option value="">' + escapeHtml(t('serviceResourceAllServices')) + '</option>' + (Array.isArray(products) ? products : [])
     .filter(item => String(item.item_type || item.type || '').toLowerCase() === 'service')
     .map(item => '<option value="' + escapeAttr(item.id) + '">' + escapeHtml(item.name || item.title || item.id) + '</option>')
     .join('');
 }
 
 function serviceResourceLocationOptions() {
-  return '<option value="">Organization-wide</option>' + (Array.isArray(organizationLocations) ? organizationLocations : [])
+  return '<option value="">' + escapeHtml(t('serviceResourceOrganizationWide')) + '</option>' + (Array.isArray(organizationLocations) ? organizationLocations : [])
     .filter(location => String(location.status || '').toLowerCase() === 'active')
     .map(location => '<option value="' + escapeAttr(location.id) + '">' + escapeHtml(location.name || location.code || location.id) + '</option>')
     .join('');
+}
+
+function serviceResourceTypeLabel(type) {
+  const labels = {
+    PROVIDER: 'serviceResourceTypeProvider',
+    FACILITY: 'serviceResourceTypeFacility',
+    EQUIPMENT: 'serviceResourceTypeEquipment',
+    OTHER: 'serviceResourceTypeOther',
+  };
+  return t(labels[String(type || '').toUpperCase()] || 'serviceResourceTypeOther');
 }
 
 function serviceResourceCard(resource) {
@@ -106,9 +116,9 @@ function serviceResourceCard(resource) {
   return '<article class="logistics-card service-resource-card" data-resource-id="' + escapeAttr(resource.id) + '">'
     + '<div class="logistics-top"><strong>' + escapeHtml(resource.name) + '</strong>'
     + '<span class="logistics-status">' + escapeHtml(resource.status) + '</span></div>'
-    + '<div class="logistics-meta">' + escapeHtml(String(resource.resourceType || '').replaceAll('_', ' ').toLowerCase())
-    + (resource.serviceItemId ? ' · ' + escapeHtml(resource.serviceItemId) : ' · All services')
-    + (resource.locationId ? ' · ' + escapeHtml(resource.locationId) : ' · Organization-wide') + ' · v' + escapeHtml(resource.version) + '</div>'
+    + '<div class="logistics-meta">' + escapeHtml(serviceResourceTypeLabel(resource.resourceType))
+    + (resource.serviceItemId ? ' · ' + escapeHtml(resource.serviceItemId) : ' · ' + escapeHtml(t('serviceResourceAllServices')))
+    + (resource.locationId ? ' · ' + escapeHtml(resource.locationId) : ' · ' + escapeHtml(t('serviceResourceOrganizationWide'))) + ' · v' + escapeHtml(resource.version) + '</div>'
     + (resource.description ? '<div class="logistics-meta">' + escapeHtml(resource.description) + '</div>' : '')
     + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">'
     + '<button type="button" class="btn-secondary service-resource-rename" data-resource-id="' + escapeAttr(resource.id) + '" data-version="' + escapeAttr(resource.version) + '">' + escapeHtml(t('serviceResourceRename')) + '</button>'
@@ -217,7 +227,7 @@ export function serviceBookingsWorkspaceShell() {
         + '<p class="logistics-meta">' + escapeHtml(t('serviceResourceDescription')) + '</p>'
         + '<form id="serviceResourceForm" class="settings-form" style="display:grid;gap:8px;">'
         + '<input name="name" maxlength="120" required placeholder="' + escapeAttr(t('serviceResourceName')) + '">'
-        + '<select name="resource_type"><option value="PROVIDER">Provider / staff</option><option value="FACILITY">Facility / room</option><option value="EQUIPMENT">Equipment</option><option value="OTHER">Other</option></select>'
+        + '<select name="resource_type"><option value="PROVIDER">' + escapeHtml(t('serviceResourceTypeProvider')) + '</option><option value="FACILITY">' + escapeHtml(t('serviceResourceTypeFacility')) + '</option><option value="EQUIPMENT">' + escapeHtml(t('serviceResourceTypeEquipment')) + '</option><option value="OTHER">' + escapeHtml(t('serviceResourceTypeOther')) + '</option></select>'
         + '<select name="service_item_id">' + serviceResourceCatalogOptions() + '</select>'
         + '<select name="location_id">' + serviceResourceLocationOptions() + '</select>'
         + '<textarea name="description" maxlength="1000" placeholder="' + escapeAttr(t('serviceResourceDescriptionField')) + '"></textarea>'
