@@ -56,4 +56,53 @@ const ties = matchDiscoveryCandidates([
 ], { productId: 'coffee' });
 assert.deepEqual(ties.map(x => x.candidate.organizationId), ['org-a', 'org-z']);
 
+const windowContext = {
+  productId: 'coffee',
+  minimumQuantity: 50,
+  unit: 'kg',
+  availabilityFrom: '2026-12-01T00:00:00.000Z',
+  availabilityTo: '2026-12-03T23:59:59.999Z',
+};
+const temporalCandidate = {
+  ...strong,
+  capacitySignals: [{
+    id: 'cap-window', subjectType: 'PRODUCT', subjectId: 'coffee',
+    quantity: 75, unit: 'kg', periodType: 'RANGE',
+    periodStart: '2026-12-01T00:00:00.000Z', periodEnd: '2026-12-05T00:00:00.000Z',
+    availability: 'LIMITED', status: 'ACTIVE', source: 'DECLARED',
+  }],
+};
+assert.equal(evaluateDiscoveryMatch(temporalCandidate, windowContext).eligible, true, 'overlapping LIMITED declared capacity qualifies');
+for (const availability of ['UNAVAILABLE', 'ON_REQUEST']) {
+  const result = evaluateDiscoveryMatch({
+    ...temporalCandidate,
+    capacitySignals: [{ ...temporalCandidate.capacitySignals[0], availability }],
+  }, windowContext);
+  assert.equal(result.eligible, false, `${availability} must not satisfy a time-bound availability request`);
+}
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], periodStart: '2026-12-04T00:00:00.000Z', periodEnd: '2026-12-06T00:00:00.000Z' }],
+}, windowContext).eligible, false, 'non-overlapping capacity window is excluded');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], periodStart: null, periodEnd: null }],
+}, windowContext).eligible, false, 'capacity without a declared period is UNKNOWN for a time-bound request');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], quantity: 10 }],
+}, windowContext).eligible, false, 'insufficient quantity is excluded');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], unit: 'tonne' }],
+}, windowContext).eligible, false, 'incompatible units are not converted implicitly');
+assert.equal(evaluateDiscoveryMatch(temporalCandidate, {
+  ...windowContext, availabilityTo: null,
+}).eligible, false, 'incomplete requested window fails closed');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], subjectType: 'CAPABILITY', subjectId: 'COFFEE' }],
+}, { ...windowContext, productId: null, capabilityCode: 'COFFEE' }).eligible, true, 'capability-bound capacity matches capability requests');
+assert.equal(evaluateDiscoveryMatch(temporalCandidate, { productId: 'coffee', minimumQuantity: 50, unit: 'kg' }).eligible, true, 'legacy searches without a requested period retain prior quantity behavior');
+
 console.log('Phase 19.7 Deterministic Matching regression: PASS');
