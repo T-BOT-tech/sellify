@@ -21,7 +21,7 @@ const booking = normalizeServiceBookingRequest({
 });
 
 const bookingContract = serviceBookingContract();
-assert.equal(bookingContract.scheduling_authority, 'existing_logistics_scheduling_when_applicable');
+assert.equal(bookingContract.scheduling_authority, 'service_resource_availability_and_booking_lifecycle');
 assert.equal(booking.persistence, 'none');
 
 // Requested appointment time alone is not an authoritative capacity decision.
