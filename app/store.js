@@ -133,6 +133,7 @@ function openTelegramServiceAppointmentDialog({marketplaceOrderId,sellerOrderId,
   const sendButton = dialog.querySelector('[data-send-request]');
   let lastAssessment = null;
   const readWindow = () => {
+    if (!timeZone) throw new Error('Seller timezone is not configured. The request was not sent.');
     const start = serviceLocalDateTimeToIso(form.elements.start.value,timeZone);
     const end = serviceLocalDateTimeToIso(form.elements.end.value,timeZone);
     if (Date.parse(end) <= Date.parse(start)) throw new Error('End time must be later than start time.');
@@ -165,9 +166,9 @@ function openTelegramServiceAppointmentDialog({marketplaceOrderId,sellerOrderId,
       const data=await response.json().catch(()=>({}));
       if(!response.ok) throw new Error(data?.error?.message||'Appointment request could not be sent.');
       dialog.close(); dialog.remove();
+      await loadTelegramOrders();
       const state=document.getElementById('ordersState');
       if(state) state.textContent='Appointment request sent. It is pending seller review; no resource slot is confirmed yet.';
-      await loadTelegramOrders();
     } catch(error) {
       stateEl.textContent=(error instanceof TypeError?'Offline — request not sent. Reconnect and retry.':error.message||'Request not sent.');
       sendButton.disabled=false;
@@ -217,12 +218,12 @@ async function loadTelegramOrders() {
         <div style="font-size:12px;">Seller order: ${esc(seller.seller_order_id)} · ${esc(seller.status || 'queued')}</div>
         ${appointmentsEnabled && (seller.service_items||[]).length ? `
           <div style="margin-top:8px;font-weight:600;">Service appointments</div>
-          ${(seller.service_appointments||[]).map(appointment => `
+          ${(seller.service_appointments||[]).length ? (seller.service_appointments||[]).map(appointment => `
             <div style="margin-top:6px;padding:8px;border:1px solid var(--line);border-radius:9px;">
               <strong>${esc(appointment.status)}</strong>
-              <div class="hint">${esc(appointment.service_item_id)} · ${esc(formatAppointmentTime(appointment.requested_start,seller.time_zone))} – ${esc(formatAppointmentTime(appointment.requested_end,seller.time_zone))}</div>
+              <div class="hint">${esc((seller.service_items||[]).find(item=>item.id===appointment.service_item_id)?.name||appointment.service_item_id)} · ${esc(formatAppointmentTime(appointment.requested_start,seller.time_zone))} – ${esc(formatAppointmentTime(appointment.requested_end,seller.time_zone))}</div>
               ${['REQUESTED','ACCEPTED','CONFIRMED'].includes(String(appointment.status).toUpperCase()) ? `<button class="fulfillment-btn" data-cancel-appointment data-marketplace-order="${esc(o.marketplace_order_id)}" data-seller-order="${esc(seller.seller_order_id)}" data-booking-id="${esc(appointment.id)}" data-version="${esc(appointment.version)}">Cancel request</button>` : ''}
-            </div>`).join('')}
+            </div>`).join('') : '<div class="hint" style="margin-top:6px;">No appointment requests yet.</div>'}
           ${(seller.service_items||[]).map(item => `<button class="fulfillment-btn" style="margin-top:8px" data-request-appointment data-marketplace-order="${esc(o.marketplace_order_id)}" data-seller-order="${esc(seller.seller_order_id)}" data-service-item="${esc(item.id)}" data-service-name="${esc(item.name)}" data-time-zone="${esc(seller.time_zone||'')}">Request ${esc(item.name)} appointment</button>`).join('')}
         ` : ''}
       </div>`).join('')}
