@@ -26,13 +26,17 @@ assert.match(bookingHandler, /service:booking:view/);
 assert.match(bookingHandler, /service:booking:request/);
 assert.doesNotMatch(bookingHandler, /logistics:scheduling:/);
 assert.match(moduleSource, /import \{ t \} from '..\/ui\/i18n\.js'/);
-for (const key of ['serviceBookingsTitle', 'serviceBookingsRefresh', 'serviceBookingsDescription', 'serviceBookingsLoading', 'serviceBookingsSignIn', 'serviceBookingsNoOrders', 'serviceBookingsDenied', 'serviceBookingsPartialFailure', 'serviceBookingsEmpty', 'serviceBookingSingular', 'serviceBookingPlural', 'serviceBookingsLoaded', 'serviceBookingReasonPrompt', 'serviceBookingCompletionPrompt', 'serviceBookingUpdateFailed', 'serviceBookingsLoadFailed']) {
+for (const key of ['serviceBookingsTitle', 'serviceBookingsRefresh', 'serviceBookingsDescription', 'serviceBookingsLoading', 'serviceBookingsSignIn', 'serviceBookingsNoOrders', 'serviceBookingsDenied', 'serviceBookingsPartialFailure', 'serviceBookingsEmpty', 'serviceBookingSingular', 'serviceBookingPlural', 'serviceBookingsLoaded', 'serviceBookingReasonPrompt', 'serviceBookingCompletionPrompt', 'serviceBookingUpdateFailed', 'serviceBookingsLoadFailed', 'serviceBookingSelectResource', 'serviceBookingNoEligibleResource', 'serviceBookingResourceRequired', 'serviceBookingAssignedResource', 'serviceBookingResourceUnknown', 'serviceBookingResourceReleased', 'serviceResourceAvailabilityConfigured', 'serviceResourceAvailabilityNotConfigured']) {
   assert.match(moduleSource, new RegExp(key));
   for (const localeSource of localeSources) {
     const occurrences = localeSource.match(new RegExp('\\b' + key + '\\s*:', 'g')) || [];
     assert.equal(occurrences.length, 1, `Expected exactly one ${key} translation per locale`);
   }
 }
+assert.match(moduleSource, /service-booking-resource-select/);
+assert.match(moduleSource, /service_resource_id/);
+assert.match(moduleSource, /resource_commitment_state/);
+assert.match(moduleSource, /availabilityConfigured/);
 assert.match(logisticsSource, /serviceBookingsWorkspaceShell/);
 assert.match(logisticsSource, /mountServiceBookingsWorkspace\(list\)/);
 
