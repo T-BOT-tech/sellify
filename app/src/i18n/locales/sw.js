@@ -158,6 +158,7 @@ export default {
     serviceAvailabilityCommitmentsNotChecked: "Miadi na matumizi yaliyopo ya rasilimali hayajakaguliwa; upatikanaji haujathibitishwa.",
     serviceResourceManageProviders: "Dhibiti watoa huduma",
     serviceResourceSelectProvider: "Chagua mtoa huduma",
+    serviceBookingChooseResource: "Chagua rasilimali inayotumika kwa miadi hii (ingiza nambari yake):",
     serviceResourceAssignProvider: "Mkabidhi mtoa huduma",
     serviceResourceProviderAssigned: "Mtoa huduma amekabidhiwa rasilimali hii.",
     serviceResourceRevokeProvider: "Ondoa ufikiaji wa mtoa huduma",
