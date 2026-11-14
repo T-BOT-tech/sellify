@@ -20,6 +20,9 @@ const env = {
   SELLIFY_TEST_TELEGRAM_BOT_TOKEN:botToken,
   NODE_OPTIONS:[process.env.NODE_OPTIONS, '--import='+helper].filter(Boolean).join(' '),
 };
+process.env.SELLIFY_DATA_DIR=dataDir;
+process.env.SELLIFY_DB_PATH=path.join(dataDir,'sellify.sqlite');
+process.env.SELLIFY_BACKUP_DIR=path.join(dataDir,'backups');
 const child = spawn(process.execPath,[path.join(root,'backend/server.js')],{cwd:root,env,stdio:['ignore','ignore','pipe']});
 const request = async (url,options={}) => {
   const response=await fetch(`http://127.0.0.1:${port}${url}`,options);
