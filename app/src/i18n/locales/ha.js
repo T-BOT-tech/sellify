@@ -65,4 +65,12 @@ export default {
     serviceAvailabilitySaving: "Ana ajiyewa…",
     serviceAvailabilitySavedDeclaration: "An ajiye jadawali a matsayin bayani; ba a tabbatar da samuwa ba.",
     serviceAvailabilitySaveFailed: "Ba a iya ajiye jadawali ba.",
+    serviceAvailabilityAssessWindow: "Kimanta lokacin da aka nema",
+    serviceAvailabilityStart: "Fara",
+    serviceAvailabilityEnd: "Ƙare",
+    serviceAvailabilityAssess: "Kimanta lokaci",
+    serviceAvailabilityWithinDeclaredHours: "Yana cikin lokutan aiki da aka bayyana.",
+    serviceAvailabilityOutsideDeclaredHours: "Yana wajen lokutan aiki da aka bayyana.",
+    serviceAvailabilityAssessmentUnknown: "Ba a san sakamakon kimantawa ba.",
+    serviceAvailabilityCommitmentsNotChecked: "Ba a duba alƙawura ko amfani da kayan aiki na yanzu ba; ba a tabbatar da samuwa ba.",
 };
