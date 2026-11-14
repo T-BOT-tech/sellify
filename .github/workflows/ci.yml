@@ -50,6 +50,39 @@ jobs:
       - name: Execute L8-L21 cumulative exit certification
         run: npm run test:logistics-l8-l21-certification
 
+  phase13_10_24:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [24]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install root dependencies
+        run: npm install --ignore-scripts
+      - name: Install Chromium for workspace browser regression
+        run: npx playwright install --with-deps chromium
+      - name: Phase 13.10.24 Logistics workspace projection regression
+        run: npm run test:phase13.10.24-workspace-projection
+      - name: Phase 13.10.24 Logistics workspace browser regression
+        run: npm run test:phase13.10.24-workspace-browser
+      - name: Phase 13.10.24 Marketplace fulfillment boundary regression
+        run: npm run test:phase13.10.24-marketplace-boundary
+      - name: Service delivery readiness and assignment compatibility regression
+        run: npm run test:service-catalog-http
+      - name: GAP-2 delivery assignment lifecycle compatibility regression
+        run: npm run test:gap-2-delivery-lifecycle
+      - name: Phase 13.10.24 Marketplace HTTP and SQLite fulfillment journey
+        run: npm run test:phase13.10.24-marketplace-fulfillment
+      - name: Service Booking operator workspace regression
+        run: npm run test:service-booking-operator-workspace
+      - name: Service Booking operator browser regression
+        run: node phase0/service-booking-operator-browser-regression.mjs
+
   baseline:
     runs-on: ubuntu-latest
     strategy:
@@ -180,6 +213,10 @@ jobs:
 
       - name: Marketplace refund confirmation integrity regression
         run: npm run phase11.4:marketplace-test
+      - name: Phase 13.10.24 Logistics workspace projection regression
+        run: npm run test:phase13.10.24-workspace-projection
+      - name: Phase 13.10.24 Marketplace fulfillment boundary regression
+        run: npm run test:phase13.10.24-marketplace-boundary
 
       - name: Phase 17.1 procurement demand contract regression
         run: npm run phase17.1:procurement-demand-contract-test

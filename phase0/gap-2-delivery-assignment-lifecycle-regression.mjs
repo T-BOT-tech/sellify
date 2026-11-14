@@ -89,7 +89,7 @@ assert.ok(assignmentProofGuard.includes('const existingProofForImmutability')
     && assignmentProofGuard.includes('legacyOrderProof'),
   'all assignment transitions must protect captured proof, including legacy order proof');
 
-assert.match(fulfillmentTransition, /applyCoreFulfillmentInventoryConsequence\(key, updated, freshOrderJson, actor\)/,
+assert.match(fulfillmentTransition, /applyCoreFulfillmentInventoryConsequence\(key, updated, freshOrderJson, actor, isCanonicalMarketplaceOrderRow\(freshOrderRow\)\)/,
   'fulfillment inventory consequences must use the order re-read inside the write transaction');
 
 assert.match(store, /ASSIGNED: new Set\(\['ACCEPTED','CANCELLED','FAILED','REASSIGNED'\]\)/);
@@ -327,7 +327,7 @@ assert.ok(
 );
 assert.match(assignmentTransition, /const locationId = canonicalLocationId \|\| active\.location_id \|\| order\.location_id \|\| null/,
   'normal reassignment must not let request input override canonical order location');
-assert.match(assignmentTransition, /applyCoreFulfillmentInventoryConsequence\(String\(chatId\), updatedFulfillment, orderFromRow\(freshOrderRow\), actor\)/,
+assert.match(assignmentTransition, /applyCoreFulfillmentInventoryConsequence\(String\(chatId\), updatedFulfillment, orderFromRow\(freshOrderRow\), actor, isCanonicalMarketplaceOrderRow\(freshOrderRow\)\)/,
   'delivery completion inventory consequences must use the freshly revalidated canonical order');
 const activeAssignmentLookup = assignmentTransition.indexOf('const active = db.prepare');
 const deliveredTransactionStart = assignmentTransition.lastIndexOf("db.exec('BEGIN IMMEDIATE')", activeAssignmentLookup);

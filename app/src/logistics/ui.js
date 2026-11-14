@@ -37,7 +37,6 @@ export function applyLogisticsUI() {
     switchTab('order');
   }
   renderOrderFulfillmentPicker();
-  refreshDeliveryAssignments();
 }
 
 export function renderOrderFulfillmentPicker() {
@@ -68,7 +67,7 @@ export function setFulfillmentType(type) {
 
 function renderDeliveryWorkloadSummary(assignments) {
   const active = (Array.isArray(assignments) ? assignments : []).filter(a =>
-    !['CANCELLED', 'FAILED', 'REASSIGNED'].includes(String(a.status || '').toUpperCase())
+    !['CANCELLED', 'FAILED', 'REASSIGNED', 'DELIVERED'].includes(String(a.status || '').toUpperCase())
   );
   const counts = active.reduce((acc, a) => {
     const key = String(a.status || 'ASSIGNED').toUpperCase();
@@ -119,8 +118,6 @@ function currentCourierUserId() {
 function renderWorkspaceModeHeader(role, assignments) {
   const active = (Array.isArray(assignments) ? assignments : [])
     .filter(a => !['CANCELLED', 'FAILED', 'REASSIGNED', 'DELIVERED'].includes(String(a.status || '').toUpperCase()));
-  const delivered = (Array.isArray(assignments) ? assignments : [])
-    .filter(a => String(a.status || '').toUpperCase() === 'DELIVERED').length;
   const label = role === 'logistics_courier'
     ? 'My deliveries'
     : role === 'logistics_viewer'
@@ -139,7 +136,7 @@ function renderWorkspaceModeHeader(role, assignments) {
       </div>
       <div class="logistics-workspace-stats">
         <span><strong>${active.length}</strong> active</span>
-        <span><strong>${delivered}</strong> delivered</span>
+        <button type="button" class="btn-secondary" id="logistics-refresh">Refresh</button>
       </div>
     </section>`;
 }
@@ -155,7 +152,8 @@ function renderOperationalWorkspaceSummary(workspace, views) {
   const trackingRows = views.includes('tracking')
     ? workspace.tracking.slice(0, 8).map(record =>
       `<div class="logistics-meta"><strong>${escapeHtml(record.server_order_id || record.order_id || 'Order')}</strong> ·
-       ${escapeHtml(record.fulfillment_status || 'unknown')}
+       ${escapeHtml(record.fulfillment_status || record.assignment_status || 'unknown')}
+       ${record.unresolved_order ? ' · Order details not loaded' : ''}
        ${record.shipment_id ? ' · Shipment ' + escapeHtml(record.shipment_id) : ''}
        ${record.tracking_reference ? ' · Tracking ' + escapeHtml(record.tracking_reference) : ''}</div>`).join('')
     : '';
@@ -188,6 +186,15 @@ function renderOperationalWorkspaceSummary(workspace, views) {
 export function renderLogistics() {
   const list = document.getElementById('logisticsList');
   if (!list) return;
+  const logisticsTab = document.getElementById('tab-logistics');
+  const refreshTenantKey = config.chatId && config.sessionToken
+    ? String(config.chatId) + ':' + String(config.sessionToken)
+    : '';
+  if (logisticsTab?.style.display === 'block' && refreshTenantKey
+      && list.dataset.assignmentRefreshTenant !== refreshTenantKey) {
+    list.dataset.assignmentRefreshTenant = refreshTenantKey;
+    refreshDeliveryAssignments();
+  }
   const canonicalAssignments = Array.isArray(deliveryAssignments) ? deliveryAssignments : [];
   const workspaceRole = logisticsWorkspaceRole();
   const courierId = currentCourierUserId();
@@ -204,11 +211,6 @@ export function renderLogistics() {
     const assignment = canonicalDeliveryAssignment(o);
     return !!assignment && String(assignment.courier_user_id || '') === courierId;
   }).slice(0, 20);
-
-  if (pending.length === 0 && done.length === 0) {
-    list.innerHTML = `<div class="empty">${t('whNoLogisticsOrders')}</div>`;
-    return;
-  }
 
   const renderCard = (o) => {
     const isDelivery = o.fulfillment_type === 'delivery';
@@ -271,14 +273,65 @@ export function renderLogistics() {
       <button type="button" class="btn-secondary" id="logistics-filter-apply">Filter</button>
       <button type="button" class="btn-secondary" id="logistics-filter-clear">Clear</button>
     </div>`;
-  const workspace = buildLogisticsOperationalWorkspaceProjection({
-    orders: courierMode ? pending.concat(done) : orders,
-    assignments: visibleAssignments,
-  });
-  const composition = getLogisticsWorkspaceComposition(workspaceRole);
   const visibleAssignments = courierMode
     ? canonicalAssignments.filter(a => String(a.courier_user_id || '') === courierId)
     : canonicalAssignments;
+  const workspaceOrders = courierMode
+    ? orders.filter(order => {
+      const assignment = canonicalDeliveryAssignment(order);
+      return !!assignment && String(assignment.courier_user_id || '') === courierId;
+    })
+    : orders;
+  const workspace = buildLogisticsOperationalWorkspaceProjection({
+    orders: workspaceOrders,
+    assignments: visibleAssignments,
+  });
+  const composition = getLogisticsWorkspaceComposition(workspaceRole);
+  const representedServerOrders = new Set(pending.concat(done).map(order => String(order.server_order_id || '')).filter(Boolean));
+  const assignmentOnly = visibleAssignments.filter(assignment =>
+    assignment.server_order_id && !representedServerOrders.has(String(assignment.server_order_id))
+  );
+  const assignmentOnlyCards = assignmentOnly.map(assignment => {
+    const serverOrderId = String(assignment.server_order_id);
+    const status = String(assignment.status || 'ASSIGNED').toUpperCase();
+    const destination = assignment.dispatch?.destination ?? assignment.destination;
+    const destinationLabel = typeof destination === 'string'
+      ? destination
+      : destination?.address || destination?.details || destination?.label || '';
+    const locationLabel = assignment.dispatch?.locationName || assignment.location_name || assignment.location_code || '';
+    const scheduledLabel = assignment.dispatch?.scheduledAt || assignment.scheduled_at || '';
+    const trackingLabel = assignment.dispatch?.trackingReference || assignment.tracking_reference || '';
+    const authRoles = new Set([
+      ...(Array.isArray(config.authRoles) ? config.authRoles : []),
+      ...(Array.isArray(config.contextualRoles) ? config.contextualRoles.map(role => role.role) : []),
+    ]);
+    const canDispatch = ['owner', 'manager', 'logistics_manager', 'logistics_dispatcher'].includes(workspaceRole)
+      || authRoles.has('owner') || authRoles.has('manager')
+      || authRoles.has('logistics_manager') || authRoles.has('logistics_dispatcher');
+    const canCourierAct = workspaceRole === 'logistics_courier' || authRoles.has('logistics_courier');
+    const dispatchControls = canDispatch
+      ? `<select class="delivery-courier-select" data-order-id="${escapeAttr(serverOrderId)}"><option value="">Choose courier…</option></select>
+         <button type="button" class="btn-secondary delivery-assign-btn" data-order-id="${escapeAttr(serverOrderId)}">Reassign</button>`
+      : '';
+    const courierControls = canCourierAct
+      ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+          ${status === 'ASSIGNED' ? `<button type="button" class="btn-secondary delivery-action-btn" data-action="ACCEPTED" data-order-id="${escapeAttr(serverOrderId)}">Accept</button>` : ''}
+          ${status === 'ACCEPTED' ? `<button type="button" class="btn-secondary delivery-action-btn" data-action="OUT_FOR_DELIVERY" data-order-id="${escapeAttr(serverOrderId)}">Start delivery</button>` : ''}
+          ${status === 'OUT_FOR_DELIVERY' ? `<input class="delivery-proof-input" data-order-id="${escapeAttr(serverOrderId)}" placeholder="Proof / reference" style="max-width:150px;"><button type="button" class="btn-secondary delivery-action-btn" data-action="DELIVERED" data-order-id="${escapeAttr(serverOrderId)}">Complete</button>` : ''}
+        </div>`
+      : '';
+    return `<article class="logistics-card" data-assignment-only="1">
+      <div class="logistics-top"><strong>Order ${escapeHtml(serverOrderId)}</strong><span class="logistics-status">${escapeHtml(status.replaceAll('_', ' '))}</span></div>
+      <div class="logistics-meta">Order details are not currently loaded. Assignment status remains canonical.</div>
+      ${destinationLabel ? `<div class="logistics-meta">${escapeHtml(destinationLabel)}</div>` : ''}
+      ${locationLabel ? `<div class="logistics-meta">Location: ${escapeHtml(locationLabel)}</div>` : ''}
+      ${scheduledLabel ? `<div class="logistics-meta">Scheduled: ${escapeHtml(scheduledLabel)}</div>` : ''}
+      ${trackingLabel ? `<div class="logistics-meta">Tracking: ${escapeHtml(trackingLabel)}</div>` : ''}
+      ${assignment.courier_name ? `<div class="logistics-meta">Courier: ${escapeHtml(assignment.courier_name)}</div>` : ''}
+      ${dispatchControls ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">${dispatchControls}</div>` : ''}
+      ${courierControls}
+    </article>`;
+  }).join('');
   let html = renderWorkspaceModeHeader(workspaceRole, visibleAssignments)
     + (courierMode ? '' : filterBar)
     + renderDeliveryWorkloadSummary(visibleAssignments);
@@ -292,6 +345,12 @@ export function renderLogistics() {
   if (done.length > 0) {
     html += `<div class="settings-section-label">${t('whCompletedFulfillment')}</div>` + done.map(renderCard).join('');
   }
+  if (assignmentOnlyCards) {
+    html += `<div class="settings-section-label">Delivery assignments</div>` + assignmentOnlyCards;
+  }
+  if (pending.length === 0 && done.length === 0 && assignmentOnly.length === 0 && !workspace.tracking.length) {
+    html += `<div class="empty">${t('whNoLogisticsOrders')}</div>`;
+  }
   list.innerHTML = html;
   if (!courierMode) mountServiceBookingsWorkspace(list);
 
@@ -302,6 +361,10 @@ export function renderLogistics() {
   if (list.dataset.dispatchFiltersBound !== '1') {
     list.dataset.dispatchFiltersBound = '1';
     list.addEventListener('click', async (event) => {
+      if (event.target.closest('#logistics-refresh')) {
+        await refreshDeliveryAssignments(logisticsDispatchFilters);
+        return;
+      }
       if (event.target.closest('#logistics-filter-apply')) {
         logisticsDispatchFilters = {
           status: list.querySelector('#logistics-status-filter')?.value || '',
@@ -324,7 +387,7 @@ export function renderLogistics() {
       const actionBtn = event.target.closest('.delivery-action-btn');
       try {
         if (assignBtn) {
-          const order = orders.find(o => String(o.id) === String(assignBtn.dataset.orderId));
+          const order = orders.find(o => String(o.id) === String(assignBtn.dataset.orderId)) || orders.find(o => String(o.server_order_id) === String(assignBtn.dataset.orderId)) || { id: String(assignBtn.dataset.orderId), server_order_id: String(assignBtn.dataset.orderId) };
           const select = list.querySelector(`.delivery-courier-select[data-order-id="${CSS.escape(assignBtn.dataset.orderId)}"]`);
           if (!order || !select?.value) return;
           assignBtn.disabled = true;
@@ -338,7 +401,7 @@ export function renderLogistics() {
             await assignDeliveryCourierForOrder(order, select.value);
           }
         } else if (actionBtn) {
-          const order = orders.find(o => String(o.id) === String(actionBtn.dataset.orderId));
+          const order = orders.find(o => String(o.id) === String(actionBtn.dataset.orderId)) || orders.find(o => String(o.server_order_id) === String(actionBtn.dataset.orderId)) || { id: String(actionBtn.dataset.orderId), server_order_id: String(actionBtn.dataset.orderId) };
           if (!order) return;
           const input = list.querySelector(`.delivery-proof-input[data-order-id="${CSS.escape(actionBtn.dataset.orderId)}"]`);
           const proof = input?.value?.trim();

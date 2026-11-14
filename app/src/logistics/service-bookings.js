@@ -5,6 +5,10 @@ import { authHeaders } from '../auth/tenant.js';
 import { escapeHtml, escapeAttr } from '../utils/index.js';
 import { t } from '../ui/i18n.js';
 
+let mountedServiceBookingsWorkspace = null;
+let mountedServiceBookingsTenant = null;
+const serviceBookingsHandlerRoots = new WeakSet();
+
 const NEXT = Object.freeze({
   REQUESTED: ['ACCEPTED', 'REJECTED', 'CANCELLED'],
   ACCEPTED: ['CONFIRMED', 'REJECTED', 'CANCELLED'],
@@ -27,10 +31,10 @@ function serviceOrders() {
     .slice(-40);
 }
 
-async function requestBookings(order) {
-  const url = apiBase() + '/tenants/' + encodeURIComponent(config.chatId)
+async function requestBookings(order, context) {
+  const url = context.baseUrl + '/tenants/' + encodeURIComponent(context.tenantId)
     + '/orders/' + encodeURIComponent(order.server_order_id) + '/service-bookings';
-  const response = await fetch(url, { headers: authHeaders() });
+  const response = await fetch(url, { headers: context.headers });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = new Error(data?.error?.message || t('serviceBookingsLoadFailed'));
@@ -93,17 +97,31 @@ export async function refreshServiceBookings(root = document) {
     list.replaceChildren();
     return;
   }
+  const sequence = Number(workspace.dataset.refreshSequence || 0) + 1;
+  workspace.dataset.refreshSequence = String(sequence);
+  const tenantId = String(config.chatId);
+  const sessionToken = String(config.sessionToken);
+  const context = { tenantId, baseUrl: apiBase(), headers: authHeaders() };
   status.textContent = t('serviceBookingsLoading');
   list.replaceChildren();
   const candidates = serviceOrders();
   if (!candidates.length) {
-    status.textContent = t('serviceBookingsNoOrders');
+    if (workspace.dataset.refreshSequence === String(sequence)
+        && String(config.chatId) === tenantId && String(config.sessionToken) === sessionToken) {
+      status.textContent = t('serviceBookingsNoOrders');
+    }
     return;
   }
   const results = await Promise.all(candidates.map(async order => {
-    try { return { order, bookings: await requestBookings(order) }; }
+    try { return { order, bookings: await requestBookings(order, context) }; }
     catch (error) { return { order, error }; }
   }));
+  // Ignore responses from an older refresh or a tenant/session that is no
+  // longer active. A late response must not repaint another tenant's workspace.
+  if (workspace.isConnected === false
+      || workspace.dataset.refreshSequence !== String(sequence)
+      || String(config.chatId) !== tenantId
+      || String(config.sessionToken) !== sessionToken) return;
   const bookings = results.flatMap(result => result.bookings
     ? result.bookings.map(booking => ({ order: result.order, booking }))
     : []);
@@ -158,14 +176,24 @@ async function transitionBooking(button, root) {
 export function mountServiceBookingsWorkspace(root = document) {
   const workspace = root.querySelector('#serviceBookingsWorkspace');
   if (!workspace) return;
-  if (!workspace.dataset.handlersBound) {
-    workspace.dataset.handlersBound = '1';
-    workspace.addEventListener('click', event => {
+  // The Logistics list re-renders after unrelated assignment updates. Keep
+  // the delegated handler on the stable list root and avoid refetching all
+  // bookings on every render.
+  if (root && typeof root.addEventListener === 'function' && !serviceBookingsHandlerRoots.has(root)) {
+    serviceBookingsHandlerRoots.add(root);
+    root.addEventListener('click', event => {
       const refresh = event.target.closest('#serviceBookingsRefresh');
       const action = event.target.closest('.service-booking-action');
       if (refresh) refreshServiceBookings(root);
       if (action) transitionBooking(action, root);
     });
   }
-  refreshServiceBookings(root);
+  const tenantKey = config.chatId && config.sessionToken
+    ? String(config.chatId) + ':' + String(config.sessionToken)
+    : '';
+  if (tenantKey && (mountedServiceBookingsWorkspace !== workspace || mountedServiceBookingsTenant !== tenantKey)) {
+    mountedServiceBookingsWorkspace = workspace;
+    mountedServiceBookingsTenant = tenantKey;
+    refreshServiceBookings(root);
+  }
 }
