@@ -203,11 +203,26 @@ try {
     .run(JSON.stringify(['browse','order_status']),organizationId);
   const disabled=store.getTelegramStorefrontConfig(tenant.chatId);
   assert.equal(disabled.enabledCapabilities.includes('service_appointments'),false);
+  const secondCreated=await request(baseUrl,{method:'POST',headers:{...authHeaders,'Idempotency-Key':'tg11-create-second-'+suffix},body:JSON.stringify({
+    ...windowBody,appointment_mode:'REMOTE',
+  })});
+  assert.equal(secondCreated.response.status,201);
   const disabledResponse=await request(baseUrl,{method:'POST',headers:{...authHeaders,'Idempotency-Key':'tg11-disabled-'+suffix},body:JSON.stringify({
     ...windowBody,appointment_mode:'REMOTE',
   })});
   assert.equal(disabledResponse.response.status,403);
   assert.equal(disabledResponse.body.error?.code,'TELEGRAM_SERVICE_APPOINTMENTS_DISABLED');
+  const cancelWhileDisabled=await request(baseUrl+'/'+encodeURIComponent(secondCreated.body.booking.id),{
+    method:'PATCH',headers:{...authHeaders,'Idempotency-Key':'tg11-cancel-disabled-'+suffix},
+    body:JSON.stringify({seller_order_id:sellerOrderId,expected_version:1,reason:'Cancel after seller disabled new requests'}),
+  });
+  assert.equal(cancelWhileDisabled.response.status,200);
+  assert.equal(cancelWhileDisabled.body.booking.status,'CANCELLED',
+    'buyers must retain cancellation access to existing appointments when new requests are disabled');
+  const historyWhenDisabled=await request(`/api/telegram-storefront/${encodeURIComponent(tenant.chatId)}/orders`,{headers:authHeaders});
+  assert.equal(historyWhenDisabled.response.status,200);
+  assert.equal(historyWhenDisabled.body.orders[0].sellers[0].service_items.length,0);
+  assert.ok(historyWhenDisabled.body.orders[0].sellers[0].service_appointments.some(item=>item.id===secondCreated.body.booking.id));
 
   const buyerUi=await readFile(path.join(root,'app/store.js'),'utf8');
   assert.match(buyerUi,/service-appointment-request-dialog/);
