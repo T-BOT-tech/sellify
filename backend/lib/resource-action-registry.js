@@ -69,13 +69,12 @@ const DEFINITIONS = [
   ['logistics', 'scheduling', 'confirm', 'logistics:scheduling:confirm'],
   ['logistics', 'scheduling', 'cancel', 'logistics:scheduling:cancel'],
 
-  // Service Pack vocabulary for SC-03. These entries describe service-owned
-  // resources and feasibility only. They intentionally do not introduce a
-  // Service role, permission grant, booking lifecycle, calendar authority,
-  // persistence layer, or evaluator. Booking lifecycle remains in the
-  // existing Service Booking domain; Logistics Scheduling is not repurposed.
-  ['service', 'service_resource', 'view', null],
-  ['service', 'service_resource', 'manage', null],
+  // Service Pack resource administration uses explicit central permissions.
+  // Owner remains covered by the existing wildcard; Manager receives only
+  // these two resource-management permissions. Availability and feasibility
+  // remain vocabulary-only until their own policy and evidence contracts exist.
+  ['service', 'service_resource', 'view', 'service:service_resource:view'],
+  ['service', 'service_resource', 'manage', 'service:service_resource:manage'],
   ['service', 'resource_availability', 'view', null],
   ['service', 'resource_availability', 'manage', null],
   ['service', 'appointment_feasibility', 'view', null],
