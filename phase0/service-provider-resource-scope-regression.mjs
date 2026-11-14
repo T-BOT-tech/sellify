@@ -80,6 +80,19 @@ try {
     role: 'service_provider', scopeType: 'RESOURCE', scopeId: foreignResource.resource.id,
   }), error => error?.code === 'SERVICE_PROVIDER_RESOURCE_SCOPE_DENIED');
 
+  const inactiveResource = await store.createServiceResource(tenant.chatId, {
+    resource_type: 'PROVIDER', name: 'Inactive Provider Resource',
+    idempotency_key: 'inactive-service-resource-' + suffix,
+  }, { userId: owner.id });
+  await store.updateServiceResource(tenant.chatId, inactiveResource.resource.id, {
+    status: 'INACTIVE', expected_version: inactiveResource.resource.version,
+    idempotency_key: 'deactivate-service-resource-' + suffix,
+  }, { userId: owner.id });
+  await assert.rejects(store.assignMembershipContextualRole({
+    actorUserId: owner.id, chatId: tenant.chatId, membershipId: membership.id,
+    role: 'service_provider', scopeType: 'RESOURCE', scopeId: inactiveResource.resource.id,
+  }), error => error?.code === 'SERVICE_PROVIDER_RESOURCE_SCOPE_DENIED');
+
   const session = await store.createSession({ userId: provider.id, chatId: tenant.chatId });
   const authenticated = await store.authenticateSessionToken(session.token);
   assert.ok(authenticated.contextualRoles.some(item =>
