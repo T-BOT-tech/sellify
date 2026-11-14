@@ -148,4 +148,12 @@ export default {
     serviceAvailabilitySaving: "Inahifadhi…",
     serviceAvailabilitySavedDeclaration: "Ratiba imehifadhiwa kama tamko; upatikanaji haujathibitishwa.",
     serviceAvailabilitySaveFailed: "Imeshindwa kuhifadhi ratiba.",
+    serviceAvailabilityAssessWindow: "Tathmini muda ulioombwa",
+    serviceAvailabilityStart: "Anza",
+    serviceAvailabilityEnd: "Mwisho",
+    serviceAvailabilityAssess: "Tathmini muda",
+    serviceAvailabilityWithinDeclaredHours: "Ndani ya saa za kazi zilizotangazwa.",
+    serviceAvailabilityOutsideDeclaredHours: "Nje ya saa za kazi zilizotangazwa.",
+    serviceAvailabilityAssessmentUnknown: "Tathmini haijulikani.",
+    serviceAvailabilityCommitmentsNotChecked: "Miadi na matumizi yaliyopo ya rasilimali hayajakaguliwa; upatikanaji haujathibitishwa.",
 };
