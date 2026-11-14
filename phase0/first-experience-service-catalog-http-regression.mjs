@@ -406,6 +406,19 @@ try {
   const serviceOrder = (await store.getOrders(tenant.chatId)).find(item =>
     item.items?.some(line => String(line.item_id || line.id || '') === 'consultation-http'));
   assert.ok(serviceOrder?.server_order_id, 'marketplace service order must expose its canonical seller-order ID');
+  const appointmentResourceResult = await store.createServiceResource(tenant.chatId, {
+    name: 'HTTP Consultation Room', resource_type: 'FACILITY', service_item_id: 'consultation-http',
+    idempotency_key: 'service-booking-http-resource-create-1',
+  }, { userId: user.id });
+  const appointmentResource = appointmentResourceResult.resource;
+  await store.setServiceResourceAvailability(tenant.chatId, appointmentResource.id, {
+    expected_version: 0,
+    idempotency_key: 'service-booking-http-resource-hours-1',
+    working_hours: [0,1,2,3,4,5,6].map(weekday => ({
+      weekday, start_time: '08:00', end_time: '18:00',
+    })),
+    exceptions: [],
+  }, { userId: user.id });
   const bookingsUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId)
     + '/orders/' + encodeURIComponent(serviceOrder.server_order_id) + '/service-bookings';
   const bookingRequest = {
@@ -443,7 +456,7 @@ try {
   const bookingConfirm = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
     method: 'PATCH',
     headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
-    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+    body: JSON.stringify({ status: 'CONFIRMED', resource_id: appointmentResource.id, expected_version: 2 }),
   });
   assert.equal(bookingConfirm.status, 200, 'authorized merchant should confirm an accepted appointment');
   const bookingConfirmBody = await bookingConfirm.json();
