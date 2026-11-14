@@ -647,7 +647,7 @@ async function handleTelegramStorefrontServiceAppointments(req, res, chatId, mar
       const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
       if (!idempotencyKey) return sendJSON(res,400,{error:{message:'Idempotency-Key is required',status:400,code:'IDEMPOTENCY_KEY_REQUIRED'}},req);
       const result = await cancelTelegramBuyerServiceBooking(chatId,verified.telegramUserId,marketplaceOrderId,sellerOrderId,bookingId,{...body,idempotencyKey});
-      return sendJSON(res,200,{booking:result.booking,replayed:result.replayed},req);
+      return sendJSON(res,200,{booking:telegramBuyerServiceBookingProjection(result.booking),replayed:result.replayed},req);
     }
     return sendJSON(res,405,{error:{message:'Method not allowed',status:405}},req);
   } catch (error) {
