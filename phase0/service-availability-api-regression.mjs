@@ -16,7 +16,7 @@ assert.match(store, /SERVICE_AVAILABILITY_IDEMPOTENCY_CONFLICT/);
 assert.match(store, /services\.resource\.availability\.updated/);
 assert.match(store, /organization\?\.timezone/);
 assert.match(server, /handleServiceResourceAvailability/);
-assert.match(server, /service-resources\/\(\[\^\/\]\+\)\/availability/);
+assert.ok(server.includes('handleServiceResourceAvailability(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]))'), 'availability GET/PUT routes must be registered');
 assert.match(server, /service:service_resource:view/);
 assert.match(server, /service:service_resource:manage/);
 assert.match(contract, /WORKING_HOURS_OVERLAP/);
