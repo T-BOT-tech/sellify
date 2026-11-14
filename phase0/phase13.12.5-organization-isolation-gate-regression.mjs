@@ -30,8 +30,8 @@ const check = (condition, message) => {
   assert.equal(Boolean(condition), true, message);
 };
 
-check(RESOURCE_ACTION_REGISTRY.length === 48, 'all 48 registered capabilities are covered');
-check(CROSS_PACK_ROLE_MATRIX.length === 336, 'seven role entries × 48 capabilities remain represented');
+check(RESOURCE_ACTION_REGISTRY.length === 53, 'all 53 registered capabilities are covered');
+check(CROSS_PACK_ROLE_MATRIX.length === 371, 'seven role entries × 53 capabilities remain represented');
 check(serverSource.includes('assertTenantScope(session, tenant);'), 'server request boundary asserts tenant scope');
 check(serverSource.includes("requireAuthorization(session, tenant, resource, action"), 'server authorization boundary remains centralized');
 check(serverSource.includes("from './lib/tenant-isolation.js'"), 'server uses canonical tenant isolation module');
