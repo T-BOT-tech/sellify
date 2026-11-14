@@ -160,6 +160,8 @@ export default {
     serviceResourceManageProviders: "Administrar proveedores",
     serviceResourceSelectProvider: "Seleccionar proveedor",
     serviceBookingChooseResource: "Elige un recurso activo para esta cita (introduce su número):",
+    serviceBookingConfirmResource: "Confirmar cita",
+    serviceBookingCancelResource: "Cancelar",
     serviceResourceAssignProvider: "Asignar proveedor",
     serviceResourceProviderAssigned: "Proveedor asignado a este recurso.",
     serviceResourceRevokeProvider: "Revocar acceso del proveedor",
