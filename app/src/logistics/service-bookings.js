@@ -5,6 +5,9 @@ import { authHeaders } from '../auth/tenant.js';
 import { escapeHtml, escapeAttr } from '../utils/index.js';
 import { t } from '../ui/i18n.js';
 
+let mountedServiceBookingsWorkspace = null;
+let mountedServiceBookingsTenant = null;
+
 const NEXT = Object.freeze({
   REQUESTED: ['ACCEPTED', 'REJECTED', 'CANCELLED'],
   ACCEPTED: ['CONFIRMED', 'REJECTED', 'CANCELLED'],
@@ -187,8 +190,9 @@ export function mountServiceBookingsWorkspace(root = document) {
   const tenantKey = config.chatId && config.sessionToken
     ? String(config.chatId) + ':' + String(config.sessionToken)
     : '';
-  if (tenantKey && root.dataset?.serviceBookingsTenant !== tenantKey) {
-    root.dataset.serviceBookingsTenant = tenantKey;
+  if (tenantKey && (mountedServiceBookingsWorkspace !== workspace || mountedServiceBookingsTenant !== tenantKey)) {
+    mountedServiceBookingsWorkspace = workspace;
+    mountedServiceBookingsTenant = tenantKey;
     refreshServiceBookings(root);
   }
 }
