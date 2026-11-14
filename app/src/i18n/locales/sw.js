@@ -159,6 +159,8 @@ export default {
     serviceResourceManageProviders: "Dhibiti watoa huduma",
     serviceResourceSelectProvider: "Chagua mtoa huduma",
     serviceBookingChooseResource: "Chagua rasilimali inayotumika kwa miadi hii (ingiza nambari yake):",
+    serviceBookingConfirmResource: "Thibitisha miadi",
+    serviceBookingCancelResource: "Ghairi",
     serviceResourceAssignProvider: "Mkabidhi mtoa huduma",
     serviceResourceProviderAssigned: "Mtoa huduma amekabidhiwa rasilimali hii.",
     serviceResourceRevokeProvider: "Ondoa ufikiaji wa mtoa huduma",
