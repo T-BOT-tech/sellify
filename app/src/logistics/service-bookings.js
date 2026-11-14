@@ -244,7 +244,8 @@ async function openServiceResourceAvailability(button, root) {
   const card = button.closest('.service-resource-card');
   if (!card) return;
   let panel = card.querySelector('.service-resource-availability-panel');
-  if (panel) { panel.remove(); return; }
+  if (panel && !forceRefresh) { panel.remove(); return; }
+  if (panel) panel.remove();
   panel = document.createElement('section');
   panel.className = 'service-resource-availability-panel';
   panel.style.cssText = 'display:grid;gap:8px;margin-top:10px;';
@@ -302,7 +303,7 @@ function assessServiceResourceWindow(button) {
   }
 }
 
-async function openServiceResourceProviders(button) {
+async function openServiceResourceProviders(button, forceRefresh = false) {
   const resourceId = button.dataset.resourceId;
   const card = button.closest('.service-resource-card');
   if (!card) return;
@@ -355,7 +356,7 @@ async function assignServiceProvider(button) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data?.error?.message || t('serviceResourceProviderAssignFailed'));
     if (status) status.textContent = t('serviceResourceProviderAssigned');
-    await openServiceResourceProviders({ dataset: { resourceId: button.dataset.resourceId }, closest: () => button.closest('.service-resource-card') });
+    await openServiceResourceProviders({ dataset: { resourceId: button.dataset.resourceId }, closest: () => button.closest('.service-resource-card') }, true);
   } catch (error) {
     if (status) status.textContent = error.message || t('serviceResourceProviderAssignFailed');
   } finally { button.disabled = false; }
