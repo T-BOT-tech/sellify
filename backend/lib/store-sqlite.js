@@ -10567,6 +10567,7 @@ export function coreFulfillmentContract() {
     payment_authority: 'unchanged; delivery does not mutate payment state or payment ledger',
     settlement_authority: 'unchanged; delivery does not create, settle, reverse, or mutate settlement records',
     marketplace_fulfillment_reuse: false,
+    marketplace_delivery_path: 'canonical delivery assignment may update fulfillment/proof; Marketplace checkout remains the inventory SALE authority; generic Core Fulfillment mutations are rejected',
   });
 }
 
