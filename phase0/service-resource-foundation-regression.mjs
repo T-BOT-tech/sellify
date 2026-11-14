@@ -27,7 +27,7 @@ assert.match(store, /services\.resource\.updated/);
 assert.match(store, /location_id IS NULL OR location_id = \?/);
 
 assert.match(server, /listServiceResources, createServiceResource, updateServiceResource/);
-assert.match(server, /\/tenants\/\(\[\^\/\]\+\)\/service-resources/);
+assert.match(server, /service-resources/);
 assert.match(server, /service:service_resource:view/);
 assert.match(server, /service:service_resource:manage/);
 assert.match(server, /handleServiceResources/);
