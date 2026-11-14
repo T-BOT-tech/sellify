@@ -7,6 +7,7 @@ import { t } from '../ui/i18n.js';
 
 let mountedServiceBookingsWorkspace = null;
 let mountedServiceBookingsTenant = null;
+const serviceBookingsHandlerRoots = new WeakSet();
 
 const NEXT = Object.freeze({
   REQUESTED: ['ACCEPTED', 'REJECTED', 'CANCELLED'],
@@ -178,8 +179,8 @@ export function mountServiceBookingsWorkspace(root = document) {
   // The Logistics list re-renders after unrelated assignment updates. Keep
   // the delegated handler on the stable list root and avoid refetching all
   // bookings on every render.
-  if (root.dataset && root.dataset.serviceBookingsHandlersBound !== '1') {
-    root.dataset.serviceBookingsHandlersBound = '1';
+  if (root && typeof root.addEventListener === 'function' && !serviceBookingsHandlerRoots.has(root)) {
+    serviceBookingsHandlerRoots.add(root);
     root.addEventListener('click', event => {
       const refresh = event.target.closest('#serviceBookingsRefresh');
       const action = event.target.closest('.service-booking-action');
