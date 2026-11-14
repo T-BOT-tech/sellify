@@ -100,7 +100,7 @@ export function assessServiceResourceCommitWindow({ timeZone, workingHours = [],
   }
   const formatter = new Intl.DateTimeFormat('en-GB', {
     timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
-    weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
   });
   const parts = (instant) => Object.fromEntries(formatter.formatToParts(new Date(instant))
     .filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
@@ -110,8 +110,11 @@ export function assessServiceResourceCommitWindow({ timeZone, workingHours = [],
     return { state: 'UNKNOWN', reason: 'CROSS_LOCAL_DATE_WINDOW', confirmsAvailability: false };
   }
   const weekday = ({ Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 })[a.weekday];
-  const startMinute = Number(a.hour) * 60 + Number(a.minute);
-  const endMinute = Number(b.hour) * 60 + Number(b.minute);
+  const startMinute = Number(a.hour) * 60 + Number(a.minute) + Number(a.second || 0) / 60;
+  const endMinute = Number(b.hour) * 60 + Number(b.minute) + Number(b.second || 0) / 60;
+  if (endMinute <= startMinute) {
+    return { state: 'UNKNOWN', reason: 'LOCAL_TIME_ORDER_AMBIGUOUS', confirmsAvailability: false };
+  }
   const exception = exceptions.find(item => item?.date === localDate);
   if (!workingHours.length && !exception) {
     return { state: 'UNKNOWN', reason: 'NO_DECLARED_SCHEDULE', confirmsAvailability: false };
