@@ -4271,7 +4271,12 @@ export async function discoverSupplierNetwork(chatId, input={}, actor=null){
     if(geoCode){const gm=areaMatches.filter(r=>String(r.geo_code)===geoCode); if(gm.length){score+=15;matches.push({dimension:'GEOGRAPHY',reason:'Service area match',geoCode});} else if(countryCode) areaMatches=[];}
     let capacityMatches=capacities;
     if(productId) capacityMatches=capacityMatches.filter(r=>r.subject_type==='PRODUCT'&&String(r.subject_id)===productId);
-    if(capabilityCode) capacityMatches=capacityMatches.filter(r=>r.subject_type==='CAPABILITY'&&String(r.subject_id)===String(capabilityMatches.find(c=>String(c.code).toUpperCase()===capabilityCode)?.id));
+    if(capabilityCode) {
+      const requestedCapability = capabilities.find(item => String(item.code).toUpperCase() === capabilityCode);
+      capacityMatches = requestedCapability
+        ? capacityMatches.filter(r => r.subject_type === 'CAPABILITY' && String(r.subject_id) === String(requestedCapability.id))
+        : [];
+    }
     if(minQty!=null){capacityMatches=capacityMatches.filter(r=>Number(r.quantity)>=minQty); if(capacityMatches.length){score+=10;matches.push({dimension:'CAPACITY',reason:'Declared capacity meets requested minimum',minimumQuantity:minQty});}}
     else if(capacities.length){score+=5;matches.push({dimension:'CAPACITY',reason:'Declared capacity signal available'});}
     let commercialMatches=commercial;
