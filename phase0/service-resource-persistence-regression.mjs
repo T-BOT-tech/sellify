@@ -128,7 +128,9 @@ try {
   assert.deepEqual(audit.map(row => row.action), [
     'services.resource.created', 'services.resource.updated', 'services.resource.updated',
   ]);
-  assert.ok(audit.every(row => row.organization_id === seller.organizationId && row.chat_id === seller.chatId));
+  const expectedOrganizationId = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(seller.chatId)?.organization_id;
+  assert.ok(expectedOrganizationId, 'tenant must resolve to a canonical organization');
+  assert.ok(audit.every(row => row.organization_id === expectedOrganizationId && row.chat_id === String(seller.chatId)));
 
   console.log('SC-03.1 Service Resource Persistence Regression: PASS');
   console.log('Catalog service-only binding and canonical location validation: PASS');
