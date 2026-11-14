@@ -65,4 +65,12 @@ export default {
     serviceAvailabilitySaving: "Ń fi pamọ́…",
     serviceAvailabilitySavedDeclaration: "A ti fi ètò pamọ́ gẹ́gẹ́ bí ìkéde; ìmúrasílẹ̀ kò tíì jẹ́rìí.",
     serviceAvailabilitySaveFailed: "A kò lè fi ètò pamọ́.",
+    serviceAvailabilityAssessWindow: "Ṣàyẹ̀wò àkókò tí a béèrè",
+    serviceAvailabilityStart: "Ìbẹ̀rẹ̀",
+    serviceAvailabilityEnd: "Òpin",
+    serviceAvailabilityAssess: "Ṣàyẹ̀wò àkókò",
+    serviceAvailabilityWithinDeclaredHours: "Ó wà láàárín àkókò iṣẹ́ tí a kéde.",
+    serviceAvailabilityOutsideDeclaredHours: "Ó wà lẹ́yìn àkókò iṣẹ́ tí a kéde.",
+    serviceAvailabilityAssessmentUnknown: "A kò mọ àbájáde ìṣàyẹ̀wò.",
+    serviceAvailabilityCommitmentsNotChecked: "A kò ṣàyẹ̀wò àwọn ìpàdé àti ìlò ohun èlò tó wà; a kò tíì jẹ́rìí sí wíwà.",
 };
