@@ -45,4 +45,10 @@ export default {
     serviceResourceActivate: "Ativar",
     serviceResourceDeactivate: "Desativar",
     serviceResourceUnknownStale: "A disponibilidade é desconhecida ou está desatualizada. Atualize antes de confiar nela.",
+    serviceResourceAllServices: "Todos os serviços",
+    serviceResourceOrganizationWide: "Toda a organização",
+    serviceResourceTypeProvider: "Prestador / funcionário",
+    serviceResourceTypeFacility: "Instalação / sala",
+    serviceResourceTypeEquipment: "Equipamento",
+    serviceResourceTypeOther: "Outro",
 };
