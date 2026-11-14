@@ -16,7 +16,7 @@ The Service Booking record remains linked to the canonical seller order. The cus
 2. If the seller has enabled `service_appointments`, the buyer sees service lines and existing appointment requests for seller orders they own.
 3. The buyer selects a service line and enters a start/end interval in the seller organization's IANA timezone.
 4. The buyer may request a feasibility assessment. It checks active matching Service Resources, declared working hours/date exceptions, and current ACTIVE resource commitments.
-5. Assessment returns `FEASIBLE`, `UNAVAILABLE`, or `UNKNOWN`. It never returns a resource identity, reserves a slot, authorizes the booking, or confirms availability.
+5. Assessment returns `FEASIBLE`, `UNAVAILABLE`, or `UNKNOWN`. Overlapping legacy confirmed bookings without a resource binding force `UNKNOWN` and block a new confirmation until reviewed. Assessment never returns a resource identity, reserves a slot, authorizes the booking, or confirms availability.
 6. The buyer submits an idempotent appointment request. The canonical Service Booking is created in `REQUESTED` state and remains pending seller review.
 7. Manager/Owner accepts and confirms through the existing Service Booking workspace. Confirmation rechecks resource eligibility, declared hours, and interval conflicts atomically under SC-03.4.
 8. The buyer sees the current booking status in My orders and may cancel an eligible `REQUESTED`, `ACCEPTED`, or `CONFIRMED` booking. Cancellation is buyer-ownership checked and idempotent; if already confirmed, it releases the Service Resource commitment through the existing lifecycle.
