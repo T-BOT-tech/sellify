@@ -281,6 +281,8 @@ export default {
     serviceResourceManageProviders: "Manage providers",
     serviceResourceSelectProvider: "Select provider",
     serviceBookingChooseResource: "Choose an active resource for this appointment (enter its number):",
+    serviceBookingConfirmResource: "Confirm appointment",
+    serviceBookingCancelResource: "Cancel",
     serviceResourceAssignProvider: "Assign provider",
     serviceResourceProviderAssigned: "Provider assigned to this resource.",
     serviceResourceRevokeProvider: "Revoke provider access",
