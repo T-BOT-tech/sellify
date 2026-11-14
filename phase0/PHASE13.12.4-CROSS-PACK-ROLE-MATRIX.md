@@ -102,3 +102,9 @@ Phase 13.12.4 passes when:
 Next controlled subphase:
 
 **Phase 13.12.5 — Organization Isolation Gate**
+
+## Subsequent Service Provider scope extension
+
+The derived matrix now covers seven role entries × 48 resource/action entries = **336 rows**. The existing Core membership roles remain unchanged. `service_provider` is included as a **contextual-only** role; it is not a permitted base membership role.
+
+The Provider role's Service permissions require an exact resource-scoped membership assignment and a canonical `service_resource` context matching resource ID, organization ID, and location ID. It can view its assigned resource and manage only that resource's declared availability. It cannot manage resource metadata, assign roles, access Logistics Scheduling, or view other resources. Owner/Manager retain their existing resource-administration boundary; Manager also receives the two Service availability permissions.
