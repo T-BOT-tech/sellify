@@ -225,14 +225,14 @@ try {
   assert.equal(orderAfter.total_minor,35000);
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM fulfillments WHERE server_order_id=?').get(serverOrderId).count,0,
     'customer appointment actions must not create Logistics fulfillment');
-  db.prepare('UPDATE telegram_storefront_configs SET enabled_capabilities_json=? WHERE organization_id=?')
-    .run(JSON.stringify(['browse','order_status']),organizationId);
-  const disabled=store.getTelegramStorefrontConfig(tenant.chatId);
-  assert.equal(disabled.enabledCapabilities.includes('service_appointments'),false);
   const secondCreated=await request(baseUrl,{method:'POST',headers:{...authHeaders,'Idempotency-Key':'tg11-create-second-'+suffix},body:JSON.stringify({
     ...windowBody,appointment_mode:'REMOTE',
   })});
   assert.equal(secondCreated.response.status,201);
+  db.prepare('UPDATE telegram_storefront_configs SET enabled_capabilities_json=? WHERE organization_id=?')
+    .run(JSON.stringify(['browse','order_status']),organizationId);
+  const disabled=store.getTelegramStorefrontConfig(tenant.chatId);
+  assert.equal(disabled.enabledCapabilities.includes('service_appointments'),false);
   const disabledResponse=await request(baseUrl,{method:'POST',headers:{...authHeaders,'Idempotency-Key':'tg11-disabled-'+suffix},body:JSON.stringify({
     ...windowBody,appointment_mode:'REMOTE',
   })});
