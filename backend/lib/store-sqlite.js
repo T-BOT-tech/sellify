@@ -12026,7 +12026,7 @@ export async function assignMembershipContextualRole({
   }
   if (normalizedScopeType === 'RESOURCE') {
     const tenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(String(chatId));
-    const resource = db.prepare('SELECT id FROM service_resources WHERE id = ? AND organization_id = ? AND chat_id = ?')
+    const resource = db.prepare("SELECT id FROM service_resources WHERE id = ? AND organization_id = ? AND chat_id = ? AND status = 'ACTIVE'")
       .get(normalizedScopeId, String(tenant?.organization_id || ''), String(chatId));
     if (!resource) throw Object.assign(new Error('Service resource is outside the tenant organization'), { statusCode: 403, code: 'SERVICE_PROVIDER_RESOURCE_SCOPE_DENIED' });
   }
