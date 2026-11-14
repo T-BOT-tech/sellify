@@ -245,6 +245,7 @@ export function authorize(actor, organization, location, resource, action, resou
     : null;
   const validServiceResourceContext = Boolean(
     context &&
+    String(resource).trim().toLowerCase() === 'service_resource' &&
     context.resourceType === 'service_resource' &&
     context.resourceId != null && String(context.resourceId).trim() &&
     context.organizationId != null && organizationId &&
