@@ -82,6 +82,7 @@ check('Service resource administration is granted to Org Admin/Manager; Provider
   assert.equal(authorize(actor('manager'), organization, null, 'service_resource', 'service:service_resource:view'), AUTHZ.ALLOW);
   assert.equal(authorize(actor('manager'), organization, null, 'service_resource', 'service:service_resource:manage'), AUTHZ.ALLOW);
   assert.equal(authorize(actor('service_provider'), organization, null, 'service_resource', 'service:service_resource:view'), AUTHZ.DENY);
+  assert.equal(authorize(actor('service_provider'), organization, null, 'service_resource', 'service:resource_availability:manage'), AUTHZ.DENY);
   for (const role of ['cashier', 'staff', 'buyer', 'viewer']) {
     assert.equal(authorize(actor(role), organization, null, 'service_resource', 'service:service_resource:view'), AUTHZ.DENY);
     assert.equal(authorize(actor(role), organization, null, 'service_resource', 'service:service_resource:manage'), AUTHZ.DENY);
