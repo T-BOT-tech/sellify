@@ -80,4 +80,5 @@ export default {
     serviceResourceRevokeProvider: "Fagilé àṣẹ olùpèsè",
     serviceResourceProviderAssignFailed: "A kò lè ṣe àtúnṣe àṣẹ olùpèsè.",
     serviceResourceNoProviderMembers: "Kò sí ọmọ ẹgbẹ́ òṣìṣẹ́ tó yẹ.",
+    serviceResourceProviderDescription: "Wo àwọn ohun èlò iṣẹ́ tí a yàn fún ọ, kí o sì ṣe àtúnṣe sí àkókò iṣẹ́ tí a kéde. A kò jẹ́rìí sí wíwà títí a ó fi ṣàyẹ̀wò àwọn ìpinnu tó wà.",
 };
