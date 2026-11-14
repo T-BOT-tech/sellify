@@ -86,6 +86,53 @@ export function normalizeAvailabilityExceptions(input) {
 }
 
 /**
+ * Re-evaluate a requested interval against the resource's current declared
+ * hours inside the Service Booking transaction. This is only one prerequisite
+ * to commitment; callers must still perform the authoritative overlap check.
+ */
+export function assessServiceResourceCommitWindow({ timeZone, workingHours = [], exceptions = [], start, end } = {}) {
+  if (!isIanaTimeZone(timeZone)) {
+    return { state: 'UNKNOWN', reason: 'TIMEZONE_NOT_CONFIGURED', confirmsAvailability: false };
+  }
+  const startMs = Date.parse(start), endMs = Date.parse(end);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+    fail('A valid increasing appointment interval is required', 'SERVICE_BOOKING_TIME_WINDOW_INVALID');
+  }
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+    weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  });
+  const parts = (instant) => Object.fromEntries(formatter.formatToParts(new Date(instant))
+    .filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+  const a = parts(startMs), b = parts(endMs);
+  const localDate = `${a.year}-${a.month}-${a.day}`;
+  if (`${b.year}-${b.month}-${b.day}` !== localDate) {
+    return { state: 'UNKNOWN', reason: 'CROSS_LOCAL_DATE_WINDOW', confirmsAvailability: false };
+  }
+  const weekday = ({ Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 })[a.weekday];
+  const startMinute = Number(a.hour) * 60 + Number(a.minute);
+  const endMinute = Number(b.hour) * 60 + Number(b.minute);
+  const exception = exceptions.find(item => item?.date === localDate);
+  if (exception?.kind === 'CLOSED') {
+    return { state: 'OUTSIDE_DECLARED_HOURS', reason: 'DATE_EXCEPTION_CLOSED', confirmsAvailability: false };
+  }
+  const intervals = exception?.kind === 'OPEN'
+    ? [exception]
+    : workingHours.filter(item => Number(item?.weekday) === weekday);
+  if (!intervals.length) {
+    return { state: 'OUTSIDE_DECLARED_HOURS', reason: 'NO_DECLARED_HOURS_FOR_DATE', confirmsAvailability: false };
+  }
+  const contained = intervals.some(interval => {
+    const from = Number(String(interval.startTime).slice(0, 2)) * 60 + Number(String(interval.startTime).slice(3, 5));
+    const to = Number(String(interval.endTime).slice(0, 2)) * 60 + Number(String(interval.endTime).slice(3, 5));
+    return startMinute >= from && endMinute <= to;
+  });
+  return contained
+    ? { state: 'WITHIN_DECLARED_HOURS', reason: exception?.kind === 'OPEN' ? 'DATE_EXCEPTION_OPEN' : 'WORKING_HOURS_MATCH', confirmsAvailability: false }
+    : { state: 'OUTSIDE_DECLARED_HOURS', reason: 'OUTSIDE_DECLARED_HOURS', confirmsAvailability: false };
+}
+
+/**
  * A configured schedule is only declared working time. Until authoritative
  * resource commitments/conflicts are queried, feasibility must remain UNKNOWN.
  */
