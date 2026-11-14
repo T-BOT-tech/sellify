@@ -48,6 +48,7 @@ assert.equal(contract.duplicate_assignment_authority, false);
 const ui = fs.readFileSync(new URL('../app/src/logistics/ui.js', import.meta.url), 'utf8');
 assert.ok(ui.indexOf('const visibleAssignments =') < ui.indexOf('const workspace = buildLogisticsOperationalWorkspaceProjection('),
   'visible assignments must be declared before workspace projection');
+assert.match(ui, /data-assignment-only="1"/, 'assignment-only records must render actionable Logistics cards');
 assert.doesNotMatch(ui, /if \(pending\.length === 0 && done\.length === 0\)[\s\S]{0,120}return;/,
   'assignment workspace must not be hidden by the legacy order-only empty state');
 
