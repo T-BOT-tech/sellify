@@ -9,6 +9,7 @@ import { assessServiceResourceDeclaredWindow, serviceLocalDateTimeToIso } from '
 let mountedServiceBookingsWorkspace = null;
 let mountedServiceBookingsTenant = null;
 let serviceResourcesForBooking = [];
+let serviceResourcesForBookingState = 'UNKNOWN';
 const serviceBookingsHandlerRoots = new WeakSet();
 
 const NEXT = Object.freeze({
@@ -64,17 +65,19 @@ function renderBookingCard(order, booking) {
     && (!resource.serviceItemId || String(resource.serviceItemId) === String(booking.service_item_id))
     && (!resource.locationId || String(resource.locationId) === String(order.location_id || '')));
   const actions = canOperate() ? transitions.map(target => {
-    const unavailable = target === 'CONFIRMED' && !eligibleResources.length;
+    const unavailable = target === 'CONFIRMED' && (serviceResourcesForBookingState !== 'READY' || !eligibleResources.length);
     return '<button type="button" class="btn-secondary service-booking-action" data-order-id="' + escapeAttr(order.server_order_id)
       + '" data-booking-id="' + escapeAttr(booking.id) + '" data-version="' + escapeAttr(booking.version)
       + '" data-target="' + escapeAttr(target) + '"' + (unavailable ? ' disabled' : '') + '>' + escapeHtml(target.replaceAll('_', ' ')) + '</button>';
   }).join('') : '';
   const resourcePicker = status === 'ACCEPTED' && canManageServiceResources()
-    ? '<label class="service-booking-resource-label">' + escapeHtml(t('serviceBookingResource')) + '<select class="service-booking-resource-select" data-booking-id="' + escapeAttr(booking.id) + '">'
+    ? '<label class="service-booking-resource-label">' + escapeHtml(t('serviceBookingResource')) + '<select class="service-booking-resource-select" data-booking-id="' + escapeAttr(booking.id) + '"' + (serviceResourcesForBookingState !== 'READY' ? ' disabled' : '') + '>'
       + '<option value="">' + escapeHtml(t('serviceBookingChooseResource')) + '</option>'
       + eligibleResources.map(resource => '<option value="' + escapeAttr(resource.id) + '">' + escapeHtml(resource.name || resource.id) + '</option>').join('')
       + '</select></label>'
-      + (!eligibleResources.length ? '<p class="logistics-meta">' + escapeHtml(t('serviceBookingNoEligibleResource')) + '</p>' : '')
+      + (serviceResourcesForBookingState !== 'READY'
+        ? '<p class="logistics-meta" role="status">' + escapeHtml(t('serviceResourceUnknownStale')) + '</p>'
+        : !eligibleResources.length ? '<p class="logistics-meta" role="status">' + escapeHtml(t('serviceBookingNoEligibleResource')) + '</p>' : '')
     : '';
   const assignedResource = booking.assigned_resource_id
     ? serviceResourcesForBooking.find(resource => String(resource.id) === String(booking.assigned_resource_id))
@@ -490,12 +493,17 @@ export async function refreshServiceBookings(root = document) {
     return;
   }
   serviceResourcesForBooking = [];
+  serviceResourcesForBookingState = 'UNKNOWN';
   if (canManageServiceResources()) {
+    serviceResourcesForBookingState = 'LOADING';
     try {
       const resourceResponse = await fetch(serviceResourceEndpoint() + '?include_inactive=true', { headers: context.headers });
       const resourceData = await resourceResponse.json().catch(() => ({}));
-      if (resourceResponse.ok && Array.isArray(resourceData.resources)) serviceResourcesForBooking = resourceData.resources;
-    } catch { serviceResourcesForBooking = []; }
+      if (resourceResponse.ok && Array.isArray(resourceData.resources)) {
+        serviceResourcesForBooking = resourceData.resources;
+        serviceResourcesForBookingState = 'READY';
+      } else serviceResourcesForBookingState = 'UNKNOWN';
+    } catch { serviceResourcesForBooking = []; serviceResourcesForBookingState = 'UNKNOWN'; }
   }
   const results = await Promise.all(candidates.map(async order => {
     try { return { order, bookings: await requestBookings(order, context) }; }
