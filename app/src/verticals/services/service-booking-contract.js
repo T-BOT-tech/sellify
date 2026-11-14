@@ -37,6 +37,7 @@ const FORBIDDEN_AUTHORITY_FIELDS = new Set([
   'fulfillment_id', 'fulfillmentId', 'inventory_reservation_id',
   'inventoryReservationId', 'courier_id', 'courierId',
   'provider_id', 'providerId', 'organization_id', 'organizationId',
+  'service_resource_id', 'serviceResourceId',
 ]);
 
 function invalid(message, code = 'SERVICE_BOOKING_INVALID') {
@@ -134,6 +135,8 @@ export function serviceBookingContract() {
     order_authority: 'canonical_commerce_order',
     payment_authority: 'payment_core',
     scheduling_authority: 'service_resource_availability_and_booking_lifecycle',
+    resource_assignment_authority: 'server_authorized_confirmation_only',
+    resource_commitment_states: Object.freeze(['NOT_COMMITTED', 'COMMITTED', 'UNKNOWN', 'RELEASED']),
     persists: false,
     creates_order: false,
     creates_payment: false,
