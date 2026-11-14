@@ -69,10 +69,10 @@ const DEFINITIONS = [
   ['logistics', 'scheduling', 'confirm', 'logistics:scheduling:confirm'],
   ['logistics', 'scheduling', 'cancel', 'logistics:scheduling:cancel'],
 
-  // Service Resource administration and availability map to the central
-  // authorization authority. Service Provider receives availability actions
-  // only through an exact resource-scoped membership context; Manager receives
-  // organization-level availability actions. Appointment feasibility remains
+  // Service Resource, availability, and booking actions map to the central
+  // authorization authority. Service Provider receives only exact-resource
+  // availability actions; Manager receives organization-level resource,
+  // availability, and booking permissions. Appointment feasibility remains
   // vocabulary-only until its evidence and decision boundary is implemented.
   ['service', 'service_resource', 'view', 'service:service_resource:view'],
   ['service', 'service_resource', 'manage', 'service:service_resource:manage'],
