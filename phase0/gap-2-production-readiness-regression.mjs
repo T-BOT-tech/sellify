@@ -15,7 +15,8 @@ const requiredScripts = [
   'test:gap-2-cross-feature-consistency','test:gap-2-adversarial-delivery',
   'test:service-booking-persistence','test:service-resource-foundation','test:service-resource-persistence',
   'test:service-availability-contract','test:service-availability-api',
-  'test:service-window-assessment','test:service-provider-resource-scope'
+  'test:service-window-assessment','test:service-provider-resource-scope',
+  'tg1:telegram-storefront-test','tg7:telegram-buyer-orders-test','tg8:telegram-fulfillment-test','tg11:telegram-service-appointments-test'
 ];
 for (const script of requiredScripts) assert.equal(typeof pkg.scripts?.[script], 'string', 'missing ' + script);
 assert.match(ci, /node-version: \[24\]/);
