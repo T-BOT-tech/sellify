@@ -135,8 +135,8 @@ try {
   for (const locale of ['en','am','om','so','sw','es','hi','fr','ar','ha','yo','ru','pt']) {
     const source = fs.readFileSync(new URL('../app/src/i18n/locales/' + locale + '.js', import.meta.url), 'utf8');
     for (const key of ['serviceResourceManageProviders','serviceResourceSelectProvider','serviceResourceAssignProvider','serviceResourceProviderAssigned','serviceResourceRevokeProvider','serviceResourceProviderAssignFailed','serviceResourceNoProviderMembers']) {
-      const count = source.match(new RegExp('\\\\b' + key + '\\\\s*:', 'g')) || [];
-      assert.equal(count.length, 1, locale + ' must define ' + key + ' exactly once');
+      const count = source.split(key + ':').length - 1;
+      assert.equal(count, 1, locale + ' must define ' + key + ' exactly once');
     }
   }
 
