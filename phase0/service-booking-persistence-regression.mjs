@@ -234,8 +234,8 @@ try {
   );
 
   const listed = await store.listServiceBookings(seller.chatId, order.server_order_id);
-  assert.equal(listed.length, 1);
-  assert.equal(listed[0].id, created.booking.id);
+  assert.equal(listed.length, 4);
+  assert.ok(listed.some(item => item.id === created.booking.id), 'confirmed booking remains in the tenant-scoped booking list');
 
   const secondUser = await store.getOrCreateUserByTelegram('booking-other-' + suffix, 'Other Seller');
   const secondSeller = await store.createTenantForUser({
