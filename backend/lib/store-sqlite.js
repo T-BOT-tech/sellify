@@ -6210,6 +6210,7 @@ export async function createServiceBooking(chatId, serverOrderId, input = {}, ac
   const organizationId = String(tenant?.organization_id || tenant?.organizationId || '');
   if (!organizationId) throw Object.assign(new Error('Order organization is required'), { statusCode: 409, code: 'ORDER_ORGANIZATION_REQUIRED' });
   assertServiceBookingAuthorityBoundary(input);
+  if (input.resource_id != null || input.resourceId != null) throw Object.assign(new Error('A Service Resource can only be committed when confirming an accepted booking'), { statusCode:400, code:'SERVICE_BOOKING_RESOURCE_INVALID' });
   const orderId = String(serverOrderId || '').trim();
   const serviceItemId = bookingRequiredText(input.service_item_id ?? input.serviceItemId, 'service_item_id');
   const requestedStart = bookingTimestamp(input.requested_start ?? input.requestedStart, 'requested_start');
