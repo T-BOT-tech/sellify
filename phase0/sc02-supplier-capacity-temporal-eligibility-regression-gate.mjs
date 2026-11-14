@@ -13,6 +13,7 @@ const checks = [
 ];
 
 for (const [label, file] of checks) {
+  console.log(`RUN: ${label} (${file})`);
   const result = spawnSync(process.execPath, [`phase0/${file}`], { encoding: 'utf8' });
   if (result.status !== 0) {
     process.stdout.write(result.stdout || '');
