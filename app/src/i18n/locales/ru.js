@@ -65,4 +65,12 @@ export default {
     serviceAvailabilitySaving: "Сохранение…",
     serviceAvailabilitySavedDeclaration: "Расписание сохранено как декларация; доступность не подтверждена.",
     serviceAvailabilitySaveFailed: "Не удалось сохранить расписание.",
+    serviceAvailabilityAssessWindow: "Оценить запрошенный интервал",
+    serviceAvailabilityStart: "Начало",
+    serviceAvailabilityEnd: "Окончание",
+    serviceAvailabilityAssess: "Оценить интервал",
+    serviceAvailabilityWithinDeclaredHours: "В пределах заявленных рабочих часов.",
+    serviceAvailabilityOutsideDeclaredHours: "За пределами заявленных рабочих часов.",
+    serviceAvailabilityAssessmentUnknown: "Результат оценки неизвестен.",
+    serviceAvailabilityCommitmentsNotChecked: "Существующие записи и занятость ресурса не проверялись; доступность не подтверждена.",
 };
