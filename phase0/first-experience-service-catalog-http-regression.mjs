@@ -609,7 +609,7 @@ try {
   const failedBooking = (await failedBookingCreate.json()).booking;
   for (const step of [
     { status: 'ACCEPTED', expected_version: 1, key: 'service-booking-http-fail-accept-1' },
-    { status: 'CONFIRMED', expected_version: 2, key: 'service-booking-http-fail-confirm-1' },
+    { status: 'CONFIRMED', resource_id: appointmentResource.id, expected_version: 2, key: 'service-booking-http-fail-confirm-1' },
     {
       status: 'IN_PROGRESS',
       expected_version: 3,
@@ -682,7 +682,7 @@ try {
   const staleResponse = await fetch(bookingsUrl + '/' + encodeURIComponent(staleBooking.id), {
     method: 'PATCH',
     headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-stale-transition-1' },
-    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 1 }),
+    body: JSON.stringify({ status: 'CONFIRMED', resource_id: appointmentResource.id, expected_version: 1 }),
   });
   assert.equal(staleResponse.status, 409, 'stale expected_version must conflict');
   const staleState = (await (await fetch(bookingsUrl, { headers: authHeaders })).json()).bookings
@@ -747,7 +747,7 @@ try {
   const deniedTransition = await fetch(bookingsUrl + '/' + encodeURIComponent(staleBooking.id), {
     method: 'PATCH',
     headers: staffHeaders,
-    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+    body: JSON.stringify({ status: 'CONFIRMED', resource_id: appointmentResource.id, expected_version: 2 }),
   });
   assert.equal(deniedTransition.status, 403, 'staff without scheduling:manage must be denied');
   const stateAfterPermissionDenial = (await (await fetch(bookingsUrl, { headers: authHeaders })).json()).bookings
@@ -825,7 +825,7 @@ try {
   const completedBooking = (await completedBookingCreate.json()).booking;
   for (const step of [
     { status: 'ACCEPTED', expected_version: 1, key: 'service-booking-http-complete-accept-1' },
-    { status: 'CONFIRMED', expected_version: 2, key: 'service-booking-http-complete-confirm-1' },
+    { status: 'CONFIRMED', resource_id: appointmentResource.id, expected_version: 2, key: 'service-booking-http-complete-confirm-1' },
     { status: 'IN_PROGRESS', expected_version: 3, key: 'service-booking-http-complete-start-1' },
   ]) {
     const response = await fetch(bookingsUrl + '/' + encodeURIComponent(completedBooking.id), {
