@@ -68,7 +68,7 @@ Added:
 - `test:phase13.12.4`
 - updated `SELLIFY_AI_HANDOFF.md`
 
-The implementation derives 7 role entries × 48 registered resource/actions = **336 matrix rows**.
+The implementation derives 7 role entries × 53 registered resource/actions = **371 matrix rows**.
 
 It has no database access, no permission persistence, no role store, and no authorization evaluator.
 
@@ -90,7 +90,7 @@ It has no database access, no permission persistence, no role store, and no auth
 Phase 13.12.4 passes when:
 
 - all six Core roles plus contextual-only `service_provider` are represented;
-- all 48 registry entries are represented for every role;
+- all 53 registry entries are represented for every role;
 - current central permission grants are preserved exactly;
 - vocabulary-only capabilities do not broaden non-owner access and preserve the existing owner wildcard;
 - organization/location boundary behavior remains delegated to the existing authority;
@@ -107,6 +107,10 @@ Next controlled subphase:
 
 ## Subsequent Service Provider scope extension
 
-The derived matrix now covers seven role entries × 48 resource/action entries = **336 rows**. The existing Core membership roles remain unchanged. `service_provider` is included as a **contextual-only** role; it is not a permitted base membership role.
+The derived matrix now covers seven role entries × 53 resource/action entries = **371 rows**. The existing Core membership roles remain unchanged. `service_provider` is included as a **contextual-only** role; it is not a permitted base membership role.
 
 The Provider role's Service permissions require an exact resource-scoped membership assignment and a canonical `service_resource` context matching resource ID, organization ID, and location ID. It can view its assigned resource and manage only that resource's declared availability. It cannot manage resource metadata, assign roles, access Logistics Scheduling, or view other resources. Owner/Manager retain their existing resource-administration boundary; Manager also receives the two Service availability permissions.
+
+## Subsequent Service Booking policy extension
+
+The Service Pack now includes explicit booking permissions for view, request, manage, confirm, and cancel. Manager and Owner can operate the Service Booking lifecycle through these permissions. Logistics Manager and Dispatcher roles do not inherit Service Booking access; Service Booking remains a Service Pack responsibility. Provider remains limited to assigned-resource availability and does not receive booking lifecycle actions in this increment.
