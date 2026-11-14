@@ -35,4 +35,8 @@ node phase0/service-window-assessment-regression.mjs
 node phase0/service-provider-resource-scope-regression.mjs
 node phase0/service-booking-persistence-regression.mjs
 node phase0/service-booking-operator-workspace-regression.mjs
+node phase0/tg1-telegram-storefront-regression.mjs
+node phase0/tg7-telegram-buyer-orders-regression.mjs
+node phase0/tg8-telegram-fulfillment-regression.mjs
+node phase0/tg11-telegram-buyer-service-appointments-regression.mjs
 echo "PASS: Phase 0 baseline checks completed"
