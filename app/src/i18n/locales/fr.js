@@ -80,4 +80,5 @@ export default {
     serviceResourceRevokeProvider: "Révoquer l’accès du prestataire",
     serviceResourceProviderAssignFailed: "Impossible de modifier l’accès du prestataire.",
     serviceResourceNoProviderMembers: "Aucun membre du personnel admissible.",
+    serviceResourceProviderDescription: "Consultez les ressources de service qui vous sont attribuées et mettez à jour leurs horaires déclarés. La disponibilité n’est pas confirmée tant que les engagements existants ne sont pas vérifiés.",
 };
