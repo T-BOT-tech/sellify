@@ -84,6 +84,17 @@ function canManageServiceResources() {
   return role === 'owner' || role === 'manager';
 }
 
+function hasServiceProviderResourceScope(resourceId = null) {
+  const roles = Array.isArray(config.contextualRoles) ? config.contextualRoles : [];
+  return roles.some(item => String(item?.role || '').toLowerCase() === 'service_provider'
+    && String(item?.scopeType || '').toUpperCase() === 'RESOURCE'
+    && (!resourceId || String(item?.scopeId || '') === String(resourceId)));
+}
+
+function canAccessServiceResources() {
+  return canManageServiceResources() || hasServiceProviderResourceScope();
+}
+
 function serviceResourceEndpoint() {
   return apiBase() + '/tenants/' + encodeURIComponent(config.chatId) + '/service-resources';
 }
@@ -114,6 +125,17 @@ function serviceResourceTypeLabel(type) {
 
 function serviceResourceCard(resource) {
   const active = String(resource.status).toUpperCase() === 'ACTIVE';
+  const manager = canManageServiceResources();
+  const providerScope = hasServiceProviderResourceScope(resource.id);
+  const actions = [];
+  if (manager) {
+    actions.push('<button type="button" class="btn-secondary service-resource-rename" data-resource-id="' + escapeAttr(resource.id) + '" data-version="' + escapeAttr(resource.version) + '">' + escapeHtml(t('serviceResourceRename')) + '</button>');
+    actions.push('<button type="button" class="btn-secondary service-resource-providers" data-resource-id="' + escapeAttr(resource.id) + '">' + escapeHtml(t('serviceResourceManageProviders')) + '</button>');
+    actions.push('<button type="button" class="btn-secondary service-resource-toggle" data-resource-id="' + escapeAttr(resource.id) + '" data-version="' + escapeAttr(resource.version) + '" data-status="' + (active ? 'INACTIVE' : 'ACTIVE') + '">' + escapeHtml(active ? t('serviceResourceDeactivate') : t('serviceResourceActivate')) + '</button>');
+  }
+  if (manager || providerScope) {
+    actions.push('<button type="button" class="btn-secondary service-resource-availability" data-resource-id="' + escapeAttr(resource.id) + '">' + escapeHtml(t('serviceAvailabilityConfigure')) + '</button>');
+  }
   return '<article class="logistics-card service-resource-card" data-resource-id="' + escapeAttr(resource.id) + '">'
     + '<div class="logistics-top"><strong>' + escapeHtml(resource.name) + '</strong>'
     + '<span class="logistics-status">' + escapeHtml(resource.status) + '</span></div>'
@@ -121,18 +143,15 @@ function serviceResourceCard(resource) {
     + (resource.serviceItemId ? ' · ' + escapeHtml(resource.serviceItemId) : ' · ' + escapeHtml(t('serviceResourceAllServices')))
     + (resource.locationId ? ' · ' + escapeHtml(resource.locationId) : ' · ' + escapeHtml(t('serviceResourceOrganizationWide'))) + ' · v' + escapeHtml(resource.version) + '</div>'
     + (resource.description ? '<div class="logistics-meta">' + escapeHtml(resource.description) + '</div>' : '')
-    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">'
-    + '<button type="button" class="btn-secondary service-resource-rename" data-resource-id="' + escapeAttr(resource.id) + '" data-version="' + escapeAttr(resource.version) + '">' + escapeHtml(t('serviceResourceRename')) + '</button>'
-    + '<button type="button" class="btn-secondary service-resource-availability" data-resource-id="' + escapeAttr(resource.id) + '">' + escapeHtml(t('serviceAvailabilityConfigure')) + '</button>'
-    + '<button type="button" class="btn-secondary service-resource-toggle" data-resource-id="' + escapeAttr(resource.id) + '" data-version="' + escapeAttr(resource.version) + '" data-status="' + (active ? 'INACTIVE' : 'ACTIVE') + '">' + escapeHtml(active ? t('serviceResourceDeactivate') : t('serviceResourceActivate')) + '</button>'
-    + '</div></article>';
+    + (actions.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">' + actions.join('') + '</div>' : '')
+    + '</article>';
 }
 
 async function refreshServiceResources(root = document) {
   const workspace = root.querySelector('#serviceBookingsWorkspace');
   const status = workspace?.querySelector('#serviceResourcesStatus');
   const list = workspace?.querySelector('#serviceResourcesList');
-  if (!workspace || !status || !list || !canManageServiceResources()) return;
+  if (!workspace || !status || !list || !canAccessServiceResources()) return;
   if (!config.chatId || !config.sessionToken) {
     status.textContent = t('serviceBookingsSignIn');
     list.replaceChildren();
@@ -283,6 +302,87 @@ function assessServiceResourceWindow(button) {
   }
 }
 
+async function openServiceResourceProviders(button) {
+  const resourceId = button.dataset.resourceId;
+  const card = button.closest('.service-resource-card');
+  if (!card) return;
+  let panel = card.querySelector('.service-resource-providers-panel');
+  if (panel) { panel.remove(); return; }
+  panel = document.createElement('section');
+  panel.className = 'service-resource-providers-panel';
+  panel.style.cssText = 'display:grid;gap:8px;margin-top:10px;';
+  panel.textContent = t('serviceResourceLoading');
+  card.append(panel);
+  try {
+    const response = await fetch(apiBase() + '/tenants/' + encodeURIComponent(config.chatId) + '/memberships', { headers: authHeaders() });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.error?.message || t('serviceResourceProviderAssignFailed'));
+    const memberships = Array.isArray(data.memberships) ? data.memberships : [];
+    const assigned = memberships.filter(member => (member.contextualRoles || []).some(role =>
+      String(role.role || '').toLowerCase() === 'service_provider'
+      && String(role.scopeType || '').toUpperCase() === 'RESOURCE'
+      && String(role.scopeId || '') === String(resourceId)));
+    const eligible = memberships.filter(member => String(member.role || '').toLowerCase() === 'staff'
+      && !assigned.some(item => String(item.id) === String(member.id)));
+    panel.innerHTML = '<label>' + escapeHtml(t('serviceResourceSelectProvider')) + '<select class="service-resource-provider-select">'
+      + '<option value="">' + escapeHtml(t('serviceResourceNoProviderMembers')) + '</option>'
+      + eligible.map(member => '<option value="' + escapeAttr(member.id) + '">' + escapeHtml(member.displayName || member.id) + '</option>').join('')
+      + '</select></label>'
+      + '<button type="button" class="btn-secondary service-resource-provider-assign" data-resource-id="' + escapeAttr(resourceId) + '">' + escapeHtml(t('serviceResourceAssignProvider')) + '</button>'
+      + '<div class="service-resource-provider-status logistics-meta" role="status"></div>'
+      + '<div><strong>' + escapeHtml(t('serviceResourceAssignedProviders')) + '</strong>'
+      + (assigned.length ? assigned.map(member => '<div class="logistics-meta">' + escapeHtml(member.displayName || member.id)
+        + ' <button type="button" class="btn-secondary service-resource-provider-revoke" data-resource-id="' + escapeAttr(resourceId)
+        + '" data-membership-id="' + escapeAttr(member.id) + '">' + escapeHtml(t('serviceResourceRevokeProvider')) + '</button></div>').join('')
+        : '<div class="logistics-meta">' + escapeHtml(t('serviceResourceEmpty')) + '</div>') + '</div>';
+  } catch (error) {
+    panel.textContent = error.message || t('serviceResourceProviderAssignFailed');
+  }
+}
+
+async function assignServiceProvider(button) {
+  const panel = button.closest('.service-resource-providers-panel');
+  const membershipId = panel?.querySelector('.service-resource-provider-select')?.value;
+  const status = panel?.querySelector('.service-resource-provider-status');
+  if (!membershipId) { if (status) status.textContent = t('serviceResourceNoProviderMembers'); return; }
+  button.disabled = true;
+  try {
+    const response = await fetch(apiBase() + '/auth/membership-contextual-role', {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ membershipId, role: 'service_provider', scopeType: 'RESOURCE', scopeId: button.dataset.resourceId }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.error?.message || t('serviceResourceProviderAssignFailed'));
+    if (status) status.textContent = t('serviceResourceProviderAssigned');
+    await openServiceResourceProviders({ dataset: { resourceId: button.dataset.resourceId }, closest: () => button.closest('.service-resource-card') });
+  } catch (error) {
+    if (status) status.textContent = error.message || t('serviceResourceProviderAssignFailed');
+  } finally { button.disabled = false; }
+}
+
+async function revokeServiceProvider(button) {
+  button.disabled = true;
+  const panel = button.closest('.service-resource-providers-panel');
+  const status = panel?.querySelector('.service-resource-provider-status');
+  try {
+    const response = await fetch(apiBase() + '/auth/membership-contextual-role/revoke', {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        membershipId: button.dataset.membershipId, role: 'service_provider',
+        scopeType: 'RESOURCE', scopeId: button.dataset.resourceId,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.error?.message || t('serviceResourceProviderAssignFailed'));
+    if (status) status.textContent = t('serviceResourceProviderAssigned');
+    await openServiceResourceProviders({ dataset: { resourceId: button.dataset.resourceId }, closest: () => button.closest('.service-resource-card') });
+  } catch (error) {
+    if (status) status.textContent = error.message || t('serviceResourceProviderAssignFailed');
+  } finally { button.disabled = false; }
+}
+
 async function saveServiceResourceAvailability(button, root) {
   const panel = button.closest('.service-resource-availability-panel');
   if (!panel) return;
@@ -324,17 +424,19 @@ export function serviceBookingsWorkspaceShell() {
     + '<p class="logistics-meta">' + escapeHtml(t('serviceBookingsDescription')) + '</p>'
     + '<div id="serviceBookingsStatus" class="logistics-meta" role="status">' + escapeHtml(t('serviceBookingsLoading')) + '</div>'
     + '<div id="serviceBookingsList"></div>'
-    + (canManageServiceResources()
+    + (canAccessServiceResources()
       ? '<section class="settings-section" aria-label="' + escapeAttr(t('serviceResourceTitle')) + '">'
         + '<h4>' + escapeHtml(t('serviceResourceTitle')) + '</h4>'
         + '<p class="logistics-meta">' + escapeHtml(t('serviceResourceDescription')) + '</p>'
-        + '<form id="serviceResourceForm" class="settings-form" style="display:grid;gap:8px;">'
-        + '<input name="name" maxlength="120" required placeholder="' + escapeAttr(t('serviceResourceName')) + '">'
-        + '<select name="resource_type"><option value="PROVIDER">' + escapeHtml(t('serviceResourceTypeProvider')) + '</option><option value="FACILITY">' + escapeHtml(t('serviceResourceTypeFacility')) + '</option><option value="EQUIPMENT">' + escapeHtml(t('serviceResourceTypeEquipment')) + '</option><option value="OTHER">' + escapeHtml(t('serviceResourceTypeOther')) + '</option></select>'
-        + '<select name="service_item_id">' + serviceResourceCatalogOptions() + '</select>'
-        + '<select name="location_id">' + serviceResourceLocationOptions() + '</select>'
-        + '<textarea name="description" maxlength="1000" placeholder="' + escapeAttr(t('serviceResourceDescriptionField')) + '"></textarea>'
-        + '<button type="submit" class="btn-primary" id="serviceResourceCreate">' + escapeHtml(t('serviceResourceCreate')) + '</button></form>'
+        + (canManageServiceResources()
+          ? '<form id="serviceResourceForm" class="settings-form" style="display:grid;gap:8px;">'
+            + '<input name="name" maxlength="120" required placeholder="' + escapeAttr(t('serviceResourceName')) + '">'
+            + '<select name="resource_type"><option value="PROVIDER">' + escapeHtml(t('serviceResourceTypeProvider')) + '</option><option value="FACILITY">' + escapeHtml(t('serviceResourceTypeFacility')) + '</option><option value="EQUIPMENT">' + escapeHtml(t('serviceResourceTypeEquipment')) + '</option><option value="OTHER">' + escapeHtml(t('serviceResourceTypeOther')) + '</option></select>'
+            + '<select name="service_item_id">' + serviceResourceCatalogOptions() + '</select>'
+            + '<select name="location_id">' + serviceResourceLocationOptions() + '</select>'
+            + '<textarea name="description" maxlength="1000" placeholder="' + escapeAttr(t('serviceResourceDescriptionField')) + '"></textarea>'
+            + '<button type="submit" class="btn-primary" id="serviceResourceCreate">' + escapeHtml(t('serviceResourceCreate')) + '</button></form>'
+          : '')
         + '<div id="serviceResourcesStatus" class="logistics-meta" role="status">' + escapeHtml(t('serviceResourceLoading')) + '</div>'
         + '<div id="serviceResourcesList"></div></section>'
       : '') + '</section>';
@@ -440,6 +542,9 @@ export function mountServiceBookingsWorkspace(root = document) {
       const resourceToggle = event.target.closest('.service-resource-toggle');
       const resourceRename = event.target.closest('.service-resource-rename');
       const resourceAvailability = event.target.closest('.service-resource-availability');
+      const resourceProviders = event.target.closest('.service-resource-providers');
+      const providerAssign = event.target.closest('.service-resource-provider-assign');
+      const providerRevoke = event.target.closest('.service-resource-provider-revoke');
       const availabilitySave = event.target.closest('.service-availability-save');
       const windowAssess = event.target.closest('.service-window-assess');
       const createResource = event.target.closest('#serviceResourceCreate');
@@ -447,6 +552,9 @@ export function mountServiceBookingsWorkspace(root = document) {
       if (action) transitionBooking(action, root);
       if (resourceToggle) updateServiceResource(resourceToggle, root, { status: resourceToggle.dataset.status });
       if (resourceAvailability) openServiceResourceAvailability(resourceAvailability, root);
+      if (resourceProviders) openServiceResourceProviders(resourceProviders);
+      if (providerAssign) assignServiceProvider(providerAssign);
+      if (providerRevoke) revokeServiceProvider(providerRevoke);
       if (availabilitySave) saveServiceResourceAvailability(availabilitySave, root);
       if (windowAssess) assessServiceResourceWindow(windowAssess);
       if (resourceRename) {
