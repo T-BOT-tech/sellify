@@ -5943,7 +5943,7 @@ export async function listServiceResources(chatId, { includeInactive = false, se
   const params = [String(organizationId), String(chatId)];
   if (!includeInactive) clauses.push("status = 'ACTIVE'");
   if (serviceItemId) { clauses.push('service_item_id = ?'); params.push(String(serviceItemId)); }
-  if (locationId) { clauses.push('location_id = ?'); params.push(String(locationId)); }
+  if (locationId) { clauses.push('(location_id IS NULL OR location_id = ?)'); params.push(String(locationId)); }
   return db.prepare(`SELECT * FROM service_resources WHERE ${clauses.join(' AND ')} ORDER BY name COLLATE NOCASE, id`)
     .all(...params).map(serviceResourceFromRow);
 }
