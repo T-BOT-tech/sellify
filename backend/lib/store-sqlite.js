@@ -19,6 +19,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import { normalizeWorkingHours, normalizeAvailabilityExceptions, isIanaTimeZone } from './service-availability-contract.js';
+import { assessServiceResourceDeclaredWindow } from '../../app/src/verticals/services/service-window-assessment-contract.js';
 import { resolveOnboardingCountry } from './country-pack-onboarding.js';
 import { assertVerificationFreshness } from './payments/verification-freshness.js';
 import { requirePaymentProvider } from './payments/provider-registry.js';
@@ -3368,6 +3369,19 @@ if (!applied.includes(39)) {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(79, nowIso());
   }
+  // Confirmed Service Bookings are the commitment record. No parallel
+  // reservation table is introduced; the existing booking row owns the slot.
+  if (!applied.includes(80)) {
+    const bookingColumns = new Set(
+      db.prepare('PRAGMA table_info(service_bookings)').all().map(column => String(column.name))
+    );
+    if (!bookingColumns.has('service_resource_id')) {
+      db.exec('ALTER TABLE service_bookings ADD COLUMN service_resource_id TEXT');
+    }
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_service_bookings_resource_window
+      ON service_bookings(organization_id, chat_id, service_resource_id, status, requested_start, requested_end);`);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(80, nowIso());
+  }
 }
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({
@@ -5858,6 +5872,7 @@ function serviceBookingFromRow(row) {
     order_id: String(row.server_order_id), service_item_id: String(row.service_item_id),
     requested_start: String(row.requested_start), requested_end: String(row.requested_end),
     appointment_mode: String(row.appointment_mode), customer_note: row.customer_note ?? null,
+    service_resource_id: row.service_resource_id || null,
     status: String(row.status), version: Number(row.version),
     created_by: row.created_by || null, updated_by: row.updated_by || null,
     started_at: row.started_at || null, started_by: row.started_by || null,
@@ -6176,6 +6191,7 @@ export async function createServiceBooking(chatId, serverOrderId, input = {}, ac
   const organizationId = String(tenant?.organization_id || tenant?.organizationId || '');
   if (!organizationId) throw Object.assign(new Error('Order organization is required'), { statusCode: 409, code: 'ORDER_ORGANIZATION_REQUIRED' });
   assertServiceBookingAuthorityBoundary(input);
+  if (input.service_resource_id != null || input.serviceResourceId != null) throw Object.assign(new Error('A service resource can only be assigned during booking confirmation'), { statusCode: 400, code: 'SERVICE_BOOKING_RESOURCE_ASSIGNMENT_FORBIDDEN' });
   const orderId = String(serverOrderId || '').trim();
   const serviceItemId = bookingRequiredText(input.service_item_id ?? input.serviceItemId, 'service_item_id');
   const requestedStart = bookingTimestamp(input.requested_start ?? input.requestedStart, 'requested_start');
@@ -6221,6 +6237,12 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
   if(!organizationId) throw Object.assign(new Error('Order organization is required'),{statusCode:409,code:'ORDER_ORGANIZATION_REQUIRED'});
   assertServiceBookingAuthorityBoundary(input);
   const target=String(input.status||input.next_status||input.nextStatus||'').trim().toUpperCase();
+  const serviceResourceId = target === 'CONFIRMED'
+    ? bookingRequiredText(input.service_resource_id ?? input.serviceResourceId, 'service_resource_id')
+    : null;
+  if (target !== 'CONFIRMED' && (input.service_resource_id != null || input.serviceResourceId != null)) {
+    throw Object.assign(new Error('service_resource_id is only valid when confirming a booking'), { statusCode: 400, code: 'SERVICE_BOOKING_RESOURCE_ASSIGNMENT_INVALID' });
+  }
   const commandKey=String(input.idempotencyKey||input.idempotency_key||'').trim();
   if(!commandKey) throw Object.assign(new Error('Idempotency-Key is required'),{statusCode:400,code:'IDEMPOTENCY_KEY_REQUIRED'});
   const expectedVersion=Number(input.expected_version??input.expectedVersion);
@@ -6230,7 +6252,7 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
   const completionNote = input.completion_note == null && input.completionNote == null
     ? null : bookingRequiredText(input.completion_note ?? input.completionNote,'completion_note',500);
   if(target!=='COMPLETED'&&completionNote!==null) throw Object.assign(new Error('completion_note is only valid when completing a service booking'),{statusCode:400,code:'SERVICE_BOOKING_COMPLETION_NOTE_INVALID'});
-  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({booking_id:String(bookingId),order_id:String(serverOrderId),status:target,expected_version:expectedVersion,reason,completion_note:completionNote})).digest('hex');
+  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({booking_id:String(bookingId),order_id:String(serverOrderId),status:target,expected_version:expectedVersion,reason,completion_note:completionNote,service_resource_id:serviceResourceId})).digest('hex');
   db.exec('BEGIN IMMEDIATE');
   try {
     const freshTenant=db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(String(chatId));
@@ -6244,10 +6266,72 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
     }
     if(!SERVICE_BOOKING_TRANSITIONS[String(row.status)]?.has(target)) throw Object.assign(new Error(`Service booking transition ${row.status} -> ${target} is not allowed`),{statusCode:409,code:'SERVICE_BOOKING_TRANSITION_INVALID'});
     if(Number(row.version)!==expectedVersion) throw Object.assign(new Error('Service booking version conflict'),{statusCode:409,code:'SERVICE_BOOKING_VERSION_CONFLICT'});
+    if (target === 'CONFIRMED') {
+      const resource = db.prepare('SELECT * FROM service_resources WHERE id=? AND organization_id=? AND chat_id=?')
+        .get(serviceResourceId, organizationId, String(chatId));
+      if (!resource) throw Object.assign(new Error('Service resource not found in this organization'), { statusCode:404, code:'SERVICE_RESOURCE_NOT_FOUND' });
+      if (String(resource.status || '').toUpperCase() !== 'ACTIVE') {
+        throw Object.assign(new Error('Only active Service Resources can be committed to a booking'), { statusCode:409, code:'SERVICE_RESOURCE_INACTIVE' });
+      }
+      if (resource.service_item_id && String(resource.service_item_id) !== String(row.service_item_id)) {
+        throw Object.assign(new Error('Service Resource is not bound to the requested Catalog service'), { statusCode:409, code:'SERVICE_RESOURCE_SERVICE_ITEM_MISMATCH' });
+      }
+      const schedule = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=? AND organization_id=? AND chat_id=?')
+        .get(serviceResourceId, organizationId, String(chatId));
+      if (!schedule) throw Object.assign(new Error('Service Resource availability is UNKNOWN because no schedule is configured'), { statusCode:409, code:'SERVICE_RESOURCE_AVAILABILITY_UNKNOWN' });
+      const organization = db.prepare('SELECT timezone FROM organizations WHERE id=?').get(organizationId);
+      const timeZone = String(schedule.timezone || organization?.timezone || '');
+      let workingHours, exceptions, scheduleResult;
+      try {
+        if (!isIanaTimeZone(timeZone)) throw Object.assign(new Error('Invalid Service Resource timezone'), { code:'SERVICE_AVAILABILITY_TIMEZONE_INVALID' });
+        const normalizedWorking = normalizeWorkingHours(JSON.parse(schedule.working_hours_json || '[]'), timeZone);
+        workingHours = normalizedWorking.entries;
+        exceptions = normalizeAvailabilityExceptions(JSON.parse(schedule.exceptions_json || '[]'));
+        scheduleResult = assessServiceResourceDeclaredWindow({
+          timeZone, workingHours, exceptions, start: row.requested_start, end: row.requested_end,
+        });
+      } catch (error) {
+        throw Object.assign(new Error('Service Resource declared availability cannot be evaluated'), {
+          statusCode:409, code:'SERVICE_RESOURCE_AVAILABILITY_UNKNOWN', cause:error?.code || 'SCHEDULE_CONFIGURATION_INVALID',
+        });
+      }
+      if (scheduleResult.scheduleAssessment === 'UNKNOWN') {
+        throw Object.assign(new Error('Service Resource availability is UNKNOWN for the requested interval'), {
+          statusCode:409, code:'SERVICE_RESOURCE_AVAILABILITY_UNKNOWN', reason:scheduleResult.reason,
+        });
+      }
+      if (scheduleResult.scheduleAssessment !== 'WITHIN_DECLARED_HOURS') {
+        throw Object.assign(new Error('Requested appointment falls outside declared Service Resource working hours'), {
+          statusCode:409, code:'SERVICE_RESOURCE_OUTSIDE_DECLARED_HOURS', reason:scheduleResult.reason,
+        });
+      }
+      const orderRow = db.prepare('SELECT * FROM orders WHERE chat_id=? AND server_order_id=?')
+        .get(String(chatId), String(serverOrderId));
+      const order = orderRow ? orderFromRow(orderRow) : null;
+      const orderLocationId = order?.location_id ?? order?.locationId ?? null;
+      if (String(row.appointment_mode).toUpperCase() === 'ON_SITE' && resource.location_id && orderLocationId
+        && String(resource.location_id) !== String(orderLocationId)) {
+        throw Object.assign(new Error('On-site Service Resource location does not match the order location'), {
+          statusCode:409, code:'SERVICE_RESOURCE_LOCATION_MISMATCH',
+        });
+      }
+      // BEGIN IMMEDIATE serializes confirmation writers. This overlap check and
+      // the booking update below therefore form one conflict-safe commitment.
+      const conflict = db.prepare(`SELECT id FROM service_bookings
+        WHERE organization_id=? AND chat_id=? AND service_resource_id=?
+          AND status IN ('CONFIRMED','IN_PROGRESS')
+          AND requested_start < ? AND requested_end > ? AND id <> ?
+        LIMIT 1`).get(organizationId, String(chatId), serviceResourceId,
+          String(row.requested_end), String(row.requested_start), String(bookingId));
+      if (conflict) throw Object.assign(new Error('Service Resource already has a confirmed appointment in this time window'), {
+        statusCode:409, code:'SERVICE_RESOURCE_SLOT_CONFLICT', conflicting_booking_id:String(conflict.id),
+      });
+    }
     const now=nowIso(), nextVersion=expectedVersion+1;
     const actorId=actor?.userId||null;
     const changed=db.prepare(`UPDATE service_bookings SET
       status=?,version=?,updated_by=?,updated_at=?,
+      service_resource_id=CASE WHEN ?='CONFIRMED' THEN ? ELSE service_resource_id END,
       started_at=CASE WHEN ?='IN_PROGRESS' THEN ? ELSE started_at END,
       started_by=CASE WHEN ?='IN_PROGRESS' THEN ? ELSE started_by END,
       completed_at=CASE WHEN ?='COMPLETED' THEN ? ELSE completed_at END,
@@ -6256,13 +6340,14 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
       status_reason=CASE WHEN ? IN ('REJECTED','FAILED','CANCELLED') THEN ? ELSE status_reason END
       WHERE id=? AND organization_id=? AND version=?`).run(
         target,nextVersion,actorId,now,
+        target,serviceResourceId,
         target,now,target,actorId,target,now,target,actorId,target,completionNote,
         target,reason,
         String(bookingId),organizationId,expectedVersion,
       );
     if(Number(changed.changes)!==1) throw Object.assign(new Error('Service booking version conflict'),{statusCode:409,code:'SERVICE_BOOKING_VERSION_CONFLICT'});
     db.prepare(`INSERT INTO service_booking_commands (organization_id,command_key,booking_id,command_type,command_fingerprint,created_at) VALUES (?,?,?,'TRANSITION',?,?)`).run(organizationId,commandKey,String(bookingId),fingerprint,now);
-    audit(String(chatId),`services.booking.${target.toLowerCase()}`,'service_booking',String(bookingId),{order_id:String(serverOrderId),from_status:String(row.status),to_status:target,version:nextVersion,reason,...(target==='COMPLETED'?{completion_note:completionNote,completed_at:now,completed_by:actorId}:{}),...(target==='IN_PROGRESS'?{started_at:now,started_by:actorId}:{})},{organizationId,actorId,deviceId:actor?.deviceId||null,reason:reason||''});
+    audit(String(chatId),`services.booking.${target.toLowerCase()}`,'service_booking',String(bookingId),{order_id:String(serverOrderId),from_status:String(row.status),to_status:target,version:nextVersion,reason,...(target==='CONFIRMED'?{service_resource_id:serviceResourceId,resource_commitment:'COMMITTED'}:{}),...(target==='COMPLETED'?{completion_note:completionNote,completed_at:now,completed_by:actorId}:{}),...(target==='IN_PROGRESS'?{started_at:now,started_by:actorId}:{})},{organizationId,actorId,deviceId:actor?.deviceId||null,reason:reason||''});
     const updated=db.prepare('SELECT * FROM service_bookings WHERE id=?').get(String(bookingId));
     db.exec('COMMIT'); return {booking:serviceBookingFromRow(updated),replayed:false};
   } catch(error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
