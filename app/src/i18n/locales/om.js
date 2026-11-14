@@ -163,4 +163,5 @@ export default {
     serviceResourceRevokeProvider: "Hayyama dhiyeessaa haqii",
     serviceResourceProviderAssignFailed: "Hayyama dhiyeessaa haaromsuun hin danda'amne.",
     serviceResourceNoProviderMembers: "Miseensota hojjettoota ulaagaa guutan hin jiran.",
+    serviceResourceProviderDescription: "Qabeenya tajaajilaa siif ramadame ilaali; sa'aatii hojii isaa ibsame haaromsi. Qabamtoonni duraanii hanga hin ilaalamnetti argamuun hin mirkanoofne.",
 };
