@@ -501,6 +501,41 @@ export async function refreshServiceBookings(root = document) {
         : t('serviceBookingsEmpty');
 }
 
+async function chooseServiceBookingResource(button) {
+  const response = await fetch(serviceResourceEndpoint(), { headers: authHeaders() });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error?.message || t('serviceResourceLoadFailed'));
+  const eligible = (Array.isArray(data.resources) ? data.resources : [])
+    .filter(resource => String(resource.status || '').toUpperCase() === 'ACTIVE'
+      && (!resource.serviceItemId || String(resource.serviceItemId) === String(button.dataset.serviceItemId || '')));
+  if (!eligible.length) throw new Error(t('serviceResourceEmpty'));
+
+  const dialog = document.createElement('dialog');
+  dialog.className = 'service-booking-resource-dialog';
+  dialog.style.cssText = 'width:min(92vw,460px);border:1px solid var(--border-color,#d1d5db);border-radius:14px;padding:20px;box-shadow:0 18px 50px #0003;';
+  dialog.innerHTML = '<form method="dialog" style="display:grid;gap:14px;">'
+    + '<h3 style="margin:0;">' + escapeHtml(t('serviceBookingChooseResource')) + '</h3>'
+    + '<label style="display:grid;gap:6px;"><span>' + escapeHtml(t('serviceBookingChooseResource')) + '</span>'
+    + '<select name="resource_id" required style="width:100%;padding:10px;">'
+    + eligible.map(resource => '<option value="' + escapeAttr(resource.id) + '">'
+      + escapeHtml(resource.name + (resource.locationId ? ' · ' + resource.locationId : '')) + '</option>').join('')
+    + '</select></label>'
+    + '<div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;">'
+    + '<button type="submit" value="cancel" class="btn-secondary">' + escapeHtml(t('serviceBookingCancelResource')) + '</button>'
+    + '<button type="submit" value="confirm" class="btn-primary">' + escapeHtml(t('serviceBookingConfirmResource')) + '</button>'
+    + '</div></form>';
+  document.body.append(dialog);
+  return new Promise(resolve => {
+    dialog.addEventListener('close', () => {
+      const selected = dialog.returnValue === 'confirm'
+        ? dialog.querySelector('select[name="resource_id"]')?.value || null : null;
+      dialog.remove();
+      resolve(selected);
+    }, { once: true });
+    dialog.showModal();
+  });
+}
+
 async function transitionBooking(button, root) {
   const target = button.dataset.target;
   let reason = '';
@@ -520,22 +555,8 @@ async function transitionBooking(button, root) {
   button.disabled = true;
   try {
     if (target === 'CONFIRMED') {
-      const resourcesResponse = await fetch(serviceResourceEndpoint(), { headers: authHeaders() });
-      const resourcesData = await resourcesResponse.json().catch(() => ({}));
-      if (!resourcesResponse.ok) throw new Error(resourcesData?.error?.message || t('serviceResourceLoadFailed'));
-      const eligible = (Array.isArray(resourcesData.resources) ? resourcesData.resources : [])
-        .filter(resource => String(resource.status || '').toUpperCase() === 'ACTIVE'
-          && (!resource.serviceItemId || String(resource.serviceItemId) === String(button.dataset.serviceItemId || '')));
-      if (!eligible.length) throw new Error(t('serviceResourceEmpty'));
-      const options = eligible.map((resource, index) => (index + 1) + '. ' + resource.name
-        + (resource.locationId ? ' · ' + resource.locationId : '')).join('\n');
-      const selected = window.prompt(t('serviceBookingChooseResource') + '\\n' + options + '\\n0. Cancel');
-      if (selected == null || selected.trim() === '0') { button.disabled = false; return; }
-      const index = Number(selected) - 1;
-      if (!Number.isInteger(index) || index < 0 || index >= eligible.length) {
-        throw new Error(t('serviceBookingChooseResource'));
-      }
-      resource_id = eligible[index].id;
+      resource_id = await chooseServiceBookingResource(button);
+      if (!resource_id) { button.disabled = false; return; }
     }
     const response = await fetch(url, {
       method: 'PATCH',
