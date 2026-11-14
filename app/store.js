@@ -237,7 +237,7 @@ async function loadTelegramOrders() {
     list.innerHTML = orders.map(o => `<article class="card" style="margin:10px 0;padding:12px"><strong>Order ${esc(String(o.marketplace_order_id).slice(0,8))}…</strong><div style="margin-top:6px;color:var(--muted);font-size:12px">${esc(o.status || 'queued')} · ${money(o.total_minor, o.currency)}</div>${(o.sellers || []).map(seller => `
       <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--line);">
         <div style="font-size:12px;">Seller order: ${esc(seller.seller_order_id)} · ${esc(seller.status || 'queued')}</div>
-        ${appointmentsEnabled && (seller.service_items||[]).length ? `
+        ${((seller.service_items||[]).length || (seller.service_appointments||[]).length) ? `
           <div style="margin-top:8px;font-weight:600;">Service appointments</div>
           ${(seller.service_appointments||[]).length ? (seller.service_appointments||[]).map(appointment => `
             <div style="margin-top:6px;padding:8px;border:1px solid var(--line);border-radius:9px;">
@@ -245,7 +245,7 @@ async function loadTelegramOrders() {
               <div class="hint">${esc((seller.service_items||[]).find(item=>item.id===appointment.service_item_id)?.name||appointment.service_item_id)} · ${esc(formatAppointmentTime(appointment.requested_start,seller.time_zone))} – ${esc(formatAppointmentTime(appointment.requested_end,seller.time_zone))}</div>
               ${['REQUESTED','ACCEPTED','CONFIRMED'].includes(String(appointment.status).toUpperCase()) ? `<button class="fulfillment-btn" data-cancel-appointment data-marketplace-order="${esc(o.marketplace_order_id)}" data-seller-order="${esc(seller.seller_order_id)}" data-booking-id="${esc(appointment.id)}" data-version="${esc(appointment.version)}">Cancel request</button>` : ''}
             </div>`).join('') : '<div class="hint" style="margin-top:6px;">No appointment requests yet.</div>'}
-          ${(seller.service_items||[]).map(item => `<button class="fulfillment-btn" style="margin-top:8px" data-request-appointment data-marketplace-order="${esc(o.marketplace_order_id)}" data-seller-order="${esc(seller.seller_order_id)}" data-service-item="${esc(item.id)}" data-service-name="${esc(item.name)}" data-time-zone="${esc(seller.time_zone||'')}">Request ${esc(item.name)} appointment</button>`).join('')}
+          ${appointmentsEnabled ? (seller.service_items||[]).map(item => `<button class="fulfillment-btn" style="margin-top:8px" data-request-appointment data-marketplace-order="${esc(o.marketplace_order_id)}" data-seller-order="${esc(seller.seller_order_id)}" data-service-item="${esc(item.id)}" data-service-name="${esc(item.name)}" data-time-zone="${esc(seller.time_zone||'')}">Request ${esc(item.name)} appointment</button>`).join('') : ''}
         ` : ''}
       </div>`).join('')}
       <button class="fulfillment-btn" style="margin-top:10px" data-fulfillment-order="${esc(o.marketplace_order_id)}">Delivery & returns</button></article>`).join('');
