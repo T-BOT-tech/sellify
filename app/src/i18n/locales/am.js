@@ -165,4 +165,5 @@ export default {
     serviceResourceProviderAssignFailed: "የአቅራቢ መዳረሻን ማዘመን አልተቻለም።",
     serviceResourceNoProviderMembers: "ብቁ የሰራተኛ አባልነቶች የሉም።",
     serviceResourceProviderDescription: "የተመደቡልዎትን የአገልግሎት ሀብቶች ይመልከቱ እና የተገለጹ የሥራ ሰዓቶቻቸውን ያዘምኑ። ነባር ቁርጠኝነቶች እስኪመረመሩ ድረስ ተገኝነት አይረጋገጥም።",
+    serviceResourceProviderDescription: "የተመደቡልዎትን የአገልግሎት ሀብቶች ይመልከቱ እና የተገለጹ የሥራ ሰዓቶቻቸውን ያዘምኑ። ነባር ቁርጠኝነቶች እስኪመረመሩ ድረስ ተገኝነት አይረጋገጥም።",
 };
