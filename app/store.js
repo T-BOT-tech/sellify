@@ -131,7 +131,7 @@ function openTelegramServiceAppointmentDialog({marketplaceOrderId,sellerOrderId,
   const stateEl = dialog.querySelector('[data-assessment-state]');
   const checkButton = dialog.querySelector('[data-check-time]');
   const sendButton = dialog.querySelector('[data-send-request]');
-  let lastAssessment = null;
+  form.addEventListener('submit',event=>event.preventDefault());
   let activeCreateKey = null;
   let activeCreateStorageKey = null;
   const readWindow = () => {
@@ -150,11 +150,11 @@ function openTelegramServiceAppointmentDialog({marketplaceOrderId,sellerOrderId,
       });
       const data=await response.json().catch(()=>({}));
       if(!response.ok) throw new Error(data?.error?.message||'Could not check appointment feasibility.');
-      lastAssessment=data.assessment||null;
-      if(lastAssessment?.state==='FEASIBLE') stateEl.textContent='Potentially feasible: a resource window appears to fit. This is not a reservation or confirmation.';
-      else if(lastAssessment?.state==='UNAVAILABLE') stateEl.textContent='No current resource window appears free. You may still send a request for seller review; it will not be confirmed.';
+      const assessmentState=data.assessment?.state;
+      if(assessmentState==='FEASIBLE') stateEl.textContent='Potentially feasible: a resource window appears to fit. This is not a reservation or confirmation.';
+      else if(assessmentState==='UNAVAILABLE') stateEl.textContent='No current resource window appears free. You may still send a request for seller review; it will not be confirmed.';
       else stateEl.textContent='Availability is UNKNOWN. You may still send a request for seller review; no slot is reserved.';
-    } catch(error) { lastAssessment=null; stateEl.textContent=error.message||'Availability is UNKNOWN. The request has not been sent.'; }
+    } catch(error) { stateEl.textContent=error.message||'Availability is UNKNOWN. The request has not been sent.'; }
     finally { checkButton.disabled=false; }
   });
   sendButton.addEventListener('click',async()=>{
