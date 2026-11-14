@@ -8,6 +8,7 @@ import { assessServiceResourceDeclaredWindow, serviceLocalDateTimeToIso } from '
 
 let mountedServiceBookingsWorkspace = null;
 let mountedServiceBookingsTenant = null;
+let serviceResourcesForBooking = [];
 const serviceBookingsHandlerRoots = new WeakSet();
 
 const NEXT = Object.freeze({
@@ -58,17 +59,34 @@ function renderBookingCard(order, booking) {
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? String(value || '—') : parsed.toLocaleString();
   };
-  const actions = canOperate() ? transitions.map(target =>
-    '<button type="button" class="btn-secondary service-booking-action" data-order-id="' + escapeAttr(order.server_order_id)
-    + '" data-booking-id="' + escapeAttr(booking.id) + '" data-version="' + escapeAttr(booking.version)
-    + '" data-target="' + escapeAttr(target) + '">' + escapeHtml(target.replaceAll('_', ' ')) + '</button>'
-  ).join('') : '';
+  const eligibleResources = serviceResourcesForBooking.filter(resource =>
+    String(resource.status || '').toUpperCase() === 'ACTIVE'
+    && (!resource.serviceItemId || String(resource.serviceItemId) === String(booking.service_item_id))
+    && (!resource.locationId || String(resource.locationId) === String(order.location_id || '')));
+  const actions = canOperate() ? transitions.map(target => {
+    const unavailable = target === 'CONFIRMED' && !eligibleResources.length;
+    return '<button type="button" class="btn-secondary service-booking-action" data-order-id="' + escapeAttr(order.server_order_id)
+      + '" data-booking-id="' + escapeAttr(booking.id) + '" data-version="' + escapeAttr(booking.version)
+      + '" data-target="' + escapeAttr(target) + '"' + (unavailable ? ' disabled' : '') + '>' + escapeHtml(target.replaceAll('_', ' ')) + '</button>';
+  }).join('') : '';
+  const resourcePicker = status === 'ACCEPTED' && canManageServiceResources()
+    ? '<label class="service-booking-resource-label">' + escapeHtml(t('serviceBookingResource')) + '<select class="service-booking-resource-select" data-booking-id="' + escapeAttr(booking.id) + '">'
+      + '<option value="">' + escapeHtml(t('serviceBookingChooseResource')) + '</option>'
+      + eligibleResources.map(resource => '<option value="' + escapeAttr(resource.id) + '">' + escapeHtml(resource.name || resource.id) + '</option>').join('')
+      + '</select></label>'
+      + (!eligibleResources.length ? '<p class="logistics-meta">' + escapeHtml(t('serviceBookingNoEligibleResource')) + '</p>' : '')
+    : '';
+  const assignedResource = booking.assigned_resource_id
+    ? serviceResourcesForBooking.find(resource => String(resource.id) === String(booking.assigned_resource_id))
+    : null;
   return '<article class="logistics-card service-booking-card">'
     + '<div class="logistics-top"><strong>' + escapeHtml(booking.service_item_id || 'Service')
     + '</strong><span class="logistics-status">' + escapeHtml(status.replaceAll('_', ' ')) + '</span></div>'
     + '<div class="logistics-meta">Order ' + escapeHtml(order.server_order_id) + ' · ' + escapeHtml(mode || 'appointment')
     + ' · v' + escapeHtml(booking.version) + '</div>'
     + '<div class="logistics-meta">' + escapeHtml(date(booking.requested_start)) + ' – ' + escapeHtml(date(booking.requested_end)) + '</div>'
+    + (assignedResource ? '<div class="logistics-meta">' + escapeHtml(t('serviceBookingAssignedResource')) + ': ' + escapeHtml(assignedResource.name || assignedResource.id) + '</div>' : '')
+    + resourcePicker
     + (booking.customer_note ? '<div class="logistics-meta">' + escapeHtml(booking.customer_note) + '</div>' : '')
     + (booking.status_reason ? '<div class="logistics-meta">Reason: ' + escapeHtml(booking.status_reason) + '</div>' : '')
     + (booking.completion_note ? '<div class="logistics-meta">Completion: ' + escapeHtml(booking.completion_note) + '</div>' : '')
@@ -471,6 +489,14 @@ export async function refreshServiceBookings(root = document) {
     }
     return;
   }
+  serviceResourcesForBooking = [];
+  if (canManageServiceResources()) {
+    try {
+      const resourceResponse = await fetch(serviceResourceEndpoint() + '?include_inactive=true', { headers: context.headers });
+      const resourceData = await resourceResponse.json().catch(() => ({}));
+      if (resourceResponse.ok && Array.isArray(resourceData.resources)) serviceResourcesForBooking = resourceData.resources;
+    } catch { serviceResourcesForBooking = []; }
+  }
   const results = await Promise.all(candidates.map(async order => {
     try { return { order, bookings: await requestBookings(order, context) }; }
     catch (error) { return { order, error }; }
@@ -507,6 +533,14 @@ async function transitionBooking(button, root) {
   if (target === 'COMPLETED') {
     completion_note = window.prompt(t('serviceBookingCompletionPrompt'))?.trim() || '';
   }
+  const card = button.closest('.service-booking-card');
+  const resourceId = target === 'CONFIRMED'
+    ? card?.querySelector('.service-booking-resource-select')?.value || ''
+    : '';
+  if (target === 'CONFIRMED' && !resourceId) {
+    window.alert(t('serviceBookingChooseResource'));
+    return;
+  }
   const orderId = button.dataset.orderId;
   const bookingId = button.dataset.bookingId;
   const url = apiBase() + '/tenants/' + encodeURIComponent(config.chatId)
@@ -519,6 +553,7 @@ async function transitionBooking(button, root) {
       body: JSON.stringify({
         status: target,
         expected_version: Number(button.dataset.version),
+        ...(resourceId ? { resource_id: resourceId } : {}),
         ...(reason ? { reason } : {}),
         ...(completion_note ? { completion_note } : {}),
       }),
