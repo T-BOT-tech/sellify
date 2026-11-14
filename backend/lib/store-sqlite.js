@@ -6326,6 +6326,11 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
         .get(String(chatId), String(serverOrderId));
       const order = orderRow ? orderFromRow(orderRow) : null;
       const orderLocationId = order?.location_id ?? order?.locationId ?? null;
+      if (String(row.appointment_mode).toUpperCase() === 'ON_SITE' && resource.location_id && !orderLocationId) {
+        throw Object.assign(new Error('On-site booking location is UNKNOWN; a location-bound resource cannot be committed'), {
+          statusCode:409, code:'SERVICE_RESOURCE_LOCATION_UNKNOWN',
+        });
+      }
       if (String(row.appointment_mode).toUpperCase() === 'ON_SITE' && resource.location_id && orderLocationId
         && String(resource.location_id) !== String(orderLocationId)) {
         throw Object.assign(new Error('On-site Service Resource location does not match the order location'), {
