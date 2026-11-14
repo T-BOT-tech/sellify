@@ -4,6 +4,7 @@ import { config, orders, products, organizationLocations } from '../state.js';
 import { authHeaders } from '../auth/tenant.js';
 import { escapeHtml, escapeAttr } from '../utils/index.js';
 import { t } from '../ui/i18n.js';
+import { assessServiceResourceDeclaredWindow, serviceLocalDateTimeToIso } from '../verticals/services/service-window-assessment-contract.js';
 
 let mountedServiceBookingsWorkspace = null;
 let mountedServiceBookingsTenant = null;
@@ -237,10 +238,20 @@ async function openServiceResourceAvailability(button, root) {
     if (!response.ok) throw new Error(data?.error?.message || t('serviceAvailabilityLoadFailed'));
     const availability = data.availability || {};
     panel.dataset.version = String(availability.version || 0);
+    panel.dataset.timeZone = String(availability.timeZone || '');
+    panel.dataset.workingHours = JSON.stringify(availability.workingHours || []);
+    panel.dataset.exceptions = JSON.stringify(availability.exceptions || []);
     panel.innerHTML = '<div class="logistics-meta">' + escapeHtml(t('serviceAvailabilityTimezone')) + ': ' + escapeHtml(availability.timeZone || '') + '</div>'
       + '<label>' + escapeHtml(t('serviceAvailabilityWorkingHours')) + '<textarea class="service-availability-hours" rows="7" spellcheck="false">' + escapeHtml(JSON.stringify(availability.workingHours || [], null, 2)) + '</textarea></label>'
       + '<label>' + escapeHtml(t('serviceAvailabilityExceptions')) + '<textarea class="service-availability-exceptions" rows="5" spellcheck="false">' + escapeHtml(JSON.stringify(availability.exceptions || [], null, 2)) + '</textarea></label>'
       + '<p class="logistics-meta">' + escapeHtml(t('serviceAvailabilityDeclarationOnly')) + '</p>'
+      + '<fieldset class="service-window-assessment" style="display:grid;gap:8px;border:1px solid var(--border-color, #ddd);padding:10px;border-radius:8px;">'
+      + '<legend>' + escapeHtml(t('serviceAvailabilityAssessWindow')) + '</legend>'
+      + '<label>' + escapeHtml(t('serviceAvailabilityStart')) + '<input type="datetime-local" class="service-window-start"></label>'
+      + '<label>' + escapeHtml(t('serviceAvailabilityEnd')) + '<input type="datetime-local" class="service-window-end"></label>'
+      + '<button type="button" class="btn-secondary service-window-assess">' + escapeHtml(t('serviceAvailabilityAssess')) + '</button>'
+      + '<div class="logistics-meta service-window-assessment-result" role="status" aria-live="polite"></div>'
+      + '</fieldset>'
       + '<div class="logistics-meta service-availability-status" role="status">' + escapeHtml(availability.state === 'EMPTY' ? t('serviceAvailabilityEmpty') : t('serviceAvailabilityDeclared')) + '</div>'
       + '<button type="button" class="btn-primary service-availability-save" data-resource-id="' + escapeAttr(resourceId) + '">' + escapeHtml(t('serviceAvailabilitySave')) + '</button>';
   } catch (error) {
@@ -248,7 +259,31 @@ async function openServiceResourceAvailability(button, root) {
   } finally { button.disabled = false; }
 }
 
-async function saveServiceResourceAvailability(button, root) {
+async function assessServiceResourceWindow(button) {
+  const panel = button.closest('.service-resource-availability-panel');
+  if (!panel) return;
+  const output = panel.querySelector('.service-window-assessment-result');
+  try {
+    const timeZone = panel.dataset.timeZone || '';
+    const start = serviceLocalDateTimeToIso(panel.querySelector('.service-window-start')?.value, timeZone);
+    const end = serviceLocalDateTimeToIso(panel.querySelector('.service-window-end')?.value, timeZone);
+    const assessment = assessServiceResourceDeclaredWindow({
+      timeZone,
+      workingHours: JSON.parse(panel.querySelector('.service-availability-hours')?.value || '[]'),
+      exceptions: JSON.parse(panel.querySelector('.service-availability-exceptions')?.value || '[]'),
+      start, end,
+    });
+    const label = assessment.scheduleAssessment === 'WITHIN_DECLARED_HOURS'
+      ? t('serviceAvailabilityWithinDeclaredHours')
+      : assessment.scheduleAssessment === 'OUTSIDE_DECLARED_HOURS'
+        ? t('serviceAvailabilityOutsideDeclaredHours') : t('serviceAvailabilityAssessmentUnknown');
+    output.textContent = label + ' ' + t('serviceAvailabilityCommitmentsNotChecked');
+  } catch (error) {
+    output.textContent = error.message || t('serviceAvailabilityAssessmentUnknown');
+  }
+}
+
+function saveServiceResourceAvailability(button, root) {
   const panel = button.closest('.service-resource-availability-panel');
   if (!panel) return;
   let workingHours, exceptions;
@@ -272,6 +307,9 @@ async function saveServiceResourceAvailability(button, root) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data?.error?.message || t('serviceAvailabilitySaveFailed'));
     panel.dataset.version = String(data.availability?.version || panel.dataset.version);
+    panel.dataset.timeZone = String(data.availability?.timeZone || panel.dataset.timeZone || '');
+    panel.dataset.workingHours = JSON.stringify(data.availability?.workingHours || workingHours);
+    panel.dataset.exceptions = JSON.stringify(data.availability?.exceptions || exceptions);
     status.textContent = t('serviceAvailabilitySavedDeclaration');
   } catch (error) {
     status.textContent = error.message || t('serviceAvailabilitySaveFailed');
@@ -403,12 +441,14 @@ export function mountServiceBookingsWorkspace(root = document) {
       const resourceRename = event.target.closest('.service-resource-rename');
       const resourceAvailability = event.target.closest('.service-resource-availability');
       const availabilitySave = event.target.closest('.service-availability-save');
+      const windowAssess = event.target.closest('.service-window-assess');
       const createResource = event.target.closest('#serviceResourceCreate');
       if (refresh) { refreshServiceBookings(root); refreshServiceResources(root); }
       if (action) transitionBooking(action, root);
       if (resourceToggle) updateServiceResource(resourceToggle, root, { status: resourceToggle.dataset.status });
       if (resourceAvailability) openServiceResourceAvailability(resourceAvailability, root);
       if (availabilitySave) saveServiceResourceAvailability(availabilitySave, root);
+      if (windowAssess) assessServiceResourceWindow(windowAssess);
       if (resourceRename) {
         const nextName = window.prompt(t('serviceResourceRenamePrompt'))?.trim();
         if (nextName) updateServiceResource(resourceRename, root, { name: nextName });
