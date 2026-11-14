@@ -165,4 +165,8 @@ export default {
     serviceResourceProviderAssignFailed: "የአቅራቢ መዳረሻን ማዘመን አልተቻለም።",
     serviceResourceNoProviderMembers: "ብቁ የሰራተኛ አባልነቶች የሉም።",
     serviceResourceProviderDescription: "የተመደቡልዎትን የአገልግሎት ሀብቶች ይመልከቱ እና የተገለጹ የሥራ ሰዓቶቻቸውን ያዘምኑ። ነባር ቁርጠኝነቶች እስኪመረመሩ ድረስ ተገኝነት አይረጋገጥም።",
+    serviceBookingResource: "የአገልግሎት ሀብት",
+    serviceBookingChooseResource: "ሀብት ይምረጡ",
+    serviceBookingNoEligibleResource: "ከዚህ አገልግሎትና የትዕዛዝ ቦታ ጋር የሚስማማ ንቁ ሀብት የለም።",
+    serviceBookingAssignedResource: "የተመደበ ሀብት",
 };
