@@ -11,6 +11,13 @@ assert.match(inventory, /if \(marketplaceOrder\) return \[\]/,
 
 assert.match(store, /function isCanonicalMarketplaceOrderRow\(orderRow\)/, 'Marketplace classification must use canonical SQL order markers');
 
+const assignmentTransitionStart = store.indexOf('export async function transitionDeliveryAssignment(');
+const assignmentTransitionEnd = store.indexOf('export async function transitionOrderFulfillment(', assignmentTransitionStart + 40);
+assert.ok(assignmentTransitionStart >= 0 && assignmentTransitionEnd > assignmentTransitionStart);
+const assignmentTransition = store.slice(assignmentTransitionStart, assignmentTransitionEnd);
+assert.match(assignmentTransition, /SELECT o\.server_order_id, o\.order_json,[\s\S]*?o\.marketplace_order_id, o\.is_marketplace/,
+  'courier completion transaction must reload canonical Marketplace SQL markers before applying inventory consequences');
+
 const transitionStart = store.indexOf('export async function transitionOrderFulfillment(');
 const transitionEnd = store.indexOf('export function coreFulfillmentContract()', transitionStart);
 assert.ok(transitionStart >= 0 && transitionEnd > transitionStart);
