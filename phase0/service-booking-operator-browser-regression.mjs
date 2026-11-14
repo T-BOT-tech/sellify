@@ -78,18 +78,18 @@ try {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        resources: providerMode ? [{
+        resources: [{
           id: 'provider-resource-1', name: 'Provider One', resourceType: 'PROVIDER',
           status: 'ACTIVE', version: 1, organizationId: 'test-org',
-          locationId: null, serviceItemId: null,
-        }] : [],
+          locationId: null, serviceItemId: 'service-1',
+        }],
         state: 'READY', authority: 'service_resource_registry',
         scope: providerMode ? 'ASSIGNED_RESOURCES' : 'ORGANIZATION',
       }),
     });
   });
 
-  await page.route('**/tenants/test-tenant/service-resources/provider-resource-1/availability', async route => {
+  await page.route('**/service-resources/provider-resource-1/availability', async route => {
     if (route.request().method() === 'GET') {
       await route.fulfill({
         status: 200, contentType: 'application/json',
@@ -202,6 +202,9 @@ try {
     const workspace = await import('/src/logistics/service-bookings.js');
     await workspace.refreshServiceBookings(document);
   });
+  await page.locator('.service-booking-resource-select').selectOption('provider-resource-1');
+  assert.equal(await page.locator('.service-booking-action[data-target="CONFIRMED"]').isDisabled(), false,
+    'confirmation is enabled only when an eligible resource exists');
   forceConflict = true;
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'CONFIRMED' }).click();
@@ -209,8 +212,6 @@ try {
     const button = document.querySelector('.service-booking-action[data-target="CONFIRMED"]');
     return Boolean(button && !button.disabled);
   }, null, { timeout: 3000 });
-  assert.equal(await page.locator('.service-booking-action[data-target="CONFIRMED"]').isDisabled(), false,
-    'failed version-conflict mutation re-enables the control for refresh/retry');
   assert.ok(pageErrors.length === 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
 
 
