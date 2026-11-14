@@ -29,8 +29,8 @@ export default {
     serviceBookingReasonPrompt: "Укажите причину для",
     serviceBookingCompletionPrompt: "Примечание о завершении (необязательно):",
     serviceBookingUpdateFailed: "Не удалось обновить бронирование.",
-    serviceBookingsLoadFailed: "Не удалось загрузить бронирования услуг."
-,    serviceResourceTitle: "Ресурсы услуг",
+    serviceBookingsLoadFailed: "Не удалось загрузить бронирования услуг.",
+    serviceResourceTitle: "Ресурсы услуг",
     serviceResourceDescription: "Управляйте исполнителями, помещениями и оборудованием. Этот реестр не подтверждает доступность или запись.",
     serviceResourceName: "Название ресурса",
     serviceResourceDescriptionField: "Описание (необязательно)",
