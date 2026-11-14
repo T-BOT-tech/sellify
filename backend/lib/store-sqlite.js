@@ -6313,7 +6313,7 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
       const order = db.prepare('SELECT * FROM orders WHERE chat_id=? AND server_order_id=?').get(String(chatId),String(serverOrderId));
       if (!order) throw Object.assign(new Error('Canonical order not found'),{statusCode:404,code:'ORDER_NOT_FOUND'});
       const orderLocationId = order.location_id ?? null;
-      if (commitmentResource.location_id && orderLocationId && String(commitmentResource.location_id)!==String(orderLocationId)) {
+      if (commitmentResource.location_id && String(commitmentResource.location_id)!==String(orderLocationId || '')) {
         throw Object.assign(new Error('Service Resource is outside the canonical order location'),{statusCode:409,code:'SERVICE_BOOKING_RESOURCE_LOCATION_MISMATCH'});
       }
       const schedule = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=? AND organization_id=? AND chat_id=?')
