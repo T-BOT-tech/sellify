@@ -123,6 +123,12 @@ try {
     .run(new Date().toISOString(), organizationId);
   const inactivePackSession = await store.authenticateSessionToken(session.token);
   assert.equal(inactivePackSession.contextualRoles.some(item => item.role === 'service_provider'), false);
+  const newInactiveSession = await store.createSession({ userId: provider.id, chatId: tenant.chatId });
+  assert.equal(newInactiveSession.contextualRoles.some(item => item.role === 'service_provider'), false);
+  await assert.rejects(store.assignMembershipContextualRole({
+    actorUserId: owner.id, chatId: tenant.chatId, membershipId: membership.id,
+    role: 'service_provider', scopeType: 'RESOURCE', scopeId: resource.id,
+  }), error => error?.statusCode === 409);
 
 
   const serverSource = fs.readFileSync(new URL('../backend/server.js', import.meta.url), 'utf8');
