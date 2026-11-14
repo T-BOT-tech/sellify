@@ -466,7 +466,8 @@
     "test:country-evidence-source-registry": "node phase0/country-evidence-source-registry-regression.mjs",
     "test:service-availability-contract": "node phase0/service-availability-contract-regression.mjs",
     "test:service-availability-api": "node phase0/service-availability-api-regression.mjs",
-    "test:service-window-assessment": "node phase0/service-window-assessment-regression.mjs"
+    "test:service-window-assessment": "node phase0/service-window-assessment-regression.mjs",
+    "test:service-provider-resource-scope": "node phase0/service-provider-resource-scope-regression.mjs"
   },
   "engines": {
     "node": ">=24"
