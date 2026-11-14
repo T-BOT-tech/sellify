@@ -38,6 +38,12 @@ export const supplierNetworkDiscoveryProvider = Object.freeze({
       availability: {
         catalogCount: Array.isArray(row.catalog) ? row.catalog.length : 0,
         capacitySignalCount: Array.isArray(row.capacitySignals) ? row.capacitySignals.length : 0,
+        capacitySignals: Array.isArray(row.capacitySignals) ? row.capacitySignals.map(signal => ({
+          id: signal.id, subjectType: signal.subjectType, subjectId: signal.subjectId,
+          quantity: signal.quantity, unit: signal.unit, periodType: signal.periodType,
+          periodStart: signal.periodStart, periodEnd: signal.periodEnd,
+          availability: signal.availability, source: 'DECLARED', status: signal.status || 'ACTIVE',
+        })) : [],
       },
       commercialSignals: {
         commercialTermCount: Array.isArray(row.commercialTerms) ? row.commercialTerms.length : 0,
