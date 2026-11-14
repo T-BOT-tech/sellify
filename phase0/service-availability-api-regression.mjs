@@ -6,7 +6,7 @@ const server = read('backend/server.js');
 const contract = read('backend/lib/service-availability-contract.js');
 const ui = read('app/src/logistics/service-bookings.js');
 assert.match(store, /if \(!applied\.includes\(79\)\)/);
-assert.match(store, /if \\(!applied\\.includes\\(80\\)\\)/);
+assert.match(store, /if \(!applied\.includes\(80\)\)/);
 assert.match(store, /CREATE TABLE IF NOT EXISTS service_resource_commitments/);
 assert.match(store, /SERVICE_BOOKING_RESOURCE_CONFLICT/);
 assert.match(store, /assessServiceResourceCommitWindow/);
