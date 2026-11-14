@@ -126,6 +126,7 @@ try {
   })});
   assert.equal(created.response.status,201);
   assert.equal(created.body.booking.status,'REQUESTED');
+  assert.equal(created.body.booking.resource_id,undefined,'buyer request response must not expose internal resource identifiers');
   const replay=await request(baseUrl,{method:'POST',headers:createHeaders,body:JSON.stringify({
     ...windowBody,appointment_mode:'REMOTE',customer_note:'Please call on arrival.',
   })});
@@ -168,6 +169,7 @@ try {
   });
   assert.equal(cancelled.response.status,200);
   assert.equal(cancelled.body.booking.status,'CANCELLED');
+  assert.equal(cancelled.body.booking.resource_id,undefined,'buyer cancellation response must not expose internal resource identifiers');
   assert.equal(db.prepare('SELECT status FROM service_resource_commitments WHERE booking_id=?').get(bookingId).status,'RELEASED');
   const cancelReplay=await request(baseUrl+'/'+encodeURIComponent(bookingId),{
     method:'PATCH',headers:cancelHeaders,body:JSON.stringify({
