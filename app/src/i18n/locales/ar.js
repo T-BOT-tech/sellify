@@ -81,4 +81,8 @@ export default {
     serviceResourceProviderAssignFailed: "تعذر تحديث وصول مقدم الخدمة.",
     serviceResourceNoProviderMembers: "لا توجد عضويات موظفين مؤهلة.",
     serviceResourceProviderDescription: "اعرض موارد الخدمة المخصصة لك وحدّث ساعات العمل المعلنة لها. لا يتم تأكيد التوفر حتى تتم مراجعة الالتزامات الحالية.",
+    serviceBookingResource: "مورد الخدمة",
+    serviceBookingChooseResource: "اختر مورداً",
+    serviceBookingNoEligibleResource: "لا يوجد مورد نشط يناسب هذه الخدمة وموقع الطلب.",
+    serviceBookingAssignedResource: "المورد المخصص",
 };
