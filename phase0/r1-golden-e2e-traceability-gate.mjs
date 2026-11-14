@@ -34,8 +34,9 @@ ok('Supplier discovery UI uses the unified Discovery boundary', () => {
 });
 
 ok('Supplier capacity time-window search is surfaced in the operational UI', () => {
-  assert.match(html, /id="sourcingAvailabilityFrom"/);
-  assert.match(html, /id="sourcingAvailabilityTo"/);
+  for (const id of ['sourcingProductId','sourcingCapabilityCode','sourcingMinimumQuantity','sourcingCapacityUnit','sourcingAvailabilityFrom','sourcingAvailabilityTo']) {
+    assert.match(html, new RegExp(`id=["']${id}["']`));
+  }
   assert.match(sourcing, /availabilityFrom/);
   assert.match(sourcing, /availabilityTo/);
   assert.match(sourcing, /Capacity is supplier-declared/);
