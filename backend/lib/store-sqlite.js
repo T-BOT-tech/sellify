@@ -6009,9 +6009,15 @@ export async function updateServiceResource(chatId, resourceId, input = {}, acto
       .get(String(resourceId), String(organizationId), String(chatId));
     if (!row) throw Object.assign(new Error('Service resource not found'), { statusCode: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' });
     const values = serviceResourceInput(input, row);
+    const serviceItemInput = Object.prototype.hasOwnProperty.call(input, 'serviceItemId')
+      ? input.serviceItemId
+      : Object.prototype.hasOwnProperty.call(input, 'service_item_id') ? input.service_item_id : row.service_item_id;
+    const locationInput = Object.prototype.hasOwnProperty.call(input, 'locationId')
+      ? input.locationId
+      : Object.prototype.hasOwnProperty.call(input, 'location_id') ? input.location_id : row.location_id;
     const refs = validateServiceResourceReferences(chatId, organizationId, {
-      serviceItemId: input.serviceItemId ?? input.service_item_id ?? row.service_item_id,
-      locationId: input.locationId ?? input.location_id ?? row.location_id,
+      serviceItemId: serviceItemInput,
+      locationId: locationInput,
     });
     const fingerprint = crypto.createHash('sha256').update(JSON.stringify({
       resourceId: String(resourceId), expectedVersion, ...values, ...refs,
