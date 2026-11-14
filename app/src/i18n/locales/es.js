@@ -165,5 +165,4 @@ export default {
     serviceResourceProviderAssignFailed: "No se pudo actualizar el acceso del proveedor.",
     serviceResourceNoProviderMembers: "No hay miembros del personal elegibles.",
     serviceResourceProviderDescription: "Consulta los recursos de servicio que tienes asignados y mantén sus horarios declarados. La disponibilidad no se confirma hasta revisar los compromisos existentes.",
-    serviceResourceProviderDescription: "Consulta los recursos de servicio que tienes asignados y mantén sus horarios declarados. La disponibilidad no se confirma hasta revisar los compromisos existentes.",
 };
