@@ -38,7 +38,7 @@ Each registry entry contains:
 - canonical `authorizationAuthority`
 - `policyDefined`
 
-The registry contains **42** entries across the four Phase 13 vertical packs.
+The registry now contains **48** entries across five packs: Agriculture, Restaurant, Warehouse, Logistics, and Service.
 
 ### Agriculture
 
@@ -103,8 +103,7 @@ For vocabulary-only entries, later enforcement must remain denied unless a delib
 
 ## Deliberately not changed
 
-- `backend/lib/authorization.js`
-- `ROLE_PERMISSIONS`
+- The original registry baseline did not change `backend/lib/authorization.js` or `ROLE_PERMISSIONS`; the subsequent Service availability extension adds two explicit central permission mappings through that same authority.
 - session / membership / device identity
 - organization/location authority
 - tenant isolation
@@ -120,7 +119,7 @@ No database migration, permission table, role store, evaluator, or vertical auth
 
 Phase 13.12.3 passes when:
 
-1. all four vertical packs have explicit resource/action vocabulary;
+1. all five packs have explicit resource/action vocabulary;
 2. existing central permission keys are preserved rather than renamed;
 3. vocabulary-only actions are explicitly identifiable;
 4. the registry is persistence-neutral and policy-neutral;
