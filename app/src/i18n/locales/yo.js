@@ -81,4 +81,12 @@ export default {
     serviceResourceProviderAssignFailed: "A kò lè ṣe àtúnṣe àṣẹ olùpèsè.",
     serviceResourceNoProviderMembers: "Kò sí ọmọ ẹgbẹ́ òṣìṣẹ́ tó yẹ.",
     serviceResourceProviderDescription: "Wo àwọn ohun èlò iṣẹ́ tí a yàn fún ọ, kí o sì ṣe àtúnṣe sí àkókò iṣẹ́ tí a kéde. A kò jẹ́rìí sí wíwà títí a ó fi ṣàyẹ̀wò àwọn ìpinnu tó wà.",
+    serviceBookingSelectResource: "Ohun èlò iṣẹ́",
+    serviceBookingNoEligibleResource: "Kò sí ohun èlò tó ń ṣiṣẹ́ tí a ṣètò àkókò iṣẹ́ fún iṣẹ́ yìí.",
+    serviceBookingResourceRequired: "Yan ohun èlò iṣẹ́ kí o tó fìdí ìpàdé yìí múlẹ̀.",
+    serviceBookingAssignedResource: "Ohun èlò tí a yàn",
+    serviceBookingResourceUnknown: "Ìdánilójú ohun èlò kò mọ̀ — a nílò àyẹ̀wò.",
+    serviceBookingResourceReleased: "A ti tú àkókò ohun èlò sílẹ̀",
+    serviceResourceAvailabilityConfigured: "A ti ṣètò àkókò iṣẹ́",
+    serviceResourceAvailabilityNotConfigured: "A kò tíì ṣètò àkókò iṣẹ́",
 };
