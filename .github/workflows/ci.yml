@@ -126,7 +126,7 @@ jobs:
         run: npm run test:service-catalog-contract
       - name: Service booking lifecycle contract regression
         run: npm run test:service-booking-contract
-      - name: Service booking persistence regression
+      - name: Service booking persistence and atomic appointment commitment regression
         run: npm run test:service-booking-persistence
       - name: Service booking scheduling authority boundary regression
         run: npm run test:service-booking-scheduling-boundary
@@ -138,6 +138,14 @@ jobs:
         run: npm run test:service-resource-foundation
       - name: SC-03.1 service resource SQLite persistence regression
         run: npm run test:service-resource-persistence
+      - name: SC-03.2 service availability contract regression
+        run: npm run test:service-availability-contract
+      - name: SC-03.2 service availability API and UI regression
+        run: npm run test:service-availability-api
+      - name: SC-03.3 declared appointment window assessment regression
+        run: npm run test:service-window-assessment
+      - name: SC-03.3 Provider resource-scoped access regression
+        run: npm run test:service-provider-resource-scope
       - name: First-experience service catalog HTTP journey regression
         run: npm run test:service-catalog-http
       - name: First merchant-to-first-checkout HTTP journey regression
