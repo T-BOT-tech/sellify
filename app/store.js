@@ -132,6 +132,7 @@ function openTelegramServiceAppointmentDialog({marketplaceOrderId,sellerOrderId,
   const checkButton = dialog.querySelector('[data-check-time]');
   const sendButton = dialog.querySelector('[data-send-request]');
   let lastAssessment = null;
+  let activeCreateKey = null;
   const readWindow = () => {
     if (!timeZone) throw new Error('Seller timezone is not configured. The request was not sent.');
     const start = serviceLocalDateTimeToIso(form.elements.start.value,timeZone);
@@ -159,12 +160,16 @@ function openTelegramServiceAppointmentDialog({marketplaceOrderId,sellerOrderId,
     sendButton.disabled=true; stateEl.textContent='Sending appointment request…';
     try {
       const payload={...readWindow(),appointment_mode:form.elements.mode.value,customer_note:form.elements.note.value.trim()};
+      const storageKey='sellify:telegram-service-appointment:'+marketplaceOrderId+':'+sellerOrderId+':'+serviceItemId+':'+payload.requested_start+':'+payload.requested_end;
+      activeCreateKey=activeCreateKey||sessionStorage.getItem(storageKey)||buyerRequestKey('create');
+      sessionStorage.setItem(storageKey,activeCreateKey);
       const response=await fetch(telegramAppointmentBase(marketplaceOrderId),{
-        method:'POST',headers:telegramBuyerHeaders({'Idempotency-Key':buyerRequestKey('create')}),
+        method:'POST',headers:telegramBuyerHeaders({'Idempotency-Key':activeCreateKey}),
         body:JSON.stringify(payload),
       });
       const data=await response.json().catch(()=>({}));
       if(!response.ok) throw new Error(data?.error?.message||'Appointment request could not be sent.');
+      sessionStorage.removeItem(storageKey);
       dialog.close(); dialog.remove();
       await loadTelegramOrders();
       const state=document.getElementById('ordersState');
@@ -181,10 +186,11 @@ function openTelegramServiceAppointmentDialog({marketplaceOrderId,sellerOrderId,
 async function cancelTelegramServiceAppointment(button) {
   button.disabled=true;
   const orderId=button.dataset.marketplaceOrder;
+  button.dataset.idempotencyKey=button.dataset.idempotencyKey||buyerRequestKey('cancel');
   try {
     const response=await fetch(telegramAppointmentBase(orderId)+'/'+encodeURIComponent(button.dataset.bookingId),{
       method:'PATCH',
-      headers:telegramBuyerHeaders({'Idempotency-Key':buyerRequestKey('cancel')}),
+      headers:telegramBuyerHeaders({'Idempotency-Key':button.dataset.idempotencyKey}),
       body:JSON.stringify({
         seller_order_id:button.dataset.sellerOrder,
         expected_version:Number(button.dataset.version),
