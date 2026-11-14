@@ -55,18 +55,47 @@ function geographyMatches(candidate, context) {
 }
 
 function capacityMatches(candidate, context) {
-  if (context.minimumQuantity == null) return { requested: false, observed: asArray(candidate.capacitySignals).length > 0, eligible: true };
-  const requested = Number(context.minimumQuantity);
-  if (!Number.isFinite(requested) || requested <= 0) return { requested: false, observed: false, eligible: false };
   const signals = asArray(candidate.capacitySignals);
+  const temporalRequested = context.availabilityFrom != null || context.availabilityTo != null;
+  const quantityRequested = context.minimumQuantity != null;
+  if (!temporalRequested && !quantityRequested) {
+    return { requested: false, observed: signals.length > 0, eligible: true };
+  }
+  const requested = quantityRequested ? Number(context.minimumQuantity) : null;
+  if (quantityRequested && (!Number.isFinite(requested) || requested <= 0)) {
+    return { requested: true, observed: signals.length > 0, eligible: false };
+  }
+  let from = null;
+  let to = null;
+  if (temporalRequested) {
+    from = Date.parse(context.availabilityFrom || '');
+    to = Date.parse(context.availabilityTo || '');
+    if (!Number.isFinite(from) || !Number.isFinite(to) || from > to) {
+      return { requested: true, observed: signals.length > 0, eligible: false };
+    }
+  }
   const productId = norm(context.productId);
+  const capabilityCode = upper(context.capabilityCode);
   const unit = norm(context.unit);
-  const relevant = signals.filter(s => {
-    if (productId && norm(s.subjectId) !== productId) return false;
-    if (unit && norm(s.unit) !== unit) return false;
-    return true;
+  const relevant = signals.filter(signal => {
+    if (productId && (upper(signal.subjectType) !== 'PRODUCT' || norm(signal.subjectId) !== productId)) return false;
+    if (capabilityCode && (upper(signal.subjectType) !== 'CAPABILITY' || upper(signal.subjectId) !== capabilityCode)) return false;
+    if (unit && norm(signal.unit) !== unit) return false;
+    if (signal.status && upper(signal.status) !== 'ACTIVE') return false;
+    if (temporalRequested) {
+      const start = Date.parse(signal.periodStart || '');
+      const end = Date.parse(signal.periodEnd || '');
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) return false;
+      if (start > to || end < from) return false;
+      if (!['AVAILABLE', 'LIMITED'].includes(upper(signal.availability))) return false;
+    }
+    return !quantityRequested || Number(signal.quantity) >= requested;
   });
-  return { requested: relevant.some(s => Number(s.quantity) >= requested), observed: signals.length > 0, eligible: relevant.some(s => Number(s.quantity) >= requested) };
+  return {
+    requested: true,
+    observed: signals.length > 0,
+    eligible: relevant.length > 0,
+  };
 }
 
 function commercialMatches(candidate, context) {
