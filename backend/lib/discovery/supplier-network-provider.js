@@ -10,7 +10,7 @@ export const supplierNetworkDiscoveryProvider = Object.freeze({
   version: '1.0',
   entityTypes: ['supplier'],
   capabilities: ['supplier-discovery', 'supplier-network-federation'],
-  filters: ['search', 'productId', 'capabilityCode', 'countryCode', 'geoCode', 'currency', 'minimumQuantity', 'wholesale', 'bulkOrder', 'qualificationType', 'limit'],
+  filters: ['search', 'productId', 'capabilityCode', 'countryCode', 'geoCode', 'currency', 'minimumQuantity', 'unit', 'availabilityFrom', 'availabilityTo', 'wholesale', 'bulkOrder', 'qualificationType', 'limit'],
   async search(intent = {}) {
     const chatId = String(intent.chatId || '').trim();
     if (!chatId) throw Object.assign(new Error('chatId is required for supplier-network discovery'), { code: 'DISCOVERY_PROVIDER_CONTEXT_REQUIRED', statusCode: 400 });
