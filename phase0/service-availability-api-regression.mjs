@@ -9,6 +9,8 @@ assert.match(store, /if \(!applied\.includes\(79\)\)/);
 assert.match(store, /if \(!applied\.includes\(80\)\)/);
 assert.match(store, /CREATE TABLE IF NOT EXISTS service_resource_commitments/);
 assert.match(store, /SERVICE_BOOKING_RESOURCE_CONFLICT/);
+assert.match(store, /SERVICE_AVAILABILITY_CONFLICTS_WITH_COMMITMENTS/);
+assert.match(store, /SERVICE_RESOURCE_HAS_ACTIVE_COMMITMENTS/);
 assert.match(store, /assessServiceResourceCommitWindow/);
 assert.match(store, /CREATE TABLE IF NOT EXISTS service_resource_availability/);
 assert.match(store, /CREATE TABLE IF NOT EXISTS service_resource_availability_commands/);
