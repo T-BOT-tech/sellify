@@ -46,10 +46,8 @@ async function requestBookings(order, context) {
 }
 
 function canOperate() {
-  const roles = Array.isArray(config.contextualRoles) ? config.contextualRoles : [];
-  const roleNames = roles.map(r => String(r?.role || '').toLowerCase());
-  return ['owner', 'manager'].includes(String(config.currentStaffRole || config.authRole || config.tenantRole || '').toLowerCase())
-    || roleNames.some(r => ['logistics_manager', 'logistics_dispatcher'].includes(r));
+  const role = String(config.currentStaffRole || config.authRole || config.tenantRole || '').toLowerCase();
+  return role === 'owner' || role === 'manager';
 }
 
 function renderBookingCard(order, booking) {
