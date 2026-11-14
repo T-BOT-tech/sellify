@@ -80,4 +80,5 @@ export default {
     serviceResourceRevokeProvider: "Soke damar mai bayar da sabis",
     serviceResourceProviderAssignFailed: "An kasa sabunta damar mai bayar da sabis.",
     serviceResourceNoProviderMembers: "Babu ma'aikatan da suka cancanta.",
+    serviceResourceProviderDescription: "Duba albarkatun sabis da aka ba ka kuma sabunta lokutan aikinsu da aka bayyana. Ba a tabbatar da samuwa ba har sai an duba alƙawuran da ke akwai.",
 };
