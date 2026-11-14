@@ -6349,6 +6349,13 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
       if (commitmentResource.location_id && String(commitmentResource.location_id)!==String(orderLocationId || '')) {
         throw Object.assign(new Error('Service Resource is outside the canonical order location'),{statusCode:409,code:'SERVICE_BOOKING_RESOURCE_LOCATION_MISMATCH'});
       }
+      const legacyUnassignedConflict = db.prepare(`SELECT id FROM service_bookings
+        WHERE organization_id=? AND chat_id=? AND service_item_id=? AND status='CONFIRMED'
+          AND resource_id IS NULL AND requested_start < ? AND requested_end > ? AND id<>? LIMIT 1`)
+        .get(organizationId,String(chatId),String(row.service_item_id),String(row.requested_end),String(row.requested_start),String(bookingId));
+      if (legacyUnassignedConflict) throw Object.assign(new Error('An overlapping confirmed appointment has no resource commitment; feasibility is unknown until it is reviewed'),{
+        statusCode:409,code:'SERVICE_BOOKING_LEGACY_RESOURCE_UNKNOWN',
+      });
       const schedule = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=? AND organization_id=? AND chat_id=?')
         .get(requestedResourceId,organizationId,String(chatId));
       if (!schedule) throw Object.assign(new Error('Service Resource working hours are not configured'),{statusCode:409,code:'SERVICE_BOOKING_RESOURCE_SCHEDULE_UNKNOWN'});
@@ -11932,6 +11939,15 @@ export async function assessTelegramBuyerServiceAppointmentWindow(chatId, telegr
   if (!resources.length) return {
     state:'UNKNOWN', reason:'NO_ELIGIBLE_ACTIVE_SERVICE_RESOURCE', checked_at:nowIso(),
     availability_confirmed:false, commitment_created:false,
+  };
+  const legacyUnassignedConflict = db.prepare(`SELECT id FROM service_bookings
+    WHERE organization_id=? AND chat_id=? AND service_item_id=? AND status='CONFIRMED'
+      AND resource_id IS NULL AND requested_start < ? AND requested_end > ? LIMIT 1`)
+    .get(context.organizationId,String(chatId),serviceItemId,end,start);
+  if (legacyUnassignedConflict) return {
+    state:'UNKNOWN',reason:'OVERLAPPING_LEGACY_CONFIRMED_BOOKING_WITHOUT_RESOURCE',
+    checked_at:nowIso(),eligible_resource_count:resources.length,
+    availability_confirmed:false,commitment_created:false,
   };
   let unknown = false, knownUnavailable = false;
   for (const resource of resources) {
