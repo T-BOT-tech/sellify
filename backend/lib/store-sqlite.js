@@ -3618,6 +3618,9 @@ export async function upsertTelegramStorefrontConfig(chatId, input = {}, actor =
     });
   }
   const capabilities = requestedCapabilities || (current?.enabledCapabilities || ['browse','search','product','cart','checkout','order_status']);
+  if (capabilities.includes('service_appointments') && !capabilities.includes('order_status')) {
+    capabilities.push('order_status');
+  }
   const metadata = input.metadata && typeof input.metadata === 'object' && !Array.isArray(input.metadata) ? input.metadata : (current?.metadata || {});
   const now = nowIso();
   const values = [org, String(input.botId ?? current?.botId ?? '') || null, String(input.botUsername ?? current?.botUsername ?? '') || null, String(input.credentialRef ?? current?.credentialRef ?? '') || null, status, String(input.webappUrl ?? current?.webappUrl ?? '') || null, json(capabilities), json(metadata), actorId, now];
