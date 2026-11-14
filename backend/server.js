@@ -3126,12 +3126,43 @@ async function handleServiceResources(req, res, chatId, resourceId = null) {
     return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
   }
   const body = await readBody(req);
-  const locationId = body.locationId || body.location_id || session.locationId || null;
-  const location = locationId ? await getOrganizationLocation(chatId, locationId) : null;
+  let locationId = body.locationId || body.location_id || session.locationId || null;
+  let location = locationId ? await getOrganizationLocation(chatId, locationId) : null;
   if (locationId && !location) throw Object.assign(new Error('Service resource location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
-  await requireAuthorization(session, tenant, 'service_resource', 'service:service_resource:manage', {
-    location, deniedMessage: 'Service resource management permission required',
-  });
+
+  if (req.method === 'POST') {
+    await requireAuthorization(session, tenant, 'service_resource', 'service:service_resource:manage', {
+      location, deniedMessage: 'Service resource management permission required',
+    });
+  } else {
+    // A location-scoped manager must be authorized against the resource's
+    // existing location as well as any requested destination. Do not authorize
+    // a move by checking only the caller-supplied target location.
+    const existing = (await listServiceResources(chatId, { includeInactive: true }))
+      .find(item => String(item.id) === String(resourceId));
+    if (!existing) return sendJSON(res, 404, { error: { message: 'Service resource not found', status: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' } }, req);
+    if (!existing.locationId && session.locationId) {
+      throw Object.assign(new Error('Organization-wide service resources require organization-level scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
+    }
+    const existingLocation = existing.locationId ? await getOrganizationLocation(chatId, existing.locationId) : null;
+    if (existing.locationId && !existingLocation) throw Object.assign(new Error('Existing service resource location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
+    const hasLocationPatch = Object.prototype.hasOwnProperty.call(body, 'locationId')
+      || Object.prototype.hasOwnProperty.call(body, 'location_id');
+    locationId = Object.prototype.hasOwnProperty.call(body, 'locationId')
+      ? body.locationId
+      : Object.prototype.hasOwnProperty.call(body, 'location_id') ? body.location_id : existing.locationId;
+    location = locationId ? await getOrganizationLocation(chatId, locationId) : null;
+    if (locationId && !location) throw Object.assign(new Error('Service resource destination location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
+    await requireAuthorization(session, tenant, 'service_resource', 'service:service_resource:manage', {
+      location: existingLocation, deniedMessage: 'Service resource management permission required for its current location',
+    });
+    if (hasLocationPatch && String(locationId || '') !== String(existing.locationId || '')) {
+      await requireAuthorization(session, tenant, 'service_resource', 'service:service_resource:manage', {
+        location, deniedMessage: 'Service resource management permission required for its destination location',
+      });
+    }
+  }
+
   const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
   if (!idempotencyKey) return sendJSON(res, 400, { error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' } }, req);
   if (req.method === 'POST') {
