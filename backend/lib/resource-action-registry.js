@@ -80,6 +80,7 @@ const DEFINITIONS = [
   ['service', 'resource_availability', 'manage', 'service:resource_availability:manage'],
   ['service', 'appointment_feasibility', 'view', null],
   ['service', 'appointment_feasibility', 'assess', null],
+  ['service', 'appointment_commitment', 'commit', 'service:appointment:commit'],
 ];
 
 const RESOURCE_ACTIONS = new Map();
