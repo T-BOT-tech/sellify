@@ -30,8 +30,8 @@ const check = (condition, message) => {
   assert.equal(Boolean(condition), true, message);
 };
 
-check(RESOURCE_ACTION_REGISTRY.length === 42, 'all 42 registered capabilities are covered');
-check(CROSS_PACK_ROLE_MATRIX.length === 252, 'all six roles × 42 capabilities remain represented');
+check(RESOURCE_ACTION_REGISTRY.length === 48, 'all 48 registered capabilities are covered');
+check(CROSS_PACK_ROLE_MATRIX.length === 336, 'seven role entries × 48 capabilities remain represented');
 check(serverSource.includes('assertTenantScope(session, tenant);'), 'server request boundary asserts tenant scope');
 check(serverSource.includes("requireAuthorization(session, tenant, resource, action"), 'server authorization boundary remains centralized');
 check(serverSource.includes("from './lib/tenant-isolation.js'"), 'server uses canonical tenant isolation module');
@@ -43,7 +43,11 @@ for (const role of ROLES) {
     const matrix = CROSS_PACK_ROLE_MATRIX.find((row) =>
       row.role === role && row.packId === entry.packId && row.resource === entry.resource && row.action === entry.action
     );
-    check(sameOrg === matrix.decision, `same-org decision preserves role matrix for ${role}/${entry.key}`);
+    const expectedWithoutResourceContext = role === 'service_provider' ? AUTHZ.DENY : matrix.decision;
+    check(sameOrg === expectedWithoutResourceContext, `same-org decision preserves scoped role boundary for ${role}/${entry.key}`);
+    if (role === 'service_provider' && matrix.decision === AUTHZ.ALLOW) {
+      check(matrix.resourceScope === 'exact-service-resource-context-required', `Provider matrix row requires resource context for ${entry.key}`);
+    }
 
     const crossOrg = authorize(actor, orgB, null, entry.resource, entry.permission ?? entry.action);
     check(crossOrg === AUTHZ.DENY, `cross-org authorization denied for ${role}/${entry.key}`);
