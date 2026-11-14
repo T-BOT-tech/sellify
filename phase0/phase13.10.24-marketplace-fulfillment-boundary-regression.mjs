@@ -25,9 +25,11 @@ const transition = store.slice(transitionStart, transitionEnd);
 const replay = transition.indexOf('const priorCommand = db.prepare');
 const newCommand = transition.indexOf('const freshCommandFingerprint');
 const readiness = transition.indexOf('assertServiceDeliveryReadyForExecution(freshOrderJson)');
+const assignmentLifecycleGuard = transition.indexOf('DELIVERY_ASSIGNMENT_LIFECYCLE_REQUIRED');
 const marketplaceGuard = transition.indexOf('MARKETPLACE_CORE_FULFILLMENT_UNSUPPORTED');
-assert.ok(replay >= 0 && newCommand > replay && readiness > newCommand && marketplaceGuard > readiness,
-  'durable replay and service-delivery readiness must precede generic Marketplace mutation rejection');
+assert.ok(replay >= 0 && newCommand > replay && readiness > newCommand
+    && assignmentLifecycleGuard > readiness && marketplaceGuard > assignmentLifecycleGuard,
+  'durable replay, service readiness, and active assignment lifecycle must precede generic Marketplace mutation rejection');
 
 const marketplaceTest = fs.readFileSync(new URL('./phase11.4-marketplace-integrity-regression.mjs', import.meta.url), 'utf8');
 for (const marker of [
