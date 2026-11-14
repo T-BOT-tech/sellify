@@ -157,4 +157,11 @@ export default {
     serviceAvailabilityOutsideDeclaredHours: "ከተገለጹት የሥራ ሰዓታት ውጭ ነው።",
     serviceAvailabilityAssessmentUnknown: "ግምገማው አይታወቅም።",
     serviceAvailabilityCommitmentsNotChecked: "ነባር ቀጠሮዎችና የሀብት ቁርጠኝነቶች አልተመረመሩም፤ ተገኝነት አልተረጋገጠም።",
+    serviceResourceManageProviders: "አቅራቢዎችን አስተዳድር",
+    serviceResourceSelectProvider: "አቅራቢ ይምረጡ",
+    serviceResourceAssignProvider: "አቅራቢ መድብ",
+    serviceResourceProviderAssigned: "አቅራቢው ለዚህ ሀብት ተመድቧል።",
+    serviceResourceRevokeProvider: "የአቅራቢ መዳረሻን አስወግድ",
+    serviceResourceProviderAssignFailed: "የአቅራቢ መዳረሻን ማዘመን አልተቻለም።",
+    serviceResourceNoProviderMembers: "ብቁ የሰራተኛ አባልነቶች የሉም።",
 };
