@@ -30,7 +30,7 @@ No new persistence, tenant registry, organization store, role store, or authoriz
 
 ## Gate coverage
 
-The regression exercises all **48 Phase 13.12.3 resource/action entries** against representative sessions and tenant objects for:
+The regression exercises all **53 Phase 13.12.3 resource/action entries** against representative sessions and tenant objects for:
 
 1. same-organization access;
 2. mismatched-organization access;
@@ -62,7 +62,7 @@ This gate records the existing behavior. It does not add vertical-specific tenan
 
 Phase 13.12.5 passes when:
 
-- all 48 registered vertical capabilities are covered;
+- all 53 registered vertical capabilities are covered;
 - all six existing roles remain unchanged;
 - same-organization requests preserve existing policy results;
 - cross-organization requests are denied;
@@ -84,4 +84,7 @@ Next controlled subphase:
 
 ## Subsequent Service Provider resource-scope extension
 
-The current organization-isolation regression now covers seven role entries and 48 resource/action entries. `service_provider` is contextual-only and remains DENY without a matching resource context. Its Service permissions require the canonical `service_resource` type, exact resource ID, organization ID, and location ID. Cross-organization requests remain DENY; no alternate tenant authority is introduced.
+The current organization-isolation regression now covers seven role entries and 53 resource/action entries. `service_provider` is contextual-only and remains DENY without a matching resource context. Its Service permissions require the canonical `service_resource` type, exact resource ID, organization ID, and location ID. Cross-organization requests remain DENY; no alternate tenant authority is introduced.
+
+
+The Service Booking lifecycle is now authorized by the five central `service:booking:*` actions. Organization isolation is evaluated through the same canonical authorization authority; Logistics contextual roles do not receive these Service Booking permissions.
