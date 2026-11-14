@@ -52,6 +52,8 @@ const keys = [
   'serviceResourceReady', 'serviceResourceEmpty', 'serviceResourceLoadFailed',
   'serviceResourceSaveFailed', 'serviceResourceRename', 'serviceResourceRenamePrompt',
   'serviceResourceActivate', 'serviceResourceDeactivate', 'serviceResourceUnknownStale',
+  'serviceResourceAllServices', 'serviceResourceOrganizationWide', 'serviceResourceTypeProvider',
+  'serviceResourceTypeFacility', 'serviceResourceTypeEquipment', 'serviceResourceTypeOther',
 ];
 for (const locale of localeNames) {
   const source = read('app/src/i18n/locales/' + locale + '.js');
