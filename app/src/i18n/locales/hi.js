@@ -157,4 +157,11 @@ export default {
     serviceAvailabilityOutsideDeclaredHours: "घोषित कार्य समय के बाहर।",
     serviceAvailabilityAssessmentUnknown: "आकलन अज्ञात है।",
     serviceAvailabilityCommitmentsNotChecked: "मौजूदा अपॉइंटमेंट और संसाधन प्रतिबद्धताओं की जाँच नहीं हुई; उपलब्धता की पुष्टि नहीं है।",
+    serviceResourceManageProviders: "प्रदाता प्रबंधित करें",
+    serviceResourceSelectProvider: "प्रदाता चुनें",
+    serviceResourceAssignProvider: "प्रदाता नियुक्त करें",
+    serviceResourceProviderAssigned: "प्रदाता को इस संसाधन के लिए नियुक्त किया गया।",
+    serviceResourceRevokeProvider: "प्रदाता की पहुँच रद्द करें",
+    serviceResourceProviderAssignFailed: "प्रदाता की पहुँच अपडेट नहीं हो सकी।",
+    serviceResourceNoProviderMembers: "कोई पात्र कर्मचारी सदस्य नहीं हैं।",
 };
