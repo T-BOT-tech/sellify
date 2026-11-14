@@ -70,7 +70,7 @@ function capacityMatches(candidate, context) {
   if (temporalRequested) {
     from = Date.parse(context.availabilityFrom || '');
     to = Date.parse(context.availabilityTo || '');
-    if (!Number.isFinite(from) || !Number.isFinite(to) || from > to) {
+    if (!Number.isFinite(from) || !Number.isFinite(to) || from > to || (!context.productId && !context.capabilityCode)) {
       return { requested: true, observed: signals.length > 0, eligible: false };
     }
   }
