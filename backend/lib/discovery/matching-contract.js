@@ -78,8 +78,11 @@ function capacityMatches(candidate, context) {
   const capabilityCode = upper(context.capabilityCode);
   const unit = norm(context.unit);
   const relevant = signals.filter(signal => {
-    if (productId && (upper(signal.subjectType) !== 'PRODUCT' || norm(signal.subjectId) !== productId)) return false;
-    if (capabilityCode && (upper(signal.subjectType) !== 'CAPABILITY' || upper(signal.subjectId) !== capabilityCode)) return false;
+    if (productId || capabilityCode) {
+      const productSubjectMatch = productId && upper(signal.subjectType) === 'PRODUCT' && norm(signal.subjectId) === productId;
+      const capabilitySubjectMatch = capabilityCode && upper(signal.subjectType) === 'CAPABILITY' && upper(signal.subjectId) === capabilityCode;
+      if (!productSubjectMatch && !capabilitySubjectMatch) return false;
+    }
     if (unit && norm(signal.unit) !== unit) return false;
     if (signal.status && upper(signal.status) !== 'ACTIVE') return false;
     if (temporalRequested) {
