@@ -30,7 +30,7 @@ export default {
     serviceBookingCompletionPrompt: "Bayanan kammalawa (na zaɓi):",
     serviceBookingUpdateFailed: "Sabunta ajiyar ya gaza.",
     serviceBookingsLoadFailed: "Ba a iya loda ajiyar sabis ba."
-    serviceResourceTitle: "Albarkatun sabis",
+,    serviceResourceTitle: "Albarkatun sabis",
     serviceResourceDescription: "Sarrafa masu ba da sabis, wurare da kayan aiki. Wannan rajista ba ta tabbatar da samuwa ko alƙawari.",
     serviceResourceName: "Sunan albarkatu",
     serviceResourceDescriptionField: "Bayani (na zaɓi)",
