@@ -151,6 +151,29 @@ try {
   await store.transitionServiceBooking(tenant.chatId,serverOrderId,bookingId,{
     status:'ACCEPTED',expected_version:1,idempotency_key:'tg11-manager-accept-'+suffix,
   },owner);
+  const legacyBookingId='tg11-legacy-confirmed-'+suffix;
+  db.prepare(`INSERT INTO service_bookings
+    (id,organization_id,chat_id,server_order_id,service_item_id,requested_start,requested_end,appointment_mode,customer_note,status,version,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,'REMOTE',NULL,'CONFIRMED',2,?,?)`).run(
+      legacyBookingId,organizationId,tenant.chatId,serverOrderId,'tg11-consultation',
+      '2026-11-20T06:00:00.000Z','2026-11-20T07:00:00.000Z',now,now,
+    );
+  const legacyAssessment=await request(baseUrl+'/assessment',{
+    method:'POST',headers:authHeaders,body:JSON.stringify(windowBody),
+  });
+  assert.equal(legacyAssessment.body.assessment.state,'UNKNOWN',
+    'legacy confirmed bookings without a resource binding must not be treated as free capacity');
+  await assert.rejects(
+    () => store.transitionServiceBooking(tenant.chatId,serverOrderId,bookingId,{
+      status:'CONFIRMED',resource_id:resource.id,expected_version:2,idempotency_key:'tg11-manager-confirm-legacy-'+suffix,
+    },owner),
+    error => error.code==='SERVICE_BOOKING_LEGACY_RESOURCE_UNKNOWN',
+  );
+  db.prepare('DELETE FROM service_bookings WHERE id=?').run(legacyBookingId);
+  const clearAssessment=await request(baseUrl+'/assessment',{
+    method:'POST',headers:authHeaders,body:JSON.stringify(windowBody),
+  });
+  assert.equal(clearAssessment.body.assessment.state,'FEASIBLE');
   const confirmed=await store.transitionServiceBooking(tenant.chatId,serverOrderId,bookingId,{
     status:'CONFIRMED',resource_id:resource.id,expected_version:2,idempotency_key:'tg11-manager-confirm-'+suffix,
   },owner);
