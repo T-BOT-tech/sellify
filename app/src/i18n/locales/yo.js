@@ -45,4 +45,10 @@ export default {
     serviceResourceActivate: "Mú ṣiṣẹ́",
     serviceResourceDeactivate: "Pa iṣẹ́ rẹ́",
     serviceResourceUnknownStale: "A kò mọ̀ bóyá ó wà tàbí ìwífún ti pẹ́. Tún un ṣe kí o tó gbẹ́kẹ̀ lé e.",
+    serviceResourceAllServices: "Gbogbo iṣẹ́",
+    serviceResourceOrganizationWide: "Gbogbo àjọ",
+    serviceResourceTypeProvider: "Olùpèsè / òṣìṣẹ́",
+    serviceResourceTypeFacility: "Ilé iṣẹ́ / yàrá",
+    serviceResourceTypeEquipment: "Ohun èlò",
+    serviceResourceTypeOther: "Òmíràn",
 };
