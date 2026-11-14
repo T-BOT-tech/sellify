@@ -20,6 +20,7 @@ assert.match(moduleSource, /config\.contextualRoles/);
 const canOperateSource = moduleSource.slice(moduleSource.indexOf('function canOperate'), moduleSource.indexOf('function renderBookingCard'));
 assert.ok(canOperateSource.includes("role === 'owner' || role === 'manager'"));
 assert.doesNotMatch(canOperateSource, /logistics_manager|logistics_dispatcher/);
+assert.match(moduleSource, /if \(!canManageServiceResources\(\) && !hasServiceProviderResourceScope\(\)\) return '';/);
 const bookingHandler = serverSource.slice(serverSource.indexOf('async function handleServiceBookings'), serverSource.indexOf('async function handleServiceDeliveryAssessment'));
 assert.match(bookingHandler, /service:booking:view/);
 assert.match(bookingHandler, /service:booking:request/);
