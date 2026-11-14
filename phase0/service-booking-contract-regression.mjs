@@ -67,6 +67,7 @@ assert.throws(() => assertServiceBookingTransition('REQUESTED', 'COMPLETED'),
 
 const contract = serviceBookingContract();
 assert.deepEqual(SERVICE_BOOKING_REASON_REQUIRED_STATUSES, ['REJECTED', 'FAILED']);
+assert.equal(contract.scheduling_authority, 'service_resource_availability_and_booking_lifecycle');
 assert.equal(contract.persists, false);
 assert.equal(contract.creates_order, false);
 assert.equal(contract.creates_payment, false);
