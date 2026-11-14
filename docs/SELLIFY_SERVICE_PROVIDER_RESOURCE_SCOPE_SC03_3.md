@@ -12,7 +12,7 @@
 - Audit: existing `audit_events` / `recordAuditEvent`.
 - Availability declaration: existing Service Resource Availability contract/store/API from SC-03.2.
 
-No new identity, role store, resource ownership database, availability authority, or Logistics authority is introduced.
+No new identity, role store, resource ownership database, availability authority, or Logistics authority is introduced. Service Booking lifecycle permissions remain separate from Provider availability permissions.
 
 ## Provider assignment
 
@@ -84,3 +84,8 @@ Working hours and date exceptions are declarations. A window match means only th
 - Provider appointment lifecycle actions.
 
 These require the next SC-03 boundaries and must not be inferred from a working-hours declaration.
+
+
+## Service Booking permission boundary
+
+Service Booking view/request/manage/confirm/cancel actions now use the central `service:booking:*` vocabulary. Owner and Manager receive the lifecycle permissions. Provider receives no booking lifecycle permission in this increment; the Provider workspace remains limited to assigned resource availability. Logistics Manager and Dispatcher do not receive Service Booking access.
