@@ -23,10 +23,11 @@ const transitionEnd = store.indexOf('export function coreFulfillmentContract()',
 assert.ok(transitionStart >= 0 && transitionEnd > transitionStart);
 const transition = store.slice(transitionStart, transitionEnd);
 const replay = transition.indexOf('const priorCommand = db.prepare');
-const marketplaceGuard = transition.indexOf('MARKETPLACE_CORE_FULFILLMENT_UNSUPPORTED');
 const newCommand = transition.indexOf('const freshCommandFingerprint');
-assert.ok(replay >= 0 && marketplaceGuard > replay && marketplaceGuard < newCommand,
-  'committed generic fulfillment retries must replay before unsupported Marketplace mutation is rejected');
+const readiness = transition.indexOf('assertServiceDeliveryReadyForExecution(freshOrderJson)');
+const marketplaceGuard = transition.indexOf('MARKETPLACE_CORE_FULFILLMENT_UNSUPPORTED');
+assert.ok(replay >= 0 && newCommand > replay && readiness > newCommand && marketplaceGuard > readiness,
+  'durable replay and service-delivery readiness must precede generic Marketplace mutation rejection');
 
 const marketplaceTest = fs.readFileSync(new URL('./phase11.4-marketplace-integrity-regression.mjs', import.meta.url), 'utf8');
 for (const marker of [
