@@ -5867,13 +5867,19 @@ function assertServiceDeliveryReadyForExecution(order) {
 
 function serviceBookingFromRow(row) {
   if (!row) return null;
+  const status = String(row.status);
+  const serviceResourceId = row.service_resource_id || null;
+  const resourceCommitmentState = ['CONFIRMED','IN_PROGRESS'].includes(status)
+    ? (serviceResourceId ? 'COMMITTED' : 'UNKNOWN')
+    : (serviceResourceId ? 'RELEASED' : 'NOT_COMMITTED');
   return {
     id: String(row.id), organization_id: String(row.organization_id),
     order_id: String(row.server_order_id), service_item_id: String(row.service_item_id),
     requested_start: String(row.requested_start), requested_end: String(row.requested_end),
     appointment_mode: String(row.appointment_mode), customer_note: row.customer_note ?? null,
-    service_resource_id: row.service_resource_id || null,
-    status: String(row.status), version: Number(row.version),
+    service_resource_id: serviceResourceId,
+    resource_commitment_state: resourceCommitmentState,
+    status, version: Number(row.version),
     created_by: row.created_by || null, updated_by: row.updated_by || null,
     started_at: row.started_at || null, started_by: row.started_by || null,
     completed_at: row.completed_at || null, completed_by: row.completed_by || null,
@@ -6325,6 +6331,18 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
           String(row.requested_end), String(row.requested_start), String(bookingId));
       if (conflict) throw Object.assign(new Error('Service Resource already has a confirmed appointment in this time window'), {
         statusCode:409, code:'SERVICE_RESOURCE_SLOT_CONFLICT', conflicting_booking_id:String(conflict.id),
+      });
+      // Legacy confirmed/in-progress bookings created before resource binding
+      // are UNKNOWN commitments. They may occupy any resource, so fail closed
+      // for overlapping confirmations until an operator resolves them.
+      const unassignedConflict = db.prepare(`SELECT id FROM service_bookings
+        WHERE organization_id=? AND chat_id=? AND service_resource_id IS NULL
+          AND status IN ('CONFIRMED','IN_PROGRESS')
+          AND requested_start < ? AND requested_end > ? AND id <> ?
+        LIMIT 1`).get(organizationId, String(chatId),
+          String(row.requested_end), String(row.requested_start), String(bookingId));
+      if (unassignedConflict) throw Object.assign(new Error('An overlapping legacy booking has no resource assignment; resource commitment is UNKNOWN'), {
+        statusCode:409, code:'SERVICE_RESOURCE_LEGACY_COMMITMENT_UNKNOWN', conflicting_booking_id:String(unassignedConflict.id),
       });
     }
     const now=nowIso(), nextVersion=expectedVersion+1;
