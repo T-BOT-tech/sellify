@@ -3215,9 +3215,9 @@ async function handleServiceResourceAvailability(req, res, chatId, resourceId) {
   }
   const location = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
   if (resource.locationId && !location) throw Object.assign(new Error('Service resource location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
-  if (!resource.locationId && session.locationId && !providerResourceScope) {
-    throw Object.assign(new Error('Organization-wide service resources require organization-level scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
-  }
+  // Organization-wide access is decided by the central evaluator: an
+  // organization-scoped Owner/Manager can proceed, while a location-scoped
+  // contextual role has no matching location context and fails closed.
   const action = req.method === 'GET' ? 'service:resource_availability:view' : 'service:resource_availability:manage';
   await requireAuthorization(session, tenant, 'service_resource', action, {
     location,
