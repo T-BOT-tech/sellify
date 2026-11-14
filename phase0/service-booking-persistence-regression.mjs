@@ -140,6 +140,26 @@ try {
     'SELECT COUNT(*) AS count FROM service_resource_commitments WHERE booking_id=?'
   ).get(created.booking.id).count, 1, 'confirmation replay must not duplicate resource commitment');
 
+  await assert.rejects(
+    store.updateServiceResource(seller.chatId, serviceResource.id, {
+      status: 'INACTIVE', expected_version: 1,
+      idempotency_key: 'service-resource-deactivate-committed-' + suffix,
+    }, { userId: owner.id }),
+    error => error?.code === 'SERVICE_RESOURCE_HAS_ACTIVE_COMMITMENTS',
+    'a resource with confirmed appointments cannot be deactivated',
+  );
+  await assert.rejects(
+    store.setServiceResourceAvailability(seller.chatId, serviceResource.id, {
+      expected_version: 1,
+      idempotency_key: 'service-resource-close-committed-' + suffix,
+      working_hours: [0,1,2,3,4,5,6].map(weekday => ({
+        weekday, start_time: '08:00', end_time: '18:00',
+      })),
+      exceptions: [{ date: '2026-11-01', kind: 'CLOSED' }],
+    }, { userId: owner.id }),
+    error => error?.code === 'SERVICE_AVAILABILITY_CONFLICTS_WITH_COMMITMENTS',
+    'working-hours changes cannot invalidate an existing confirmed appointment',
+  );
   const competingBookings = await Promise.all(['one','two'].map(label => store.createServiceBooking(
     seller.chatId, order.server_order_id, {
       ...request,
