@@ -45,4 +45,10 @@ export default {
     serviceResourceActivate: "Активировать",
     serviceResourceDeactivate: "Деактивировать",
     serviceResourceUnknownStale: "Доступность неизвестна или устарела. Обновите данные, прежде чем полагаться на них.",
+    serviceResourceAllServices: "Все услуги",
+    serviceResourceOrganizationWide: "Вся организация",
+    serviceResourceTypeProvider: "Исполнитель / сотрудник",
+    serviceResourceTypeFacility: "Помещение / комната",
+    serviceResourceTypeEquipment: "Оборудование",
+    serviceResourceTypeOther: "Другое",
 };
