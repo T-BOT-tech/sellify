@@ -32,6 +32,7 @@ export const CROSS_PACK_ROLE_MATRIX = freeze(
     decision: decisionFor(role, entry),
     organizationScope: 'required',
     locationScope: 'validated-when-supplied',
+    resourceScope: role === 'service_provider' ? 'exact-service-resource-context-required' : 'not-required',
     authority: 'backend/lib/authorization.js',
   }))),
 );
@@ -56,6 +57,7 @@ export function crossPackRoleMatrixContract() {
     policy_mutation: 'none',
     organization_scope: 'required',
     location_scope: 'validated-when-supplied',
+    resource_scope_rule: 'service_provider requires exact service_resource id + organization + location context',
     vocabulary_only_rule: 'DENY until deliberate Phase 10.3 policy exists',
   });
 }
