@@ -280,6 +280,7 @@ export default {
     serviceAvailabilityCommitmentsNotChecked: "Existing appointments and resource commitments were not checked; availability is unconfirmed.",
     serviceResourceManageProviders: "Manage providers",
     serviceResourceSelectProvider: "Select provider",
+    serviceBookingChooseResource: "Choose an active resource for this appointment (enter its number):",
     serviceResourceAssignProvider: "Assign provider",
     serviceResourceProviderAssigned: "Provider assigned to this resource.",
     serviceResourceRevokeProvider: "Revoke provider access",
