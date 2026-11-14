@@ -167,6 +167,7 @@ function serviceResourceCard(resource) {
     + (resource.serviceItemId ? ' · ' + escapeHtml(resource.serviceItemId) : ' · ' + escapeHtml(t('serviceResourceAllServices')))
     + (resource.locationId ? ' · ' + escapeHtml(resource.locationId) : ' · ' + escapeHtml(t('serviceResourceOrganizationWide'))) + ' · v' + escapeHtml(resource.version) + '</div>'
     + (resource.description ? '<div class="logistics-meta">' + escapeHtml(resource.description) + '</div>' : '')
+    + '<div class="logistics-meta">' + escapeHtml(resource.availabilityConfigured ? t('serviceResourceAvailabilityConfigured') : t('serviceResourceAvailabilityNotConfigured')) + '</div>'
     + (actions.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">' + actions.join('') + '</div>' : '')
     + '</article>';
 }
