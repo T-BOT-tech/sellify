@@ -128,4 +128,10 @@ export default {
     serviceResourceActivate: "Washa",
     serviceResourceDeactivate: "Zima",
     serviceResourceUnknownStale: "Upatikanaji haujulikani au taarifa zimepitwa na wakati. Onyesha upya kabla ya kutegemea taarifa.",
+    serviceResourceAllServices: "Huduma zote",
+    serviceResourceOrganizationWide: "Shirika lote",
+    serviceResourceTypeProvider: "Mtoa huduma / mfanyakazi",
+    serviceResourceTypeFacility: "Kituo / chumba",
+    serviceResourceTypeEquipment: "Kifaa",
+    serviceResourceTypeOther: "Nyingine",
 };
