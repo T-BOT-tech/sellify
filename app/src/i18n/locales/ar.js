@@ -45,4 +45,10 @@ export default {
     serviceResourceActivate: "تفعيل",
     serviceResourceDeactivate: "إلغاء التفعيل",
     serviceResourceUnknownStale: "التوفر غير معروف أو قديم. حدّث البيانات قبل الاعتماد عليها.",
+    serviceResourceAllServices: "كل الخدمات",
+    serviceResourceOrganizationWide: "على مستوى المؤسسة",
+    serviceResourceTypeProvider: "مقدم الخدمة / الموظف",
+    serviceResourceTypeFacility: "منشأة / غرفة",
+    serviceResourceTypeEquipment: "معدات",
+    serviceResourceTypeOther: "أخرى",
 };
