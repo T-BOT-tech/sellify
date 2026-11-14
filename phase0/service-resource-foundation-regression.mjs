@@ -30,7 +30,11 @@ assert.match(server, /listServiceResources, createServiceResource, updateService
 assert.match(server, /service-resources/);
 assert.match(server, /service:service_resource:view/);
 assert.match(server, /service:service_resource:manage/);
+assert.match(server, /existingLocation/);
+assert.match(server, /destination location/);
+assert.match(server, /Organization-wide service resources require organization-level scope/);
 assert.match(server, /handleServiceResources/);
+assert.match(store, /Object\.prototype\.hasOwnProperty\.call\(input, 'location_id'\)/);
 assert.match(auth, /'service:service_resource:view', 'service:service_resource:manage'/);
 assert.match(registry, /\['service', 'service_resource', 'view', 'service:service_resource:view'\]/);
 assert.match(registry, /\['service', 'service_resource', 'manage', 'service:service_resource:manage'\]/);
