@@ -281,6 +281,40 @@ export function renderLogistics() {
     assignments: visibleAssignments,
   });
   const composition = getLogisticsWorkspaceComposition(workspaceRole);
+  const representedServerOrders = new Set(workspaceOrders.map(order => String(order.server_order_id || '')).filter(Boolean));
+  const assignmentOnly = visibleAssignments.filter(assignment =>
+    assignment.server_order_id && !representedServerOrders.has(String(assignment.server_order_id))
+  );
+  const assignmentOnlyCards = assignmentOnly.map(assignment => {
+    const serverOrderId = String(assignment.server_order_id);
+    const status = String(assignment.status || 'ASSIGNED').toUpperCase();
+    const authRoles = new Set([
+      ...(Array.isArray(config.authRoles) ? config.authRoles : []),
+      ...(Array.isArray(config.contextualRoles) ? config.contextualRoles.map(role => role.role) : []),
+    ]);
+    const canDispatch = authRoles.has('owner') || authRoles.has('manager')
+      || authRoles.has('logistics_manager') || authRoles.has('logistics_dispatcher');
+    const canCourierAct = authRoles.has('logistics_courier');
+    const dispatchControls = canDispatch
+      ? `<select class="delivery-courier-select" data-order-id="${escapeAttr(serverOrderId)}"><option value="">Choose courier…</option></select>
+         <button type="button" class="btn-secondary delivery-assign-btn" data-order-id="${escapeAttr(serverOrderId)}">Reassign</button>`
+      : '';
+    const courierControls = canCourierAct
+      ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+          ${status === 'ASSIGNED' ? `<button type="button" class="btn-secondary delivery-action-btn" data-action="ACCEPTED" data-order-id="${escapeAttr(serverOrderId)}">Accept</button>` : ''}
+          ${status === 'ACCEPTED' ? `<button type="button" class="btn-secondary delivery-action-btn" data-action="OUT_FOR_DELIVERY" data-order-id="${escapeAttr(serverOrderId)}">Start delivery</button>` : ''}
+          ${status === 'OUT_FOR_DELIVERY' ? `<input class="delivery-proof-input" data-order-id="${escapeAttr(serverOrderId)}" placeholder="Proof / reference" style="max-width:150px;"><button type="button" class="btn-secondary delivery-action-btn" data-action="DELIVERED" data-order-id="${escapeAttr(serverOrderId)}">Complete</button>` : ''}
+        </div>`
+      : '';
+    return `<article class="logistics-card" data-assignment-only="1">
+      <div class="logistics-top"><strong>Order ${escapeHtml(serverOrderId)}</strong><span class="logistics-status">${escapeHtml(status.replaceAll('_', ' '))}</span></div>
+      <div class="logistics-meta">Order details are not currently loaded. Assignment status remains canonical.</div>
+      ${assignment.destination ? `<div class="logistics-meta">${escapeHtml(assignment.destination)}</div>` : ''}
+      ${assignment.scheduled_at ? `<div class="logistics-meta">${escapeHtml(assignment.scheduled_at)}</div>` : ''}
+      ${dispatchControls ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">${dispatchControls}</div>` : ''}
+      ${courierControls}
+    </article>`;
+  }).join('');
   let html = renderWorkspaceModeHeader(workspaceRole, visibleAssignments)
     + (courierMode ? '' : filterBar)
     + renderDeliveryWorkloadSummary(visibleAssignments);
@@ -293,6 +327,12 @@ export function renderLogistics() {
   }
   if (done.length > 0) {
     html += `<div class="settings-section-label">${t('whCompletedFulfillment')}</div>` + done.map(renderCard).join('');
+  }
+  if (assignmentOnlyCards) {
+    html += `<div class="settings-section-label">Delivery assignments</div>` + assignmentOnlyCards;
+  }
+  if (pending.length === 0 && done.length === 0 && assignmentOnly.length === 0 && !workspace.tracking.length) {
+    html += `<div class="empty">${t('whNoLogisticsOrders')}</div>`;
   }
   list.innerHTML = html;
   if (!courierMode) mountServiceBookingsWorkspace(list);
@@ -326,7 +366,7 @@ export function renderLogistics() {
       const actionBtn = event.target.closest('.delivery-action-btn');
       try {
         if (assignBtn) {
-          const order = orders.find(o => String(o.id) === String(assignBtn.dataset.orderId));
+          const order = orders.find(o => String(o.id) === String(assignBtn.dataset.orderId)) || orders.find(o => String(o.server_order_id) === String(assignBtn.dataset.orderId)) || { id: String(assignBtn.dataset.orderId), server_order_id: String(assignBtn.dataset.orderId) };
           const select = list.querySelector(`.delivery-courier-select[data-order-id="${CSS.escape(assignBtn.dataset.orderId)}"]`);
           if (!order || !select?.value) return;
           assignBtn.disabled = true;
@@ -340,7 +380,7 @@ export function renderLogistics() {
             await assignDeliveryCourierForOrder(order, select.value);
           }
         } else if (actionBtn) {
-          const order = orders.find(o => String(o.id) === String(actionBtn.dataset.orderId));
+          const order = orders.find(o => String(o.id) === String(actionBtn.dataset.orderId)) || orders.find(o => String(o.server_order_id) === String(actionBtn.dataset.orderId)) || { id: String(actionBtn.dataset.orderId), server_order_id: String(actionBtn.dataset.orderId) };
           if (!order) return;
           const input = list.querySelector(`.delivery-proof-input[data-order-id="${CSS.escape(actionBtn.dataset.orderId)}"]`);
           const proof = input?.value?.trim();
