@@ -60,11 +60,15 @@ function renderBookingCard(order, booking) {
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? String(value || '—') : parsed.toLocaleString();
   };
-  const actions = canOperate() ? transitions.map(target =>
-    '<button type="button" class="btn-secondary service-booking-action" data-order-id="' + escapeAttr(order.server_order_id)
-    + '" data-booking-id="' + escapeAttr(booking.id) + '" data-version="' + escapeAttr(booking.version)
-    + '" data-target="' + escapeAttr(target) + '">' + escapeHtml(target.replaceAll('_', ' ')) + '</button>'
-  ).join('') : '';
+  const role = String(config.currentStaffRole || config.authRole || config.tenantRole || '').toLowerCase();
+  const canCommit = role === 'owner' || role === 'manager';
+  const actions = canOperate() ? transitions
+    .filter(target => target !== 'CONFIRMED' || canCommit)
+    .map(target =>
+      '<button type="button" class="btn-secondary service-booking-action" data-order-id="' + escapeAttr(order.server_order_id)
+      + '" data-booking-id="' + escapeAttr(booking.id) + '" data-service-item-id="' + escapeAttr(booking.service_item_id || '') + '" data-version="' + escapeAttr(booking.version)
+      + '" data-target="' + escapeAttr(target) + '">' + escapeHtml(target.replaceAll('_', ' ')) + '</button>'
+    ).join('') : '';
   return '<article class="logistics-card service-booking-card">'
     + '<div class="logistics-top"><strong>' + escapeHtml(booking.service_item_id || 'Service')
     + '</strong><span class="logistics-status">' + escapeHtml(status.replaceAll('_', ' ')) + '</span></div>'
@@ -512,14 +516,34 @@ async function transitionBooking(button, root) {
   const bookingId = button.dataset.bookingId;
   const url = apiBase() + '/tenants/' + encodeURIComponent(config.chatId)
     + '/orders/' + encodeURIComponent(orderId) + '/service-bookings/' + encodeURIComponent(bookingId);
+  let resource_id = null;
   button.disabled = true;
   try {
+    if (target === 'CONFIRMED') {
+      const resourcesResponse = await fetch(serviceResourceEndpoint(), { headers: authHeaders() });
+      const resourcesData = await resourcesResponse.json().catch(() => ({}));
+      if (!resourcesResponse.ok) throw new Error(resourcesData?.error?.message || t('serviceResourceLoadFailed'));
+      const eligible = (Array.isArray(resourcesData.resources) ? resourcesData.resources : [])
+        .filter(resource => String(resource.status || '').toUpperCase() === 'ACTIVE'
+          && (!resource.serviceItemId || String(resource.serviceItemId) === String(button.dataset.serviceItemId || '')));
+      if (!eligible.length) throw new Error(t('serviceResourceEmpty'));
+      const options = eligible.map((resource, index) => (index + 1) + '. ' + resource.name
+        + (resource.locationId ? ' · ' + resource.locationId : '')).join('\\n');
+      const selected = window.prompt(t('serviceBookingChooseResource') + '\\n' + options + '\\n0. Cancel');
+      if (selected == null || selected.trim() === '0') return;
+      const index = Number(selected) - 1;
+      if (!Number.isInteger(index) || index < 0 || index >= eligible.length) {
+        throw new Error(t('serviceBookingChooseResource'));
+      }
+      resource_id = eligible[index].id;
+    }
     const response = await fetch(url, {
       method: 'PATCH',
       headers: { ...authHeaders(), 'Content-Type': 'application/json', 'Idempotency-Key': 'service-booking-ui-' + crypto.randomUUID() },
       body: JSON.stringify({
         status: target,
         expected_version: Number(button.dataset.version),
+        ...(resource_id ? { resource_id } : {}),
         ...(reason ? { reason } : {}),
         ...(completion_note ? { completion_note } : {}),
       }),
