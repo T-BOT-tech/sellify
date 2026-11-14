@@ -19,8 +19,8 @@ assert.match(ci, /node-version: \[24\]/);
 for (const script of requiredScripts) assert.ok(ci.includes('npm run ' + script), 'CI missing ' + script);
 
 const migrations = [...store.matchAll(/if \(!applied\.includes\((\d+)\)\)/g)].map(m => Number(m[1]));
-assert.equal(Math.max(...migrations), 79, 'latest migration must remain explicit');
-for (const version of [45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79]) {
+assert.equal(Math.max(...migrations), 80, 'latest migration must remain explicit');
+for (const version of [45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]) {
   assert.ok(migrations.includes(version), 'missing explicit migration ' + version);
 }
 const migrationPosition = version => store.indexOf(`if (!applied.includes(${version}))`);
@@ -43,6 +43,7 @@ assert.ok(migrationPosition(76) > migrationPosition(75), 'tenant business-templa
 assert.ok(migrationPosition(77) > migrationPosition(76), 'tenant creation replay persistence migration must follow business-template persistence');
 assert.ok(migrationPosition(78) > migrationPosition(77), 'service resource foundation migration must follow tenant creation replay persistence');
 assert.ok(migrationPosition(79) > migrationPosition(78), 'service availability migration must follow service resource foundation migration');
+assert.ok(migrationPosition(80) > migrationPosition(79), 'service resource commitment migration must follow availability configuration');
 assert.match(store, /if \(!applied\.includes\(77\)\)[\s\S]*?CREATE TABLE IF NOT EXISTS tenant_creation_requests[\s\S]*?challenge_token_hash TEXT PRIMARY KEY REFERENCES auth_challenges\(token_hash\)[\s\S]*?request_fingerprint TEXT NOT NULL[\s\S]*?result_json TEXT NOT NULL/,
   'tenant creation idempotency must durably bind a one-time challenge to its original request and result');
 assert.match(store, /CREATE TABLE IF NOT EXISTS tenant_business_templates/);
