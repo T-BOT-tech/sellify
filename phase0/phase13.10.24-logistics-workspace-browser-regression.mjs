@@ -101,7 +101,7 @@ try {
       authUser: { id: 'courier-browser-1' },
       userId: 'courier-browser-1',
       contextualRoles: [{ role: 'logistics_courier' }],
-      authRoles: ['logistics_courier'],
+      authRoles: [],
     });
     state.setOrders([]);
     const logistics = await import('/src/logistics/ui.js');
@@ -155,7 +155,7 @@ try {
       ...state.config,
       currentStaffRole: 'logistics_viewer',
       contextualRoles: [{ role: 'logistics_viewer' }],
-      authRoles: ['logistics_viewer'],
+      authRoles: [],
     });
     const logistics = await import('/src/logistics/ui.js');
     logistics.renderLogistics();
