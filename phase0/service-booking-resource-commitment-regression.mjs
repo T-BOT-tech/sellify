@@ -17,6 +17,7 @@ assert.match(store, /assessServiceResourceDeclaredWindow/);
 assert.match(store, /BEGIN IMMEDIATE/);
 assert.match(store, /requested_start < \? AND requested_end > \?/);
 assert.match(store, /SERVICE_RESOURCE_TIME_CONFLICT/);
+assert.match(store, /SERVICE_RESOURCE_HAS_ACTIVE_COMMITMENTS/);
 assert.match(store, /SERVICE_BOOKING_RESOURCE_SERVICE_MISMATCH/);
 assert.match(store, /SERVICE_BOOKING_RESOURCE_LOCATION_MISMATCH/);
 assert.match(store, /SERVICE_BOOKING_OUTSIDE_DECLARED_HOURS/);
