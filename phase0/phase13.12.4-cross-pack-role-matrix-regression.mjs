@@ -87,6 +87,30 @@ check('Service resource administration is explicitly granted only to Org Admin a
   assert.equal(authorize(actor('manager', 'org-a'), foreignOrganization, null, 'service_resource', 'service:service_resource:manage'), AUTHZ.DENY);
 });
 
+check('Service Provider permissions require exact resource-scoped context', () => {
+  const provider = {
+    ...actor('staff'),
+    contextualRoles: [{ role: 'service_provider', scopeType: 'RESOURCE', scopeId: 'service-resource-a' }],
+  };
+  const context = { resourceType: 'service_resource', resourceId: 'service-resource-a', organizationId: 'org-a', locationId: 'loc-a' };
+  const location = { id: 'loc-a', organizationId: 'org-a' };
+  assert.equal(authorize(provider, organization, location, 'service_resource', 'service:resource_availability:view'), AUTHZ.DENY);
+  assert.equal(authorize(provider, organization, location, 'service_resource', 'service:resource_availability:view', context), AUTHZ.ALLOW);
+  assert.equal(authorize(provider, organization, location, 'service_resource', 'service:resource_availability:manage', context), AUTHZ.ALLOW);
+  assert.equal(authorize(provider, organization, location, 'service_resource', 'service:service_resource:view', context), AUTHZ.ALLOW);
+  assert.equal(authorize(provider, organization, location, 'service_resource', 'service:service_resource:manage', context), AUTHZ.DENY);
+  assert.equal(authorize(provider, organization, location, 'service_resource', 'service:resource_availability:view', { ...context, resourceId: 'service-resource-b' }), AUTHZ.DENY);
+  assert.equal(authorize(provider, organization, location, 'service_resource', 'service:resource_availability:view', { ...context, organizationId: 'org-b' }), AUTHZ.DENY);
+  assert.equal(authorize(provider, organization, location, 'service_resource', 'service:resource_availability:view', { ...context, resourceType: 'logistics_delivery' }), AUTHZ.DENY);
+  assert.equal(authorize(provider, organization, { id: 'loc-b', organizationId: 'org-a' }, 'service_resource', 'service:resource_availability:view', context), AUTHZ.DENY);
+});
+
+check('Manager and owner retain organization-level Service availability authority', () => {
+  assert.equal(authorize(actor('manager'), organization, null, 'service_resource', 'service:resource_availability:view'), AUTHZ.ALLOW);
+  assert.equal(authorize(actor('manager'), organization, null, 'service_resource', 'service:resource_availability:manage'), AUTHZ.ALLOW);
+  assert.equal(authorize(actor('owner'), organization, null, 'service_resource', 'service:resource_availability:manage'), AUTHZ.ALLOW);
+});
+
 check('Named unsupported policy remains DENY for non-owner roles', () => {
   assert.equal(authorize(actor('owner'), organization, null, 'shipment', 'logistics:manage'), AUTHZ.ALLOW);
   assert.equal(authorize(actor('owner'), organization, null, 'recipe', 'recipe:manage'), AUTHZ.ALLOW);
