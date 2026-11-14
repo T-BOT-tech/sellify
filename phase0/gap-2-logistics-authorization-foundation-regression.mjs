@@ -38,15 +38,19 @@ const checks = [
     assert.ok(!permissions.includes('logistics:deliveries:assign'));
     assert.ok(!permissions.includes('logistics:deliveries:update_assigned'));
   }],
-  ['service booking authorization follows the operation being performed', () => {
-    const manager = actor(roles.manager);
-    const viewer = actor(roles.viewer);
-    assert.equal(authorize(manager, organization, null, 'scheduling', 'logistics:scheduling:view'), AUTHZ.ALLOW);
-    assert.equal(authorize(manager, organization, null, 'scheduling', 'logistics:scheduling:request'), AUTHZ.ALLOW);
-    assert.equal(authorize(manager, organization, null, 'scheduling', 'logistics:scheduling:confirm'), AUTHZ.ALLOW);
-    assert.equal(authorize(viewer, organization, null, 'scheduling', 'logistics:scheduling:view'), AUTHZ.ALLOW);
-    assert.equal(authorize(viewer, organization, null, 'scheduling', 'logistics:scheduling:request'), AUTHZ.DENY);
-    assert.equal(authorize(viewer, organization, null, 'scheduling', 'logistics:scheduling:confirm'), AUTHZ.DENY);
+  ['Logistics roles do not inherit Service appointment commitment authority', () => {
+    const logisticsManager = actor(roles.manager);
+    const logisticsViewer = actor(roles.viewer);
+    const serviceManager = actor('manager');
+    assert.equal(authorize(logisticsManager, organization, null, 'scheduling', 'logistics:scheduling:view'), AUTHZ.ALLOW);
+    assert.equal(authorize(logisticsManager, organization, null, 'scheduling', 'logistics:scheduling:request'), AUTHZ.ALLOW);
+    assert.equal(authorize(logisticsManager, organization, null, 'scheduling', 'logistics:scheduling:confirm'), AUTHZ.ALLOW);
+    assert.equal(authorize(logisticsViewer, organization, null, 'scheduling', 'logistics:scheduling:view'), AUTHZ.ALLOW);
+    assert.equal(authorize(logisticsViewer, organization, null, 'scheduling', 'logistics:scheduling:request'), AUTHZ.DENY);
+    assert.equal(authorize(logisticsViewer, organization, null, 'scheduling', 'logistics:scheduling:confirm'), AUTHZ.DENY);
+    assert.equal(authorize(logisticsManager, organization, null, 'service_appointment', 'service:appointment:commit'), AUTHZ.DENY);
+    assert.equal(authorize(logisticsViewer, organization, null, 'service_appointment', 'service:appointment:commit'), AUTHZ.DENY);
+    assert.equal(authorize(serviceManager, organization, null, 'service_appointment', 'service:appointment:commit'), AUTHZ.ALLOW);
   }],
   ['organization isolation remains enforced', () => {
     assert.equal(authorize(actor(roles.courier), { id: 'foreign-org' }, null, 'logistics', 'logistics:deliveries:update_assigned'), AUTHZ.DENY);
@@ -68,7 +72,8 @@ const serviceBookingHandler = server.slice(
 );
 assert.match(serviceBookingHandler, /req\.method === 'GET'[\s\S]*?logistics:scheduling:view/);
 assert.match(serviceBookingHandler, /let authorizationAction = 'logistics:scheduling:request'/);
-assert.match(serviceBookingHandler, /target === 'CONFIRMED'[\s\S]*?logistics:scheduling:confirm/);
+assert.match(serviceBookingHandler, /target === 'CONFIRMED'[\\s\\S]*?service:appointment:commit/);
+assert.match(serviceBookingHandler, /authorizationResource = authorizationAction === 'service:appointment:commit'[\\s\\S]*?service_appointment/);
 assert.match(serviceBookingHandler, /target === 'CANCELLED'[\s\S]*?logistics:scheduling:cancel/);
 assert.match(serviceBookingHandler, /'logistics:scheduling:manage'/);
 
