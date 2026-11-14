@@ -305,9 +305,10 @@ export function renderLogistics() {
       ...(Array.isArray(config.authRoles) ? config.authRoles : []),
       ...(Array.isArray(config.contextualRoles) ? config.contextualRoles.map(role => role.role) : []),
     ]);
-    const canDispatch = authRoles.has('owner') || authRoles.has('manager')
+    const canDispatch = ['owner', 'manager', 'logistics_manager', 'logistics_dispatcher'].includes(workspaceRole)
+      || authRoles.has('owner') || authRoles.has('manager')
       || authRoles.has('logistics_manager') || authRoles.has('logistics_dispatcher');
-    const canCourierAct = authRoles.has('logistics_courier');
+    const canCourierAct = workspaceRole === 'logistics_courier' || authRoles.has('logistics_courier');
     const dispatchControls = canDispatch
       ? `<select class="delivery-courier-select" data-order-id="${escapeAttr(serverOrderId)}"><option value="">Choose courier…</option></select>
          <button type="button" class="btn-secondary delivery-assign-btn" data-order-id="${escapeAttr(serverOrderId)}">Reassign</button>`
