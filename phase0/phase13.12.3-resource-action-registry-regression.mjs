@@ -15,18 +15,18 @@ assert.ok(exists('backend/lib/security-context.js'));
 assert.ok(exists('phase0/phase13.12.2-security-context-contract-regression.mjs'));
 assert.match(registrySource, /RESOURCE_ACTION_REGISTRY/);
 assert.match(registrySource, /resourceActionRegistryContract/);
-assert.match(registrySource, /backend\/lib\/authorization\.js/);
+assert.match(registrySource, /backend\\/lib\\/authorization\\.js/);
 assert.doesNotMatch(registrySource, /ROLE_PERMISSIONS/);
-assert.doesNotMatch(registrySource, /export function authorize\s*\(/);
-assert.doesNotMatch(registrySource, /CREATE TABLE|INSERT INTO|UPDATE\s+.*permission|permission_store\s*=\s*['"](?!none)/is);
+assert.doesNotMatch(registrySource, /export function authorize\\s*\\(/);
+assert.doesNotMatch(registrySource, /CREATE TABLE|INSERT INTO|UPDATE\\s+.*permission|permission_store\\s*=\\s*['"](?!none)/is);
 
 const { RESOURCE_ACTION_REGISTRY, getResourceAction, listResourceActions, resourceActionRegistryContract } =
   await import('../backend/lib/resource-action-registry.js');
 
-assert.equal(RESOURCE_ACTION_REGISTRY.length, 42);
-assert.equal(new Set(RESOURCE_ACTION_REGISTRY.map((entry) => entry.key)).size, 42);
+assert.equal(RESOURCE_ACTION_REGISTRY.length, 48);
+assert.equal(new Set(RESOURCE_ACTION_REGISTRY.map((entry) => entry.key)).size, 48);
 
-for (const packId of ['agriculture', 'restaurant', 'warehouse', 'logistics']) {
+for (const packId of ['agriculture', 'restaurant', 'warehouse', 'logistics', 'service']) {
   assert.ok(listResourceActions({ packId }).length > 0, `${packId} registry missing`);
 }
 
@@ -51,6 +51,12 @@ for (const key of [
   'logistics:route:manage',
   'logistics:delivery:manage',
   'logistics:return:manage',
+  'service:service_resource:view',
+  'service:service_resource:manage',
+  'service:resource_availability:view',
+  'service:resource_availability:manage',
+  'service:appointment_feasibility:view',
+  'service:appointment_feasibility:assess',
 ]) {
   const entry = RESOURCE_ACTION_REGISTRY.find((item) => item.key === key);
   assert.ok(entry);
@@ -58,21 +64,23 @@ for (const key of [
   assert.equal(entry.policyDefined, false);
 }
 
+assert.equal(listResourceActions({ packId: 'service' }).length, 6);
+
 const contract = resourceActionRegistryContract();
 assert.equal(contract.authority.includes('authorize(actor, organization, location, resource, action)'), true);
 assert.equal(contract.persistence, 'none');
 assert.equal(contract.evaluator, 'none');
 assert.equal(contract.permission_store, 'none');
-assert.equal(contract.registry_entries, 42);
-assert.equal(contract.packs.length, 4);
+assert.equal(contract.registry_entries, 48);
+assert.equal(contract.packs.length, 5);
 
 // Phase 10.3 remains the only policy implementation.
-assert.match(authSource, /export function authorize\(actor, organization, location, resource, action\)/);
-assert.match(handoffSource, /Phase 13\.12\.2/);
+assert.match(authSource, /export function authorize\\(actor, organization, location, resource, action\\)/);
+assert.match(handoffSource, /Phase 13\\.12\\.2/);
 
 console.log('Phase 13.12.3 Resource / Action Registry Regression: PASS');
 console.log('Canonical Phase 10.3 authorization authority preserved: PASS');
-console.log('Agriculture / Restaurant / Warehouse / Logistics vocabulary registered: PASS');
+console.log('Agriculture / Restaurant / Warehouse / Logistics / Service vocabulary registered: PASS');
+console.log('Service resource and feasibility vocabulary remains policy-neutral: PASS');
 console.log('Central permission mappings preserved without new evaluator/store: PASS');
-console.log('Vocabulary-only actions remain policy-neutral: PASS');
 console.log('No duplicate authorization authority introduced: BLOCKED');
