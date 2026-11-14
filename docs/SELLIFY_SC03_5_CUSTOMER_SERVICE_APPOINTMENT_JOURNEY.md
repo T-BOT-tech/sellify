@@ -29,7 +29,7 @@ The Service Booking record remains linked to the canonical seller order. The cus
 - Buyer ownership is rechecked inside the Service Booking transaction before create/cancel.
 - No customer membership role, provider identity, resource assignment, or resource ID is created/exposed.
 - Buyer audit evidence stores a one-way buyer identity hash, not the raw Telegram identity.
-- The `service_appointments` capability automatically depends on `order_status`; disabling the capability removes customer appointment projection and blocks its endpoints.
+- The `service_appointments` capability automatically depends on `order_status`; disabling it hides service-line request controls and blocks new assessment/request commands, while existing appointment history and buyer cancellation remain available.
 
 ## State semantics
 
