@@ -65,4 +65,12 @@ export default {
     serviceAvailabilitySaving: "جارٍ الحفظ…",
     serviceAvailabilitySavedDeclaration: "تم حفظ الجدول كإعلان؛ التوفر غير مؤكد.",
     serviceAvailabilitySaveFailed: "تعذر حفظ الجدول.",
+    serviceAvailabilityAssessWindow: "تقييم الفترة المطلوبة",
+    serviceAvailabilityStart: "البداية",
+    serviceAvailabilityEnd: "النهاية",
+    serviceAvailabilityAssess: "تقييم الفترة",
+    serviceAvailabilityWithinDeclaredHours: "ضمن ساعات العمل المعلنة.",
+    serviceAvailabilityOutsideDeclaredHours: "خارج ساعات العمل المعلنة.",
+    serviceAvailabilityAssessmentUnknown: "التقييم غير معروف.",
+    serviceAvailabilityCommitmentsNotChecked: "لم تتم مراجعة المواعيد أو التزامات الموارد الحالية؛ التوفر غير مؤكد.",
 };
