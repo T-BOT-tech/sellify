@@ -20,6 +20,8 @@ import { showToast } from '../ui/toast.js';
 import { renderLogistics } from './ui.js';
 
 export let deliveryAssignments = [];
+let deliveryAssignmentRefreshSequence = 0;
+let deliveryAssignmentRefreshInFlight = null;
 export function canonicalDeliveryAssignment(order) {
   if (!order?.server_order_id) return null;
   return deliveryAssignments.find(a => String(a.server_order_id) === String(order.server_order_id)) || null;
@@ -65,19 +67,38 @@ export async function assignDeliveryCourierForOrder(order, courierUserId = null,
 }
 export async function refreshDeliveryAssignments(filters = {}) {
   if (!config.chatId || !config.sessionToken || (typeof navigator !== 'undefined' && !navigator.onLine)) return deliveryAssignments;
-  try {
-    const response = await fetch(
-      `${(config.syncUrl || window.location.origin).replace(/\/$/, '')}${deliveryAssignmentsEndpoint()}${(() => { const p = new URLSearchParams(); if (filters.status) p.set('status', filters.status); if (filters.locationId) p.set('locationId', filters.locationId); if (filters.courierUserId) p.set('courierUserId', filters.courierUserId); const q = p.toString(); return q ? `?${q}` : ''; })()}`,
-      { headers: { ...authHeaders() } },
-    );
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) return deliveryAssignments;
-    deliveryAssignments = Array.isArray(data.assignments) ? data.assignments : [];
-    renderLogistics();
-  } catch {
-    // Keep the last canonical projection until the next successful refresh.
-  }
-  return deliveryAssignments;
+  const tenantId = String(config.chatId);
+  const sessionToken = String(config.sessionToken);
+  const query = new URLSearchParams();
+  if (filters.status) query.set('status', filters.status);
+  if (filters.locationId) query.set('locationId', filters.locationId);
+  if (filters.courierUserId) query.set('courierUserId', filters.courierUserId);
+  const queryString = query.toString();
+  const requestKey = tenantId + ':' + sessionToken + ':' + queryString;
+  if (deliveryAssignmentRefreshInFlight?.key === requestKey) return deliveryAssignmentRefreshInFlight.promise;
+  const sequence = ++deliveryAssignmentRefreshSequence;
+  const promise = (async () => {
+    try {
+      const response = await fetch(
+        `${(config.syncUrl || window.location.origin).replace(/\/$/, '')}${deliveryAssignmentsEndpoint()}${queryString ? `?${queryString}` : ''}`,
+        { headers: { ...authHeaders() } },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return deliveryAssignments;
+      if (sequence !== deliveryAssignmentRefreshSequence
+          || String(config.chatId) !== tenantId
+          || String(config.sessionToken) !== sessionToken) return deliveryAssignments;
+      deliveryAssignments = Array.isArray(data.assignments) ? data.assignments : [];
+      renderLogistics();
+    } catch {
+      // Preserve the last canonical response on transport failure.
+    } finally {
+      if (deliveryAssignmentRefreshInFlight?.sequence === sequence) deliveryAssignmentRefreshInFlight = null;
+    }
+    return deliveryAssignments;
+  })();
+  deliveryAssignmentRefreshInFlight = { key: requestKey, sequence, promise };
+  return promise;
 }
 
 export async function transitionDeliveryAssignmentForOrder(order, action, input = {}) {
