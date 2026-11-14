@@ -25,8 +25,10 @@ const bookingHandler = serverSource.slice(serverSource.indexOf('async function h
 assert.match(bookingHandler, /service:booking:view/);
 assert.match(bookingHandler, /service:booking:request/);
 assert.doesNotMatch(bookingHandler, /logistics:scheduling:/);
+assert.match(moduleSource, /service-booking-resource-select/);
+assert.match(moduleSource, /resource_id: resourceId/);
 assert.match(moduleSource, /import \{ t \} from '..\/ui\/i18n\.js'/);
-for (const key of ['serviceBookingsTitle', 'serviceBookingsRefresh', 'serviceBookingsDescription', 'serviceBookingsLoading', 'serviceBookingsSignIn', 'serviceBookingsNoOrders', 'serviceBookingsDenied', 'serviceBookingsPartialFailure', 'serviceBookingsEmpty', 'serviceBookingSingular', 'serviceBookingPlural', 'serviceBookingsLoaded', 'serviceBookingReasonPrompt', 'serviceBookingCompletionPrompt', 'serviceBookingUpdateFailed', 'serviceBookingsLoadFailed']) {
+for (const key of ['serviceBookingsTitle', 'serviceBookingsRefresh', 'serviceBookingsDescription', 'serviceBookingsLoading', 'serviceBookingsSignIn', 'serviceBookingsNoOrders', 'serviceBookingsDenied', 'serviceBookingsPartialFailure', 'serviceBookingsEmpty', 'serviceBookingSingular', 'serviceBookingPlural', 'serviceBookingsLoaded', 'serviceBookingReasonPrompt', 'serviceBookingCompletionPrompt', 'serviceBookingResource', 'serviceBookingChooseResource', 'serviceBookingNoEligibleResource', 'serviceBookingAssignedResource', 'serviceBookingUpdateFailed', 'serviceBookingsLoadFailed']) {
   assert.match(moduleSource, new RegExp(key));
   for (const localeSource of localeSources) {
     const occurrences = localeSource.match(new RegExp('\\b' + key + '\\s*:', 'g')) || [];
