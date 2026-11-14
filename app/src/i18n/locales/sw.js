@@ -156,4 +156,11 @@ export default {
     serviceAvailabilityOutsideDeclaredHours: "Nje ya saa za kazi zilizotangazwa.",
     serviceAvailabilityAssessmentUnknown: "Tathmini haijulikani.",
     serviceAvailabilityCommitmentsNotChecked: "Miadi na matumizi yaliyopo ya rasilimali hayajakaguliwa; upatikanaji haujathibitishwa.",
+    serviceResourceManageProviders: "Dhibiti watoa huduma",
+    serviceResourceSelectProvider: "Chagua mtoa huduma",
+    serviceResourceAssignProvider: "Mkabidhi mtoa huduma",
+    serviceResourceProviderAssigned: "Mtoa huduma amekabidhiwa rasilimali hii.",
+    serviceResourceRevokeProvider: "Ondoa ufikiaji wa mtoa huduma",
+    serviceResourceProviderAssignFailed: "Imeshindwa kusasisha ufikiaji wa mtoa huduma.",
+    serviceResourceNoProviderMembers: "Hakuna wanachama wa wafanyakazi wanaostahili.",
 };
