@@ -30,7 +30,7 @@ export default {
     serviceBookingCompletionPrompt: "Note de fin (facultative) :",
     serviceBookingUpdateFailed: "Échec de la mise à jour de la réservation.",
     serviceBookingsLoadFailed: "Impossible de charger les réservations de services."
-    serviceResourceTitle: "Ressources de service",
+,    serviceResourceTitle: "Ressources de service",
     serviceResourceDescription: "Gérez les prestataires, locaux et équipements. Ce registre ne confirme ni la disponibilité ni les rendez-vous.",
     serviceResourceName: "Nom de la ressource",
     serviceResourceDescriptionField: "Description (facultative)",
