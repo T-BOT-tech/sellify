@@ -5,6 +5,7 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { verifyTelegramBuyerInitDataWithSecret } from '../app/src/platform/telegram-buyer-identity-contract.js';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -104,6 +105,7 @@ try {
   },owner);
 
   const initData=telegramInitData(buyerId);
+  assert.equal(verifyTelegramBuyerInitDataWithSecret(initData,botToken).telegramUserId,buyerId,'test initData signature must be valid');
   const baseUrl=`/api/telegram-storefront/${encodeURIComponent(tenant.chatId)}/orders/${encodeURIComponent(marketplaceOrderId)}/service-appointments`;
   const windowBody={
     seller_order_id:sellerOrderId,service_item_id:'tg11-consultation',
@@ -112,7 +114,7 @@ try {
   const authHeaders={'Content-Type':'application/json','X-Telegram-Init-Data':initData};
 
   const history=await request(`/api/telegram-storefront/${encodeURIComponent(tenant.chatId)}/orders`,{headers:authHeaders});
-  assert.equal(history.response.status,200);
+  assert.equal(history.response.status,200,JSON.stringify(history.body.error||history.body));
   assert.equal(history.body.orders[0].sellers[0].service_items[0].id,'tg11-consultation');
 
   const assessment=await request(baseUrl+'/assessment',{
