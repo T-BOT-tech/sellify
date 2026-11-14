@@ -10417,14 +10417,6 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
       });
     }
     assertServiceDeliveryReadyForExecution(freshOrderJson);
-    // Marketplace orders retain their own lifecycle. Delivery Assignment is
-    // the supported Logistics bridge; generic Core Fulfillment mutations are
-    // explicitly rejected. Existing committed commands still replay above.
-    if (isCanonicalMarketplaceOrderRow(freshOrderRow)) {
-      throw Object.assign(new Error('Marketplace orders must use the Marketplace/Logistics fulfillment path'), {
-        statusCode: 409, code: 'MARKETPLACE_CORE_FULFILLMENT_UNSUPPORTED',
-      });
-    }
     const freshCanonicalLocationId = freshOrderRow.location_id ? String(freshOrderRow.location_id) : null;
     if (freshCanonicalLocationId && requestedLocationId
       && String(requestedLocationId) !== freshCanonicalLocationId) {
@@ -10514,6 +10506,14 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
           statusCode: 409, code: 'DELIVERY_ASSIGNMENT_LIFECYCLE_REQUIRED',
         });
       }
+    }
+    // Marketplace orders retain their own lifecycle. Delivery Assignment is
+    // the supported Logistics bridge; generic Core Fulfillment mutations are
+    // explicitly rejected. Existing committed commands still replay above.
+    if (isCanonicalMarketplaceOrderRow(freshOrderRow)) {
+      throw Object.assign(new Error('Marketplace orders must use the Marketplace/Logistics fulfillment path'), {
+        statusCode: 409, code: 'MARKETPLACE_CORE_FULFILLMENT_UNSUPPORTED',
+      });
     }
     if (!CORE_FULFILLMENT_TRANSITIONS[type][current]?.has(target)) {
       throw Object.assign(new Error(`Cannot move fulfillment from ${current} to ${target}`), { statusCode: 409, code: 'INVALID_FULFILLMENT_TRANSITION' });
