@@ -136,9 +136,13 @@ Next controlled subphase:
 
 ## Subsequent Service availability policy extension
 
-The Service Pack registry was extended additively from 42 to 48 entries across five packs. The two existing Service Resource Availability entries now map to the canonical Phase 10.3 permissions:
+The Service Pack registry was extended additively from 42 to 53 entries across five packs. The two existing Service Resource Availability entries now map to the canonical Phase 10.3 permissions:
 
 - `service:resource_availability:view`
 - `service:resource_availability:manage`
 
 Manager receives organization-level availability permissions. The contextual-only `service_provider` role receives these availability permissions plus Service Resource view, but only when the central evaluator receives an exact, organization-bound `service_resource` context. Appointment-feasibility actions remain vocabulary-only. No new evaluator, permission store, or domain authority was introduced.
+
+## Subsequent Service Booking permission extension
+
+Five additional Service actions are now registered: `service:booking:view`, `service:booking:request`, `service:booking:manage`, `service:booking:confirm`, and `service:booking:cancel`. Owner retains wildcard authority; Manager receives these Service Booking permissions. Service Booking routes no longer use Logistics Scheduling permissions. Provider and Dispatcher do not receive Service Booking lifecycle permissions in this increment.
