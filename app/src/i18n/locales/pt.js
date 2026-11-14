@@ -73,4 +73,11 @@ export default {
     serviceAvailabilityOutsideDeclaredHours: "Fora do horário de trabalho declarado.",
     serviceAvailabilityAssessmentUnknown: "Avaliação desconhecida.",
     serviceAvailabilityCommitmentsNotChecked: "Os agendamentos e compromissos existentes não foram verificados; a disponibilidade não está confirmada.",
+    serviceResourceManageProviders: "Gerir prestadores",
+    serviceResourceSelectProvider: "Selecionar prestador",
+    serviceResourceAssignProvider: "Atribuir prestador",
+    serviceResourceProviderAssigned: "Prestador atribuído a este recurso.",
+    serviceResourceRevokeProvider: "Revogar acesso do prestador",
+    serviceResourceProviderAssignFailed: "Não foi possível atualizar o acesso do prestador.",
+    serviceResourceNoProviderMembers: "Não há membros da equipa elegíveis.",
 };
