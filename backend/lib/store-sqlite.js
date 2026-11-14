@@ -6260,7 +6260,7 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
   const completionNote = input.completion_note == null && input.completionNote == null
     ? null : bookingRequiredText(input.completion_note ?? input.completionNote,'completion_note',500);
   if(target!=='COMPLETED'&&completionNote!==null) throw Object.assign(new Error('completion_note is only valid when completing a service booking'),{statusCode:400,code:'SERVICE_BOOKING_COMPLETION_NOTE_INVALID'});
-  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({booking_id:String(bookingId),order_id:String(serverOrderId),status:target,expected_version:expectedVersion,reason,completion_note:completionNote})).digest('hex');
+  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({booking_id:String(bookingId),order_id:String(serverOrderId),status:target,expected_version:expectedVersion,reason,completion_note:completionNote,resource_id:target==='CONFIRMED'?String(input.resource_id??input.resourceId??''):null})).digest('hex');
   db.exec('BEGIN IMMEDIATE');
   try {
     const freshTenant=db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(String(chatId));
