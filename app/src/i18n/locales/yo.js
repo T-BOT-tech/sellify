@@ -76,6 +76,8 @@ export default {
     serviceResourceManageProviders: "Ṣàkóso àwọn olùpèsè iṣẹ́",
     serviceResourceSelectProvider: "Yan olùpèsè iṣẹ́",
     serviceBookingChooseResource: "Yan ohun èlò tó ń ṣiṣẹ́ fún ìpàdé yìí (tẹ nọ́mbà rẹ̀):",
+    serviceBookingConfirmResource: "Jẹ́rìí ìpàdé",
+    serviceBookingCancelResource: "Fagilé",
     serviceResourceAssignProvider: "Yan olùpèsè sí iṣẹ́",
     serviceResourceProviderAssigned: "A ti yan olùpèsè sí ohun èlò yìí.",
     serviceResourceRevokeProvider: "Fagilé àṣẹ olùpèsè",
