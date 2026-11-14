@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -193,9 +193,9 @@ try {
   assert.equal(orderAfter.total_minor,35000);
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM fulfillments WHERE server_order_id=?').get(serverOrderId).count,0,
     'customer appointment actions must not create Logistics fulfillment');
-  const disabled=await store.upsertTelegramStorefrontConfig(tenant.chatId,{
-    status:'PUBLISHED',enabledCapabilities:['browse','order_status'],
-  },owner);
+  db.prepare('UPDATE telegram_storefront_configs SET enabled_capabilities_json=? WHERE organization_id=?')
+    .run(JSON.stringify(['browse','order_status']),organizationId);
+  const disabled=store.getTelegramStorefrontConfig(tenant.chatId);
   assert.equal(disabled.enabledCapabilities.includes('service_appointments'),false);
   const disabledResponse=await request(baseUrl,{method:'POST',headers:{...authHeaders,'Idempotency-Key':'tg11-disabled-'+suffix},body:JSON.stringify({
     ...windowBody,appointment_mode:'REMOTE',
@@ -203,6 +203,14 @@ try {
   assert.equal(disabledResponse.response.status,403);
   assert.equal(disabledResponse.body.error?.code,'TELEGRAM_SERVICE_APPOINTMENTS_DISABLED');
 
+  const buyerUi=await readFile(path.join(root,'app/store.js'),'utf8');
+  assert.match(buyerUi,/service-appointment-request-dialog/);
+  assert.match(buyerUi,/serviceLocalDateTimeToIso/);
+  assert.match(buyerUi,/data-cancel-appointment/);
+  assert.match(buyerUi,/Offline — request not sent/);
+  assert.match(buyerUi,/Potentially feasible:.*not a reservation or confirmation/);
+  assert.match(buyerUi,/sessionStorage\.setItem\(storageKey,activeCreateKey\)/);
+  assert.doesNotMatch(buyerUi,/offlineQueueServiceAppointment|queueServiceAppointmentOffline/);
   console.log('TG-11 Telegram buyer Service appointment self-service regression: PASS');
 } finally {
   child.kill('SIGTERM');
