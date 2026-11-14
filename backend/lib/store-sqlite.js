@@ -10180,6 +10180,7 @@ export async function transitionDeliveryAssignment(chatId, serverOrderId, action
     const freshTenantRow = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
       .get(String(chatId));
     const freshOrderRow = db.prepare(`SELECT o.server_order_id, o.order_json,
+      o.marketplace_order_id, o.is_marketplace,
       (SELECT f.location_id FROM fulfillments f
        WHERE f.server_order_id = o.server_order_id AND f.organization_id = ?
        ORDER BY f.created_at DESC LIMIT 1) AS location_id
