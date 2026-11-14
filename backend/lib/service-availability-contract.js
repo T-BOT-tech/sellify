@@ -113,6 +113,9 @@ export function assessServiceResourceCommitWindow({ timeZone, workingHours = [],
   const startMinute = Number(a.hour) * 60 + Number(a.minute);
   const endMinute = Number(b.hour) * 60 + Number(b.minute);
   const exception = exceptions.find(item => item?.date === localDate);
+  if (!workingHours.length && !exception) {
+    return { state: 'UNKNOWN', reason: 'NO_DECLARED_SCHEDULE', confirmsAvailability: false };
+  }
   if (exception?.kind === 'CLOSED') {
     return { state: 'OUTSIDE_DECLARED_HOURS', reason: 'DATE_EXCEPTION_CLOSED', confirmsAvailability: false };
   }
