@@ -40,6 +40,8 @@ try {
     working_hours: workingHours, exceptions: [], expected_version: 0,
     idempotency_key: 'resource-primary-hours-' + suffix,
   }, { userId: owner.id });
+  const resourceProjection = (await store.listServiceResources(seller.chatId)).find(item => item.id === resource.id);
+  assert.equal(resourceProjection?.availabilityConfigured, true, 'resource list must expose declared schedule readiness to the booking UI');
 
   async function createAccepted(label, start, end, appointmentMode = 'REMOTE') {
     const created = await store.createServiceBooking(seller.chatId, order.server_order_id, {
@@ -94,6 +96,8 @@ try {
     name: 'Unscheduled Provider', resource_type: 'PROVIDER',
     service_item_id: 'consultation', idempotency_key: 'resource-unscheduled-' + suffix,
   }, { userId: owner.id });
+  const unscheduledProjection = (await store.listServiceResources(seller.chatId)).find(item => item.id === unscheduledResult.resource.id);
+  assert.equal(unscheduledProjection?.availabilityConfigured, false, 'resource without a schedule is not eligible for booking selection');
   const unscheduledBooking = await createAccepted('unscheduled', '2026-11-01T12:00:00+03:00', '2026-11-01T13:00:00+03:00');
   await assert.rejects(confirm(unscheduledBooking, 'unscheduled', unscheduledResult.resource.id),
     error => error?.code === 'SERVICE_RESOURCE_AVAILABILITY_UNKNOWN');
