@@ -126,7 +126,7 @@ try {
 
   const legacyOrder = (await store.getOrders(seller.chatId)).find(o => o.marketplace_order_id === master.id);
   assert.ok(legacyOrder);
-  const legacyRow = db.prepare('SELECT server_order_id FROM orders WHERE chat_id = ? AND marketplace_order_id = ? LIMIT 1').get(seller.chatId, master.id);
+  const legacyRow = db.prepare('SELECT server_order_id, is_marketplace, marketplace_order_id FROM orders WHERE chat_id = ? AND marketplace_order_id = ? LIMIT 1').get(seller.chatId, master.id);
   assert.ok(legacyRow?.server_order_id);
   const payment = await store.createPayment(seller.chatId, {
     orderId: legacyRow.server_order_id,
@@ -216,6 +216,8 @@ try {
   ).get(seller.chatId, deliveryMaster.id);
   assert.ok(deliveryLegacyOrder?.is_marketplace, 'Marketplace order marker must survive into Core Order projection');
   assert.ok(deliveryOrderRow?.server_order_id);
+  assert.equal(Number(deliveryOrderRow.is_marketplace), 1, 'Marketplace classification must come from the canonical SQL marker');
+  assert.equal(String(deliveryOrderRow.marketplace_order_id), String(deliveryMaster.id));
 
   const defaultLocation = db.prepare(
     "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
