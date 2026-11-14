@@ -69,10 +69,11 @@ const DEFINITIONS = [
   ['logistics', 'scheduling', 'confirm', 'logistics:scheduling:confirm'],
   ['logistics', 'scheduling', 'cancel', 'logistics:scheduling:cancel'],
 
-  // Service Pack resource administration uses explicit central permissions.
-  // Owner remains covered by the existing wildcard; Manager receives only
-  // these two resource-management permissions. Availability and feasibility
-  // remain vocabulary-only until their own policy and evidence contracts exist.
+  // Service Resource administration and availability map to the central
+  // authorization authority. Service Provider receives availability actions
+  // only through an exact resource-scoped membership context; Manager receives
+  // organization-level availability actions. Appointment feasibility remains
+  // vocabulary-only until its evidence and decision boundary is implemented.
   ['service', 'service_resource', 'view', 'service:service_resource:view'],
   ['service', 'service_resource', 'manage', 'service:service_resource:manage'],
   ['service', 'resource_availability', 'view', 'service:resource_availability:view'],
