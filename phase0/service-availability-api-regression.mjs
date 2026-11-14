@@ -40,7 +40,7 @@ const localeKeys = [
   'serviceAvailabilityTimezone', 'serviceAvailabilityWorkingHours', 'serviceAvailabilityExceptions',
   'serviceAvailabilityDeclarationOnly', 'serviceAvailabilityEmpty', 'serviceAvailabilityDeclared',
   'serviceAvailabilitySave', 'serviceAvailabilityInvalidJson', 'serviceAvailabilitySaving',
-  'serviceAvailabilitySavedDeclaration', 'serviceAvailabilitySaveFailed',
+  'serviceAvailabilitySavedDeclaration', 'serviceAvailabilitySaveFailed', 'serviceBookingChooseResource',
 ];
 for (const locale of localeNames) {
   const source = read('app/src/i18n/locales/' + locale + '.js');
