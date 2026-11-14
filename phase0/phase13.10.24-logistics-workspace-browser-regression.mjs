@@ -51,6 +51,12 @@ try {
     fulfillment_status: 'pending',
     destination: 'Test delivery destination',
     tracking_reference: 'TRACK-BROWSER-1',
+    dispatch: {
+      destination: { address: 'Test delivery destination' },
+      locationName: 'DEFAULT',
+      scheduledAt: '2026-11-15T09:00:00.000Z',
+      trackingReference: 'TRACK-BROWSER-1',
+    },
   };
   let assignmentReads = 0;
   await page.route('**/tenants/test-tenant/delivery-assignments*', async route => {
@@ -106,6 +112,11 @@ try {
   assert.equal(await page.locator('[data-assignment-only="1"]').count(), 1,
     'courier must see an assignment even when its local Order projection is absent');
   assert.match(await page.locator('[data-assignment-only="1"]').innerText(), /server-order-browser-1/);
+  const assignmentCardText = await page.locator('[data-assignment-only="1"]').innerText();
+  assert.match(assignmentCardText, /Test delivery destination/);
+  assert.match(assignmentCardText, /Location: DEFAULT/);
+  assert.match(assignmentCardText, /TRACK-BROWSER-1/);
+  assert.match(assignmentCardText, /Browser Courier/);
   assert.equal(await page.getByRole('button', { name: 'Accept' }).count(), 1);
   assert.equal(pageErrors.length, 0, `renderLogistics browser errors: ${pageErrors.join(' | ')}`);
 
