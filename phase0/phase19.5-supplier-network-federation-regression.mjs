@@ -39,6 +39,7 @@ assert.equal(candidate.sourceAuthority, 'supplier_network');
 assert.equal(candidate.sourceEntityId, supplierOrg);
 assert.equal(candidate.organizationId, supplierOrg);
 assert.equal(candidate.entityType, 'supplier');
+assert.equal(candidate.catalog.some(item => item.productId === productId), true, 'canonical product references survive supplier normalization');
 const capacityProjection = supplierNetworkDiscoveryProvider.normalize({
   ...rows[0],
   capacitySignals: [{
