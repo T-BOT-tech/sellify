@@ -65,4 +65,12 @@ export default {
     serviceAvailabilitySaving: "A guardar…",
     serviceAvailabilitySavedDeclaration: "Horário guardado como declaração; disponibilidade não confirmada.",
     serviceAvailabilitySaveFailed: "Não foi possível guardar o horário.",
+    serviceAvailabilityAssessWindow: "Avaliar o período solicitado",
+    serviceAvailabilityStart: "Início",
+    serviceAvailabilityEnd: "Fim",
+    serviceAvailabilityAssess: "Avaliar período",
+    serviceAvailabilityWithinDeclaredHours: "Dentro do horário de trabalho declarado.",
+    serviceAvailabilityOutsideDeclaredHours: "Fora do horário de trabalho declarado.",
+    serviceAvailabilityAssessmentUnknown: "Avaliação desconhecida.",
+    serviceAvailabilityCommitmentsNotChecked: "Os agendamentos e compromissos existentes não foram verificados; a disponibilidade não está confirmada.",
 };
