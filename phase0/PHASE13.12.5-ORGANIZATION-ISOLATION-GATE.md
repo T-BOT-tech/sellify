@@ -30,7 +30,7 @@ No new persistence, tenant registry, organization store, role store, or authoriz
 
 ## Gate coverage
 
-The regression exercises all **42 Phase 13.12.3 resource/action entries** against representative sessions and tenant objects for:
+The regression exercises all **48 Phase 13.12.3 resource/action entries** against representative sessions and tenant objects for:
 
 1. same-organization access;
 2. mismatched-organization access;
@@ -62,7 +62,7 @@ This gate records the existing behavior. It does not add vertical-specific tenan
 
 Phase 13.12.5 passes when:
 
-- all 42 registered vertical capabilities are covered;
+- all 48 registered vertical capabilities are covered;
 - all six existing roles remain unchanged;
 - same-organization requests preserve existing policy results;
 - cross-organization requests are denied;
@@ -80,3 +80,8 @@ Phase 13.12.5 passes when:
 Next controlled subphase:
 
 **13.12.6 — Location Scope Gate**
+
+
+## Subsequent Service Provider resource-scope extension
+
+The current organization-isolation regression now covers seven role entries and 48 resource/action entries. `service_provider` is contextual-only and remains DENY without a matching resource context. Its Service permissions require the canonical `service_resource` type, exact resource ID, organization ID, and location ID. Cross-organization requests remain DENY; no alternate tenant authority is introduced.
