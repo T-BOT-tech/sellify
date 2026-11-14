@@ -501,7 +501,7 @@ try {
   const delayedConfirmReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
     method: 'PATCH',
     headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
-    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+    body: JSON.stringify({ status: 'CONFIRMED', resource_id: appointmentResource.id, expected_version: 2 }),
   });
   assert.equal(delayedConfirmReplay.status, 200, 'delayed exact retry should remain idempotent after later transitions');
   const delayedConfirmReplayBody = await delayedConfirmReplay.json();
