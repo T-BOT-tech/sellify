@@ -15,7 +15,7 @@ const hours = normalizeWorkingHours([
 ], 'Africa/Addis_Ababa');
 assert.equal(hours.timeZone, 'Africa/Addis_Ababa');
 assert.equal(hours.entries.length, 3);
-assert.throws(() => normalizeWorkingHours([{ weekday: 1, startTime: '09:00', endTime: '12:00' }], 'UTC'), { code: undefined });
+assert.equal(normalizeWorkingHours([{ weekday: 1, startTime: '09:00', endTime: '12:00' }], 'UTC').entries.length, 1);
 assert.throws(() => normalizeWorkingHours([
   { weekday: 1, startTime: '09:00', endTime: '12:00' },
   { weekday: 1, startTime: '11:30', endTime: '13:00' },
