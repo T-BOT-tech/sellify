@@ -621,10 +621,14 @@
           <button id="sourcingSearchBtn" class="btn-secondary" type="button" style="width:auto;margin-top:0;">Search</button>
         </div>
         <div class="form-grid" style="margin-top:8px;">
+          <label>Product reference ID<input id="sourcingProductId" type="text" placeholder="Canonical product ID" style="display:block;width:100%;box-sizing:border-box;"></label>
+          <label>Capability code<input id="sourcingCapabilityCode" type="text" placeholder="Supplier capability code" style="display:block;width:100%;box-sizing:border-box;"></label>
+          <label>Minimum quantity<input id="sourcingMinimumQuantity" type="number" min="0.000001" step="any" placeholder="Optional" style="display:block;width:100%;box-sizing:border-box;"></label>
+          <label>Unit<input id="sourcingCapacityUnit" type="text" placeholder="e.g. kg, parcel" style="display:block;width:100%;box-sizing:border-box;"></label>
           <label>Capacity available from<input id="sourcingAvailabilityFrom" type="datetime-local" style="display:block;width:100%;box-sizing:border-box;"></label>
           <label>Capacity available through<input id="sourcingAvailabilityTo" type="datetime-local" style="display:block;width:100%;box-sizing:border-box;"></label>
         </div>
-        <div class="muted">Optional time-window filter. Both dates are required together. Results use supplier-declared active capacity signals; they do not reserve a slot or confirm availability.</div>
+        <div class="muted">Optional resource and time-window filters. For a time-window search, provide one product ID or capability code and both dates. Quantity requires an exact unit match; no implicit unit conversion is performed. Results use supplier-declared active capacity signals and do not reserve or confirm availability.</div>
         <div id="sourcingDiscoveryResults" style="margin-top:10px;"></div>
         <div id="sourcingIntelligenceSummary" class="sync-note" style="margin-top:10px;display:none;"></div>
         <div id="sourcingRelationshipList" style="margin-top:10px;"></div>
