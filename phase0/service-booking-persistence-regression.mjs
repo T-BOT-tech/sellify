@@ -120,6 +120,11 @@ try {
   assert.equal(confirmed.booking.version, 3);
   assert.equal(confirmed.booking.assigned_resource_id, serviceResource.id);
   assert.equal(confirmed.booking.resource_commitment_state, 'COMMITTED');
+  await assert.rejects(store.updateServiceResource(seller.chatId, serviceResource.id, {
+    status: 'INACTIVE', expected_version: serviceResource.version,
+    idempotency_key: 'deactivate-resource-with-commitment-' + suffix,
+  }, { userId: owner.id }), error => error?.code === 'SERVICE_RESOURCE_HAS_ACTIVE_COMMITMENTS',
+  'a resource with a committed appointment cannot be deactivated');
   const firstCommitment = store.getDatabaseForTests().prepare(
     "SELECT * FROM service_booking_resource_commitments WHERE booking_id=? AND state='COMMITTED'"
   ).get(created.booking.id);
