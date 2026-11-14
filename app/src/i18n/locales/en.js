@@ -286,4 +286,8 @@ export default {
     serviceResourceProviderAssignFailed: "Could not update provider access.",
     serviceResourceNoProviderMembers: "No eligible staff memberships.",
     serviceResourceProviderDescription: "View your assigned service resources and maintain their declared working hours. Availability is not confirmed until existing commitments are checked.",
+    serviceBookingResource: "Service resource",
+    serviceBookingChooseResource: "Choose a resource",
+    serviceBookingNoEligibleResource: "No active resource matches this service and order location.",
+    serviceBookingAssignedResource: "Assigned resource",
 };
