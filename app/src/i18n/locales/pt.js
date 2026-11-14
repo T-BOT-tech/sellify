@@ -81,4 +81,8 @@ export default {
     serviceResourceProviderAssignFailed: "Não foi possível atualizar o acesso do prestador.",
     serviceResourceNoProviderMembers: "Não há membros da equipa elegíveis.",
     serviceResourceProviderDescription: "Consulte os recursos de serviço atribuídos a si e mantenha os horários declarados. A disponibilidade não é confirmada até que os compromissos existentes sejam verificados.",
+    serviceBookingResource: "Recurso do serviço",
+    serviceBookingChooseResource: "Escolher um recurso",
+    serviceBookingNoEligibleResource: "Não existe recurso ativo compatível com este serviço e o local do pedido.",
+    serviceBookingAssignedResource: "Recurso atribuído",
 };
