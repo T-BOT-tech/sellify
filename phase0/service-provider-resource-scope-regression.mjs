@@ -139,9 +139,10 @@ try {
   assert.match(uiSource, /service-resource-provider-assign/);
   assert.match(uiSource, /service-resource-provider-revoke/);
   assert.match(uiSource, /hasServiceProviderResourceScope/);
+  assert.match(uiSource, /serviceResourceProviderDescription/);
   for (const locale of ['en','am','om','so','sw','es','hi','fr','ar','ha','yo','ru','pt']) {
     const source = fs.readFileSync(new URL('../app/src/i18n/locales/' + locale + '.js', import.meta.url), 'utf8');
-    for (const key of ['serviceResourceManageProviders','serviceResourceSelectProvider','serviceResourceAssignProvider','serviceResourceProviderAssigned','serviceResourceRevokeProvider','serviceResourceProviderAssignFailed','serviceResourceNoProviderMembers']) {
+    for (const key of ['serviceResourceManageProviders','serviceResourceSelectProvider','serviceResourceAssignProvider','serviceResourceProviderAssigned','serviceResourceRevokeProvider','serviceResourceProviderAssignFailed','serviceResourceNoProviderMembers','serviceResourceProviderDescription']) {
       const count = source.split(key + ':').length - 1;
       assert.equal(count, 1, locale + ' must define ' + key + ' exactly once');
     }
