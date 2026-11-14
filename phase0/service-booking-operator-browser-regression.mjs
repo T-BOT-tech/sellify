@@ -95,7 +95,7 @@ try {
         status: 200, contentType: 'application/json',
         body: JSON.stringify({
           availability: {
-            state: 'DECLARED', timezone: 'Africa/Addis_Ababa',
+            state: 'DECLARED', timeZone: 'Africa/Addis_Ababa',
             workingHours: [], exceptions: [], version: 1,
           },
           state: 'DECLARED', authority: 'service_resource_availability',
