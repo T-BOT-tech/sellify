@@ -103,6 +103,11 @@ assert.equal(evaluateDiscoveryMatch({
   ...temporalCandidate,
   capacitySignals: [{ ...temporalCandidate.capacitySignals[0], subjectType: 'CAPABILITY', subjectId: 'COFFEE' }],
 }, { ...windowContext, productId: null, capabilityCode: 'COFFEE' }).eligible, true, 'capability-bound capacity matches capability requests');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capabilities: [{ id: 'cap-coffee-id', code: 'COFFEE' }],
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], subjectType: 'CAPABILITY', subjectId: 'cap-coffee-id' }],
+}, { ...windowContext, productId: null, capabilityCode: 'COFFEE' }).eligible, true, 'canonical capability IDs bind capacity to the matching capability');
 assert.equal(evaluateDiscoveryMatch(temporalCandidate, { productId: 'coffee', minimumQuantity: 50, unit: 'kg' }).eligible, true, 'legacy searches without a requested period retain prior quantity behavior');
 
 console.log('Phase 19.7 Deterministic Matching regression: PASS');
