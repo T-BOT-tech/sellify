@@ -72,8 +72,8 @@ const serviceBookingHandler = server.slice(
 );
 assert.match(serviceBookingHandler, /req\.method === 'GET'[\s\S]*?logistics:scheduling:view/);
 assert.match(serviceBookingHandler, /let authorizationAction = 'logistics:scheduling:request'/);
-assert.match(serviceBookingHandler, /target === 'CONFIRMED'[\\s\\S]*?service:appointment:commit/);
-assert.match(serviceBookingHandler, /authorizationResource = authorizationAction === 'service:appointment:commit'[\\s\\S]*?service_appointment/);
+assert.match(serviceBookingHandler, /target === 'CONFIRMED'[\s\S]*?service:appointment:commit/);
+assert.match(serviceBookingHandler, /authorizationResource = authorizationAction === 'service:appointment:commit'[\s\S]*?service_appointment/);
 assert.match(serviceBookingHandler, /target === 'CANCELLED'[\s\S]*?logistics:scheduling:cancel/);
 assert.match(serviceBookingHandler, /'logistics:scheduling:manage'/);
 
