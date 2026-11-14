@@ -73,4 +73,11 @@ export default {
     serviceAvailabilityOutsideDeclaredHours: "خارج ساعات العمل المعلنة.",
     serviceAvailabilityAssessmentUnknown: "التقييم غير معروف.",
     serviceAvailabilityCommitmentsNotChecked: "لم تتم مراجعة المواعيد أو التزامات الموارد الحالية؛ التوفر غير مؤكد.",
+    serviceResourceManageProviders: "إدارة مقدمي الخدمة",
+    serviceResourceSelectProvider: "اختيار مقدم الخدمة",
+    serviceResourceAssignProvider: "تعيين مقدم الخدمة",
+    serviceResourceProviderAssigned: "تم تعيين مقدم الخدمة لهذا المورد.",
+    serviceResourceRevokeProvider: "إلغاء وصول مقدم الخدمة",
+    serviceResourceProviderAssignFailed: "تعذر تحديث وصول مقدم الخدمة.",
+    serviceResourceNoProviderMembers: "لا توجد عضويات موظفين مؤهلة.",
 };
