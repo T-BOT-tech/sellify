@@ -3206,12 +3206,15 @@ async function handleServiceResourceAvailability(req, res, chatId, resourceId) {
   const resource = (await listServiceResources(chatId, { includeInactive: true }))
     .find(item => String(item.id) === String(resourceId));
   if (!resource) return sendJSON(res, 404, { error: { message: 'Service resource not found', status: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' } }, req);
-  const location = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
-  if (resource.locationId && !location) throw Object.assign(new Error('Service resource location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
   const providerResourceScope = (Array.isArray(session.contextualRoles) ? session.contextualRoles : []).some(item =>
     String(item?.role || '').toLowerCase() === 'service_provider'
     && String(item?.scopeType || '').toUpperCase() === 'RESOURCE'
     && String(item?.scopeId || '') === String(resource.id));
+  if (providerResourceScope && String(resource.status).toUpperCase() !== 'ACTIVE') {
+    return sendJSON(res, 404, { error: { message: 'Assigned Service Resource is not active', status: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' } }, req);
+  }
+  const location = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
+  if (resource.locationId && !location) throw Object.assign(new Error('Service resource location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
   if (!resource.locationId && session.locationId && !providerResourceScope) {
     throw Object.assign(new Error('Organization-wide service resources require organization-level scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
   }
