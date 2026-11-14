@@ -149,4 +149,12 @@ export default {
     serviceAvailabilitySaving: "सहेजा जा रहा है…",
     serviceAvailabilitySavedDeclaration: "समय-सारणी घोषणा के रूप में सहेजी गई; उपलब्धता अपुष्ट है।",
     serviceAvailabilitySaveFailed: "समय-सारणी सहेजी नहीं जा सकी।",
+    serviceAvailabilityAssessWindow: "अनुरोधित समय का आकलन करें",
+    serviceAvailabilityStart: "प्रारंभ",
+    serviceAvailabilityEnd: "समाप्ति",
+    serviceAvailabilityAssess: "समय का आकलन करें",
+    serviceAvailabilityWithinDeclaredHours: "घोषित कार्य समय के भीतर।",
+    serviceAvailabilityOutsideDeclaredHours: "घोषित कार्य समय के बाहर।",
+    serviceAvailabilityAssessmentUnknown: "आकलन अज्ञात है।",
+    serviceAvailabilityCommitmentsNotChecked: "मौजूदा अपॉइंटमेंट और संसाधन प्रतिबद्धताओं की जाँच नहीं हुई; उपलब्धता की पुष्टि नहीं है।",
 };
