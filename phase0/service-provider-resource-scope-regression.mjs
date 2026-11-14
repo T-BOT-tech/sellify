@@ -24,7 +24,8 @@ try {
   const now = new Date().toISOString();
   db.prepare(`INSERT INTO pack_lifecycle
     (id,organization_id,pack_id,pack_version,state,installed_at,activated_at,created_at,updated_at,version)
-    VALUES (?,?,'service','1.0','ACTIVE',?,?,?,?,1)`)
+    VALUES (?,?,'service','1.0','ACTIVE',?,?,?,?,1)
+    ON CONFLICT(organization_id,pack_id) DO UPDATE SET state='ACTIVE', updated_at=excluded.updated_at, version=pack_lifecycle.version+1`)
     .run('service-pack-' + suffix, organizationId, now, now, now, now);
 
   const created = await store.createServiceResource(tenant.chatId, {
