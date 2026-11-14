@@ -6249,6 +6249,19 @@ export async function createServiceBooking(chatId, serverOrderId, input = {}, ac
     if (String(freshTenant?.organization_id || '') !== organizationId) throw Object.assign(new Error('Tenant organization changed during booking'), { statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH' });
     const orderRow = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?').get(String(chatId), orderId);
     if (!orderRow) throw Object.assign(new Error('Canonical order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    if (actor?.marketplaceOrderId && actor?.buyerIdentity) {
+      const buyerOwnsOrder = db.prepare(`SELECT 1
+        FROM marketplace_orders mo
+        JOIN marketplace_seller_orders mso ON mso.marketplace_order_id=mo.id
+        JOIN orders marketplace_order ON marketplace_order.chat_id=mso.seller_id
+          AND marketplace_order.local_id=mso.seller_order_id
+        WHERE mo.id=? AND mo.buyer_identity=? AND mso.seller_id=?
+          AND mso.organization_id=? AND marketplace_order.server_order_id=? LIMIT 1`)
+        .get(String(actor.marketplaceOrderId),String(actor.buyerIdentity),String(chatId),organizationId,orderId);
+      if (!buyerOwnsOrder) throw Object.assign(new Error('Marketplace buyer order not found'), {
+        statusCode:404, code:'MARKETPLACE_BUYER_ORDER_NOT_FOUND',
+      });
+    }
     const order = orderFromRow(orderRow);
     const lines = Array.isArray(order?.items) ? order.items : [];
     if (!lines.some(item => String(item.item_id ?? item.product_id ?? item.id ?? '') === serviceItemId && String(item.item_type || '').toLowerCase() === 'service')) {
@@ -6266,7 +6279,11 @@ export async function createServiceBooking(chatId, serverOrderId, input = {}, ac
       (id,organization_id,chat_id,server_order_id,service_item_id,requested_start,requested_end,appointment_mode,customer_note,status,version,created_by,updated_by,created_at,updated_at)
       VALUES (?,?,?,?,?,?,?,?,?,'REQUESTED',1,?,?,?,?)`).run(id,organizationId,String(chatId),orderId,serviceItemId,requestedStart,requestedEnd,appointmentMode,customerNote,actor?.userId||null,actor?.userId||null,now,now);
     db.prepare(`INSERT INTO service_booking_commands (organization_id,command_key,booking_id,command_type,command_fingerprint,created_at) VALUES (?,?,?,'CREATE',?,?)`).run(organizationId,commandKey,id,fingerprint,now);
-    audit(String(chatId),'services.booking.requested','service_booking',id,{order_id:orderId,service_item_id:serviceItemId,requested_start:requestedStart,requested_end:requestedEnd,appointment_mode:appointmentMode,version:1},{organizationId,actorId:actor?.userId||null,deviceId:actor?.deviceId||null});
+    audit(String(chatId),'services.booking.requested','service_booking',id,{
+      order_id:orderId,service_item_id:serviceItemId,requested_start:requestedStart,requested_end:requestedEnd,
+      appointment_mode:appointmentMode,version:1,
+      ...(actor?.buyerIdentityHash?{buyer_identity_hash:String(actor.buyerIdentityHash)}:{}),
+    },{organizationId,actorId:actor?.userId||null,deviceId:actor?.deviceId||null});
     const created=db.prepare('SELECT * FROM service_bookings WHERE id = ?').get(id);
     db.exec('COMMIT'); return {booking:serviceBookingFromRow(created),replayed:false};
   } catch(error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
@@ -6293,6 +6310,19 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
     if(String(freshTenant?.organization_id||'')!==organizationId) throw Object.assign(new Error('Tenant organization changed during booking transition'),{statusCode:409,code:'ORDER_ORGANIZATION_MISMATCH'});
     const row=db.prepare('SELECT * FROM service_bookings WHERE id=? AND organization_id=? AND chat_id=? AND server_order_id=?').get(String(bookingId),organizationId,String(chatId),String(serverOrderId));
     if(!row) throw Object.assign(new Error('Service booking not found'),{statusCode:404,code:'SERVICE_BOOKING_NOT_FOUND'});
+    if (actor?.marketplaceOrderId && actor?.buyerIdentity) {
+      const buyerOwnsOrder = db.prepare(`SELECT 1
+        FROM marketplace_orders mo
+        JOIN marketplace_seller_orders mso ON mso.marketplace_order_id=mo.id
+        JOIN orders marketplace_order ON marketplace_order.chat_id=mso.seller_id
+          AND marketplace_order.local_id=mso.seller_order_id
+        WHERE mo.id=? AND mo.buyer_identity=? AND mso.seller_id=?
+          AND mso.organization_id=? AND marketplace_order.server_order_id=? LIMIT 1`)
+        .get(String(actor.marketplaceOrderId),String(actor.buyerIdentity),String(chatId),organizationId,String(serverOrderId));
+      if (!buyerOwnsOrder) throw Object.assign(new Error('Marketplace buyer order not found'), {
+        statusCode:404, code:'MARKETPLACE_BUYER_ORDER_NOT_FOUND',
+      });
+    }
     const prior=db.prepare('SELECT * FROM service_booking_commands WHERE organization_id=? AND command_key=?').get(organizationId,commandKey);
     if(prior) {
       if(prior.command_type!=='TRANSITION'||String(prior.booking_id)!==String(bookingId)||prior.command_fingerprint!==fingerprint) throw Object.assign(new Error('Idempotency key was reused for a different booking command'),{statusCode:409,code:'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT'});
@@ -6380,6 +6410,7 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
       ...(['CANCELLED','FAILED'].includes(target)?{resource_commitment_released:true}:{}),
       ...(target==='COMPLETED'?{completion_note:completionNote,completed_at:now,completed_by:actorId,resource_commitment_completed:true}:{}),
       ...(target==='IN_PROGRESS'?{started_at:now,started_by:actorId}:{}),
+      ...(actor?.buyerIdentityHash?{buyer_identity_hash:String(actor.buyerIdentityHash)}:{}),
     },{organizationId,actorId,deviceId:actor?.deviceId||null,reason:reason||''});
     const updated=db.prepare('SELECT * FROM service_bookings WHERE id=?').get(String(bookingId));
     db.exec('COMMIT'); return {booking:serviceBookingFromRow(updated),replayed:false};
