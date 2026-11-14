@@ -148,4 +148,12 @@ export default {
     serviceAvailabilitySaving: "Waa la kaydinayaa…",
     serviceAvailabilitySavedDeclaration: "Jadwalka waa la kaydiyey; helitaanka lama xaqiijin.",
     serviceAvailabilitySaveFailed: "Jadwalka lama kaydin karo.",
+    serviceAvailabilityAssessWindow: "Qiimee waqtiga la codsaday",
+    serviceAvailabilityStart: "Bilow",
+    serviceAvailabilityEnd: "Dhammaad",
+    serviceAvailabilityAssess: "Qiimee waqtiga",
+    serviceAvailabilityWithinDeclaredHours: "Waxay ku jirtaa saacadaha shaqada ee la sheegay.",
+    serviceAvailabilityOutsideDeclaredHours: "Waxay ka baxsan tahay saacadaha shaqada ee la sheegay.",
+    serviceAvailabilityAssessmentUnknown: "Qiimeyntu lama yaqaan.",
+    serviceAvailabilityCommitmentsNotChecked: "Ballamaha jira iyo qoondeynta kheyraadka lama hubin; helitaankuna lama xaqiijin.",
 };
