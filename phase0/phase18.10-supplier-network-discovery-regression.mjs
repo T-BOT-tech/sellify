@@ -28,7 +28,7 @@ assert.equal(results.length,1);
 assert.equal(results[0].organizationId,supplier.organization_id);
 assert.equal(results[0].deterministic,undefined);
 assert.ok(results[0].matchReasons.some(r=>r.dimension==='CAPACITY')===true);
-let capacityResults=await discoverSupplierNetwork(buyer.chat_id,{capabilityCode:'WHOLESALE',minimumQuantity:100,limit:10},buyerActor);
+let capacityResults=await discoverSupplierNetwork(buyer.chat_id,{search:'Kaffa Supply '+x,capabilityCode:'WHOLESALE',minimumQuantity:100,limit:10},buyerActor);
 assert.equal(capacityResults.length,1,'capability-bound declared capacity is discoverable by canonical capability ID');
 assert.equal(capacityResults[0].capacitySignals[0].subjectId,capability.id);
 assert.equal(capacityResults[0].capacitySignals[0].periodStart,'2026-12-01T00:00:00.000Z');
