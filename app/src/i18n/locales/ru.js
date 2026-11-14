@@ -73,4 +73,11 @@ export default {
     serviceAvailabilityOutsideDeclaredHours: "За пределами заявленных рабочих часов.",
     serviceAvailabilityAssessmentUnknown: "Результат оценки неизвестен.",
     serviceAvailabilityCommitmentsNotChecked: "Существующие записи и занятость ресурса не проверялись; доступность не подтверждена.",
+    serviceResourceManageProviders: "Управление исполнителями",
+    serviceResourceSelectProvider: "Выбрать исполнителя",
+    serviceResourceAssignProvider: "Назначить исполнителя",
+    serviceResourceProviderAssigned: "Исполнитель назначен на этот ресурс.",
+    serviceResourceRevokeProvider: "Отозвать доступ исполнителя",
+    serviceResourceProviderAssignFailed: "Не удалось обновить доступ исполнителя.",
+    serviceResourceNoProviderMembers: "Нет подходящих сотрудников.",
 };
