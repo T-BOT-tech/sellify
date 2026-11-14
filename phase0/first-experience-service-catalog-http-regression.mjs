@@ -776,7 +776,7 @@ try {
       'Content-Type': 'application/json',
       'Idempotency-Key': 'service-booking-http-wrong-location-scope-1',
     },
-    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+    body: JSON.stringify({ status: 'CONFIRMED', resource_id: appointmentResource.id, expected_version: 2 }),
   });
   assert.equal(wrongLocationScopedResponse.status, 403,
     'manager authority scoped to another location must not authorize booking lifecycle changes');
