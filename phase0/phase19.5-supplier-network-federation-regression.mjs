@@ -39,6 +39,18 @@ assert.equal(candidate.sourceAuthority, 'supplier_network');
 assert.equal(candidate.sourceEntityId, supplierOrg);
 assert.equal(candidate.organizationId, supplierOrg);
 assert.equal(candidate.entityType, 'supplier');
+const capacityProjection = supplierNetworkDiscoveryProvider.normalize({
+  ...rows[0],
+  capacitySignals: [{
+    id: 'capacity-test', subjectType: 'PRODUCT', subjectId: productId,
+    quantity: 250, unit: 'kg', periodType: 'RANGE',
+    periodStart: '2026-12-01T00:00:00.000Z', periodEnd: '2026-12-31T23:59:59.999Z',
+    availability: 'AVAILABLE',
+  }],
+});
+assert.equal(capacityProjection.availability.capacitySignals[0].subjectType, 'PRODUCT');
+assert.equal(capacityProjection.availability.capacitySignals[0].periodStart, '2026-12-01T00:00:00.000Z');
+assert.equal(capacityProjection.availability.capacitySignals[0].source, 'DECLARED');
 assert.equal(supplierNetworkDiscoveryProvider.evidence(rows[0])[0].type, 'SUPPLIER_NETWORK_DISCOVERY');
 assert.equal(supplierNetworkDiscoveryProvider.actions(rows[0]).some(a => a.sourceAuthority === 'procurement'), true);
 
