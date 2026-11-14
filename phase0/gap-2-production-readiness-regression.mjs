@@ -12,7 +12,10 @@ const requiredScripts = [
   'test:gap-2-logistics-authz','test:gap-2-delivery-assignment','test:gap-2-delivery-lifecycle',
   'test:gap-2-delivery-exception','test:gap-2-dispatch-workload','test:gap-2-delivery-frontend',
   'test:gap-2-delivery-certification','test:gap-2-route-dispatch-scope',
-  'test:gap-2-cross-feature-consistency','test:gap-2-adversarial-delivery'
+  'test:gap-2-cross-feature-consistency','test:gap-2-adversarial-delivery',
+  'test:service-booking-persistence','test:service-resource-foundation','test:service-resource-persistence',
+  'test:service-availability-contract','test:service-availability-api',
+  'test:service-window-assessment','test:service-provider-resource-scope'
 ];
 for (const script of requiredScripts) assert.equal(typeof pkg.scripts?.[script], 'string', 'missing ' + script);
 assert.match(ci, /node-version: \[24\]/);
