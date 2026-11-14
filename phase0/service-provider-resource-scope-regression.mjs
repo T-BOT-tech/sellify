@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -122,7 +123,24 @@ try {
   const inactivePackSession = await store.authenticateSessionToken(session.token);
   assert.equal(inactivePackSession.contextualRoles.some(item => item.role === 'service_provider'), false);
 
-  console.log('SC-03.3 Service Provider resource-scoped membership regression: PASS');
+
+  const serverSource = fs.readFileSync(new URL('../backend/server.js', import.meta.url), 'utf8');
+  const uiSource = fs.readFileSync(new URL('../app/src/logistics/service-bookings.js', import.meta.url), 'utf8');
+  assert.match(serverSource, /resourceContext: \{ resourceType: 'service_resource'/);
+  assert.match(serverSource, /ASSIGNED_RESOURCES/);
+  assert.match(uiSource, /serviceResourceManageProviders/);
+  assert.match(uiSource, /service-resource-provider-assign/);
+  assert.match(uiSource, /service-resource-provider-revoke/);
+  assert.match(uiSource, /hasServiceProviderResourceScope/);
+  for (const locale of ['en','am','om','so','sw','es','hi','fr','ar','ha','yo','ru','pt']) {
+    const source = fs.readFileSync(new URL('../app/src/i18n/locales/' + locale + '.js', import.meta.url), 'utf8');
+    for (const key of ['serviceResourceManageProviders','serviceResourceSelectProvider','serviceResourceAssignProvider','serviceResourceProviderAssigned','serviceResourceRevokeProvider','serviceResourceProviderAssignFailed','serviceResourceNoProviderMembers']) {
+      const count = source.match(new RegExp('\\\\b' + key + '\\\\s*:', 'g')) || [];
+      assert.equal(count.length, 1, locale + ' must define ' + key + ' exactly once');
+    }
+  }
+
+  console.log('SC-03.3 Service Provider resource-scoped membership + UI regression: PASS');
   console.log('Exact resource/org/location authorization and tenant isolation: PASS');
   console.log('Service Pack activation and membership role constraints: PASS');
   console.log('Provider can manage only own availability; no Logistics authority: PASS');
