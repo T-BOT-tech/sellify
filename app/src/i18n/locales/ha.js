@@ -45,4 +45,10 @@ export default {
     serviceResourceActivate: "Kunna",
     serviceResourceDeactivate: "Kashe",
     serviceResourceUnknownStale: "Ba a san samuwa ba ko bayanin ya tsufa. Sabunta kafin dogaro da shi.",
+    serviceResourceAllServices: "Duk sabis",
+    serviceResourceOrganizationWide: "Dukkan ƙungiya",
+    serviceResourceTypeProvider: "Mai bayarwa / ma'aikaci",
+    serviceResourceTypeFacility: "Wuri / ɗaki",
+    serviceResourceTypeEquipment: "Kayan aiki",
+    serviceResourceTypeOther: "Wani",
 };
