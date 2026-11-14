@@ -212,6 +212,7 @@ try {
   const buyerUi=await readFile(path.join(root,'app/store.js'),'utf8');
   assert.match(buyerUi,/service-appointment-request-dialog/);
   assert.match(buyerUi,/serviceLocalDateTimeToIso/);
+  assert.match(buyerUi,/assessedWindowKey!==windowKey\(appointmentWindow\)/);
   assert.match(buyerUi,/data-cancel-appointment/);
   assert.match(buyerUi,/Offline — request not sent/);
   assert.match(buyerUi,/Potentially feasible:.*not a reservation or confirmation/);
