@@ -34,6 +34,9 @@ export function normalizeTelegramStorefrontConfig(input = {}) {
   const enabledCapabilities = Array.isArray(input.enabledCapabilities)
     ? [...new Set(input.enabledCapabilities.map(String).map(x => x.trim()).filter(x => TELEGRAM_STOREFRONT_CAPABILITIES.includes(x)))]
     : ['browse', 'search', 'product', 'cart', 'checkout', 'order_status'];
+  if (enabledCapabilities.includes('service_appointments') && !enabledCapabilities.includes('order_status')) {
+    enabledCapabilities.push('order_status');
+  }
   return {
     channelType: 'telegram',
     botId: input.botId ? String(input.botId) : null,
