@@ -73,4 +73,11 @@ export default {
     serviceAvailabilityOutsideDeclaredHours: "Ó wà lẹ́yìn àkókò iṣẹ́ tí a kéde.",
     serviceAvailabilityAssessmentUnknown: "A kò mọ àbájáde ìṣàyẹ̀wò.",
     serviceAvailabilityCommitmentsNotChecked: "A kò ṣàyẹ̀wò àwọn ìpàdé àti ìlò ohun èlò tó wà; a kò tíì jẹ́rìí sí wíwà.",
+    serviceResourceManageProviders: "Ṣàkóso àwọn olùpèsè iṣẹ́",
+    serviceResourceSelectProvider: "Yan olùpèsè iṣẹ́",
+    serviceResourceAssignProvider: "Yan olùpèsè sí iṣẹ́",
+    serviceResourceProviderAssigned: "A ti yan olùpèsè sí ohun èlò yìí.",
+    serviceResourceRevokeProvider: "Fagilé àṣẹ olùpèsè",
+    serviceResourceProviderAssignFailed: "A kò lè ṣe àtúnṣe àṣẹ olùpèsè.",
+    serviceResourceNoProviderMembers: "Kò sí ọmọ ẹgbẹ́ òṣìṣẹ́ tó yẹ.",
 };
