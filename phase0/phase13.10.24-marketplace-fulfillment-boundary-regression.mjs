@@ -35,7 +35,8 @@ for (const marker of [
   'phase13-10-24-marketplace-start',
   'phase13-10-24-marketplace-delivered',
   'MARKETPLACE_CORE_FULFILLMENT_UNSUPPORTED',
-  'Marketplace checkout SALE must remain the only inventory movement',
+  'Marketplace checkout SALE must remain the only SALE after courier completion',
+  'Marketplace courier completion must not append a Core Fulfillment SALE',
 ]) assert.ok(marketplaceTest.includes(marker), 'Marketplace runtime regression missing ' + marker);
 
 console.log('Phase 13.10.24 Marketplace fulfillment boundary regression: PASS');
