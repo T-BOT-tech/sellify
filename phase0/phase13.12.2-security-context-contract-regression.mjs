@@ -51,8 +51,8 @@ assert.equal(contract.duplicate_authorization_authority, false);
 assert.equal(contract.duplicate_audit_authority, false);
 
 // The contract must not silently replace the existing authority boundaries.
-assert.match(authSource, /export function authorize\(actor, organization, location, resource, action\)/);
-assert.match(serverSource, /authorize\(session, organization, location, resource, action\)/);
+assert.match(authSource, /export function authorize\(actor, organization, location, resource, action, resourceContext = null\)/);
+assert.match(serverSource, /authorize\(session, organization, location, resource, action, resourceContext\)/);
 assert.match(serverSource, /assertTenantScope\(session, tenant\)/);
 assert.match(tenantSource, /existing sessions \+ memberships \+ devices/);
 assert.match(auditSource, /existing backend audit_events \/ recordAuditEvent\(\)/);
