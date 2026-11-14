@@ -159,6 +159,8 @@ export default {
     serviceResourceManageProviders: "Dhiyeessitoota bulchi",
     serviceResourceSelectProvider: "Dhiyeessaa filadhu",
     serviceBookingChooseResource: "Beellama kanaaf qabeenya hojii irra jiru filadhu (lakkoofsa isaa galchi):",
+    serviceBookingConfirmResource: "Beellama mirkaneessi",
+    serviceBookingCancelResource: "Haqi",
     serviceResourceAssignProvider: "Dhiyeessaa ramadi",
     serviceResourceProviderAssigned: "Dhiyeessaan qabeenya kanaaf ramadameera.",
     serviceResourceRevokeProvider: "Hayyama dhiyeessaa haqii",
