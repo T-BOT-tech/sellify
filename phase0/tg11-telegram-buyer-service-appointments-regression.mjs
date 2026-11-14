@@ -122,6 +122,7 @@ try {
   assert.equal(assessment.body.assessment.state,'FEASIBLE');
   assert.equal(assessment.body.assessment.availability_confirmed,false);
   assert.equal(assessment.body.assessment.commitment_created,false);
+  assert.equal(assessment.body.assessment.resource_id,undefined,'feasibility response must not reveal candidate resources');
 
   const createHeaders={...authHeaders,'Idempotency-Key':'tg11-create-'+suffix};
   const created=await request(baseUrl,{method:'POST',headers:createHeaders,body:JSON.stringify({
@@ -188,6 +189,7 @@ try {
   const afterConfirm=await request(baseUrl+'/assessment',{
     method:'POST',headers:authHeaders,body:JSON.stringify(windowBody),
   });
+  assert.equal(afterConfirm.body.assessment.resource_id,undefined,'feasibility response must not reveal committed resource IDs');
   assert.equal(afterConfirm.body.assessment.state,'UNAVAILABLE',
     'a confirmed commitment must be visible to the buyer feasibility projection');
 
