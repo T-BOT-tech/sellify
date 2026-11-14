@@ -439,6 +439,17 @@ try {
   const bookingAcceptBody = await bookingAccept.json();
   assert.equal(bookingAcceptBody.booking.status, 'ACCEPTED');
   assert.equal(bookingAcceptBody.booking.version, 2);
+  const bookingConfirmWithoutResource = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
+    method: 'PATCH',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-no-resource' },
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+  });
+  assert.equal(bookingConfirmWithoutResource.status, 400);
+  assert.equal((await bookingConfirmWithoutResource.json()).error?.code, 'SERVICE_BOOKING_RESOURCE_REQUIRED');
+  const bookingAfterMissingResource = (await (await fetch(bookingsUrl, { headers: authHeaders })).json()).bookings
+    .find(item => item.id === bookingCreatedBody.booking.id);
+  assert.equal(bookingAfterMissingResource.status, 'ACCEPTED');
+  assert.equal(bookingAfterMissingResource.version, 2);
 
   const httpServiceResource = await store.createServiceResource(tenant.chatId, {
     resource_type: 'PROVIDER', name: 'HTTP Consultation Provider',
