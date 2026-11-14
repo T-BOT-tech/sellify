@@ -38,8 +38,8 @@ function eq(actual, expected, message) { checks += 1; assert.equal(actual, expec
 
 // 1. Registry coverage: every Phase 13 capability is evaluated through the
 // same canonical organization/location boundary, without new permissions.
-eq(RESOURCE_ACTION_REGISTRY.length, 48, 'Phase 13 registry remains 48 entries');
-eq(CROSS_PACK_ROLE_MATRIX.length, 336, 'Phase 13 role matrix covers seven roles × 48 registry entries');
+eq(RESOURCE_ACTION_REGISTRY.length, 49, 'Phase 13 registry remains 48 entries');
+eq(CROSS_PACK_ROLE_MATRIX.length, 343, 'Phase 13 role matrix covers seven roles × 48 registry entries');
 for (const role of ROLES) {
   for (const entry of RESOURCE_ACTION_REGISTRY) {
     const actor = { ...session, role };
