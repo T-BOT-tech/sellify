@@ -33,6 +33,21 @@ try {
     paymentStatus: order.paymentStatus ?? null,
     fulfillment_status: order.fulfillment_status ?? null,
   };
+  const resourceResult = await store.createServiceResource(seller.chatId, {
+    resource_type: 'PROVIDER', name: 'Consultation Provider', service_item_id: 'consultation',
+    idempotency_key: 'booking-resource-' + suffix,
+  }, { userId: owner.id });
+  const serviceResource = resourceResult.resource;
+  const schedule = await store.setServiceResourceAvailability(seller.chatId, serviceResource.id, {
+    expected_version: 0, idempotency_key: 'booking-resource-hours-' + suffix,
+    working_hours: [
+      { weekday: 0, start_time: '09:00', end_time: '17:00' },
+      { weekday: 4, start_time: '09:00', end_time: '17:00' },
+      { weekday: 5, start_time: '09:00', end_time: '17:00' },
+    ],
+    exceptions: [],
+  }, { userId: owner.id });
+  assert.equal(schedule.availability.state, 'DECLARED');
 
   const request = {
     service_item_id: 'consultation',
@@ -84,10 +99,32 @@ try {
   assert.equal(acceptedReplay.replayed, true);
   assert.equal(acceptedReplay.booking.status, 'ACCEPTED');
 
+  await assert.rejects(
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, created.booking.id, {
+      status: 'CONFIRMED', expected_version: 2, idempotency_key: 'booking-confirm-no-resource-' + suffix,
+    }, { userId: owner.id }),
+    error => error?.code === 'SERVICE_BOOKING_RESOURCE_REQUIRED',
+    'confirmation requires an explicit Service Resource',
+  );
   const confirmed = await store.transitionServiceBooking(seller.chatId, order.server_order_id, created.booking.id, {
-    status: 'CONFIRMED', expected_version: 2, idempotency_key: 'booking-confirm-' + suffix,
+    status: 'CONFIRMED', expected_version: 2, resource_id: serviceResource.id,
+    idempotency_key: 'booking-confirm-' + suffix,
   }, { userId: owner.id });
   assert.equal(confirmed.booking.version, 3);
+  assert.equal(confirmed.booking.assigned_resource_id, serviceResource.id);
+  assert.equal(confirmed.booking.resource_commitment_state, 'COMMITTED');
+  const firstCommitment = store.getDatabaseForTests().prepare(
+    "SELECT * FROM service_booking_resource_commitments WHERE booking_id=? AND state='COMMITTED'"
+  ).get(created.booking.id);
+  assert.equal(firstCommitment.resource_id, serviceResource.id);
+  const confirmedReplay = await store.transitionServiceBooking(seller.chatId, order.server_order_id, created.booking.id, {
+    status: 'CONFIRMED', expected_version: 2, resource_id: serviceResource.id,
+    idempotency_key: 'booking-confirm-' + suffix,
+  }, { userId: owner.id });
+  assert.equal(confirmedReplay.replayed, true);
+  assert.equal(store.getDatabaseForTests().prepare(
+    'SELECT COUNT(*) AS count FROM service_booking_resource_commitments WHERE booking_id=?'
+  ).get(created.booking.id).count, 1, 'idempotent confirmation must not duplicate the commitment');
 
   // Booking lifecycle is not authority to mutate canonical order, payment, or
   // fulfillment state, and must not manufacture a logistics activity.
@@ -152,7 +189,8 @@ try {
     status: 'ACCEPTED', expected_version: 1, idempotency_key: 'booking-execution-accept-' + suffix,
   }, { userId: owner.id });
   const executionConfirm = await store.transitionServiceBooking(seller.chatId, order.server_order_id, executionBooking.booking.id, {
-    status: 'CONFIRMED', expected_version: 2, idempotency_key: 'booking-execution-confirm-' + suffix,
+    status: 'CONFIRMED', expected_version: 2, resource_id: serviceResource.id,
+    idempotency_key: 'booking-execution-confirm-' + suffix,
   }, { userId: owner.id });
   assert.equal(executionConfirm.booking.status, 'CONFIRMED');
   const started = await store.transitionServiceBooking(seller.chatId, order.server_order_id, executionBooking.booking.id, {
@@ -184,6 +222,9 @@ try {
   assert.notEqual(completed.booking.completed_at, '1999-01-01T00:00:00.000Z');
   assert.equal(completed.booking.completed_by, owner.id, 'service completer must come from authenticated actor context');
   assert.equal(completed.booking.completion_note, 'Consultation completed; follow-up plan provided.');
+  assert.equal(completed.booking.resource_commitment_state, 'RELEASED');
+  assert.equal(db.prepare("SELECT state FROM service_booking_resource_commitments WHERE booking_id=?").get(executionBooking.booking.id).state, 'RELEASED',
+    'completion must release the resource commitment in the same transaction');
   const completedReplay = await store.transitionServiceBooking(seller.chatId, order.server_order_id, executionBooking.booking.id, {
     status: 'COMPLETED', expected_version: 4, completion_note: 'Consultation completed; follow-up plan provided.',
     idempotency_key: 'booking-execution-complete-' + suffix,
@@ -209,6 +250,45 @@ try {
     paymentStatus: canonicalOrderAfterCompletion.paymentStatus ?? null,
     fulfillment_status: canonicalOrderAfterCompletion.fulfillment_status ?? null,
   }, canonicalOrderStateBefore, 'service completion must not mutate canonical order/payment/fulfillment lifecycle');
+
+  // Two independent bookings race for overlapping intervals on the same resource.
+  const concurrentRequests = await Promise.all([0, 1].map(index => store.createServiceBooking(
+    seller.chatId, order.server_order_id, {
+      ...request,
+      requested_start: index === 0 ? '2026-11-01T11:00:00+03:00' : '2026-11-01T11:30:00+03:00',
+      requested_end: index === 0 ? '2026-11-01T12:00:00+03:00' : '2026-11-01T12:30:00+03:00',
+      idempotency_key: 'booking-concurrent-create-' + index + '-' + suffix,
+    }, { userId: owner.id },
+  )));
+  const concurrentAccepted = await Promise.all(concurrentRequests.map((item,index) => store.transitionServiceBooking(
+    seller.chatId, order.server_order_id, item.booking.id, {
+      status: 'ACCEPTED', expected_version: 1, idempotency_key: 'booking-concurrent-accept-' + index + '-' + suffix,
+    }, { userId: owner.id },
+  )));
+  const concurrentResults = await Promise.allSettled(concurrentAccepted.map((item,index) => store.transitionServiceBooking(
+    seller.chatId, order.server_order_id, item.booking.id, {
+      status: 'CONFIRMED', expected_version: 2, resource_id: serviceResource.id,
+      idempotency_key: 'booking-concurrent-confirm-' + index + '-' + suffix,
+    }, { userId: owner.id },
+  )));
+  assert.equal(concurrentResults.filter(item => item.status === 'fulfilled').length, 1,
+    'only one overlapping booking may commit against the resource');
+  assert.equal(concurrentResults.filter(item => item.status === 'rejected' && item.reason?.code === 'SERVICE_RESOURCE_TIME_CONFLICT').length, 1,
+    'the competing overlapping booking must fail with an explicit conflict');
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM service_booking_resource_commitments WHERE resource_id=? AND state='COMMITTED'").get(serviceResource.id).count, 2,
+    'the first confirmed booking and one concurrent winner occupy the resource; completed booking is released');
+
+  const outsideHours = await store.createServiceBooking(seller.chatId, order.server_order_id, {
+    ...request, requested_start: '2026-11-01T18:00:00+03:00', requested_end: '2026-11-01T19:00:00+03:00',
+    idempotency_key: 'booking-outside-hours-create-' + suffix,
+  }, { userId: owner.id });
+  await store.transitionServiceBooking(seller.chatId, order.server_order_id, outsideHours.booking.id, {
+    status: 'ACCEPTED', expected_version: 1, idempotency_key: 'booking-outside-hours-accept-' + suffix,
+  }, { userId: owner.id });
+  await assert.rejects(store.transitionServiceBooking(seller.chatId, order.server_order_id, outsideHours.booking.id, {
+    status: 'CONFIRMED', expected_version: 2, resource_id: serviceResource.id,
+    idempotency_key: 'booking-outside-hours-confirm-' + suffix,
+  }, { userId: owner.id }), error => error?.code === 'SERVICE_BOOKING_OUTSIDE_DECLARED_HOURS');
 
   const rejectionRequest = {
     ...request,
@@ -253,7 +333,7 @@ try {
     status: 'ACCEPTED', expected_version: 1, idempotency_key: 'booking-failure-accept-' + suffix,
   }, { userId: owner.id });
   await store.transitionServiceBooking(seller.chatId, order.server_order_id, failureBooking.booking.id, {
-    status: 'CONFIRMED', expected_version: 2, idempotency_key: 'booking-failure-confirm-' + suffix,
+    status: 'CONFIRMED', expected_version: 2, resource_id: serviceResource.id, idempotency_key: 'booking-failure-confirm-' + suffix,
   }, { userId: owner.id });
   await assert.rejects(
     store.transitionServiceBooking(seller.chatId, order.server_order_id, failureBooking.booking.id, {
@@ -267,6 +347,8 @@ try {
     idempotency_key: 'booking-failure-with-reason-' + suffix,
   }, { userId: owner.id });
   assert.equal(failed.booking.status, 'FAILED');
+  assert.equal(failed.booking.resource_commitment_state, 'RELEASED');
+  assert.equal(db.prepare('SELECT state FROM service_booking_resource_commitments WHERE booking_id=?').get(failureBooking.booking.id).state, 'RELEASED');
   assert.equal(failed.booking.status_reason, 'Required specialist was unavailable');
   const failedReplay = await store.transitionServiceBooking(seller.chatId, order.server_order_id, failureBooking.booking.id, {
     status: 'FAILED', expected_version: 3, reason: 'Required specialist was unavailable',
