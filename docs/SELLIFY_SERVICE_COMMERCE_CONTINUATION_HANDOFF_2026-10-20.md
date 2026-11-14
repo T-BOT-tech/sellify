@@ -320,3 +320,8 @@ Only after the P0 API boundary is solid:
 > First refresh the live `main` SHA, PR #80 diff/status, and all checks. PR #80 adds HTTP-level rejection/failure/idempotency regression coverage in `phase0/first-experience-service-catalog-http-regression.mjs`; its latest Sellify CI and security checks passed on `4a996fefcea6eaba897e5856c8d2a9f4f61d54ca`. The PR remains open and must not be merged without my explicit permission.
 >
 > Inspect the PR diff, then continue P0 with actual HTTP-level tenant/order/location/permission-denial tests and assertions that denied commands leave booking and audit state unchanged. Also verify idempotency conflict scope, stale-version behavior, replay after later transitions, and forged completion evidence. Reuse existing test fixtures, make narrow code/test changes, and run focused tests plus CI. Do not return to planning-only work; preserve canonical order, Payment Core, inventory, logistics, tenant, and audit authorities.
+
+
+## SC-03.3 follow-up — Service Booking authorization ownership
+
+The Service Booking operator routes no longer use `logistics:scheduling:*`. They now use the central Service Pack actions `service:booking:view/request/manage/confirm/cancel`. Owner and Manager receive the Service Booking lifecycle permissions; Logistics Manager, Dispatcher, Courier, and Viewer do not. Provider remains limited to exact assigned-resource availability in this increment. The Logistics Scheduling authority and its feasibility evaluator remain unchanged and are not a universal appointment calendar.
