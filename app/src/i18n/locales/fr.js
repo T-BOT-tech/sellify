@@ -65,4 +65,12 @@ export default {
     serviceAvailabilitySaving: "Enregistrement…",
     serviceAvailabilitySavedDeclaration: "Horaires enregistrés comme déclaration ; disponibilité non confirmée.",
     serviceAvailabilitySaveFailed: "Impossible d’enregistrer les horaires.",
+    serviceAvailabilityAssessWindow: "Évaluer un créneau demandé",
+    serviceAvailabilityStart: "Début",
+    serviceAvailabilityEnd: "Fin",
+    serviceAvailabilityAssess: "Évaluer le créneau",
+    serviceAvailabilityWithinDeclaredHours: "Dans les horaires de travail déclarés.",
+    serviceAvailabilityOutsideDeclaredHours: "En dehors des horaires de travail déclarés.",
+    serviceAvailabilityAssessmentUnknown: "Évaluation inconnue.",
+    serviceAvailabilityCommitmentsNotChecked: "Les rendez-vous et engagements existants n’ont pas été vérifiés ; disponibilité non confirmée.",
 };
