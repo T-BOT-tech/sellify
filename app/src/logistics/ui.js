@@ -37,7 +37,6 @@ export function applyLogisticsUI() {
     switchTab('order');
   }
   renderOrderFulfillmentPicker();
-  refreshDeliveryAssignments();
 }
 
 export function renderOrderFulfillmentPicker() {
@@ -119,8 +118,6 @@ function currentCourierUserId() {
 function renderWorkspaceModeHeader(role, assignments) {
   const active = (Array.isArray(assignments) ? assignments : [])
     .filter(a => !['CANCELLED', 'FAILED', 'REASSIGNED', 'DELIVERED'].includes(String(a.status || '').toUpperCase()));
-  const delivered = (Array.isArray(assignments) ? assignments : [])
-    .filter(a => String(a.status || '').toUpperCase() === 'DELIVERED').length;
   const label = role === 'logistics_courier'
     ? 'My deliveries'
     : role === 'logistics_viewer'
@@ -139,7 +136,7 @@ function renderWorkspaceModeHeader(role, assignments) {
       </div>
       <div class="logistics-workspace-stats">
         <span><strong>${active.length}</strong> active</span>
-        <span><strong>${delivered}</strong> delivered</span>
+        <button type="button" class="btn-secondary" id="logistics-refresh">Refresh</button>
       </div>
     </section>`;
 }
@@ -189,6 +186,15 @@ function renderOperationalWorkspaceSummary(workspace, views) {
 export function renderLogistics() {
   const list = document.getElementById('logisticsList');
   if (!list) return;
+  const logisticsTab = document.getElementById('tab-logistics');
+  const refreshTenantKey = config.chatId && config.sessionToken
+    ? String(config.chatId) + ':' + String(config.sessionToken)
+    : '';
+  if (logisticsTab?.style.display === 'block' && refreshTenantKey
+      && list.dataset.assignmentRefreshTenant !== refreshTenantKey) {
+    list.dataset.assignmentRefreshTenant = refreshTenantKey;
+    refreshDeliveryAssignments();
+  }
   const canonicalAssignments = Array.isArray(deliveryAssignments) ? deliveryAssignments : [];
   const workspaceRole = logisticsWorkspaceRole();
   const courierId = currentCourierUserId();
@@ -344,6 +350,10 @@ export function renderLogistics() {
   if (list.dataset.dispatchFiltersBound !== '1') {
     list.dataset.dispatchFiltersBound = '1';
     list.addEventListener('click', async (event) => {
+      if (event.target.closest('#logistics-refresh')) {
+        await refreshDeliveryAssignments(logisticsDispatchFilters);
+        return;
+      }
       if (event.target.closest('#logistics-filter-apply')) {
         logisticsDispatchFilters = {
           status: list.querySelector('#logistics-status-filter')?.value || '',
