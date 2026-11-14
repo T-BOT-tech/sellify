@@ -75,6 +75,7 @@ export default {
     serviceAvailabilityCommitmentsNotChecked: "Существующие записи и занятость ресурса не проверялись; доступность не подтверждена.",
     serviceResourceManageProviders: "Управление исполнителями",
     serviceResourceSelectProvider: "Выбрать исполнителя",
+    serviceBookingChooseResource: "Выберите активный ресурс для этой записи (введите его номер):",
     serviceResourceAssignProvider: "Назначить исполнителя",
     serviceResourceProviderAssigned: "Исполнитель назначен на этот ресурс.",
     serviceResourceRevokeProvider: "Отозвать доступ исполнителя",
