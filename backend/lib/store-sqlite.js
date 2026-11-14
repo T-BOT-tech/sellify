@@ -11883,6 +11883,125 @@ export async function getTelegramBuyerFulfillmentExperience(chatId, telegramUser
   };
 }
 
+async function getTelegramBuyerServiceOrderContext(chatId, telegramUserId, marketplaceOrderId, sellerOrderId) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  const organizationId = String(tenant?.organizationId || tenant?.organization_id || '');
+  const buyer = String(telegramUserId || '').trim();
+  if (!organizationId) throw Object.assign(new Error('Unknown store'), { statusCode:404, code:'STORE_NOT_FOUND' });
+  if (!buyer) throw Object.assign(new Error('Telegram buyer identity is required'), { statusCode:400, code:'TELEGRAM_BUYER_REQUIRED' });
+  const binding = db.prepare(`SELECT mo.id AS marketplace_order_id,mso.seller_order_id,mso.seller_id,
+      mso.organization_id,o.server_order_id,o.location_id
+    FROM marketplace_orders mo
+    JOIN marketplace_seller_orders mso ON mso.marketplace_order_id=mo.id
+    JOIN orders o ON o.chat_id=mso.seller_id AND o.local_id=mso.seller_order_id AND o.is_marketplace=1
+    WHERE mo.id=? AND mo.buyer_identity=? AND mso.seller_id=?
+      AND mso.seller_order_id=? AND mso.organization_id=? LIMIT 1`)
+    .get(String(marketplaceOrderId),buyer,String(chatId),String(sellerOrderId),organizationId);
+  if (!binding) throw Object.assign(new Error('Marketplace buyer order not found'), { statusCode:404, code:'MARKETPLACE_BUYER_ORDER_NOT_FOUND' });
+  const orderRow = db.prepare('SELECT * FROM orders WHERE chat_id=? AND server_order_id=? AND is_marketplace=1')
+    .get(String(chatId),String(binding.server_order_id));
+  if (!orderRow) throw Object.assign(new Error('Canonical seller order not found'), { statusCode:404, code:'ORDER_NOT_FOUND' });
+  return { tenant, organizationId, buyer, binding, orderRow, order:orderFromRow(orderRow) };
+}
+
+function telegramBuyerServiceItem(order, serviceItemId) {
+  const lines = Array.isArray(order?.items) ? order.items : [];
+  return lines.find(item =>
+    String(item.item_id ?? item.product_id ?? item.id ?? '') === String(serviceItemId)
+      && String(item.item_type || '').toLowerCase() === 'service') || null;
+}
+
+export async function assessTelegramBuyerServiceAppointmentWindow(chatId, telegramUserId, marketplaceOrderId, sellerOrderId, input = {}) {
+  const context = await getTelegramBuyerServiceOrderContext(chatId,telegramUserId,marketplaceOrderId,sellerOrderId);
+  const serviceItemId = bookingRequiredText(input.service_item_id ?? input.serviceItemId,'service_item_id');
+  if (!telegramBuyerServiceItem(context.order,serviceItemId)) {
+    throw Object.assign(new Error('Requested item is not a service line on this buyer order'), { statusCode:409, code:'SERVICE_BOOKING_ORDER_LINE_INVALID' });
+  }
+  const start = bookingTimestamp(input.requested_start ?? input.requestedStart,'requested_start');
+  const end = bookingTimestamp(input.requested_end ?? input.requestedEnd,'requested_end');
+  if (Date.parse(end) <= Date.parse(start)) throw Object.assign(new Error('requested_end must be later than requested_start'), { statusCode:400, code:'SERVICE_BOOKING_TIME_WINDOW_INVALID' });
+  const resources = db.prepare(`SELECT * FROM service_resources
+    WHERE organization_id=? AND chat_id=? AND status='ACTIVE'
+      AND (service_item_id IS NULL OR service_item_id=?)
+      AND (location_id IS NULL OR location_id=?)`)
+    .all(context.organizationId,String(chatId),serviceItemId,String(context.binding.location_id || ''));
+  if (!resources.length) return {
+    state:'UNKNOWN', reason:'NO_ELIGIBLE_ACTIVE_SERVICE_RESOURCE', checked_at:nowIso(),
+    availability_confirmed:false, commitment_created:false,
+  };
+  let unknown = false, knownUnavailable = false;
+  for (const resource of resources) {
+    const schedule = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=? AND organization_id=? AND chat_id=?')
+      .get(String(resource.id),context.organizationId,String(chatId));
+    if (!schedule) { unknown = true; continue; }
+    const assessment = assessServiceResourceCommitWindow({
+      timeZone:schedule.timezone,
+      workingHours:JSON.parse(schedule.working_hours_json || '[]'),
+      exceptions:JSON.parse(schedule.exceptions_json || '[]'),
+      start,end,
+    });
+    if (assessment.state === 'UNKNOWN') { unknown = true; continue; }
+    if (assessment.state !== 'WITHIN_DECLARED_HOURS') { knownUnavailable = true; continue; }
+    const conflict = db.prepare(`SELECT 1 FROM service_resource_commitments
+      WHERE organization_id=? AND chat_id=? AND resource_id=? AND status='ACTIVE'
+        AND starts_at < ? AND ends_at > ? LIMIT 1`).get(
+      context.organizationId,String(chatId),String(resource.id),end,start,
+    );
+    if (!conflict) return {
+      state:'FEASIBLE', reason:'DECLARED_HOURS_AND_CURRENT_COMMITMENTS_MATCH',
+      checked_at:nowIso(), eligible_resource_count:resources.length,
+      availability_confirmed:false, commitment_created:false,
+    };
+    knownUnavailable = true;
+  }
+  if (unknown) return {
+    state:'UNKNOWN', reason:'ONE_OR_MORE_RESOURCE_SCHEDULES_UNKNOWN', checked_at:nowIso(),
+    eligible_resource_count:resources.length, availability_confirmed:false, commitment_created:false,
+  };
+  return {
+    state:'UNAVAILABLE', reason:knownUnavailable?'NO_RESOURCE_WINDOW_FREE':'NO_RESOURCE_WINDOW_MATCH',
+    checked_at:nowIso(), eligible_resource_count:resources.length,
+    availability_confirmed:false, commitment_created:false,
+  };
+}
+
+export async function createTelegramBuyerServiceBooking(chatId, telegramUserId, marketplaceOrderId, sellerOrderId, input = {}, actor = null) {
+  const context = await getTelegramBuyerServiceOrderContext(chatId,telegramUserId,marketplaceOrderId,sellerOrderId);
+  const serviceItemId = bookingRequiredText(input.service_item_id ?? input.serviceItemId,'service_item_id');
+  if (!telegramBuyerServiceItem(context.order,serviceItemId)) {
+    throw Object.assign(new Error('Booking must reference a service line on this buyer order'), { statusCode:409, code:'SERVICE_BOOKING_ORDER_LINE_INVALID' });
+  }
+  const result = await createServiceBooking(chatId,context.binding.server_order_id,{
+    service_item_id:serviceItemId,
+    requested_start:input.requested_start ?? input.requestedStart,
+    requested_end:input.requested_end ?? input.requestedEnd,
+    appointment_mode:input.appointment_mode ?? input.appointmentMode,
+    customer_note:input.customer_note ?? input.customerNote,
+    idempotencyKey:input.idempotencyKey ?? input.idempotency_key,
+  },{
+    userId:null,deviceId:null,marketplaceOrderId:String(marketplaceOrderId),
+    buyerIdentity:context.buyer,buyerIdentityHash:hashToken(context.buyer),...actor,
+  });
+  return result;
+}
+
+export async function cancelTelegramBuyerServiceBooking(chatId, telegramUserId, marketplaceOrderId, sellerOrderId, bookingId, input = {}) {
+  const context = await getTelegramBuyerServiceOrderContext(chatId,telegramUserId,marketplaceOrderId,sellerOrderId);
+  const booking = db.prepare('SELECT * FROM service_bookings WHERE id=? AND chat_id=? AND organization_id=? AND server_order_id=?')
+    .get(String(bookingId),String(chatId),context.organizationId,String(context.binding.server_order_id));
+  if (!booking) throw Object.assign(new Error('Service booking not found for this buyer order'), { statusCode:404, code:'SERVICE_BOOKING_NOT_FOUND' });
+  return transitionServiceBooking(chatId,context.binding.server_order_id,bookingId,{
+    status:'CANCELLED',
+    expected_version:input.expected_version ?? input.expectedVersion,
+    idempotencyKey:input.idempotencyKey ?? input.idempotency_key,
+    reason:input.reason || 'Cancelled by customer',
+  },{
+    userId:null,deviceId:null,marketplaceOrderId:String(marketplaceOrderId),
+    buyerIdentity:context.buyer,buyerIdentityHash:hashToken(context.buyer),
+  });
+}
+
 export async function listTelegramBuyerOrders(chatId, telegramUserId, limit = 20) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
@@ -11912,7 +12031,32 @@ export async function listTelegramBuyerOrders(chatId, telegramUserId, limit = 20
       sellers: [],
     });
     const order = grouped.get(row.marketplace_order_id);
-    order.sellers.push({ seller_order_id: row.seller_order_id, status: row.seller_status, subtotal_minor: Number(row.subtotal_minor || 0), currency: row.seller_currency });
+    const sellerOrder = db.prepare('SELECT * FROM orders WHERE chat_id=? AND local_id=? AND is_marketplace=1')
+      .get(String(chatId),String(row.seller_order_id));
+    let serviceItems = [], serviceAppointments = [], timeZone = null;
+    if (sellerOrder) {
+      const canonical = orderFromRow(sellerOrder);
+      const lines = Array.isArray(canonical?.items) ? canonical.items : [];
+      serviceItems = lines.filter(line => String(line.item_type || '').toLowerCase() === 'service')
+        .map(line => ({
+          id:String(line.item_id ?? line.product_id ?? line.id ?? ''),
+          name:String(line.name || line.title || line.item_name || 'Service'),
+          quantity:Number(line.qty || line.quantity || 1),
+        })).filter(line => line.id);
+      serviceAppointments = db.prepare(`SELECT id,service_item_id,requested_start,requested_end,appointment_mode,status,version,created_at,updated_at
+        FROM service_bookings WHERE chat_id=? AND server_order_id=? ORDER BY created_at DESC,id DESC`)
+        .all(String(chatId),String(sellerOrder.server_order_id)).map(item => ({
+          id:item.id,service_item_id:item.service_item_id,requested_start:item.requested_start,
+          requested_end:item.requested_end,appointment_mode:item.appointment_mode,
+          status:item.status,version:Number(item.version),created_at:item.created_at,updated_at:item.updated_at,
+        }));
+      timeZone = String(db.prepare('SELECT timezone FROM organizations WHERE id=?').get(String(row.organization_id))?.timezone || '');
+    }
+    order.sellers.push({
+      seller_order_id:row.seller_order_id,status:row.seller_status,
+      subtotal_minor:Number(row.subtotal_minor||0),currency:row.seller_currency,
+      service_items:serviceItems,service_appointments:serviceAppointments,time_zone:timeZone,
+    });
   }
   return [...grouped.values()].slice(0, safeLimit);
 }
