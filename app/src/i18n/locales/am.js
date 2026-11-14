@@ -160,6 +160,8 @@ export default {
     serviceResourceManageProviders: "አቅራቢዎችን አስተዳድር",
     serviceResourceSelectProvider: "አቅራቢ ይምረጡ",
     serviceBookingChooseResource: "ለዚህ ቀጠሮ ንቁ ሀብት ይምረጡ (ቁጥሩን ያስገቡ):",
+    serviceBookingConfirmResource: "ቀጠሮውን አረጋግጥ",
+    serviceBookingCancelResource: "ሰርዝ",
     serviceResourceAssignProvider: "አቅራቢ መድብ",
     serviceResourceProviderAssigned: "አቅራቢው ለዚህ ሀብት ተመድቧል።",
     serviceResourceRevokeProvider: "የአቅራቢ መዳረሻን አስወግድ",
