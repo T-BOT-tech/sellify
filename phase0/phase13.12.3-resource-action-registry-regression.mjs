@@ -15,10 +15,10 @@ assert.ok(exists('backend/lib/security-context.js'));
 assert.ok(exists('phase0/phase13.12.2-security-context-contract-regression.mjs'));
 assert.match(registrySource, /RESOURCE_ACTION_REGISTRY/);
 assert.match(registrySource, /resourceActionRegistryContract/);
-assert.match(registrySource, /backend\\/lib\\/authorization\\.js/);
+assert.match(registrySource, /backend\/lib\/authorization\.js/);
 assert.doesNotMatch(registrySource, /ROLE_PERMISSIONS/);
-assert.doesNotMatch(registrySource, /export function authorize\\s*\\(/);
-assert.doesNotMatch(registrySource, /CREATE TABLE|INSERT INTO|UPDATE\\s+.*permission|permission_store\\s*=\\s*['"](?!none)/is);
+assert.doesNotMatch(registrySource, /export function authorize\s*\(/);
+assert.doesNotMatch(registrySource, /CREATE TABLE|INSERT INTO|UPDATE\s+.*permission|permission_store\s*=\s*['"](?!none)/is);
 
 const { RESOURCE_ACTION_REGISTRY, getResourceAction, listResourceActions, resourceActionRegistryContract } =
   await import('../backend/lib/resource-action-registry.js');
@@ -75,8 +75,8 @@ assert.equal(contract.registry_entries, 48);
 assert.equal(contract.packs.length, 5);
 
 // Phase 10.3 remains the only policy implementation.
-assert.match(authSource, /export function authorize\\(actor, organization, location, resource, action\\)/);
-assert.match(handoffSource, /Phase 13\\.12\\.2/);
+assert.match(authSource, /export function authorize\(actor, organization, location, resource, action\)/);
+assert.match(handoffSource, /Phase 13\.12\.2/);
 
 console.log('Phase 13.12.3 Resource / Action Registry Regression: PASS');
 console.log('Canonical Phase 10.3 authorization authority preserved: PASS');
