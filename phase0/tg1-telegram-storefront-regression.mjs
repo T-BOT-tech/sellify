@@ -19,6 +19,12 @@ assert.equal(created.status, 'CONFIGURED');
 assert.equal(created.botUsername, 'tg1_demo_bot');
 assert.equal(created.credentialRef, 'secret://telegram/tg1-demo');
 assert.equal(created.enabledCapabilities.includes('checkout'), true);
+const appointmentsEnabled = await upsertTelegramStorefrontConfig(row.chat_id, {
+  enabledCapabilities: ['browse', 'service_appointments'],
+}, actor);
+assert.equal(appointmentsEnabled.enabledCapabilities.includes('service_appointments'), true);
+assert.equal(appointmentsEnabled.enabledCapabilities.includes('order_status'), true,
+  'service appointment self-service must include buyer order history as its entry point');
 await assert.rejects(
   () => upsertTelegramStorefrontConfig(row.chat_id, { enabledCapabilities: ['browse', 'returns'] }, actor),
   error => error?.code === 'UNSUPPORTED_TELEGRAM_STOREFRONT_CAPABILITY'
