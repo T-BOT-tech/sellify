@@ -71,7 +71,7 @@ assert.equal(getResourceAction('service', 'service_booking', 'confirm').permissi
 assert.equal(getResourceAction('service', 'service_booking', 'cancel').permission, 'service:booking:cancel');
 
 assert.equal(getResourceAction('service', 'appointment_feasibility', 'assess').permission, null);
-assert.equal(listResourceActions({ packId: 'service' }).length, 6);
+assert.equal(listResourceActions({ packId: 'service' }).length, 11);
 
 
 const contract = resourceActionRegistryContract();
@@ -89,6 +89,6 @@ assert.match(handoffSource, /Phase 13\.12\.2/);
 console.log('Phase 13.12.3 Resource / Action Registry Regression: PASS');
 console.log('Canonical Phase 10.3 authorization authority preserved: PASS');
 console.log('Agriculture / Restaurant / Warehouse / Logistics / Service vocabulary registered: PASS');
-console.log('Service availability maps to central policy; appointment feasibility remains vocabulary-only: PASS');
+console.log('Service Resource, availability, and booking actions map to central policy; appointment feasibility remains vocabulary-only: PASS');
 console.log('Central permission mappings preserved without new evaluator/store: PASS');
 console.log('No duplicate authorization authority introduced: BLOCKED');
