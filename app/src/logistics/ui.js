@@ -294,6 +294,13 @@ export function renderLogistics() {
   const assignmentOnlyCards = assignmentOnly.map(assignment => {
     const serverOrderId = String(assignment.server_order_id);
     const status = String(assignment.status || 'ASSIGNED').toUpperCase();
+    const destination = assignment.dispatch?.destination ?? assignment.destination;
+    const destinationLabel = typeof destination === 'string'
+      ? destination
+      : destination?.address || destination?.details || destination?.label || '';
+    const locationLabel = assignment.dispatch?.locationName || assignment.location_name || assignment.location_code || '';
+    const scheduledLabel = assignment.dispatch?.scheduledAt || assignment.scheduled_at || '';
+    const trackingLabel = assignment.dispatch?.trackingReference || assignment.tracking_reference || '';
     const authRoles = new Set([
       ...(Array.isArray(config.authRoles) ? config.authRoles : []),
       ...(Array.isArray(config.contextualRoles) ? config.contextualRoles.map(role => role.role) : []),
@@ -315,8 +322,11 @@ export function renderLogistics() {
     return `<article class="logistics-card" data-assignment-only="1">
       <div class="logistics-top"><strong>Order ${escapeHtml(serverOrderId)}</strong><span class="logistics-status">${escapeHtml(status.replaceAll('_', ' '))}</span></div>
       <div class="logistics-meta">Order details are not currently loaded. Assignment status remains canonical.</div>
-      ${assignment.destination ? `<div class="logistics-meta">${escapeHtml(assignment.destination)}</div>` : ''}
-      ${assignment.scheduled_at ? `<div class="logistics-meta">${escapeHtml(assignment.scheduled_at)}</div>` : ''}
+      ${destinationLabel ? `<div class="logistics-meta">${escapeHtml(destinationLabel)}</div>` : ''}
+      ${locationLabel ? `<div class="logistics-meta">Location: ${escapeHtml(locationLabel)}</div>` : ''}
+      ${scheduledLabel ? `<div class="logistics-meta">Scheduled: ${escapeHtml(scheduledLabel)}</div>` : ''}
+      ${trackingLabel ? `<div class="logistics-meta">Tracking: ${escapeHtml(trackingLabel)}</div>` : ''}
+      ${assignment.courier_name ? `<div class="logistics-meta">Courier: ${escapeHtml(assignment.courier_name)}</div>` : ''}
       ${dispatchControls ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">${dispatchControls}</div>` : ''}
       ${courierControls}
     </article>`;
