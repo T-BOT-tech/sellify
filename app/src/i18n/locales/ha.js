@@ -76,6 +76,8 @@ export default {
     serviceResourceManageProviders: "Sarrafa masu bayar da sabis",
     serviceResourceSelectProvider: "Zaɓi mai bayar da sabis",
     serviceBookingChooseResource: "Zaɓi kayan aiki mai aiki don wannan alƙawari (shigar da lambarsa):",
+    serviceBookingConfirmResource: "Tabbatar da alƙawari",
+    serviceBookingCancelResource: "Soke",
     serviceResourceAssignProvider: "Sanya mai bayar da sabis",
     serviceResourceProviderAssigned: "An sanya mai bayar da sabis ga wannan albarkatu.",
     serviceResourceRevokeProvider: "Soke damar mai bayar da sabis",
