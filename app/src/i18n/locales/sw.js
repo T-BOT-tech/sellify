@@ -164,4 +164,12 @@ export default {
     serviceResourceProviderAssignFailed: "Imeshindwa kusasisha ufikiaji wa mtoa huduma.",
     serviceResourceNoProviderMembers: "Hakuna wanachama wa wafanyakazi wanaostahili.",
     serviceResourceProviderDescription: "Tazama rasilimali za huduma ulizokabidhiwa na udumishe saa za kazi zilizotangazwa. Upatikanaji haujathibitishwa hadi miadi iliyopo ikaguliwe.",
+    serviceBookingSelectResource: "Rasilimali ya huduma",
+    serviceBookingNoEligibleResource: "Hakuna rasilimali hai yenye ratiba iliyowekwa kwa huduma hii.",
+    serviceBookingResourceRequired: "Chagua rasilimali ya huduma kabla ya kuthibitisha miadi hii.",
+    serviceBookingAssignedResource: "Rasilimali iliyotengwa",
+    serviceBookingResourceUnknown: "Ahadi ya rasilimali haijulikani — inahitaji ukaguzi.",
+    serviceBookingResourceReleased: "Muda wa rasilimali umeachiliwa",
+    serviceResourceAvailabilityConfigured: "Ratiba imesanidiwa",
+    serviceResourceAvailabilityNotConfigured: "Ratiba haijasanidiwa",
 };
