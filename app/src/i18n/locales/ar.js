@@ -76,6 +76,8 @@ export default {
     serviceResourceManageProviders: "إدارة مقدمي الخدمة",
     serviceResourceSelectProvider: "اختيار مقدم الخدمة",
     serviceBookingChooseResource: "اختر مورداً نشطاً لهذا الموعد (أدخل رقمه):",
+    serviceBookingConfirmResource: "تأكيد الموعد",
+    serviceBookingCancelResource: "إلغاء",
     serviceResourceAssignProvider: "تعيين مقدم الخدمة",
     serviceResourceProviderAssigned: "تم تعيين مقدم الخدمة لهذا المورد.",
     serviceResourceRevokeProvider: "إلغاء وصول مقدم الخدمة",
