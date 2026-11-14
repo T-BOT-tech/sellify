@@ -250,4 +250,10 @@ export default {
     serviceResourceActivate: "Activate",
     serviceResourceDeactivate: "Deactivate",
     serviceResourceUnknownStale: "Availability is unknown or stale. Refresh before relying on it.",
+    serviceResourceAllServices: "All services",
+    serviceResourceOrganizationWide: "Organization-wide",
+    serviceResourceTypeProvider: "Provider / staff",
+    serviceResourceTypeFacility: "Facility / room",
+    serviceResourceTypeEquipment: "Equipment",
+    serviceResourceTypeOther: "Other",
 };
