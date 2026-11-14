@@ -35,7 +35,7 @@ function telegramInitData(userId) {
     query_id:'AA_TG11_'+String(userId),
     user:JSON.stringify({id:Number(userId),first_name:'TG11 Buyer',username:'tg11buyer'}),
   });
-  const check=[...params.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([key,value])=>key+'='+value).join('\\n');
+  const check=[...params.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([key,value])=>key+'='+value).join('\n');
   const secret=crypto.createHmac('sha256','WebAppData').update(botToken).digest();
   params.set('hash',crypto.createHmac('sha256',secret).update(check).digest('hex'));
   return params.toString();
