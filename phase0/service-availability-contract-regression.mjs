@@ -4,6 +4,7 @@ import {
   normalizeWorkingHours,
   normalizeAvailabilityExceptions,
   projectServiceAvailabilityState,
+  assessServiceResourceCommitWindow,
 } from '../backend/lib/service-availability-contract.js';
 
 assert.equal(isIanaTimeZone('Africa/Addis_Ababa'), true);
@@ -32,6 +33,36 @@ assert.throws(() => normalizeAvailabilityExceptions([{ date: '2026-02-30', kind:
 assert.throws(() => normalizeAvailabilityExceptions([
   { date: '2026-12-25', kind: 'CLOSED' }, { date: '2026-12-25', kind: 'OPEN', startTime: '10:00', endTime: '12:00' },
 ]), { code: 'SERVICE_AVAILABILITY_EXCEPTION_DUPLICATE' });
+const inHours = assessServiceResourceCommitWindow({
+  timeZone: 'Africa/Addis_Ababa',
+  workingHours: [{ weekday: 0, startTime: '08:00', endTime: '18:00' }],
+  exceptions: [],
+  start: '2026-11-01T06:00:00.000Z',
+  end: '2026-11-01T07:00:00.000Z',
+});
+assert.equal(inHours.state, 'WITHIN_DECLARED_HOURS');
+assert.equal(inHours.confirmsAvailability, false, 'working-hours assessment alone must never claim confirmed availability');
+const outsideHours = assessServiceResourceCommitWindow({
+  timeZone: 'Africa/Addis_Ababa',
+  workingHours: [{ weekday: 0, startTime: '08:00', endTime: '18:00' }],
+  exceptions: [{ date: '2026-11-01', kind: 'CLOSED' }],
+  start: '2026-11-01T06:00:00.000Z',
+  end: '2026-11-01T07:00:00.000Z',
+});
+assert.equal(outsideHours.state, 'OUTSIDE_DECLARED_HOURS');
+const unknownWindow = assessServiceResourceCommitWindow({
+  timeZone: 'Africa/Addis_Ababa', workingHours: [], exceptions: [],
+  start: '2026-11-01T06:00:00.000Z', end: '2026-11-01T07:00:00.000Z',
+});
+assert.equal(unknownWindow.state, 'OUTSIDE_DECLARED_HOURS');
+const crossDate = assessServiceResourceCommitWindow({
+  timeZone: 'Africa/Addis_Ababa',
+  workingHours: [{ weekday: 0, startTime: '08:00', endTime: '23:59' }],
+  exceptions: [],
+  start: '2026-11-01T20:30:00.000Z',
+  end: '2026-11-01T22:00:00.000Z',
+});
+assert.equal(crossDate.state, 'UNKNOWN');
 const state = projectServiceAvailabilityState({ scheduleConfigured: true });
 assert.equal(state.state, 'UNKNOWN');
 assert.equal(state.confirmsAvailability, false);
