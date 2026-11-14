@@ -164,5 +164,4 @@ export default {
     serviceResourceProviderAssignFailed: "Imeshindwa kusasisha ufikiaji wa mtoa huduma.",
     serviceResourceNoProviderMembers: "Hakuna wanachama wa wafanyakazi wanaostahili.",
     serviceResourceProviderDescription: "Tazama rasilimali za huduma ulizokabidhiwa na udumishe saa za kazi zilizotangazwa. Upatikanaji haujathibitishwa hadi miadi iliyopo ikaguliwe.",
-    serviceResourceProviderDescription: "Tazama rasilimali za huduma ulizokabidhiwa na udumishe saa za kazi zilizotangazwa. Upatikanaji haujathibitishwa hadi miadi iliyopo ikaguliwe.",
 };
