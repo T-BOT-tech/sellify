@@ -6093,6 +6093,16 @@ export async function updateServiceResource(chatId, resourceId, input = {}, acto
       return { resource: serviceResourceFromRow(row), replayed: true };
     }
     if (Number(row.version) !== expectedVersion) throw Object.assign(new Error('Service resource version conflict'), { statusCode: 409, code: 'SERVICE_RESOURCE_VERSION_CONFLICT' });
+    const activeCommitments = Number(db.prepare("SELECT COUNT(*) AS count FROM service_booking_resource_commitments WHERE resource_id=? AND state='COMMITTED'").get(String(resourceId))?.count || 0);
+    const identityChanged = String(values.resourceType) !== String(row.resource_type)
+      || String(refs.serviceItemId || '') !== String(row.service_item_id || '')
+      || String(refs.locationId || '') !== String(row.location_id || '');
+    const deactivated = String(row.status).toUpperCase() === 'ACTIVE' && String(values.status).toUpperCase() === 'INACTIVE';
+    if (activeCommitments > 0 && (identityChanged || deactivated)) {
+      throw Object.assign(new Error('A Service Resource with committed appointments cannot be deactivated or rebound until those appointments are released'), {
+        statusCode:409, code:'SERVICE_RESOURCE_HAS_ACTIVE_COMMITMENTS',
+      });
+    }
     const now = nowIso(), actorId = actor?.userId || actor?.user_id || null, nextVersion = expectedVersion + 1;
     const changed = db.prepare(`UPDATE service_resources SET
       resource_type=?,name=?,description=?,service_item_id=?,location_id=?,status=?,metadata_json=?,
