@@ -416,6 +416,7 @@ async function saveServiceResourceAvailability(button, root) {
 }
 
 export function serviceBookingsWorkspaceShell() {
+  if (!canManageServiceResources() && !hasServiceProviderResourceScope()) return '';
   const providerOnly = hasServiceProviderResourceScope() && !canManageServiceResources();
   return '<section id="serviceBookingsWorkspace" class="settings-section" aria-label="' + escapeAttr(t(providerOnly ? 'serviceResourceTitle' : 'serviceBookingsTitle')) + '">'
     + (providerOnly
