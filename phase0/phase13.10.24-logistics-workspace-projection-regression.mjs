@@ -58,3 +58,15 @@ assert.match(fulfillment, /String\(config\.chatId\) !== tenantId/);
 assert.match(fulfillment, /String\(config\.sessionToken\) !== sessionToken/);
 
 console.log('Phase 13.10.24 Logistics workspace projection regression: PASS');
+
+const serviceBookings = fs.readFileSync(new URL('../app/src/logistics/service-bookings.js', import.meta.url), 'utf8');
+assert.match(serviceBookings, /workspace\.dataset\.refreshSequence/);
+assert.match(serviceBookings, /String\(config\.chatId\) !== tenantId/);
+assert.match(serviceBookings, /String\(config\.sessionToken\) !== sessionToken/);
+assert.match(serviceBookings, /serviceBookingsTenant/,
+  'Service Booking refresh must not be coupled to every Logistics list render');
+const applyLogistics = ui.slice(ui.indexOf('export function applyLogisticsUI'), ui.indexOf('export function renderOrderFulfillmentPicker'));
+assert.doesNotMatch(applyLogistics, /refreshDeliveryAssignments\(/,
+  'general app renders must not trigger assignment network requests');
+assert.match(ui, /assignmentRefreshTenant/,
+  'opening Logistics must trigger a tenant-scoped initial assignment refresh');
