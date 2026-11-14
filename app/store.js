@@ -1,4 +1,5 @@
 import { applyTelegramBuyerChrome, getTelegramBuyerProfile, getTelegramInitData, isTelegramWebApp, hasTelegramCapability } from './src/telegram-buyer-storefront.js';
+import { serviceLocalDateTimeToIso } from './src/verticals/services/service-window-assessment-contract.js';
 
 const state = { products: [], query: '', category: 'ALL', branding: null, cart: {}, storefront: null, telegram: false, telegramBuyer: null, orderIdempotencyKey: null };
 const pathParts = location.pathname.split('/').filter(Boolean);
@@ -89,6 +90,117 @@ async function submitCheckout() {
     document.getElementById('successModal').style.display = 'flex';
   } catch (err) { document.getElementById('checkoutError').textContent = err.message || 'Unable to place order.'; } finally { btn.disabled = false; }
 }
+function buyerRequestKey(prefix) {
+  const id = globalThis.crypto?.randomUUID?.() || (Date.now().toString(36) + Math.random().toString(36).slice(2));
+  return 'tg-service-' + prefix + '-' + id;
+}
+function formatAppointmentTime(value, timeZone) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || '—');
+  try {
+    return new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short',...(timeZone?{timeZone}:{})}).format(date);
+  } catch { return date.toLocaleString(); }
+}
+function telegramAppointmentBase(orderId) {
+  return `/api/telegram-storefront/${encodeURIComponent(chatId)}/orders/${encodeURIComponent(orderId)}/service-appointments`;
+}
+function telegramBuyerHeaders(extra = {}) {
+  return { Accept:'application/json','Content-Type':'application/json','X-Telegram-Init-Data':getTelegramInitData(),...extra };
+}
+function openTelegramServiceAppointmentDialog({marketplaceOrderId,sellerOrderId,serviceItemId,serviceName,timeZone}) {
+  const dialog = document.createElement('dialog');
+  dialog.className = 'service-appointment-request-dialog';
+  dialog.style.cssText = 'width:min(94vw,520px);max-height:88vh;overflow:auto;border:1px solid var(--line);border-radius:16px;padding:18px;';
+  dialog.innerHTML = `
+    <form method="dialog" style="display:grid;gap:12px;">
+      <h2 style="margin:0;">Request an appointment</h2>
+      <div class="hint">${esc(serviceName)} · Seller timezone: ${esc(timeZone || 'not provided')}</div>
+      <label>Start date and time<input name="start" type="datetime-local" required></label>
+      <label>End date and time<input name="end" type="datetime-local" required></label>
+      <label>Appointment type<select name="mode"><option value="ON_SITE">At provider</option><option value="CUSTOMER_LOCATION">At my location</option><option value="REMOTE">Remote</option></select></label>
+      <label>Note (optional)<textarea name="note" maxlength="500" rows="3" placeholder="Anything the provider should know"></textarea></label>
+      <div data-assessment-state class="state" role="status" aria-live="polite">Choose a time and check its current feasibility.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="fulfillment-btn" data-check-time>Check time</button>
+        <button type="button" class="submit" data-send-request>Send request</button>
+        <button type="button" class="fulfillment-btn" data-close-dialog>Close</button>
+      </div>
+    </form>`;
+  document.body.append(dialog);
+  const form = dialog.querySelector('form');
+  const stateEl = dialog.querySelector('[data-assessment-state]');
+  const checkButton = dialog.querySelector('[data-check-time]');
+  const sendButton = dialog.querySelector('[data-send-request]');
+  let lastAssessment = null;
+  const readWindow = () => {
+    const start = serviceLocalDateTimeToIso(form.elements.start.value,timeZone);
+    const end = serviceLocalDateTimeToIso(form.elements.end.value,timeZone);
+    if (Date.parse(end) <= Date.parse(start)) throw new Error('End time must be later than start time.');
+    return { service_item_id:serviceItemId, requested_start:start, requested_end:end, seller_order_id:sellerOrderId };
+  };
+  checkButton.addEventListener('click',async()=>{
+    checkButton.disabled=true; stateEl.textContent='Checking current resource windows…';
+    try {
+      const payload=readWindow();
+      const response=await fetch(telegramAppointmentBase(marketplaceOrderId)+'/assessment',{
+        method:'POST',headers:telegramBuyerHeaders(),body:JSON.stringify(payload),
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(data?.error?.message||'Could not check appointment feasibility.');
+      lastAssessment=data.assessment||null;
+      if(lastAssessment?.state==='FEASIBLE') stateEl.textContent='Potentially feasible: a resource window appears to fit. This is not a reservation or confirmation.';
+      else if(lastAssessment?.state==='UNAVAILABLE') stateEl.textContent='No current resource window appears free. You may still send a request for seller review; it will not be confirmed.';
+      else stateEl.textContent='Availability is UNKNOWN. You may still send a request for seller review; no slot is reserved.';
+    } catch(error) { lastAssessment=null; stateEl.textContent=error.message||'Availability is UNKNOWN. The request has not been sent.'; }
+    finally { checkButton.disabled=false; }
+  });
+  sendButton.addEventListener('click',async()=>{
+    sendButton.disabled=true; stateEl.textContent='Sending appointment request…';
+    try {
+      const payload={...readWindow(),appointment_mode:form.elements.mode.value,customer_note:form.elements.note.value.trim()};
+      const response=await fetch(telegramAppointmentBase(marketplaceOrderId),{
+        method:'POST',headers:telegramBuyerHeaders({'Idempotency-Key':buyerRequestKey('create')}),
+        body:JSON.stringify(payload),
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(data?.error?.message||'Appointment request could not be sent.');
+      dialog.close(); dialog.remove();
+      const state=document.getElementById('ordersState');
+      if(state) state.textContent='Appointment request sent. It is pending seller review; no resource slot is confirmed yet.';
+      await loadTelegramOrders();
+    } catch(error) {
+      stateEl.textContent=(error instanceof TypeError?'Offline — request not sent. Reconnect and retry.':error.message||'Request not sent.');
+      sendButton.disabled=false;
+    }
+  });
+  dialog.querySelector('[data-close-dialog]').addEventListener('click',()=>{dialog.close();dialog.remove();});
+  dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+  dialog.showModal();
+}
+async function cancelTelegramServiceAppointment(button) {
+  button.disabled=true;
+  const orderId=button.dataset.marketplaceOrder;
+  try {
+    const response=await fetch(telegramAppointmentBase(orderId)+'/'+encodeURIComponent(button.dataset.bookingId),{
+      method:'PATCH',
+      headers:telegramBuyerHeaders({'Idempotency-Key':buyerRequestKey('cancel')}),
+      body:JSON.stringify({
+        seller_order_id:button.dataset.sellerOrder,
+        expected_version:Number(button.dataset.version),
+        reason:'Cancelled by customer',
+      }),
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(data?.error?.message||'Appointment could not be cancelled.');
+    await loadTelegramOrders();
+    const state=document.getElementById('ordersState');
+    if(state) state.textContent='Appointment request cancelled.';
+  } catch(error) {
+    const state=document.getElementById('ordersState');
+    if(state) state.textContent=(error instanceof TypeError?'Offline — cancellation not sent. Reconnect and retry.':error.message||'Cancellation not sent.');
+    button.disabled=false;
+  }
+}
 async function loadTelegramOrders() {
   if (!state.telegram || !hasTelegramCapability(state.storefront, 'order_status')) return;
   const modal = document.getElementById('ordersModal'); const stateEl = document.getElementById('ordersState'); const list = document.getElementById('ordersList');
@@ -98,9 +210,29 @@ async function loadTelegramOrders() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error?.message || 'Unable to load orders.');
     const orders = Array.isArray(data.orders) ? data.orders : [];
+    const appointmentsEnabled = hasTelegramCapability(state.storefront,'service_appointments');
     stateEl.textContent = orders.length ? `${orders.length} recent order${orders.length === 1 ? '' : 's'}` : 'No orders found for this store.';
-    list.innerHTML = orders.map(o => `<article class="card" style="margin:10px 0;padding:12px"><strong>Order ${esc(String(o.marketplace_order_id).slice(0,8))}…</strong><div style="margin-top:6px;color:var(--muted);font-size:12px">${esc(o.status || 'queued')} · ${money(o.total_minor, o.currency)}</div>${(o.sellers || []).map(x => `<div style="margin-top:6px;font-size:12px">Seller order: ${esc(x.seller_order_id)} · ${esc(x.status || 'queued')}</div>`).join('')}<button class="fulfillment-btn" style="margin-top:10px" data-fulfillment-order="${esc(o.marketplace_order_id)}">Delivery & returns</button></article>`).join('');
+    list.innerHTML = orders.map(o => `<article class="card" style="margin:10px 0;padding:12px"><strong>Order ${esc(String(o.marketplace_order_id).slice(0,8))}…</strong><div style="margin-top:6px;color:var(--muted);font-size:12px">${esc(o.status || 'queued')} · ${money(o.total_minor, o.currency)}</div>${(o.sellers || []).map(seller => `
+      <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--line);">
+        <div style="font-size:12px;">Seller order: ${esc(seller.seller_order_id)} · ${esc(seller.status || 'queued')}</div>
+        ${appointmentsEnabled && (seller.service_items||[]).length ? `
+          <div style="margin-top:8px;font-weight:600;">Service appointments</div>
+          ${(seller.service_appointments||[]).map(appointment => `
+            <div style="margin-top:6px;padding:8px;border:1px solid var(--line);border-radius:9px;">
+              <strong>${esc(appointment.status)}</strong>
+              <div class="hint">${esc(appointment.service_item_id)} · ${esc(formatAppointmentTime(appointment.requested_start,seller.time_zone))} – ${esc(formatAppointmentTime(appointment.requested_end,seller.time_zone))}</div>
+              ${['REQUESTED','ACCEPTED','CONFIRMED'].includes(String(appointment.status).toUpperCase()) ? `<button class="fulfillment-btn" data-cancel-appointment data-marketplace-order="${esc(o.marketplace_order_id)}" data-seller-order="${esc(seller.seller_order_id)}" data-booking-id="${esc(appointment.id)}" data-version="${esc(appointment.version)}">Cancel request</button>` : ''}
+            </div>`).join('')}
+          ${(seller.service_items||[]).map(item => `<button class="fulfillment-btn" style="margin-top:8px" data-request-appointment data-marketplace-order="${esc(o.marketplace_order_id)}" data-seller-order="${esc(seller.seller_order_id)}" data-service-item="${esc(item.id)}" data-service-name="${esc(item.name)}" data-time-zone="${esc(seller.time_zone||'')}">Request ${esc(item.name)} appointment</button>`).join('')}
+        ` : ''}
+      </div>`).join('')}
+      <button class="fulfillment-btn" style="margin-top:10px" data-fulfillment-order="${esc(o.marketplace_order_id)}">Delivery & returns</button></article>`).join('');
     list.querySelectorAll('[data-fulfillment-order]').forEach(btn => btn.addEventListener('click', () => loadTelegramFulfillment(btn.dataset.fulfillmentOrder)));
+    list.querySelectorAll('[data-request-appointment]').forEach(btn => btn.addEventListener('click',()=>openTelegramServiceAppointmentDialog({
+      marketplaceOrderId:btn.dataset.marketplaceOrder,sellerOrderId:btn.dataset.sellerOrder,
+      serviceItemId:btn.dataset.serviceItem,serviceName:btn.dataset.serviceName,timeZone:btn.dataset.timeZone,
+    })));
+    list.querySelectorAll('[data-cancel-appointment]').forEach(btn => btn.addEventListener('click',()=>cancelTelegramServiceAppointment(btn)));
   } catch (e) { stateEl.textContent = e.message || 'Unable to load orders.'; list.innerHTML = ''; }
 }
 
