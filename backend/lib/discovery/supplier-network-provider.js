@@ -35,6 +35,13 @@ export const supplierNetworkDiscoveryProvider = Object.freeze({
       organizationId: row.organizationId,
       organization: { id: row.organizationId, name: row.organizationName },
       profile: row.profile,
+      catalog: Array.isArray(row.catalog) ? row.catalog.map(item => ({
+        id: item.id, productId: item.productId, productName: item.productName,
+        unit: item.unit, availabilityStatus: item.availabilityStatus,
+      })) : [],
+      capabilities: Array.isArray(row.capabilities) ? row.capabilities.map(item => ({
+        id: item.id, code: item.code, name: item.name, category: item.category,
+      })) : [],
       availability: {
         catalogCount: Array.isArray(row.catalog) ? row.catalog.length : 0,
         capacitySignalCount: Array.isArray(row.capacitySignals) ? row.capacitySignals.length : 0,
