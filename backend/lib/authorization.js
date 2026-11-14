@@ -264,6 +264,7 @@ export function authorize(actor, organization, location, resource, action, resou
     }))
     .filter(item => {
       if (!item.role) return false;
+      if (item.role === 'service_provider' && item.scopeType !== 'RESOURCE') return false;
       if (item.scopeType === 'ORGANIZATION') return true;
       if (item.scopeType === 'LOCATION') {
         return requestedLocationId != null && String(requestedLocationId) === item.scopeId;
