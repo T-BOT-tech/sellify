@@ -158,6 +158,7 @@ export default {
     serviceAvailabilityCommitmentsNotChecked: "Beellamoonni fi qabeenyi duraan qabaman hin ilaalamne; argamuun hin mirkanoofne.",
     serviceResourceManageProviders: "Dhiyeessitoota bulchi",
     serviceResourceSelectProvider: "Dhiyeessaa filadhu",
+    serviceBookingChooseResource: "Beellama kanaaf qabeenya hojii irra jiru filadhu (lakkoofsa isaa galchi):",
     serviceResourceAssignProvider: "Dhiyeessaa ramadi",
     serviceResourceProviderAssigned: "Dhiyeessaan qabeenya kanaaf ramadameera.",
     serviceResourceRevokeProvider: "Hayyama dhiyeessaa haqii",
