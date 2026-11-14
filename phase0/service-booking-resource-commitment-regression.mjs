@@ -36,7 +36,7 @@ assert.ok(transition.indexOf('INSERT INTO service_booking_resource_commitments')
 assert.match(server, /service:service_resource:manage/);
 assert.match(server, /service:booking:confirm/);
 assert.match(server, /resourceContext:\s*\{/);
-assert.match(server, /SERVICE_BOOKING_RESOURCE_REQUIRED/);
+assert.match(store, /SERVICE_BOOKING_RESOURCE_REQUIRED/);
 assert.match(ui, /service-booking-resource-select/);
 assert.match(ui, /resource_id: resourceId/);
 assert.match(ui, /serviceBookingNoEligibleResource/);
