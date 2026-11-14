@@ -29,8 +29,8 @@ export default {
     serviceBookingReasonPrompt: "أدخل سبباً لـ",
     serviceBookingCompletionPrompt: "ملاحظة الإكمال (اختيارية):",
     serviceBookingUpdateFailed: "فشل تحديث الحجز.",
-    serviceBookingsLoadFailed: "تعذر تحميل حجوزات الخدمات."
-,    serviceResourceTitle: "موارد الخدمة",
+    serviceBookingsLoadFailed: "تعذر تحميل حجوزات الخدمات.",
+    serviceResourceTitle: "موارد الخدمة",
     serviceResourceDescription: "إدارة مقدمي الخدمة والمرافق والمعدات. هذا السجل لا يؤكد التوفر أو المواعيد.",
     serviceResourceName: "اسم المورد",
     serviceResourceDescriptionField: "الوصف (اختياري)",
