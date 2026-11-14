@@ -63,6 +63,24 @@ const crossDate = assessServiceResourceCommitWindow({
   end: '2026-11-01T22:00:00.000Z',
 });
 assert.equal(crossDate.state, 'UNKNOWN');
+const secondsPastClose = assessServiceResourceCommitWindow({
+  timeZone: 'Africa/Addis_Ababa',
+  workingHours: [{ weekday: 0, startTime: '08:00', endTime: '18:00' }],
+  exceptions: [],
+  start: '2026-11-01T14:59:30.000Z',
+  end: '2026-11-01T15:00:30.000Z',
+});
+assert.equal(secondsPastClose.state, 'OUTSIDE_DECLARED_HOURS',
+  'sub-minute timestamps must not round an appointment past closing time into the declared interval');
+const ambiguousDst = assessServiceResourceCommitWindow({
+  timeZone: 'Europe/London',
+  workingHours: [{ weekday: 0, startTime: '00:00', endTime: '23:59' }],
+  exceptions: [],
+  start: '2026-10-25T00:30:00.000Z',
+  end: '2026-10-25T01:15:00.000Z',
+});
+assert.equal(ambiguousDst.state, 'UNKNOWN',
+  'ambiguous fall-back local clock ordering must fail closed');
 const state = projectServiceAvailabilityState({ scheduleConfigured: true });
 assert.equal(state.state, 'UNKNOWN');
 assert.equal(state.confirmsAvailability, false);
