@@ -75,6 +75,7 @@ export default {
     serviceAvailabilityCommitmentsNotChecked: "لم تتم مراجعة المواعيد أو التزامات الموارد الحالية؛ التوفر غير مؤكد.",
     serviceResourceManageProviders: "إدارة مقدمي الخدمة",
     serviceResourceSelectProvider: "اختيار مقدم الخدمة",
+    serviceBookingChooseResource: "اختر مورداً نشطاً لهذا الموعد (أدخل رقمه):",
     serviceResourceAssignProvider: "تعيين مقدم الخدمة",
     serviceResourceProviderAssigned: "تم تعيين مقدم الخدمة لهذا المورد.",
     serviceResourceRevokeProvider: "إلغاء وصول مقدم الخدمة",
