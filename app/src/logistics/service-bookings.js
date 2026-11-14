@@ -336,6 +336,12 @@ export function mountServiceBookingsWorkspace(root = document) {
       }
       if (createResource) { event.preventDefault(); saveServiceResource(createResource, root); }
     });
+    root.addEventListener('submit', event => {
+      if (event.target?.id !== 'serviceResourceForm') return;
+      event.preventDefault();
+      const button = event.target.querySelector('#serviceResourceCreate');
+      if (button) saveServiceResource(button, root);
+    });
   }
   const tenantKey = config.chatId && config.sessionToken
     ? String(config.chatId) + ':' + String(config.sessionToken)
