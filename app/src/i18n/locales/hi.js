@@ -159,6 +159,7 @@ export default {
     serviceAvailabilityCommitmentsNotChecked: "मौजूदा अपॉइंटमेंट और संसाधन प्रतिबद्धताओं की जाँच नहीं हुई; उपलब्धता की पुष्टि नहीं है।",
     serviceResourceManageProviders: "प्रदाता प्रबंधित करें",
     serviceResourceSelectProvider: "प्रदाता चुनें",
+    serviceBookingChooseResource: "इस अपॉइंटमेंट के लिए सक्रिय संसाधन चुनें (उसका नंबर दर्ज करें):",
     serviceResourceAssignProvider: "प्रदाता नियुक्त करें",
     serviceResourceProviderAssigned: "प्रदाता को इस संसाधन के लिए नियुक्त किया गया।",
     serviceResourceRevokeProvider: "प्रदाता की पहुँच रद्द करें",
