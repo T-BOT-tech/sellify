@@ -130,8 +130,11 @@ try {
     logistics.applyLogisticsUI();
   });
   assert.equal(assignmentReads, readsBeforeApply, 'applyLogisticsUI must not refetch assignments on every app render');
+  const explicitRefresh = page.waitForRequest(request =>
+    request.url().includes('/tenants/test-tenant/delivery-assignments')
+  );
   await page.getByRole('button', { name: 'Refresh' }).click();
-  await page.waitForFunction(expected => window.__assignmentReads >= expected, readsBeforeApply + 1).catch(() => {});
+  await explicitRefresh;
   assert.ok(assignmentReads > readsBeforeApply, 'explicit workspace refresh must fetch canonical assignments');
 
   // Viewer sees operational evidence but no courier lifecycle controls.
