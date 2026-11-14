@@ -11,7 +11,7 @@ Establish one explicit contract for security identity, tenant scope, location sc
 Actor / authenticated session
   → Security Context
   → Organization + Location scope
-  → Phase 10.3 authorize(actor, organization, location, resource, action)
+  → Phase 10.3 authorize(actor, organization, location, resource, action[, resourceContext])
   → ALLOW | DENY | REQUIRES_APPROVAL
 ```
 
@@ -79,15 +79,7 @@ not read or write the database.
 
 ## Compatibility rule
 
-The existing API remains unchanged:
-
-```text
-authorize(actor, organization, location, resource, action)
-```
-
-No call-site migration is required by 13.12.2. Existing `requireAuthorization()`
-continues to enforce tenant scope and then delegates to the canonical
-`authorize()` policy.
+The original five-argument API remains compatible. The canonical evaluator now accepts an optional sixth `resourceContext` argument for the narrowly defined Service Resource scope. Existing five-argument call sites require no migration. Existing `requireAuthorization()` continues to enforce tenant scope and then delegates to the same canonical `authorize()` policy.
 
 ## Security rule
 
