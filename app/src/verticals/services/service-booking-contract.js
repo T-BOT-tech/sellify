@@ -1,7 +1,8 @@
 // Sellify Service Booking Contract — request and lifecycle semantics only.
-// This contract defines booking vocabulary; it does not persist records or
-// replace canonical Order, Payment Core, Fulfillment, or Logistics Scheduling.
-// Durable mutations must be implemented through those existing authorities.
+// This contract defines booking vocabulary; durable booking lifecycle belongs
+// to Service Booking. Canonical Order and Payment Core remain separate; Service
+// Resource Availability supplies declared working-time evidence. It does not
+// create a Logistics Scheduling authority.
 
 export const SERVICE_BOOKING_CONTRACT_VERSION = '1.0';
 
@@ -98,7 +99,7 @@ export function normalizeServiceBookingRequest(input = {}) {
     appointment_mode: mode,
     customer_note: optionalText(input.customer_note ?? input.customerNote, 'customer_note', 500),
     status: 'REQUESTED',
-    scheduling_authority: 'existing_logistics_scheduling_when_applicable',
+    scheduling_authority: 'service_resource_availability_and_booking_lifecycle',
     order_authority: 'canonical_commerce_order',
     payment_authority: 'payment_core',
     persistence: 'none',
@@ -132,7 +133,7 @@ export function serviceBookingContract() {
     reason_required_statuses: SERVICE_BOOKING_REASON_REQUIRED_STATUSES,
     order_authority: 'canonical_commerce_order',
     payment_authority: 'payment_core',
-    scheduling_authority: 'existing_logistics_scheduling_when_applicable',
+    scheduling_authority: 'service_resource_availability_and_booking_lifecycle',
     persists: false,
     creates_order: false,
     creates_payment: false,
