@@ -251,6 +251,21 @@ try {
     fulfillment_status: canonicalOrderAfterCompletion.fulfillment_status ?? null,
   }, canonicalOrderStateBefore, 'service completion must not mutate canonical order/payment/fulfillment lifecycle');
 
+  // Exact adjacency is allowed; the first appointment ends when this one starts.
+  const adjacentBooking = await store.createServiceBooking(seller.chatId, order.server_order_id, {
+    ...request, requested_start: '2026-11-01T10:00:00+03:00', requested_end: '2026-11-01T11:00:00+03:00',
+    idempotency_key: 'booking-adjacent-create-' + suffix,
+  }, { userId: owner.id });
+  await store.transitionServiceBooking(seller.chatId, order.server_order_id, adjacentBooking.booking.id, {
+    status: 'ACCEPTED', expected_version: 1, idempotency_key: 'booking-adjacent-accept-' + suffix,
+  }, { userId: owner.id });
+  const adjacentConfirmed = await store.transitionServiceBooking(seller.chatId, order.server_order_id, adjacentBooking.booking.id, {
+    status: 'CONFIRMED', expected_version: 2, resource_id: serviceResource.id,
+    idempotency_key: 'booking-adjacent-confirm-' + suffix,
+  }, { userId: owner.id });
+  assert.equal(adjacentConfirmed.booking.resource_commitment_state, 'COMMITTED',
+    'a back-to-back appointment may commit without a false overlap conflict');
+
   // Two independent bookings race for overlapping intervals on the same resource.
   const concurrentRequests = await Promise.all([0, 1].map(index => store.createServiceBooking(
     seller.chatId, order.server_order_id, {
@@ -275,8 +290,8 @@ try {
     'only one overlapping booking may commit against the resource');
   assert.equal(concurrentResults.filter(item => item.status === 'rejected' && item.reason?.code === 'SERVICE_RESOURCE_TIME_CONFLICT').length, 1,
     'the competing overlapping booking must fail with an explicit conflict');
-  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM service_booking_resource_commitments WHERE resource_id=? AND state='COMMITTED'").get(serviceResource.id).count, 2,
-    'the first confirmed booking and one concurrent winner occupy the resource; completed booking is released');
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM service_booking_resource_commitments WHERE resource_id=? AND state='COMMITTED'").get(serviceResource.id).count, 3,
+    'the first booking, adjacent booking, and one concurrent winner occupy the resource; completed booking is released');
 
   const outsideHours = await store.createServiceBooking(seller.chatId, order.server_order_id, {
     ...request, requested_start: '2026-11-01T18:00:00+03:00', requested_end: '2026-11-01T19:00:00+03:00',
