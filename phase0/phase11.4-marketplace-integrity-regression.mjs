@@ -212,11 +212,12 @@ try {
   });
   assert.equal(deliveryCheckoutReplay.response.status, 200);
   assert.equal(deliveryCheckoutReplay.json.marketplace_order_id, deliveryCheckout.json.marketplace_order_id);
-  const deliveryCheckoutMovements = db.prepare(`
+  const deliveryCheckoutSales = db.prepare(`
     SELECT * FROM inventory_movements
     WHERE organization_id = ? AND product_id = 'delivery-integrity-item'
+      AND movement_type = 'SALE'
   `).all(sellerSession.organizationId);
-  assert.equal(deliveryCheckoutMovements.length, 1, 'delivery checkout replay must not add another SALE');
+  assert.equal(deliveryCheckoutSales.length, 1, 'delivery checkout replay must not add another SALE');
   const deliveryMaster = db.prepare('SELECT * FROM marketplace_orders WHERE id = ?')
     .get(deliveryCheckout.json.marketplace_order_id);
   const deliveryLegacyOrder = (await store.getOrders(seller.chatId))
