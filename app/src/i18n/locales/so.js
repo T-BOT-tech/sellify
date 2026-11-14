@@ -159,6 +159,8 @@ export default {
     serviceResourceManageProviders: "Maamul bixiyeyaasha",
     serviceResourceSelectProvider: "Dooro bixiye",
     serviceBookingChooseResource: "Dooro kheyraad firfircoon oo ballantan ah (geli lambarkiisa):",
+    serviceBookingConfirmResource: "Xaqiiji ballanta",
+    serviceBookingCancelResource: "Jooji",
     serviceResourceAssignProvider: "U qoondee bixiye",
     serviceResourceProviderAssigned: "Bixiyaha waxaa loo qoondeeyay kheyraadkan.",
     serviceResourceRevokeProvider: "Ka noqo gelitaanka bixiyaha",
