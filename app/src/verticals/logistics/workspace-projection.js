@@ -45,7 +45,7 @@ function recordFromAssignment(assignment) {
     server_order_id: id(assignment?.server_order_id),
     unresolved_order: true,
     fulfillment_type: assignment?.fulfillment_type ?? 'delivery',
-    fulfillment_status: null,
+    fulfillment_status: String(assignment?.fulfillment_status || '').toLowerCase() || null,
     shipment_id: id(assignment?.shipment_id),
     tracking_reference: assignment?.tracking_reference ?? null,
     assignment_id: id(assignment?.id),
