@@ -66,7 +66,7 @@ function renderBookingCard(order, booking) {
     .filter(target => target !== 'CONFIRMED' || canCommit)
     .map(target =>
       '<button type="button" class="btn-secondary service-booking-action" data-order-id="' + escapeAttr(order.server_order_id)
-      + '" data-booking-id="' + escapeAttr(booking.id) + '" data-service-item-id="' + escapeAttr(booking.service_item_id || '') + '" data-version="' + escapeAttr(booking.version)
+      + '" data-booking-id="' + escapeAttr(booking.id) + '" data-service-item-id="' + escapeAttr(booking.service_item_id || '') + '" data-order-location-id="' + escapeAttr(order.location_id || '') + '" data-version="' + escapeAttr(booking.version)
       + '" data-target="' + escapeAttr(target) + '">' + escapeHtml(target.replaceAll('_', ' ')) + '</button>'
     ).join('') : '';
   return '<article class="logistics-card service-booking-card">'
@@ -507,7 +507,8 @@ async function chooseServiceBookingResource(button) {
   if (!response.ok) throw new Error(data?.error?.message || t('serviceResourceLoadFailed'));
   const eligible = (Array.isArray(data.resources) ? data.resources : [])
     .filter(resource => String(resource.status || '').toUpperCase() === 'ACTIVE'
-      && (!resource.serviceItemId || String(resource.serviceItemId) === String(button.dataset.serviceItemId || '')));
+      && (!resource.serviceItemId || String(resource.serviceItemId) === String(button.dataset.serviceItemId || ''))
+      && (!resource.locationId || String(resource.locationId) === String(button.dataset.orderLocationId || '')));
   if (!eligible.length) throw new Error(t('serviceResourceEmpty'));
 
   const dialog = document.createElement('dialog');
