@@ -601,6 +601,20 @@ async function handleTelegramStorefrontOrderHistory(req, res, chatId) {
   }
 }
 
+function telegramBuyerServiceBookingProjection(booking) {
+  return {
+    id:String(booking.id),
+    service_item_id:String(booking.service_item_id),
+    requested_start:booking.requested_start,
+    requested_end:booking.requested_end,
+    appointment_mode:booking.appointment_mode,
+    status:booking.status,
+    version:Number(booking.version),
+    created_at:booking.created_at,
+    updated_at:booking.updated_at,
+  };
+}
+
 async function handleTelegramStorefrontServiceAppointments(req, res, chatId, marketplaceOrderId, bookingId = null, assessmentOnly = false) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -627,7 +641,7 @@ async function handleTelegramStorefrontServiceAppointments(req, res, chatId, mar
       const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
       if (!idempotencyKey) return sendJSON(res,400,{error:{message:'Idempotency-Key is required',status:400,code:'IDEMPOTENCY_KEY_REQUIRED'}},req);
       const result = await createTelegramBuyerServiceBooking(chatId,verified.telegramUserId,marketplaceOrderId,sellerOrderId,{...body,idempotencyKey},actor);
-      return sendJSON(res,result.replayed?200:201,{booking:result.booking,replayed:result.replayed},req);
+      return sendJSON(res,result.replayed?200:201,{booking:telegramBuyerServiceBookingProjection(result.booking),replayed:result.replayed},req);
     }
     if (req.method === 'PATCH' && bookingId) {
       const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
