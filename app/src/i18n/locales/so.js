@@ -158,6 +158,7 @@ export default {
     serviceAvailabilityCommitmentsNotChecked: "Ballamaha jira iyo qoondeynta kheyraadka lama hubin; helitaankuna lama xaqiijin.",
     serviceResourceManageProviders: "Maamul bixiyeyaasha",
     serviceResourceSelectProvider: "Dooro bixiye",
+    serviceBookingChooseResource: "Dooro kheyraad firfircoon oo ballantan ah (geli lambarkiisa):",
     serviceResourceAssignProvider: "U qoondee bixiye",
     serviceResourceProviderAssigned: "Bixiyaha waxaa loo qoondeeyay kheyraadkan.",
     serviceResourceRevokeProvider: "Ka noqo gelitaanka bixiyaha",
