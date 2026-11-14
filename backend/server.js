@@ -417,11 +417,11 @@ async function requireTenantAuth(req, tenant) {
   throw Object.assign(new Error('Invalid or missing session'), { statusCode: 401 });
 }
 
-async function requireAuthorization(session, tenant, resource, action, { location = null, deniedMessage = 'Permission denied' } = {}) {
+async function requireAuthorization(session, tenant, resource, action, { location = null, resourceContext = null, deniedMessage = 'Permission denied' } = {}) {
   assertTenantScope(session, tenant);
   if (location) assertLocationScope(session, tenant, location);
   const organization = tenant?.organizationId || session?.organizationId;
-  const decision = authorize(session, organization, location, resource, action);
+  const decision = authorize(session, organization, location, resource, action, resourceContext);
   if (decision === AUTHZ.ALLOW) return decision;
   // Authorization failures use the existing audit_events table; this does not
   // create a second audit system. Best-effort logging must never turn a 403
@@ -432,8 +432,8 @@ async function requireAuthorization(session, tenant, resource, action, { locatio
       organizationId: session?.organizationId ?? null,
       action: 'authorization.denied',
       entityType: String(resource || 'unknown'),
-      entityId: null,
-      metadata: { action: String(action || ''), decision, role: String(session?.role || '') },
+      entityId: resourceContext?.resourceId ?? resourceContext?.resource_id ?? null,
+      metadata: { action: String(action || ''), decision, role: String(session?.role || ''), resourceContext: resourceContext ? { resourceType: resourceContext.resourceType, resourceId: resourceContext.resourceId } : null },
     });
   } catch (auditError) {
     console.error('[authorization] denied-event audit failed', auditError);
@@ -3107,6 +3107,29 @@ async function handleServiceResources(req, res, chatId, resourceId = null) {
   if (req.method === 'GET') {
     if (resourceId) return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
     const url = new URL(req.url, 'http://localhost');
+    const serviceProviderScopes = (Array.isArray(session.contextualRoles) ? session.contextualRoles : [])
+      .filter(item => String(item?.role || '').toLowerCase() === 'service_provider'
+        && String(item?.scopeType || '').toUpperCase() === 'RESOURCE' && item?.scopeId)
+      .map(item => String(item.scopeId));
+    const isResourceOnlyProvider = serviceProviderScopes.length > 0
+      && !['owner', 'manager'].includes(String(session.role || '').toLowerCase());
+    if (isResourceOnlyProvider) {
+      const assigned = new Set(serviceProviderScopes);
+      const resources = (await listServiceResources(chatId, {
+        includeInactive: false,
+        serviceItemId: url.searchParams.get('service_item_id') || null,
+      })).filter(item => assigned.has(String(item.id)));
+      for (const resource of resources) {
+        const resourceLocation = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
+        if (resource.locationId && !resourceLocation) throw Object.assign(new Error('Service resource location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
+        await requireAuthorization(session, tenant, 'service_resource', 'service:service_resource:view', {
+          location: resourceLocation,
+          resourceContext: { resourceType: 'service_resource', resourceId: resource.id, organizationId: resource.organizationId, locationId: resource.locationId },
+          deniedMessage: 'Assigned Service Resource view permission required',
+        });
+      }
+      return sendJSON(res, 200, { resources, state: 'READY', authority: 'service_resource_registry', scope: 'ASSIGNED_RESOURCES' }, req);
+    }
     const requestedLocationId = url.searchParams.get('location_id') || session.locationId || null;
     const location = requestedLocationId ? await getOrganizationLocation(chatId, requestedLocationId) : null;
     if (requestedLocationId && !location) throw Object.assign(new Error('Service resource location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
@@ -3185,10 +3208,18 @@ async function handleServiceResourceAvailability(req, res, chatId, resourceId) {
   if (!resource) return sendJSON(res, 404, { error: { message: 'Service resource not found', status: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' } }, req);
   const location = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
   if (resource.locationId && !location) throw Object.assign(new Error('Service resource location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
-  if (!resource.locationId && session.locationId) throw Object.assign(new Error('Organization-wide service resources require organization-level scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
-  const action = req.method === 'GET' ? 'service:service_resource:view' : 'service:service_resource:manage';
+  const providerResourceScope = (Array.isArray(session.contextualRoles) ? session.contextualRoles : []).some(item =>
+    String(item?.role || '').toLowerCase() === 'service_provider'
+    && String(item?.scopeType || '').toUpperCase() === 'RESOURCE'
+    && String(item?.scopeId || '') === String(resource.id));
+  if (!resource.locationId && session.locationId && !providerResourceScope) {
+    throw Object.assign(new Error('Organization-wide service resources require organization-level scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
+  }
+  const action = req.method === 'GET' ? 'service:resource_availability:view' : 'service:resource_availability:manage';
   await requireAuthorization(session, tenant, 'service_resource', action, {
-    location, deniedMessage: req.method === 'GET' ? 'Service availability view permission required' : 'Service availability management permission required',
+    location,
+    resourceContext: { resourceType: 'service_resource', resourceId: resource.id, organizationId: resource.organizationId, locationId: resource.locationId },
+    deniedMessage: req.method === 'GET' ? 'Service availability view permission required' : 'Service availability management permission required',
   });
   if (req.method === 'GET') {
     const availability = await getServiceResourceAvailability(chatId, resourceId);
