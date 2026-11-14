@@ -23,4 +23,21 @@ assert.match(contract, /WORKING_HOURS_OVERLAP/);
 assert.match(contract, /SERVICE_AVAILABILITY_EXCEPTION_DUPLICATE/);
 assert.match(contract, /RESOURCE_COMMITMENTS_NOT_EVALUATED/);
 assert.match(ui, /service-resource-availability/);
+
+const localeNames = ['en', 'am', 'om', 'so', 'sw', 'es', 'hi', 'fr', 'ar', 'ha', 'yo', 'ru', 'pt'];
+const localeKeys = [
+  'serviceAvailabilityConfigure', 'serviceAvailabilityLoading', 'serviceAvailabilityLoadFailed',
+  'serviceAvailabilityTimezone', 'serviceAvailabilityWorkingHours', 'serviceAvailabilityExceptions',
+  'serviceAvailabilityDeclarationOnly', 'serviceAvailabilityEmpty', 'serviceAvailabilityDeclared',
+  'serviceAvailabilitySave', 'serviceAvailabilityInvalidJson', 'serviceAvailabilitySaving',
+  'serviceAvailabilitySavedDeclaration', 'serviceAvailabilitySaveFailed',
+];
+for (const locale of localeNames) {
+  const source = read('app/src/i18n/locales/' + locale + '.js');
+  for (const key of localeKeys) {
+    const count = source.match(new RegExp('\\b' + key + '\\s*:', 'g')) || [];
+    assert.equal(count.length, 1, locale + ' must define ' + key + ' exactly once');
+  }
+}
+
 console.log('SC-03.2 Service Availability API and UI Regression: PASS');
