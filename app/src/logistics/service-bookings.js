@@ -1,6 +1,6 @@
 // Operator-facing projection for canonical service bookings.
 // The backend remains authoritative for scope, permissions, lifecycle, and persistence.
-import { config, orders, products } from '../state.js';
+import { config, orders, products, organizationLocations } from '../state.js';
 import { authHeaders } from '../auth/tenant.js';
 import { escapeHtml, escapeAttr } from '../utils/index.js';
 import { t } from '../ui/i18n.js';
@@ -77,6 +77,132 @@ function renderBookingCard(order, booking) {
     + '</article>';
 }
 
+
+function canManageServiceResources() {
+  const role = String(config.currentStaffRole || config.authRole || config.tenantRole || '').toLowerCase();
+  return role === 'owner' || role === 'manager';
+}
+
+function serviceResourceEndpoint() {
+  return apiBase() + '/tenants/' + encodeURIComponent(config.chatId) + '/service-resources';
+}
+
+function serviceResourceCatalogOptions() {
+  return '<option value="">All service items</option>' + (Array.isArray(products) ? products : [])
+    .filter(item => String(item.item_type || item.type || '').toLowerCase() === 'service')
+    .map(item => '<option value="' + escapeAttr(item.id) + '">' + escapeHtml(item.name || item.title || item.id) + '</option>')
+    .join('');
+}
+
+function serviceResourceLocationOptions() {
+  return '<option value="">Organization-wide</option>' + (Array.isArray(organizationLocations) ? organizationLocations : [])
+    .filter(location => String(location.status || '').toLowerCase() === 'active')
+    .map(location => '<option value="' + escapeAttr(location.id) + '">' + escapeHtml(location.name || location.code || location.id) + '</option>')
+    .join('');
+}
+
+function serviceResourceCard(resource) {
+  const active = String(resource.status).toUpperCase() === 'ACTIVE';
+  return '<article class="logistics-card service-resource-card" data-resource-id="' + escapeAttr(resource.id) + '">'
+    + '<div class="logistics-top"><strong>' + escapeHtml(resource.name) + '</strong>'
+    + '<span class="logistics-status">' + escapeHtml(resource.status) + '</span></div>'
+    + '<div class="logistics-meta">' + escapeHtml(String(resource.resourceType || '').replaceAll('_', ' ').toLowerCase())
+    + (resource.serviceItemId ? ' · ' + escapeHtml(resource.serviceItemId) : ' · All services')
+    + (resource.locationId ? ' · ' + escapeHtml(resource.locationId) : ' · Organization-wide') + ' · v' + escapeHtml(resource.version) + '</div>'
+    + (resource.description ? '<div class="logistics-meta">' + escapeHtml(resource.description) + '</div>' : '')
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">'
+    + '<button type="button" class="btn-secondary service-resource-rename" data-resource-id="' + escapeAttr(resource.id) + '" data-version="' + escapeAttr(resource.version) + '">' + escapeHtml(t('serviceResourceRename')) + '</button>'
+    + '<button type="button" class="btn-secondary service-resource-toggle" data-resource-id="' + escapeAttr(resource.id) + '" data-version="' + escapeAttr(resource.version) + '" data-status="' + (active ? 'INACTIVE' : 'ACTIVE') + '">' + escapeHtml(active ? t('serviceResourceDeactivate') : t('serviceResourceActivate')) + '</button>'
+    + '</div></article>';
+}
+
+async function refreshServiceResources(root = document) {
+  const workspace = root.querySelector('#serviceBookingsWorkspace');
+  const status = workspace?.querySelector('#serviceResourcesStatus');
+  const list = workspace?.querySelector('#serviceResourcesList');
+  if (!workspace || !status || !list || !canManageServiceResources()) return;
+  if (!config.chatId || !config.sessionToken) {
+    status.textContent = t('serviceBookingsSignIn');
+    list.replaceChildren();
+    return;
+  }
+  const sequence = Number(workspace.dataset.resourceRefreshSequence || 0) + 1;
+  workspace.dataset.resourceRefreshSequence = String(sequence);
+  const tenantId = String(config.chatId), sessionToken = String(config.sessionToken);
+  status.textContent = t('serviceResourceLoading');
+  list.replaceChildren();
+  try {
+    const response = await fetch(serviceResourceEndpoint() + '?include_inactive=true', { headers: authHeaders() });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data?.error?.message || t('serviceResourceLoadFailed'));
+      error.status = response.status;
+      throw error;
+    }
+    if (workspace.isConnected === false || workspace.dataset.resourceRefreshSequence !== String(sequence)
+        || String(config.chatId) !== tenantId || String(config.sessionToken) !== sessionToken) return;
+    const resources = Array.isArray(data.resources) ? data.resources : [];
+    list.innerHTML = resources.map(serviceResourceCard).join('');
+    status.textContent = resources.length ? t('serviceResourceReady') : t('serviceResourceEmpty');
+  } catch (error) {
+    if (workspace.dataset.resourceRefreshSequence !== String(sequence)
+        || String(config.chatId) !== tenantId || String(config.sessionToken) !== sessionToken) return;
+    status.textContent = error.status === 403 ? t('serviceBookingsDenied')
+      : !navigator.onLine ? t('serviceResourceUnknownStale') : t('serviceResourceLoadFailed');
+  }
+}
+
+async function saveServiceResource(button, root) {
+  const form = root.querySelector('#serviceResourceForm');
+  if (!form) return;
+  const name = form.querySelector('[name="name"]')?.value.trim();
+  if (!name) return;
+  button.disabled = true;
+  const status = root.querySelector('#serviceResourcesStatus');
+  status.textContent = t('serviceResourceLoading');
+  try {
+    const response = await fetch(serviceResourceEndpoint(), {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json', 'Idempotency-Key': 'service-resource-create-' + crypto.randomUUID() },
+      body: JSON.stringify({
+        name,
+        resource_type: form.querySelector('[name="resource_type"]').value,
+        description: form.querySelector('[name="description"]').value,
+        service_item_id: form.querySelector('[name="service_item_id"]').value || null,
+        location_id: form.querySelector('[name="location_id"]').value || null,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.error?.message || t('serviceResourceSaveFailed'));
+    form.reset();
+    await refreshServiceResources(root);
+  } catch (error) {
+    status.textContent = error.message || t('serviceResourceSaveFailed');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function updateServiceResource(button, root, patch) {
+  const resourceId = button.dataset.resourceId;
+  const status = root.querySelector('#serviceResourcesStatus');
+  button.disabled = true;
+  try {
+    const response = await fetch(serviceResourceEndpoint() + '/' + encodeURIComponent(resourceId), {
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json', 'Idempotency-Key': 'service-resource-update-' + crypto.randomUUID() },
+      body: JSON.stringify({ ...patch, expected_version: Number(button.dataset.version) }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.error?.message || t('serviceResourceSaveFailed'));
+    await refreshServiceResources(root);
+  } catch (error) {
+    status.textContent = error.message || t('serviceResourceSaveFailed');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 export function serviceBookingsWorkspaceShell() {
   return '<section id="serviceBookingsWorkspace" class="settings-section" aria-label="' + escapeAttr(t('serviceBookingsTitle')) + '">'
     + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
@@ -84,7 +210,21 @@ export function serviceBookingsWorkspaceShell() {
     + '<button type="button" class="btn-secondary" id="serviceBookingsRefresh">' + escapeHtml(t('serviceBookingsRefresh')) + '</button></div>'
     + '<p class="logistics-meta">' + escapeHtml(t('serviceBookingsDescription')) + '</p>'
     + '<div id="serviceBookingsStatus" class="logistics-meta" role="status">' + escapeHtml(t('serviceBookingsLoading')) + '</div>'
-    + '<div id="serviceBookingsList"></div></section>';
+    + '<div id="serviceBookingsList"></div>'
+    + (canManageServiceResources()
+      ? '<section class="settings-section" aria-label="' + escapeAttr(t('serviceResourceTitle')) + '">'
+        + '<h4>' + escapeHtml(t('serviceResourceTitle')) + '</h4>'
+        + '<p class="logistics-meta">' + escapeHtml(t('serviceResourceDescription')) + '</p>'
+        + '<form id="serviceResourceForm" class="settings-form" style="display:grid;gap:8px;">'
+        + '<input name="name" maxlength="120" required placeholder="' + escapeAttr(t('serviceResourceName')) + '">'
+        + '<select name="resource_type"><option value="PROVIDER">Provider / staff</option><option value="FACILITY">Facility / room</option><option value="EQUIPMENT">Equipment</option><option value="OTHER">Other</option></select>'
+        + '<select name="service_item_id">' + serviceResourceCatalogOptions() + '</select>'
+        + '<select name="location_id">' + serviceResourceLocationOptions() + '</select>'
+        + '<textarea name="description" maxlength="1000" placeholder="' + escapeAttr(t('serviceResourceDescriptionField')) + '"></textarea>'
+        + '<button type="submit" class="btn-primary" id="serviceResourceCreate">' + escapeHtml(t('serviceResourceCreate')) + '</button></form>'
+        + '<div id="serviceResourcesStatus" class="logistics-meta" role="status">' + escapeHtml(t('serviceResourceLoading')) + '</div>'
+        + '<div id="serviceResourcesList"></div></section>'
+      : '') + '</section>';
 }
 
 export async function refreshServiceBookings(root = document) {
@@ -184,8 +324,17 @@ export function mountServiceBookingsWorkspace(root = document) {
     root.addEventListener('click', event => {
       const refresh = event.target.closest('#serviceBookingsRefresh');
       const action = event.target.closest('.service-booking-action');
-      if (refresh) refreshServiceBookings(root);
+      const resourceToggle = event.target.closest('.service-resource-toggle');
+      const resourceRename = event.target.closest('.service-resource-rename');
+      const createResource = event.target.closest('#serviceResourceCreate');
+      if (refresh) { refreshServiceBookings(root); refreshServiceResources(root); }
       if (action) transitionBooking(action, root);
+      if (resourceToggle) updateServiceResource(resourceToggle, root, { status: resourceToggle.dataset.status });
+      if (resourceRename) {
+        const nextName = window.prompt(t('serviceResourceRenamePrompt'))?.trim();
+        if (nextName) updateServiceResource(resourceRename, root, { name: nextName });
+      }
+      if (createResource) { event.preventDefault(); saveServiceResource(createResource, root); }
     });
   }
   const tenantKey = config.chatId && config.sessionToken
@@ -195,5 +344,6 @@ export function mountServiceBookingsWorkspace(root = document) {
     mountedServiceBookingsWorkspace = workspace;
     mountedServiceBookingsTenant = tenantKey;
     refreshServiceBookings(root);
+    refreshServiceResources(root);
   }
 }
