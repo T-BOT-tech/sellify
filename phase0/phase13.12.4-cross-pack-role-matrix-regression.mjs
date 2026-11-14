@@ -21,6 +21,7 @@ check('Phase 10.3 canonical authority remains the evaluator', () => {
   assert.equal(typeof authorize, 'function');
   assert.equal(typeof getRolePermissions, 'function');
   assert.equal(crossPackRoleMatrixContract().authorization_authority, 'backend/lib/authorization.js');
+  assert.match(crossPackRoleMatrixContract().resource_scope_rule, /service_provider requires exact service_resource/);
 });
 
 check('All existing roles are represented exactly once per registry entry', () => {
@@ -75,11 +76,12 @@ check('Valid organization is accepted by the canonical authority for existing po
   assert.equal(authorize(actor('staff'), organization, null, 'storage', 'inventory:view'), AUTHZ.ALLOW);
 });
 
-check('Service resource administration is explicitly granted only to Org Admin and Manager', () => {
+check('Service resource administration is granted to Org Admin/Manager; Provider view requires exact resource scope', () => {
   assert.equal(authorize(actor('owner'), organization, null, 'service_resource', 'service:service_resource:view'), AUTHZ.ALLOW);
   assert.equal(authorize(actor('owner'), organization, null, 'service_resource', 'service:service_resource:manage'), AUTHZ.ALLOW);
   assert.equal(authorize(actor('manager'), organization, null, 'service_resource', 'service:service_resource:view'), AUTHZ.ALLOW);
   assert.equal(authorize(actor('manager'), organization, null, 'service_resource', 'service:service_resource:manage'), AUTHZ.ALLOW);
+  assert.equal(authorize(actor('service_provider'), organization, null, 'service_resource', 'service:service_resource:view'), AUTHZ.DENY);
   for (const role of ['cashier', 'staff', 'buyer', 'viewer']) {
     assert.equal(authorize(actor(role), organization, null, 'service_resource', 'service:service_resource:view'), AUTHZ.DENY);
     assert.equal(authorize(actor(role), organization, null, 'service_resource', 'service:service_resource:manage'), AUTHZ.DENY);
