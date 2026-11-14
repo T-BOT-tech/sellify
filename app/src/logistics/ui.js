@@ -67,7 +67,7 @@ export function setFulfillmentType(type) {
 
 function renderDeliveryWorkloadSummary(assignments) {
   const active = (Array.isArray(assignments) ? assignments : []).filter(a =>
-    !['CANCELLED', 'FAILED', 'REASSIGNED'].includes(String(a.status || '').toUpperCase())
+    !['CANCELLED', 'FAILED', 'REASSIGNED', 'DELIVERED'].includes(String(a.status || '').toUpperCase())
   );
   const counts = active.reduce((acc, a) => {
     const key = String(a.status || 'ASSIGNED').toUpperCase();
