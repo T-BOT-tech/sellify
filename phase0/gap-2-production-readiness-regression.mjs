@@ -43,6 +43,9 @@ assert.ok(migrationPosition(76) > migrationPosition(75), 'tenant business-templa
 assert.ok(migrationPosition(77) > migrationPosition(76), 'tenant creation replay persistence migration must follow business-template persistence');
 assert.ok(migrationPosition(78) > migrationPosition(77), 'service resource foundation migration must follow tenant creation replay persistence');
 assert.ok(migrationPosition(79) > migrationPosition(78), 'service availability migration must follow service resource foundation migration');
+assert.ok(migrationPosition(80) > migrationPosition(79), 'service appointment commitment migration must follow availability declarations');
+assert.match(store, /CREATE TABLE IF NOT EXISTS service_resource_commitments/);
+assert.match(store, /idx_service_resource_commitments_overlap/);
 assert.match(store, /if \(!applied\.includes\(77\)\)[\s\S]*?CREATE TABLE IF NOT EXISTS tenant_creation_requests[\s\S]*?challenge_token_hash TEXT PRIMARY KEY REFERENCES auth_challenges\(token_hash\)[\s\S]*?request_fingerprint TEXT NOT NULL[\s\S]*?result_json TEXT NOT NULL/,
   'tenant creation idempotency must durably bind a one-time challenge to its original request and result');
 assert.match(store, /CREATE TABLE IF NOT EXISTS tenant_business_templates/);
