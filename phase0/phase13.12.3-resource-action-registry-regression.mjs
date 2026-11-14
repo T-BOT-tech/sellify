@@ -23,8 +23,8 @@ assert.doesNotMatch(registrySource, /CREATE TABLE|INSERT INTO|UPDATE\s+.*permiss
 const { RESOURCE_ACTION_REGISTRY, getResourceAction, listResourceActions, resourceActionRegistryContract } =
   await import('../backend/lib/resource-action-registry.js');
 
-assert.equal(RESOURCE_ACTION_REGISTRY.length, 48);
-assert.equal(new Set(RESOURCE_ACTION_REGISTRY.map((entry) => entry.key)).size, 48);
+assert.equal(RESOURCE_ACTION_REGISTRY.length, 49);
+assert.equal(new Set(RESOURCE_ACTION_REGISTRY.map((entry) => entry.key)).size, 49);
 
 for (const packId of ['agriculture', 'restaurant', 'warehouse', 'logistics', 'service']) {
   assert.ok(listResourceActions({ packId }).length > 0, `${packId} registry missing`);
@@ -65,7 +65,8 @@ assert.equal(getResourceAction('service', 'service_resource', 'manage').permissi
 assert.equal(getResourceAction('service', 'resource_availability', 'view').permission, 'service:resource_availability:view');
 assert.equal(getResourceAction('service', 'resource_availability', 'manage').permission, 'service:resource_availability:manage');
 assert.equal(getResourceAction('service', 'appointment_feasibility', 'assess').permission, null);
-assert.equal(listResourceActions({ packId: 'service' }).length, 6);
+assert.equal(getResourceAction('service', 'appointment_commitment', 'commit').permission, 'service:appointment:commit');
+assert.equal(listResourceActions({ packId: 'service' }).length, 7);
 
 
 const contract = resourceActionRegistryContract();
@@ -73,7 +74,7 @@ assert.equal(contract.authority.includes('authorize(actor, organization, locatio
 assert.equal(contract.persistence, 'none');
 assert.equal(contract.evaluator, 'none');
 assert.equal(contract.permission_store, 'none');
-assert.equal(contract.registry_entries, 48);
+assert.equal(contract.registry_entries, 49);
 assert.equal(contract.packs.length, 5);
 
 // Phase 10.3 remains the only policy implementation.
