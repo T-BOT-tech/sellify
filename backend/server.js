@@ -649,9 +649,6 @@ async function handleTelegramStorefrontServiceAppointments(req, res, chatId, mar
   }
 }
 
-  { method: 'POST', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/service-appointments\/assessment$/, handler: (req, res, m) => handleTelegramStorefrontServiceAppointments(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), null, true) },
-  { method: 'POST', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/service-appointments$/, handler: (req, res, m) => handleTelegramStorefrontServiceAppointments(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
-  { method: 'PATCH', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/service-appointments\/([^/]+)$/, handler: (req, res, m) => handleTelegramStorefrontServiceAppointments(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
 async function handleTelegramStorefrontFulfillment(req, res, chatId, orderId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -3471,6 +3468,9 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/telegram-storefront$/, handler: (req, res, m) => handleTelegramStorefrontGet(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/api\/telegram-storefront\/([^/]+)$/, handler: (req, res, m) => handleTelegramStorefrontPublicGet(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/api\/telegram-storefront\/([^/]+)\/buyer-session$/, handler: (req, res, m) => handleTelegramStorefrontBuyerSession(req, res, decodeURIComponent(m[1])) },
+  { method: 'POST', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/service-appointments\/assessment$/, handler: (req, res, m) => handleTelegramStorefrontServiceAppointments(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), null, true) },
+  { method: 'POST', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/service-appointments$/, handler: (req, res, m) => handleTelegramStorefrontServiceAppointments(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'PATCH', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/service-appointments\/([^/]+)$/, handler: (req, res, m) => handleTelegramStorefrontServiceAppointments(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
   { method: 'GET', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleTelegramStorefrontFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)$/, handler: (req, res, m) => handleTelegramStorefrontOrder(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders$/, handler: (req, res, m) => handleTelegramStorefrontOrderHistory(req, res, decodeURIComponent(m[1])) },
