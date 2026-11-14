@@ -270,7 +270,8 @@ export function authorize(actor, organization, location, resource, action, resou
         return requestedLocationId != null && String(requestedLocationId) === item.scopeId;
       }
       if (item.scopeType === 'RESOURCE') {
-        return validServiceResourceContext && String(context.resourceId) === item.scopeId;
+        return item.role === 'service_provider'
+          && validServiceResourceContext && String(context.resourceId) === item.scopeId;
       }
       return false;
     })
