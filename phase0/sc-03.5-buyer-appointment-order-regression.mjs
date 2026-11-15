@@ -116,6 +116,53 @@ try {
     service_resource_id: resource.resource.id, idempotencyKey: 'sc035-confirm-' + suffix,
   }, null);
   assert.equal(confirmed.booking.status, 'CONFIRMED');
+
+  const pendingProviderQueue = await store.listServiceProviderBookings(seller.chatId, [resource.resource.id]);
+  assert.equal(pendingProviderQueue.length, 1,
+    'provider projection includes a confirmed appointment only after its canonical commitment exists');
+  assert.equal(pendingProviderQueue[0].id, created.booking.id);
+
+  const secondResource = await store.createServiceResource(seller.chatId, {
+    name: 'Second Consultation Provider', resourceType: 'PROVIDER',
+    serviceItemId: 'sc035-consultation', idempotencyKey: 'sc035-resource-two-' + suffix,
+  }, null);
+  const secondRequest = await store.createServiceBooking(seller.chatId, owned.orderId, {
+    service_item_id: 'sc035-consultation',
+    requested_start: '2027-01-23T09:00:00+03:00',
+    requested_end: '2027-01-23T10:00:00+03:00',
+    appointment_mode: 'REMOTE', idempotencyKey: 'sc035-booking-two-' + suffix,
+  }, null);
+  const secondAccepted = await store.transitionServiceBooking(seller.chatId, owned.orderId, secondRequest.booking.id, {
+    status: 'ACCEPTED', expectedVersion: secondRequest.booking.version,
+    idempotencyKey: 'sc035-accept-two-' + suffix,
+  }, null);
+  await store.transitionServiceBooking(seller.chatId, owned.orderId, secondRequest.booking.id, {
+    status: 'CONFIRMED', expectedVersion: secondAccepted.booking.version,
+    service_resource_id: secondResource.resource.id,
+    idempotencyKey: 'sc035-confirm-two-' + suffix,
+  }, null);
+
+  const firstProviderQueue = await store.listServiceProviderBookings(seller.chatId, [resource.resource.id]);
+  const secondProviderQueue = await store.listServiceProviderBookings(seller.chatId, [secondResource.resource.id]);
+  assert.deepEqual(firstProviderQueue.map(item => item.id), [created.booking.id],
+    'one provider resource must not see another resource\'s appointment');
+  assert.deepEqual(secondProviderQueue.map(item => item.id), [secondRequest.booking.id],
+    'the second provider sees only its own committed appointment');
+
+  const foreignResource = await store.createServiceResource(otherSeller.chatId, {
+    name: 'Foreign Tenant Provider', resourceType: 'PROVIDER',
+    idempotencyKey: 'sc035-foreign-resource-' + suffix,
+  }, null);
+  assert.deepEqual(await store.listServiceProviderBookings(seller.chatId, [foreignResource.resource.id]), [],
+    'a resource identifier from another organization must not expose appointments');
+
+  const inactivatedResource = await store.updateServiceResource(seller.chatId, secondResource.resource.id, {
+    expectedVersion: secondResource.resource.version, status: 'INACTIVE',
+    idempotencyKey: 'sc035-inactivate-resource-two-' + suffix,
+  }, null);
+  assert.equal(inactivatedResource.resource.status, 'INACTIVE');
+  assert.deepEqual(await store.listServiceProviderBookings(seller.chatId, [secondResource.resource.id]), [],
+    'appointments assigned to an inactive resource are excluded from the provider queue');
   const conflict = await store.assessTelegramBuyerServiceFeasibility(seller.chatId, buyer, checkout.marketplace_order_id, {
     service_item_id: 'sc035-consultation', start, end,
   });
@@ -176,6 +223,8 @@ try {
     idempotencyKey: 'sc035-operator-cancel-' + suffix,
   }, null);
   const afterRelease = await store.getTelegramBuyerServiceBookings(seller.chatId, buyer, checkout.marketplace_order_id);
+  assert.deepEqual(await store.listServiceProviderBookings(seller.chatId, [resource.resource.id]), [],
+    'released commitments are immediately excluded from the provider queue');
   assert.equal(afterRelease.bookings.find(item => item.id === created.booking.id)?.service_resource_name, null,
     'customer projection must stop showing a resource after canonical commitment release');
   const feasibleAfterRelease = await store.assessTelegramBuyerServiceFeasibility(seller.chatId, buyer, checkout.marketplace_order_id, {
