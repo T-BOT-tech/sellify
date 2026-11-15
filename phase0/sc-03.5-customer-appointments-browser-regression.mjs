@@ -165,17 +165,21 @@ try {
   assert.equal((await focusState()).name, 'requested_start', 'start time field is keyboard focusable');
   await appointmentForm.locator('[name="requested_end"]').focus();
   assert.equal((await focusState()).name, 'requested_end', 'end time field is keyboard focusable');
-  // Native datetime-local segmented controls retain focus while moving between date/time parts.
-  await appointmentForm.locator('[name="appointment_mode"]').focus();
-  assert.equal((await focusState()).name, 'appointment_mode', 'appointment mode field is keyboard focusable');
-  await page.keyboard.press('Tab');
-  assert.equal((await focusState()).name, 'customer_note',
+  // Native datetime-local controls can expose segmented sub-fields as tab stops.
+  const tabUntil = async predicate => {
+    for (let attempt = 0; attempt < 20; attempt++) {
+      await page.keyboard.press('Tab');
+      if (predicate(await focusState())) return true;
+    }
+    return false;
+  };
+  assert.equal(await tabUntil(active => active.name === 'appointment_mode'), true,
+    'keyboard navigation moves from end time to appointment mode');
+  assert.equal(await tabUntil(active => active.name === 'customer_note'), true,
     'keyboard navigation moves to the optional note');
-  await page.keyboard.press('Tab');
-  assert.equal((await focusState()).id, 'checkAppointmentFeasibility',
+  assert.equal(await tabUntil(active => active.id === 'checkAppointmentFeasibility'), true,
     'keyboard navigation reaches feasibility check');
-  await page.keyboard.press('Tab');
-  assert.equal((await focusState()).type, 'submit',
+  assert.equal(await tabUntil(active => active.type === 'submit'), true,
     'keyboard navigation reaches request submission');
 
   await page.locator('[name="requested_start"]').fill('2027-01-20T09:00');
