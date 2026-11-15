@@ -239,6 +239,8 @@ try {
   await page.locator('#logisticsSchedulingRequestForm [name="referenceId"]').fill('server-order-browser-1');
   await page.locator('#logisticsSchedulingRequestForm [name="requestedStart"]').fill('2026-11-16T09:00');
   await page.locator('#logisticsSchedulingRequestForm [name="requestedEnd"]').fill('2026-11-16T10:00');
+  assert.equal(await page.locator('#logisticsSchedulingRequestForm').evaluate(form => form.checkValidity()), true,
+    'manager scheduling request form is valid before submission');
   await page.locator('#logisticsSchedulingRequestForm button[type="submit"]').click();
   await page.waitForTimeout(250);
   assert.ok(schedulingCalls.some(call => call.method === 'POST' && call.pathname.endsWith('/logistics/scheduling')),
