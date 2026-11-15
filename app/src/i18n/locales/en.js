@@ -318,6 +318,7 @@ export default {
     logisticsSchedulingReferenceHint: "Movement references use the existing projection format: movement:<Core Order ID>.",
     logisticsSchedulingScheduleBlocked: "Scheduling is disabled until a fresh evaluation returns FEASIBLE from trusted capacity evidence.",
     logisticsSchedulingWindowRequired: "Enter a proposed scheduled start and end before evaluating feasibility.",
+    logisticsSchedulingWindowInvalid: "The end time must be later than the start time. Review the proposed window.",
     logisticsSchedulingWindowChanged: "The proposed window changed. Evaluate feasibility again before scheduling.",
     logisticsSchedulingScheduledStart: "Scheduled start",
     logisticsSchedulingScheduledEnd: "Scheduled end",
