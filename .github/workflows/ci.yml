@@ -120,6 +120,8 @@ jobs:
         run: npm run test:outbox-tenant-scope
       - name: Order sync idempotency regression
         run: npm run test:order-sync-idempotency
+      - name: Location scope gate regression
+        run: npm run test:phase13.12.6
       - name: B2B invoice transition concurrency regression
         run: npm run phase11.3:invoice-test
       - name: Authorization location capability projection regression
