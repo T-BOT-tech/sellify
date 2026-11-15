@@ -165,4 +165,12 @@ export default {
     serviceResourceProviderAssignFailed: "የአቅራቢ መዳረሻን ማዘመን አልተቻለም።",
     serviceResourceNoProviderMembers: "ብቁ የሰራተኛ አባልነቶች የሉም።",
     serviceResourceProviderDescription: "የተመደቡልዎትን የአገልግሎት ሀብቶች ይመልከቱ እና የተገለጹ የሥራ ሰዓቶቻቸውን ያዘምኑ። ነባር ቁርጠኝነቶች እስኪመረመሩ ድረስ ተገኝነት አይረጋገጥም።",
+    serviceProviderAppointmentsTitle: "ቀጠሮዎቼ",
+    serviceProviderAppointmentsRefresh: "አድስ",
+    serviceProviderAppointmentsLoading: "ቀጠሮዎችን በመጫን ላይ…",
+    serviceProviderAppointmentsReady: "{count} ቀጠሮ(ዎች) ለንቁ ሀብቶችዎ ተመድበዋል።",
+    serviceProviderAppointmentsEmpty: "ለተመደቡልዎት ሀብቶች የተረጋገጡ ቀጠሮዎች የሉም።",
+    serviceProviderAppointmentsDenied: "ወደዚህ የቀጠሮ ዝርዝር መድረስ አልተፈቀደም።",
+    serviceProviderAppointmentsUnavailable: "የቀጠሮ ዝርዝሩ አልተገኘም። እንደገና ለመሞከር ያድሱ።",
+    serviceProviderAppointmentsUnknownStale: "የቀጠሮ ዝርዝሩ ሁኔታ አይታወቅም ወይም ያረጀ ነው። ከመተማመንዎ በፊት ይገናኙና ያድሱ።",
 };
