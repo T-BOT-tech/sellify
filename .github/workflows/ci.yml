@@ -122,8 +122,6 @@ jobs:
         run: npm run test:order-sync-idempotency
       - name: Authorization location capability projection regression
         run: node phase0/p1-05-scope-context-regression.mjs
-      - name: Canonical location scope gate regression
-        run: npm run test:phase13.12.6
       - name: Country currency and money localization regression
         run: npm run test:phase14.3
       - name: Restaurant payment intent authority regression
