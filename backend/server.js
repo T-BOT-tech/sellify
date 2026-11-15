@@ -3297,10 +3297,13 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
   if (!activity) {
     return sendJSON(res, 404, { error: { message: 'Scheduling activity not found', status: 404, code: 'SCHEDULING_ACTIVITY_NOT_FOUND' } }, req);
   }
-  const activityLocation = activity.location_id
-    ? await getOrganizationLocation(chatId, activity.location_id)
+  // Store projections expose camelCase fields; accept the persisted snake_case
+  // shape as a compatibility fallback without weakening tenant validation.
+  const activityLocationId = activity.locationId ?? activity.location_id ?? null;
+  const activityLocation = activityLocationId
+    ? await getOrganizationLocation(chatId, activityLocationId)
     : null;
-  if (activity.location_id && !activityLocation) {
+  if (activityLocationId && !activityLocation) {
     return sendJSON(res, 403, { error: { message: 'Scheduling location is outside this tenant scope', status: 403, code: 'LOCATION_SCOPE_DENIED' } }, req);
   }
   await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:view', {
