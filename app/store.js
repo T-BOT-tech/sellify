@@ -92,7 +92,10 @@ async function submitCheckout() {
 async function loadTelegramOrders() {
   if (!state.telegram || !hasTelegramCapability(state.storefront, 'order_status')) return;
   const modal = document.getElementById('ordersModal'); const stateEl = document.getElementById('ordersState'); const list = document.getElementById('ordersList');
-  modal.style.display = 'flex'; stateEl.textContent = 'Loading orders…'; list.innerHTML = '';
+  modal.style.display = 'flex';
+  modal.setAttribute('aria-hidden', 'false');
+  document.getElementById('closeOrders').focus();
+  stateEl.textContent = 'Loading orders…'; list.innerHTML = '';
   try {
     const res = await fetch(`/api/telegram-storefront/${encodeURIComponent(chatId)}/orders`, { headers: { Accept: 'application/json', 'X-Telegram-Init-Data': getTelegramInitData() } });
     const data = await res.json().catch(() => ({}));
@@ -293,4 +296,33 @@ document.getElementById('submitOrder').addEventListener('click', submitCheckout)
 document.getElementById('closeSuccess').addEventListener('click', () => { document.getElementById('successModal').style.display = 'none'; });
 
 document.getElementById('openOrders').addEventListener('click', loadTelegramOrders);
-document.getElementById('closeOrders').addEventListener('click', () => { document.getElementById('ordersModal').style.display = 'none'; });
+const ordersModal = document.getElementById('ordersModal');
+function closeOrdersModal() {
+  ordersModal.style.display = 'none';
+  ordersModal.setAttribute('aria-hidden', 'true');
+  document.getElementById('openOrders').focus();
+}
+document.getElementById('closeOrders').addEventListener('click', closeOrdersModal);
+ordersModal.addEventListener('keydown', event => {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeOrdersModal();
+    return;
+  }
+  if (event.key !== 'Tab') return;
+  const focusable = [...ordersModal.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter(element => element.getClientRects().length > 0);
+  if (!focusable.length) {
+    event.preventDefault();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && (document.activeElement === first || document.activeElement === ordersModal)) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+});
