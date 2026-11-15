@@ -64,6 +64,18 @@ try {
     currency: 'ETB',
     timezone: 'Africa/Addis_Ababa',
   });
+  const db = store.getDatabaseForTests();
+  const orderId = `canonical-order-${suffix}`;
+  db.prepare(`
+    INSERT INTO orders (
+      chat_id, local_id, server_order_id, order_json, total_minor,
+      created_at, status, delivered_to_device, marketplace_order_id, is_marketplace
+    ) VALUES (?, ?, ?, ?, 0, ?, 'pending', 1, NULL, 0)
+  `).run(
+    tenant.chatId, `local-${suffix}`, orderId,
+    JSON.stringify({ id: orderId, fulfillment_type: 'delivery', fulfillment_status: 'pending' }),
+    Date.now(),
+  );
   const session = await store.createSession({
     userId: owner.id,
     chatId: tenant.chatId,
@@ -104,7 +116,8 @@ try {
       requested_start: start,
       requested_end: end,
       timezone: 'Africa/Addis_Ababa',
-      related_order: { id: `canonical-order-${suffix}` },
+      related_order: { id: orderId },
+      related_movement: { id: `movement:${orderId}` },
     }),
   });
   assert.equal(created.response.status, 201, JSON.stringify(created.json));
@@ -188,6 +201,29 @@ try {
   const otherSession = await store.createSession({
     userId: otherUser.id, chatId: otherTenant.chatId, deviceName: 'L11 other tenant',
   });
+  const foreignOrderId = `foreign-order-${suffix}`;
+  db.prepare(`
+    INSERT INTO orders (
+      chat_id, local_id, server_order_id, order_json, total_minor,
+      created_at, status, delivered_to_device, marketplace_order_id, is_marketplace
+    ) VALUES (?, ?, ?, ?, 0, ?, 'pending', 1, NULL, 0)
+  `).run(
+    otherTenant.chatId, `foreign-local-${suffix}`, foreignOrderId,
+    JSON.stringify({ id: foreignOrderId, fulfillment_type: 'delivery', fulfillment_status: 'pending' }),
+    Date.now(),
+  );
+  const foreignReference = await request(base, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-foreign-reference-${suffix}` },
+    body: JSON.stringify({
+      activity_type: 'DELIVERY',
+      mode: 'ON_DEMAND',
+      related_order: { id: foreignOrderId },
+    }),
+  });
+  assert.equal(foreignReference.response.status, 409);
+  assert.equal(foreignReference.json.error?.code, 'ORDER_REFERENCE_INVALID');
+
   const crossTenant = await request(`${base}/${encodeURIComponent(activityId)}`, {
     headers: { Authorization: `Bearer ${otherSession.token}` },
   });
