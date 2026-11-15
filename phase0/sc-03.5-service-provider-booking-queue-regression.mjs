@@ -40,9 +40,11 @@ assert.doesNotMatch(handler, /readBody|PATCH|POST|transitionServiceBooking/);
 assert.ok(server.includes('service-provider' + String.fromCharCode(92) + '/bookings'));
 
 assert.match(ui, /\/service-provider\/bookings/);
-assert.match(ui, /My Appointments/);
+assert.match(ui, /serviceProviderAppointmentsTitle/);
 assert.match(ui, /escapeHtml\(booking\.customer_note\)/);
 assert.match(ui, /serviceBookingsRefresh/);
+assert.match(ui, /serviceProviderAppointmentsUnknownStale/);
+assert.match(ui, /UNKNOWN_STALE/);
 assert.match(ui, /status\.dataset\.state = bookings\.length \? 'READY' : 'EMPTY'/);
 
 console.log('SC-03.5 service provider booking queue source regression passed.');
