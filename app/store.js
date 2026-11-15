@@ -117,12 +117,31 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
     const lines = Array.isArray(data.order?.serviceLines) ? data.order.serviceLines : [];
     const bookings = Array.isArray(data.bookings) ? data.bookings : [];
     const lineLabel = line => line.name || line.title || line.product_name || line.item_name || line.item_id || line.product_id || 'Service';
-    const bookingCards = bookings.map(b => `<div style="margin:8px 0;padding:10px;border:1px solid var(--line);border-radius:10px"><strong>${esc(b.status || 'UNKNOWN')}</strong><div style="font-size:12px;margin-top:5px">${esc(lineLabel(lines.find(x => String(x.item_id ?? x.product_id ?? x.id ?? '') === String(b.service_item_id)) || {}))}</div><div style="font-size:12px;color:var(--muted);margin-top:4px">${esc(new Date(b.requested_start).toLocaleString())} – ${esc(new Date(b.requested_end).toLocaleString())} · ${esc(b.appointment_mode || '')}</div>${b.service_resource_name ? `<div style="font-size:12px;margin-top:5px">Committed resource: ${esc(b.service_resource_name)}</div>` : ''}${b.status_reason ? `<div style="font-size:12px;margin-top:5px">${esc(b.status_reason)}</div>` : ''}</div>`).join('');
+    const bookingCards = bookings.map(b => `<div style="margin:8px 0;padding:10px;border:1px solid var(--line);border-radius:10px"><strong>${esc(b.status || 'UNKNOWN')}</strong><div style="font-size:12px;margin-top:5px">${esc(lineLabel(lines.find(x => String(x.item_id ?? x.product_id ?? x.id ?? '') === String(b.service_item_id)) || {}))}</div><div style="font-size:12px;color:var(--muted);margin-top:4px">${esc(new Date(b.requested_start).toLocaleString())} – ${esc(new Date(b.requested_end).toLocaleString())} · ${esc(b.appointment_mode || '')}</div>${b.service_resource_name ? `<div style="font-size:12px;margin-top:5px">Committed resource: ${esc(b.service_resource_name)}</div>` : ''}${b.status_reason ? `<div style="font-size:12px;margin-top:5px">${esc(b.status_reason)}</div>` : ''}${['REQUESTED', 'ACCEPTED'].includes(String(b.status).toUpperCase()) ? `<button class="fulfillment-btn" style="margin-top:8px" data-cancel-booking="${esc(b.id)}" data-booking-version="${esc(b.version)}">Cancel request</button>` : ''}</div>`).join('');
     const options = lines.map(line => {
       const id = line.item_id ?? line.product_id ?? line.id;
       return id == null ? '' : `<option value="${esc(id)}">${esc(lineLabel(line))}</option>`;
     }).join('');
     panel.innerHTML = `${notice ? `<div role="status" style="margin-bottom:10px">${esc(notice)}</div>` : ''}<strong>Appointments</strong>${bookingCards || '<div style="margin:6px 0;color:var(--muted)">No appointment requests yet.</div>'}${options ? `<form id="customerAppointmentForm" style="margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:10px"><strong>Request an appointment</strong><label>Service<select name="service_item_id" required style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px">${options}</select></label><label>Start (your device local time)<input name="requested_start" type="datetime-local" required></label><label>End (your device local time)<input name="requested_end" type="datetime-local" required></label><label>Appointment type<select name="appointment_mode" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"><option value="ON_SITE">At provider location</option><option value="CUSTOMER_LOCATION">At my location</option><option value="REMOTE">Remote</option></select></label><label>Note (optional)<input name="customer_note" maxlength="500" placeholder="Anything the provider should know"></label><button id="checkAppointmentFeasibility" class="fulfillment-btn" type="button">Check time</button><div id="appointmentFeasibilityState" role="status" style="margin:8px 0;font-size:12px;color:var(--muted)">Check the selected time before sending your request.</div><div id="appointmentRequestError" class="error" role="alert"></div><button class="submit" type="submit">Send appointment request</button><p style="font-size:12px;color:var(--muted);line-height:1.45">Times are sent with your device timezone offset. A request is not a confirmed appointment. The provider must accept it and commit a resource. No time is reserved by submitting this request.</p></form>` : '<div style="margin-top:8px;color:var(--muted)">This order has no appointment-based service lines.</div>'}`;
+    panel.querySelectorAll('[data-cancel-booking]').forEach(button => {
+      button.addEventListener('click', async () => {
+        if (!window.confirm('Cancel this appointment request?')) return;
+        button.disabled = true;
+        try {
+          const response = await fetch(`${endpoint}/${encodeURIComponent(button.dataset.cancelBooking)}/cancel`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
+            body: JSON.stringify({ expected_version: Number(button.dataset.bookingVersion) }),
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(result?.error?.message || 'Unable to cancel appointment.');
+          await loadTelegramAppointments(marketplaceOrderId, result.message || 'Appointment cancelled.');
+        } catch (error) {
+          button.disabled = false;
+          panel.insertAdjacentHTML('afterbegin', `<div class="error" role="alert">${esc(!navigator.onLine ? 'Offline: cancellation was not queued. Reconnect and retry.' : (error.message || 'Unable to cancel appointment.'))}</div>`);
+        }
+      });
+    });
     const form = document.getElementById('customerAppointmentForm');
     if (form) {
       const feasibilityState = document.getElementById('appointmentFeasibilityState');
