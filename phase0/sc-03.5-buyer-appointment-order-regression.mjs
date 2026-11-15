@@ -48,21 +48,66 @@ try {
     'another seller tenant must not discover this order or its appointments',
   );
 
-  const start = new Date(Date.now() + 48 * 60 * 60 * 1000);
-  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const resource = await store.createServiceResource(seller.chatId, {
+    name: 'Customer-facing Consultation Resource',
+    resourceType: 'PROVIDER',
+    serviceItemId: 'sc035-consultation',
+    idempotencyKey: 'sc035-resource-' + suffix,
+  }, null);
+  await store.setServiceResourceAvailability(seller.chatId, resource.resource.id, {
+    expectedVersion: 0,
+    idempotencyKey: 'sc035-hours-' + suffix,
+    workingHours: [0, 1, 2, 3, 4, 5, 6].map(weekday => ({
+      weekday, startTime: '08:00', endTime: '18:00',
+    })),
+    exceptions: [],
+  }, null);
+
+  const start = '2027-01-20T09:00:00+03:00';
+  const end = '2027-01-20T10:00:00+03:00';
+  const db = store.getDatabaseForTests();
+  const bookingsBeforeAssessment = db.prepare('SELECT COUNT(*) AS count FROM service_bookings').get().count;
+  const commitmentsBeforeAssessment = db.prepare('SELECT COUNT(*) AS count FROM service_resource_commitments').get().count;
+  const feasible = await store.assessTelegramBuyerServiceFeasibility(seller.chatId, buyer, checkout.marketplace_order_id, {
+    service_item_id: 'sc035-consultation', start, end,
+  });
+  assert.equal(feasible.state, 'FEASIBLE');
+  assert.equal(feasible.confirmsAvailability, false);
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM service_bookings').get().count, bookingsBeforeAssessment,
+    'feasibility must not create a booking');
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM service_resource_commitments').get().count, commitmentsBeforeAssessment,
+    'feasibility must not reserve or commit a resource');
+
   const created = await store.createServiceBooking(seller.chatId, owned.orderId, {
     service_item_id: 'sc035-consultation',
-    requested_start: start.toISOString(),
-    requested_end: end.toISOString(),
+    requested_start: start,
+    requested_end: end,
     appointment_mode: 'REMOTE',
     idempotencyKey: 'sc035-booking-' + suffix,
   }, null);
   assert.equal(created.booking.status, 'REQUESTED');
+  assert.equal(created.booking.service_resource_id, null,
+    'customer request must not assign or commit a resource');
+
+  const accepted = await store.transitionServiceBooking(seller.chatId, owned.orderId, created.booking.id, {
+    status: 'ACCEPTED', expectedVersion: 1, idempotencyKey: 'sc035-accept-' + suffix,
+  }, null);
+  const confirmed = await store.transitionServiceBooking(seller.chatId, owned.orderId, created.booking.id, {
+    status: 'CONFIRMED', expectedVersion: accepted.booking.version,
+    service_resource_id: resource.resource.id, idempotencyKey: 'sc035-confirm-' + suffix,
+  }, null);
+  assert.equal(confirmed.booking.status, 'CONFIRMED');
+  const conflict = await store.assessTelegramBuyerServiceFeasibility(seller.chatId, buyer, checkout.marketplace_order_id, {
+    service_item_id: 'sc035-consultation', start, end,
+  });
+  assert.equal(conflict.state, 'CONFLICT',
+    'a committed interval must be excluded from subsequent advisory feasibility');
+  assert.equal(conflict.reasonCode, 'ALL_MATCHING_RESOURCES_COMMITTED');
+
   const after = await store.getTelegramBuyerServiceBookings(seller.chatId, buyer, checkout.marketplace_order_id);
   assert.equal(after.bookings.length, 1);
   assert.equal(after.bookings[0].id, created.booking.id);
-  assert.equal(after.bookings[0].service_resource_id, null,
-    'customer request must not assign or commit a resource');
+  assert.equal(after.bookings[0].service_resource_name, 'Customer-facing Consultation Resource');
   console.log('SC-03.5 buyer-owned appointment order resolution regression: PASS');
 } finally {
   await rm(dataDir, { recursive: true, force: true });
