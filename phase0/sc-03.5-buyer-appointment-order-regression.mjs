@@ -132,9 +132,12 @@ try {
   assert.equal(cancelledReplay.booking.status, 'CANCELLED');
 
   const after = await store.getTelegramBuyerServiceBookings(seller.chatId, buyer, checkout.marketplace_order_id);
-  assert.equal(after.bookings.length, 1);
-  assert.equal(after.bookings[0].id, created.booking.id);
-  assert.equal(after.bookings[0].service_resource_name, 'Customer-facing Consultation Resource');
+  assert.equal(after.bookings.length, 2);
+  const visibleConfirmed = after.bookings.find(item => item.id === created.booking.id);
+  const visibleCancelled = after.bookings.find(item => item.id === cancellable.booking.id);
+  assert.equal(visibleConfirmed?.service_resource_name, 'Customer-facing Consultation Resource');
+  assert.equal(visibleConfirmed?.status, 'CONFIRMED');
+  assert.equal(visibleCancelled?.status, 'CANCELLED');
   console.log('SC-03.5 buyer-owned appointment order resolution regression: PASS');
 } finally {
   await rm(dataDir, { recursive: true, force: true });
