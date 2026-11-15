@@ -84,8 +84,27 @@ try {
     requested_end: end,
     appointment_mode: 'REMOTE',
     idempotencyKey: 'sc035-booking-' + suffix,
-  }, null);
+  }, {
+    actorType: 'TELEGRAM_BUYER',
+    buyerTelegramUserId: buyer,
+    marketplaceOrderId: checkout.marketplace_order_id,
+  });
   assert.equal(created.booking.status, 'REQUESTED');
+  await assert.rejects(
+    store.createServiceBooking(seller.chatId, owned.orderId, {
+      service_item_id: 'sc035-consultation',
+      requested_start: '2027-01-22T09:00:00+03:00',
+      requested_end: '2027-01-22T10:00:00+03:00',
+      appointment_mode: 'REMOTE',
+      idempotencyKey: 'sc035-wrong-buyer-create-' + suffix,
+    }, {
+      actorType: 'TELEGRAM_BUYER',
+      buyerTelegramUserId: 'forged-buyer',
+      marketplaceOrderId: checkout.marketplace_order_id,
+    }),
+    error => error?.code === 'ORDER_NOT_FOUND',
+    'booking transaction must recheck the verified buyer-to-order binding',
+  );
   assert.equal(created.booking.service_resource_id, null,
     'customer request must not assign or commit a resource');
 
@@ -123,11 +142,19 @@ try {
   }, null);
   const cancelled = await store.transitionServiceBooking(seller.chatId, owned.orderId, cancellable.booking.id, {
     status: 'CANCELLED', expected_version: 1, idempotencyKey: 'sc035-cancel-request-' + suffix,
-  }, { actorType: 'TELEGRAM_BUYER' });
+  }, {
+    actorType: 'TELEGRAM_BUYER',
+    buyerTelegramUserId: buyer,
+    marketplaceOrderId: checkout.marketplace_order_id,
+  });
   assert.equal(cancelled.booking.status, 'CANCELLED');
   const cancelledReplay = await store.transitionServiceBooking(seller.chatId, owned.orderId, cancellable.booking.id, {
     status: 'CANCELLED', expected_version: 1, idempotencyKey: 'sc035-cancel-request-' + suffix,
-  }, { actorType: 'TELEGRAM_BUYER' });
+  }, {
+    actorType: 'TELEGRAM_BUYER',
+    buyerTelegramUserId: buyer,
+    marketplaceOrderId: checkout.marketplace_order_id,
+  });
   assert.equal(cancelledReplay.replayed, true);
   assert.equal(cancelledReplay.booking.status, 'CANCELLED');
 
