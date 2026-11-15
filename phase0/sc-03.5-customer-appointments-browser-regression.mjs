@@ -215,6 +215,15 @@ try {
   await page.getByText(/Likely feasible based on declared hours/).waitFor();
   assert.match(await page.locator('#appointmentFeasibilityState').innerText(), /not a reservation/i);
 
+  await page.locator('[name="requested_start"]').fill('2027-01-20T09:30');
+  await page.getByRole('button', { name: 'Send appointment request' }).click();
+  await page.getByText(/changed after the last check/i).waitFor();
+  assert.equal(calls.filter(call => call.method === 'POST' && call.path.endsWith('/service-bookings')).length, 0,
+    'a changed time cannot reuse an earlier feasibility assessment');
+  await page.locator('[name="requested_start"]').fill('2027-01-20T09:00');
+  await page.getByRole('button', { name: 'Check time' }).click();
+  await page.getByText(/Likely feasible based on declared hours/).waitFor();
+
   await page.getByRole('button', { name: 'Send appointment request' }).click();
   await page.getByText('REQUESTED', { exact: true }).waitFor();
   assert.equal(calls.filter(call => call.method === 'POST' && call.path.endsWith('/service-bookings')).length, 1,
