@@ -193,4 +193,5 @@ export default {
     logisticsSchedulingEvaluation: "Madaallii danda'amummaa",
     logisticsSchedulingBlockedUnknown: "Sagantaan hin mirkanoofne: ragaan dandeettii amanamaan hin walqabanne; kanaaf madaalliin UNKNOWN dha.",
     logisticsSchedulingBlockedConflict: "Sochiin kaanonikaa duraan jiru yeroo kanaan waan walitti bu'uuf sagantaan dhaabbateera.",
+    logisticsSchedulingReferenceHint: "Wabiin Movement bifa projection jiru fayyadama: movement:<Core Order ID>.",
 };
