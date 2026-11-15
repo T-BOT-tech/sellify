@@ -134,7 +134,8 @@ try {
       requested_start: start,
       requested_end: end,
       timezone: 'Africa/Addis_Ababa',
-      related_order: { id: `canonical-order-${suffix}` },
+      related_order: { id: orderId },
+      related_movement: { id: `movement:${orderId}` },
     }),
   });
   assert.equal(replayCreate.response.status, 200);
