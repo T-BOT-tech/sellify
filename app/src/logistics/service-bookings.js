@@ -70,7 +70,7 @@ function renderBookingCard(order, booking) {
     + '</strong><span class="logistics-status">' + escapeHtml(status.replaceAll('_', ' ')) + '</span></div>'
     + '<div class="logistics-meta">Order ' + escapeHtml(order.server_order_id) + ' · ' + escapeHtml(mode || 'appointment')
     + ' · v' + escapeHtml(booking.version) + '</div>'
-    + (booking.service_resource_id ? '<div class="logistics-meta">Committed resource: ' + escapeHtml(booking.service_resource_id) + '</div>' : '')
+    + (booking.service_resource_id ? '<div class="logistics-meta">Committed resource: ' + escapeHtml(booking.service_resource_name || booking.service_resource_id) + '</div>' : '')
     + '<div class="logistics-meta">' + escapeHtml(date(booking.requested_start)) + ' – ' + escapeHtml(date(booking.requested_end)) + '</div>'
     + (booking.customer_note ? '<div class="logistics-meta">' + escapeHtml(booking.customer_note) + '</div>' : '')
     + (booking.status_reason ? '<div class="logistics-meta">Reason: ' + escapeHtml(booking.status_reason) + '</div>' : '')
