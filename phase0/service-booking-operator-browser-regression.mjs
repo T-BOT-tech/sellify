@@ -47,6 +47,11 @@ try {
   const page = await context.newPage();
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(error.message));
+  page.on('response', response => {
+    if (response.status() >= 400 && response.status() !== 409) {
+      pageErrors.push('HTTP ' + response.status() + ' ' + response.url());
+    }
+  });
   page.on('console', message => {
     // The deliberate HTTP 409 below is the version-conflict recovery fixture.
     if (message.type() === 'error' && !message.text().includes('409 (Conflict)')) {
