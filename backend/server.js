@@ -3250,8 +3250,12 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
   if (!activityId && req.method === 'GET') {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const locationId = String(url.searchParams.get('locationId') || session.locationId || '').trim() || null;
+    const location = locationId ? await getOrganizationLocation(chatId, locationId) : null;
+    if (locationId && !location) {
+      return sendJSON(res, 403, { error: { message: 'Scheduling location is outside this tenant scope', status: 403, code: 'LOCATION_SCOPE_DENIED' } }, req);
+    }
     await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:view', {
-      location: locationId,
+      location,
       deniedMessage: 'Logistics scheduling view permission required',
     });
     const activities = await listLogisticsSchedulingActivities(chatId, {
@@ -3269,8 +3273,12 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
   if (!activityId && req.method === 'POST' && !action) {
     const body = await readBody(req);
     const locationId = String(body.locationId ?? body.location_id ?? session.locationId ?? '').trim() || null;
+    const location = locationId ? await getOrganizationLocation(chatId, locationId) : null;
+    if (locationId && !location) {
+      return sendJSON(res, 403, { error: { message: 'Scheduling location is outside this tenant scope', status: 403, code: 'LOCATION_SCOPE_DENIED' } }, req);
+    }
     await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:request', {
-      location: locationId,
+      location,
       deniedMessage: 'Logistics scheduling request permission required',
     });
     const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
@@ -3289,8 +3297,14 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
   if (!activity) {
     return sendJSON(res, 404, { error: { message: 'Scheduling activity not found', status: 404, code: 'SCHEDULING_ACTIVITY_NOT_FOUND' } }, req);
   }
+  const activityLocation = activity.location_id
+    ? await getOrganizationLocation(chatId, activity.location_id)
+    : null;
+  if (activity.location_id && !activityLocation) {
+    return sendJSON(res, 403, { error: { message: 'Scheduling location is outside this tenant scope', status: 403, code: 'LOCATION_SCOPE_DENIED' } }, req);
+  }
   await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:view', {
-    location: activity.location_id,
+    location: activityLocation,
     deniedMessage: 'Logistics scheduling view permission required',
   });
 
