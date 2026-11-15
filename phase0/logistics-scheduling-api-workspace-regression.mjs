@@ -25,6 +25,8 @@ assert.match(server, /pattern:.*logistics.*scheduling/);
 assert.match(server, /requireSession\(req, chatId\)/);
 assert.match(server, /logistics:scheduling:view/);
 assert.match(server, /logistics:scheduling:request/);
+assert.match(server, /scheduledStart: body\.scheduledStart/);
+assert.match(server, /scheduledEnd: body\.scheduledEnd/);
 assert.match(server, /transitionLogisticsSchedulingActivity\(chatId, activityId, target, session/);
 assert.match(server, /Only transition command fields cross the HTTP boundary/);
 assert.match(server, /idempotencyKey: req\.headers\['idempotency-key'\]/);
@@ -36,6 +38,8 @@ assert.match(store, /const externalEvaluation = null/);
 assert.match(store, /export async function transitionLogisticsSchedulingActivity/);
 assert.match(store, /assertLogisticsSchedulingAuthorization\(actor, organizationId, row\.location_id, schedulingAction\)/);
 assert.match(store, /function assertSchedulingReferences/);
+assert.match(store, /const scheduledStart = options\.scheduledStart/);
+assert.match(store, /const scheduledEnd = options\.scheduledEnd/);
 assert.match(store, /JOIN tenants t ON t.chat_id = o.chat_id/);
 assert.match(store, /assertSchedulingReferences\(organizationId, request\.related\)/);
 
@@ -67,6 +71,8 @@ for (const locale of [en, am, om]) {
     'logisticsSchedulingError',
     'logisticsSchedulingUnknownStale',
     'logisticsSchedulingSubmit',
+    'logisticsSchedulingWindowRequired',
+    'logisticsSchedulingScheduleBlocked',
   ]) assert.match(locale, new RegExp(key + ':'));
 }
 
