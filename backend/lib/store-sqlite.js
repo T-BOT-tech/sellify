@@ -10064,16 +10064,57 @@ function assertSchedulingLocation(organizationId, locationId) {
   }
 }
 
-function assertSchedulingFulfillment(organizationId, fulfillmentId) {
-  if (!fulfillmentId) return;
-  const fulfillment = db.prepare(
-    'SELECT id, organization_id FROM fulfillments WHERE id = ? AND organization_id = ?'
-  ).get(String(fulfillmentId), String(organizationId));
-  if (!fulfillment) {
-    throw Object.assign(new Error('Referenced fulfillment does not belong to this organization'), {
-      statusCode: 409, code: 'FULFILLMENT_REFERENCE_INVALID',
+function assertSchedulingOrder(organizationId, orderId) {
+  const order = db.prepare(`
+    SELECT o.server_order_id
+    FROM orders o
+    JOIN tenants t ON t.chat_id = o.chat_id
+    WHERE o.server_order_id = ? AND t.organization_id = ?
+  `).get(String(orderId), String(organizationId));
+  if (!order) {
+    throw Object.assign(new Error('Referenced order does not belong to this organization'), {
+      statusCode: 409, code: 'ORDER_REFERENCE_INVALID',
     });
   }
+  return String(order.server_order_id);
+}
+
+function assertSchedulingReferences(organizationId, related = {}) {
+  let orderId = related.order?.id ? String(related.order.id) : null;
+  const movementId = related.movement?.id ? String(related.movement.id) : null;
+
+  // Movement is the existing deterministic projection movement:<Core Order ID>,
+  // not a new persisted movement authority or independently assignable record.
+  if (movementId) {
+    const prefix = 'movement:';
+    const projectedOrderId = movementId.startsWith(prefix) ? movementId.slice(prefix.length) : '';
+    if (!projectedOrderId || (orderId && orderId !== projectedOrderId)) {
+      throw Object.assign(new Error('Movement reference must resolve to the same canonical Core Order'), {
+        statusCode: 409, code: 'MOVEMENT_REFERENCE_INVALID',
+      });
+    }
+    orderId = projectedOrderId;
+  }
+
+  if (related.fulfillment?.id) {
+    const fulfillment = db.prepare(
+      'SELECT id, server_order_id FROM fulfillments WHERE id = ? AND organization_id = ?'
+    ).get(String(related.fulfillment.id), String(organizationId));
+    if (!fulfillment) {
+      throw Object.assign(new Error('Referenced fulfillment does not belong to this organization'), {
+        statusCode: 409, code: 'FULFILLMENT_REFERENCE_INVALID',
+      });
+    }
+    const fulfillmentOrderId = String(fulfillment.server_order_id);
+    if (orderId && orderId !== fulfillmentOrderId) {
+      throw Object.assign(new Error('Order, movement, and fulfillment references must identify the same Core Order'), {
+        statusCode: 409, code: 'SCHEDULING_REFERENCE_MISMATCH',
+      });
+    }
+    orderId = fulfillmentOrderId;
+  }
+
+  if (orderId) assertSchedulingOrder(organizationId, orderId);
 }
 
 export async function createLogisticsSchedulingActivity(chatId, input = {}, actor = null) {
@@ -10106,10 +10147,10 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
   const actorUserId = actor?.userId ? String(actor.userId) : null;
   const requestHash = schedulingRequestHash(request);
   assertSchedulingLocation(organizationId, request.location_id);
-  assertSchedulingFulfillment(organizationId, request.related.fulfillment?.id);
 
   db.exec('BEGIN IMMEDIATE');
   try {
+    assertSchedulingReferences(organizationId, request.related);
     const existing = db.prepare(
       'SELECT * FROM logistics_scheduling_activities WHERE organization_id = ? AND idempotency_key = ?'
     ).get(organizationId, idempotencyKey);
