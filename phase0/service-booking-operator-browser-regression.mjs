@@ -55,14 +55,17 @@ try {
     }
   });
   page.on('console', message => {
-    // Ignore only errors deliberately induced by this regression: the version
-    // conflict and the provider queue's real offline/network-failure state.
-    const expectedOfflineFailure = providerQueueScenario === 'OFFLINE'
-      && message.text().includes('net::ERR_INTERNET_DISCONNECTED');
+    // Ignore only network errors deliberately induced by this regression:
+    // version conflict, provider access denial/unavailability, and offline.
+    const text = message.text();
+    const expectedProviderQueueFailure =
+      (providerQueueScenario === 'DENIED' && text.includes('403 (Forbidden)'))
+      || (providerQueueScenario === 'ERROR' && text.includes('503 (Service Unavailable)'))
+      || (providerQueueScenario === 'OFFLINE' && text.includes('net::ERR_INTERNET_DISCONNECTED'));
     if (message.type() === 'error'
-        && !message.text().includes('409 (Conflict)')
-        && !expectedOfflineFailure) {
-      pageErrors.push(message.text());
+        && !text.includes('409 (Conflict)')
+        && !expectedProviderQueueFailure) {
+      pageErrors.push(text);
     }
   });
 
