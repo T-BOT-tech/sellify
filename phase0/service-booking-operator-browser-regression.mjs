@@ -69,6 +69,7 @@ try {
   const calls = [];
   let forceConflict = false;
   let providerMode = false;
+  let resourceSelectionMode = false;
   await page.route('**/tenants/test-tenant/service-resources**', async route => {
     if (route.request().method() !== 'GET') {
       await route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Method not allowed' } }) });
@@ -82,11 +83,11 @@ try {
           id: 'provider-resource-1', name: 'Provider One', resourceType: 'PROVIDER',
           status: 'ACTIVE', version: 1, organizationId: 'test-org',
           locationId: null, serviceItemId: null,
-        }] : [{
+        }] : resourceSelectionMode ? [{
           id: 'resource-room-1', name: 'Consultation Room', resourceType: 'FACILITY',
           status: 'ACTIVE', version: 1, organizationId: 'test-org',
           locationId: null, serviceItemId: 'consultation',
-        }],
+        }] : [],
         state: 'READY', authority: 'service_resource_registry',
         scope: providerMode ? 'ASSIGNED_RESOURCES' : 'ORGANIZATION',
       }),
@@ -207,6 +208,7 @@ try {
     await workspace.refreshServiceBookings(document);
   });
   forceConflict = true;
+  resourceSelectionMode = true;
   page.once('dialog', dialog => dialog.type() === 'prompt' ? dialog.accept('1') : dialog.accept());
   await page.getByRole('button', { name: 'CONFIRMED' }).click();
   await page.waitForFunction(() => {
