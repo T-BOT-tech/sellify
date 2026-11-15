@@ -217,7 +217,7 @@ try {
 
   await page.locator('[name="requested_start"]').fill('2027-01-20T09:30');
   await page.getByRole('button', { name: 'Send appointment request' }).click();
-  await page.getByText(/changed after the last check/i).waitFor();
+  await page.getByText(/selected service or time changed/i).waitFor();
   assert.equal(calls.filter(call => call.method === 'POST' && call.path.endsWith('/service-bookings')).length, 0,
     'a changed time cannot reuse an earlier feasibility assessment');
   await page.locator('[name="requested_start"]').fill('2027-01-20T09:00');
