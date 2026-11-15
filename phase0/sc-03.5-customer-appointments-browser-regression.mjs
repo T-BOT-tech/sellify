@@ -173,6 +173,43 @@ try {
   await page.getByRole('button', { name: 'Check time' }).click();
   await page.getByText(/Availability is unknown/).waitFor();
   assert.equal(await page.locator('#appointmentFeasibilityState').getAttribute('data-state'), 'UNKNOWN');
+
+  // Exercise the narrow Telegram WebApp viewport and the explicit offline retry state.
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.waitForTimeout(50);
+  const mobileMetrics = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    content: document.documentElement.scrollWidth,
+  }));
+  assert.ok(mobileMetrics.content <= mobileMetrics.viewport + 1,
+    `appointment journey overflows narrow mobile viewport: ${JSON.stringify(mobileMetrics)}`);
+
+  await context.setOffline(true);
+  await page.getByRole('button', { name: 'Check time' }).click();
+  await page.getByText(/Offline: time feasibility cannot be checked/).waitFor();
+  assert.equal(await page.locator('#appointmentFeasibilityState').getAttribute('data-state'), 'UNKNOWN');
+  await context.setOffline(false);
+
+  // Product-only orders must not expose an appointment request form.
+  const originalRoute = calls.length;
+  await page.route('**/api/telegram-storefront/**/service-bookings', async route => {
+    if (route.request().method() === 'GET') {
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          order: { marketplaceOrderId, serviceLines: [] },
+          bookings: [],
+        }),
+      });
+    }
+    return route.fallback();
+  });
+  await page.getByRole('button', { name: 'Appointments' }).click();
+  await page.getByText(/This order has no appointment-based service lines/).waitFor();
+  assert.equal(await page.locator('#customerAppointmentForm').count(), 0,
+    'product-only order must not show an appointment request form');
+  assert.ok(calls.length >= originalRoute);
+
   assert.equal(pageErrors.length, 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
 
   console.log('SC-03.5 customer appointment browser regression: PASS');
