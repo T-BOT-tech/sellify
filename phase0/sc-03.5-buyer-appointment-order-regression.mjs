@@ -169,6 +169,20 @@ try {
   assert.equal(visibleConfirmed?.service_resource_name, 'Customer-facing Consultation Resource');
   assert.equal(visibleConfirmed?.status, 'CONFIRMED');
   assert.equal(visibleCancelled?.status, 'CANCELLED');
+  assert.equal(visibleCancelled?.service_resource_name, null,
+    'released or never-committed resources must not be presented as committed');
+  await store.transitionServiceBooking(seller.chatId, owned.orderId, created.booking.id, {
+    status: 'CANCELLED', expected_version: confirmed.booking.version,
+    idempotencyKey: 'sc035-operator-cancel-' + suffix,
+  }, null);
+  const afterRelease = await store.getTelegramBuyerServiceBookings(seller.chatId, buyer, checkout.marketplace_order_id);
+  assert.equal(afterRelease.bookings.find(item => item.id === created.booking.id)?.service_resource_name, null,
+    'customer projection must stop showing a resource after canonical commitment release');
+  const feasibleAfterRelease = await store.assessTelegramBuyerServiceFeasibility(seller.chatId, buyer, checkout.marketplace_order_id, {
+    service_item_id: 'sc035-consultation', start, end,
+  });
+  assert.equal(feasibleAfterRelease.state, 'FEASIBLE',
+    'released commitment must no longer block advisory feasibility');
   console.log('SC-03.5 buyer-owned appointment order resolution regression: PASS');
 } finally {
   await rm(dataDir, { recursive: true, force: true });
