@@ -294,7 +294,6 @@ export default {
     serviceProviderAppointmentsDenied: "Access denied for this appointment queue.",
     serviceProviderAppointmentsUnavailable: "Appointment queue unavailable. Refresh to retry.",
     serviceProviderAppointmentsUnknownStale: "Appointment queue status is unknown or stale. Reconnect and refresh before relying on it.",
-,
     logisticsSchedulingTitle: "Logistics scheduling",
     logisticsSchedulingHint: "Coordinate pickup, delivery and other logistics activities against existing canonical records.",
     logisticsSchedulingRefresh: "Refresh schedule",
