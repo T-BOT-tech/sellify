@@ -240,6 +240,100 @@ try {
     });
     assert.equal(roleTransition.response.status, 403, `${role} is read-only and cannot cancel scheduling activity`);
   }
+
+  // Location-scoped contextual roles must be constrained at the real HTTP
+  // boundary: a valid role at one location must not grant tenant-wide access.
+  const scopedLocation = await store.createOrganizationLocation(tenant.chatId, {
+    code: `L11A${suffix.slice(-8)}`, name: 'L11 Scoped Location A', type: 'WAREHOUSE',
+  });
+  const otherLocation = await store.createOrganizationLocation(tenant.chatId, {
+    code: `L11B${suffix.slice(-8)}`, name: 'L11 Scoped Location B', type: 'WAREHOUSE',
+  });
+  const locationRoleSessions = new Map();
+  for (const role of ['logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer']) {
+    const roleUser = await store.getOrCreateUserByTelegram(`l11-location-${role}-${suffix}`, `L11 Location ${role}`);
+    const membership = await store.ensureMembership(roleUser.id, tenant.chatId, 'staff');
+    await store.assignMembershipContextualRole({
+      actorUserId: owner.id,
+      chatId: tenant.chatId,
+      membershipId: membership.id,
+      role,
+      scopeType: 'LOCATION',
+      scopeId: scopedLocation.id,
+    });
+    const roleSession = await store.createSession({
+      userId: roleUser.id,
+      chatId: tenant.chatId,
+      deviceName: `L11 location-scoped ${role} HTTP regression`,
+    });
+    locationRoleSessions.set(role, {
+      headers: { Authorization: `Bearer ${roleSession.token}`, Accept: 'application/json' },
+    });
+  }
+
+  for (const role of ['logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer']) {
+    const roleContext = locationRoleSessions.get(role);
+    const inScopeRead = await request(`${base}?locationId=${encodeURIComponent(scopedLocation.id)}`, {
+      headers: roleContext.headers,
+    });
+    assert.equal(inScopeRead.response.status, 200, `${role} may read its assigned location`);
+    const outOfScopeRead = await request(`${base}?locationId=${encodeURIComponent(otherLocation.id)}`, {
+      headers: roleContext.headers,
+    });
+    assert.equal(outOfScopeRead.response.status, 403, `${role} cannot read another location`);
+    const unscopedRead = await request(base, { headers: roleContext.headers });
+    assert.equal(unscopedRead.response.status, 403, `${role} cannot broaden a location assignment into tenant-wide access`);
+  }
+
+  for (const role of ['logistics_manager', 'logistics_dispatcher']) {
+    const roleContext = locationRoleSessions.get(role);
+    const inScopeCreate = await request(base, {
+      method: 'POST',
+      headers: { ...roleContext.headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-location-${role}-request-${suffix}` },
+      body: JSON.stringify({
+        activity_type: 'PICKUP',
+        mode: 'ON_DEMAND',
+        location_id: scopedLocation.id,
+        related_order: { id: orderId },
+      }),
+    });
+    assert.equal(inScopeCreate.response.status, 201, `${role} may create activity at its assigned location`);
+    assert.equal(inScopeCreate.json.activity.locationId, scopedLocation.id);
+    const inScopeCancel = await request(`${base}/${encodeURIComponent(inScopeCreate.json.activity.id)}/transition`, {
+      method: 'PATCH',
+      headers: { ...roleContext.headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-location-${role}-cancel-${suffix}` },
+      body: JSON.stringify({ status: 'CANCELLED', expectedVersion: 1 }),
+    });
+    assert.equal(inScopeCancel.response.status, 200, `${role} may transition activity at its assigned location`);
+
+    const outOfScopeCreate = await request(base, {
+      method: 'POST',
+      headers: { ...roleContext.headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-location-${role}-outside-${suffix}` },
+      body: JSON.stringify({
+        activity_type: 'PICKUP',
+        mode: 'ON_DEMAND',
+        location_id: otherLocation.id,
+        related_order: { id: orderId },
+      }),
+    });
+    assert.equal(outOfScopeCreate.response.status, 403, `${role} cannot create activity at another location`);
+  }
+
+  for (const role of ['logistics_courier', 'logistics_viewer']) {
+    const roleContext = locationRoleSessions.get(role);
+    const deniedCreate = await request(base, {
+      method: 'POST',
+      headers: { ...roleContext.headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-location-${role}-denied-${suffix}` },
+      body: JSON.stringify({
+        activity_type: 'PICKUP',
+        mode: 'ON_DEMAND',
+        location_id: scopedLocation.id,
+        related_order: { id: orderId },
+      }),
+    });
+    assert.equal(deniedCreate.response.status, 403, `${role} remains read-only inside its assigned location`);
+  }
+
   const evaluation = await request(`${base}/${encodeURIComponent(activityId)}/evaluate`, {
     method: 'POST',
     headers: { ...headers, 'Content-Type': 'application/json' },
