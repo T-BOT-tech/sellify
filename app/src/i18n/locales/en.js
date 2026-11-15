@@ -315,4 +315,5 @@ export default {
     logisticsSchedulingEvaluation: "Feasibility",
     logisticsSchedulingBlockedUnknown: "Scheduling was not confirmed: trusted capacity evidence is not connected, so feasibility remains UNKNOWN.",
     logisticsSchedulingBlockedConflict: "Scheduling was blocked because an existing canonical activity conflicts with this time window.",
+    logisticsSchedulingReferenceHint: "Movement references use the existing projection format: movement:<Core Order ID>.",
 };
