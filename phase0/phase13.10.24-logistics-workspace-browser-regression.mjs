@@ -274,6 +274,42 @@ try {
     'the UI does not send an impossible SCHEDULED command while feasibility is UNKNOWN');
   assert.equal(pageErrors.length, 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
 
+  // Dispatcher receives the same operator scheduling surface as Manager.
+  await page.evaluate(async () => {
+    const state = await import('/src/state.js');
+    state.setConfig({
+      ...state.config,
+      currentStaffRole: 'logistics_dispatcher',
+      contextualRoles: [{ role: 'logistics_dispatcher', scopeType: 'ORGANIZATION', scopeId: 'test-org' }],
+      authRoles: [],
+    });
+    const logistics = await import('/src/logistics/ui.js');
+    logistics.renderLogistics();
+  });
+  await page.locator('#logisticsSchedulingRequestForm').waitFor();
+  assert.ok(await page.locator('[data-scheduling-card="scheduling-browser-1"]').count() === 1,
+    'dispatcher can view the scheduling activity');
+  assert.ok(await page.locator('[data-scheduling-transition="SCHEDULED"]').count() === 1,
+    'dispatcher receives operator lifecycle controls, subject to feasibility guard');
+
+  // Service Provider and Customer use their separate journeys, not the
+  // Logistics Scheduling operator workspace.
+  for (const role of ['service_provider', 'customer']) {
+    await page.evaluate(async roleName => {
+      const state = await import('/src/state.js');
+      state.setConfig({
+        ...state.config,
+        currentStaffRole: roleName,
+        contextualRoles: [],
+        authRoles: [],
+      });
+      const logistics = await import('/src/logistics/ui.js');
+      logistics.renderLogistics();
+    }, role);
+    assert.equal(await page.locator('.logistics-scheduling-workspace').count(), 0,
+      `${role} must not be routed into the Logistics Scheduling operator workspace`);
+  }
+
   console.log('Phase 13.10.24 Logistics workspace browser regression: PASS');
 } catch (error) {
   if (stderr) process.stderr.write(stderr);
