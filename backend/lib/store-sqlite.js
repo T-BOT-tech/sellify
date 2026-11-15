@@ -6291,6 +6291,12 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
       const replay=db.prepare('SELECT * FROM service_bookings WHERE id=? AND organization_id=?').get(String(bookingId),organizationId);
       db.exec('COMMIT'); return {booking:serviceBookingFromRow(replay),replayed:true};
     }
+    if (actor?.actorType === 'TELEGRAM_BUYER'
+      && (target !== 'CANCELLED' || !['REQUESTED', 'ACCEPTED'].includes(String(row.status)))) {
+      throw Object.assign(new Error('Customers may cancel only requested or accepted appointments'), {
+        statusCode: 409, code: 'SERVICE_BOOKING_CUSTOMER_CANCELLATION_NOT_ALLOWED',
+      });
+    }
     if(!SERVICE_BOOKING_TRANSITIONS[String(row.status)]?.has(target)) throw Object.assign(new Error(`Service booking transition ${row.status} -> ${target} is not allowed`),{statusCode:409,code:'SERVICE_BOOKING_TRANSITION_INVALID'});
     if(Number(row.version)!==expectedVersion) throw Object.assign(new Error('Service booking version conflict'),{statusCode:409,code:'SERVICE_BOOKING_VERSION_CONFLICT'});
     const actorId=actor?.userId||null;
