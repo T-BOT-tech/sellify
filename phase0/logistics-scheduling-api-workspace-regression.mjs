@@ -19,9 +19,9 @@ for (const name of [
   'transitionLogisticsSchedulingActivity',
 ]) assert.match(server, new RegExp(name));
 
-assert.ok(server.includes("pattern: /^\\\\/tenants\\\\/([^/]+)\\\\/logistics\\\\/scheduling$/"));
-assert.ok(server.includes("pattern: /^\\\\/tenants\\\\/([^/]+)\\\\/logistics\\\\/scheduling\\\\/([^/]+)\\\\/evaluate$/"));
-assert.ok(server.includes("pattern: /^\\\\/tenants\\\\/([^/]+)\\\\/logistics\\\\/scheduling\\\\/([^/]+)\\\\/transition$/"));
+assert.ok(server.includes(String.raw`pattern: /^\\/tenants\\/([^/]+)\\/logistics\\/scheduling$/`));
+assert.ok(server.includes(String.raw`pattern: /^\\/tenants\\/([^/]+)\\/logistics\\/scheduling\\/([^/]+)\\/evaluate$/`));
+assert.ok(server.includes(String.raw`pattern: /^\\/tenants\\/([^/]+)\\/logistics\\/scheduling\\/([^/]+)\\/transition$/`));
 
 assert.match(server, /requireSession\(req, chatId\)/);
 assert.match(server, /logistics:scheduling:view/);
