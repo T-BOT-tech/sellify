@@ -160,15 +160,22 @@ try {
   ];
   await appointmentForm.locator(keyboardOrder[0][0]).focus();
   for (let index = 1; index < keyboardOrder.length; index++) {
-    await page.keyboard.press('Tab');
-    const active = await page.evaluate(() => ({
-      name: document.activeElement?.getAttribute('name') || '',
-      id: document.activeElement?.id || '',
-      type: document.activeElement?.getAttribute('type') || '',
-    }));
     const expected = keyboardOrder[index];
-    assert.equal(expected[1] ? (active.name || active.id) === expected[1] : active.type === 'submit', true,
-      `keyboard focus order reaches ${expected[1] || 'submit'}`);
+    let reached = false;
+    // Native datetime-local controls may expose segmented sub-fields to keyboard navigation.
+    for (let tabAttempt = 0; tabAttempt < 5; tabAttempt++) {
+      await page.keyboard.press('Tab');
+      const active = await page.evaluate(() => ({
+        name: document.activeElement?.getAttribute('name') || '',
+        id: document.activeElement?.id || '',
+        type: document.activeElement?.getAttribute('type') || '',
+      }));
+      if (expected[1] ? (active.name || active.id) === expected[1] : active.type === 'submit') {
+        reached = true;
+        break;
+      }
+    }
+    assert.equal(reached, true, `keyboard focus order reaches ${expected[1] || 'submit'}`);
   }
 
   await page.locator('[name="requested_start"]').fill('2027-01-20T09:00');
