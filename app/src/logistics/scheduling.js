@@ -309,8 +309,22 @@ async function submitRequest(root, form) {
 }
 
 async function evaluateActivity(root, activityId) {
+  const startInput = root.querySelector(`[data-scheduled-start="${CSS.escape(String(activityId))}"]`);
+  const endInput = root.querySelector(`[data-scheduled-end="${CSS.escape(String(activityId))}"]`);
+  if (!startInput?.value || !endInput?.value) {
+    lastState = 'READY';
+    feedback = t('logisticsSchedulingWindowRequired');
+    renderWorkspace(root);
+    return;
+  }
+  const candidateWindow = {
+    scheduledStart: new Date(startInput.value).toISOString(),
+    scheduledEnd: new Date(endInput.value).toISOString(),
+  };
   const response = await fetch(endpoint(activityId) + '/evaluate', {
-    method: 'POST', headers: authHeaders(),
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(candidateWindow),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw Object.assign(new Error(data?.error?.message || `Evaluation failed (${response.status})`), { status: response.status });
