@@ -99,6 +99,10 @@ try {
 
   const unauthenticated = await request(base + '/service-bookings');
   assert.equal(unauthenticated.response.status, 401, 'missing initData must fail closed');
+  const invalidSignature = await request(base + '/service-bookings', {
+    headers: { 'X-Telegram-Init-Data': telegramInitData(buyerId).replace(/hash=[^&]+/, 'hash=invalid') },
+  });
+  assert.equal(invalidSignature.response.status, 401, 'invalid Telegram initData signature must fail closed');
 
   const foreignBuyer = await request(base + '/service-bookings', {
     headers: { Accept: 'application/json', 'X-Telegram-Init-Data': telegramInitData(otherBuyerId) },
@@ -109,6 +113,13 @@ try {
   assert.equal(history.response.status, 200);
   assert.equal(history.json.order.serviceLines[0].item_id, 'sc035-http-consultation');
   assert.deepEqual(history.json.bookings, []);
+
+  db.prepare('UPDATE telegram_storefront_configs SET enabled_capabilities_json=? WHERE organization_id=?')
+    .run(JSON.stringify(['browse']), organizationId);
+  const capabilityDisabled = await request(base + '/service-bookings', { headers: buyerHeaders });
+  assert.equal(capabilityDisabled.response.status, 403, 'appointment endpoints must respect the existing order_status capability');
+  db.prepare('UPDATE telegram_storefront_configs SET enabled_capabilities_json=? WHERE organization_id=?')
+    .run(JSON.stringify(['browse', 'checkout', 'order_status']), organizationId);
 
   const start = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
   const end = new Date(Date.parse(start) + 60 * 60 * 1000).toISOString();
