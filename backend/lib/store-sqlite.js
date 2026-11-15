@@ -5920,6 +5920,32 @@ const SERVICE_BOOKING_FORBIDDEN_AUTHORITY_FIELDS = new Set([
   'inventoryReservationId', 'courier_id', 'courierId',
   'provider_id', 'providerId', 'organization_id', 'organizationId',
 ]);
+function assertTelegramBuyerOwnsCanonicalServiceOrder(chatId, organizationId, buyerTelegramUserId, marketplaceOrderId, serverOrderId) {
+  const buyer = String(buyerTelegramUserId || '').trim();
+  const marketplaceId = String(marketplaceOrderId || '').trim();
+  if (!buyer || !marketplaceId) {
+    throw Object.assign(new Error('Verified Telegram buyer order context is required'), {
+      statusCode: 401, code: 'TELEGRAM_BUYER_ORDER_CONTEXT_REQUIRED',
+    });
+  }
+  const owned = db.prepare(`
+    SELECT 1
+    FROM marketplace_orders mo
+    JOIN marketplace_seller_orders mso ON mso.marketplace_order_id = mo.id
+    JOIN orders o
+      ON o.chat_id = mso.seller_id
+     AND o.local_id = mso.seller_order_id
+     AND o.is_marketplace = 1
+    WHERE mo.id = ?
+      AND mo.buyer_identity = ?
+      AND mso.seller_id = ?
+      AND mso.organization_id = ?
+      AND o.server_order_id = ?
+    LIMIT 1
+  `).get(marketplaceId, buyer, String(chatId), String(organizationId), String(serverOrderId));
+  if (!owned) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+}
+
 function assertServiceBookingAuthorityBoundary(input) {
   for (const field of Object.keys(input || {})) {
     if (SERVICE_BOOKING_FORBIDDEN_AUTHORITY_FIELDS.has(field)) {
@@ -6239,6 +6265,11 @@ export async function createServiceBooking(chatId, serverOrderId, input = {}, ac
     if (String(freshTenant?.organization_id || '') !== organizationId) throw Object.assign(new Error('Tenant organization changed during booking'), { statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH' });
     const orderRow = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?').get(String(chatId), orderId);
     if (!orderRow) throw Object.assign(new Error('Canonical order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    if (actor?.actorType === 'TELEGRAM_BUYER') {
+      assertTelegramBuyerOwnsCanonicalServiceOrder(
+        chatId, organizationId, actor.buyerTelegramUserId, actor.marketplaceOrderId, orderId,
+      );
+    }
     const order = orderFromRow(orderRow);
     const lines = Array.isArray(order?.items) ? order.items : [];
     if (!lines.some(item => String(item.item_id ?? item.product_id ?? item.id ?? '') === serviceItemId && String(item.item_type || '').toLowerCase() === 'service')) {
@@ -6285,6 +6316,11 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
     if(String(freshTenant?.organization_id||'')!==organizationId) throw Object.assign(new Error('Tenant organization changed during booking transition'),{statusCode:409,code:'ORDER_ORGANIZATION_MISMATCH'});
     const row=db.prepare('SELECT * FROM service_bookings WHERE id=? AND organization_id=? AND chat_id=? AND server_order_id=?').get(String(bookingId),organizationId,String(chatId),String(serverOrderId));
     if(!row) throw Object.assign(new Error('Service booking not found'),{statusCode:404,code:'SERVICE_BOOKING_NOT_FOUND'});
+    if (actor?.actorType === 'TELEGRAM_BUYER') {
+      assertTelegramBuyerOwnsCanonicalServiceOrder(
+        chatId, organizationId, actor.buyerTelegramUserId, actor.marketplaceOrderId, serverOrderId,
+      );
+    }
     const prior=db.prepare('SELECT * FROM service_booking_commands WHERE organization_id=? AND command_key=?').get(organizationId,commandKey);
     if(prior) {
       if(prior.command_type!=='TRANSITION'||String(prior.booking_id)!==String(bookingId)||prior.command_fingerprint!==fingerprint) throw Object.assign(new Error('Idempotency key was reused for a different booking command'),{statusCode:409,code:'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT'});
