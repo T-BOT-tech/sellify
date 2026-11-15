@@ -42,6 +42,7 @@ assert.match(store, /assertSchedulingReferences\(organizationId, request\.relate
 assert.match(ui, /logisticsSchedulingWorkspaceShell/);
 assert.match(ui, /mountLogisticsSchedulingWorkspace/);
 assert.match(workspace, /logisticsSchedulingRequestForm/);
+assert.match(workspace, /requestForm\.addEventListener\('submit'/);
 assert.match(workspace, /data-scheduling-evaluate/);
 assert.match(workspace, /data-scheduling-transition/);
 assert.match(workspace, /activity\.lastEvaluation !== 'FEASIBLE'/);
