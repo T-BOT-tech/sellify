@@ -146,7 +146,7 @@ import {
   listSupplierNetworkPerformance,
   listSupplierNetworkTrustEvidence, getSupplierNetworkTrustEvidence, refreshSupplierNetworkTrustEvidence, getSupplierNetworkPerformance, recalculateSupplierNetworkPerformance,
   discoverSupplierNetwork, getSupplierNetworkMarketplaceIntegration, setProcurementSupplierParticipation,
-  getPackLifecycle, transitionPackLifecycle, getPaymentSettlementByIdempotencyKey, createPaymentSettlement, finalizePaymentSettlement, listPaymentSettlements, listPaymentRoutingPolicies, upsertPaymentRoutingPolicy, certifyPaymentProviderCapability, listPaymentOperationalActions, createPaymentOperationalAction, updatePaymentOperationalAction, recordPaymentProviderCapabilityEvidence, listPaymentProviderCapabilityEvidence, recordPaymentProductionCertification, listPaymentProductionCertifications,, listServiceProviderBookings
+  getPackLifecycle, transitionPackLifecycle, getPaymentSettlementByIdempotencyKey, createPaymentSettlement, finalizePaymentSettlement, listPaymentSettlements, listPaymentRoutingPolicies, upsertPaymentRoutingPolicy, certifyPaymentProviderCapability, listPaymentOperationalActions, createPaymentOperationalAction, updatePaymentOperationalAction, recordPaymentProviderCapabilityEvidence, listPaymentProviderCapabilityEvidence, recordPaymentProductionCertification, listPaymentProductionCertifications, listServiceProviderBookings
 } from './lib/store-sqlite.js';
 import { AUTHZ, authorize, ROLES, getRolePermissions } from './lib/authorization.js';
 import { assertTenantScope, assertLocationScope } from './lib/tenant-isolation.js';
@@ -3642,6 +3642,7 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/events\/([^/]+)$/, handler: (req, res, m) => handleSyncEvents(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/sync\/([^/]+)$/, handler: (req, res, m) => handleSyncPull(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/orders\/([^/]+)$/, handler: (req, res, m) => handleOrdersFeed(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-provider\/bookings$/, handler: (req, res, m) => handleServiceProviderBookings(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-provider\/bookings$/, handler: (req, res, m) => handleServiceProviderBookings(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-resources$/, handler: (req, res, m) => handleServiceResources(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/service-resources$/, handler: (req, res, m) => handleServiceResources(req, res, decodeURIComponent(m[1])) },
