@@ -167,6 +167,79 @@ try {
   assert.equal(invalidMovement.json.error?.code, 'MOVEMENT_REFERENCE_INVALID');
 
   const activityId = created.json.activity.id;
+
+  // Exercise the real HTTP authorization boundary with persisted Logistics
+  // contextual roles, not only the standalone policy matrix.
+  const organizationId = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
+    .get(tenant.chatId).organization_id;
+  const packNow = new Date().toISOString();
+  db.prepare(`INSERT INTO pack_lifecycle (
+    id, organization_id, pack_id, pack_version, state, installed_at, activated_at,
+    created_by_user_id, updated_by_user_id, created_at, updated_at, version
+  ) VALUES (?, ?, 'logistics', '1.0.0', 'ACTIVE', ?, ?, ?, ?, ?, ?, 1)`).run(
+    `l11-http-logistics-pack-${suffix}`, organizationId, packNow, packNow,
+    owner.id, owner.id, packNow, packNow,
+  );
+
+  const logisticsRoleSessions = new Map();
+  for (const role of ['logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer']) {
+    const roleUser = await store.getOrCreateUserByTelegram(`l11-${role}-${suffix}`, `L11 ${role}`);
+    const membership = await store.ensureMembership(roleUser.id, tenant.chatId, 'staff');
+    await store.assignMembershipContextualRole({
+      actorUserId: owner.id,
+      chatId: tenant.chatId,
+      membershipId: membership.id,
+      role,
+      scopeType: 'ORGANIZATION',
+    });
+    const roleSession = await store.createSession({
+      userId: roleUser.id,
+      chatId: tenant.chatId,
+      deviceName: `L11 ${role} HTTP regression`,
+    });
+    logisticsRoleSessions.set(role, {
+      headers: { Authorization: `Bearer ${roleSession.token}`, Accept: 'application/json' },
+    });
+  }
+
+  for (const role of ['logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer']) {
+    const roleContext = logisticsRoleSessions.get(role);
+    const roleRead = await request(base, { headers: roleContext.headers });
+    assert.equal(roleRead.response.status, 200, `${role} must read the scheduling workspace`);
+  }
+
+  for (const role of ['logistics_manager', 'logistics_dispatcher']) {
+    const roleContext = logisticsRoleSessions.get(role);
+    const roleRequest = await request(base, {
+      method: 'POST',
+      headers: { ...roleContext.headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-${role}-request-${suffix}` },
+      body: JSON.stringify({ activity_type: 'PICKUP', mode: 'ON_DEMAND' }),
+    });
+    assert.equal(roleRequest.response.status, 201, `${role} may request scheduling activity`);
+    const roleCancel = await request(`${base}/${encodeURIComponent(roleRequest.json.activity.id)}/transition`, {
+      method: 'PATCH',
+      headers: { ...roleContext.headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-${role}-cancel-${suffix}` },
+      body: JSON.stringify({ status: 'CANCELLED', expectedVersion: 1 }),
+    });
+    assert.equal(roleCancel.response.status, 200, `${role} may cancel scheduling activity`);
+    assert.equal(roleCancel.json.activity.status, 'CANCELLED');
+  }
+
+  for (const role of ['logistics_courier', 'logistics_viewer']) {
+    const roleContext = logisticsRoleSessions.get(role);
+    const roleRequest = await request(base, {
+      method: 'POST',
+      headers: { ...roleContext.headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-${role}-denied-request-${suffix}` },
+      body: JSON.stringify({ activity_type: 'PICKUP', mode: 'ON_DEMAND' }),
+    });
+    assert.equal(roleRequest.response.status, 403, `${role} is read-only and cannot request scheduling activity`);
+    const roleTransition = await request(`${base}/${encodeURIComponent(activityId)}/transition`, {
+      method: 'PATCH',
+      headers: { ...roleContext.headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-${role}-denied-cancel-${suffix}` },
+      body: JSON.stringify({ status: 'CANCELLED', expectedVersion: 1 }),
+    });
+    assert.equal(roleTransition.response.status, 403, `${role} is read-only and cannot cancel scheduling activity`);
+  }
   const evaluation = await request(`${base}/${encodeURIComponent(activityId)}/evaluate`, {
     method: 'POST',
     headers: { ...headers, 'Content-Type': 'application/json' },
