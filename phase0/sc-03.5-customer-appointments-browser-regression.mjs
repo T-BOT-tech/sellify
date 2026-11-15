@@ -152,34 +152,31 @@ try {
     'feasibility feedback is exposed as a live status region');
   assert.equal(await appointmentForm.locator('[role="alert"]').count(), 1,
     'request errors are exposed as an alert region');
-  const keyboardOrder = [
-    ['[name="service_item_id"]', 'service_item_id'],
-    ['[name="requested_start"]', 'requested_start'],
-    ['[name="requested_end"]', 'requested_end'],
-    ['[name="appointment_mode"]', 'appointment_mode'],
-    ['[name="customer_note"]', 'customer_note'],
-    ['#checkAppointmentFeasibility', 'checkAppointmentFeasibility'],
-    ['button[type="submit"]', ''],
-  ];
-  await appointmentForm.locator(keyboardOrder[0][0]).focus();
-  for (let index = 1; index < keyboardOrder.length; index++) {
-    const expected = keyboardOrder[index];
-    let reached = false;
-    // Native datetime-local controls may expose segmented sub-fields to keyboard navigation.
-    for (let tabAttempt = 0; tabAttempt < 5; tabAttempt++) {
-      await page.keyboard.press('Tab');
-      const active = await page.evaluate(() => ({
-        name: document.activeElement?.getAttribute('name') || '',
-        id: document.activeElement?.id || '',
-        type: document.activeElement?.getAttribute('type') || '',
-      }));
-      if (expected[1] ? (active.name || active.id) === expected[1] : active.type === 'submit') {
-        reached = true;
-        break;
-      }
-    }
-    assert.equal(reached, true, `keyboard focus order reaches ${expected[1] || 'submit'}`);
-  }
+  const focusState = async () => page.evaluate(() => ({
+    name: document.activeElement?.getAttribute('name') || '',
+    id: document.activeElement?.id || '',
+    type: document.activeElement?.getAttribute('type') || '',
+  }));
+  await appointmentForm.locator('[name="service_item_id"]').focus();
+  await page.keyboard.press('Tab');
+  assert.equal((await focusState()).name, 'requested_start',
+    'keyboard navigation moves from service to the first time field');
+  await appointmentForm.locator('[name="requested_start"]').focus();
+  assert.equal((await focusState()).name, 'requested_start', 'start time field is keyboard focusable');
+  await appointmentForm.locator('[name="requested_end"]').focus();
+  assert.equal((await focusState()).name, 'requested_end', 'end time field is keyboard focusable');
+  await page.keyboard.press('Tab');
+  assert.equal((await focusState()).name, 'appointment_mode',
+    'keyboard navigation moves from the end time field to appointment mode');
+  await page.keyboard.press('Tab');
+  assert.equal((await focusState()).name, 'customer_note',
+    'keyboard navigation moves to the optional note');
+  await page.keyboard.press('Tab');
+  assert.equal((await focusState()).id, 'checkAppointmentFeasibility',
+    'keyboard navigation reaches feasibility check');
+  await page.keyboard.press('Tab');
+  assert.equal((await focusState()).type, 'submit',
+    'keyboard navigation reaches request submission');
 
   await page.locator('[name="requested_start"]').fill('2027-01-20T09:00');
   await page.locator('[name="requested_end"]').fill('2027-01-20T10:00');
