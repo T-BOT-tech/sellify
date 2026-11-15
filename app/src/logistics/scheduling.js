@@ -279,6 +279,8 @@ function commandKey() {
 }
 
 async function submitRequest(root, form) {
+  // Invalidate list reads started before this mutation so stale responses cannot erase its result.
+  ++refreshSequence;
   const values = new FormData(form);
   const referenceType = String(values.get('referenceType') || 'fulfillment');
   const referenceId = String(values.get('referenceId') || '').trim();
@@ -324,6 +326,8 @@ async function submitRequest(root, form) {
 }
 
 async function evaluateActivity(root, activityId) {
+  // Evaluation is newer evidence than any list read already in flight.
+  ++refreshSequence;
   const startInput = root.querySelector(`[data-scheduled-start="${CSS.escape(String(activityId))}"]`);
   const endInput = root.querySelector(`[data-scheduled-end="${CSS.escape(String(activityId))}"]`);
   if (!startInput?.value || !endInput?.value) {
@@ -362,6 +366,8 @@ async function evaluateActivity(root, activityId) {
 }
 
 async function transitionActivity(root, activityId, target, button) {
+  // A pre-command list response must not overwrite the command result.
+  ++refreshSequence;
   const activity = activities.find(item => String(item.id) === String(activityId));
   if (!activity) return;
   const startInput = root.querySelector(`[data-scheduled-start="${CSS.escape(String(activityId))}"]`);
