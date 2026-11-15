@@ -26,6 +26,7 @@ import { switchTab } from '../ui/tabs.js';
 import { buildLogisticsOperationalWorkspaceProjection } from '../verticals/logistics/workspace-projection.js';
 import { getLogisticsWorkspaceComposition } from '../verticals/logistics/workspace-contract.js';
 import { serviceBookingsWorkspaceShell, mountServiceBookingsWorkspace } from './service-bookings.js';
+import { logisticsSchedulingWorkspaceShell, mountLogisticsSchedulingWorkspace } from './scheduling.js';
 
 export function applyLogisticsUI() {
   const enabled = isLogisticsEnabled();
@@ -336,6 +337,7 @@ export function renderLogistics() {
     + (courierMode ? '' : filterBar)
     + renderDeliveryWorkloadSummary(visibleAssignments);
   if (!courierMode) html += serviceBookingsWorkspaceShell();
+  html += logisticsSchedulingWorkspaceShell();
   if (composition.views.some(view => view.id === 'tracking')) {
     html += renderOperationalWorkspaceSummary(workspace, composition.views.map(view => view.id));
   }
@@ -353,6 +355,7 @@ export function renderLogistics() {
   }
   list.innerHTML = html;
   if (!courierMode) mountServiceBookingsWorkspace(list);
+  mountLogisticsSchedulingWorkspace(list);
 
   const statusFilter = list.querySelector('#logistics-status-filter');
   const courierFilter = list.querySelector('#logistics-courier-filter');
