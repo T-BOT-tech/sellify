@@ -149,6 +149,35 @@ try {
     'overlapping appointments must not commit to the same resource',
   );
 
+  // Two concurrent confirmations for the same free interval must serialize:
+  // exactly one transaction wins and the other observes the committed overlap.
+  const raceBookings = await Promise.all(['A', 'B'].map(async label => store.createServiceBooking(
+    seller.chatId, order.server_order_id, {
+      ...request,
+      requested_start: '2026-11-08T13:00:00+03:00',
+      requested_end: '2026-11-08T14:00:00+03:00',
+      idempotency_key: 'booking-race-create-' + label + '-' + suffix,
+    }, { userId: owner.id },
+  )));
+  const raceAccepted = await Promise.all(raceBookings.map((entry, index) => store.transitionServiceBooking(
+    seller.chatId, order.server_order_id, entry.booking.id, {
+      status: 'ACCEPTED', expected_version: 1,
+      idempotency_key: 'booking-race-accept-' + index + '-' + suffix,
+    }, { userId: owner.id },
+  )));
+  const raceResults = await Promise.allSettled(raceBookings.map((entry, index) => store.transitionServiceBooking(
+    seller.chatId, order.server_order_id, entry.booking.id, {
+      status: 'CONFIRMED', expected_version: raceAccepted[index].booking.version,
+      service_resource_id: serviceResourceId,
+      idempotency_key: 'booking-race-confirm-' + index + '-' + suffix,
+    }, { userId: owner.id },
+  )));
+  assert.equal(raceResults.filter(result => result.status === 'fulfilled').length, 1,
+    'exactly one concurrent appointment confirmation may commit');
+  const raceRejected = raceResults.find(result => result.status === 'rejected');
+  assert.equal(raceRejected.reason?.code, 'SERVICE_BOOKING_RESOURCE_CONFLICT',
+    'losing concurrent confirmation must return a resource conflict');
+  
   // Booking lifecycle is not authority to mutate canonical order, payment, or
   // fulfillment state, and must not manufacture a logistics activity.
   const canonicalOrderAfterConfirmation = (await store.getOrders(seller.chatId)).find(item =>
