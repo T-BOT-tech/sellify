@@ -14,6 +14,7 @@ let mountedStatusNode = null;
 let pendingRequestKey = null;
 let pendingRequestFingerprint = '';
 const pendingTransitionKeys = new Map();
+const candidateWindowDrafts = new Map();
 
 function endpoint(activityId = '') {
   const base = (config.syncUrl || window.location.origin).replace(/\/$/, '');
@@ -165,6 +166,12 @@ function bindSchedulingControls(root) {
       lastEvaluations.delete(activityId);
       const activity = activities.find(item => String(item.id) === activityId);
       if (activity) activity.lastEvaluation = null;
+      const startInput = root.querySelector(`[data-scheduled-start="${CSS.escape(activityId)}"]`);
+      const endInput = root.querySelector(`[data-scheduled-end="${CSS.escape(activityId)}"]`);
+      candidateWindowDrafts.set(activityId, {
+        start: startInput?.value || '',
+        end: endInput?.value || '',
+      });
       const card = input.closest('[data-scheduling-card]');
       card?.querySelector('.scheduling-feasibility-result')?.remove();
       const scheduleButton = card?.querySelector('[data-scheduling-transition="SCHEDULED"]');
@@ -188,20 +195,19 @@ function renderWorkspace(root) {
   if (!list) return;
   // Preserve operator-entered candidate windows when an evaluation, refresh,
   // or command causes the activity cards to be re-rendered.
-  const candidateDrafts = new Map();
   list.querySelectorAll('[data-scheduled-start]').forEach(input => {
     const activityId = String(input.dataset.scheduledStart || '');
     if (!activityId) return;
     const endInput = Array.from(list.querySelectorAll('[data-scheduled-end]'))
       .find(candidate => String(candidate.dataset.scheduledEnd || '') === activityId);
-    candidateDrafts.set(activityId, { start: input.value, end: endInput?.value || '' });
+    candidateWindowDrafts.set(activityId, { start: input.value, end: endInput?.value || '' });
   });
   list.innerHTML = activities.map(renderActivity).join('');
   if (lastState === 'EMPTY') list.innerHTML = `<div class="empty">${stateLabel('EMPTY')}</div>`;
   if (lastState === 'DENIED' || lastState === 'ERROR' || lastState === 'UNKNOWN_STALE') {
     list.innerHTML = `<div class="empty">${stateLabel(lastState)}</div>` + activities.map(renderActivity).join('');
   }
-  for (const [activityId, draft] of candidateDrafts) {
+  for (const [activityId, draft] of candidateWindowDrafts) {
     const startInput = Array.from(list.querySelectorAll('[data-scheduled-start]'))
       .find(candidate => String(candidate.dataset.scheduledStart || '') === activityId);
     const endInput = Array.from(list.querySelectorAll('[data-scheduled-end]'))
@@ -441,6 +447,9 @@ async function transitionActivity(root, activityId, target, button) {
   }
   pendingTransitionKeys.delete(transitionKey);
   const updated = data?.activity;
+  if (updated && String(updated.status || '').toUpperCase() !== 'REQUESTED') {
+    candidateWindowDrafts.delete(String(activityId));
+  }
   if (updated) activities = activities.map(item => String(item.id) === String(activityId) ? updated : item);
   await refresh(root);
 }
