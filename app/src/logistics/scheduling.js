@@ -134,6 +134,14 @@ function bindSchedulingControls(root) {
     });
   }
 
+  root.querySelectorAll('[data-scheduling-filter]').forEach(filter => {
+    if (filter.dataset.schedulingBound === '1') return;
+    filter.dataset.schedulingBound = '1';
+    filter.addEventListener('change', async () => {
+      try { await refresh(root); } catch (error) { handleSchedulingError(root, error); }
+    });
+  });
+
   root.querySelectorAll('[data-scheduling-evaluate]').forEach(button => {
     if (button.dataset.schedulingBound === '1') return;
     button.dataset.schedulingBound = '1';
@@ -251,6 +259,7 @@ export function logisticsSchedulingWorkspaceShell() {
         <div><h3 style="margin:0;">${t('logisticsSchedulingTitle')}</h3><div class="logistics-meta">${t('logisticsSchedulingHint')}</div></div>
         <button type="button" class="btn-secondary" id="logistics-scheduling-refresh">${t('logisticsSchedulingRefresh')}</button>
       </div>
+      ${filterMarkup}
       ${requestForm}
       <div id="logisticsSchedulingStatus" role="status" aria-live="polite">${stateLabel('UNKNOWN_STALE')}</div>
       <div id="logisticsSchedulingList" aria-live="polite"></div>
@@ -277,6 +286,10 @@ async function refresh(root) {
     const query = new URLSearchParams();
     const locationId = schedulingLocationId();
     if (locationId) query.set('locationId', locationId);
+    const statusFilter = root.querySelector('#logisticsSchedulingStatusFilter')?.value || '';
+    const typeFilter = root.querySelector('#logisticsSchedulingTypeFilter')?.value || '';
+    if (statusFilter) query.set('status', statusFilter);
+    if (typeFilter) query.set('activityType', typeFilter);
     const response = await fetch(endpoint() + (query.size ? `?${query}` : ''), { headers: authHeaders() });
     const data = await response.json().catch(() => ({}));
     if (sequence !== refreshSequence) return;
