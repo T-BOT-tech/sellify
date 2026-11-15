@@ -219,7 +219,9 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
       if (!['FEASIBLE', 'UNKNOWN'].includes(checkedState)) {
         errorEl.textContent = checkedState === 'CONFLICT'
           ? 'This time has a known conflict. Choose another interval and check again.'
-          : 'Check the selected time before sending your appointment request.';
+          : checkedState === ''
+            ? 'The selected service or time changed. Check it again before sending your appointment request.'
+            : 'Check the selected time before sending your appointment request.';
         return;
       }
       const startValue = String(values.get('requested_start') || '');
