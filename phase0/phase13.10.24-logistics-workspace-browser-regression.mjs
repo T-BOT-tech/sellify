@@ -250,6 +250,8 @@ try {
   assert.ok(createCall, 'manager can submit a scheduling request');
   assert.equal(createCall.body.related_order.id, 'server-order-browser-1');
   assert.ok(createCall.headers['idempotency-key'], 'scheduling request carries an idempotency key');
+  await page.locator('[data-scheduled-start="scheduling-browser-1"]').fill('2026-11-16T09:00');
+  await page.locator('[data-scheduled-end="scheduling-browser-1"]').fill('2026-11-16T10:00');
   const evaluateButton = page.locator('[data-scheduling-evaluate="scheduling-browser-1"]');
   assert.equal(await evaluateButton.getAttribute('data-scheduling-bound'), '1',
     'the current rendered evaluation control is bound to the scheduling API action');
