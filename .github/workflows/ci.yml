@@ -138,6 +138,8 @@ jobs:
         run: npm run test:sc-03.5-service-provider-bookings
       - name: Service booking scheduling authority boundary regression
         run: npm run test:service-booking-scheduling-boundary
+      - name: Logistics Scheduling API and workspace integration regression
+        run: npm run test:logistics-scheduling-api-workspace
       - name: Service booking operator workspace regression
         run: npm run test:service-booking-operator-workspace
       - name: Service booking operator browser interaction regression
