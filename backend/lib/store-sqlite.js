@@ -5886,6 +5886,7 @@ function serviceBookingFromRow(row) {
     appointment_mode: String(row.appointment_mode), customer_note: row.customer_note ?? null,
     status: String(row.status), version: Number(row.version),
     service_resource_id: row.service_resource_id || null,
+    service_resource_name: row.service_resource_name || null,
     created_by: row.created_by || null, updated_by: row.updated_by || null,
     started_at: row.started_at || null, started_by: row.started_by || null,
     completed_at: row.completed_at || null, completed_by: row.completed_by || null,
@@ -6360,7 +6361,12 @@ export async function listServiceBookings(chatId, serverOrderId) {
   ensureDatabase();
   const tenant=await getTenant(chatId), organizationId=String(tenant?.organization_id||tenant?.organizationId||'');
   if(!organizationId) throw Object.assign(new Error('Order organization is required'),{statusCode:409,code:'ORDER_ORGANIZATION_REQUIRED'});
-  return db.prepare('SELECT * FROM service_bookings WHERE organization_id=? AND chat_id=? AND server_order_id=? ORDER BY created_at DESC,id DESC')
+  return db.prepare(`SELECT b.*,r.name AS service_resource_name
+    FROM service_bookings b
+    LEFT JOIN service_resources r ON r.id=b.service_resource_id
+      AND r.organization_id=b.organization_id AND r.chat_id=b.chat_id
+    WHERE b.organization_id=? AND b.chat_id=? AND b.server_order_id=?
+    ORDER BY b.created_at DESC,b.id DESC`)
     .all(organizationId,String(chatId),String(serverOrderId)).map(serviceBookingFromRow);
 }
 
