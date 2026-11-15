@@ -146,6 +146,7 @@ try {
   await openOrdersButton.click();
   const ordersDialog = page.getByRole('dialog', { name: 'My orders' });
   await ordersDialog.waitFor();
+  await page.getByRole('button', { name: 'Appointments' }).waitFor();
   assert.equal(await ordersDialog.getAttribute('aria-modal'), 'true',
     'My Orders is exposed as a modal dialog');
   assert.equal(await page.evaluate(() => document.activeElement?.id), 'closeOrders',
