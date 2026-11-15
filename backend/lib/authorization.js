@@ -42,6 +42,7 @@ const ROLE_PERMISSIONS = Object.freeze({
     'procurement:demand:view', 'procurement:demand:create', 'procurement:demand:manage', 'procurement:demand:submit', 'procurement:demand:cancel', 'procurement:demand:sourcing', 'procurement:supplier:view', 'procurement:supplier:manage', 'procurement:supplier:discover', 'procurement:supplier:relationship:view', 'procurement:supplier:relationship:manage', 'procurement:rfq:view', 'procurement:rfq:create', 'procurement:rfq:manage', 'procurement:rfq:send', 'procurement:rfq:close', 'procurement:rfq:respond', 'procurement:comparison:view', 'procurement:comparison:create', 'procurement:award:view', 'procurement:award:create', 'procurement:award:confirm', 'procurement:award:cancel', 'procurement:award:execute', 'procurement:receipt:view', 'procurement:receipt:create', 'procurement:receipt:cancel', 'procurement:payment:create',
     'service:service_resource:view', 'service:service_resource:manage',
     'service:resource_availability:view', 'service:resource_availability:manage',
+    'service:service_booking:view',
   ]),
   cashier: new Set([
     'orders:create', 'orders:view', 'fulfillment:view', 'fulfillment:update', 'payments:accept', 'payments:view',
