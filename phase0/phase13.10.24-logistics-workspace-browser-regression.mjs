@@ -76,7 +76,7 @@ try {
     const pathname = new URL(request.url()).pathname;
     let body = {};
     try { body = request.postDataJSON() || {}; } catch {}
-    schedulingCalls.push({ method, pathname, body, headers: request.headers() });
+    schedulingCalls.push({ method, pathname, search: new URL(request.url()).search, body, headers: request.headers() });
     if (method === 'GET') {
       await route.fulfill({
         status: 200, contentType: 'application/json',
@@ -246,6 +246,19 @@ try {
   assert.ok(schedulingCalls.some(call => call.method === 'POST' && call.pathname.endsWith('/logistics/scheduling')),
     `manager form submit did not reach API; calls=${JSON.stringify(schedulingCalls)}; status=${await page.locator('#logisticsSchedulingStatus').innerText()}`);
   await page.locator('[data-scheduling-card="scheduling-browser-1"]').waitFor();
+  const statusFilterRequest = page.waitForRequest(request => {
+    const url = new URL(request.url());
+    return request.method() === 'GET' && url.pathname.endsWith('/logistics/scheduling') && url.searchParams.get('status') === 'REQUESTED';
+  });
+  await page.locator('#logisticsSchedulingStatusFilter').selectOption('REQUESTED');
+  await statusFilterRequest;
+  const typeFilterRequest = page.waitForRequest(request => {
+    const url = new URL(request.url());
+    return request.method() === 'GET' && url.pathname.endsWith('/logistics/scheduling')
+      && url.searchParams.get('status') === 'REQUESTED' && url.searchParams.get('activityType') === 'PICKUP';
+  });
+  await page.locator('#logisticsSchedulingTypeFilter').selectOption('PICKUP');
+  await typeFilterRequest;
   const createCall = schedulingCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/logistics/scheduling'));
   assert.ok(createCall, 'manager can submit a scheduling request');
   assert.equal(createCall.body.related_order.id, 'server-order-browser-1');
