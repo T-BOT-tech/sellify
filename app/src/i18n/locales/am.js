@@ -198,4 +198,6 @@ export default {
     logisticsSchedulingScheduleBlocked: "ከታመነ የአቅም ማስረጃ የተገኘ አዲስ ግምገማ FEASIBLE እስኪመልስ ድረስ መርሐግብር ማስያዝ ተሰናክሏል።",
     logisticsSchedulingWindowRequired: "አዋጭነትን ከመገምገምዎ በፊት የታቀደውን የመጀመሪያና የመጨረሻ ጊዜ ያስገቡ።",
     logisticsSchedulingWindowChanged: "የታቀደው የጊዜ ክልል ተቀይሯል። መርሐግብር ከማድረግዎ በፊት አዋጭነቱን እንደገና ይገምግሙ።",
+    logisticsSchedulingScheduledStart: "የታቀደ መጀመሪያ",
+    logisticsSchedulingScheduledEnd: "የታቀደ መጨረሻ",
 };
