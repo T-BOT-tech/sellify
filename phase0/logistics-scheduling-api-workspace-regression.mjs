@@ -55,6 +55,8 @@ assert.match(workspace, /logisticsSchedulingScheduleBlocked/);
 assert.match(workspace, /lastEvaluations\.delete\(activityId\)/);
 assert.match(workspace, /candidateWindow/);
 assert.match(workspace, /normalizeCandidateWindow/);
+assert.match(workspace, /candidateDrafts/);
+assert.match(workspace, /candidate start is preserved/);
 assert.match(styles, /\.logistics-scheduling-workspace\s*\{/);
 assert.match(styles, /\.logistics-scheduling-card\s*\{[\s\S]*?display:\s*flex/);
 assert.match(styles, /@media \(max-width:\s*560px\)/);
