@@ -53,6 +53,7 @@ assert.match(workspace, /activity\.lastEvaluation !== 'FEASIBLE'/);
 assert.match(workspace, /logisticsSchedulingScheduleBlocked/);
 assert.match(workspace, /lastEvaluations\.delete\(activityId\)/);
 assert.match(workspace, /candidateWindow/);
+assert.match(workspace, /normalizeCandidateWindow/);
 assert.match(workspace, /UNKNOWN_STALE/);
 assert.match(workspace, /DENIED/);
 assert.match(workspace, /EMPTY/);
@@ -74,6 +75,7 @@ for (const locale of [en, am, om]) {
     'logisticsSchedulingUnknownStale',
     'logisticsSchedulingSubmit',
     'logisticsSchedulingWindowRequired',
+    'logisticsSchedulingWindowInvalid',
     'logisticsSchedulingWindowChanged',
     'logisticsSchedulingScheduledStart',
     'logisticsSchedulingScheduledEnd',
