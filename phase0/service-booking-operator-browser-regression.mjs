@@ -82,7 +82,11 @@ try {
           id: 'provider-resource-1', name: 'Provider One', resourceType: 'PROVIDER',
           status: 'ACTIVE', version: 1, organizationId: 'test-org',
           locationId: null, serviceItemId: null,
-        }] : [],
+        }] : [{
+          id: 'resource-room-1', name: 'Consultation Room', resourceType: 'FACILITY',
+          status: 'ACTIVE', version: 1, organizationId: 'test-org',
+          locationId: null, serviceItemId: 'consultation',
+        }],
         state: 'READY', authority: 'service_resource_registry',
         scope: providerMode ? 'ASSIGNED_RESOURCES' : 'ORGANIZATION',
       }),
@@ -203,7 +207,7 @@ try {
     await workspace.refreshServiceBookings(document);
   });
   forceConflict = true;
-  page.once('dialog', dialog => dialog.accept());
+  page.once('dialog', dialog => dialog.type() === 'prompt' ? dialog.accept('1') : dialog.accept());
   await page.getByRole('button', { name: 'CONFIRMED' }).click();
   await page.waitForFunction(() => {
     const button = document.querySelector('.service-booking-action[data-target="CONFIRMED"]');
