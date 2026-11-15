@@ -253,6 +253,29 @@ export function logisticsSchedulingWorkspaceShell() {
       <label>${t('logisticsSchedulingRequestedEnd')} <input name="requestedEnd" type="datetime-local"></label>
       <button type="submit" class="btn-primary">${t('logisticsSchedulingSubmit')}</button>
     </form>` : '';
+  const filterMarkup = `
+    <div class="logistics-scheduling-filters" aria-label="${t('logisticsSchedulingFilters')}">
+      <label>${t('logisticsSchedulingStatusFilter')}
+        <select id="logisticsSchedulingStatusFilter" data-scheduling-filter>
+          <option value="">${t('logisticsSchedulingAllStatuses')}</option>
+          <option value="REQUESTED">REQUESTED</option><option value="SCHEDULED">SCHEDULED</option>
+          <option value="CONFIRMED">CONFIRMED</option><option value="IN_PROGRESS">IN PROGRESS</option>
+          <option value="COMPLETED">COMPLETED</option><option value="CANCELLED">CANCELLED</option>
+          <option value="EXPIRED">EXPIRED</option><option value="MISSED">MISSED</option><option value="FAILED">FAILED</option>
+        </select>
+      </label>
+      <label>${t('logisticsSchedulingTypeFilter')}
+        <select id="logisticsSchedulingTypeFilter" data-scheduling-filter>
+          <option value="">${t('logisticsSchedulingAllTypes')}</option>
+          <option value="PICKUP">PICKUP</option><option value="DELIVERY">DELIVERY</option>
+          <option value="LOADING">LOADING</option><option value="UNLOADING">UNLOADING</option>
+          <option value="DEPARTURE">DEPARTURE</option><option value="ARRIVAL">ARRIVAL</option>
+          <option value="CHECKPOINT">CHECKPOINT</option><option value="TRANSFER">TRANSFER</option>
+          <option value="HANDOFF">HANDOFF</option><option value="HUB_ARRIVAL">HUB ARRIVAL</option>
+          <option value="HUB_DEPARTURE">HUB DEPARTURE</option>
+        </select>
+      </label>
+    </div>`;
   return `
     <section class="logistics-scheduling-workspace" aria-label="Logistics scheduling">
       <div class="logistics-workspace-head">
