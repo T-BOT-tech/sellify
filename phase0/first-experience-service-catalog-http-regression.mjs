@@ -615,7 +615,7 @@ try {
   const failedBooking = (await failedBookingCreate.json()).booking;
   for (const step of [
     { status: 'ACCEPTED', expected_version: 1, key: 'service-booking-http-fail-accept-1' },
-    { status: 'CONFIRMED', expected_version: 2, key: 'service-booking-http-fail-confirm-1' },
+    { status: 'CONFIRMED', expected_version: 2, service_resource_id: serviceResourceId, key: 'service-booking-http-fail-confirm-1' },
     {
       status: 'IN_PROGRESS',
       expected_version: 3,
