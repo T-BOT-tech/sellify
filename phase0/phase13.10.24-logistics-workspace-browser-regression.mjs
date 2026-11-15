@@ -247,14 +247,14 @@ try {
   assert.ok(createCall.headers['idempotency-key'], 'scheduling request carries an idempotency key');
   await page.locator('[data-scheduling-evaluate="scheduling-browser-1"]').click();
   await page.locator('[data-scheduling-card="scheduling-browser-1"]').getByText(/UNKNOWN/).waitFor();
-  await page.locator('[data-scheduled-start="scheduling-browser-1"]').fill('2026-11-16T09:00');
-  await page.locator('[data-scheduled-end="scheduling-browser-1"]').fill('2026-11-16T10:00');
-  await page.locator('[data-scheduling-transition="SCHEDULED"]').click();
+  const scheduleButton = page.locator('[data-scheduling-transition="SCHEDULED"]');
+  assert.equal(await scheduleButton.isDisabled(), true,
+    'SCHEDULED remains disabled while the fresh feasibility result is UNKNOWN');
   await page.waitForFunction(() => document.querySelector('#logisticsSchedulingStatus')?.textContent.includes('UNKNOWN'));
   assert.match(await page.locator('[data-scheduling-card="scheduling-browser-1"]').innerText(), /REQUESTED/,
     'UNKNOWN feasibility cannot be presented as a confirmed schedule');
-  assert.ok(schedulingCalls.some(call => call.method === 'PATCH' && call.pathname.endsWith('/transition')),
-    'manager lifecycle action crosses the authenticated API boundary');
+  assert.equal(schedulingCalls.some(call => call.method === 'PATCH' && call.pathname.endsWith('/transition')), false,
+    'the UI does not send an impossible SCHEDULED command while feasibility is UNKNOWN');
   assert.equal(pageErrors.length, 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
 
   console.log('Phase 13.10.24 Logistics workspace browser regression: PASS');
