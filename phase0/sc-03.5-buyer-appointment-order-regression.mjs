@@ -140,6 +140,13 @@ try {
     name: 'Second Consultation Provider', resourceType: 'PROVIDER',
     serviceItemId: 'sc035-consultation', idempotencyKey: 'sc035-resource-two-' + suffix,
   }, null);
+  await store.setServiceResourceAvailability(seller.chatId, secondResource.resource.id, {
+    expectedVersion: 0, idempotencyKey: 'sc035-hours-two-' + suffix,
+    workingHours: [0, 1, 2, 3, 4, 5, 6].map(weekday => ({
+      weekday, startTime: '08:00', endTime: '18:00',
+    })),
+    exceptions: [],
+  }, null);
   const secondRequest = await store.createServiceBooking(seller.chatId, owned.orderId, {
     service_item_id: 'sc035-consultation',
     requested_start: '2027-01-23T09:00:00+03:00',
