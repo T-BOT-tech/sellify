@@ -347,7 +347,7 @@ export function mountLogisticsSchedulingWorkspace(root) {
     if (event.target?.id !== 'logisticsSchedulingRequestForm') return;
     event.preventDefault();
     try { await submitRequest(root, event.target); }
-    catch (error) { lastState = error?.status && error.status < 500 ? 'ERROR' : 'UNKNOWN_STALE'; renderWorkspace(root); }
+    catch (error) { lastState = error?.status === 401 || error?.status === 403 ? 'DENIED' : error?.status && error.status < 500 ? 'ERROR' : 'UNKNOWN_STALE'; renderWorkspace(root); }
   });
   }
   const statusNode = root.querySelector('#logisticsSchedulingStatus');
