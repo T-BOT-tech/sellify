@@ -197,7 +197,7 @@ export default {
     logisticsSchedulingReferenceHint: "የMovement ማጣቀሻ የነባሩን ፕሮጀክሽን ቅርጸት ይጠቀማል፦ movement:<Core Order ID>።",
     logisticsSchedulingScheduleBlocked: "ከታመነ የአቅም ማስረጃ የተገኘ አዲስ ግምገማ FEASIBLE እስኪመልስ ድረስ መርሐግብር ማስያዝ ተሰናክሏል።",
     logisticsSchedulingWindowRequired: "አዋጭነትን ከመገምገምዎ በፊት የታቀደውን የመጀመሪያና የመጨረሻ ጊዜ ያስገቡ።",
-    logisticsSchedulingWindowInvalid: "የመጨረሻው ጊዜ ከመጀመሪያው ጊዜ በኋላ መሆን አለበት። የተመረጠውን ጊዜ ያስተካክሉ።
+    logisticsSchedulingWindowInvalid: "የመጨረሻው ጊዜ ከመጀመሪያው ጊዜ በኋላ መሆን አለበት። የተመረጠውን ጊዜ ያስተካክሉ።",
     logisticsSchedulingWindowChanged: "የታቀደው የጊዜ ክልል ተቀይሯል። መርሐግብር ከማድረግዎ በፊት አዋጭነቱን እንደገና ይገምግሙ።",
     logisticsSchedulingScheduledStart: "የታቀደ መጀመሪያ",
     logisticsSchedulingScheduledEnd: "የታቀደ መጨረሻ",
