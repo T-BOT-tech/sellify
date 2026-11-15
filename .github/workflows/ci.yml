@@ -120,6 +120,8 @@ jobs:
         run: npm run test:outbox-tenant-scope
       - name: Order sync idempotency regression
         run: npm run test:order-sync-idempotency
+      - name: B2B invoice transition concurrency regression
+        run: npm run phase11.3:invoice-test
       - name: Restaurant payment intent authority regression
         run: npm run phase13.8.6:restaurant-order-payment-test
       - name: First-experience service catalog contract regression
