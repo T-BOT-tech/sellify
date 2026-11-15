@@ -90,7 +90,8 @@ const second = await createLogisticsSchedulingActivity(chatId, {
   mode: 'SCHEDULED',
   scheduled_start: '2026-10-10T09:30:00Z',
   scheduled_end: '2026-10-10T10:30:00Z',
-  related_movement: { id: 'movement-l11-7-1', authority: 'logistics' },
+  related_order: { id: orderOne },
+  related_movement: { id: `movement:${orderOne}`, authority: 'logistics-pack-coordination-projection' },
   idempotency_key: 'l11.7-create-2',
 }, actor);
 
