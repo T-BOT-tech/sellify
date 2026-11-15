@@ -352,8 +352,8 @@ export function mountLogisticsSchedulingWorkspace(root) {
   const requestForm = root.querySelector('#logisticsSchedulingRequestForm');
   if (requestForm && requestForm.dataset.schedulingSubmitBound !== '1') {
     requestForm.dataset.schedulingSubmitBound = '1';
-    requestForm.addEventListener('submit', async event => {
-      event.preventDefault();
+    const submit = async () => {
+      if (!requestForm.reportValidity()) return;
       try { await submitRequest(root, requestForm); }
       catch (error) {
         lastState = error?.status === 401 || error?.status === 403
@@ -361,6 +361,14 @@ export function mountLogisticsSchedulingWorkspace(root) {
         feedback = error?.message || '';
         renderWorkspace(root);
       }
+    };
+    requestForm.addEventListener('submit', event => {
+      event.preventDefault();
+      submit();
+    });
+    requestForm.querySelector('button[type="submit"]')?.addEventListener('click', event => {
+      event.preventDefault();
+      submit();
     });
   }
   const statusNode = root.querySelector('#logisticsSchedulingStatus');
