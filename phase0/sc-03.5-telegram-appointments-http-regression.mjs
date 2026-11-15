@@ -75,6 +75,45 @@ try {
   const db = store.getDatabaseForTests();
   const organizationId = db.prepare('SELECT organization_id FROM tenants WHERE chat_id=?').get(tenant.chatId).organization_id;
   const actor = { userId: owner.id, role: 'owner', organizationId, chatId: tenant.chatId };
+
+  // Exercise the provider queue over HTTP, including immediate revocation of
+  // the exact resource-scoped assignment while reusing the same session token.
+  const providerResource = await store.createServiceResource(tenant.chatId, {
+    name: 'HTTP Provider Resource', resourceType: 'PROVIDER',
+    serviceItemId: 'sc035-http-consultation',
+    idempotencyKey: 'sc035-http-provider-resource-' + suffix,
+  }, null);
+  const now = new Date().toISOString();
+  db.prepare(`INSERT INTO pack_lifecycle (
+    id, organization_id, pack_id, pack_version, state, installed_at, activated_at,
+    created_by_user_id, updated_by_user_id, created_at, updated_at, version
+  ) VALUES (?, ?, 'service', '1.0.0', 'ACTIVE', ?, ?, ?, ?, ?, ?, 1)`).run(
+    'sc035-http-service-pack-' + suffix, organizationId, now, now,
+    owner.id, owner.id, now, now,
+  );
+  const providerUser = await store.getOrCreateUserByTelegram('sc035-http-provider-' + suffix, 'SC035 HTTP Provider');
+  const providerMembership = await store.ensureMembership(providerUser.id, tenant.chatId, 'staff');
+  await store.assignMembershipContextualRole({
+    actorUserId: owner.id, chatId: tenant.chatId, membershipId: providerMembership.id,
+    role: 'service_provider', scopeType: 'RESOURCE', scopeId: providerResource.resource.id,
+  });
+  const providerSession = await store.createSession({
+    userId: providerUser.id, chatId: tenant.chatId, deviceName: 'SC-03.5 provider HTTP regression',
+  });
+  const providerQueueUrl = `/tenants/${encodeURIComponent(tenant.chatId)}/service-provider/bookings`;
+  const providerHeaders = { Authorization: 'Bearer ' + providerSession.token, Accept: 'application/json' };
+  const providerQueue = await request(providerQueueUrl, { headers: providerHeaders });
+  assert.equal(providerQueue.response.status, 200, 'active resource-scoped provider assignment may read its queue');
+  assert.equal(providerQueue.json.state, 'EMPTY');
+  assert.equal(providerQueue.json.resource_count, 1);
+  await store.revokeMembershipContextualRole({
+    actorUserId: owner.id, chatId: tenant.chatId, membershipId: providerMembership.id,
+    role: 'service_provider', scopeType: 'RESOURCE', scopeId: providerResource.resource.id,
+  });
+  const revokedProviderQueue = await request(providerQueueUrl, { headers: providerHeaders });
+  assert.equal(revokedProviderQueue.response.status, 403,
+    'the same provider session must lose queue access immediately after exact resource assignment revocation');
+  assert.equal(revokedProviderQueue.json.error?.code, 'SERVICE_PROVIDER_ASSIGNMENT_REQUIRED');
   await store.saveCatalog(tenant.chatId, [{
     id: 'sc035-http-consultation', name: 'HTTP Consultation', price: 25000,
     item_type: 'service', marketplace_listed: true,
