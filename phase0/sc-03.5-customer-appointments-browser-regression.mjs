@@ -290,6 +290,8 @@ try {
   denyServiceBookingReads = true;
   await page.locator('[data-appointment-order]').click();
   await page.getByText('Appointment access is unavailable for this store.').waitFor();
+  assert.equal(await page.locator('#appointmentsState [role="alert"]').count(), 1,
+    'server-side denial is announced as an alert to assistive technology');
   assert.equal(await page.locator('#customerAppointmentForm').count(), 0,
     'denied appointment access does not expose a request form');
 
