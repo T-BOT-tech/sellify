@@ -142,7 +142,25 @@ try {
 
   await page.goto(`${baseUrl}/store.html?store=${encodeURIComponent(chatId)}`);
   await page.getByRole('button', { name: 'My orders' }).waitFor();
-  await page.getByRole('button', { name: 'My orders' }).click();
+  const openOrdersButton = page.getByRole('button', { name: 'My orders' });
+  await openOrdersButton.click();
+  const ordersDialog = page.getByRole('dialog', { name: 'My orders' });
+  await ordersDialog.waitFor();
+  assert.equal(await ordersDialog.getAttribute('aria-modal'), 'true',
+    'My Orders is exposed as a modal dialog');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'closeOrders',
+    'opening My Orders moves focus into the dialog');
+  await page.keyboard.press('Shift+Tab');
+  assert.equal(await page.evaluate(() => document.activeElement?.hasAttribute('data-appointment-order')), true,
+    'Shift+Tab from the first control wraps to the last dialog control');
+  await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'closeOrders',
+    'Tab from the last control wraps to the first dialog control');
+  await page.keyboard.press('Escape');
+  await ordersDialog.waitFor({ state: 'hidden' });
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'openOrders',
+    'Escape closes the dialog and restores focus to its opener');
+  await openOrdersButton.click();
   await page.getByRole('button', { name: 'Appointments' }).click();
   await page.locator('#customerAppointmentForm').waitFor();
 
