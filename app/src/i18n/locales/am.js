@@ -196,4 +196,5 @@ export default {
     logisticsSchedulingBlockedConflict: "ነባር ቀኖናዊ እንቅስቃሴ ከዚህ የጊዜ ክልል ጋር ስለሚጋጭ መርሐግብሩ ታግዷል።",
     logisticsSchedulingReferenceHint: "የMovement ማጣቀሻ የነባሩን ፕሮጀክሽን ቅርጸት ይጠቀማል፦ movement:<Core Order ID>።",
     logisticsSchedulingScheduleBlocked: "ከታመነ የአቅም ማስረጃ የተገኘ አዲስ ግምገማ FEASIBLE እስኪመልስ ድረስ መርሐግብር ማስያዝ ተሰናክሏል።",
+    logisticsSchedulingWindowRequired: "አዋጭነትን ከመገምገምዎ በፊት የታቀደውን የመጀመሪያና የመጨረሻ ጊዜ ያስገቡ።",
 };
