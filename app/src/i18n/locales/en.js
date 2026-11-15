@@ -295,7 +295,7 @@ export default {
     serviceProviderAppointmentsUnavailable: "Appointment queue unavailable. Refresh to retry.",
     serviceProviderAppointmentsUnknownStale: "Appointment queue status is unknown or stale. Reconnect and refresh before relying on it.",
     logisticsSchedulingTitle: "Logistics scheduling",
-    logisticsSchedulingHint: "Coordinate pickup, delivery and other logistics activities against existing canonical records.",
+    logisticsSchedulingHint: "Coordinate pickup, delivery and other logistics activities against existing canonical records. Requests stay REQUESTED until trusted feasibility evidence and an authorized transition are available.",
     logisticsSchedulingRefresh: "Reload schedule",
     logisticsSchedulingLoading: "Loading scheduling activities…",
     logisticsSchedulingReady: "Scheduling data refreshed.",
