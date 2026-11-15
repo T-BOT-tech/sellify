@@ -55,8 +55,13 @@ try {
     }
   });
   page.on('console', message => {
-    // The deliberate HTTP 409 below is the version-conflict recovery fixture.
-    if (message.type() === 'error' && !message.text().includes('409 (Conflict)')) {
+    // Ignore only errors deliberately induced by this regression: the version
+    // conflict and the provider queue's real offline/network-failure state.
+    const expectedOfflineFailure = providerQueueScenario === 'OFFLINE'
+      && message.text().includes('net::ERR_INTERNET_DISCONNECTED');
+    if (message.type() === 'error'
+        && !message.text().includes('409 (Conflict)')
+        && !expectedOfflineFailure) {
       pageErrors.push(message.text());
     }
   });
@@ -78,6 +83,15 @@ try {
   let providerMode = false;
   let providerQueueScenario = 'READY';
   let resourceSelectionMode = false;
+  // The logistics shell also refreshes its canonical delivery-assignment
+  // projection. Keep this focused service-booking browser fixture isolated
+  // from that unrelated endpoint rather than allowing a noisy 404.
+  await page.route('**/tenants/test-tenant/delivery-assignments*', route =>
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ assignments: [] }),
+    }));
+
   await page.route('**/tenants/test-tenant/service-resources**', async route => {
     if (route.request().method() !== 'GET') {
       await route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Method not allowed' } }) });
