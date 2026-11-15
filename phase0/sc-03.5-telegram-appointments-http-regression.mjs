@@ -186,6 +186,11 @@ try {
   assert.equal(create.json.booking.organization_id, undefined);
   assert.equal(create.json.booking.created_by, undefined);
 
+  const requestedProjection = await request(base + '/service-bookings', { headers: buyerHeaders });
+  assert.equal(requestedProjection.response.status, 200);
+  assert.deepEqual(requestedProjection.json.bookings[0].allowed_actions, ['CANCEL'],
+    'buyer-safe projection exposes cancellation only while the canonical request is cancellable');
+
   const feasibility = await request(base + `/service-feasibility?service_item_id=sc035-http-consultation&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, {
     headers: buyerHeaders,
   });
@@ -205,6 +210,9 @@ try {
   });
   assert.equal(cancel.response.status, 200);
   assert.equal(cancel.json.booking.status, 'CANCELLED');
+  const cancelledProjection = await request(base + '/service-bookings', { headers: buyerHeaders });
+  assert.deepEqual(cancelledProjection.json.bookings[0].allowed_actions, [],
+    'cancelled booking no longer advertises a cancellation action');
 
   const replay = await request(base + `/service-bookings/${encodeURIComponent(bookingId)}/cancel`, {
     method: 'POST',
