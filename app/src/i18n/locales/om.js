@@ -196,4 +196,5 @@ export default {
     logisticsSchedulingReferenceHint: "Wabiin Movement bifa projection jiru fayyadama: movement:<Core Order ID>.",
     logisticsSchedulingScheduleBlocked: "Madaalliin haaraan ragaa dandeettii amanamaa irraa FEASIBLE hanga deebisutti sagantaa murteessuun hin danda'amu.",
     logisticsSchedulingWindowRequired: "Madaallii danda'amummaa dura yeroo jalqabaa fi xumuraa sagantaa yaadame galchi.",
+    logisticsSchedulingWindowChanged: "Yeroon sagantaa yaadame jijjiirameera. Sagantaa murteessuu dura madaallii danda'amummaa irra deebi'ii godhi.",
 };
