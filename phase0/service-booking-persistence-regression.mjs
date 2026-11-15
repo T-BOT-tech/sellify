@@ -296,7 +296,8 @@ try {
     status: 'ACCEPTED', expected_version: 1, idempotency_key: 'booking-failure-accept-' + suffix,
   }, { userId: owner.id });
   await store.transitionServiceBooking(seller.chatId, order.server_order_id, failureBooking.booking.id, {
-    status: 'CONFIRMED', expected_version: 2, idempotency_key: 'booking-failure-confirm-' + suffix,
+    status: 'CONFIRMED', expected_version: 2, service_resource_id: serviceResourceId,
+    idempotency_key: 'booking-failure-confirm-' + suffix,
   }, { userId: owner.id });
   await assert.rejects(
     store.transitionServiceBooking(seller.chatId, order.server_order_id, failureBooking.booking.id, {
