@@ -7,6 +7,7 @@ import { t } from '../ui/i18n.js';
 
 let activities = [];
 let lastState = 'UNKNOWN_STALE';
+let feedback = '';
 let refreshSequence = 0;
 let mountedStatusNode = null;
 let pendingRequestKey = null;
@@ -90,7 +91,7 @@ function renderActivity(activity) {
 function renderWorkspace(root) {
   const status = root.querySelector('#logisticsSchedulingStatus');
   const list = root.querySelector('#logisticsSchedulingList');
-  if (status) status.textContent = stateLabel(lastState);
+  if (status) status.textContent = [stateLabel(lastState), feedback].filter(Boolean).join(' ');
   if (!list) return;
   list.innerHTML = activities.map(renderActivity).join('');
   if (lastState === 'EMPTY') list.innerHTML = `<div class="empty">${stateLabel('EMPTY')}</div>`;
@@ -228,7 +229,10 @@ async function evaluateActivity(root, activityId) {
   const evaluation = data?.evaluation?.evaluation || 'UNKNOWN';
   const item = activities.find(activity => String(activity.id) === String(activityId));
   if (item) item.lastEvaluation = evaluation;
-  lastState = evaluation === 'UNKNOWN' ? 'UNKNOWN_STALE' : 'READY';
+  lastState = 'READY';
+  feedback = evaluation === 'UNKNOWN'
+    ? t('logisticsSchedulingBlockedUnknown')
+    : evaluation === 'CONFLICT' ? t('logisticsSchedulingBlockedConflict') : '';
   renderWorkspace(root);
   const card = root.querySelector(`[data-scheduling-card="${CSS.escape(String(activityId))}"]`);
   if (card) {
@@ -270,7 +274,7 @@ async function transitionActivity(root, activityId, target, button) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 409 || response.status === 412) await refresh(root);
-    throw Object.assign(new Error(data?.error?.message || `Transition failed (${response.status})`), { status: response.status });
+    throw Object.assign(new Error(data?.error?.message || `Transition failed (${response.status})`), { status: response.status, code: data?.error?.code });
   }
   pendingTransitionKeys.delete(transitionKey);
   const updated = data?.activity;
@@ -289,8 +293,17 @@ export function mountLogisticsSchedulingWorkspace(root) {
       if (refreshButton) await refresh(root);
       else if (evaluateButton) await evaluateActivity(root, evaluateButton.dataset.schedulingEvaluate);
       else if (transitionButton) await transitionActivity(root, transitionButton.dataset.activityId, transitionButton.dataset.schedulingTransition, transitionButton);
-    } catch {
-      lastState = 'ERROR';
+    } catch (error) {
+      if (error?.code === 'SCHEDULING_FEASIBILITY_UNKNOWN') {
+        lastState = 'READY';
+        feedback = t('logisticsSchedulingBlockedUnknown');
+      } else if (error?.code === 'SCHEDULING_FEASIBILITY_CONFLICT') {
+        lastState = 'READY';
+        feedback = t('logisticsSchedulingBlockedConflict');
+      } else {
+        lastState = error?.status && error.status < 500 ? 'ERROR' : 'UNKNOWN_STALE';
+        feedback = error?.message || '';
+      }
       renderWorkspace(root);
     }
   });
