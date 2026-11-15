@@ -48,6 +48,7 @@ try {
   const pageErrors = [];
   const calls = [];
   let feasibility = 'FEASIBLE';
+  let offlineFeasibility = false;
   let bookings = [];
   page.on('pageerror', error => pageErrors.push(error.message));
   await page.addInitScript(() => {
@@ -86,6 +87,7 @@ try {
       }] });
     }
     if (path.endsWith('/service-feasibility') && method === 'GET') {
+      if (offlineFeasibility) return route.abort('internetdisconnected');
       return json(200, { feasibility: {
         state: feasibility, reasonCode: feasibility === 'FEASIBLE' ? 'DECLARED_HOURS_AND_COMMITMENTS_MATCH' : 'ALL_MATCHING_RESOURCES_COMMITTED',
         timeZone: 'Africa/Addis_Ababa', confirmsAvailability: false, reservesResource: false,
@@ -184,11 +186,13 @@ try {
   assert.ok(mobileMetrics.content <= mobileMetrics.viewport + 1,
     `appointment journey overflows narrow mobile viewport: ${JSON.stringify(mobileMetrics)}`);
 
+  offlineFeasibility = true;
   await context.setOffline(true);
   await page.getByRole('button', { name: 'Check time' }).click();
   await page.getByText(/Offline: time feasibility cannot be checked/).waitFor();
   assert.equal(await page.locator('#appointmentFeasibilityState').getAttribute('data-state'), 'UNKNOWN');
   await context.setOffline(false);
+  offlineFeasibility = false;
 
   // Product-only orders must not expose an appointment request form.
   const originalRoute = calls.length;
