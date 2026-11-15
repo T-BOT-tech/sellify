@@ -90,8 +90,8 @@ function renderActivity(activity) {
   }).join('');
   const scheduleWindow = activity.status === 'REQUESTED' && canManageScheduling()
     ? `<div class="logistics-scheduling-window">
-         <label>Scheduled start <input type="datetime-local" data-scheduled-start="${escapeHtml(activity.id)}"></label>
-         <label>Scheduled end <input type="datetime-local" data-scheduled-end="${escapeHtml(activity.id)}"></label>
+         <label>${t('logisticsSchedulingScheduledStart')} <input type="datetime-local" data-scheduled-start="${escapeHtml(activity.id)}"></label>
+         <label>${t('logisticsSchedulingScheduledEnd')} <input type="datetime-local" data-scheduled-end="${escapeHtml(activity.id)}"></label>
        </div>`
     : '';
   return `
