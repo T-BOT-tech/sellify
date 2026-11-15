@@ -8,6 +8,7 @@ import { t } from '../ui/i18n.js';
 let activities = [];
 let lastState = 'UNKNOWN_STALE';
 let refreshSequence = 0;
+let mountedStatusNode = null;
 
 function endpoint(activityId = '') {
   const base = (config.syncUrl || window.location.origin).replace(/\/$/, '');
@@ -109,7 +110,7 @@ export function logisticsSchedulingWorkspaceShell() {
         </select>
       </label>
       <label>${t('logisticsSchedulingMode')}
-        <select name="mode"><option value="WINDOWED">Windowed</option><option value="SCHEDULED">Scheduled</option><option value="ON_DEMAND">On demand</option><option value="RECURRING">Recurring</option></select>
+        <select name="mode"><option value="WINDOWED">Windowed</option><option value="SCHEDULED">Scheduled</option><option value="ON_DEMAND">On demand</option></select>
       </label>
       <label>${t('logisticsSchedulingReferenceType')}
         <select name="referenceType"><option value="fulfillment">Fulfillment</option><option value="order">Order</option><option value="movement">Movement</option></select>
@@ -283,4 +284,11 @@ export function mountLogisticsSchedulingWorkspace(root) {
     }
   });
   observer.observe(root, { childList: true, subtree: true });
+  const statusNode = root.querySelector('#logisticsSchedulingStatus');
+  if (statusNode && statusNode !== mountedStatusNode) {
+    const firstMount = mountedStatusNode === null;
+    mountedStatusNode = statusNode;
+    renderWorkspace(root);
+    if (firstMount) refresh(root);
+  }
 }
