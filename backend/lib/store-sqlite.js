@@ -6268,7 +6268,6 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
   assertServiceBookingAuthorityBoundary(input);
   const target=String(input.status||input.next_status||input.nextStatus||'').trim().toUpperCase();
   const resourceId=String(input.service_resource_id||input.serviceResourceId||'').trim()||null;
-  if(target==='CONFIRMED'&&!resourceId) throw Object.assign(new Error('Select a service resource before confirming this appointment'),{statusCode:400,code:'SERVICE_BOOKING_RESOURCE_REQUIRED'});
   if(target!=='CONFIRMED'&&resourceId) throw Object.assign(new Error('A service resource may only be assigned during confirmation'),{statusCode:400,code:'SERVICE_BOOKING_RESOURCE_ASSIGNMENT_INVALID'});
   const commandKey=String(input.idempotencyKey||input.idempotency_key||'').trim();
   if(!commandKey) throw Object.assign(new Error('Idempotency-Key is required'),{statusCode:400,code:'IDEMPOTENCY_KEY_REQUIRED'});
@@ -6297,6 +6296,7 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
     const actorId=actor?.userId||null;
     let commitment=null;
     if(target==='CONFIRMED') {
+      if(!resourceId) throw Object.assign(new Error('Select a service resource before confirming this appointment'),{statusCode:400,code:'SERVICE_BOOKING_RESOURCE_REQUIRED'});
       const resource=db.prepare('SELECT * FROM service_resources WHERE id=? AND organization_id=? AND chat_id=?').get(resourceId,organizationId,String(chatId));
       if(!resource) throw Object.assign(new Error('Service resource not found in this organization'),{statusCode:404,code:'SERVICE_RESOURCE_NOT_FOUND'});
       if(String(resource.status).toUpperCase()!=='ACTIVE') throw Object.assign(new Error('Only an active service resource can be committed'),{statusCode:409,code:'SERVICE_RESOURCE_INACTIVE'});
