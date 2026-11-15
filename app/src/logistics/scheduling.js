@@ -100,7 +100,7 @@ function renderActivity(activity) {
       <div>Requested: ${escapeHtml(formatWindow(activity.requestedStart, activity.requestedEnd))}</div>
       <div>Scheduled: ${escapeHtml(formatWindow(activity.scheduledStart, activity.scheduledEnd))}</div>
       <div>Reference: ${escapeHtml(activity.relatedFulfillmentId || activity.relatedOrderId || activity.relatedMovementId || '—')}</div>
-      ${activity.lastEvaluation ? `<div role="status">Feasibility: ${escapeHtml(activity.lastEvaluation)}</div>` : ''}
+      ${activity.lastEvaluation ? `<div class="scheduling-feasibility-result" role="status">Feasibility: ${escapeHtml(activity.lastEvaluation)}</div>` : ''}
       <div class="logistics-scheduling-actions">
         <button type="button" class="btn-secondary" data-scheduling-evaluate="${escapeHtml(activity.id)}">${t('logisticsSchedulingEvaluate')}</button>
         ${transitionButtons}
@@ -158,10 +158,25 @@ function bindSchedulingControls(root) {
     if (input.dataset.schedulingBound === '1') return;
     input.dataset.schedulingBound = '1';
     input.addEventListener('input', () => {
-      const activityId = input.dataset.scheduledStart || input.dataset.scheduledEnd;
+      const activityId = String(input.dataset.scheduledStart || input.dataset.scheduledEnd || '');
       for (const key of pendingTransitionKeys.keys()) {
         if (key.startsWith(`${activityId}:SCHEDULED:`)) pendingTransitionKeys.delete(key);
       }
+      lastEvaluations.delete(activityId);
+      const activity = activities.find(item => String(item.id) === activityId);
+      if (activity) activity.lastEvaluation = null;
+      const card = input.closest('[data-scheduling-card]');
+      card?.querySelector('.scheduling-feasibility-result')?.remove();
+      const scheduleButton = card?.querySelector('[data-scheduling-transition="SCHEDULED"]');
+      if (scheduleButton) {
+        scheduleButton.disabled = true;
+        scheduleButton.setAttribute('aria-disabled', 'true');
+        scheduleButton.title = t('logisticsSchedulingScheduleBlocked');
+      }
+      feedback = t('logisticsSchedulingWindowChanged');
+      lastState = 'READY';
+      const status = root.querySelector('#logisticsSchedulingStatus');
+      if (status) status.textContent = [stateLabel(lastState), feedback].filter(Boolean).join(' ');
     });
   });
 }
