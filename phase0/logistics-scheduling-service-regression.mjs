@@ -40,6 +40,18 @@ db.prepare(
   'INSERT INTO users (id,display_name,created_at,last_seen_at) VALUES (?,?,?,?)'
 ).run(userId, 'L11.4 Actor', new Date().toISOString(), new Date().toISOString());
 
+const orderId = 'l11.4-core-order-1';
+db.prepare(`
+  INSERT INTO orders (
+    chat_id, local_id, server_order_id, order_json, total_minor,
+    created_at, status, delivered_to_device, marketplace_order_id, is_marketplace
+  ) VALUES (?, ?, ?, ?, 0, ?, 'pending', 1, NULL, 0)
+`).run(
+  chatId, 'l11.4-local-order-1', orderId,
+  JSON.stringify({ id: orderId, fulfillment_type: 'delivery', fulfillment_status: 'pending' }),
+  Date.now(),
+);
+
 const actor = { userId, deviceId: null, role: 'logistics_manager', roles: ['logistics_manager'], organizationId };
 const base = {
   location_id: locationId,
@@ -47,7 +59,8 @@ const base = {
   mode: 'SCHEDULED',
   scheduled_start: '2026-10-10T09:00:00Z',
   scheduled_end: '2026-10-10T10:00:00Z',
-  related_movement: { id: 'movement-l11-4-1', authority: 'logistics' },
+  related_order: { id: orderId },
+  related_movement: { id: `movement:${orderId}`, authority: 'logistics-pack-coordination-projection' },
   idempotency_key: 'l11.4-create-1',
 };
 
