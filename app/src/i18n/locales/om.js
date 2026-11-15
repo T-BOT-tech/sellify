@@ -164,4 +164,12 @@ export default {
     serviceResourceProviderAssignFailed: "Hayyama dhiyeessaa haaromsuun hin danda'amne.",
     serviceResourceNoProviderMembers: "Miseensota hojjettoota ulaagaa guutan hin jiran.",
     serviceResourceProviderDescription: "Qabeenya tajaajilaa siif ramadame ilaali; sa'aatii hojii isaa ibsame haaromsi. Qabamtoonni duraanii hanga hin ilaalamnetti argamuun hin mirkanoofne.",
+    serviceProviderAppointmentsTitle: "Beellamoota Koo",
+    serviceProviderAppointmentsRefresh: "Haaromsi",
+    serviceProviderAppointmentsLoading: "Beellamoota fe'aa jira…",
+    serviceProviderAppointmentsReady: "Beellamoonni {count} qabeenya kee hojii irra jiraniif ramadaman.",
+    serviceProviderAppointmentsEmpty: "Qabeenya siif ramadameef beellamoonni mirkanaa'an hin jiran.",
+    serviceProviderAppointmentsDenied: "Tarree beellamoota kana argachuuf hayyamni hin jiru.",
+    serviceProviderAppointmentsUnavailable: "Tarreen beellamootaa hin argamne. Irra deebi'ii yaaluuf haaromsi.",
+    serviceProviderAppointmentsUnknownStale: "Haalli tarree beellamootaa hin beekamu ykn dulloomeera. Itti hin hirkatin dura wal-qunnamiitii haaromsi.",
 };
