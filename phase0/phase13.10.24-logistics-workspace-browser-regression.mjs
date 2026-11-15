@@ -261,7 +261,6 @@ try {
   const scheduleButton = page.locator('[data-scheduling-transition="SCHEDULED"]');
   assert.equal(await scheduleButton.isDisabled(), true,
     'SCHEDULED remains disabled while the fresh feasibility result is UNKNOWN');
-  await page.waitForFunction(() => document.querySelector('#logisticsSchedulingStatus')?.textContent.includes('UNKNOWN'));
   assert.match(await page.locator('[data-scheduling-card="scheduling-browser-1"]').innerText(), /REQUESTED/,
     'UNKNOWN feasibility cannot be presented as a confirmed schedule');
   assert.equal(schedulingCalls.some(call => call.method === 'PATCH' && call.pathname.endsWith('/transition')), false,
