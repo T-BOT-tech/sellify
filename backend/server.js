@@ -3527,11 +3527,6 @@ async function handleServiceResourceAvailability(req, res, chatId, resourceId) {
   return sendJSON(res, 200, { availability: result.availability, replayed: result.replayed, state: 'DECLARED' }, req);
 }
 
-  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1])) },
-  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1])) },
-  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling\/([^/]+)$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
-  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling\/([^/]+)\/evaluate$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), 'evaluate') },
-  { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling\/([^/]+)\/transition$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), 'transition') },
 async function handleServiceProviderBookings(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -3734,6 +3729,11 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/events\/([^/]+)$/, handler: (req, res, m) => handleSyncEvents(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/sync\/([^/]+)$/, handler: (req, res, m) => handleSyncPull(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/orders\/([^/]+)$/, handler: (req, res, m) => handleOrdersFeed(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling\/([^/]+)$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling\/([^/]+)\/evaluate$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), 'evaluate') },
+  { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling\/([^/]+)\/transition$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), 'transition') },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-provider\/bookings$/, handler: (req, res, m) => handleServiceProviderBookings(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-resources$/, handler: (req, res, m) => handleServiceResources(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/service-resources$/, handler: (req, res, m) => handleServiceResources(req, res, decodeURIComponent(m[1])) },
