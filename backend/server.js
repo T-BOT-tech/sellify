@@ -720,6 +720,8 @@ async function handleTelegramStorefrontServiceBookings(req, res, chatId, marketp
       appointment_mode: booking.appointment_mode,
       customer_note: booking.customer_note,
       status: booking.status,
+      // Customer-safe affordances only; transitionServiceBooking re-authorizes every cancellation.
+      allowed_actions: ['REQUESTED', 'ACCEPTED'].includes(String(booking.status || '').toUpperCase()) ? ['CANCEL'] : [],
       version: booking.version,
       service_resource_name: booking.service_resource_name,
       created_at: booking.created_at,
