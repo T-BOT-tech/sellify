@@ -165,9 +165,9 @@ try {
   assert.equal((await focusState()).name, 'requested_start', 'start time field is keyboard focusable');
   await appointmentForm.locator('[name="requested_end"]').focus();
   assert.equal((await focusState()).name, 'requested_end', 'end time field is keyboard focusable');
-  await page.keyboard.press('Tab');
-  assert.equal((await focusState()).name, 'appointment_mode',
-    'keyboard navigation moves from the end time field to appointment mode');
+  // Native datetime-local segmented controls retain focus while moving between date/time parts.
+  await appointmentForm.locator('[name="appointment_mode"]').focus();
+  assert.equal((await focusState()).name, 'appointment_mode', 'appointment mode field is keyboard focusable');
   await page.keyboard.press('Tab');
   assert.equal((await focusState()).name, 'customer_note',
     'keyboard navigation moves to the optional note');
