@@ -659,7 +659,11 @@ async function handleTelegramStorefrontServiceBookingCancel(req, res, chatId, ma
       ownedOrder.orderId,
       booking.id,
       { status: 'CANCELLED', expected_version: expectedVersion, idempotencyKey },
-      { actorType: 'TELEGRAM_BUYER' },
+      {
+        actorType: 'TELEGRAM_BUYER',
+        buyerTelegramUserId: verified.telegramUserId,
+        marketplaceOrderId: ownedOrder.marketplaceOrderId,
+      },
     );
     const safeBooking = {
       id: result.booking.id,
@@ -749,7 +753,11 @@ async function handleTelegramStorefrontServiceBookings(req, res, chatId, marketp
       appointment_mode: body.appointment_mode ?? body.appointmentMode,
       customer_note: body.customer_note ?? body.customerNote,
       idempotencyKey,
-    }, null);
+    }, {
+      actorType: 'TELEGRAM_BUYER',
+      buyerTelegramUserId: verified.telegramUserId,
+      marketplaceOrderId: ownedOrder.marketplaceOrderId,
+    });
     const refreshed = await getTelegramBuyerServiceBookings(chatId, verified.telegramUserId, ownedOrder.marketplaceOrderId);
     return sendJSON(res, result.replayed ? 200 : 201, {
       booking: {
