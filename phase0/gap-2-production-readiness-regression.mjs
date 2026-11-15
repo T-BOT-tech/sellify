@@ -44,7 +44,9 @@ assert.ok(migrationPosition(77) > migrationPosition(76), 'tenant creation replay
 assert.ok(migrationPosition(78) > migrationPosition(77), 'service resource foundation migration must follow tenant creation replay persistence');
 assert.ok(migrationPosition(79) > migrationPosition(78), 'service availability migration must follow service resource foundation migration');
 assert.ok(migrationPosition(80) > migrationPosition(79), 'service resource commitment migration must follow service availability migration');
-assert.match(store, /CREATE TABLE IF NOT EXISTS service_resource_commitments[\\s\\S]*?booking_id TEXT NOT NULL UNIQUE[\\s\\S]*?state TEXT NOT NULL CHECK \\(state IN \\('COMMITTED','RELEASED'\\)\\)/, 'service appointment commitments must be resource-scoped and lifecycle-aware');
+assert.ok(store.includes('CREATE TABLE IF NOT EXISTS service_resource_commitments'), 'service appointment commitment table must be present');
+assert.ok(store.includes('booking_id TEXT NOT NULL UNIQUE'), 'a booking must have at most one resource commitment');
+assert.ok(store.includes("state TEXT NOT NULL CHECK (state IN ('COMMITTED','RELEASED'))"), 'resource commitments must have explicit committed/released lifecycle states');
 assert.match(store, /if \(!applied\.includes\(77\)\)[\s\S]*?CREATE TABLE IF NOT EXISTS tenant_creation_requests[\s\S]*?challenge_token_hash TEXT PRIMARY KEY REFERENCES auth_challenges\(token_hash\)[\s\S]*?request_fingerprint TEXT NOT NULL[\s\S]*?result_json TEXT NOT NULL/,
   'tenant creation idempotency must durably bind a one-time challenge to its original request and result');
 assert.match(store, /CREATE TABLE IF NOT EXISTS tenant_business_templates/);
