@@ -11939,8 +11939,13 @@ export async function getTelegramBuyerServiceBookings(chatId, telegramUserId, ma
   const bookings = db.prepare(`
     SELECT b.*, r.name AS service_resource_name
     FROM service_bookings b
+    LEFT JOIN service_resource_commitments commitment
+      ON commitment.booking_id = b.id
+     AND commitment.organization_id = b.organization_id
+     AND commitment.chat_id = b.chat_id
+     AND commitment.state = 'COMMITTED'
     LEFT JOIN service_resources r
-      ON r.id = b.service_resource_id
+      ON r.id = commitment.resource_id
      AND r.organization_id = b.organization_id
      AND r.chat_id = b.chat_id
     WHERE b.organization_id = ?
