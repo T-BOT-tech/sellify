@@ -34,6 +34,15 @@ function canManageScheduling() {
   ].includes(role));
 }
 
+function schedulingLocationId() {
+  if (config.locationId) return String(config.locationId);
+  const contextual = Array.isArray(config.contextualRoles) ? config.contextualRoles : [];
+  const scoped = [...new Set(contextual
+    .filter(item => String(item?.scopeType || '').toUpperCase() === 'LOCATION' && item?.scopeId)
+    .map(item => String(item.scopeId)))];
+  return scoped.length === 1 ? scoped[0] : null;
+}
+
 function stateLabel(state) {
   const keys = {
     LOADING: 'logisticsSchedulingLoading',
@@ -146,14 +155,17 @@ async function refresh(root) {
   }
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     lastState = 'UNKNOWN_STALE';
+    feedback = '';
     renderWorkspace(root);
     return;
   }
+  feedback = '';
   lastState = 'LOADING';
   renderWorkspace(root);
   try {
     const query = new URLSearchParams();
-    if (config.locationId) query.set('locationId', String(config.locationId));
+    const locationId = schedulingLocationId();
+    if (locationId) query.set('locationId', locationId);
     const response = await fetch(endpoint() + (query.size ? `?${query}` : ''), { headers: authHeaders() });
     const data = await response.json().catch(() => ({}));
     if (sequence !== refreshSequence) return;
@@ -164,6 +176,7 @@ async function refresh(root) {
     }
     if (!response.ok) throw new Error(data?.error?.message || `Scheduling request failed (${response.status})`);
     activities = Array.isArray(data.activities) ? data.activities : [];
+    feedback = '';
     lastState = activities.length ? 'READY' : 'EMPTY';
   } catch {
     lastState = typeof navigator !== 'undefined' && !navigator.onLine ? 'UNKNOWN_STALE' : 'ERROR';
@@ -185,7 +198,7 @@ async function submitRequest(root, form) {
   const body = {
     activity_type: String(values.get('activityType') || 'DELIVERY'),
     mode,
-    location_id: config.locationId || null,
+    location_id: schedulingLocationId(),
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     requested_start: startValue ? new Date(startValue).toISOString() : null,
     requested_end: endValue ? new Date(endValue).toISOString() : null,
