@@ -114,6 +114,15 @@ try {
   assert.equal(commitment.resource_id, serviceResourceId);
   assert.equal(commitment.starts_at, created.booking.requested_start);
   assert.equal(commitment.ends_at, created.booking.requested_end);
+  await assert.rejects(
+    store.setServiceResourceAvailability(seller.chatId, serviceResourceId, {
+      expected_version: 1, idempotency_key: 'booking-resource-hours-invalid-edit-' + suffix,
+      workingHours: [0, 1, 2, 3, 4, 5, 6].map(weekday => ({ weekday, startTime: '10:00', endTime: '18:00' })),
+      exceptions: [],
+    }, { userId: owner.id }),
+    error => error?.code === 'SERVICE_AVAILABILITY_CONFLICTS_WITH_COMMITMENTS',
+    'schedule edits must not invalidate a committed appointment',
+  );
   const confirmedReplay = await store.transitionServiceBooking(seller.chatId, order.server_order_id, created.booking.id, {
     status: 'CONFIRMED', expected_version: 2, service_resource_id: serviceResourceId,
     idempotency_key: 'booking-confirm-' + suffix,
