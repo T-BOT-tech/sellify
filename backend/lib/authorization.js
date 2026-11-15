@@ -59,6 +59,7 @@ const ROLE_PERMISSIONS = Object.freeze({
   service_provider: new Set([
     'service:service_resource:view',
     'service:resource_availability:view', 'service:resource_availability:manage',
+    'service:service_booking:view',
   ]),
   // FUX-6 Restaurant contextual roles. These are executable only when the
   // Restaurant Pack is active; assignment is handled through membership_roles.
