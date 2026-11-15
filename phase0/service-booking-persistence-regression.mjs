@@ -84,10 +84,52 @@ try {
   assert.equal(acceptedReplay.replayed, true);
   assert.equal(acceptedReplay.booking.status, 'ACCEPTED');
 
+  const resourceResult = await store.createServiceResource(seller.chatId, {
+    name: 'Consultation Room', resourceType: 'FACILITY', serviceItemId: 'consultation',
+    idempotency_key: 'booking-resource-' + suffix,
+  }, { userId: owner.id });
+  const serviceResourceId = resourceResult.resource.id;
+  await store.setServiceResourceAvailability(seller.chatId, serviceResourceId, {
+    expected_version: 0, idempotency_key: 'booking-resource-hours-' + suffix,
+    workingHours: [0, 1, 2, 3, 4, 5, 6].map(weekday => ({ weekday, startTime: '08:00', endTime: '18:00' })),
+    exceptions: [],
+  }, { userId: owner.id });
+
+  await assert.rejects(
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, created.booking.id, {
+      status: 'CONFIRMED', expected_version: 2, idempotency_key: 'booking-confirm-no-resource-' + suffix,
+    }, { userId: owner.id }),
+    error => error?.code === 'SERVICE_BOOKING_RESOURCE_REQUIRED',
+  );
+
   const confirmed = await store.transitionServiceBooking(seller.chatId, order.server_order_id, created.booking.id, {
-    status: 'CONFIRMED', expected_version: 2, idempotency_key: 'booking-confirm-' + suffix,
+    status: 'CONFIRMED', expected_version: 2, service_resource_id: serviceResourceId,
+    idempotency_key: 'booking-confirm-' + suffix,
   }, { userId: owner.id });
   assert.equal(confirmed.booking.version, 3);
+  assert.equal(confirmed.booking.service_resource_id, serviceResourceId);
+  const commitment = store.getDatabaseForTests().prepare(
+    "SELECT * FROM service_resource_commitments WHERE booking_id = ? AND state = 'COMMITTED'"
+  ).get(created.booking.id);
+  assert.equal(commitment.resource_id, serviceResourceId);
+  assert.equal(commitment.starts_at, created.booking.requested_start);
+  assert.equal(commitment.ends_at, created.booking.requested_end);
+
+  const overlappingRequest = await store.createServiceBooking(seller.chatId, order.server_order_id, {
+    ...request, customer_note: 'Overlapping appointment',
+    idempotency_key: 'booking-overlap-create-' + suffix,
+  }, { userId: owner.id });
+  const overlappingAccept = await store.transitionServiceBooking(seller.chatId, order.server_order_id, overlappingRequest.booking.id, {
+    status: 'ACCEPTED', expected_version: 1, idempotency_key: 'booking-overlap-accept-' + suffix,
+  }, { userId: owner.id });
+  await assert.rejects(
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, overlappingRequest.booking.id, {
+      status: 'CONFIRMED', expected_version: overlappingAccept.booking.version,
+      service_resource_id: serviceResourceId, idempotency_key: 'booking-overlap-confirm-' + suffix,
+    }, { userId: owner.id }),
+    error => error?.code === 'SERVICE_BOOKING_RESOURCE_CONFLICT',
+    'overlapping appointments must not commit to the same resource',
+  );
 
   // Booking lifecycle is not authority to mutate canonical order, payment, or
   // fulfillment state, and must not manufacture a logistics activity.
@@ -152,7 +194,8 @@ try {
     status: 'ACCEPTED', expected_version: 1, idempotency_key: 'booking-execution-accept-' + suffix,
   }, { userId: owner.id });
   const executionConfirm = await store.transitionServiceBooking(seller.chatId, order.server_order_id, executionBooking.booking.id, {
-    status: 'CONFIRMED', expected_version: 2, idempotency_key: 'booking-execution-confirm-' + suffix,
+    status: 'CONFIRMED', expected_version: 2, service_resource_id: serviceResourceId,
+    idempotency_key: 'booking-execution-confirm-' + suffix,
   }, { userId: owner.id });
   assert.equal(executionConfirm.booking.status, 'CONFIRMED');
   const started = await store.transitionServiceBooking(seller.chatId, order.server_order_id, executionBooking.booking.id, {
