@@ -270,11 +270,23 @@ try {
     'invalid scheduling windows replace the prior window-changed feedback with actionable validation feedback');
   assert.equal(schedulingCalls.filter(call => call.method === 'POST' && call.pathname.endsWith('/evaluate')).length,
     evaluationsBeforeInvalidWindow, 'invalid candidate windows never reach the feasibility API');
+  assert.equal(await page.locator('[data-scheduled-start="scheduling-browser-1"]').inputValue(), '2026-11-16T09:00',
+    'invalid-window feedback preserves the candidate start for correction');
+  assert.equal(await page.locator('[data-scheduled-end="scheduling-browser-1"]').inputValue(), '2026-11-16T08:00',
+    'invalid-window feedback preserves the candidate end for correction');
   await page.locator('[data-scheduled-end="scheduling-browser-1"]').fill('2026-11-16T10:00');
+  assert.equal(await page.locator('[data-scheduled-start="scheduling-browser-1"]').inputValue(), '2026-11-16T09:00',
+    'editing the candidate end does not erase the start value');
   assert.equal(await evaluateButton.getAttribute('data-scheduling-bound'), '1',
     'the current rendered evaluation control is bound to the scheduling API action');
+  const evaluationRequest = page.waitForRequest(request =>
+    request.method() === 'POST' && request.url().endsWith('/logistics/scheduling/scheduling-browser-1/evaluate')
+  );
   await evaluateButton.click();
-  await page.waitForTimeout(250);
+  await evaluationRequest;
+  await page.waitForFunction(() =>
+    document.querySelector('[data-scheduling-card="scheduling-browser-1"]')?.innerText.includes('Feasibility: UNKNOWN')
+  );
   const evaluatedCardText = await page.locator('[data-scheduling-card="scheduling-browser-1"]').innerText();
   assert.match(evaluatedCardText, /UNKNOWN/,
     `evaluation result missing from card; card=${evaluatedCardText}; calls=${JSON.stringify(schedulingCalls)}; status=${await page.locator('#logisticsSchedulingStatus').innerText()}`);
