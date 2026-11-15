@@ -6,6 +6,7 @@ import { escapeHtml } from '../utils/index.js';
 import { t } from '../ui/i18n.js';
 
 let activities = [];
+const lastEvaluations = new Map();
 let lastState = 'UNKNOWN_STALE';
 let feedback = '';
 let refreshSequence = 0;
@@ -246,7 +247,10 @@ async function refresh(root) {
       return;
     }
     if (!response.ok) throw new Error(data?.error?.message || `Scheduling request failed (${response.status})`);
-    activities = Array.isArray(data.activities) ? data.activities : [];
+    activities = (Array.isArray(data.activities) ? data.activities : []).map(activity => ({
+      ...activity,
+      lastEvaluation: lastEvaluations.get(String(activity.id)) || activity.lastEvaluation || null,
+    }));
     feedback = '';
     lastState = activities.length ? 'READY' : 'EMPTY';
   } catch {
@@ -313,6 +317,7 @@ async function evaluateActivity(root, activityId) {
   const evaluation = data?.evaluation?.evaluation || 'UNKNOWN';
   const item = activities.find(activity => String(activity.id) === String(activityId));
   if (item) item.lastEvaluation = evaluation;
+  lastEvaluations.set(String(activityId), evaluation);
   lastState = 'READY';
   feedback = evaluation === 'UNKNOWN'
     ? t('logisticsSchedulingBlockedUnknown')
