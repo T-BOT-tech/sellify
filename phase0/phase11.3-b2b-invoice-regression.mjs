@@ -9,7 +9,7 @@ process.env.SELLIFY_DB_PATH = path.join(tmp, 'test.sqlite');
 const store = await import('../backend/lib/store-sqlite.js');
 const authz = await import('../backend/lib/authorization.js');
 const user = await store.getOrCreateUserByTelegram(`tg-${Date.now()}`, 'Invoice Test');
-const tenant = await store.createTenantForUser({ userId: user.id, sellerName: 'Invoice Test', currency: 'ETB' });
+const tenant = await store.createTenantForUser({ userId: user.id, sellerName: 'Invoice Test', country: 'ET', currency: 'ETB', timezone: 'Africa/Addis_Ababa' });
 const chatId = tenant.chatId;
 const customer = await store.upsertCustomer(chatId, { id: `business-${Date.now()}`, customerType: 'business', name: 'Invoice Buyer' });
 const terms = await store.createCreditTerms(chatId, { customerId: customer.id, creditLimitMinor: 100000, paymentDueDays: 30, requiresPo: false }, { userId: user.id });
@@ -26,10 +26,35 @@ assert.equal(invoice.items[0].lineTotalMinor, 500);
 const issued = await store.transitionInvoice(chatId, invoice.id, 'ISSUED', { userId: user.id });
 assert.equal(issued.status, 'ISSUED');
 await assert.rejects(() => store.transitionInvoice(chatId, invoice.id, 'DRAFT', { userId: user.id }), e => e?.code === 'INVALID_INVOICE_TRANSITION' && e?.statusCode === 409);
+
+// Competing transitions must serialize against canonical state. Exactly one
+// DRAFT -> ISSUED / DRAFT -> CANCELLED command may win.
+const raceSync = await store.saveQueuedOrders(chatId, [{
+  id: `invoice-race-${Date.now()}`,
+  customer_id: customer.id,
+  currency: 'ETB',
+  items: [{ id: 'p1', name: 'Invoice Product', price: 250, qty: 2 }],
+  total: 500,
+}]);
+assert.equal(raceSync[0].status, 'synced');
+const raceAr = await store.createReceivable(chatId, { sourceType: 'order', sourceId: raceSync[0].order_id }, { userId: user.id });
+const raceInvoice = await store.createInvoice(chatId, { receivableId: raceAr.id }, { userId: user.id });
+const raceResults = await Promise.allSettled([
+  store.transitionInvoice(chatId, raceInvoice.id, 'ISSUED', { userId: user.id }),
+  store.transitionInvoice(chatId, raceInvoice.id, 'CANCELLED', { userId: user.id }),
+]);
+assert.equal(raceResults.filter(result => result.status === 'fulfilled').length, 1,
+  'only one competing invoice transition should commit');
+assert.equal(raceResults.filter(result => result.status === 'rejected').length, 1,
+  'the stale competing invoice transition should be rejected');
+const rejectedRace = raceResults.find(result => result.status === 'rejected');
+assert.ok(['INVALID_INVOICE_TRANSITION', 'INVOICE_STATE_CONFLICT'].includes(rejectedRace.reason?.code));
+const persistedRaceInvoice = await store.getInvoice(chatId, raceInvoice.id);
+assert.ok(['ISSUED', 'CANCELLED'].includes(persistedRaceInvoice.status));
 await assert.rejects(() => store.createInvoice(chatId, { receivableId: ar.id }, { userId: user.id }), e => e?.code === 'INVOICE_EXISTS' && e?.statusCode === 409);
 const db = store.getDatabaseForTests();
 assert.equal(db.prepare('SELECT version FROM schema_migrations WHERE version = 19').get()?.version, 19);
-assert.equal(db.prepare('SELECT COUNT(*) AS n FROM invoices').get().n, 1);
+assert.equal(db.prepare('SELECT COUNT(*) AS n FROM invoices').get().n, 2);
 assert.equal(authz.authorize({ userId: 'buyer', role: 'buyer', organizationId: tenant.organizationId }, tenant.organizationId, null, 'b2b_invoices', 'b2b:invoice:view'), authz.AUTHZ.DENY);
 const manager = { userId: 'manager', role: 'manager', organizationId: tenant.organizationId };
 assert.equal(authz.authorize(manager, tenant.organizationId, null, 'b2b_invoices', 'b2b:invoice:view'), authz.AUTHZ.ALLOW);
