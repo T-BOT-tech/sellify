@@ -194,4 +194,5 @@ export default {
     logisticsSchedulingEvaluation: "የአዋጭነት ግምገማ",
     logisticsSchedulingBlockedUnknown: "መርሐግብሩ አልተረጋገጠም፤ የታመነ የአቅም ማስረጃ ስላልተገናኘ አዋጭነቱ UNKNOWN ነው።",
     logisticsSchedulingBlockedConflict: "ነባር ቀኖናዊ እንቅስቃሴ ከዚህ የጊዜ ክልል ጋር ስለሚጋጭ መርሐግብሩ ታግዷል።",
+    logisticsSchedulingReferenceHint: "የMovement ማጣቀሻ የነባሩን ፕሮጀክሽን ቅርጸት ይጠቀማል፦ movement:<Core Order ID>።",
 };
