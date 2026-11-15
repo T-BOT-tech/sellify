@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { authorize } from '../backend/lib/authorization.js';
+import { authorize, hasAuthorization } from '../backend/lib/authorization.js';
 
 const owner = { userId: 'u-owner', role: 'owner', organizationId: 'org-1', chatId: 'chat-1' };
 const manager = { userId: 'u-manager', role: 'manager', organizationId: 'org-1', chatId: 'chat-1' };
@@ -13,12 +13,18 @@ assert.equal(authorize(owner, tenant, location, 'scope_context', 'locations:mana
 assert.equal(authorize(manager, tenant, location, 'scope_context', 'locations:view'), 'ALLOW');
 assert.equal(authorize(manager, tenant, location, 'scope_context', 'locations:manage'), 'ALLOW');
 assert.equal(authorize(viewer, tenant, location, 'scope_context', 'locations:view'), 'DENY');
+assert.equal(hasAuthorization(owner, tenant, null, 'scope_context', 'locations:manage'), true);
+assert.equal(hasAuthorization(manager, tenant, null, 'scope_context', 'locations:manage'), true);
+assert.equal(hasAuthorization(viewer, tenant, null, 'scope_context', 'locations:manage'), false);
+assert.equal(hasAuthorization({ ...manager, role: 'cashier' }, tenant, null, 'scope_context', 'locations:manage'), false);
 
 const server = readFileSync(new URL('../backend/server.js', import.meta.url), 'utf8');
 const ui = readFileSync(new URL('../app/src/authorization/scope-context.js', import.meta.url), 'utf8');
 assert.ok(server.includes('handleAuthorizationScopeContext'));
 assert.ok(server.includes('scope-context'));
 assert.match(server, /locations:manage/);
+assert.match(server, /const canManageLocations = hasAuthorization\(session, tenant, null, 'scope_context', 'locations:manage'\);/);
+assert.doesNotMatch(server, /authorize\(session, tenant, null, 'scope_context', 'locations:manage'\); return true/);
 assert.match(ui, /Selecting a location changes client context; it does not grant authorization/);
 assert.match(ui, /\/locations/);
 
