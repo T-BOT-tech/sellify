@@ -72,6 +72,17 @@ try {
   const base = `/tenants/${encodeURIComponent(tenant.chatId)}/logistics/scheduling`;
   const headers = { Authorization: `Bearer ${session.token}`, Accept: 'application/json' };
 
+  const staff = await store.getOrCreateUserByTelegram(`l11-scheduling-staff-${suffix}`, 'L11 Scheduling Staff');
+  await store.ensureMembership(staff.id, tenant.chatId, 'staff');
+  const staffSession = await store.createSession({
+    userId: staff.id, chatId: tenant.chatId, deviceName: 'L11 scheduling unauthorized staff',
+  });
+  const staffRead = await request(base, {
+    headers: { Authorization: `Bearer ${staffSession.token}` },
+  });
+  assert.equal(staffRead.response.status, 403,
+    'ordinary staff without logistics scheduling permission cannot read the scheduling workspace');
+
   const unauthenticated = await request(base);
   assert.equal(unauthenticated.response.status, 401);
 
