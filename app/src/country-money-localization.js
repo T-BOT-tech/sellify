@@ -42,7 +42,6 @@ export function fromCountryMinorUnits(minor, countryCode = 'ET') {
 export const COUNTRY_MONEY_LOCALIZATION_CONTRACT = Object.freeze({
   phase: '14.3',
   authority: 'country_money_localization_bridge',
-  currencyMetadataAuthority: 'country_pack_contract',
   moneyCalculationAuthority: 'app/src/utils/money.js',
   currencySymbolAuthority: 'app/src/constants.js',
   currencyMetadataAuthority: 'app/src/currency-money-contract.js',
