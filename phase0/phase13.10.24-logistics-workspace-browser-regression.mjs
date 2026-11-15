@@ -74,7 +74,8 @@ try {
     const request = route.request();
     const method = request.method();
     const pathname = new URL(request.url()).pathname;
-    const body = request.postDataJSON?.() || {};
+    let body = {};
+    try { body = request.postDataJSON() || {}; } catch {}
     schedulingCalls.push({ method, pathname, body, headers: request.headers() });
     if (method === 'GET') {
       await route.fulfill({
@@ -160,8 +161,11 @@ try {
   await page.locator('.logistics-scheduling-workspace').waitFor();
   assert.equal(await page.locator('#logisticsSchedulingRequestForm').count(), 0,
     'courier scheduling workspace is read-only');
-  assert.equal(await page.locator('#logisticsSchedulingStatus').innerText(), /No scheduling activities yet./.test(await page.locator('#logisticsSchedulingStatus').innerText()) ? await page.locator('#logisticsSchedulingStatus').innerText() : await page.locator('#logisticsSchedulingStatus').innerText(),
-    'courier scheduling view loads without an edit form');
+  await page.waitForFunction(() =>
+    document.querySelector('#logisticsSchedulingStatus')?.textContent.includes('No scheduling activities yet.')
+  );
+  assert.match(await page.locator('#logisticsSchedulingStatus').innerText(), /No scheduling activities yet\./,
+    'courier scheduling view loads an explicit empty state without an edit form');
   assert.equal(await page.locator('[data-assignment-only="1"]').count(), 1,
     'courier must see an assignment even when its local Order projection is absent');
   assert.match(await page.locator('[data-assignment-only="1"]').innerText(), /server-order-browser-1/);
@@ -248,7 +252,7 @@ try {
   await page.locator('[data-scheduled-start="scheduling-browser-1"]').fill('2026-11-16T09:00');
   await page.locator('[data-scheduled-end="scheduling-browser-1"]').fill('2026-11-16T10:00');
   await page.locator('[data-scheduling-transition="SCHEDULED"]').click();
-  await page.locator('#logisticsSchedulingStatus').getByText(/UNKNOWN/).waitFor();
+  await page.waitForFunction(() => document.querySelector('#logisticsSchedulingStatus')?.textContent.includes('UNKNOWN'));
   assert.match(await page.locator('[data-scheduling-card="scheduling-browser-1"]').innerText(), /REQUESTED/,
     'UNKNOWN feasibility cannot be presented as a confirmed schedule');
   assert.ok(schedulingCalls.some(call => call.method === 'PATCH' && call.pathname.endsWith('/transition')),
