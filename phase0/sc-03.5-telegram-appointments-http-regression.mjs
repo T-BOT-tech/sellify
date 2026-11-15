@@ -76,6 +76,11 @@ try {
   const organizationId = db.prepare('SELECT organization_id FROM tenants WHERE chat_id=?').get(tenant.chatId).organization_id;
   const actor = { userId: owner.id, role: 'owner', organizationId, chatId: tenant.chatId };
 
+  await store.saveCatalog(tenant.chatId, [{
+    id: 'sc035-http-consultation', name: 'HTTP Consultation', price: 25000,
+    item_type: 'service', marketplace_listed: true,
+  }]);
+
   // Exercise the provider queue over HTTP, including immediate revocation of
   // the exact resource-scoped assignment while reusing the same session token.
   const providerResource = await store.createServiceResource(tenant.chatId, {
@@ -114,10 +119,6 @@ try {
   assert.equal(revokedProviderQueue.response.status, 403,
     'the same provider session must lose queue access immediately after exact resource assignment revocation');
   assert.equal(revokedProviderQueue.json.error?.code, 'SERVICE_PROVIDER_ASSIGNMENT_REQUIRED');
-  await store.saveCatalog(tenant.chatId, [{
-    id: 'sc035-http-consultation', name: 'HTTP Consultation', price: 25000,
-    item_type: 'service', marketplace_listed: true,
-  }]);
   await store.upsertTelegramStorefrontConfig(tenant.chatId, {
     botId: '123456', botUsername: 'sc035_test_bot', credentialRef: 'secret://sc035/test',
     status: 'CONFIGURED', webappUrl: 'https://example.invalid/sc035',
