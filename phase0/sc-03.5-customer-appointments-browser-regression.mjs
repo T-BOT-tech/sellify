@@ -144,6 +144,33 @@ try {
   await page.getByRole('button', { name: 'Appointments' }).click();
   await page.locator('#customerAppointmentForm').waitFor();
 
+  const appointmentForm = page.locator('#customerAppointmentForm');
+  assert.equal(await appointmentForm.locator('[role="status"]').count(), 1,
+    'feasibility feedback is exposed as a live status region');
+  assert.equal(await appointmentForm.locator('[role="alert"]').count(), 1,
+    'request errors are exposed as an alert region');
+  const keyboardOrder = [
+    ['[name="service_item_id"]', 'service_item_id'],
+    ['[name="requested_start"]', 'requested_start'],
+    ['[name="requested_end"]', 'requested_end'],
+    ['[name="appointment_mode"]', 'appointment_mode'],
+    ['[name="customer_note"]', 'customer_note'],
+    ['#checkAppointmentFeasibility', 'checkAppointmentFeasibility'],
+    ['button[type="submit"]', ''],
+  ];
+  await appointmentForm.locator(keyboardOrder[0][0]).focus();
+  for (let index = 1; index < keyboardOrder.length; index++) {
+    await page.keyboard.press('Tab');
+    const active = await page.evaluate(() => ({
+      name: document.activeElement?.getAttribute('name') || '',
+      id: document.activeElement?.id || '',
+      type: document.activeElement?.getAttribute('type') || '',
+    }));
+    const expected = keyboardOrder[index];
+    assert.equal(expected[1] ? active.name === expected[1] : active.type === 'submit', true,
+      `keyboard focus order reaches ${expected[1] || 'submit'}`);
+  }
+
   await page.locator('[name="requested_start"]').fill('2027-01-20T09:00');
   await page.locator('[name="requested_end"]').fill('2027-01-20T10:00');
   await page.locator('[name="appointment_mode"]').selectOption('REMOTE');
