@@ -115,6 +115,10 @@ try {
       await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Temporarily unavailable' } }) });
       return;
     }
+    if (providerQueueScenario === 'OFFLINE') {
+      await route.abort('internetdisconnected');
+      return;
+    }
     const bookings = providerQueueScenario === 'EMPTY' ? [] : [{
       id: 'provider-booking-1', service_item_id: 'consultation', status: 'CONFIRMED',
       order_id: 'provider-order-1', service_resource_name: 'Provider One',
@@ -314,7 +318,7 @@ try {
   assert.equal(await page.locator('.service-booking-card').count(), 0,
     'failed provider refresh does not leave stale appointment details visible');
 
-  providerQueueScenario = 'READY';
+  providerQueueScenario = 'OFFLINE';
   await context.setOffline(true);
   await refreshProviderQueue();
   assert.equal(await page.locator('#serviceBookingsStatus').getAttribute('data-state'), 'UNKNOWN_STALE',
@@ -322,6 +326,7 @@ try {
   assert.equal(await page.locator('.service-booking-card').count(), 0,
     'offline provider refresh clears unverified appointment details');
   await context.setOffline(false);
+  providerQueueScenario = 'READY';
   await refreshProviderQueue();
   assert.equal(await page.locator('#serviceBookingsStatus').getAttribute('data-state'), 'READY',
     'reconnecting and refreshing restores the verified provider queue');
