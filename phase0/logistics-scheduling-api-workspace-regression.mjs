@@ -35,6 +35,9 @@ assert.match(store, /export async function evaluateLogisticsSchedulingActivity/)
 assert.match(store, /const externalEvaluation = null/);
 assert.match(store, /export async function transitionLogisticsSchedulingActivity/);
 assert.match(store, /assertLogisticsSchedulingAuthorization\(actor, organizationId, row\.location_id, schedulingAction\)/);
+assert.match(store, /function assertSchedulingReferences/);
+assert.match(store, /JOIN tenants t ON t.chat_id = o.chat_id/);
+assert.match(store, /assertSchedulingReferences\(organizationId, request\.related\)/);
 
 assert.match(ui, /logisticsSchedulingWorkspaceShell/);
 assert.match(ui, /mountLogisticsSchedulingWorkspace/);
