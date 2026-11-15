@@ -174,7 +174,7 @@ export default {
     serviceProviderAppointmentsUnknownStale: "Haalli tarree beellamootaa hin beekamu ykn dulloomeera. Itti hin hirkatin dura wal-qunnamiitii haaromsi.",
     logisticsSchedulingTitle: "Sagantaa loojistikii",
     logisticsSchedulingHint: "Sochii fudhannaa, geejjibaa fi hojiiwwan loojistikii galmee kaanonikaa jiru waliin qindeessi.",
-    logisticsSchedulingRefresh: "Sagantaa haaromsi",
+    logisticsSchedulingRefresh: "Sagantaa irra deebi'ii fe'i",
     logisticsSchedulingLoading: "Sochiiwwan sagantaa fe'amaa jiru…",
     logisticsSchedulingReady: "Odeeffannoon sagantaa haaromfameera.",
     logisticsSchedulingEmpty: "Ammaaf sochiin sagantaa hin jiru.",
