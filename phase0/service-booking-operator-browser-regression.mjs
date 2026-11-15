@@ -179,7 +179,8 @@ try {
 
   await page.locator('.service-booking-card').waitFor();
   await page.locator('#serviceResourceForm').waitFor();
-  await page.locator('#serviceResourcesStatus').filter({ hasText: 'No service resources yet' }).waitFor();
+  await page.locator('#serviceResourcesStatus').filter({ hasText: 'Resources loaded and current.' }).waitFor();
+  await page.locator('.service-resource-card').filter({ hasText: 'Consultation Resource' }).waitFor();
 
   assert.equal(await page.locator('.service-booking-action').count(), 3, 'owner sees valid REQUESTED transitions');
   assert.equal(await page.locator('.service-booking-card img').count(), 0, 'customer note is escaped rather than parsed as markup');
