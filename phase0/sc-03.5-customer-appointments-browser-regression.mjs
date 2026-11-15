@@ -50,6 +50,7 @@ try {
   let feasibility = 'FEASIBLE';
   let offlineFeasibility = false;
   let staleCancelOnce = true;
+  let denyServiceBookingReads = false;
   let bookings = [];
   page.on('pageerror', error => pageErrors.push(error.message));
   await page.addInitScript(() => {
@@ -95,6 +96,7 @@ try {
       } });
     }
     if (path.endsWith('/service-bookings') && method === 'GET') {
+      if (denyServiceBookingReads) return json(403, { error: { message: 'Appointment access is unavailable for this store.' } });
       return json(200, {
         order: { marketplaceOrderId, serviceLines: [{ item_id: 'consultation', name: 'Consultation', item_type: 'service' }] },
         bookings,
@@ -263,6 +265,14 @@ try {
   assert.equal(await page.locator('#customerAppointmentForm').count(), 0,
     'product-only order must not show an appointment request form');
   assert.ok(calls.length >= originalRoute);
+
+  // A server-side denial must be visible and must not leave a usable request form.
+  await page.unroute('**/api/telegram-storefront/**/service-bookings');
+  denyServiceBookingReads = true;
+  await page.locator('[data-appointment-order]').click();
+  await page.getByText('Appointment access is unavailable for this store.').waitFor();
+  assert.equal(await page.locator('#customerAppointmentForm').count(), 0,
+    'denied appointment access does not expose a request form');
 
   assert.equal(pageErrors.length, 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
 
