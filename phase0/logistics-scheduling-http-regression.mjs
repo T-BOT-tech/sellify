@@ -213,7 +213,7 @@ try {
     const roleRequest = await request(base, {
       method: 'POST',
       headers: { ...roleContext.headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-${role}-request-${suffix}` },
-      body: JSON.stringify({ activity_type: 'PICKUP', mode: 'ON_DEMAND' }),
+      body: JSON.stringify({ activity_type: 'PICKUP', mode: 'ON_DEMAND', related_order: { id: orderId } }),
     });
     assert.equal(roleRequest.response.status, 201, `${role} may request scheduling activity`);
     const roleCancel = await request(`${base}/${encodeURIComponent(roleRequest.json.activity.id)}/transition`, {
