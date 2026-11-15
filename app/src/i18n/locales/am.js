@@ -175,7 +175,7 @@ export default {
     serviceProviderAppointmentsUnknownStale: "የቀጠሮ ዝርዝሩ ሁኔታ አይታወቅም ወይም ያረጀ ነው። ከመተማመንዎ በፊት ይገናኙና ያድሱ።",
     logisticsSchedulingTitle: "የሎጂስቲክስ መርሐግብር",
     logisticsSchedulingHint: "የመውሰጃ፣ የማድረሻ እና ሌሎች የሎጂስቲክስ እንቅስቃሴዎችን ከቀድሞ መዝገቦች ጋር ያስተባብሩ።",
-    logisticsSchedulingRefresh: "መርሐግብሩን አድስ",
+    logisticsSchedulingRefresh: "መርሐግብሩን ዳግም ጫን",
     logisticsSchedulingLoading: "የመርሐግብር እንቅስቃሴዎች በመጫን ላይ…",
     logisticsSchedulingReady: "የመርሐግብር መረጃ ታድሷል።",
     logisticsSchedulingEmpty: "እስካሁን የመርሐግብር እንቅስቃሴ የለም።",
