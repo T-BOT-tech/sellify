@@ -186,10 +186,28 @@ function renderWorkspace(root) {
   const list = root.querySelector('#logisticsSchedulingList');
   if (status) status.textContent = [stateLabel(lastState), feedback].filter(Boolean).join(' ');
   if (!list) return;
+  // Preserve operator-entered candidate windows when an evaluation, refresh,
+  // or command causes the activity cards to be re-rendered.
+  const candidateDrafts = new Map();
+  list.querySelectorAll('[data-scheduled-start]').forEach(input => {
+    const activityId = String(input.dataset.scheduledStart || '');
+    if (!activityId) return;
+    const endInput = Array.from(list.querySelectorAll('[data-scheduled-end]'))
+      .find(candidate => String(candidate.dataset.scheduledEnd || '') === activityId);
+    candidateDrafts.set(activityId, { start: input.value, end: endInput?.value || '' });
+  });
   list.innerHTML = activities.map(renderActivity).join('');
   if (lastState === 'EMPTY') list.innerHTML = `<div class="empty">${stateLabel('EMPTY')}</div>`;
   if (lastState === 'DENIED' || lastState === 'ERROR' || lastState === 'UNKNOWN_STALE') {
     list.innerHTML = `<div class="empty">${stateLabel(lastState)}</div>` + activities.map(renderActivity).join('');
+  }
+  for (const [activityId, draft] of candidateDrafts) {
+    const startInput = Array.from(list.querySelectorAll('[data-scheduled-start]'))
+      .find(candidate => String(candidate.dataset.scheduledStart || '') === activityId);
+    const endInput = Array.from(list.querySelectorAll('[data-scheduled-end]'))
+      .find(candidate => String(candidate.dataset.scheduledEnd || '') === activityId);
+    if (startInput) startInput.value = draft.start;
+    if (endInput) endInput.value = draft.end;
   }
   bindSchedulingControls(root);
 }
