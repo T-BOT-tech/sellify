@@ -296,9 +296,11 @@ async function transitionActivity(root, activityId, target, button) {
 }
 
 export function mountLogisticsSchedulingWorkspace(root) {
-  if (!root || root.dataset.schedulingWorkspaceBound === '1') return;
-  root.dataset.schedulingWorkspaceBound = '1';
-  root.addEventListener('click', async event => {
+  if (!root) return;
+  const shouldBind = root.dataset.schedulingWorkspaceBound !== '1';
+  if (shouldBind) {
+    root.dataset.schedulingWorkspaceBound = '1';
+    root.addEventListener('click', async event => {
     const refreshButton = event.target.closest('#logistics-scheduling-refresh');
     const evaluateButton = event.target.closest('[data-scheduling-evaluate]');
     const transitionButton = event.target.closest('[data-scheduling-transition]');
@@ -332,6 +334,7 @@ export function mountLogisticsSchedulingWorkspace(root) {
     try { await submitRequest(root, event.target); }
     catch (error) { lastState = error?.status && error.status < 500 ? 'ERROR' : 'UNKNOWN_STALE'; renderWorkspace(root); }
   });
+  }
   const statusNode = root.querySelector('#logisticsSchedulingStatus');
   if (statusNode && statusNode !== mountedStatusNode) {
     mountedStatusNode = statusNode;
