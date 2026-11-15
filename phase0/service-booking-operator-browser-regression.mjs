@@ -48,7 +48,9 @@ try {
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(error.message));
   page.on('response', response => {
-    if (response.status() >= 400 && response.status() !== 409) {
+    const expectedProviderQueueFailure = response.url().includes('/service-provider/bookings')
+      && [403, 503].includes(response.status());
+    if (response.status() >= 400 && response.status() !== 409 && !expectedProviderQueueFailure) {
       pageErrors.push('HTTP ' + response.status() + ' ' + response.url());
     }
   });
@@ -74,6 +76,7 @@ try {
   const calls = [];
   let forceConflict = false;
   let providerMode = false;
+  let providerQueueScenario = 'READY';
   let resourceSelectionMode = false;
   await page.route('**/tenants/test-tenant/service-resources**', async route => {
     if (route.request().method() !== 'GET') {
@@ -104,18 +107,24 @@ try {
       await route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Method not allowed' } }) });
       return;
     }
+    if (providerQueueScenario === 'DENIED') {
+      await route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ error: { code: 'SERVICE_PROVIDER_ASSIGNMENT_REQUIRED' } }) });
+      return;
+    }
+    if (providerQueueScenario === 'ERROR') {
+      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Temporarily unavailable' } }) });
+      return;
+    }
+    const bookings = providerQueueScenario === 'EMPTY' ? [] : [{
+      id: 'provider-booking-1', service_item_id: 'consultation', status: 'CONFIRMED',
+      order_id: 'provider-order-1', service_resource_name: 'Provider One',
+      commitment_starts_at: '2026-11-16T06:00:00.000Z',
+      commitment_ends_at: '2026-11-16T07:00:00.000Z',
+      customer_note: 'Please call on arrival',
+    }];
     await route.fulfill({
       status: 200, contentType: 'application/json',
-      body: JSON.stringify({
-        bookings: [{
-          id: 'provider-booking-1', service_item_id: 'consultation', status: 'CONFIRMED',
-          order_id: 'provider-order-1', service_resource_name: 'Provider One',
-          commitment_starts_at: '2026-11-16T06:00:00.000Z',
-          commitment_ends_at: '2026-11-16T07:00:00.000Z',
-          customer_note: 'Please call on arrival',
-        }],
-        state: 'READY', scope: 'ACTIVE_ASSIGNED_RESOURCES',
-      }),
+      body: JSON.stringify({ bookings, state: bookings.length ? 'READY' : 'EMPTY', scope: 'ACTIVE_ASSIGNED_RESOURCES' }),
     });
   });
 
@@ -278,6 +287,46 @@ try {
     return panel && /declaration only|Declared|Empty|Could not load/i.test(panel.innerText);
   }, null, { timeout: 5000 });
   assert.match(await page.locator('.service-resource-availability-panel').innerText(), /declaration only|Declared/i);
+
+  // Verify the provider appointment queue's complete server-state presentation.
+  const refreshProviderQueue = async () => page.evaluate(async () => {
+    const workspace = await import('/src/logistics/service-bookings.js');
+    await workspace.refreshServiceBookings(document);
+  });
+  providerQueueScenario = 'EMPTY';
+  await refreshProviderQueue();
+  assert.equal(await page.locator('#serviceBookingsStatus').getAttribute('data-state'), 'EMPTY',
+    'an authoritative empty provider queue is distinct from loading or failure');
+  assert.equal(await page.locator('.service-booking-card').count(), 0,
+    'empty provider queue does not retain stale appointment cards');
+
+  providerQueueScenario = 'DENIED';
+  await refreshProviderQueue();
+  assert.equal(await page.locator('#serviceBookingsStatus').getAttribute('data-state'), 'DENIED',
+    'revoked or missing provider assignment is presented as denied');
+  assert.equal(await page.locator('.service-booking-card').count(), 0,
+    'denied provider queue clears previously visible appointment details');
+
+  providerQueueScenario = 'ERROR';
+  await refreshProviderQueue();
+  assert.equal(await page.locator('#serviceBookingsStatus').getAttribute('data-state'), 'ERROR',
+    'server failure is not represented as an empty appointment queue');
+  assert.equal(await page.locator('.service-booking-card').count(), 0,
+    'failed provider refresh does not leave stale appointment details visible');
+
+  providerQueueScenario = 'READY';
+  await context.setOffline(true);
+  await refreshProviderQueue();
+  assert.equal(await page.locator('#serviceBookingsStatus').getAttribute('data-state'), 'UNKNOWN_STALE',
+    'offline provider refresh is explicitly unknown/stale rather than successful or empty');
+  assert.equal(await page.locator('.service-booking-card').count(), 0,
+    'offline provider refresh clears unverified appointment details');
+  await context.setOffline(false);
+  await refreshProviderQueue();
+  assert.equal(await page.locator('#serviceBookingsStatus').getAttribute('data-state'), 'READY',
+    'reconnecting and refreshing restores the verified provider queue');
+  assert.equal(await page.locator('.service-booking-card').count(), 1);
+
   assert.ok(pageErrors.length === 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
 
   console.log('Service booking operator browser regression: PASS');
