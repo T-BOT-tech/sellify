@@ -47,6 +47,9 @@ assert.match(workspace, /EMPTY/);
 assert.match(workspace, /LOADING/);
 assert.doesNotMatch(workspace, /enqueueCommand|offline queue|QUEUED/i);
 assert.match(workspace, /canManageScheduling/);
+assert.match(workspace, /function canViewScheduling/);
+assert.match(workspace, /'logistics_courier', 'logistics_viewer'/);
+assert.doesNotMatch(workspace, /'service_provider'|'customer'/);
 assert.match(workspace, /related_\$\{referenceType\}/);
 
 for (const locale of [en, am, om]) {
