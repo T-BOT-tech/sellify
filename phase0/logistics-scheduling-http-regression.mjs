@@ -142,6 +142,30 @@ try {
   assert.equal(replayCreate.json.activity.id, created.json.activity.id);
   assert.equal(replayCreate.json.activity.idempotent, true);
 
+  const movementOnly = await request(base, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-movement-only-${suffix}` },
+    body: JSON.stringify({
+      activity_type: 'PICKUP',
+      mode: 'ON_DEMAND',
+      related_movement: { id: `movement:${orderId}` },
+    }),
+  });
+  assert.equal(movementOnly.response.status, 201, JSON.stringify(movementOnly.json));
+  assert.equal(movementOnly.json.activity.relatedMovementId, `movement:${orderId}`);
+
+  const invalidMovement = await request(base, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-invalid-movement-${suffix}` },
+    body: JSON.stringify({
+      activity_type: 'PICKUP',
+      mode: 'ON_DEMAND',
+      related_movement: { id: 'movement-without-projection-prefix' },
+    }),
+  });
+  assert.equal(invalidMovement.response.status, 409);
+  assert.equal(invalidMovement.json.error?.code, 'MOVEMENT_REFERENCE_INVALID');
+
   const activityId = created.json.activity.id;
   const evaluation = await request(`${base}/${encodeURIComponent(activityId)}/evaluate`, {
     method: 'POST',
