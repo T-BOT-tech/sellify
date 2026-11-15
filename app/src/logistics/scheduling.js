@@ -10,6 +10,7 @@ let lastState = 'UNKNOWN_STALE';
 let feedback = '';
 let refreshSequence = 0;
 let mountedStatusNode = null;
+const boundSchedulingRoots = new WeakSet();
 let pendingRequestKey = null;
 let pendingRequestFingerprint = '';
 const pendingTransitionKeys = new Map();
@@ -310,9 +311,9 @@ async function transitionActivity(root, activityId, target, button) {
 
 export function mountLogisticsSchedulingWorkspace(root) {
   if (!root) return;
-  const shouldBind = root.dataset.schedulingWorkspaceBound !== '1';
+  const shouldBind = !boundSchedulingRoots.has(root);
   if (shouldBind) {
-    root.dataset.schedulingWorkspaceBound = '1';
+    boundSchedulingRoots.add(root);
     root.addEventListener('click', async event => {
     const refreshButton = event.target.closest('#logistics-scheduling-refresh');
     const evaluateButton = event.target.closest('[data-scheduling-evaluate]');
@@ -347,12 +348,20 @@ export function mountLogisticsSchedulingWorkspace(root) {
       }
     }
   });
-  root.addEventListener('submit', async event => {
-    if (event.target?.id !== 'logisticsSchedulingRequestForm') return;
-    event.preventDefault();
-    try { await submitRequest(root, event.target); }
-    catch (error) { lastState = error?.status === 401 || error?.status === 403 ? 'DENIED' : error?.status && error.status < 500 ? 'ERROR' : 'UNKNOWN_STALE'; renderWorkspace(root); }
-  });
+  }
+  const requestForm = root.querySelector('#logisticsSchedulingRequestForm');
+  if (requestForm && requestForm.dataset.schedulingSubmitBound !== '1') {
+    requestForm.dataset.schedulingSubmitBound = '1';
+    requestForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      try { await submitRequest(root, requestForm); }
+      catch (error) {
+        lastState = error?.status === 401 || error?.status === 403
+          ? 'DENIED' : error?.status && error.status < 500 ? 'ERROR' : 'UNKNOWN_STALE';
+        feedback = error?.message || '';
+        renderWorkspace(root);
+      }
+    });
   }
   const statusNode = root.querySelector('#logisticsSchedulingStatus');
   if (statusNode && statusNode !== mountedStatusNode) {
