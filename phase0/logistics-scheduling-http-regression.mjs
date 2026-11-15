@@ -171,12 +171,16 @@ try {
     method: 'POST',
     headers: { ...headers, 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      scheduledStart: start,
+      scheduledEnd: end,
       externalEvaluation: { outcome: 'FEASIBLE', authority: 'caller-claim', referenceId: 'fake-evidence' },
     }),
   });
   assert.equal(evaluation.response.status, 200);
   assert.equal(evaluation.json.evaluation.evaluation, 'UNKNOWN',
     'caller-provided capacity evidence must not convert UNKNOWN into FEASIBLE');
+  assert.equal(evaluation.json.evaluation.reason, 'NO_AUTHORITATIVE_CAPACITY_DECISION',
+    'the candidate window is evaluated, but no trusted capacity authority is connected');
 
   const blockedSchedule = await request(`${base}/${encodeURIComponent(activityId)}/transition`, {
     method: 'PATCH',
