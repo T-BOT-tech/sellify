@@ -9,6 +9,9 @@ let activities = [];
 let lastState = 'UNKNOWN_STALE';
 let refreshSequence = 0;
 let mountedStatusNode = null;
+let pendingRequestKey = null;
+let pendingRequestFingerprint = '';
+const pendingTransitionKeys = new Map();
 
 function endpoint(activityId = '') {
   const base = (config.syncUrl || window.location.origin).replace(/\/$/, '');
@@ -75,6 +78,7 @@ function renderActivity(activity) {
       <div>Requested: ${escapeHtml(formatWindow(activity.requestedStart, activity.requestedEnd))}</div>
       <div>Scheduled: ${escapeHtml(formatWindow(activity.scheduledStart, activity.scheduledEnd))}</div>
       <div>Reference: ${escapeHtml(activity.relatedFulfillmentId || activity.relatedOrderId || activity.relatedMovementId || '—')}</div>
+      ${activity.lastEvaluation ? `<div role="status">Feasibility: ${escapeHtml(activity.lastEvaluation)}</div>` : ''}
       <div class="logistics-scheduling-actions">
         <button type="button" class="btn-secondary" data-scheduling-evaluate="${escapeHtml(activity.id)}">${t('logisticsSchedulingEvaluate')}</button>
         ${transitionButtons}
@@ -191,14 +195,26 @@ async function submitRequest(root, form) {
     renderWorkspace(root);
     return;
   }
-  const key = commandKey();
+  const fingerprint = JSON.stringify(body);
+  if (!pendingRequestKey || pendingRequestFingerprint !== fingerprint) {
+    pendingRequestKey = commandKey();
+    pendingRequestFingerprint = fingerprint;
+  }
+  const key = pendingRequestKey;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    lastState = 'UNKNOWN_STALE';
+    renderWorkspace(root);
+    return;
+  }
   const response = await fetch(endpoint(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(), 'Idempotency-Key': key },
     body: JSON.stringify({ ...body, idempotencyKey: key }),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error?.message || `Scheduling request failed (${response.status})`);
+  if (!response.ok) throw Object.assign(new Error(data?.error?.message || `Scheduling request failed (${response.status})`), { status: response.status });
+  pendingRequestKey = null;
+  pendingRequestFingerprint = '';
   form.reset();
   await refresh(root);
 }
@@ -208,7 +224,7 @@ async function evaluateActivity(root, activityId) {
     method: 'POST', headers: authHeaders(),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error?.message || `Evaluation failed (${response.status})`);
+  if (!response.ok) throw Object.assign(new Error(data?.error?.message || `Evaluation failed (${response.status})`), { status: response.status });
   const evaluation = data?.evaluation?.evaluation || 'UNKNOWN';
   const item = activities.find(activity => String(activity.id) === String(activityId));
   if (item) item.lastEvaluation = evaluation;
@@ -238,14 +254,25 @@ async function transitionActivity(root, activityId, target, button) {
     body.scheduledStart = new Date(startInput.value).toISOString();
     body.scheduledEnd = new Date(endInput.value).toISOString();
   }
-  const key = commandKey();
+  const transitionKey = `${activityId}:${target}:${activity.version}`;
+  const key = pendingTransitionKeys.get(transitionKey) || commandKey();
+  pendingTransitionKeys.set(transitionKey, key);
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    lastState = 'UNKNOWN_STALE';
+    renderWorkspace(root);
+    return;
+  }
   const response = await fetch(endpoint(activityId) + '/transition', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...authHeaders(), 'Idempotency-Key': key },
     body: JSON.stringify({ ...body, idempotencyKey: key }),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error?.message || `Transition failed (${response.status})`);
+  if (!response.ok) {
+    if (response.status === 409 || response.status === 412) await refresh(root);
+    throw Object.assign(new Error(data?.error?.message || `Transition failed (${response.status})`), { status: response.status });
+  }
+  pendingTransitionKeys.delete(transitionKey);
   const updated = data?.activity;
   if (updated) activities = activities.map(item => String(item.id) === String(activityId) ? updated : item);
   await refresh(root);
@@ -267,28 +294,22 @@ export function mountLogisticsSchedulingWorkspace(root) {
       renderWorkspace(root);
     }
   });
+  root.addEventListener('input', event => {
+    if (event.target?.closest('#logisticsSchedulingRequestForm')) {
+      pendingRequestKey = null;
+      pendingRequestFingerprint = '';
+    }
+  });
   root.addEventListener('submit', async event => {
     if (event.target?.id !== 'logisticsSchedulingRequestForm') return;
     event.preventDefault();
     try { await submitRequest(root, event.target); }
-    catch { lastState = 'ERROR'; renderWorkspace(root); }
+    catch (error) { lastState = error?.status && error.status < 500 ? 'ERROR' : 'UNKNOWN_STALE'; renderWorkspace(root); }
   });
-  const observer = new MutationObserver(() => {
-    if (root.querySelector('#logisticsSchedulingStatus')) {
-      if (root.dataset.schedulingMounted !== '1') {
-        root.dataset.schedulingMounted = '1';
-        refresh(root);
-      }
-    } else {
-      root.dataset.schedulingMounted = '0';
-    }
-  });
-  observer.observe(root, { childList: true, subtree: true });
   const statusNode = root.querySelector('#logisticsSchedulingStatus');
   if (statusNode && statusNode !== mountedStatusNode) {
-    const firstMount = mountedStatusNode === null;
     mountedStatusNode = statusNode;
     renderWorkspace(root);
-    if (firstMount) refresh(root);
+    refresh(root);
   }
 }
