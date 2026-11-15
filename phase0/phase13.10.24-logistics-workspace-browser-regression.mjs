@@ -278,6 +278,10 @@ try {
   const evaluatedCardText = await page.locator('[data-scheduling-card="scheduling-browser-1"]').innerText();
   assert.match(evaluatedCardText, /UNKNOWN/,
     `evaluation result missing from card; card=${evaluatedCardText}; calls=${JSON.stringify(schedulingCalls)}; status=${await page.locator('#logisticsSchedulingStatus').innerText()}`);
+  assert.equal(await page.locator('[data-scheduled-start="scheduling-browser-1"]').inputValue(), '2026-11-16T09:00',
+    'candidate start is preserved after evaluation refreshes the activity card');
+  assert.equal(await page.locator('[data-scheduled-end="scheduling-browser-1"]').inputValue(), '2026-11-16T10:00',
+    'candidate end is preserved after evaluation refreshes the activity card');
   const scheduleButton = page.locator('[data-scheduling-transition="SCHEDULED"]');
   assert.equal(await scheduleButton.isDisabled(), true,
     'SCHEDULED remains disabled while the fresh feasibility result is UNKNOWN');
