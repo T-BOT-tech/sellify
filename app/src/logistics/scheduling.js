@@ -28,6 +28,13 @@ function roleNames() {
   ];
 }
 
+function canViewScheduling() {
+  return roleNames().some(role => [
+    'owner', 'manager', 'logistics_manager', 'logistics_dispatcher',
+    'logistics_courier', 'logistics_viewer',
+  ].includes(role));
+}
+
 function canManageScheduling() {
   return roleNames().some(role => [
     'owner', 'manager', 'logistics_manager', 'logistics_dispatcher',
@@ -110,6 +117,7 @@ function renderWorkspace(root) {
 }
 
 export function logisticsSchedulingWorkspaceShell() {
+  if (!canViewScheduling()) return '';
   const requestForm = canManageScheduling() ? `
     <form id="logisticsSchedulingRequestForm" class="logistics-scheduling-form">
       <div class="settings-section-label">${t('logisticsSchedulingRequestTitle')}</div>
