@@ -110,7 +110,7 @@ try {
         id: 'customer-booking-1', service_item_id: 'consultation',
         requested_start: body.requested_start, requested_end: body.requested_end,
         appointment_mode: body.appointment_mode, customer_note: body.customer_note,
-        status: 'REQUESTED', version: 1, service_resource_name: null,
+        status: 'REQUESTED', allowed_actions: ['CANCEL'], version: 1, service_resource_name: null,
         created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       };
       bookings = [booking];
@@ -119,11 +119,11 @@ try {
     if (path.endsWith('/cancel') && method === 'POST') {
       if (staleCancelOnce) {
         staleCancelOnce = false;
-        bookings = bookings.map(item => ({ ...item, status: 'ACCEPTED', version: 2 }));
+        bookings = bookings.map(item => ({ ...item, status: 'ACCEPTED', allowed_actions: ['CANCEL'], version: 2 }));
         return json(409, { error: { message: 'Booking version is stale.' } });
       }
       assert.equal(body.expected_version, 2);
-      bookings = bookings.map(item => ({ ...item, status: 'CANCELLED', version: 3 }));
+      bookings = bookings.map(item => ({ ...item, status: 'CANCELLED', allowed_actions: [], version: 3 }));
       return json(200, { booking: bookings[0], message: 'Appointment cancelled' });
     }
     return json(404, { error: { message: `Unexpected fixture route: ${method} ${path}` } });
