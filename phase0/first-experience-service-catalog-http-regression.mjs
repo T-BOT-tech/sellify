@@ -474,7 +474,7 @@ try {
   const bookingConfirmReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
     method: 'PATCH',
     headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
-    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2, service_resource_id: serviceResource.id }),
   });
   assert.equal(bookingConfirmReplay.status, 200, 'exact confirmation retry should replay successfully');
   const bookingConfirmReplayBody = await bookingConfirmReplay.json();
