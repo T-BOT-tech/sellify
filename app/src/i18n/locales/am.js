@@ -192,4 +192,6 @@ export default {
     logisticsSchedulingSubmit: "ጥያቄ አስገባ",
     logisticsSchedulingEvaluate: "ገምግም",
     logisticsSchedulingEvaluation: "የአዋጭነት ግምገማ",
+    logisticsSchedulingBlockedUnknown: "መርሐግብሩ አልተረጋገጠም፤ የታመነ የአቅም ማስረጃ ስላልተገናኘ አዋጭነቱ UNKNOWN ነው።",
+    logisticsSchedulingBlockedConflict: "ነባር ቀኖናዊ እንቅስቃሴ ከዚህ የጊዜ ክልል ጋር ስለሚጋጭ መርሐግብሩ ታግዷል።",
 };
