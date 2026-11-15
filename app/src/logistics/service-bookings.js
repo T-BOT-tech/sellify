@@ -424,9 +424,9 @@ export function serviceBookingsWorkspaceShell() {
     + (providerOnly
       ? '<h3 style="margin:0;">' + escapeHtml(t('serviceResourceTitle')) + '</h3>'
         + '<p class="logistics-meta">' + escapeHtml(t('serviceResourceProviderDescription')) + '</p>'
-        + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h4>My Appointments</h4>'
-        + '<button type="button" class="btn-secondary" id="serviceBookingsRefresh">Refresh</button></div>'
-        + '<div id="serviceBookingsStatus" class="logistics-meta" role="status">Loading appointments…</div>'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h4>' + escapeHtml(t('serviceProviderAppointmentsTitle')) + '</h4>'
+        + '<button type="button" class="btn-secondary" id="serviceBookingsRefresh">' + escapeHtml(t('serviceProviderAppointmentsRefresh')) + '</button></div>'
+        + '<div id="serviceBookingsStatus" class="logistics-meta" role="status">' + escapeHtml(t('serviceProviderAppointmentsLoading')) + '</div>'
         + '<div id="serviceBookingsList" aria-live="polite"></div>'
       : '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
         + '<h3 style="margin:0;">' + escapeHtml(t('serviceBookingsTitle')) + '</h3>'
@@ -487,12 +487,15 @@ export async function refreshServiceBookings(root = document) {
           + escapeHtml(date(booking.commitment_ends_at || booking.requested_end)) + '</div>'
           + (booking.customer_note ? '<div class="logistics-meta">' + escapeHtml(booking.customer_note) + '</div>' : '') + '</article>';
       }).join('');
-      status.textContent = bookings.length ? bookings.length + ' appointment(s) assigned to your active resources.' : 'No confirmed appointments for your assigned resources.';
+      status.textContent = bookings.length
+        ? t('serviceProviderAppointmentsReady').replace('{count}', String(bookings.length))
+        : t('serviceProviderAppointmentsEmpty');
       status.dataset.state = bookings.length ? 'READY' : 'EMPTY';
     } catch (error) {
       if (workspace.dataset.refreshSequence !== String(sequence) || String(config.chatId) !== tenantId || String(config.sessionToken) !== sessionToken) return;
-      status.textContent = error.status === 403 ? 'Access denied for this appointment queue.' : 'Appointment queue unavailable. Refresh to retry.';
-      status.dataset.state = error.status === 403 ? 'DENIED' : 'ERROR';
+      status.textContent = error.status === 403 ? t('serviceProviderAppointmentsDenied')
+        : !navigator.onLine ? t('serviceProviderAppointmentsUnknownStale') : t('serviceProviderAppointmentsUnavailable');
+      status.dataset.state = error.status === 403 ? 'DENIED' : !navigator.onLine ? 'UNKNOWN_STALE' : 'ERROR';
       list.replaceChildren();
     }
     return;
