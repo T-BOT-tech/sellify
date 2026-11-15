@@ -200,6 +200,10 @@ try {
   assert.equal(stillRequested.response.status, 200);
   assert.equal(stillRequested.json.activity.status, 'REQUESTED',
     'UNKNOWN feasibility must not mutate REQUESTED into SCHEDULED');
+  assert.equal(stillRequested.json.activity.scheduledStart, null,
+    'read-only feasibility must not persist the proposed start');
+  assert.equal(stillRequested.json.activity.scheduledEnd, null,
+    'read-only feasibility must not persist the proposed end');
 
   const cancelKey = `l11-cancel-${suffix}`;
   const cancelled = await request(`${base}/${encodeURIComponent(activityId)}/transition`, {
