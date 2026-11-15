@@ -240,7 +240,7 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
       });
     }
   } catch (error) {
-    panel.textContent = error.message || 'Unable to load appointment information.';
+    panel.innerHTML = `<div role="alert">${esc(error.message || 'Unable to load appointment information.')}</div>`;
   }
 }
 
