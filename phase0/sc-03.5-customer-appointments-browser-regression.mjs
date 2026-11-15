@@ -166,6 +166,10 @@ try {
   await page.locator('#customerAppointmentForm').waitFor();
 
   const appointmentForm = page.locator('#customerAppointmentForm');
+  assert.equal(await appointmentForm.evaluate(node => getComputedStyle(node).display), 'grid',
+    'customer appointment form uses the branded responsive layout');
+  assert.equal(await page.locator('.customer-appointment-card').count(), 0,
+    'empty appointment history renders without placeholder booking cards');
   for (const label of ['Service', 'Start (your device local time)', 'End (your device local time)', 'Appointment type', 'Note (optional)']) {
     assert.equal(await appointmentForm.getByLabel(label).count(), 1, `appointment field has accessible label: ${label}`);
   }
@@ -249,6 +253,10 @@ try {
 
   // Exercise the narrow Telegram WebApp viewport and the explicit offline retry state.
   await page.setViewportSize({ width: 360, height: 800 });
+  assert.equal(await page.locator('.customer-appointment-fields').evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length), 1,
+    'appointment form collapses to one column on narrow Telegram WebView screens');
+  assert.equal(await page.locator('.customer-appointment-actions').evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length), 1,
+    'appointment actions stack vertically on narrow screens');
   await page.waitForTimeout(50);
   const mobileMetrics = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
