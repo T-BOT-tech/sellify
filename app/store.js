@@ -122,9 +122,53 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
       const id = line.item_id ?? line.product_id ?? line.id;
       return id == null ? '' : `<option value="${esc(id)}">${esc(lineLabel(line))}</option>`;
     }).join('');
-    panel.innerHTML = `${notice ? `<div role="status" style="margin-bottom:10px">${esc(notice)}</div>` : ''}<strong>Appointments</strong>${bookingCards || '<div style="margin:6px 0;color:var(--muted)">No appointment requests yet.</div>'}${options ? `<form id="customerAppointmentForm" style="margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:10px"><strong>Request an appointment</strong><label>Service<select name="service_item_id" required style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px">${options}</select></label><label>Start<input name="requested_start" type="datetime-local" required></label><label>End<input name="requested_end" type="datetime-local" required></label><label>Appointment type<select name="appointment_mode" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"><option value="ON_SITE">At provider location</option><option value="CUSTOMER_LOCATION">At my location</option><option value="REMOTE">Remote</option></select></label><label>Note (optional)<input name="customer_note" maxlength="500" placeholder="Anything the provider should know"></label><div id="appointmentRequestError" class="error" role="alert"></div><button class="submit" type="submit">Send appointment request</button><p style="font-size:12px;color:var(--muted);line-height:1.45">A request is not a confirmed appointment. The provider must accept it and commit a resource. No time is reserved by submitting this request.</p></form>` : '<div style="margin-top:8px;color:var(--muted)">This order has no appointment-based service lines.</div>'}`;
+    panel.innerHTML = `${notice ? `<div role="status" style="margin-bottom:10px">${esc(notice)}</div>` : ''}<strong>Appointments</strong>${bookingCards || '<div style="margin:6px 0;color:var(--muted)">No appointment requests yet.</div>'}${options ? `<form id="customerAppointmentForm" style="margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:10px"><strong>Request an appointment</strong><label>Service<select name="service_item_id" required style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px">${options}</select></label><label>Start<input name="requested_start" type="datetime-local" required></label><label>End<input name="requested_end" type="datetime-local" required></label><label>Appointment type<select name="appointment_mode" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"><option value="ON_SITE">At provider location</option><option value="CUSTOMER_LOCATION">At my location</option><option value="REMOTE">Remote</option></select></label><label>Note (optional)<input name="customer_note" maxlength="500" placeholder="Anything the provider should know"></label><button id="checkAppointmentFeasibility" class="fulfillment-btn" type="button">Check time</button><div id="appointmentFeasibilityState" role="status" style="margin:8px 0;font-size:12px;color:var(--muted)">Check the selected time before sending your request.</div><div id="appointmentRequestError" class="error" role="alert"></div><button class="submit" type="submit">Send appointment request</button><p style="font-size:12px;color:var(--muted);line-height:1.45">A request is not a confirmed appointment. The provider must accept it and commit a resource. No time is reserved by submitting this request.</p></form>` : '<div style="margin-top:8px;color:var(--muted)">This order has no appointment-based service lines.</div>'}`;
     const form = document.getElementById('customerAppointmentForm');
-    if (form) form.addEventListener('submit', async event => {
+    if (form) {
+      const feasibilityState = document.getElementById('appointmentFeasibilityState');
+      const checkButton = document.getElementById('checkAppointmentFeasibility');
+      const getRequestedWindow = () => {
+        const values = new FormData(form);
+        const startValue = String(values.get('requested_start') || '');
+        const endValue = String(values.get('requested_end') || '');
+        const start = new Date(startValue), end = new Date(endValue);
+        if (!startValue || !endValue || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+          throw new Error('Choose a valid start and end time; the end must be later than the start.');
+        }
+        return { values, start, end };
+      };
+      checkButton.addEventListener('click', async () => {
+        checkButton.disabled = true;
+        feasibilityState.textContent = 'Checking declared hours and existing commitments…';
+        feasibilityState.dataset.state = 'UNKNOWN';
+        try {
+          const { values, start, end } = getRequestedWindow();
+          const params = new URLSearchParams({
+            service_item_id: String(values.get('service_item_id')),
+            start: start.toISOString(),
+            end: end.toISOString(),
+          });
+          const response = await fetch(`/api/telegram-storefront/${encodeURIComponent(chatId)}/orders/${encodeURIComponent(marketplaceOrderId)}/service-feasibility?${params}`, { headers });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(result?.error?.message || 'Unable to check this time.');
+          const assessment = result.feasibility || {};
+          feasibilityState.dataset.state = assessment.state || 'UNKNOWN';
+          const zone = assessment.timeZone ? ` · ${assessment.timeZone}` : '';
+          if (assessment.state === 'FEASIBLE') feasibilityState.textContent = `Likely feasible based on declared hours and current commitments${zone}. This is not a reservation.`;
+          else if (assessment.state === 'CONFLICT') feasibilityState.textContent = 'No matching resource currently fits this time. Choose another interval.';
+          else feasibilityState.textContent = `Availability is unknown${zone}. You may still send a request for provider review; no availability is guaranteed.`;
+        } catch (error) {
+          feasibilityState.dataset.state = 'UNKNOWN';
+          feasibilityState.textContent = error.message || 'Time feasibility is unknown.';
+        } finally { checkButton.disabled = false; }
+      });
+      form.querySelectorAll('[name="service_item_id"],[name="requested_start"],[name="requested_end"]').forEach(input => {
+        input.addEventListener('change', () => {
+          feasibilityState.dataset.state = '';
+          feasibilityState.textContent = 'Selection changed. Check the new time before sending your request.';
+        });
+      });
+      form.addEventListener('submit', async event => {
       event.preventDefault();
       const button = form.querySelector('button[type="submit"]');
       const errorEl = document.getElementById('appointmentRequestError');
@@ -157,7 +201,8 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
         errorEl.textContent = error.message || 'Unable to submit appointment request. Please retry.';
         button.disabled = false;
       }
-    });
+      });
+    }
   } catch (error) {
     panel.textContent = error.message || 'Unable to load appointment information.';
   }
