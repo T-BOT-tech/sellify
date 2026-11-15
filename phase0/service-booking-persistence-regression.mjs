@@ -114,6 +114,15 @@ try {
   assert.equal(commitment.resource_id, serviceResourceId);
   assert.equal(commitment.starts_at, created.booking.requested_start);
   assert.equal(commitment.ends_at, created.booking.requested_end);
+  const confirmedReplay = await store.transitionServiceBooking(seller.chatId, order.server_order_id, created.booking.id, {
+    status: 'CONFIRMED', expected_version: 2, service_resource_id: serviceResourceId,
+    idempotency_key: 'booking-confirm-' + suffix,
+  }, { userId: owner.id });
+  assert.equal(confirmedReplay.replayed, true);
+  assert.equal(confirmedReplay.booking.version, 3);
+  assert.equal(store.getDatabaseForTests().prepare(
+    'SELECT COUNT(*) AS count FROM service_resource_commitments WHERE booking_id = ?'
+  ).get(created.booking.id).count, 1, 'confirmation replay must not create a second resource commitment');
 
   const overlappingRequest = await store.createServiceBooking(seller.chatId, order.server_order_id, {
     ...request, customer_note: 'Overlapping appointment',
@@ -312,6 +321,9 @@ try {
   }, { userId: owner.id });
   assert.equal(failed.booking.status, 'FAILED');
   assert.equal(failed.booking.status_reason, 'Required specialist was unavailable');
+  assert.equal(store.getDatabaseForTests().prepare(
+    'SELECT state FROM service_resource_commitments WHERE booking_id = ?'
+  ).get(failureBooking.booking.id).state, 'RELEASED', 'failed appointment must release its committed resource interval');
   const failedReplay = await store.transitionServiceBooking(seller.chatId, order.server_order_id, failureBooking.booking.id, {
     status: 'FAILED', expected_version: 3, reason: 'Required specialist was unavailable',
     idempotency_key: 'booking-failure-with-reason-' + suffix,
