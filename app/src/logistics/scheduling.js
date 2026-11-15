@@ -10,7 +10,6 @@ let lastState = 'UNKNOWN_STALE';
 let feedback = '';
 let refreshSequence = 0;
 let mountedStatusNode = null;
-const boundSchedulingRoots = new WeakSet();
 let pendingRequestKey = null;
 let pendingRequestFingerprint = '';
 const pendingTransitionKeys = new Map();
@@ -109,6 +108,63 @@ function renderActivity(activity) {
     </article>`;
 }
 
+function handleSchedulingError(root, error) {
+  if (error?.code === 'SCHEDULING_FEASIBILITY_UNKNOWN') {
+    lastState = 'READY';
+    feedback = t('logisticsSchedulingBlockedUnknown');
+  } else if (error?.code === 'SCHEDULING_FEASIBILITY_CONFLICT') {
+    lastState = 'READY';
+    feedback = t('logisticsSchedulingBlockedConflict');
+  } else {
+    lastState = error?.status === 401 || error?.status === 403
+      ? 'DENIED' : error?.status && error.status < 500 ? 'ERROR' : 'UNKNOWN_STALE';
+    feedback = error?.message || '';
+  }
+  renderWorkspace(root);
+}
+
+function bindSchedulingControls(root) {
+  const refreshButton = root.querySelector('#logistics-scheduling-refresh');
+  if (refreshButton && refreshButton.dataset.schedulingBound !== '1') {
+    refreshButton.dataset.schedulingBound = '1';
+    refreshButton.addEventListener('click', async () => {
+      try { await refresh(root); } catch (error) { handleSchedulingError(root, error); }
+    });
+  }
+
+  root.querySelectorAll('[data-scheduling-evaluate]').forEach(button => {
+    if (button.dataset.schedulingBound === '1') return;
+    button.dataset.schedulingBound = '1';
+    button.addEventListener('click', async () => {
+      try { await evaluateActivity(root, button.dataset.schedulingEvaluate); }
+      catch (error) { handleSchedulingError(root, error); }
+    });
+  });
+
+  root.querySelectorAll('[data-scheduling-transition]').forEach(button => {
+    if (button.dataset.schedulingBound === '1') return;
+    button.dataset.schedulingBound = '1';
+    button.addEventListener('click', async () => {
+      try {
+        await transitionActivity(root, button.dataset.activityId, button.dataset.schedulingTransition, button);
+      } catch (error) {
+        handleSchedulingError(root, error);
+      }
+    });
+  });
+
+  root.querySelectorAll('[data-scheduled-start], [data-scheduled-end]').forEach(input => {
+    if (input.dataset.schedulingBound === '1') return;
+    input.dataset.schedulingBound = '1';
+    input.addEventListener('input', () => {
+      const activityId = input.dataset.scheduledStart || input.dataset.scheduledEnd;
+      for (const key of pendingTransitionKeys.keys()) {
+        if (key.startsWith(`${activityId}:SCHEDULED:`)) pendingTransitionKeys.delete(key);
+      }
+    });
+  });
+}
+
 function renderWorkspace(root) {
   const status = root.querySelector('#logisticsSchedulingStatus');
   const list = root.querySelector('#logisticsSchedulingList');
@@ -119,6 +175,7 @@ function renderWorkspace(root) {
   if (lastState === 'DENIED' || lastState === 'ERROR' || lastState === 'UNKNOWN_STALE') {
     list.innerHTML = `<div class="empty">${stateLabel(lastState)}</div>` + activities.map(renderActivity).join('');
   }
+  bindSchedulingControls(root);
 }
 
 export function logisticsSchedulingWorkspaceShell() {
@@ -311,56 +368,17 @@ async function transitionActivity(root, activityId, target, button) {
 
 export function mountLogisticsSchedulingWorkspace(root) {
   if (!root) return;
-  const shouldBind = !boundSchedulingRoots.has(root);
-  if (shouldBind) {
-    boundSchedulingRoots.add(root);
-    root.addEventListener('click', async event => {
-    const refreshButton = event.target.closest('#logistics-scheduling-refresh');
-    const evaluateButton = event.target.closest('[data-scheduling-evaluate]');
-    const transitionButton = event.target.closest('[data-scheduling-transition]');
-    try {
-      if (refreshButton) await refresh(root);
-      else if (evaluateButton) await evaluateActivity(root, evaluateButton.dataset.schedulingEvaluate);
-      else if (transitionButton) await transitionActivity(root, transitionButton.dataset.activityId, transitionButton.dataset.schedulingTransition, transitionButton);
-    } catch (error) {
-      if (error?.code === 'SCHEDULING_FEASIBILITY_UNKNOWN') {
-        lastState = 'READY';
-        feedback = t('logisticsSchedulingBlockedUnknown');
-      } else if (error?.code === 'SCHEDULING_FEASIBILITY_CONFLICT') {
-        lastState = 'READY';
-        feedback = t('logisticsSchedulingBlockedConflict');
-      } else {
-        lastState = error?.status === 401 || error?.status === 403 ? 'DENIED' : error?.status && error.status < 500 ? 'ERROR' : 'UNKNOWN_STALE';
-        feedback = error?.message || '';
-      }
-      renderWorkspace(root);
-    }
-  });
-  root.addEventListener('input', event => {
-    if (event.target?.closest('#logisticsSchedulingRequestForm')) {
-      pendingRequestKey = null;
-      pendingRequestFingerprint = '';
-    }
-    const activityId = event.target?.dataset?.scheduledStart || event.target?.dataset?.scheduledEnd;
-    if (activityId) {
-      for (const key of pendingTransitionKeys.keys()) {
-        if (key.startsWith(`${activityId}:SCHEDULED:`)) pendingTransitionKeys.delete(key);
-      }
-    }
-  });
-  }
   const requestForm = root.querySelector('#logisticsSchedulingRequestForm');
   if (requestForm && requestForm.dataset.schedulingSubmitBound !== '1') {
     requestForm.dataset.schedulingSubmitBound = '1';
+    requestForm.addEventListener('input', () => {
+      pendingRequestKey = null;
+      pendingRequestFingerprint = '';
+    });
     const submit = async () => {
       if (!requestForm.reportValidity()) return;
       try { await submitRequest(root, requestForm); }
-      catch (error) {
-        lastState = error?.status === 401 || error?.status === 403
-          ? 'DENIED' : error?.status && error.status < 500 ? 'ERROR' : 'UNKNOWN_STALE';
-        feedback = error?.message || '';
-        renderWorkspace(root);
-      }
+      catch (error) { handleSchedulingError(root, error); }
     };
     requestForm.addEventListener('submit', event => {
       event.preventDefault();
@@ -376,5 +394,7 @@ export function mountLogisticsSchedulingWorkspace(root) {
     mountedStatusNode = statusNode;
     renderWorkspace(root);
     refresh(root);
+  } else {
+    bindSchedulingControls(root);
   }
 }
