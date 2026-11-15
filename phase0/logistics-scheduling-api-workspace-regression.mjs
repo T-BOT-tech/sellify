@@ -10,6 +10,7 @@ const workspace = read('../app/src/logistics/scheduling.js');
 const en = read('../app/src/i18n/locales/en.js');
 const am = read('../app/src/i18n/locales/am.js');
 const om = read('../app/src/i18n/locales/om.js');
+const styles = read('../app/styles.css');
 
 for (const name of [
   'createLogisticsSchedulingActivity',
@@ -54,6 +55,9 @@ assert.match(workspace, /logisticsSchedulingScheduleBlocked/);
 assert.match(workspace, /lastEvaluations\.delete\(activityId\)/);
 assert.match(workspace, /candidateWindow/);
 assert.match(workspace, /normalizeCandidateWindow/);
+assert.match(styles, /\.logistics-scheduling-workspace\s*\{/);
+assert.match(styles, /\.logistics-scheduling-card\s*\{[\s\S]*?display:\s*flex/);
+assert.match(styles, /@media \(max-width:\s*560px\)/);
 assert.match(workspace, /UNKNOWN_STALE/);
 assert.match(workspace, /DENIED/);
 assert.match(workspace, /EMPTY/);
