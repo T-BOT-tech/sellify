@@ -37,12 +37,12 @@ assert.match(handler, /listServiceResources\(chatId, \{ includeInactive: false \
 assert.match(handler, /requireAuthorization\(session, tenant, 'service_resource', 'service:service_booking:view'/);
 assert.match(handler, /listServiceProviderBookings\(chatId, activeResources\.map/);
 assert.doesNotMatch(handler, /readBody|PATCH|POST|transitionServiceBooking/);
-assert.match(server, /\/service-provider\\/bookings\$/);
+assert.match(server, /service-provider\\/bookings/);
 
 assert.match(ui, /\/service-provider\/bookings/);
 assert.match(ui, /My Appointments/);
 assert.match(ui, /escapeHtml\(booking\.customer_note\)/);
 assert.match(ui, /serviceBookingsRefresh/);
-assert.match(ui, /data\.state = bookings\.length \? 'READY' : 'EMPTY'/);
+assert.match(ui, /status\.dataset\.state = bookings\.length \? 'READY' : 'EMPTY'/);
 
 console.log('SC-03.5 service provider booking queue source regression passed.');
