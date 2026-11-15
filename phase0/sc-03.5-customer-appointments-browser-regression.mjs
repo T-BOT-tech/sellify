@@ -167,7 +167,7 @@ try {
       type: document.activeElement?.getAttribute('type') || '',
     }));
     const expected = keyboardOrder[index];
-    assert.equal(expected[1] ? active.name === expected[1] : active.type === 'submit', true,
+    assert.equal(expected[1] ? (active.name || active.id) === expected[1] : active.type === 'submit', true,
       `keyboard focus order reaches ${expected[1] || 'submit'}`);
   }
 
