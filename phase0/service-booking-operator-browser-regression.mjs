@@ -94,6 +94,26 @@ try {
     });
   });
 
+  await page.route('**/tenants/test-tenant/service-provider/bookings', async route => {
+    if (route.request().method() !== 'GET') {
+      await route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Method not allowed' } }) });
+      return;
+    }
+    await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        bookings: [{
+          id: 'provider-booking-1', service_item_id: 'consultation', status: 'CONFIRMED',
+          order_id: 'provider-order-1', service_resource_name: 'Provider One',
+          commitment_starts_at: '2026-11-16T06:00:00.000Z',
+          commitment_ends_at: '2026-11-16T07:00:00.000Z',
+          customer_note: 'Please call on arrival',
+        }],
+        state: 'READY', scope: 'ACTIVE_ASSIGNED_RESOURCES',
+      }),
+    });
+  });
+
   await page.route('**/service-resources/provider-resource-1/availability', async route => {
     if (route.request().method() === 'GET') {
       await route.fulfill({
@@ -238,7 +258,9 @@ try {
     workspace.mountServiceBookingsWorkspace(document);
   });
   await page.locator('.service-resource-card').filter({ hasText: 'Provider One' }).waitFor();
-  assert.equal(await page.locator('.service-booking-card').count(), 0, 'Provider does not see customer booking workspace');
+  assert.equal(await page.locator('.service-booking-card').count(), 1, 'Provider sees only the assigned-resource appointment projection');
+  assert.match(await page.locator('#serviceBookingsList').innerText(), /Provider One|Please call on arrival/);
+  assert.equal(await page.locator('.service-booking-action').count(), 0, 'Provider appointment queue is read-only');
   assert.equal(await page.locator('#serviceResourceForm').count(), 0, 'Provider cannot create resources');
   assert.equal(await page.locator('.service-resource-rename').count(), 0, 'Provider cannot rename resources');
   assert.equal(await page.locator('.service-resource-toggle').count(), 0, 'Provider cannot activate or deactivate resources');
