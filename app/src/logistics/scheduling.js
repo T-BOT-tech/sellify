@@ -274,6 +274,14 @@ async function refresh(root) {
   if (sequence === refreshSequence) renderWorkspace(root);
 }
 
+function normalizeCandidateWindow(startValue, endValue) {
+  if (!startValue || !endValue) return null;
+  const start = new Date(startValue);
+  const end = new Date(endValue);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return null;
+  return { scheduledStart: start.toISOString(), scheduledEnd: end.toISOString() };
+}
+
 function commandKey() {
   return globalThis.crypto?.randomUUID?.() || `scheduling-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -297,7 +305,14 @@ async function submitRequest(root, form) {
     [`related_${referenceType}`]: { id: referenceId },
   };
   if (mode === 'WINDOWED' && (!body.requested_start || !body.requested_end)) {
-    lastState = 'ERROR';
+    lastState = 'READY';
+    feedback = t('logisticsSchedulingWindowRequired');
+    renderWorkspace(root);
+    return;
+  }
+  if (mode === 'WINDOWED' && !normalizeCandidateWindow(startValue, endValue)) {
+    lastState = 'READY';
+    feedback = t('logisticsSchedulingWindowInvalid');
     renderWorkspace(root);
     return;
   }
@@ -336,10 +351,13 @@ async function evaluateActivity(root, activityId) {
     renderWorkspace(root);
     return;
   }
-  const candidateWindow = {
-    scheduledStart: new Date(startInput.value).toISOString(),
-    scheduledEnd: new Date(endInput.value).toISOString(),
-  };
+  const candidateWindow = normalizeCandidateWindow(startInput.value, endInput.value);
+  if (!candidateWindow) {
+    lastState = 'READY';
+    feedback = t('logisticsSchedulingWindowInvalid');
+    renderWorkspace(root);
+    return;
+  }
   const response = await fetch(endpoint(activityId) + '/evaluate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -374,13 +392,16 @@ async function transitionActivity(root, activityId, target, button) {
   const endInput = root.querySelector(`[data-scheduled-end="${CSS.escape(String(activityId))}"]`);
   const body = { status: target, expectedVersion: activity.version };
   if (target === 'SCHEDULED') {
-    if (!startInput?.value || !endInput?.value) {
-      lastState = 'ERROR';
+    const candidateWindow = normalizeCandidateWindow(startInput?.value, endInput?.value);
+    if (!candidateWindow) {
+      lastState = 'READY';
+      feedback = startInput?.value && endInput?.value
+        ? t('logisticsSchedulingWindowInvalid')
+        : t('logisticsSchedulingWindowRequired');
       renderWorkspace(root);
       return;
     }
-    body.scheduledStart = new Date(startInput.value).toISOString();
-    body.scheduledEnd = new Date(endInput.value).toISOString();
+    Object.assign(body, candidateWindow);
   }
   const transitionKey = `${activityId}:${target}:${activity.version}`;
   const key = pendingTransitionKeys.get(transitionKey) || commandKey();
