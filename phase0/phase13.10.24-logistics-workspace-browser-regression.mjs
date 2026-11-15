@@ -68,6 +68,54 @@ try {
   });
   await page.route('**/tenants/test-tenant/memberships', route =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ memberships: [] }) }));
+  const schedulingCalls = [];
+  let schedulingActivities = [];
+  await page.route('**/tenants/test-tenant/logistics/scheduling**', async route => {
+    const request = route.request();
+    const method = request.method();
+    const pathname = new URL(request.url()).pathname;
+    const body = request.postDataJSON?.() || {};
+    schedulingCalls.push({ method, pathname, body, headers: request.headers() });
+    if (method === 'GET') {
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ activities: schedulingActivities, state: schedulingActivities.length ? 'READY' : 'EMPTY' }),
+      });
+      return;
+    }
+    if (method === 'POST' && pathname.endsWith('/evaluate')) {
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ evaluation: { evaluation: 'UNKNOWN', reason: 'NO_AUTHORITATIVE_CAPACITY_DECISION' } }),
+      });
+      return;
+    }
+    if (method === 'POST') {
+      const activity = {
+        id: 'scheduling-browser-1',
+        activityType: body.activity_type,
+        mode: body.mode,
+        status: 'REQUESTED',
+        relatedOrderId: body.related_order?.id || null,
+        relatedFulfillmentId: body.related_fulfillment?.id || null,
+        relatedMovementId: body.related_movement?.id || null,
+        requestedStart: body.requested_start,
+        requestedEnd: body.requested_end,
+        version: 1,
+      };
+      schedulingActivities = [activity];
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ activity }) });
+      return;
+    }
+    if (method === 'PATCH') {
+      await route.fulfill({
+        status: 409, contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'SCHEDULING_FEASIBILITY_UNKNOWN', message: 'Scheduling blocked: feasibility is UNKNOWN.' } }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 405, body: 'Method not allowed' });
+  });
   const lifecycleCalls = [];
   await page.route('**/tenants/test-tenant/orders/server-order-browser-1/delivery-assignment', async route => {
     const request = route.request();
@@ -109,6 +157,11 @@ try {
   });
 
   await page.locator('[data-assignment-only="1"]').waitFor();
+  await page.locator('.logistics-scheduling-workspace').waitFor();
+  assert.equal(await page.locator('#logisticsSchedulingRequestForm').count(), 0,
+    'courier scheduling workspace is read-only');
+  assert.equal(await page.locator('#logisticsSchedulingStatus').innerText(), /No scheduling activities yet./.test(await page.locator('#logisticsSchedulingStatus').innerText()) ? await page.locator('#logisticsSchedulingStatus').innerText() : await page.locator('#logisticsSchedulingStatus').innerText(),
+    'courier scheduling view loads without an edit form');
   assert.equal(await page.locator('[data-assignment-only="1"]').count(), 1,
     'courier must see an assignment even when its local Order projection is absent');
   assert.match(await page.locator('[data-assignment-only="1"]').innerText(), /server-order-browser-1/);
@@ -162,6 +215,44 @@ try {
   });
   assert.equal(await page.locator('.delivery-action-btn').count(), 0, 'viewer cannot see courier mutation controls');
   assert.equal(await page.locator('[data-assignment-only="1"]').count(), 1, 'viewer retains assignment visibility');
+  assert.equal(await page.locator('#logisticsSchedulingRequestForm').count(), 0,
+    'viewer scheduling workspace is read-only');
+
+  // Logistics Manager gets the scheduling request form, can evaluate, and
+  // cannot force a SCHEDULED state when the server returns UNKNOWN feasibility.
+  await page.evaluate(async () => {
+    const state = await import('/src/state.js');
+    state.setConfig({
+      ...state.config,
+      currentStaffRole: 'logistics_manager',
+      locationId: 'DEFAULT',
+      contextualRoles: [{ role: 'logistics_manager', scopeType: 'ORGANIZATION', scopeId: 'test-org' }],
+      authRoles: [],
+    });
+    const logistics = await import('/src/logistics/ui.js');
+    logistics.renderLogistics();
+  });
+  await page.locator('#logisticsSchedulingRequestForm').waitFor();
+  await page.locator('#logisticsSchedulingRequestForm [name="referenceType"]').selectOption('order');
+  await page.locator('#logisticsSchedulingRequestForm [name="referenceId"]').fill('server-order-browser-1');
+  await page.locator('#logisticsSchedulingRequestForm [name="requestedStart"]').fill('2026-11-16T09:00');
+  await page.locator('#logisticsSchedulingRequestForm [name="requestedEnd"]').fill('2026-11-16T10:00');
+  await page.locator('#logisticsSchedulingRequestForm button[type="submit"]').click();
+  await page.locator('[data-scheduling-card="scheduling-browser-1"]').waitFor();
+  const createCall = schedulingCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/logistics/scheduling'));
+  assert.ok(createCall, 'manager can submit a scheduling request');
+  assert.equal(createCall.body.related_order.id, 'server-order-browser-1');
+  assert.ok(createCall.headers['idempotency-key'], 'scheduling request carries an idempotency key');
+  await page.locator('[data-scheduling-evaluate="scheduling-browser-1"]').click();
+  await page.locator('[data-scheduling-card="scheduling-browser-1"]').getByText(/UNKNOWN/).waitFor();
+  await page.locator('[data-scheduled-start="scheduling-browser-1"]').fill('2026-11-16T09:00');
+  await page.locator('[data-scheduled-end="scheduling-browser-1"]').fill('2026-11-16T10:00');
+  await page.locator('[data-scheduling-transition="SCHEDULED"]').click();
+  await page.locator('#logisticsSchedulingStatus').getByText(/UNKNOWN/).waitFor();
+  assert.match(await page.locator('[data-scheduling-card="scheduling-browser-1"]').innerText(), /REQUESTED/,
+    'UNKNOWN feasibility cannot be presented as a confirmed schedule');
+  assert.ok(schedulingCalls.some(call => call.method === 'PATCH' && call.pathname.endsWith('/transition')),
+    'manager lifecycle action crosses the authenticated API boundary');
   assert.equal(pageErrors.length, 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
 
   console.log('Phase 13.10.24 Logistics workspace browser regression: PASS');
