@@ -49,6 +49,7 @@ try {
   const calls = [];
   let feasibility = 'FEASIBLE';
   let offlineFeasibility = false;
+  let staleCancelOnce = true;
   let bookings = [];
   page.on('pageerror', error => pageErrors.push(error.message));
   await page.addInitScript(() => {
@@ -114,8 +115,13 @@ try {
       return json(201, { booking, bookings, message: 'Appointment request received' });
     }
     if (path.endsWith('/cancel') && method === 'POST') {
-      assert.equal(body.expected_version, 1);
-      bookings = bookings.map(item => ({ ...item, status: 'CANCELLED', version: 2 }));
+      if (staleCancelOnce) {
+        staleCancelOnce = false;
+        bookings = bookings.map(item => ({ ...item, status: 'ACCEPTED', version: 2 }));
+        return json(409, { error: { message: 'Booking version is stale.' } });
+      }
+      assert.equal(body.expected_version, 2);
+      bookings = bookings.map(item => ({ ...item, status: 'CANCELLED', version: 3 }));
       return json(200, { booking: bookings[0], message: 'Appointment cancelled' });
     }
     return json(404, { error: { message: `Unexpected fixture route: ${method} ${path}` } });
@@ -156,9 +162,15 @@ try {
 
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Cancel request' }).click();
+  await page.getByText('ACCEPTED', { exact: true }).waitFor();
+  await page.getByText(/current status has been refreshed/i).waitFor();
+  assert.equal(calls.filter(call => call.method === 'GET' && call.path.endsWith('/service-bookings')).length >= 2, true,
+    'stale cancellation refreshes the authoritative booking projection');
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Cancel request' }).click();
   await page.getByText('CANCELLED', { exact: true }).waitFor();
-  assert.equal(calls.filter(call => call.method === 'POST' && call.path.endsWith('/cancel')).length, 1,
-    'eligible buyer cancellation uses the dedicated server route');
+  assert.equal(calls.filter(call => call.method === 'POST' && call.path.endsWith('/cancel')).length, 2,
+    'eligible buyer cancellation retries against the refreshed booking version');
 
   feasibility = 'CONFLICT';
   await page.locator('[name="requested_start"]').fill('2027-01-21T09:00');
