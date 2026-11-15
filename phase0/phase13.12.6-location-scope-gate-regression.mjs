@@ -91,7 +91,7 @@ ok(!tenantSource.includes('LocationPermissionStore'), 'tenant isolation has no l
 ok(!authSource.includes('LocationPermissionStore'), 'authorization has no location permission store');
 
 // 9. Existing central policy wildcard/role behavior remains untouched.
-ok(authSource.includes("permissions.has('*') || permissions.has(permission)"), 'existing Phase 10.3 wildcard/permission behavior preserved');
+ok(authSource.includes("permissions.some(set => set.has('*') || set.has(permission))"), 'existing Phase 10.3 wildcard/permission behavior preserved across resolved role permission sets');
 
 console.log('Phase 13.12.6 Location Scope Gate Regression: PASS');
 console.log(`Roles checked: ${ROLES.length}`);
