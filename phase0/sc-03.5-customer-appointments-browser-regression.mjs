@@ -145,6 +145,9 @@ try {
   await page.locator('#customerAppointmentForm').waitFor();
 
   const appointmentForm = page.locator('#customerAppointmentForm');
+  for (const label of ['Service', 'Start (your device local time)', 'End (your device local time)', 'Appointment type', 'Note (optional)']) {
+    assert.equal(await appointmentForm.getByLabel(label).count(), 1, `appointment field has accessible label: ${label}`);
+  }
   assert.equal(await appointmentForm.locator('[role="status"]').count(), 1,
     'feasibility feedback is exposed as a live status region');
   assert.equal(await appointmentForm.locator('[role="alert"]').count(), 1,
