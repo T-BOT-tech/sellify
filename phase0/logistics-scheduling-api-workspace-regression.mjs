@@ -19,11 +19,9 @@ for (const name of [
   'transitionLogisticsSchedulingActivity',
 ]) assert.match(server, new RegExp(name));
 
-for (const route of [
-  /\/tenants\/\(\[\^\/\]\+\)\\\/logistics\\\/scheduling\$/,
-  /logistics\\\/scheduling\\\/\(\[\^\/\]\+\)\\\/evaluate\$/,
-  /logistics\\\/scheduling\\\/\(\[\^\/\]\+\)\\\/transition\$/,
-]) assert.match(server, route);
+assert.ok(server.includes("pattern: /^\\\\/tenants\\\\/([^/]+)\\\\/logistics\\\\/scheduling$/"));
+assert.ok(server.includes("pattern: /^\\\\/tenants\\\\/([^/]+)\\\\/logistics\\\\/scheduling\\\\/([^/]+)\\\\/evaluate$/"));
+assert.ok(server.includes("pattern: /^\\\\/tenants\\\\/([^/]+)\\\\/logistics\\\\/scheduling\\\\/([^/]+)\\\\/transition$/"));
 
 assert.match(server, /requireSession\(req, chatId\)/);
 assert.match(server, /logistics:scheduling:view/);
