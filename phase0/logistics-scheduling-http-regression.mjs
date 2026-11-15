@@ -304,7 +304,7 @@ try {
       headers: { ...roleContext.headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-location-${role}-cancel-${suffix}` },
       body: JSON.stringify({ status: 'CANCELLED', expectedVersion: 1 }),
     });
-    assert.equal(inScopeCancel.response.status, 200, `${role} may transition activity at its assigned location`);
+    assert.equal(inScopeCancel.response.status, 200, `${role} may transition activity at its assigned location; response=${JSON.stringify(inScopeCancel.json)}`);
 
     const outOfScopeCreate = await request(base, {
       method: 'POST',
