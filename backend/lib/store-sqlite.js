@@ -6399,6 +6399,34 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
     db.exec('COMMIT'); return {booking:serviceBookingFromRow(updated),replayed:false};
   } catch(error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
+export async function listServiceProviderBookings(chatId, resourceIds = []) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  const organizationId = String(tenant?.organization_id || tenant?.organizationId || '');
+  if (!organizationId) throw Object.assign(new Error('Service booking organization is required'), { statusCode: 409, code: 'ORDER_ORGANIZATION_REQUIRED' });
+  const ids = [...new Set((Array.isArray(resourceIds) ? resourceIds : []).map(value => String(value || '').trim()).filter(Boolean))];
+  if (!ids.length) return [];
+  const placeholders = ids.map(() => '?').join(',');
+  return db.prepare(`SELECT b.*, r.name AS service_resource_name,
+      c.starts_at AS commitment_starts_at, c.ends_at AS commitment_ends_at
+    FROM service_bookings b
+    JOIN service_resource_commitments c ON c.booking_id = b.id
+      AND c.organization_id = b.organization_id AND c.chat_id = b.chat_id
+      AND c.resource_id = b.service_resource_id AND c.state = 'COMMITTED'
+    JOIN service_resources r ON r.id = c.resource_id
+      AND r.organization_id = c.organization_id AND r.chat_id = c.chat_id
+      AND r.status = 'ACTIVE'
+    WHERE b.organization_id = ? AND b.chat_id = ?
+      AND b.service_resource_id IN (${placeholders})
+      AND b.status IN ('CONFIRMED','IN_PROGRESS')
+    ORDER BY c.starts_at ASC, b.id ASC`)
+    .all(String(organizationId), String(chatId), ...ids)
+    .map(row => ({ ...serviceBookingFromRow(row),
+      commitment_starts_at: String(row.commitment_starts_at),
+      commitment_ends_at: String(row.commitment_ends_at),
+    }));
+}
+
 export async function listServiceBookings(chatId, serverOrderId) {
   ensureDatabase();
   const tenant=await getTenant(chatId), organizationId=String(tenant?.organization_id||tenant?.organizationId||'');
