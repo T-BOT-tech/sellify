@@ -476,15 +476,32 @@ export async function refreshServiceBookings(root = document) {
       if (!response.ok) { const error = new Error(data?.error?.message || t('serviceBookingsLoadFailed')); error.status = response.status; throw error; }
       if (workspace.isConnected === false || workspace.dataset.refreshSequence !== String(sequence)
           || String(config.chatId) !== tenantId || String(config.sessionToken) !== sessionToken) return;
-      const bookings = Array.isArray(data.bookings) ? data.bookings : [];
+      const bookings = (Array.isArray(data.bookings) ? data.bookings : []).slice().sort((a, b) => {
+        const startOf = booking => {
+          const value = booking.commitment_starts_at || booking.requested_start;
+          const timestamp = value ? new Date(value).getTime() : Number.NaN;
+          return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
+        };
+        const difference = startOf(a) - startOf(b);
+        return Number.isNaN(difference) || difference === 0
+          ? String(a.id || '').localeCompare(String(b.id || '')) : difference;
+      });
       list.innerHTML = bookings.map(booking => {
         const date = value => { const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? String(value || '—') : parsed.toLocaleString(); };
+        const start = booking.commitment_starts_at || booking.requested_start;
+        const end = booking.commitment_ends_at || booking.requested_end;
+        const timeMarkup = (value, label) => {
+          const parsed = value ? new Date(value) : null;
+          const valid = parsed && Number.isFinite(parsed.getTime());
+          return '<time' + (valid ? ' datetime="' + escapeAttr(parsed.toISOString()) + '"' : '')
+            + '>' + escapeHtml(date(value)) + '</time>';
+        };
         return '<article class="logistics-card service-booking-card"><div class="logistics-top"><strong>'
           + escapeHtml(booking.service_item_id || 'Service') + '</strong><span class="logistics-status">'
           + escapeHtml(String(booking.status || '').replaceAll('_', ' ')) + '</span></div>'
           + '<div class="logistics-meta">Order ' + escapeHtml(booking.order_id) + ' · ' + escapeHtml(booking.service_resource_name || 'Assigned resource') + '</div>'
-          + '<div class="logistics-meta">' + escapeHtml(date(booking.commitment_starts_at || booking.requested_start)) + ' – '
-          + escapeHtml(date(booking.commitment_ends_at || booking.requested_end)) + '</div>'
+          + '<div class="logistics-meta service-booking-time">' + timeMarkup(start, 'start') + ' – '
+          + timeMarkup(end, 'end') + '</div>'
           + (booking.customer_note ? '<div class="logistics-meta">' + escapeHtml(booking.customer_note) + '</div>' : '') + '</article>';
       }).join('');
       status.textContent = bookings.length
