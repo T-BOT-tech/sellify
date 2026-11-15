@@ -265,6 +265,11 @@ try {
     'SCHEDULED remains disabled while the fresh feasibility result is UNKNOWN');
   assert.match(await page.locator('[data-scheduling-card="scheduling-browser-1"]').innerText(), /REQUESTED/,
     'UNKNOWN feasibility cannot be presented as a confirmed schedule');
+  await page.locator('[data-scheduled-start="scheduling-browser-1"]').fill('2026-11-16T10:00');
+  assert.doesNotMatch(await page.locator('[data-scheduling-card="scheduling-browser-1"]').innerText(), /Feasibility: UNKNOWN/,
+    'editing the candidate window invalidates the prior feasibility result');
+  assert.equal(await scheduleButton.isDisabled(), true,
+    'a changed candidate window requires a new evaluation');
   assert.equal(schedulingCalls.some(call => call.method === 'PATCH' && call.pathname.endsWith('/transition')), false,
     'the UI does not send an impossible SCHEDULED command while feasibility is UNKNOWN');
   assert.equal(pageErrors.length, 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
