@@ -136,7 +136,19 @@ try {
       await route.abort('internetdisconnected');
       return;
     }
-    const bookings = providerQueueScenario === 'EMPTY' ? [] : [{
+    const bookings = providerQueueScenario === 'EMPTY' ? [] : providerQueueScenario === 'MULTI' ? [{
+      id: 'provider-booking-later', service_item_id: 'consultation', status: 'CONFIRMED',
+      order_id: 'provider-order-later', service_resource_name: 'Provider One',
+      commitment_starts_at: '2026-11-16T08:00:00.000Z',
+      commitment_ends_at: '2026-11-16T09:00:00.000Z',
+      customer_note: 'Later appointment',
+    }, {
+      id: 'provider-booking-earlier', service_item_id: 'consultation', status: 'CONFIRMED',
+      order_id: 'provider-order-earlier', service_resource_name: 'Provider One',
+      commitment_starts_at: '2026-11-16T06:00:00.000Z',
+      commitment_ends_at: '2026-11-16T07:00:00.000Z',
+      customer_note: 'Earlier appointment',
+    }] : [{
       id: 'provider-booking-1', service_item_id: 'consultation', status: 'CONFIRMED',
       order_id: 'provider-order-1', service_resource_name: 'Provider One',
       commitment_starts_at: '2026-11-16T06:00:00.000Z',
@@ -343,11 +355,17 @@ try {
   assert.equal(await page.locator('.service-booking-card').count(), 0,
     'offline provider refresh clears unverified appointment details');
   await context.setOffline(false);
-  providerQueueScenario = 'READY';
+  providerQueueScenario = 'MULTI';
   await refreshProviderQueue();
-  assert.equal(await page.locator('#serviceBookingsStatus').getAttribute('data-state'), 'READY',
-    'reconnecting and refreshing restores the verified provider queue');
-  assert.equal(await page.locator('.service-booking-card').count(), 1);
+  assert.equal(await page.locator('.service-booking-card').count(), 2,
+    'provider queue retains all confirmed appointments');
+  const orderedProviderCards = page.locator('.service-booking-card');
+  assert.match(await orderedProviderCards.nth(0).innerText(), /Earlier appointment/,
+    'provider queue prioritizes the earliest committed appointment');
+  assert.match(await orderedProviderCards.nth(1).innerText(), /Later appointment/,
+    'later appointments follow earlier commitments');
+  assert.equal(await orderedProviderCards.nth(0).locator('time[datetime]').count(), 2,
+    'appointment start and end are exposed as semantic machine-readable times');
 
   assert.ok(pageErrors.length === 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
 
