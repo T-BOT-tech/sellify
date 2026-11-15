@@ -3313,7 +3313,13 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
   }
 
   if (req.method === 'POST' && action === 'evaluate') {
-    const evaluation = await evaluateLogisticsSchedulingActivity(chatId, activityId, session);
+    const body = await readBody(req);
+    // Candidate time fields are advisory input only. Caller-supplied capacity,
+    // feasibility, tenant, organization, or actor assertions are never consumed.
+    const evaluation = await evaluateLogisticsSchedulingActivity(chatId, activityId, session, {
+      scheduledStart: body.scheduledStart ?? body.scheduled_start,
+      scheduledEnd: body.scheduledEnd ?? body.scheduled_end,
+    });
     return sendJSON(res, 200, {
       evaluation,
       state: evaluation.evaluation === 'UNKNOWN' ? 'UNKNOWN' : 'READY',
