@@ -253,6 +253,16 @@ try {
   await page.locator('[data-scheduled-start="scheduling-browser-1"]').fill('2026-11-16T09:00');
   await page.locator('[data-scheduled-end="scheduling-browser-1"]').fill('2026-11-16T10:00');
   const evaluateButton = page.locator('[data-scheduling-evaluate="scheduling-browser-1"]');
+  const evaluationsBeforeInvalidWindow = schedulingCalls.filter(call => call.method === 'POST' && call.pathname.endsWith('/evaluate')).length;
+  await page.locator('[data-scheduled-end="scheduling-browser-1"]').fill('2026-11-16T08:00');
+  await evaluateButton.click();
+  assert.match(await page.locator('#logisticsSchedulingStatus').innerText(), /end time must be later/i,
+    'invalid scheduling windows show actionable validation feedback');
+  assert.equal(schedulingCalls.filter(call => call.method === 'POST' && call.pathname.endsWith('/evaluate')).length,
+    evaluationsBeforeInvalidWindow, 'invalid candidate windows never reach the feasibility API');
+  await page.locator('[data-scheduled-end="scheduling-browser-1"]').fill('2026-11-16T10:00');
+  assert.equal(await page.locator('.logistics-scheduling-card').evaluate(node => getComputedStyle(node).display), 'flex',
+    'scheduling cards use the responsive professional card layout');
   assert.equal(await evaluateButton.getAttribute('data-scheduling-bound'), '1',
     'the current rendered evaluation control is bound to the scheduling API action');
   await evaluateButton.click();
