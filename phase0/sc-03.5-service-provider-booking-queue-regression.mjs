@@ -37,7 +37,7 @@ assert.match(handler, /listServiceResources\(chatId, \{ includeInactive: false \
 assert.match(handler, /requireAuthorization\(session, tenant, 'service_resource', 'service:service_booking:view'/);
 assert.match(handler, /listServiceProviderBookings\(chatId, activeResources\.map/);
 assert.doesNotMatch(handler, /readBody|PATCH|POST|transitionServiceBooking/);
-assert.match(server, /service-provider\\/bookings/);
+assert.ok(server.includes('service-provider' + String.fromCharCode(92) + '/bookings'));
 
 assert.match(ui, /\/service-provider\/bookings/);
 assert.match(ui, /My Appointments/);
