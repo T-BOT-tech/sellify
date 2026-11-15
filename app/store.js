@@ -99,9 +99,68 @@ async function loadTelegramOrders() {
     if (!res.ok) throw new Error(data?.error?.message || 'Unable to load orders.');
     const orders = Array.isArray(data.orders) ? data.orders : [];
     stateEl.textContent = orders.length ? `${orders.length} recent order${orders.length === 1 ? '' : 's'}` : 'No orders found for this store.';
-    list.innerHTML = orders.map(o => `<article class="card" style="margin:10px 0;padding:12px"><strong>Order ${esc(String(o.marketplace_order_id).slice(0,8))}…</strong><div style="margin-top:6px;color:var(--muted);font-size:12px">${esc(o.status || 'queued')} · ${money(o.total_minor, o.currency)}</div>${(o.sellers || []).map(x => `<div style="margin-top:6px;font-size:12px">Seller order: ${esc(x.seller_order_id)} · ${esc(x.status || 'queued')}</div>`).join('')}<button class="fulfillment-btn" style="margin-top:10px" data-fulfillment-order="${esc(o.marketplace_order_id)}">Delivery & returns</button></article>`).join('');
+    list.innerHTML = orders.map(o => `<article class="card" style="margin:10px 0;padding:12px"><strong>Order ${esc(String(o.marketplace_order_id).slice(0,8))}…</strong><div style="margin-top:6px;color:var(--muted);font-size:12px">${esc(o.status || 'queued')} · ${money(o.total_minor, o.currency)}</div>${(o.sellers || []).map(x => `<div style="margin-top:6px;font-size:12px">Seller order: ${esc(x.seller_order_id)} · ${esc(x.status || 'queued')}</div>`).join('')}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="fulfillment-btn" data-fulfillment-order="${esc(o.marketplace_order_id)}">Delivery & returns</button><button class="fulfillment-btn" data-appointment-order="${esc(o.marketplace_order_id)}">Appointments</button></div></article>`).join('');
     list.querySelectorAll('[data-fulfillment-order]').forEach(btn => btn.addEventListener('click', () => loadTelegramFulfillment(btn.dataset.fulfillmentOrder)));
+    list.querySelectorAll('[data-appointment-order]').forEach(btn => btn.addEventListener('click', () => loadTelegramAppointments(btn.dataset.appointmentOrder)));
   } catch (e) { stateEl.textContent = e.message || 'Unable to load orders.'; list.innerHTML = ''; }
+}
+
+async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
+  const panel = document.getElementById('appointmentsState');
+  panel.style.display = 'block'; panel.textContent = 'Loading appointment information…';
+  try {
+    const endpoint = `/api/telegram-storefront/${encodeURIComponent(chatId)}/orders/${encodeURIComponent(marketplaceOrderId)}/service-bookings`;
+    const headers = { Accept: 'application/json', 'X-Telegram-Init-Data': getTelegramInitData() };
+    const res = await fetch(endpoint, { headers });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error?.message || 'Unable to load appointments.');
+    const lines = Array.isArray(data.order?.serviceLines) ? data.order.serviceLines : [];
+    const bookings = Array.isArray(data.bookings) ? data.bookings : [];
+    const lineLabel = line => line.name || line.title || line.product_name || line.item_name || line.item_id || line.product_id || 'Service';
+    const bookingCards = bookings.map(b => `<div style="margin:8px 0;padding:10px;border:1px solid var(--line);border-radius:10px"><strong>${esc(b.status || 'UNKNOWN')}</strong><div style="font-size:12px;margin-top:5px">${esc(lineLabel(lines.find(x => String(x.item_id ?? x.product_id ?? x.id ?? '') === String(b.service_item_id)) || {}))}</div><div style="font-size:12px;color:var(--muted);margin-top:4px">${esc(new Date(b.requested_start).toLocaleString())} – ${esc(new Date(b.requested_end).toLocaleString())} · ${esc(b.appointment_mode || '')}</div>${b.service_resource_name ? `<div style="font-size:12px;margin-top:5px">Committed resource: ${esc(b.service_resource_name)}</div>` : ''}${b.status_reason ? `<div style="font-size:12px;margin-top:5px">${esc(b.status_reason)}</div>` : ''}</div>`).join('');
+    const options = lines.map(line => {
+      const id = line.item_id ?? line.product_id ?? line.id;
+      return id == null ? '' : `<option value="${esc(id)}">${esc(lineLabel(line))}</option>`;
+    }).join('');
+    panel.innerHTML = `${notice ? `<div role="status" style="margin-bottom:10px">${esc(notice)}</div>` : ''}<strong>Appointments</strong>${bookingCards || '<div style="margin:6px 0;color:var(--muted)">No appointment requests yet.</div>'}${options ? `<form id="customerAppointmentForm" style="margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:10px"><strong>Request an appointment</strong><label>Service<select name="service_item_id" required style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px">${options}</select></label><label>Start<input name="requested_start" type="datetime-local" required></label><label>End<input name="requested_end" type="datetime-local" required></label><label>Appointment type<select name="appointment_mode" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px"><option value="ON_SITE">At provider location</option><option value="CUSTOMER_LOCATION">At my location</option><option value="REMOTE">Remote</option></select></label><label>Note (optional)<input name="customer_note" maxlength="500" placeholder="Anything the provider should know"></label><div id="appointmentRequestError" class="error" role="alert"></div><button class="submit" type="submit">Send appointment request</button><p style="font-size:12px;color:var(--muted);line-height:1.45">A request is not a confirmed appointment. The provider must accept it and commit a resource. No time is reserved by submitting this request.</p></form>` : '<div style="margin-top:8px;color:var(--muted)">This order has no appointment-based service lines.</div>'}`;
+    const form = document.getElementById('customerAppointmentForm');
+    if (form) form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = form.querySelector('button[type="submit"]');
+      const errorEl = document.getElementById('appointmentRequestError');
+      const values = new FormData(form);
+      const startValue = String(values.get('requested_start') || '');
+      const endValue = String(values.get('requested_end') || '');
+      const start = new Date(startValue), end = new Date(endValue);
+      if (!startValue || !endValue || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+        errorEl.textContent = 'Choose a valid start and end time; the end must be later than the start.';
+        return;
+      }
+      button.disabled = true; errorEl.textContent = '';
+      try {
+        const idempotencyKey = crypto.randomUUID();
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+          body: JSON.stringify({
+            service_item_id: values.get('service_item_id'),
+            requested_start: start.toISOString(),
+            requested_end: end.toISOString(),
+            appointment_mode: values.get('appointment_mode'),
+            customer_note: values.get('customer_note'),
+          }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result?.error?.message || 'Unable to submit appointment request.');
+        await loadTelegramAppointments(marketplaceOrderId, result.message || 'Appointment request received. Status: REQUESTED.');
+      } catch (error) {
+        errorEl.textContent = error.message || 'Unable to submit appointment request. Please retry.';
+        button.disabled = false;
+      }
+    });
+  } catch (error) {
+    panel.textContent = error.message || 'Unable to load appointment information.';
+  }
 }
 
 async function loadTelegramFulfillment(orderId) {
