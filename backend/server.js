@@ -652,7 +652,19 @@ async function handleTelegramStorefrontServiceBookings(req, res, chatId, marketp
     }, null);
     const refreshed = await getTelegramBuyerServiceBookings(chatId, verified.telegramUserId, ownedOrder.marketplaceOrderId);
     return sendJSON(res, result.replayed ? 200 : 201, {
-      booking: result.booking,
+      booking: {
+        id: result.booking.id,
+        service_item_id: result.booking.service_item_id,
+        requested_start: result.booking.requested_start,
+        requested_end: result.booking.requested_end,
+        appointment_mode: result.booking.appointment_mode,
+        customer_note: result.booking.customer_note,
+        status: result.booking.status,
+        version: result.booking.version,
+        service_resource_name: result.booking.service_resource_name,
+        created_at: result.booking.created_at,
+        updated_at: result.booking.updated_at,
+      },
       replayed: result.replayed,
       bookings: refreshed.bookings.map(booking => ({
         id: booking.id, service_item_id: booking.service_item_id,
