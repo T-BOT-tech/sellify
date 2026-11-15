@@ -173,6 +173,13 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
       const button = form.querySelector('button[type="submit"]');
       const errorEl = document.getElementById('appointmentRequestError');
       const values = new FormData(form);
+      const checkedState = feasibilityState.dataset.state || '';
+      if (!['FEASIBLE', 'UNKNOWN'].includes(checkedState)) {
+        errorEl.textContent = checkedState === 'CONFLICT'
+          ? 'This time has a known conflict. Choose another interval and check again.'
+          : 'Check the selected time before sending your appointment request.';
+        return;
+      }
       const startValue = String(values.get('requested_start') || '');
       const endValue = String(values.get('requested_end') || '');
       const start = new Date(startValue), end = new Date(endValue);
