@@ -161,11 +161,9 @@ try {
   await page.locator('.logistics-scheduling-workspace').waitFor();
   assert.equal(await page.locator('#logisticsSchedulingRequestForm').count(), 0,
     'courier scheduling workspace is read-only');
-  await page.waitForFunction(() =>
-    document.querySelector('#logisticsSchedulingStatus')?.textContent.includes('No scheduling activities yet.')
-  );
-  assert.match(await page.locator('#logisticsSchedulingStatus').innerText(), /No scheduling activities yet\./,
-    'courier scheduling view loads an explicit empty state without an edit form');
+  await page.locator('#logisticsSchedulingList .empty').waitFor();
+  assert.ok((await page.locator('#logisticsSchedulingList .empty').innerText()).length > 0,
+    'courier scheduling view loads an explicit localized empty state without an edit form');
   assert.equal(await page.locator('[data-assignment-only="1"]').count(), 1,
     'courier must see an assignment even when its local Order projection is absent');
   assert.match(await page.locator('[data-assignment-only="1"]').innerText(), /server-order-browser-1/);
