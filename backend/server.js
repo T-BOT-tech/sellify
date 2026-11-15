@@ -606,10 +606,30 @@ async function handleTelegramStorefrontServiceBookings(req, res, chatId, marketp
     const secret = await resolveTelegramBotCredential(config.credentialRef);
     const verified = verifyTelegramBuyerInitDataWithSecret(initData, secret, TELEGRAM_AUTH_MAX_AGE_SEC);
     const ownedOrder = await getTelegramBuyerServiceBookings(chatId, verified.telegramUserId, decodeURIComponent(marketplaceOrderId));
+    const customerBookings = ownedOrder.bookings.map(booking => ({
+      id: booking.id,
+      service_item_id: booking.service_item_id,
+      requested_start: booking.requested_start,
+      requested_end: booking.requested_end,
+      appointment_mode: booking.appointment_mode,
+      customer_note: booking.customer_note,
+      status: booking.status,
+      version: booking.version,
+      service_resource_name: booking.service_resource_name,
+      created_at: booking.created_at,
+      updated_at: booking.updated_at,
+    }));
+    const customerServiceLines = ownedOrder.serviceLines.map(line => ({
+      item_id: line.item_id ?? line.product_id ?? line.id ?? null,
+      name: line.name ?? line.title ?? line.product_name ?? line.item_name ?? null,
+      item_type: 'service',
+      quantity: line.quantity ?? line.qty ?? null,
+      unit: line.unit ?? null,
+    }));
     if (req.method === 'GET') {
       return sendJSON(res, 200, {
-        order: { marketplaceOrderId: ownedOrder.marketplaceOrderId, serviceLines: ownedOrder.serviceLines },
-        bookings: ownedOrder.bookings,
+        order: { marketplaceOrderId: ownedOrder.marketplaceOrderId, serviceLines: customerServiceLines },
+        bookings: customerBookings,
         authority: 'canonical_service_booking',
       }, req);
     }
@@ -634,7 +654,14 @@ async function handleTelegramStorefrontServiceBookings(req, res, chatId, marketp
     return sendJSON(res, result.replayed ? 200 : 201, {
       booking: result.booking,
       replayed: result.replayed,
-      bookings: refreshed.bookings,
+      bookings: refreshed.bookings.map(booking => ({
+        id: booking.id, service_item_id: booking.service_item_id,
+        requested_start: booking.requested_start, requested_end: booking.requested_end,
+        appointment_mode: booking.appointment_mode, customer_note: booking.customer_note,
+        status: booking.status, version: booking.version,
+        service_resource_name: booking.service_resource_name,
+        created_at: booking.created_at, updated_at: booking.updated_at,
+      })),
       message: result.replayed ? 'Appointment request already received' : 'Appointment request received',
     }, req);
   } catch (e) {
