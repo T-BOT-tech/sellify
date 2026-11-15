@@ -54,6 +54,21 @@ try {
     serviceItemId: 'sc035-consultation',
     idempotencyKey: 'sc035-resource-' + suffix,
   }, null);
+  // Fixture precondition: service-provider role assignment is valid only when
+  // the tenant's canonical Service Pack lifecycle is ACTIVE. Seed that state
+  // directly in this isolated test database; production activation remains
+  // governed by the Pack lifecycle authority.
+  const db = store.getDatabaseForTests();
+  const organizationId = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(seller.chatId).organization_id;
+  const now = new Date().toISOString();
+  db.prepare(`INSERT INTO pack_lifecycle (
+    id, organization_id, pack_id, pack_version, state, installed_at, activated_at,
+    created_by_user_id, updated_by_user_id, created_at, updated_at, version
+  ) VALUES (?, ?, 'service', '1.0.0', 'ACTIVE', ?, ?, ?, ?, ?, ?, 1)`).run(
+    'sc035-service-pack-' + suffix, organizationId, now, now,
+    sellerUser.id, sellerUser.id, now, now,
+  );
+
   const providerUser = await store.getOrCreateUserByTelegram('sc035-provider-' + suffix, 'SC035 Provider');
   const providerMembership = await store.ensureMembership(providerUser.id, seller.chatId, 'staff');
   await store.assignMembershipContextualRole({
@@ -79,7 +94,6 @@ try {
 
   const start = '2027-01-20T09:00:00+03:00';
   const end = '2027-01-20T10:00:00+03:00';
-  const db = store.getDatabaseForTests();
   const bookingsBeforeAssessment = db.prepare('SELECT COUNT(*) AS count FROM service_bookings').get().count;
   const commitmentsBeforeAssessment = db.prepare('SELECT COUNT(*) AS count FROM service_resource_commitments').get().count;
   const feasible = await store.assessTelegramBuyerServiceFeasibility(seller.chatId, buyer, checkout.marketplace_order_id, {
