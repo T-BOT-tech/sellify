@@ -209,9 +209,10 @@ try {
   );
 
   const listed = await store.listServiceBookings(seller.chatId, order.server_order_id);
-  assert.equal(listed.length, 2, 'requested overlapping booking remains visible even though commitment was rejected');
-  assert.ok(listed.some(item => item.id === created.booking.id));
-  assert.ok(listed.some(item => item.id === overlappingRequest.booking.id));
+  assert.equal(listed.length, 4, 'all requested appointments remain visible, including the uncommitted overlap and concurrent race loser');
+  for (const expectedId of [created.booking.id, overlappingRequest.booking.id, ...raceBookings.map(entry => entry.booking.id)]) {
+    assert.ok(listed.some(item => item.id === expectedId), 'booking list must include ' + expectedId);
+  }
 
   const secondUser = await store.getOrCreateUserByTelegram('booking-other-' + suffix, 'Other Seller');
   const secondSeller = await store.createTenantForUser({
