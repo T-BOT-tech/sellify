@@ -47,6 +47,10 @@ assert.match(store, /assertSchedulingReferences\(organizationId, request\.relate
 assert.match(ui, /logisticsSchedulingWorkspaceShell/);
 assert.match(ui, /mountLogisticsSchedulingWorkspace/);
 assert.match(workspace, /logisticsSchedulingRequestForm/);
+assert.match(workspace, /logisticsSchedulingStatusFilter/);
+assert.match(workspace, /logisticsSchedulingTypeFilter/);
+assert.match(workspace, /query\.set\('status', statusFilter\)/);
+assert.match(workspace, /query\.set\('activityType', typeFilter\)/);
 assert.match(workspace, /requestForm\.addEventListener\('submit'/);
 assert.match(workspace, /data-scheduling-evaluate/);
 assert.match(workspace, /data-scheduling-transition/);
@@ -74,6 +78,11 @@ assert.match(workspace, /related_\$\{referenceType\}/);
 for (const locale of [en, am, om]) {
   for (const key of [
     'logisticsSchedulingTitle',
+    'logisticsSchedulingFilters',
+    'logisticsSchedulingStatusFilter',
+    'logisticsSchedulingTypeFilter',
+    'logisticsSchedulingAllStatuses',
+    'logisticsSchedulingAllTypes',
     'logisticsSchedulingLoading',
     'logisticsSchedulingEmpty',
     'logisticsSchedulingDenied',
