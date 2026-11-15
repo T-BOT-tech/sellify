@@ -3278,6 +3278,24 @@ async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId 
       : 'Service booking lifecycle permission required',
   });
 
+  // Confirmation binds a resource as well as a booking. Enforce the caller's
+  // scheduling scope at both the canonical order location and the selected
+  // resource location; an order-scoped grant must not authorize a cross-site
+  // resource commitment.
+  if (req.method === 'PATCH' && authorizationAction === 'logistics:scheduling:confirm') {
+    const resourceId = String(body.service_resource_id || body.serviceResourceId || '').trim();
+    if (!resourceId) throw Object.assign(new Error('A service resource is required to confirm an appointment'), { statusCode: 400, code: 'SERVICE_BOOKING_RESOURCE_REQUIRED' });
+    const resource = (await listServiceResources(chatId, { includeInactive: true }))
+      .find(item => String(item.id) === resourceId);
+    if (!resource) throw Object.assign(new Error('Service resource not found in this organization'), { statusCode: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' });
+    const resourceLocation = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
+    if (resource.locationId && !resourceLocation) throw Object.assign(new Error('Service resource location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
+    await requireAuthorization(session, tenant, 'scheduling', authorizationAction, {
+      location: resourceLocation,
+      deniedMessage: 'Appointment confirmation is not authorized at the selected resource location',
+    });
+  }
+
   if (req.method === 'POST') {
     const result = await createServiceBooking(chatId, serverOrderId, { ...body, idempotencyKey }, session);
     return sendJSON(res, result.replayed ? 200 : 201, { order_id: String(serverOrderId), booking: result.booking, replayed: result.replayed }, req);
