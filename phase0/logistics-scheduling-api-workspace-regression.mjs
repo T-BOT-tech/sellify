@@ -44,6 +44,8 @@ assert.match(ui, /mountLogisticsSchedulingWorkspace/);
 assert.match(workspace, /logisticsSchedulingRequestForm/);
 assert.match(workspace, /data-scheduling-evaluate/);
 assert.match(workspace, /data-scheduling-transition/);
+assert.match(workspace, /activity\.lastEvaluation !== 'FEASIBLE'/);
+assert.match(workspace, /logisticsSchedulingScheduleBlocked/);
 assert.match(workspace, /UNKNOWN_STALE/);
 assert.match(workspace, /DENIED/);
 assert.match(workspace, /EMPTY/);
