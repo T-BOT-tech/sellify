@@ -10309,6 +10309,8 @@ export async function evaluateLogisticsSchedulingActivity(chatId, activityId, ac
   // Feasibility options cross a caller-controlled request boundary. Until a trusted
   // server-side capacity adapter is explicitly wired here, callers cannot assert FEASIBLE.
   const externalEvaluation = null;
+  const scheduledStart = options.scheduledStart ?? options.scheduled_start ?? row.scheduled_start;
+  const scheduledEnd = options.scheduledEnd ?? options.scheduled_end ?? row.scheduled_end;
 
   return evaluateLogisticsSchedulingFeasibility({
     request: {
@@ -10318,8 +10320,8 @@ export async function evaluateLogisticsSchedulingActivity(chatId, activityId, ac
       mode: row.mode,
       requested_start: row.requested_start,
       requested_end: row.requested_end,
-      scheduled_start: row.scheduled_start,
-      scheduled_end: row.scheduled_end,
+      scheduled_start: scheduledStart,
+      scheduled_end: scheduledEnd,
       timezone: row.timezone,
       recurrence: parseJSON(row.recurrence_json, null),
       related_order: row.related_order_id ? { id: row.related_order_id } : null,
