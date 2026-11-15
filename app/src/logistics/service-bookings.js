@@ -424,6 +424,10 @@ export function serviceBookingsWorkspaceShell() {
     + (providerOnly
       ? '<h3 style="margin:0;">' + escapeHtml(t('serviceResourceTitle')) + '</h3>'
         + '<p class="logistics-meta">' + escapeHtml(t('serviceResourceProviderDescription')) + '</p>'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h4>My Appointments</h4>'
+        + '<button type="button" class="btn-secondary" id="serviceBookingsRefresh">Refresh</button></div>'
+        + '<div id="serviceBookingsStatus" class="logistics-meta" role="status">Loading appointments…</div>'
+        + '<div id="serviceBookingsList" aria-live="polite"></div>'
       : '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
         + '<h3 style="margin:0;">' + escapeHtml(t('serviceBookingsTitle')) + '</h3>'
         + '<button type="button" class="btn-secondary" id="serviceBookingsRefresh">' + escapeHtml(t('serviceBookingsRefresh')) + '</button></div>'
@@ -465,6 +469,34 @@ export async function refreshServiceBookings(root = document) {
   const context = { tenantId, baseUrl: apiBase(), headers: authHeaders() };
   status.textContent = t('serviceBookingsLoading');
   list.replaceChildren();
+  if (hasServiceProviderResourceScope() && !canManageServiceResources()) {
+    try {
+      const response = await fetch(context.baseUrl + '/tenants/' + encodeURIComponent(tenantId) + '/service-provider/bookings', { headers: context.headers });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { const error = new Error(data?.error?.message || t('serviceBookingsLoadFailed')); error.status = response.status; throw error; }
+      if (workspace.isConnected === false || workspace.dataset.refreshSequence !== String(sequence)
+          || String(config.chatId) !== tenantId || String(config.sessionToken) !== sessionToken) return;
+      const bookings = Array.isArray(data.bookings) ? data.bookings : [];
+      list.innerHTML = bookings.map(booking => {
+        const date = value => { const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? String(value || '—') : parsed.toLocaleString(); };
+        return '<article class="logistics-card service-booking-card"><div class="logistics-top"><strong>'
+          + escapeHtml(booking.service_item_id || 'Service') + '</strong><span class="logistics-status">'
+          + escapeHtml(String(booking.status || '').replaceAll('_', ' ')) + '</span></div>'
+          + '<div class="logistics-meta">Order ' + escapeHtml(booking.order_id) + ' · ' + escapeHtml(booking.service_resource_name || 'Assigned resource') + '</div>'
+          + '<div class="logistics-meta">' + escapeHtml(date(booking.commitment_starts_at || booking.requested_start)) + ' – '
+          + escapeHtml(date(booking.commitment_ends_at || booking.requested_end)) + '</div>'
+          + (booking.customer_note ? '<div class="logistics-meta">' + escapeHtml(booking.customer_note) + '</div>' : '') + '</article>';
+      }).join('');
+      status.textContent = bookings.length ? bookings.length + ' appointment(s) assigned to your active resources.' : 'No confirmed appointments for your assigned resources.';
+      status.dataset.state = bookings.length ? 'READY' : 'EMPTY';
+    } catch (error) {
+      if (workspace.dataset.refreshSequence !== String(sequence) || String(config.chatId) !== tenantId || String(config.sessionToken) !== sessionToken) return;
+      status.textContent = error.status === 403 ? 'Access denied for this appointment queue.' : 'Appointment queue unavailable. Refresh to retry.';
+      status.dataset.state = error.status === 403 ? 'DENIED' : 'ERROR';
+      list.replaceChildren();
+    }
+    return;
+  }
   const candidates = serviceOrders();
   if (!candidates.length) {
     if (workspace.dataset.refreshSequence === String(sequence)
