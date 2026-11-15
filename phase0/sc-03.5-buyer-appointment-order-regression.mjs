@@ -104,6 +104,33 @@ try {
     'a committed interval must be excluded from subsequent advisory feasibility');
   assert.equal(conflict.reasonCode, 'ALL_MATCHING_RESOURCES_COMMITTED');
 
+  await assert.rejects(
+    store.transitionServiceBooking(seller.chatId, owned.orderId, created.booking.id, {
+      status: 'CANCELLED',
+      expected_version: confirmed.booking.version,
+      idempotencyKey: 'sc035-buyer-cancel-confirmed-' + suffix,
+    }, { actorType: 'TELEGRAM_BUYER' }),
+    error => error?.code === 'SERVICE_BOOKING_CUSTOMER_CANCELLATION_NOT_ALLOWED',
+    'customer cancellation policy must reject confirmed appointments inside the canonical transition transaction',
+  );
+
+  const cancellable = await store.createServiceBooking(seller.chatId, owned.orderId, {
+    service_item_id: 'sc035-consultation',
+    requested_start: '2027-01-21T09:00:00+03:00',
+    requested_end: '2027-01-21T10:00:00+03:00',
+    appointment_mode: 'REMOTE',
+    idempotencyKey: 'sc035-cancellable-request-' + suffix,
+  }, null);
+  const cancelled = await store.transitionServiceBooking(seller.chatId, owned.orderId, cancellable.booking.id, {
+    status: 'CANCELLED', expected_version: 1, idempotencyKey: 'sc035-cancel-request-' + suffix,
+  }, { actorType: 'TELEGRAM_BUYER' });
+  assert.equal(cancelled.booking.status, 'CANCELLED');
+  const cancelledReplay = await store.transitionServiceBooking(seller.chatId, owned.orderId, cancellable.booking.id, {
+    status: 'CANCELLED', expected_version: 1, idempotencyKey: 'sc035-cancel-request-' + suffix,
+  }, { actorType: 'TELEGRAM_BUYER' });
+  assert.equal(cancelledReplay.replayed, true);
+  assert.equal(cancelledReplay.booking.status, 'CANCELLED');
+
   const after = await store.getTelegramBuyerServiceBookings(seller.chatId, buyer, checkout.marketplace_order_id);
   assert.equal(after.bookings.length, 1);
   assert.equal(after.bookings[0].id, created.booking.id);
