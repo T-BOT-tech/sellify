@@ -146,7 +146,9 @@ import {
   listSupplierNetworkPerformance,
   listSupplierNetworkTrustEvidence, getSupplierNetworkTrustEvidence, refreshSupplierNetworkTrustEvidence, getSupplierNetworkPerformance, recalculateSupplierNetworkPerformance,
   discoverSupplierNetwork, getSupplierNetworkMarketplaceIntegration, setProcurementSupplierParticipation,
-  getPackLifecycle, transitionPackLifecycle, getPaymentSettlementByIdempotencyKey, createPaymentSettlement, finalizePaymentSettlement, listPaymentSettlements, listPaymentRoutingPolicies, upsertPaymentRoutingPolicy, certifyPaymentProviderCapability, listPaymentOperationalActions, createPaymentOperationalAction, updatePaymentOperationalAction, recordPaymentProviderCapabilityEvidence, listPaymentProviderCapabilityEvidence, recordPaymentProductionCertification, listPaymentProductionCertifications, listServiceProviderBookings
+  getPackLifecycle, transitionPackLifecycle, getPaymentSettlementByIdempotencyKey, createPaymentSettlement, finalizePaymentSettlement, listPaymentSettlements, listPaymentRoutingPolicies, upsertPaymentRoutingPolicy, certifyPaymentProviderCapability, listPaymentOperationalActions, createPaymentOperationalAction, updatePaymentOperationalAction, recordPaymentProviderCapabilityEvidence, listPaymentProviderCapabilityEvidence, recordPaymentProductionCertification, listPaymentProductionCertifications, listServiceProviderBookings,
+  createLogisticsSchedulingActivity, getLogisticsSchedulingActivity, listLogisticsSchedulingActivities,
+  evaluateLogisticsSchedulingActivity, transitionLogisticsSchedulingActivity
 } from './lib/store-sqlite.js';
 import { AUTHZ, authorize, ROLES, getRolePermissions } from './lib/authorization.js';
 import { assertTenantScope, assertLocationScope } from './lib/tenant-isolation.js';
@@ -3240,6 +3242,91 @@ async function handlePackLifecycle(req, res, chatId, packId) {
 }
 
 
+async function handleLogisticsScheduling(req, res, chatId, activityId = null, action = null) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, chatId);
+
+  if (!activityId && req.method === 'GET') {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const locationId = String(url.searchParams.get('locationId') || session.locationId || '').trim() || null;
+    await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:view', {
+      location: locationId,
+      deniedMessage: 'Logistics scheduling view permission required',
+    });
+    const activities = await listLogisticsSchedulingActivities(chatId, {
+      locationId,
+      status: url.searchParams.get('status'),
+      activityType: url.searchParams.get('activityType'),
+    });
+    return sendJSON(res, 200, {
+      activities,
+      state: activities.length ? 'READY' : 'EMPTY',
+      authority: 'logistics_scheduling_activities',
+    }, req);
+  }
+
+  if (!activityId && req.method === 'POST' && !action) {
+    const body = await readBody(req);
+    const locationId = String(body.locationId ?? body.location_id ?? session.locationId ?? '').trim() || null;
+    await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:request', {
+      location: locationId,
+      deniedMessage: 'Logistics scheduling request permission required',
+    });
+    const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
+    if (!idempotencyKey) {
+      return sendJSON(res, 400, { error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' } }, req);
+    }
+    const activity = await createLogisticsSchedulingActivity(chatId, {
+      ...body,
+      location_id: locationId,
+      idempotencyKey,
+    }, session);
+    return sendJSON(res, activity.idempotent ? 200 : 201, { activity }, req);
+  }
+
+  const activity = await getLogisticsSchedulingActivity(chatId, activityId);
+  if (!activity) {
+    return sendJSON(res, 404, { error: { message: 'Scheduling activity not found', status: 404, code: 'SCHEDULING_ACTIVITY_NOT_FOUND' } }, req);
+  }
+  await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:view', {
+    location: activity.location_id,
+    deniedMessage: 'Logistics scheduling view permission required',
+  });
+
+  if (req.method === 'GET' && !action) {
+    return sendJSON(res, 200, { activity }, req);
+  }
+
+  if (req.method === 'POST' && action === 'evaluate') {
+    const evaluation = await evaluateLogisticsSchedulingActivity(chatId, activityId, session);
+    return sendJSON(res, 200, {
+      evaluation,
+      state: evaluation.evaluation === 'UNKNOWN' ? 'UNKNOWN' : 'READY',
+      authority: 'logistics_scheduling_activities',
+    }, req);
+  }
+
+  if (req.method === 'PATCH' && action === 'transition') {
+    const body = await readBody(req);
+    const target = String(body.status || body.targetStatus || body.target_status || '').trim().toUpperCase();
+    if (!target) {
+      return sendJSON(res, 400, { error: { message: 'status is required', status: 400, code: 'SCHEDULING_STATUS_REQUIRED' } }, req);
+    }
+    // Only transition command fields cross the HTTP boundary. Tenant, organization,
+    // actor, authorization, and capacity evidence are derived or owned server-side.
+    const result = await transitionLogisticsSchedulingActivity(chatId, activityId, target, session, {
+      idempotencyKey: req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key,
+      expectedVersion: body.expectedVersion ?? body.expected_version,
+      scheduledStart: body.scheduledStart ?? body.scheduled_start,
+      scheduledEnd: body.scheduledEnd ?? body.scheduled_end,
+    });
+    return sendJSON(res, 200, { activity: result }, req);
+  }
+
+  return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+}
+
 async function handleDeliveryAssignmentsList(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -3440,6 +3527,11 @@ async function handleServiceResourceAvailability(req, res, chatId, resourceId) {
   return sendJSON(res, 200, { availability: result.availability, replayed: result.replayed, state: 'DECLARED' }, req);
 }
 
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling\/([^/]+)$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling\/([^/]+)\/evaluate$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), 'evaluate') },
+  { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling\/([^/]+)\/transition$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), 'transition') },
 async function handleServiceProviderBookings(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
