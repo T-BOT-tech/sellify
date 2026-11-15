@@ -335,6 +335,12 @@ export function mountLogisticsSchedulingWorkspace(root) {
       pendingRequestKey = null;
       pendingRequestFingerprint = '';
     }
+    const activityId = event.target?.dataset?.scheduledStart || event.target?.dataset?.scheduledEnd;
+    if (activityId) {
+      for (const key of pendingTransitionKeys.keys()) {
+        if (key.startsWith(`${activityId}:SCHEDULED:`)) pendingTransitionKeys.delete(key);
+      }
+    }
   });
   root.addEventListener('submit', async event => {
     if (event.target?.id !== 'logisticsSchedulingRequestForm') return;
