@@ -240,6 +240,9 @@ try {
   await page.locator('#logisticsSchedulingRequestForm [name="requestedStart"]').fill('2026-11-16T09:00');
   await page.locator('#logisticsSchedulingRequestForm [name="requestedEnd"]').fill('2026-11-16T10:00');
   await page.locator('#logisticsSchedulingRequestForm button[type="submit"]').click();
+  await page.waitForTimeout(250);
+  assert.ok(schedulingCalls.some(call => call.method === 'POST' && call.pathname.endsWith('/logistics/scheduling')),
+    `manager form submit did not reach API; calls=${JSON.stringify(schedulingCalls)}; status=${await page.locator('#logisticsSchedulingStatus').innerText()}`);
   await page.locator('[data-scheduling-card="scheduling-browser-1"]').waitFor();
   const createCall = schedulingCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/logistics/scheduling'));
   assert.ok(createCall, 'manager can submit a scheduling request');
