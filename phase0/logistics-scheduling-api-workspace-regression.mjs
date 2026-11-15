@@ -75,6 +75,8 @@ for (const locale of [en, am, om]) {
     'logisticsSchedulingSubmit',
     'logisticsSchedulingWindowRequired',
     'logisticsSchedulingWindowChanged',
+    'logisticsSchedulingScheduledStart',
+    'logisticsSchedulingScheduledEnd',
     'logisticsSchedulingScheduleBlocked',
   ]) assert.match(locale, new RegExp(key + ':'));
 }
