@@ -3284,16 +3284,17 @@ async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId 
   // resource commitment.
   if (req.method === 'PATCH' && authorizationAction === 'logistics:scheduling:confirm') {
     const resourceId = String(body.service_resource_id || body.serviceResourceId || '').trim();
-    if (!resourceId) throw Object.assign(new Error('A service resource is required to confirm an appointment'), { statusCode: 400, code: 'SERVICE_BOOKING_RESOURCE_REQUIRED' });
-    const resource = (await listServiceResources(chatId, { includeInactive: true }))
-      .find(item => String(item.id) === resourceId);
-    if (!resource) throw Object.assign(new Error('Service resource not found in this organization'), { statusCode: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' });
-    const resourceLocation = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
-    if (resource.locationId && !resourceLocation) throw Object.assign(new Error('Service resource location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
-    await requireAuthorization(session, tenant, 'scheduling', authorizationAction, {
-      location: resourceLocation,
-      deniedMessage: 'Appointment confirmation is not authorized at the selected resource location',
-    });
+    if (resourceId) {
+      const resource = (await listServiceResources(chatId, { includeInactive: true }))
+        .find(item => String(item.id) === resourceId);
+      if (!resource) throw Object.assign(new Error('Service resource not found in this organization'), { statusCode: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' });
+      const resourceLocation = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
+      if (resource.locationId && !resourceLocation) throw Object.assign(new Error('Service resource location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
+      await requireAuthorization(session, tenant, 'scheduling', authorizationAction, {
+        location: resourceLocation,
+        deniedMessage: 'Appointment confirmation is not authorized at the selected resource location',
+      });
+    }
   }
 
   if (req.method === 'POST') {
