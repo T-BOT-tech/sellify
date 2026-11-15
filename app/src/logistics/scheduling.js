@@ -178,7 +178,7 @@ async function refresh(root) {
     const response = await fetch(endpoint() + (query.size ? `?${query}` : ''), { headers: authHeaders() });
     const data = await response.json().catch(() => ({}));
     if (sequence !== refreshSequence) return;
-    if (response.status === 403) {
+    if (response.status === 401 || response.status === 403) {
       lastState = 'DENIED';
       renderWorkspace(root);
       return;
@@ -325,7 +325,7 @@ export function mountLogisticsSchedulingWorkspace(root) {
         lastState = 'READY';
         feedback = t('logisticsSchedulingBlockedConflict');
       } else {
-        lastState = error?.status && error.status < 500 ? 'ERROR' : 'UNKNOWN_STALE';
+        lastState = error?.status === 401 || error?.status === 403 ? 'DENIED' : error?.status && error.status < 500 ? 'ERROR' : 'UNKNOWN_STALE';
         feedback = error?.message || '';
       }
       renderWorkspace(root);
