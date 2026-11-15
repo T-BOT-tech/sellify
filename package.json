@@ -105,6 +105,7 @@
     "test:service-booking-contract": "node phase0/service-booking-contract-regression.mjs",
     "test:service-booking-persistence": "node phase0/service-booking-persistence-regression.mjs",
     "test:sc-03.5-buyer-appointments": "node phase0/sc-03.5-buyer-appointment-order-regression.mjs",
+    "test:sc-03.5-appointments-browser": "node phase0/sc-03.5-customer-appointments-browser-regression.mjs",
     "test:service-booking-scheduling-boundary": "node phase0/service-booking-scheduling-authority-boundary-regression.mjs",
     "test:service-resource-foundation": "node phase0/service-resource-foundation-regression.mjs",
     "test:service-resource-persistence": "node phase0/service-resource-persistence-regression.mjs",
