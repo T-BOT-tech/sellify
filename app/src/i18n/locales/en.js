@@ -313,4 +313,6 @@ export default {
     logisticsSchedulingSubmit: "Submit request",
     logisticsSchedulingEvaluate: "Evaluate",
     logisticsSchedulingEvaluation: "Feasibility",
+    logisticsSchedulingBlockedUnknown: "Scheduling was not confirmed: trusted capacity evidence is not connected, so feasibility remains UNKNOWN.",
+    logisticsSchedulingBlockedConflict: "Scheduling was blocked because an existing canonical activity conflicts with this time window.",
 };
