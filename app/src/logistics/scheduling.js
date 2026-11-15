@@ -80,9 +80,13 @@ function transitionTargets(status) {
 
 function renderActivity(activity) {
   const targets = canManageScheduling() ? transitionTargets(activity.status) : [];
-  const transitionButtons = targets.map(target =>
-    `<button type="button" class="btn-secondary" data-scheduling-transition="${escapeHtml(target)}" data-activity-id="${escapeHtml(activity.id)}">${escapeHtml(target.replaceAll('_', ' '))}</button>`
-  ).join('');
+  const transitionButtons = targets.map(target => {
+    const feasibilityBlocked = target === 'SCHEDULED' && activity.lastEvaluation !== 'FEASIBLE';
+    const blockedAttributes = feasibilityBlocked
+      ? `disabled aria-disabled="true" title="${escapeHtml(t('logisticsSchedulingScheduleBlocked'))}"`
+      : '';
+    return `<button type="button" class="btn-secondary" data-scheduling-transition="${escapeHtml(target)}" data-activity-id="${escapeHtml(activity.id)}" ${blockedAttributes}>${escapeHtml(target.replaceAll('_', ' '))}</button>`;
+  }).join('');
   const scheduleWindow = activity.status === 'REQUESTED' && canManageScheduling()
     ? `<div class="logistics-scheduling-window">
          <label>Scheduled start <input type="datetime-local" data-scheduled-start="${escapeHtml(activity.id)}"></label>
