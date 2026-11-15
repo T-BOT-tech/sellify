@@ -674,7 +674,7 @@ async function handleTelegramStorefrontServiceBookingCancel(req, res, chatId, ma
       created_at: result.booking.created_at,
       updated_at: result.booking.updated_at,
     };
-    return sendJSON(res, result.replayed ? 200 : 200, {
+    return sendJSON(res, 200, {
       booking: safeBooking,
       replayed: result.replayed,
       message: result.replayed ? 'Appointment cancellation already recorded' : 'Appointment cancelled',
