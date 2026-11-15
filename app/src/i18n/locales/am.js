@@ -173,7 +173,6 @@ export default {
     serviceProviderAppointmentsDenied: "ወደዚህ የቀጠሮ ዝርዝር መድረስ አልተፈቀደም።",
     serviceProviderAppointmentsUnavailable: "የቀጠሮ ዝርዝሩ አልተገኘም። እንደገና ለመሞከር ያድሱ።",
     serviceProviderAppointmentsUnknownStale: "የቀጠሮ ዝርዝሩ ሁኔታ አይታወቅም ወይም ያረጀ ነው። ከመተማመንዎ በፊት ይገናኙና ያድሱ።",
-,
     logisticsSchedulingTitle: "የሎጂስቲክስ መርሐግብር",
     logisticsSchedulingHint: "የመውሰጃ፣ የማድረሻ እና ሌሎች የሎጂስቲክስ እንቅስቃሴዎችን ከቀድሞ መዝገቦች ጋር ያስተባብሩ።",
     logisticsSchedulingRefresh: "መርሐግብሩን አድስ",
