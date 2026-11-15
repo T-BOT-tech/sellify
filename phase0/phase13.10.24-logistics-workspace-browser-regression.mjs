@@ -252,11 +252,15 @@ try {
   assert.ok(createCall.headers['idempotency-key'], 'scheduling request carries an idempotency key');
   await page.locator('[data-scheduled-start="scheduling-browser-1"]').fill('2026-11-16T09:00');
   await page.locator('[data-scheduled-end="scheduling-browser-1"]').fill('2026-11-16T10:00');
-  await page.waitForFunction(() => !document.querySelector('#logisticsSchedulingStatus')?.textContent?.includes('Loading scheduling'));
+  await page.waitForFunction(() => {
+    const status = document.querySelector('#logisticsSchedulingStatus')?.textContent || '';
+    return status.includes('Scheduling data refreshed.') || status.includes('No scheduling activities yet.');
+  });
   const evaluateButton = page.locator('[data-scheduling-evaluate="scheduling-browser-1"]');
   const evaluationsBeforeInvalidWindow = schedulingCalls.filter(call => call.method === 'POST' && call.pathname.endsWith('/evaluate')).length;
   await page.locator('[data-scheduled-end="scheduling-browser-1"]').fill('2026-11-16T08:00');
   await evaluateButton.click();
+  await page.waitForFunction(() => document.querySelector('#logisticsSchedulingStatus')?.textContent?.toLowerCase().includes('end time must be later'));
   assert.match(await page.locator('#logisticsSchedulingStatus').innerText(), /end time must be later/i,
     'invalid scheduling windows show actionable validation feedback');
   assert.equal(schedulingCalls.filter(call => call.method === 'POST' && call.pathname.endsWith('/evaluate')).length,
