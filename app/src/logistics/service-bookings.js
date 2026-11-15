@@ -490,7 +490,7 @@ export async function refreshServiceBookings(root = document) {
         const date = value => { const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? String(value || '—') : parsed.toLocaleString(); };
         const start = booking.commitment_starts_at || booking.requested_start;
         const end = booking.commitment_ends_at || booking.requested_end;
-        const timeMarkup = (value, label) => {
+        const timeMarkup = value => {
           const parsed = value ? new Date(value) : null;
           const valid = parsed && Number.isFinite(parsed.getTime());
           return '<time' + (valid ? ' datetime="' + escapeAttr(parsed.toISOString()) + '"' : '')
@@ -500,8 +500,8 @@ export async function refreshServiceBookings(root = document) {
           + escapeHtml(booking.service_item_id || 'Service') + '</strong><span class="logistics-status">'
           + escapeHtml(String(booking.status || '').replaceAll('_', ' ')) + '</span></div>'
           + '<div class="logistics-meta">Order ' + escapeHtml(booking.order_id) + ' · ' + escapeHtml(booking.service_resource_name || 'Assigned resource') + '</div>'
-          + '<div class="logistics-meta service-booking-time">' + timeMarkup(start, 'start') + ' – '
-          + timeMarkup(end, 'end') + '</div>'
+          + '<div class="logistics-meta service-booking-time">' + timeMarkup(start) + ' – '
+          + timeMarkup(end) + '</div>'
           + (booking.customer_note ? '<div class="logistics-meta">' + escapeHtml(booking.customer_note) + '</div>' : '') + '</article>';
       }).join('');
       status.textContent = bookings.length
