@@ -209,6 +209,14 @@ try {
   });
   assert.equal(await page.locator('.service-booking-action').count(), 0, 'cashier has no operator lifecycle controls');
 
+  // Restore the authorized operator before testing confirmation validation.
+  await page.evaluate(async () => {
+    const state = await import('/src/state.js');
+    state.setConfig({ ...state.config, currentStaffRole: 'owner', contextualRoles: [] });
+    const workspace = await import('/src/logistics/service-bookings.js');
+    await workspace.refreshServiceBookings(document);
+  });
+
   // Confirmation requires an explicit resource selection; no request is sent without one.
   page.once('dialog', dialog => {
     assert.match(dialog.message(), /Select a service resource/);
