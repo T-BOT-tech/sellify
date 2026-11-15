@@ -251,7 +251,10 @@ try {
   assert.equal(createCall.body.related_order.id, 'server-order-browser-1');
   assert.ok(createCall.headers['idempotency-key'], 'scheduling request carries an idempotency key');
   await page.locator('[data-scheduling-evaluate="scheduling-browser-1"]').click();
-  await page.locator('[data-scheduling-card="scheduling-browser-1"]').getByText(/UNKNOWN/).waitFor();
+  await page.waitForTimeout(250);
+  const evaluatedCardText = await page.locator('[data-scheduling-card="scheduling-browser-1"]').innerText();
+  assert.match(evaluatedCardText, /UNKNOWN/,
+    `evaluation result missing from card; card=${evaluatedCardText}; calls=${JSON.stringify(schedulingCalls)}; status=${await page.locator('#logisticsSchedulingStatus').innerText()}`);
   const scheduleButton = page.locator('[data-scheduling-transition="SCHEDULED"]');
   assert.equal(await scheduleButton.isDisabled(), true,
     'SCHEDULED remains disabled while the fresh feasibility result is UNKNOWN');
