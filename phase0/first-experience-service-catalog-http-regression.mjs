@@ -440,10 +440,29 @@ try {
   assert.equal(bookingAcceptBody.booking.status, 'ACCEPTED');
   assert.equal(bookingAcceptBody.booking.version, 2);
 
+  const serviceLocations = await store.listOrganizationLocations(tenant.chatId, { includeInactive: true });
+  const serviceLocation = serviceLocations.find(location =>
+    String(location.id) === String(serviceOrder.location_id) && location.status === 'active')
+    || serviceLocations.find(location => location.status === 'active');
+  assert.ok(serviceLocation?.id, 'service resource must use an active canonical organization location');
+  const serviceResourceResult = await store.createServiceResource(tenant.chatId, {
+    resource_type: 'PROVIDER',
+    name: 'HTTP Consultation Resource',
+    service_item_id: 'consultation-http',
+    location_id: serviceLocation.id,
+    idempotency_key: 'service-resource-http-confirm-1',
+  }, { userId: user.id });
+  const serviceResource = serviceResourceResult.resource;
+  await store.setServiceResourceAvailability(tenant.chatId, serviceResource.id, {
+    working_hours: Array.from({ length: 7 }, (_, weekday) => ({ weekday, start_time: '08:00', end_time: '18:00' })),
+    exceptions: [], expected_version: 0,
+    idempotency_key: 'service-resource-http-hours-1',
+  }, { userId: user.id });
+
   const bookingConfirm = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
     method: 'PATCH',
     headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
-    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2, service_resource_id: serviceResource.id }),
   });
   assert.equal(bookingConfirm.status, 200, 'authorized merchant should confirm an accepted appointment');
   const bookingConfirmBody = await bookingConfirm.json();
