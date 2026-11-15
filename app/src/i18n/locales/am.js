@@ -174,7 +174,7 @@ export default {
     serviceProviderAppointmentsUnavailable: "የቀጠሮ ዝርዝሩ አልተገኘም። እንደገና ለመሞከር ያድሱ።",
     serviceProviderAppointmentsUnknownStale: "የቀጠሮ ዝርዝሩ ሁኔታ አይታወቅም ወይም ያረጀ ነው። ከመተማመንዎ በፊት ይገናኙና ያድሱ።",
     logisticsSchedulingTitle: "የሎጂስቲክስ መርሐግብር",
-    logisticsSchedulingHint: "የመውሰጃ፣ የማድረሻ እና ሌሎች የሎጂስቲክስ እንቅስቃሴዎችን ከቀድሞ መዝገቦች ጋር ያስተባብሩ።",
+    logisticsSchedulingHint: "የመውሰጃ፣ የማድረሻ እና ሌሎች የሎጂስቲክስ እንቅስቃሴዎችን ከቀኖናዊ መዝገቦች ጋር ያስተባብሩ። የታመነ የአዋጭነት ማስረጃና የተፈቀደ ሽግግር እስኪኖር ድረስ ጥያቄዎች REQUESTED ሁኔታ ውስጥ ይቆያሉ።",
     logisticsSchedulingRefresh: "መርሐግብሩን ዳግም ጫን",
     logisticsSchedulingLoading: "የመርሐግብር እንቅስቃሴዎች በመጫን ላይ…",
     logisticsSchedulingReady: "የመርሐግብር መረጃ ታድሷል።",
