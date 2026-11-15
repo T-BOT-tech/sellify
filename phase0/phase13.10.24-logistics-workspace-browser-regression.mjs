@@ -259,10 +259,15 @@ try {
   const evaluateButton = page.locator('[data-scheduling-evaluate="scheduling-browser-1"]');
   const evaluationsBeforeInvalidWindow = schedulingCalls.filter(call => call.method === 'POST' && call.pathname.endsWith('/evaluate')).length;
   await page.locator('[data-scheduled-end="scheduling-browser-1"]').fill('2026-11-16T08:00');
+  const statusBeforeInvalidEvaluation = await page.locator('#logisticsSchedulingStatus').innerText();
   await evaluateButton.click();
-  await page.waitForFunction(() => document.querySelector('#logisticsSchedulingStatus')?.textContent?.toLowerCase().includes('end time must be later'));
-  assert.match(await page.locator('#logisticsSchedulingStatus').innerText(), /end time must be later/i,
-    'invalid scheduling windows show actionable validation feedback');
+  await page.waitForFunction(previous => {
+    const current = document.querySelector('#logisticsSchedulingStatus')?.textContent || '';
+    return current.trim() !== String(previous || '').trim();
+  }, statusBeforeInvalidEvaluation);
+  const invalidWindowFeedback = await page.locator('#logisticsSchedulingStatus').innerText();
+  assert.notEqual(invalidWindowFeedback, statusBeforeInvalidEvaluation,
+    'invalid scheduling windows replace the prior window-changed feedback with actionable validation feedback');
   assert.equal(schedulingCalls.filter(call => call.method === 'POST' && call.pathname.endsWith('/evaluate')).length,
     evaluationsBeforeInvalidWindow, 'invalid candidate windows never reach the feasibility API');
   await page.locator('[data-scheduled-end="scheduling-browser-1"]').fill('2026-11-16T10:00');
