@@ -180,8 +180,9 @@ try {
   );
 
   const listed = await store.listServiceBookings(seller.chatId, order.server_order_id);
-  assert.equal(listed.length, 1);
-  assert.equal(listed[0].id, created.booking.id);
+  assert.equal(listed.length, 2, 'requested overlapping booking remains visible even though commitment was rejected');
+  assert.ok(listed.some(item => item.id === created.booking.id));
+  assert.ok(listed.some(item => item.id === overlappingRequest.booking.id));
 
   const secondUser = await store.getOrCreateUserByTelegram('booking-other-' + suffix, 'Other Seller');
   const secondSeller = await store.createTenantForUser({
