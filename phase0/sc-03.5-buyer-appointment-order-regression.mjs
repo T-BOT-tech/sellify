@@ -254,7 +254,10 @@ try {
   assert.equal(cancelledReplay.booking.status, 'CANCELLED');
 
   const after = await store.getTelegramBuyerServiceBookings(seller.chatId, buyer, checkout.marketplace_order_id);
-  assert.equal(after.bookings.length, 2);
+  assert.equal(after.bookings.length, 3,
+    'buyer projection includes both committed appointments and the cancelled request');
+  assert.ok(after.bookings.some(item => item.id === secondRequest.booking.id),
+    'buyer projection retains the second provider appointment after its resource is inactivated');
   const visibleConfirmed = after.bookings.find(item => item.id === created.booking.id);
   const visibleCancelled = after.bookings.find(item => item.id === cancellable.booking.id);
   assert.equal(visibleConfirmed?.service_resource_name, 'Customer-facing Consultation Resource');
