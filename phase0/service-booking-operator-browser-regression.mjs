@@ -215,6 +215,10 @@ try {
   }, null, { timeout: 3000 });
   assert.equal(await page.locator('.service-booking-action[data-target="CONFIRMED"]').isDisabled(), false,
     'failed version-conflict mutation re-enables the control for refresh/retry');
+  const confirmAttempt = calls.filter(call => call.method === 'PATCH').at(-1);
+  assert.equal(confirmAttempt.body.status, 'CONFIRMED');
+  assert.equal(confirmAttempt.body.service_resource_id, 'resource-room-1',
+    'operator confirmation must submit the selected service resource');
   assert.ok(pageErrors.length === 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
 
 
