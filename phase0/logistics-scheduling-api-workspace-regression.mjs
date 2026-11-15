@@ -51,6 +51,8 @@ assert.match(workspace, /data-scheduling-evaluate/);
 assert.match(workspace, /data-scheduling-transition/);
 assert.match(workspace, /activity\.lastEvaluation !== 'FEASIBLE'/);
 assert.match(workspace, /logisticsSchedulingScheduleBlocked/);
+assert.match(workspace, /lastEvaluations\.delete\(activityId\)/);
+assert.match(workspace, /candidateWindow/);
 assert.match(workspace, /UNKNOWN_STALE/);
 assert.match(workspace, /DENIED/);
 assert.match(workspace, /EMPTY/);
@@ -72,6 +74,7 @@ for (const locale of [en, am, om]) {
     'logisticsSchedulingUnknownStale',
     'logisticsSchedulingSubmit',
     'logisticsSchedulingWindowRequired',
+    'logisticsSchedulingWindowChanged',
     'logisticsSchedulingScheduleBlocked',
   ]) assert.match(locale, new RegExp(key + ':'));
 }
