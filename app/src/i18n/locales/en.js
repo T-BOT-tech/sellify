@@ -286,4 +286,12 @@ export default {
     serviceResourceProviderAssignFailed: "Could not update provider access.",
     serviceResourceNoProviderMembers: "No eligible staff memberships.",
     serviceResourceProviderDescription: "View your assigned service resources and maintain their declared working hours. Availability is not confirmed until existing commitments are checked.",
+    serviceProviderAppointmentsTitle: "My Appointments",
+    serviceProviderAppointmentsRefresh: "Refresh",
+    serviceProviderAppointmentsLoading: "Loading appointments…",
+    serviceProviderAppointmentsReady: "{count} appointment(s) assigned to your active resources.",
+    serviceProviderAppointmentsEmpty: "No confirmed appointments for your assigned resources.",
+    serviceProviderAppointmentsDenied: "Access denied for this appointment queue.",
+    serviceProviderAppointmentsUnavailable: "Appointment queue unavailable. Refresh to retry.",
+    serviceProviderAppointmentsUnknownStale: "Appointment queue status is unknown or stale. Reconnect and refresh before relying on it.",
 };
