@@ -138,6 +138,7 @@ export function logisticsSchedulingWorkspaceShell() {
         <select name="referenceType"><option value="fulfillment">Fulfillment</option><option value="order">Order</option><option value="movement">Movement</option></select>
       </label>
       <label>${t('logisticsSchedulingReferenceId')} <input name="referenceId" required maxlength="160"></label>
+      <div class="logistics-meta">${t('logisticsSchedulingReferenceHint')}</div>
       <label>${t('logisticsSchedulingRequestedStart')} <input name="requestedStart" type="datetime-local"></label>
       <label>${t('logisticsSchedulingRequestedEnd')} <input name="requestedEnd" type="datetime-local"></label>
       <button type="submit" class="btn-primary">${t('logisticsSchedulingSubmit')}</button>
