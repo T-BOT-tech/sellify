@@ -687,7 +687,7 @@ try {
   const staleResponse = await fetch(bookingsUrl + '/' + encodeURIComponent(staleBooking.id), {
     method: 'PATCH',
     headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-stale-transition-1' },
-    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 1 }),
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 1, service_resource_id: serviceResource.id }),
   });
   assert.equal(staleResponse.status, 409, 'stale expected_version must conflict');
   const staleState = (await (await fetch(bookingsUrl, { headers: authHeaders })).json()).bookings
