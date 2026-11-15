@@ -11863,6 +11863,59 @@ export async function listTelegramBuyerOrders(chatId, telegramUserId, limit = 20
   return [...grouped.values()].slice(0, safeLimit);
 }
 
+// Customer-safe appointment projection: resolve the marketplace order through
+// the verified buyer + seller relation before reading canonical order bookings.
+export async function getTelegramBuyerServiceBookings(chatId, telegramUserId, marketplaceOrderId) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  const organizationId = String(tenant?.organization_id || tenant?.organizationId || '');
+  const buyer = String(telegramUserId || '').trim();
+  const marketplaceId = String(marketplaceOrderId || '').trim();
+  if (!organizationId) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'STORE_NOT_FOUND' });
+  if (!buyer) throw Object.assign(new Error('Telegram buyer identity is required'), { statusCode: 400, code: 'TELEGRAM_BUYER_REQUIRED' });
+  if (!marketplaceId) throw Object.assign(new Error('Marketplace order ID is required'), { statusCode: 400, code: 'MARKETPLACE_ORDER_REQUIRED' });
+
+  const row = db.prepare(`
+    SELECT o.*
+    FROM marketplace_orders mo
+    JOIN marketplace_seller_orders mso ON mso.marketplace_order_id = mo.id
+    JOIN orders o
+      ON o.chat_id = mso.seller_id
+     AND o.local_id = mso.seller_order_id
+     AND o.is_marketplace = 1
+    WHERE mo.id = ?
+      AND mo.buyer_identity = ?
+      AND mso.seller_id = ?
+      AND mso.organization_id = ?
+      AND o.server_order_id IS NOT NULL
+    LIMIT 1
+  `).get(marketplaceId, buyer, String(chatId), organizationId);
+  // Deliberately indistinguishable for unknown, foreign-buyer, and foreign-seller orders.
+  if (!row) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+
+  const canonicalOrder = orderFromRow(row);
+  const bookings = db.prepare(`
+    SELECT b.*, r.name AS service_resource_name
+    FROM service_bookings b
+    LEFT JOIN service_resources r
+      ON r.id = b.service_resource_id
+     AND r.organization_id = b.organization_id
+     AND r.chat_id = b.chat_id
+    WHERE b.organization_id = ?
+      AND b.chat_id = ?
+      AND b.server_order_id = ?
+    ORDER BY b.created_at DESC, b.id DESC
+  `).all(organizationId, String(chatId), String(row.server_order_id)).map(serviceBookingFromRow);
+
+  return {
+    marketplaceOrderId: marketplaceId,
+    orderId: String(row.server_order_id),
+    serviceLines: (Array.isArray(canonicalOrder?.items) ? canonicalOrder.items : [])
+      .filter(item => String(item.item_type || '').toLowerCase() === 'service'),
+    bookings,
+  };
+}
+
 export async function listAuditEvents(chatId, limit = 100, filters = {}) {
   ensureDatabase();
   const safeLimit = Math.min(500, Math.max(1, Number(limit) || 100));
