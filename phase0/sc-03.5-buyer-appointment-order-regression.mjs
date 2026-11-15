@@ -54,6 +54,20 @@ try {
     serviceItemId: 'sc035-consultation',
     idempotencyKey: 'sc035-resource-' + suffix,
   }, null);
+  const providerUser = await store.getOrCreateUserByTelegram('sc035-provider-' + suffix, 'SC035 Provider');
+  const providerMembership = await store.ensureMembership(providerUser.id, seller.chatId, 'staff');
+  await store.assignMembershipContextualRole({
+    actorUserId: sellerUser.id, chatId: seller.chatId, membershipId: providerMembership.id,
+    role: 'service_provider', scopeType: 'RESOURCE', scopeId: resource.resource.id,
+  });
+  const providerSession = await store.createSession({
+    userId: providerUser.id, chatId: seller.chatId, deviceName: 'SC-03.5 provider regression',
+  });
+  const activeProviderSession = await store.authenticateSessionToken(providerSession.token);
+  assert.ok(activeProviderSession.contextualRoles.some(item =>
+    item.role === 'service_provider' && item.scopeType === 'RESOURCE' && item.scopeId === resource.resource.id),
+  'authenticated session resolves the currently active resource-scoped provider assignment');
+
   await store.setServiceResourceAvailability(seller.chatId, resource.resource.id, {
     expectedVersion: 0,
     idempotencyKey: 'sc035-hours-' + suffix,
@@ -163,6 +177,15 @@ try {
   assert.equal(inactivatedResource.resource.status, 'INACTIVE');
   assert.deepEqual(await store.listServiceProviderBookings(seller.chatId, [secondResource.resource.id]), [],
     'appointments assigned to an inactive resource are excluded from the provider queue');
+
+  await store.revokeMembershipContextualRole({
+    actorUserId: sellerUser.id, chatId: seller.chatId, membershipId: providerMembership.id,
+    role: 'service_provider', scopeType: 'RESOURCE', scopeId: resource.resource.id,
+  });
+  const revokedProviderSession = await store.authenticateSessionToken(providerSession.token);
+  assert.equal(revokedProviderSession.contextualRoles.some(item =>
+    item.role === 'service_provider' && item.scopeType === 'RESOURCE' && item.scopeId === resource.resource.id), false,
+  'revoking the provider assignment removes its authority from an already-issued session token');
   const conflict = await store.assessTelegramBuyerServiceFeasibility(seller.chatId, buyer, checkout.marketplace_order_id, {
     service_item_id: 'sc035-consultation', start, end,
   });
