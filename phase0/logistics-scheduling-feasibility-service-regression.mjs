@@ -43,6 +43,21 @@ db.prepare(
   'INSERT INTO users (id,display_name,created_at,last_seen_at) VALUES (?,?,?,?)'
 ).run(userId, 'L11.7 Actor', new Date().toISOString(), new Date().toISOString());
 
+const orderOne = 'l11.7-core-order-1';
+const orderThree = 'l11.7-core-order-3';
+for (const [orderId, localId] of [[orderOne, 'l11.7-local-1'], [orderThree, 'l11.7-local-3']]) {
+  db.prepare(`
+    INSERT INTO orders (
+      chat_id, local_id, server_order_id, order_json, total_minor,
+      created_at, status, delivered_to_device, marketplace_order_id, is_marketplace
+    ) VALUES (?, ?, ?, ?, 0, ?, 'pending', 1, NULL, 0)
+  `).run(
+    chatId, localId, orderId,
+    JSON.stringify({ id: orderId, fulfillment_type: 'delivery', fulfillment_status: 'pending' }),
+    Date.now(),
+  );
+}
+
 const actor = {
   userId,
   deviceId: null,
@@ -57,7 +72,8 @@ const first = await createLogisticsSchedulingActivity(chatId, {
   mode: 'SCHEDULED',
   scheduled_start: '2026-10-10T09:00:00Z',
   scheduled_end: '2026-10-10T10:00:00Z',
-  related_movement: { id: 'movement-l11-7-1', authority: 'logistics' },
+  related_order: { id: orderOne },
+  related_movement: { id: `movement:${orderOne}`, authority: 'logistics-pack-coordination-projection' },
   idempotency_key: 'l11.7-create-1',
 }, actor);
 
@@ -95,7 +111,8 @@ const third = await createLogisticsSchedulingActivity(chatId, {
   mode: 'SCHEDULED',
   scheduled_start: '2026-10-10T12:00:00Z',
   scheduled_end: '2026-10-10T13:00:00Z',
-  related_movement: { id: 'movement-l11-7-3', authority: 'logistics' },
+  related_order: { id: orderThree },
+  related_movement: { id: `movement:${orderThree}`, authority: 'logistics-pack-coordination-projection' },
   idempotency_key: 'l11.7-create-3',
 }, actor);
 
