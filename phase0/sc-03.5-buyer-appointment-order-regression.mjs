@@ -128,7 +128,11 @@ try {
       status: 'CANCELLED',
       expected_version: confirmed.booking.version,
       idempotencyKey: 'sc035-buyer-cancel-confirmed-' + suffix,
-    }, { actorType: 'TELEGRAM_BUYER' }),
+    }, {
+      actorType: 'TELEGRAM_BUYER',
+      buyerTelegramUserId: buyer,
+      marketplaceOrderId: checkout.marketplace_order_id,
+    }),
     error => error?.code === 'SERVICE_BOOKING_CUSTOMER_CANCELLATION_NOT_ALLOWED',
     'customer cancellation policy must reject confirmed appointments inside the canonical transition transaction',
   );
