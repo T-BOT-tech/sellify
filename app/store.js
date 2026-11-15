@@ -164,8 +164,25 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
         }
         return { values, start, end };
       };
-      form.addEventListener('input', () => { delete form.dataset.appointmentIdempotencyKey; });
-      form.addEventListener('change', () => { delete form.dataset.appointmentIdempotencyKey; });
+      const feasibilitySignature = (values, start, end) => JSON.stringify([
+        String(values.get('service_item_id') || ''), start.toISOString(), end.toISOString(),
+      ]);
+      form.addEventListener('input', event => {
+        delete form.dataset.appointmentIdempotencyKey;
+        if (['service_item_id', 'requested_start', 'requested_end'].includes(event.target?.name)) {
+          delete form.dataset.feasibilitySignature;
+          feasibilityState.dataset.state = '';
+          feasibilityState.textContent = 'Selection changed. Check the new time before sending your request.';
+        }
+      });
+      form.addEventListener('change', event => {
+        delete form.dataset.appointmentIdempotencyKey;
+        if (['service_item_id', 'requested_start', 'requested_end'].includes(event.target?.name)) {
+          delete form.dataset.feasibilitySignature;
+          feasibilityState.dataset.state = '';
+          feasibilityState.textContent = 'Selection changed. Check the new time before sending your request.';
+        }
+      });
       checkButton.addEventListener('click', async () => {
         checkButton.disabled = true;
         feasibilityState.textContent = 'Checking declared hours and existing commitments…';
@@ -181,21 +198,17 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
           const result = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(result?.error?.message || 'Unable to check this time.');
           const assessment = result.feasibility || {};
+          form.dataset.feasibilitySignature = feasibilitySignature(values, start, end);
           feasibilityState.dataset.state = assessment.state || 'UNKNOWN';
           const zone = assessment.timeZone ? ` · ${assessment.timeZone}` : '';
           if (assessment.state === 'FEASIBLE') feasibilityState.textContent = `Likely feasible based on declared hours and current commitments${zone}. This is not a reservation.`;
           else if (assessment.state === 'CONFLICT') feasibilityState.textContent = 'No matching resource currently fits this time. Choose another interval.';
           else feasibilityState.textContent = `Availability is unknown${zone}. You may still send a request for provider review; no availability is guaranteed.`;
         } catch (error) {
+          delete form.dataset.feasibilitySignature;
           feasibilityState.dataset.state = 'UNKNOWN';
           feasibilityState.textContent = !navigator.onLine ? 'Offline: time feasibility cannot be checked until you reconnect.' : (error.message || 'Time feasibility is unknown.');
         } finally { checkButton.disabled = false; }
-      });
-      form.querySelectorAll('[name="service_item_id"],[name="requested_start"],[name="requested_end"]').forEach(input => {
-        input.addEventListener('change', () => {
-          feasibilityState.dataset.state = '';
-          feasibilityState.textContent = 'Selection changed. Check the new time before sending your request.';
-        });
       });
       form.addEventListener('submit', async event => {
       event.preventDefault();
@@ -214,6 +227,13 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
       const start = new Date(startValue), end = new Date(endValue);
       if (!startValue || !endValue || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
         errorEl.textContent = 'Choose a valid start and end time; the end must be later than the start.';
+        return;
+      }
+      if (form.dataset.feasibilitySignature !== feasibilitySignature(values, start, end)) {
+        delete form.dataset.feasibilitySignature;
+        feasibilityState.dataset.state = '';
+        feasibilityState.textContent = 'Selection changed. Check the new time before sending your request.';
+        errorEl.textContent = 'The selected service or time changed after the last check. Check it again before sending your request.';
         return;
       }
       button.disabled = true; errorEl.textContent = '';
