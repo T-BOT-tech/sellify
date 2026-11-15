@@ -172,7 +172,6 @@ export default {
     serviceProviderAppointmentsDenied: "Tarree beellamoota kana argachuuf hayyamni hin jiru.",
     serviceProviderAppointmentsUnavailable: "Tarreen beellamootaa hin argamne. Irra deebi'ii yaaluuf haaromsi.",
     serviceProviderAppointmentsUnknownStale: "Haalli tarree beellamootaa hin beekamu ykn dulloomeera. Itti hin hirkatin dura wal-qunnamiitii haaromsi.",
-,
     logisticsSchedulingTitle: "Sagantaa loojistikii",
     logisticsSchedulingHint: "Sochii fudhannaa, geejjibaa fi hojiiwwan loojistikii galmee kaanonikaa jiru waliin qindeessi.",
     logisticsSchedulingRefresh: "Sagantaa haaromsi",
