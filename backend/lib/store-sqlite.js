@@ -11910,10 +11910,94 @@ export async function getTelegramBuyerServiceBookings(chatId, telegramUserId, ma
   return {
     marketplaceOrderId: marketplaceId,
     orderId: String(row.server_order_id),
+    locationId: row.location_id ? String(row.location_id) : null,
     serviceLines: (Array.isArray(canonicalOrder?.items) ? canonicalOrder.items : [])
       .filter(item => String(item.item_type || '').toLowerCase() === 'service'),
     bookings,
   };
+}
+
+// Advisory buyer-facing feasibility only. This reads declared hours and
+// committed intervals; it never creates a hold, booking, commitment, or audit row.
+export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUserId, marketplaceOrderId, input = {}) {
+  ensureDatabase();
+  const ownedOrder = await getTelegramBuyerServiceBookings(chatId, telegramUserId, marketplaceOrderId);
+  const serviceItemId = bookingRequiredText(input.service_item_id ?? input.serviceItemId, 'service_item_id');
+  if (!ownedOrder.serviceLines.some(line =>
+    String(line.item_id ?? line.product_id ?? line.id ?? '') === serviceItemId)) {
+    throw Object.assign(new Error('Feasibility must reference a service line in this buyer-owned order'), {
+      statusCode: 409, code: 'SERVICE_BOOKING_ORDER_LINE_INVALID',
+    });
+  }
+  const start = bookingTimestamp(input.start ?? input.requested_start, 'start');
+  const end = bookingTimestamp(input.end ?? input.requested_end, 'end');
+  if (Date.parse(end) <= Date.parse(start)) {
+    throw Object.assign(new Error('end must be later than start'), { statusCode: 400, code: 'SERVICE_BOOKING_TIME_WINDOW_INVALID' });
+  }
+  const tenant = await getTenant(chatId);
+  const organizationId = String(tenant?.organization_id || tenant?.organizationId || '');
+  const organization = db.prepare('SELECT timezone FROM organizations WHERE id = ?').get(organizationId);
+  const timeZone = String(organization?.timezone || '');
+  if (!isIanaTimeZone(timeZone)) {
+    return { state: 'UNKNOWN', reasonCode: 'ORGANIZATION_TIMEZONE_INVALID', timeZone: null, confirmsAvailability: false };
+  }
+
+  const resources = db.prepare(`
+    SELECT r.id, r.location_id, a.timezone, a.working_hours_json, a.exceptions_json
+    FROM service_resources r
+    LEFT JOIN service_resource_availability a
+      ON a.resource_id = r.id
+     AND a.organization_id = r.organization_id
+     AND a.chat_id = r.chat_id
+    WHERE r.organization_id = ?
+      AND r.chat_id = ?
+      AND r.status = 'ACTIVE'
+      AND (r.service_item_id IS NULL OR r.service_item_id = ?)
+      AND (r.location_id IS NULL OR r.location_id = ?)
+    ORDER BY r.id
+  `).all(organizationId, String(chatId), serviceItemId, ownedOrder.locationId);
+
+  if (!resources.length) {
+    return { state: 'UNKNOWN', reasonCode: 'NO_ACTIVE_MATCHING_RESOURCES', timeZone, confirmsAvailability: false };
+  }
+
+  let scheduleUnknown = false;
+  let scheduleMatched = 0;
+  let overlapCount = 0;
+  for (const resource of resources) {
+    const resourceTimeZone = String(resource.timezone || timeZone);
+    if (!isIanaTimeZone(resourceTimeZone)) { scheduleUnknown = true; continue; }
+    const schedule = assessServiceResourceDeclaredWindow({
+      timeZone: resourceTimeZone,
+      workingHours: parseJSON(resource.working_hours_json, []),
+      exceptions: parseJSON(resource.exceptions_json, []),
+      start, end,
+    });
+    if (schedule.scheduleAssessment === 'UNKNOWN') { scheduleUnknown = true; continue; }
+    if (schedule.scheduleAssessment !== 'WITHIN_DECLARED_HOURS') continue;
+    scheduleMatched += 1;
+    const overlap = db.prepare(`
+      SELECT 1
+      FROM service_resource_commitments
+      WHERE organization_id = ?
+        AND chat_id = ?
+        AND resource_id = ?
+        AND state = 'COMMITTED'
+        AND starts_at < ?
+        AND ends_at > ?
+      LIMIT 1
+    `).get(organizationId, String(chatId), String(resource.id), end, start);
+    if (overlap) { overlapCount += 1; continue; }
+    return { state: 'FEASIBLE', reasonCode: 'DECLARED_HOURS_AND_COMMITMENTS_MATCH', timeZone, confirmsAvailability: false };
+  }
+
+  if (scheduleUnknown) {
+    return { state: 'UNKNOWN', reasonCode: 'RESOURCE_SCHEDULE_EVIDENCE_INCOMPLETE', timeZone, confirmsAvailability: false };
+  }
+  if (scheduleMatched > 0 && overlapCount === scheduleMatched) {
+    return { state: 'CONFLICT', reasonCode: 'ALL_MATCHING_RESOURCES_COMMITTED', timeZone, confirmsAvailability: false };
+  }
+  return { state: 'CONFLICT', reasonCode: 'OUTSIDE_DECLARED_WORKING_HOURS', timeZone, confirmsAvailability: false };
 }
 
 export async function listAuditEvents(chatId, limit = 100, filters = {}) {
