@@ -3372,6 +3372,7 @@ if (!applied.includes(39)) {
         command_key TEXT NOT NULL,
         resource_id TEXT NOT NULL REFERENCES service_resources(id) ON DELETE CASCADE,
         command_fingerprint TEXT NOT NULL,
+        response_json TEXT NOT NULL,
         created_at TEXT NOT NULL,
         PRIMARY KEY (organization_id, command_key)
       );
