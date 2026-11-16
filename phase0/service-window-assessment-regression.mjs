@@ -62,6 +62,14 @@ assert.throws(() => serviceLocalDateTimeToIso('2026-03-29T02:30', 'Europe/Paris'
   { code: 'SERVICE_WINDOW_LOCAL_TIME_AMBIGUOUS' });
 
 
+const fs = await import('node:fs/promises');
+const backendSource = await fs.readFile(new URL('../backend/lib/store-sqlite.js', import.meta.url), 'utf8');
+assert.match(backendSource, /from '\.\.\/\.\.\/shared\/service-window-assessment-contract\.js'/);
+assert.doesNotMatch(backendSource, /from ['\"]\.\.\/\.\.\/app\/src\/verticals\/services\/service-window-assessment-contract\.js['\"]/);
+const sharedSource = await fs.readFile(new URL('../shared/service-window-assessment-contract.js', import.meta.url), 'utf8');
+assert.match(sharedSource, /export function assessServiceResourceDeclaredWindow/);
+assert.match(sharedSource, /export function serviceLocalDateTimeToIso/);
+
 const uiSource = await (await import('node:fs/promises')).readFile(new URL('../app/src/logistics/service-bookings.js', import.meta.url), 'utf8');
 assert.match(uiSource, /assessServiceResourceDeclaredWindow/);
 assert.match(uiSource, /serviceLocalDateTimeToIso/);
