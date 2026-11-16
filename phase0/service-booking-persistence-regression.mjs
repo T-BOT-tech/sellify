@@ -359,6 +359,25 @@ try {
   assert.equal(rejected.booking.status_reason, 'Requested time is unavailable',
     'rejection rationale must be returned with the durable booking record');
 
+  const cancellationBooking = await store.createServiceBooking(seller.chatId, order.server_order_id, {
+    ...request,
+    requested_start: '2026-11-05T11:00:00+03:00',
+    requested_end: '2026-11-05T12:00:00+03:00',
+    idempotency_key: 'booking-create-cancel-without-commitment-' + suffix,
+  }, { userId: owner.id });
+  const cancelledWithoutCommitment = await store.transitionServiceBooking(
+    seller.chatId, order.server_order_id, cancellationBooking.booking.id, {
+      status: 'CANCELLED', expected_version: 1,
+      idempotency_key: 'booking-cancel-without-commitment-' + suffix,
+    }, { userId: owner.id },
+  );
+  assert.equal(cancelledWithoutCommitment.booking.status, 'CANCELLED');
+  const cancellationAudit = db.prepare(
+    "SELECT metadata_json FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ? AND action = 'services.booking.cancelled'"
+  ).get(cancellationBooking.booking.id);
+  assert.equal(JSON.parse(cancellationAudit.metadata_json).resource_commitment_released, false,
+    'audit must not claim a resource commitment was released when no commitment existed');
+
   const failureBooking = await store.createServiceBooking(seller.chatId, order.server_order_id, {
     ...request,
     requested_start: '2026-11-06T09:00:00+03:00',
