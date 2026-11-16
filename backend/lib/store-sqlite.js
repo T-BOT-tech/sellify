@@ -6341,7 +6341,7 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
           row.requested_start,row.requested_end,actorId,now,
         );
     }
-    if(['CANCELLED','FAILED'].includes(target)) {
+    if(['CANCELLED','FAILED','COMPLETED'].includes(target)) {
       db.prepare(`UPDATE service_resource_commitments SET state='RELEASED',released_by=?,released_at=?
         WHERE booking_id=? AND organization_id=? AND state='COMMITTED'`).run(actorId,now,String(bookingId),organizationId);
     }
@@ -6349,7 +6349,7 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
     audit(String(chatId),`services.booking.${target.toLowerCase()}`,'service_booking',String(bookingId),{
       order_id:String(serverOrderId),from_status:String(row.status),to_status:target,version:nextVersion,reason,
       ...(commitment?{service_resource_id:commitment.resourceId,resource_commitment_id:commitment.id,commitment_state:'COMMITTED'}:{}),
-      ...(['CANCELLED','FAILED'].includes(target)?{resource_commitment_released:true}:{}),
+      ...(['CANCELLED','FAILED','COMPLETED'].includes(target)?{resource_commitment_released:true}:{}),
       ...(target==='COMPLETED'?{completion_note:completionNote,completed_at:now,completed_by:actorId}:{}),
       ...(target==='IN_PROGRESS'?{started_at:now,started_by:actorId}:{}),
     },{organizationId,actorId,deviceId:actor?.deviceId||null,reason:reason||''});
