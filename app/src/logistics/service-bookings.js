@@ -70,7 +70,7 @@ function renderBookingCard(order, booking) {
     + '</strong><span class="logistics-status">' + escapeHtml(status.replaceAll('_', ' ')) + '</span></div>'
     + '<div class="logistics-meta">Order ' + escapeHtml(order.server_order_id) + ' · ' + escapeHtml(mode || 'appointment')
     + ' · v' + escapeHtml(booking.version) + '</div>'
-    + (booking.service_resource_id ? '<div class="logistics-meta">Committed resource: ' + escapeHtml(booking.service_resource_name || booking.service_resource_id) + '</div>' : '')
+    + (booking.service_resource_id ? '<div class="logistics-meta">' + escapeHtml(t('serviceBookingAssignedResource')) + ': ' + escapeHtml(booking.service_resource_name || booking.service_resource_id) + '</div>' : '')
     + '<div class="logistics-meta">' + escapeHtml(date(booking.requested_start)) + ' – ' + escapeHtml(date(booking.requested_end)) + '</div>'
     + (booking.customer_note ? '<div class="logistics-meta">' + escapeHtml(booking.customer_note) + '</div>' : '')
     + (booking.status_reason ? '<div class="logistics-meta">Reason: ' + escapeHtml(booking.status_reason) + '</div>' : '')
@@ -517,7 +517,7 @@ async function transitionBooking(button, root) {
       const eligible = (Array.isArray(resourcesData.resources) ? resourcesData.resources : [])
         .filter(resource => String(resource.status || '').toUpperCase() === 'ACTIVE'
           && (!resource.serviceItemId || String(resource.serviceItemId) === String(button.dataset.serviceItemId)));
-      if (!eligible.length) throw new Error('No active service resource is available for this service. Create or activate a resource first.');
+      if (!eligible.length) throw new Error(t('serviceBookingNoEligibleResource'));
       const choices = eligible.map((resource, index) => (index + 1) + '. ' + resource.name + ' (' + resource.resourceType + ')').join('\n');
       const selected = window.prompt('Select the resource for this appointment by number:\n' + choices);
       if (selected === null) { button.disabled = false; return; }
