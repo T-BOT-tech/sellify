@@ -195,7 +195,7 @@ try {
     "const store = await import('./backend/lib/store-sqlite.js'); store.getDatabaseForTests().close()"
   ], { cwd: process.cwd(), env: malformedEnv, encoding: 'utf8' });
   assert.notEqual(rejected.status, 0, 'unsupported legacy ledger schema must stop startup rather than be silently discarded');
-  assert.match(rejected.stderr, /SERVICE_RESOURCE_COMMITMENT_MIGRATION_UNSUPPORTED_LEGACY_SCHEMA/);
+  assert.match(rejected.stderr, /Unsupported v80 service_resource_commitments schema/);
   const preservedDb = new DatabaseSync(malformedDbPath);
   assert.equal(preservedDb.prepare("SELECT count(*) AS count FROM sqlite_master WHERE type='table' AND name='service_resource_commitments_v80_status_legacy'").get().count, 1);
   assert.equal(preservedDb.prepare("SELECT id FROM service_resource_commitments_v80_status_legacy WHERE id='preserve-me'").get().id, 'preserve-me');
