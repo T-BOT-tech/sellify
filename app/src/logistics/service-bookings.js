@@ -519,7 +519,7 @@ async function transitionBooking(button, root) {
           && (!resource.serviceItemId || String(resource.serviceItemId) === String(button.dataset.serviceItemId)));
       if (!eligible.length) throw new Error(t('serviceBookingNoEligibleResource'));
       const choices = eligible.map((resource, index) => (index + 1) + '. ' + resource.name + ' (' + resource.resourceType + ')').join('\n');
-      const selected = window.prompt('Select the resource for this appointment by number:\n' + choices);
+      const selected = window.prompt(t('serviceBookingResourceRequired') + '\n' + choices);
       if (selected === null) { button.disabled = false; return; }
       const index = Number(selected) - 1;
       if (!Number.isInteger(index) || index < 0 || index >= eligible.length) throw new Error('Choose a valid resource number.');
