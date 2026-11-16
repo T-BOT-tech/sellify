@@ -583,7 +583,7 @@ assert.match(marketplaceCheckoutSource, /let marketplaceCheckoutSubmission = nul
   'concurrent submit events must share one in-flight marketplace checkout promise');
 assert.match(
   marketplaceCheckoutSource,
-  /if \(platform\.id === 'telegram' && platform\.isActive\(\)\) \{[\s\S]*?await writePendingMarketplaceTelegramHandoff\(intent\)[\s\S]*?if \(twaResult && twaResult\.ok\) \{[\s\S]*?server confirmation is pending[\s\S]*?return;[\s\S]*?\}[\s\S]*?await clearPendingMarketplaceTelegramHandoff\(\);[\s\S]*?\}[\s\S]*?await writePendingMarketplaceIntent\(intent\)/,
+  /if \(platform\.id === 'telegram' && platform\.isActive\(\)\) \{[\s\S]*?await writePendingMarketplaceTelegramHandoff\(intent\)[\s\S]*?if \(twaResult && twaResult\.ok\) \{[\s\S]*?server confirmation is pending[\s\S]*?return;[\s\S]*?\}[\s\S]*?Telegram handoff could not be confirmed[\s\S]*?return;[\s\S]*?\}[\s\S]*?await writePendingMarketplaceIntent\(intent\)/,
   'Telegram handoff must be durably marked unconfirmed and return before API checkout, avoiding duplicate orders'
 );
 assert.match(marketplaceCheckoutSource, /Checkout was rejected/,
