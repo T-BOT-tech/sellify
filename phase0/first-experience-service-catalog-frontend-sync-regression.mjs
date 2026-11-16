@@ -583,8 +583,8 @@ assert.match(marketplaceCheckoutSource, /let marketplaceCheckoutSubmission = nul
   'concurrent submit events must share one in-flight marketplace checkout promise');
 assert.match(
   marketplaceCheckoutSource,
-  /if \(twaResult && twaResult\.ok\) \{[\s\S]*?showToast\('Marketplace order sent to Telegram for processing\.'\);\s*return;\s*\}[\s\S]*?await writePendingMarketplaceIntent\(intent\)/,
-  'successful Telegram handoff must return before the direct API checkout path to avoid duplicate orders'
+  /if \(platform\.id === 'telegram' && platform\.isActive\(\)\) \{[\s\S]*?await writePendingMarketplaceTelegramHandoff\(intent\)[\s\S]*?if \(twaResult && twaResult\.ok\) \{[\s\S]*?server confirmation is pending[\s\S]*?return;[\s\S]*?\}[\s\S]*?await clearPendingMarketplaceTelegramHandoff\(\);[\s\S]*?\}[\s\S]*?await writePendingMarketplaceIntent\(intent\)/,
+  'Telegram handoff must be durably marked unconfirmed and return before API checkout, avoiding duplicate orders'
 );
 assert.match(marketplaceCheckoutSource, /Checkout was rejected/,
   'definitive marketplace 4xx errors must not be reported as pending ambiguous checkouts');
