@@ -175,6 +175,32 @@ try {
     'replaying migration 81 must not duplicate commitments');
   migrated.close();
 
+  // Unsupported status-shaped ledgers must fail safely without dropping evidence.
+  const malformedDbPath = path.join(tempDir, 'malformed-ledger.sqlite');
+  const malformedEnv = { ...env, SELLIFY_DB_PATH: malformedDbPath };
+  const seed = spawnSync(process.execPath, ['--input-type=module', '-e',
+    "const store = await import('./backend/lib/store-sqlite.js'); store.getDatabaseForTests().close()"
+  ], { cwd: process.cwd(), env: malformedEnv, encoding: 'utf8' });
+  assert.equal(seed.status, 0, `malformed-ledger fixture initialization failed:\n${seed.stdout}\n${seed.stderr}`);
+  const malformedDb = new DatabaseSync(malformedDbPath);
+  malformedDb.exec(`
+    DROP TABLE service_resource_commitments;
+    CREATE TABLE service_resource_commitments (id TEXT PRIMARY KEY, status TEXT NOT NULL);
+    INSERT INTO service_resource_commitments (id, status) VALUES ('preserve-me', 'ACTIVE');
+    DELETE FROM schema_migrations WHERE version = 81;
+  `);
+  malformedDb.close();
+
+  const rejected = spawnSync(process.execPath, ['--input-type=module', '-e',
+    "const store = await import('./backend/lib/store-sqlite.js'); store.getDatabaseForTests().close()"
+  ], { cwd: process.cwd(), env: malformedEnv, encoding: 'utf8' });
+  assert.notEqual(rejected.status, 0, 'unsupported legacy ledger schema must stop startup rather than be silently discarded');
+  assert.match(rejected.stderr, /SERVICE_RESOURCE_COMMITMENT_MIGRATION_UNSUPPORTED_LEGACY_SCHEMA/);
+  const preservedDb = new DatabaseSync(malformedDbPath);
+  assert.equal(preservedDb.prepare("SELECT count(*) AS count FROM sqlite_master WHERE type='table' AND name='service_resource_commitments_v80_status_legacy'").get().count, 1);
+  assert.equal(preservedDb.prepare("SELECT id FROM service_resource_commitments_v80_status_legacy WHERE id='preserve-me'").get().id, 'preserve-me');
+  preservedDb.close();
+
   console.log('Service Resource Migration 80/81 Compatibility Regression: PASS');
 } finally {
   await rm(tempDir, { recursive: true, force: true });
