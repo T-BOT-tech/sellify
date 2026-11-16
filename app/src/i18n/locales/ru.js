@@ -81,4 +81,8 @@ export default {
     serviceResourceProviderAssignFailed: "Не удалось обновить доступ исполнителя.",
     serviceResourceNoProviderMembers: "Нет подходящих сотрудников.",
     serviceResourceProviderDescription: "Просматривайте назначенные вам сервисные ресурсы и обновляйте заявленные часы работы. Доступность не подтверждается, пока не проверены существующие обязательства.",
+    serviceBookingSelectResource: "Ресурс услуги",
+    serviceBookingNoEligibleResource: "Для этой услуги нет активного ресурса с настроенным расписанием.",
+    serviceBookingResourceRequired: "Выберите ресурс услуги перед подтверждением записи.",
+    serviceBookingAssignedResource: "Назначенный ресурс",
 };
