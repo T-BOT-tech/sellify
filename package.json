@@ -104,6 +104,7 @@
     "test:service-catalog-contract": "node phase0/first-experience-service-catalog-contract-regression.mjs",
     "test:service-booking-contract": "node phase0/service-booking-contract-regression.mjs",
     "test:service-booking-persistence": "node phase0/service-booking-persistence-regression.mjs",
+    "test:service-resource-migration-compatibility": "node phase0/service-resource-migration-80-81-compatibility-regression.mjs",
     "test:service-booking-scheduling-boundary": "node phase0/service-booking-scheduling-authority-boundary-regression.mjs",
     "test:service-resource-foundation": "node phase0/service-resource-foundation-regression.mjs",
     "test:service-resource-persistence": "node phase0/service-resource-persistence-regression.mjs",
