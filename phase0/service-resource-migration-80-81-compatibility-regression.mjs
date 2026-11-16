@@ -10,7 +10,7 @@ const dbPath = path.join(tempDir, 'sellify.sqlite');
 const env = { ...process.env, SELLIFY_DATA_DIR: tempDir, SELLIFY_DB_PATH: dbPath };
 
 function restartStore() {
-  const result = spawnSync(process.execPath, ['--input-type=module', '-e', "await import('./backend/lib/store-sqlite.js')"], {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', "const store = await import('./backend/lib/store-sqlite.js'); store.getDatabaseForTests().close()"], {
     cwd: process.cwd(), env, encoding: 'utf8',
   });
   assert.equal(result.status, 0, `store migration subprocess failed:\n${result.stdout}\n${result.stderr}`);
