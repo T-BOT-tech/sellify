@@ -64,8 +64,8 @@ assert.throws(() => serviceLocalDateTimeToIso('2026-03-29T02:30', 'Europe/Paris'
 
 const fs = await import('node:fs/promises');
 const backendSource = await fs.readFile(new URL('../backend/lib/store-sqlite.js', import.meta.url), 'utf8');
-assert.match(backendSource, /from '\.\.\/\.\.\/shared\/service-window-assessment-contract\.js'/);
-assert.doesNotMatch(backendSource, /from ['\"]\.\.\/\.\.\/app\/src\/verticals\/services\/service-window-assessment-contract\.js['\"]/);
+assert.match(backendSource, /from '\.\/service-window-assessment-contract\.js'/);
+assert.doesNotMatch(backendSource, /from ['\"](?:\.\.\/\.\.\/app\/src\/verticals\/services\/service-window-assessment-contract\.js|\.\.\/\.\.\/shared\/service-window-assessment-contract\.js)['\"]/);
 const backendContract = await fs.readFile(new URL('../backend/lib/service-window-assessment-contract.js', import.meta.url), 'utf8');
 const frontendContract = await fs.readFile(new URL('../app/src/verticals/services/service-window-assessment-contract.js', import.meta.url), 'utf8');
 assert.match(backendContract, /export function assessServiceResourceDeclaredWindow/);
