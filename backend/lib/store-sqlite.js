@@ -3394,6 +3394,76 @@ if (!applied.includes(39)) {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(80, nowIso());
   }
+
+  // SC-03.4 compatibility bridge. Migration 80 existed in two incompatible
+  // deployed branch histories: one added only service_bookings.service_resource_id,
+  // while the other added the commitment ledger. Never rewrite migration 80:
+  // databases that already recorded it will not rerun it. Version 81 reconciles
+  // both shapes, and backfills only explicit, tenant-matching resource assignments.
+  if (!applied.includes(81)) {
+    const bookingColumns = new Set(
+      db.prepare('PRAGMA table_info(service_bookings)').all().map(column => String(column.name))
+    );
+    if (!bookingColumns.has('service_resource_id')) {
+      db.exec('ALTER TABLE service_bookings ADD COLUMN service_resource_id TEXT');
+    }
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS service_resource_commitments (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        chat_id TEXT NOT NULL REFERENCES tenants(chat_id) ON DELETE CASCADE,
+        resource_id TEXT NOT NULL REFERENCES service_resources(id) ON DELETE CASCADE,
+        booking_id TEXT NOT NULL UNIQUE REFERENCES service_bookings(id) ON DELETE CASCADE,
+        starts_at TEXT NOT NULL,
+        ends_at TEXT NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('COMMITTED','RELEASED')),
+        committed_by TEXT,
+        committed_at TEXT NOT NULL,
+        released_by TEXT,
+        released_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_service_resource_commitments_overlap
+        ON service_resource_commitments(organization_id, chat_id, resource_id, state, starts_at, ends_at);
+      CREATE INDEX IF NOT EXISTS idx_service_bookings_resource_window
+        ON service_bookings(organization_id, chat_id, service_resource_id, status, requested_start, requested_end);
+    `);
+
+    // Only a resource ID already persisted on the booking and resolving inside
+    // the same tenant/organization is evidence of assignment. Do not infer a
+    // resource for legacy unassigned bookings; leave those UNKNOWN/fail-closed.
+    // Existing overlapping legacy rows are retained as COMMITTED so new writes
+    // see the conflict instead of silently treating the interval as free.
+    db.prepare(`
+      INSERT OR IGNORE INTO service_resource_commitments
+        (id, organization_id, chat_id, resource_id, booking_id, starts_at, ends_at,
+         state, committed_by, committed_at, released_by, released_at)
+      SELECT
+        'migration-81:' || b.id,
+        b.organization_id,
+        b.chat_id,
+        b.service_resource_id,
+        b.id,
+        b.requested_start,
+        b.requested_end,
+        'COMMITTED',
+        b.updated_by,
+        COALESCE(NULLIF(b.updated_at, ''), b.created_at, ?),
+        NULL,
+        NULL
+      FROM service_bookings b
+      JOIN service_resources r
+        ON r.id = b.service_resource_id
+       AND r.organization_id = b.organization_id
+       AND r.chat_id = b.chat_id
+      WHERE b.service_resource_id IS NOT NULL
+        AND trim(b.service_resource_id) <> ''
+        AND b.status IN ('CONFIRMED', 'IN_PROGRESS')
+        AND b.requested_start IS NOT NULL
+        AND b.requested_end IS NOT NULL
+        AND julianday(b.requested_end) > julianday(b.requested_start)
+    `).run(nowIso());
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(81, nowIso());
+  }
 }
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({
