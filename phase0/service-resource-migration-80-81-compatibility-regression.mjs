@@ -7,6 +7,8 @@ import { DatabaseSync } from 'node:sqlite';
 
 const tempDir = await mkdtemp(path.join(os.tmpdir(), 'sellify-service-migration-81-'));
 const dbPath = path.join(tempDir, 'sellify.sqlite');
+process.env.SELLIFY_DATA_DIR = tempDir;
+process.env.SELLIFY_DB_PATH = dbPath;
 const env = { ...process.env, SELLIFY_DATA_DIR: tempDir, SELLIFY_DB_PATH: dbPath };
 
 function restartStore() {
