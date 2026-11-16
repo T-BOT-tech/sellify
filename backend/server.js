@@ -3271,7 +3271,7 @@ async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId 
         ? 'logistics:scheduling:cancel'
         : 'logistics:scheduling:manage';
   }
-  await requireAuthorization(session, tenant, 'scheduling', authorizationAction, {
+  await requireAuthorization(session, tenant, 'service_booking', authorizationAction, {
     location: authorizationLocation,
     deniedMessage: authorizationAction === 'logistics:scheduling:request'
       ? 'Service booking request permission required'
@@ -3282,7 +3282,7 @@ async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId 
   // scheduling scope at both the canonical order location and the selected
   // resource location; an order-scoped grant must not authorize a cross-site
   // resource commitment.
-  if (req.method === 'PATCH' && authorizationAction === 'logistics:scheduling:confirm') {
+  if (req.method === 'PATCH' && authorizationAction === 'service:booking:confirm') {
     const resourceId = String(body.service_resource_id || body.serviceResourceId || '').trim();
     if (resourceId) {
       const resource = (await listServiceResources(chatId, { includeInactive: true }))
