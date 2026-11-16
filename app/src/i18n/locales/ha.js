@@ -81,4 +81,8 @@ export default {
     serviceResourceProviderAssignFailed: "An kasa sabunta damar mai bayar da sabis.",
     serviceResourceNoProviderMembers: "Babu ma'aikatan da suka cancanta.",
     serviceResourceProviderDescription: "Duba albarkatun sabis da aka ba ka kuma sabunta lokutan aikinsu da aka bayyana. Ba a tabbatar da samuwa ba har sai an duba alƙawuran da ke akwai.",
+    serviceBookingSelectResource: "Kayan aikin sabis",
+    serviceBookingNoEligibleResource: "Babu kayan aiki mai aiki da aka tsara lokutan aiki don wannan sabis ɗin.",
+    serviceBookingResourceRequired: "Zaɓi kayan aikin sabis kafin tabbatar da wannan alƙawari.",
+    serviceBookingAssignedResource: "Kayan aikin da aka ware",
 };
