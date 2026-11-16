@@ -165,4 +165,8 @@ export default {
     serviceResourceProviderAssignFailed: "प्रदाता की पहुँच अपडेट नहीं हो सकी।",
     serviceResourceNoProviderMembers: "कोई पात्र कर्मचारी सदस्य नहीं हैं।",
     serviceResourceProviderDescription: "आपको सौंपे गए सेवा संसाधन देखें और उनके घोषित कार्य समय अपडेट करें। मौजूदा प्रतिबद्धताओं की जाँच होने तक उपलब्धता की पुष्टि नहीं होती।",
+    serviceBookingSelectResource: "सेवा संसाधन",
+    serviceBookingNoEligibleResource: "इस सेवा के लिए घोषित समय-सारणी वाला कोई सक्रिय संसाधन नहीं है।",
+    serviceBookingResourceRequired: "अपॉइंटमेंट की पुष्टि करने से पहले सेवा संसाधन चुनें।",
+    serviceBookingAssignedResource: "आवंटित संसाधन",
 };
