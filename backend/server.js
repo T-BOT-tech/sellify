@@ -3290,7 +3290,7 @@ async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId 
       if (!resource) throw Object.assign(new Error('Service resource not found in this organization'), { statusCode: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' });
       const resourceLocation = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
       if (resource.locationId && !resourceLocation) throw Object.assign(new Error('Service resource location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
-      await requireAuthorization(session, tenant, 'scheduling', authorizationAction, {
+      await requireAuthorization(session, tenant, 'service_booking', authorizationAction, {
         location: resourceLocation,
         deniedMessage: 'Appointment confirmation is not authorized at the selected resource location',
       });
