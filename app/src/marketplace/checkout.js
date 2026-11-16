@@ -297,9 +297,11 @@ async function submitMarketplaceOrderOnce() {
       showToast('Telegram handoff submitted; server confirmation is pending. Do not resubmit until the seller confirms the order.');
       return;
     }
-    // A null result means no confirmed sendData handoff. Clear the Telegram-only
-    // marker before continuing through the canonical API fallback.
-    await clearPendingMarketplaceTelegramHandoff();
+    // A failed/ambiguous transport result is not proof that Telegram did not
+    // receive the payload. Keep the marker and do not fall through to API checkout,
+    // which could create a duplicate order if the bot received the first handoff.
+    showToast('Telegram handoff could not be confirmed. Do not submit again; verify with the seller before retrying.');
+    return;
   }
 
   // Persist the exact API request before the network side effect. If the
