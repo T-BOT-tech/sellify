@@ -13,7 +13,10 @@ assert.match(store, /export async function setServiceResourceAvailability/);
 assert.match(store, /BEGIN IMMEDIATE/);
 assert.match(store, /SERVICE_AVAILABILITY_VERSION_CONFLICT/);
 assert.match(store, /SERVICE_AVAILABILITY_IDEMPOTENCY_CONFLICT/);
-assert.match(store, /response_json TEXT NOT NULL/, 'idempotency command must persist its original response');
+const availabilityCommandsTable = store.match(/CREATE TABLE IF NOT EXISTS service_resource_availability_commands \(([\s\S]*?)\n\s*\);/);
+assert.ok(availabilityCommandsTable, 'migration 79 must define the availability idempotency table');
+assert.match(availabilityCommandsTable[1], /(?:^|\n)\s*response_json TEXT NOT NULL,?\s*(?:\n|$)/,
+  'availability idempotency table itself must persist its original response');
 assert.match(store, /parseJSON\(prior\.response_json, null\)/, 'idempotency replay must use original response snapshot');
 assert.doesNotMatch(store, /const replay = db\.prepare\('SELECT \* FROM service_resource_availability WHERE resource_id=\?'\)/, 'replay must not return the resource current state');
 assert.match(store, /services\.resource\.availability\.updated/);
