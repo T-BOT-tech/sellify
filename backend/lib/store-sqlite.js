@@ -2552,6 +2552,7 @@ if (!applied.includes(39)) {
         command_key TEXT NOT NULL,
         server_order_id TEXT NOT NULL REFERENCES orders(server_order_id) ON DELETE CASCADE,
         command_fingerprint TEXT NOT NULL,
+        response_json TEXT NOT NULL,
         created_at TEXT NOT NULL,
         PRIMARY KEY (organization_id, command_key)
       );
@@ -6141,9 +6142,12 @@ export async function setServiceResourceAvailability(chatId, resourceId, input =
       .get(String(organizationId),commandKey);
     if (prior) {
       if (String(prior.resource_id)!==String(resourceId) || prior.command_fingerprint!==fingerprint) throw Object.assign(new Error('Idempotency key was reused for a different availability command'), { statusCode:409, code:'SERVICE_AVAILABILITY_IDEMPOTENCY_CONFLICT' });
-      const replay = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=?').get(String(resourceId));
+      const originalResult = parseJSON(prior.response_json, null);
+      if (!originalResult || !originalResult.availability) {
+        throw Object.assign(new Error('Stored idempotency response is unavailable'), { statusCode: 500, code: 'SERVICE_AVAILABILITY_IDEMPOTENCY_RESPONSE_MISSING' });
+      }
       db.exec('COMMIT');
-      return { availability: serviceResourceAvailabilityFromRow(replay), replayed: true };
+      return { availability: originalResult.availability, replayed: true };
     }
     const current = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=? AND organization_id=? AND chat_id=?')
       .get(String(resourceId),String(organizationId),String(chatId));
@@ -6157,16 +6161,17 @@ export async function setServiceResourceAvailability(chatId, resourceId, input =
         working_hours_json=excluded.working_hours_json,exceptions_json=excluded.exceptions_json,
         version=excluded.version,updated_by=excluded.updated_by,updated_at=excluded.updated_at`)
       .run(String(resourceId),String(organizationId),String(chatId),timeZone,json(working.entries),json(exceptions),nextVersion,actorId,now);
+    const saved = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=?').get(String(resourceId));
+    const availability = serviceResourceAvailabilityFromRow(saved);
     db.prepare(`INSERT INTO service_resource_availability_commands
-      (organization_id,command_key,resource_id,command_fingerprint,created_at) VALUES (?,?,?,?,?)`)
-      .run(String(organizationId),commandKey,String(resourceId),fingerprint,now);
+      (organization_id,command_key,resource_id,command_fingerprint,response_json,created_at) VALUES (?,?,?,?,?,?)`)
+      .run(String(organizationId),commandKey,String(resourceId),fingerprint,json({ availability }),now);
     audit(String(chatId),'services.resource.availability.updated','service_resource',String(resourceId),{
       version:nextVersion,timezone:timeZone,working_hours_count:working.entries.length,exception_count:exceptions.length,
       state:'DECLARED_ONLY',availability_confirmed:false,
     },{organizationId,locationId:resource.location_id,actorId,deviceId:actor?.deviceId||null});
-    const saved = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=?').get(String(resourceId));
     db.exec('COMMIT');
-    return { availability: serviceResourceAvailabilityFromRow(saved), replayed:false };
+    return { availability, replayed:false };
   } catch(error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
 
