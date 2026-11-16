@@ -18,6 +18,7 @@ import { mkdir, readdir, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
+import { normalizeWorkingHours, normalizeAvailabilityExceptions, isIanaTimeZone } from './service-availability-contract.js';
 import { resolveOnboardingCountry } from './country-pack-onboarding.js';
 import { assertVerificationFreshness } from './payments/verification-freshness.js';
 import { requirePaymentProvider } from './payments/provider-registry.js';
@@ -2551,6 +2552,7 @@ if (!applied.includes(39)) {
         command_key TEXT NOT NULL,
         server_order_id TEXT NOT NULL REFERENCES orders(server_order_id) ON DELETE CASCADE,
         command_fingerprint TEXT NOT NULL,
+        response_json TEXT NOT NULL,
         created_at TEXT NOT NULL,
         PRIMARY KEY (organization_id, command_key)
       );
@@ -2559,13 +2561,22 @@ if (!applied.includes(39)) {
     `);
     const fulfillmentColumns = new Set(db.prepare('PRAGMA table_info(fulfillments)').all().map(column => String(column.name)));
     if (fulfillmentColumns.has('last_command_fingerprint')) {
-      db.prepare(`
-        INSERT OR IGNORE INTO fulfillment_commands (organization_id, command_key, server_order_id, command_fingerprint, created_at)
-        SELECT organization_id, last_command_key, server_order_id, last_command_fingerprint, updated_at
-        FROM fulfillments
+      const legacyCommands = db.prepare(`
+        SELECT * FROM fulfillments
         WHERE last_command_key IS NOT NULL AND trim(last_command_key) <> ''
           AND last_command_fingerprint IS NOT NULL AND trim(last_command_fingerprint) <> ''
-      `).run();
+      `).all();
+      const insertLegacyCommand = db.prepare(`
+        INSERT OR IGNORE INTO fulfillment_commands
+          (organization_id, command_key, server_order_id, command_fingerprint, response_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      for (const legacy of legacyCommands) {
+        insertLegacyCommand.run(
+          legacy.organization_id, legacy.last_command_key, legacy.server_order_id,
+          legacy.last_command_fingerprint, json(fulfillmentFromRow(legacy)), legacy.updated_at,
+        );
+      }
     }
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(70, nowIso());
   }
@@ -3338,6 +3349,35 @@ if (!applied.includes(39)) {
         ON service_resource_commands(organization_id, resource_id, created_at DESC);
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(78, nowIso());
+  }
+  // SC-03.2 — service-owned working-hours declarations and date exceptions.
+  // These are configuration records only, never availability commitments.
+  if (!applied.includes(79)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS service_resource_availability (
+        resource_id TEXT PRIMARY KEY REFERENCES service_resources(id) ON DELETE CASCADE,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        chat_id TEXT NOT NULL REFERENCES tenants(chat_id) ON DELETE CASCADE,
+        timezone TEXT NOT NULL,
+        working_hours_json TEXT NOT NULL DEFAULT '[]',
+        exceptions_json TEXT NOT NULL DEFAULT '[]',
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+        updated_by TEXT,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_service_resource_availability_org
+        ON service_resource_availability(organization_id, chat_id);
+      CREATE TABLE IF NOT EXISTS service_resource_availability_commands (
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        command_key TEXT NOT NULL,
+        resource_id TEXT NOT NULL REFERENCES service_resources(id) ON DELETE CASCADE,
+        command_fingerprint TEXT NOT NULL,
+        response_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (organization_id, command_key)
+      );
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(79, nowIso());
   }
 }
 
@@ -6086,6 +6126,99 @@ export async function updateServiceResource(chatId, resourceId, input = {}, acto
     db.exec('COMMIT');
     return { resource: serviceResourceFromRow(updated), replayed: false };
   } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
+
+
+function serviceResourceAvailabilityFromRow(row) {
+  if (!row) return null;
+  return {
+    resourceId: row.resource_id,
+    organizationId: row.organization_id,
+    timeZone: row.timezone,
+    workingHours: parseJSON(row.working_hours_json, []),
+    exceptions: parseJSON(row.exceptions_json, []),
+    version: Number(row.version || 1),
+    updatedBy: row.updated_by || null,
+    updatedAt: row.updated_at,
+    state: 'DECLARED',
+    confirmsAvailability: false,
+  };
+}
+
+export async function getServiceResourceAvailability(chatId, resourceId) {
+  ensureDatabase();
+  const organizationId = ensureCanonicalIdentityForTenant(chatId);
+  if (!organizationId) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const resource = db.prepare('SELECT id FROM service_resources WHERE id=? AND organization_id=? AND chat_id=?')
+    .get(String(resourceId), String(organizationId), String(chatId));
+  if (!resource) throw Object.assign(new Error('Service resource not found'), { statusCode: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' });
+  const row = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=? AND organization_id=? AND chat_id=?')
+    .get(String(resourceId), String(organizationId), String(chatId));
+  const organization = db.prepare('SELECT o.timezone FROM organizations o WHERE o.id=?').get(String(organizationId));
+  const timeZone = String(row?.timezone || organization?.timezone || '');
+  if (!isIanaTimeZone(timeZone)) throw Object.assign(new Error('Organization timezone is invalid; availability configuration is unavailable'), { statusCode: 409, code: 'SERVICE_AVAILABILITY_TIMEZONE_INVALID' });
+  return serviceResourceAvailabilityFromRow(row) || {
+    resourceId: String(resourceId), organizationId: String(organizationId), timeZone,
+    workingHours: [], exceptions: [], version: 0, updatedBy: null, updatedAt: null,
+    state: 'EMPTY', confirmsAvailability: false,
+  };
+}
+
+export async function setServiceResourceAvailability(chatId, resourceId, input = {}, actor = null) {
+  ensureDatabase();
+  const organizationId = ensureCanonicalIdentityForTenant(chatId);
+  if (!organizationId) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const expectedVersion = Number(input.expectedVersion ?? input.expected_version ?? 0);
+  if (!Number.isInteger(expectedVersion) || expectedVersion < 0) throw Object.assign(new Error('expected_version must be a non-negative integer'), { statusCode: 400, code: 'SERVICE_AVAILABILITY_VERSION_REQUIRED' });
+  const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  if (!commandKey) throw Object.assign(new Error('Idempotency-Key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
+  const organization = db.prepare('SELECT timezone FROM organizations WHERE id=?').get(String(organizationId));
+  const timeZone = String(organization?.timezone || '');
+  const working = normalizeWorkingHours(input.workingHours ?? input.working_hours ?? [], timeZone);
+  const exceptions = normalizeAvailabilityExceptions(input.exceptions ?? []);
+  const fingerprint = crypto.createHash('sha256').update(JSON.stringify({resourceId:String(resourceId),expectedVersion,workingHours:working.entries,exceptions})).digest('hex');
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const freshTenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id=?').get(String(chatId));
+    if (String(freshTenant?.organization_id || '') !== String(organizationId)) throw Object.assign(new Error('Tenant organization changed'), { statusCode:409, code:'SERVICE_RESOURCE_ORGANIZATION_MISMATCH' });
+    const resource = db.prepare('SELECT * FROM service_resources WHERE id=? AND organization_id=? AND chat_id=?')
+      .get(String(resourceId),String(organizationId),String(chatId));
+    if (!resource) throw Object.assign(new Error('Service resource not found'), { statusCode:404, code:'SERVICE_RESOURCE_NOT_FOUND' });
+    const prior = db.prepare('SELECT * FROM service_resource_availability_commands WHERE organization_id=? AND command_key=?')
+      .get(String(organizationId),commandKey);
+    if (prior) {
+      if (String(prior.resource_id)!==String(resourceId) || prior.command_fingerprint!==fingerprint) throw Object.assign(new Error('Idempotency key was reused for a different availability command'), { statusCode:409, code:'SERVICE_AVAILABILITY_IDEMPOTENCY_CONFLICT' });
+      const originalResult = parseJSON(prior.response_json, null);
+      if (!originalResult || !originalResult.availability) {
+        throw Object.assign(new Error('Stored idempotency response is unavailable'), { statusCode: 500, code: 'SERVICE_AVAILABILITY_IDEMPOTENCY_RESPONSE_MISSING' });
+      }
+      db.exec('COMMIT');
+      return { availability: originalResult.availability, replayed: true };
+    }
+    const current = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=? AND organization_id=? AND chat_id=?')
+      .get(String(resourceId),String(organizationId),String(chatId));
+    const currentVersion = Number(current?.version || 0);
+    if (currentVersion !== expectedVersion) throw Object.assign(new Error('Service availability version conflict'), { statusCode:409, code:'SERVICE_AVAILABILITY_VERSION_CONFLICT' });
+    const now = nowIso(), nextVersion = currentVersion + 1, actorId = actor?.userId || actor?.user_id || null;
+    db.prepare(`INSERT INTO service_resource_availability
+      (resource_id,organization_id,chat_id,timezone,working_hours_json,exceptions_json,version,updated_by,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(resource_id) DO UPDATE SET timezone=excluded.timezone,
+        working_hours_json=excluded.working_hours_json,exceptions_json=excluded.exceptions_json,
+        version=excluded.version,updated_by=excluded.updated_by,updated_at=excluded.updated_at`)
+      .run(String(resourceId),String(organizationId),String(chatId),timeZone,json(working.entries),json(exceptions),nextVersion,actorId,now);
+    const saved = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=?').get(String(resourceId));
+    const availability = serviceResourceAvailabilityFromRow(saved);
+    db.prepare(`INSERT INTO service_resource_availability_commands
+      (organization_id,command_key,resource_id,command_fingerprint,response_json,created_at) VALUES (?,?,?,?,?,?)`)
+      .run(String(organizationId),commandKey,String(resourceId),fingerprint,json({ availability }),now);
+    audit(String(chatId),'services.resource.availability.updated','service_resource',String(resourceId),{
+      version:nextVersion,timezone:timeZone,working_hours_count:working.entries.length,exception_count:exceptions.length,
+      state:'DECLARED_ONLY',availability_confirmed:false,
+    },{organizationId,locationId:resource.location_id,actorId,deviceId:actor?.deviceId||null});
+    db.exec('COMMIT');
+    return { availability, replayed:false };
+  } catch(error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
 
 export async function createServiceBooking(chatId, serverOrderId, input = {}, actor = null) {
@@ -10648,13 +10781,12 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
           statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT',
         });
       }
-      const replay = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?')
-        .get(String(serverOrderId), organizationId);
-      if (!replay) throw Object.assign(new Error('Fulfillment result for prior command is missing'), {
-        statusCode: 409, code: 'FULFILLMENT_REPLAY_STATE_MISSING',
+      const originalResult = parseJSON(priorCommand.response_json, null);
+      if (!originalResult || !originalResult.id) throw Object.assign(new Error('Stored fulfillment command response is missing'), {
+        statusCode: 409, code: 'FULFILLMENT_REPLAY_RESPONSE_MISSING',
       });
       db.exec('COMMIT');
-      return fulfillmentFromRow(replay);
+      return originalResult;
     }
     const freshCommandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
       fulfillment_type: input.fulfillmentType === undefined && input.fulfillment_type === undefined
@@ -10795,9 +10927,10 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     );
     const updated = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(row.id);
     db.prepare(`
-      INSERT INTO fulfillment_commands (organization_id, command_key, server_order_id, command_fingerprint, created_at)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(organizationId, commandKey, String(serverOrderId), commandFingerprint, now);
+      INSERT INTO fulfillment_commands
+        (organization_id, command_key, server_order_id, command_fingerprint, response_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(organizationId, commandKey, String(serverOrderId), commandFingerprint, json(fulfillmentFromRow(updated)), now);
     const inventoryMovements = applyCoreFulfillmentInventoryConsequence(key, updated, freshOrderJson, actor, isCanonicalMarketplaceOrderRow(freshOrderRow));
     audit(key, 'fulfillment.transitioned', 'fulfillment', row.id, {
       orderId: String(serverOrderId), from: current, to: target, commandKey,

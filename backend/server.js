@@ -119,6 +119,7 @@ import {
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment, recordServiceDeliveryAssessment,
   createServiceBooking, transitionServiceBooking, listServiceBookings,
   listServiceResources, createServiceResource, updateServiceResource,
+  getServiceResourceAvailability, setServiceResourceAvailability,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
   createComplianceRequest, getComplianceRequest, listComplianceRequests, resolveComplianceRequest, buildComplianceExport,
   listPaymentAccounts, createPaymentAccount, createPayment, createPaymentWithIntent, getPayment, getPaymentIdempotency, insertPaymentIdempotency, updatePaymentIdempotencyProgress, completePaymentIdempotency, getPaymentIntent, getOrderPaymentSummary, getPaymentRefundByIdempotencyKey, getPaymentRefunds, createPaymentRefundRequest, finalizePaymentRefund, listPayments, listPaymentLedger, listPaymentEvidence, listPaymentVerifications, listPaymentDecisions, reconcilePayment, recordPaymentReconciliation, listPaymentReconciliations, insertPaymentEvidence, insertProviderNotificationEvidence, getPaymentAccountForProviderNotification, resolvePaymentIntentForProviderEvidence, createPaymentConfirmationAttempt, updatePaymentConfirmationAttempt, getPaymentConfirmationAttempt, getPaymentConfirmationAttemptByProviderTransaction, insertPaymentVerification, insertPaymentDecision, commitPaymentDecision, beginPaymentStatusQuery, markPaymentStatusQueryProviderStarted, completePaymentStatusQuery, listPaymentOutboundIntents, getPaymentOutboundIntent, createPaymentOutboundIntent, transitionPaymentOutboundIntent, createProcurementPaymentIntent, getProcurementSettlement, listProcurementSettlements, listProcurementSettlementAllocations, allocateConfirmedOutboundPaymentToProcurementSettlement,
@@ -3170,6 +3171,33 @@ async function handleServiceResources(req, res, chatId, resourceId = null) {
   return sendJSON(res, 200, { resource: result.resource, replayed: result.replayed, state: 'READY' }, req);
 }
 
+
+async function handleServiceResourceAvailability(req, res, chatId, resourceId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  if (req.method !== 'GET' && req.method !== 'PUT') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+  const session = await requireSession(req, chatId);
+  const resource = (await listServiceResources(chatId, { includeInactive: true }))
+    .find(item => String(item.id) === String(resourceId));
+  if (!resource) return sendJSON(res, 404, { error: { message: 'Service resource not found', status: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' } }, req);
+  const location = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
+  if (resource.locationId && !location) throw Object.assign(new Error('Service resource location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
+  if (!resource.locationId && session.locationId) throw Object.assign(new Error('Organization-wide service resources require organization-level scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
+  const action = req.method === 'GET' ? 'service:service_resource:view' : 'service:service_resource:manage';
+  await requireAuthorization(session, tenant, 'service_resource', action, {
+    location, deniedMessage: req.method === 'GET' ? 'Service availability view permission required' : 'Service availability management permission required',
+  });
+  if (req.method === 'GET') {
+    const availability = await getServiceResourceAvailability(chatId, resourceId);
+    return sendJSON(res, 200, { availability, state: availability.state || 'DECLARED', authority: 'service_resource_availability' }, req);
+  }
+  const body = await readBody(req);
+  const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
+  if (!idempotencyKey) return sendJSON(res, 400, { error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' } }, req);
+  const result = await setServiceResourceAvailability(chatId, resourceId, { ...body, idempotencyKey }, session);
+  return sendJSON(res, 200, { availability: result.availability, replayed: result.replayed, state: 'DECLARED' }, req);
+}
+
 async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId = null) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -3324,6 +3352,8 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-resources$/, handler: (req, res, m) => handleServiceResources(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/service-resources$/, handler: (req, res, m) => handleServiceResources(req, res, decodeURIComponent(m[1])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/service-resources\/([^/]+)$/, handler: (req, res, m) => handleServiceResources(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-resources\/([^/]+)\/availability$/, handler: (req, res, m) => handleServiceResourceAvailability(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'PUT', pattern: /^\/tenants\/([^/]+)\/service-resources\/([^/]+)\/availability$/, handler: (req, res, m) => handleServiceResourceAvailability(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/service-bookings$/, handler: (req, res, m) => handleServiceBookings(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/service-bookings$/, handler: (req, res, m) => handleServiceBookings(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/service-bookings\/([^/]+)$/, handler: (req, res, m) => handleServiceBookings(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },

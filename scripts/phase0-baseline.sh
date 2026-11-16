@@ -29,4 +29,6 @@ fi
 echo "PASS: JavaScript syntax baseline"
 node phase0/service-resource-foundation-regression.mjs
 node phase0/service-resource-persistence-regression.mjs
+node phase0/service-availability-contract-regression.mjs
+node phase0/service-availability-api-regression.mjs
 echo "PASS: Phase 0 baseline checks completed"

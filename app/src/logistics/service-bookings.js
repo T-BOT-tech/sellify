@@ -122,6 +122,7 @@ function serviceResourceCard(resource) {
     + (resource.description ? '<div class="logistics-meta">' + escapeHtml(resource.description) + '</div>' : '')
     + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">'
     + '<button type="button" class="btn-secondary service-resource-rename" data-resource-id="' + escapeAttr(resource.id) + '" data-version="' + escapeAttr(resource.version) + '">' + escapeHtml(t('serviceResourceRename')) + '</button>'
+    + '<button type="button" class="btn-secondary service-resource-availability" data-resource-id="' + escapeAttr(resource.id) + '">' + escapeHtml(t('serviceAvailabilityConfigure')) + '</button>'
     + '<button type="button" class="btn-secondary service-resource-toggle" data-resource-id="' + escapeAttr(resource.id) + '" data-version="' + escapeAttr(resource.version) + '" data-status="' + (active ? 'INACTIVE' : 'ACTIVE') + '">' + escapeHtml(active ? t('serviceResourceDeactivate') : t('serviceResourceActivate')) + '</button>'
     + '</div></article>';
 }
@@ -211,6 +212,70 @@ async function updateServiceResource(button, root, patch) {
   } finally {
     button.disabled = false;
   }
+}
+
+
+function serviceResourceAvailabilityEndpoint(resourceId) {
+  return serviceResourceEndpoint() + '/' + encodeURIComponent(resourceId) + '/availability';
+}
+
+async function openServiceResourceAvailability(button, root) {
+  const resourceId = button.dataset.resourceId;
+  const card = button.closest('.service-resource-card');
+  if (!card) return;
+  let panel = card.querySelector('.service-resource-availability-panel');
+  if (panel) { panel.remove(); return; }
+  panel = document.createElement('section');
+  panel.className = 'service-resource-availability-panel';
+  panel.style.cssText = 'display:grid;gap:8px;margin-top:10px;';
+  panel.innerHTML = '<p class="logistics-meta" role="status">' + escapeHtml(t('serviceAvailabilityLoading')) + '</p>';
+  card.append(panel);
+  button.disabled = true;
+  try {
+    const response = await fetch(serviceResourceAvailabilityEndpoint(resourceId), { headers: authHeaders() });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.error?.message || t('serviceAvailabilityLoadFailed'));
+    const availability = data.availability || {};
+    panel.dataset.version = String(availability.version || 0);
+    panel.innerHTML = '<div class="logistics-meta">' + escapeHtml(t('serviceAvailabilityTimezone')) + ': ' + escapeHtml(availability.timeZone || '') + '</div>'
+      + '<label>' + escapeHtml(t('serviceAvailabilityWorkingHours')) + '<textarea class="service-availability-hours" rows="7" spellcheck="false">' + escapeHtml(JSON.stringify(availability.workingHours || [], null, 2)) + '</textarea></label>'
+      + '<label>' + escapeHtml(t('serviceAvailabilityExceptions')) + '<textarea class="service-availability-exceptions" rows="5" spellcheck="false">' + escapeHtml(JSON.stringify(availability.exceptions || [], null, 2)) + '</textarea></label>'
+      + '<p class="logistics-meta">' + escapeHtml(t('serviceAvailabilityDeclarationOnly')) + '</p>'
+      + '<div class="logistics-meta service-availability-status" role="status">' + escapeHtml(availability.state === 'EMPTY' ? t('serviceAvailabilityEmpty') : t('serviceAvailabilityDeclared')) + '</div>'
+      + '<button type="button" class="btn-primary service-availability-save" data-resource-id="' + escapeAttr(resourceId) + '">' + escapeHtml(t('serviceAvailabilitySave')) + '</button>';
+  } catch (error) {
+    panel.textContent = error.message || t('serviceAvailabilityLoadFailed');
+  } finally { button.disabled = false; }
+}
+
+async function saveServiceResourceAvailability(button, root) {
+  const panel = button.closest('.service-resource-availability-panel');
+  if (!panel) return;
+  let workingHours, exceptions;
+  try {
+    workingHours = JSON.parse(panel.querySelector('.service-availability-hours')?.value || '[]');
+    exceptions = JSON.parse(panel.querySelector('.service-availability-exceptions')?.value || '[]');
+    if (!Array.isArray(workingHours) || !Array.isArray(exceptions)) throw new Error('Expected JSON arrays');
+  } catch (error) {
+    panel.querySelector('.service-availability-status').textContent = t('serviceAvailabilityInvalidJson');
+    return;
+  }
+  button.disabled = true;
+  const status = panel.querySelector('.service-availability-status');
+  status.textContent = t('serviceAvailabilitySaving');
+  try {
+    const response = await fetch(serviceResourceAvailabilityEndpoint(button.dataset.resourceId), {
+      method: 'PUT',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json', 'Idempotency-Key': 'service-availability-' + crypto.randomUUID() },
+      body: JSON.stringify({ working_hours: workingHours, exceptions, expected_version: Number(panel.dataset.version || 0) }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.error?.message || t('serviceAvailabilitySaveFailed'));
+    panel.dataset.version = String(data.availability?.version || panel.dataset.version);
+    status.textContent = t('serviceAvailabilitySavedDeclaration');
+  } catch (error) {
+    status.textContent = error.message || t('serviceAvailabilitySaveFailed');
+  } finally { button.disabled = false; }
 }
 
 export function serviceBookingsWorkspaceShell() {
@@ -336,10 +401,14 @@ export function mountServiceBookingsWorkspace(root = document) {
       const action = event.target.closest('.service-booking-action');
       const resourceToggle = event.target.closest('.service-resource-toggle');
       const resourceRename = event.target.closest('.service-resource-rename');
+      const resourceAvailability = event.target.closest('.service-resource-availability');
+      const availabilitySave = event.target.closest('.service-availability-save');
       const createResource = event.target.closest('#serviceResourceCreate');
       if (refresh) { refreshServiceBookings(root); refreshServiceResources(root); }
       if (action) transitionBooking(action, root);
       if (resourceToggle) updateServiceResource(resourceToggle, root, { status: resourceToggle.dataset.status });
+      if (resourceAvailability) openServiceResourceAvailability(resourceAvailability, root);
+      if (availabilitySave) saveServiceResourceAvailability(availabilitySave, root);
       if (resourceRename) {
         const nextName = window.prompt(t('serviceResourceRenamePrompt'))?.trim();
         if (nextName) updateServiceResource(resourceRename, root, { name: nextName });

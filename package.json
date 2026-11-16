@@ -463,7 +463,9 @@
     "test:marketplace-order-payment-bootstrap": "node phase0/marketplace-order-payment-bootstrap-regression.mjs",
     "test:p1-13": "node phase0/p1-13-pack-dependency-readiness-regression.mjs",
     "test:first-experience-workspace-activation": "node phase0/first-experience-workspace-activation-regression.mjs",
-    "test:country-evidence-source-registry": "node phase0/country-evidence-source-registry-regression.mjs"
+    "test:country-evidence-source-registry": "node phase0/country-evidence-source-registry-regression.mjs",
+    "test:service-availability-contract": "node phase0/service-availability-contract-regression.mjs",
+    "test:service-availability-api": "node phase0/service-availability-api-regression.mjs"
   },
   "engines": {
     "node": ">=24"

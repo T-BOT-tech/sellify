@@ -46,8 +46,10 @@ assert.ok(fulfillmentReplayLookup >= 0
   'durable fulfillment retries must replay before mutable order fingerprint and readiness validation');
 assert.match(fulfillmentTransition, /priorCommand\.server_order_id[\s\S]*?priorCommand\.command_fingerprint/,
   'durable fulfillment replay must reject key reuse across orders or changed command intent');
-assert.match(fulfillmentTransition, /FULFILLMENT_REPLAY_STATE_MISSING/,
-  'durable fulfillment replay must fail closed if its canonical result row is missing');
+assert.match(fulfillmentTransition, /FULFILLMENT_REPLAY_RESPONSE_MISSING/,
+  'durable fulfillment replay must fail closed if its persisted response snapshot is missing');
+assert.match(fulfillmentTransition, /priorCommand\.response_json/,
+  'durable fulfillment replay must return the original command response snapshot, not mutable current state');
 assert.match(fulfillmentTransition, /priorCommand\.command_fingerprint\) !== commandFingerprint/,
   'reusing a historical key with a different command fingerprint must conflict');
 assert.match(fulfillmentTransition, /INSERT INTO fulfillment_commands/,
