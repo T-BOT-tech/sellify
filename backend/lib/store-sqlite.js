@@ -2561,13 +2561,22 @@ if (!applied.includes(39)) {
     `);
     const fulfillmentColumns = new Set(db.prepare('PRAGMA table_info(fulfillments)').all().map(column => String(column.name)));
     if (fulfillmentColumns.has('last_command_fingerprint')) {
-      db.prepare(`
-        INSERT OR IGNORE INTO fulfillment_commands (organization_id, command_key, server_order_id, command_fingerprint, created_at)
-        SELECT organization_id, last_command_key, server_order_id, last_command_fingerprint, updated_at
-        FROM fulfillments
+      const legacyCommands = db.prepare(`
+        SELECT * FROM fulfillments
         WHERE last_command_key IS NOT NULL AND trim(last_command_key) <> ''
           AND last_command_fingerprint IS NOT NULL AND trim(last_command_fingerprint) <> ''
-      `).run();
+      `).all();
+      const insertLegacyCommand = db.prepare(`
+        INSERT OR IGNORE INTO fulfillment_commands
+          (organization_id, command_key, server_order_id, command_fingerprint, response_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      for (const legacy of legacyCommands) {
+        insertLegacyCommand.run(
+          legacy.organization_id, legacy.last_command_key, legacy.server_order_id,
+          legacy.last_command_fingerprint, json(fulfillmentFromRow(legacy)), legacy.updated_at,
+        );
+      }
     }
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(70, nowIso());
   }
@@ -10735,13 +10744,12 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
           statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSE_CONFLICT',
         });
       }
-      const replay = db.prepare('SELECT * FROM fulfillments WHERE server_order_id = ? AND organization_id = ?')
-        .get(String(serverOrderId), organizationId);
-      if (!replay) throw Object.assign(new Error('Fulfillment result for prior command is missing'), {
-        statusCode: 409, code: 'FULFILLMENT_REPLAY_STATE_MISSING',
+      const originalResult = parseJSON(priorCommand.response_json, null);
+      if (!originalResult || !originalResult.id) throw Object.assign(new Error('Stored fulfillment command response is missing'), {
+        statusCode: 409, code: 'FULFILLMENT_REPLAY_RESPONSE_MISSING',
       });
       db.exec('COMMIT');
-      return fulfillmentFromRow(replay);
+      return originalResult;
     }
     const freshCommandFingerprint = crypto.createHash('sha256').update(JSON.stringify({
       fulfillment_type: input.fulfillmentType === undefined && input.fulfillment_type === undefined
@@ -10882,9 +10890,10 @@ export async function transitionOrderFulfillment(chatId, serverOrderId, nextStat
     );
     const updated = db.prepare('SELECT * FROM fulfillments WHERE id = ?').get(row.id);
     db.prepare(`
-      INSERT INTO fulfillment_commands (organization_id, command_key, server_order_id, command_fingerprint, created_at)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(organizationId, commandKey, String(serverOrderId), commandFingerprint, now);
+      INSERT INTO fulfillment_commands
+        (organization_id, command_key, server_order_id, command_fingerprint, response_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(organizationId, commandKey, String(serverOrderId), commandFingerprint, json(fulfillmentFromRow(updated)), now);
     const inventoryMovements = applyCoreFulfillmentInventoryConsequence(key, updated, freshOrderJson, actor, isCanonicalMarketplaceOrderRow(freshOrderRow));
     audit(key, 'fulfillment.transitioned', 'fulfillment', row.id, {
       orderId: String(serverOrderId), from: current, to: target, commandKey,
