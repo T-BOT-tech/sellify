@@ -276,6 +276,30 @@ try {
   assert.notEqual(completed.booking.completed_at, '1999-01-01T00:00:00.000Z');
   assert.equal(completed.booking.completed_by, owner.id, 'service completer must come from authenticated actor context');
   assert.equal(completed.booking.completion_note, 'Consultation completed; follow-up plan provided.');
+  assert.equal(db.prepare(
+    'SELECT state FROM service_resource_commitments WHERE booking_id = ?'
+  ).get(executionBooking.booking.id).state, 'RELEASED',
+  'completed appointment must release its committed resource interval');
+  const completionAuditRow = db.prepare(
+    "SELECT metadata_json FROM audit_events WHERE entity_type = 'service_booking' AND entity_id = ? AND action = 'services.booking.completed'"
+  ).get(executionBooking.booking.id);
+  assert.equal(JSON.parse(completionAuditRow.metadata_json).resource_commitment_released, true,
+    'completion audit must record resource release');
+  const replacementBooking = await store.createServiceBooking(seller.chatId, order.server_order_id, {
+    ...request,
+    requested_start: '2026-11-05T09:00:00+03:00',
+    requested_end: '2026-11-05T10:00:00+03:00',
+    idempotency_key: 'booking-create-after-completion-' + suffix,
+  }, { userId: owner.id });
+  const replacementAccepted = await store.transitionServiceBooking(seller.chatId, order.server_order_id, replacementBooking.booking.id, {
+    status: 'ACCEPTED', expected_version: 1, idempotency_key: 'booking-after-completion-accept-' + suffix,
+  }, { userId: owner.id });
+  const replacementConfirmed = await store.transitionServiceBooking(seller.chatId, order.server_order_id, replacementBooking.booking.id, {
+    status: 'CONFIRMED', expected_version: replacementAccepted.booking.version,
+    service_resource_id: serviceResourceId, idempotency_key: 'booking-after-completion-confirm-' + suffix,
+  }, { userId: owner.id });
+  assert.equal(replacementConfirmed.booking.status, 'CONFIRMED',
+    'released resource interval must be available to a subsequent appointment');
   const completedReplay = await store.transitionServiceBooking(seller.chatId, order.server_order_id, executionBooking.booking.id, {
     status: 'COMPLETED', expected_version: 4, completion_note: 'Consultation completed; follow-up plan provided.',
     idempotency_key: 'booking-execution-complete-' + suffix,
