@@ -147,7 +147,7 @@ import {
   discoverSupplierNetwork, getSupplierNetworkMarketplaceIntegration, setProcurementSupplierParticipation,
   getPackLifecycle, transitionPackLifecycle, getPaymentSettlementByIdempotencyKey, createPaymentSettlement, finalizePaymentSettlement, listPaymentSettlements, listPaymentRoutingPolicies, upsertPaymentRoutingPolicy, certifyPaymentProviderCapability, listPaymentOperationalActions, createPaymentOperationalAction, updatePaymentOperationalAction, recordPaymentProviderCapabilityEvidence, listPaymentProviderCapabilityEvidence, recordPaymentProductionCertification, listPaymentProductionCertifications,
 } from './lib/store-sqlite.js';
-import { AUTHZ, authorize, ROLES, getRolePermissions } from './lib/authorization.js';
+import { AUTHZ, authorize, hasAuthorization, ROLES, getRolePermissions } from './lib/authorization.js';
 import { assertTenantScope, assertLocationScope } from './lib/tenant-isolation.js';
 import { getPaymentProvider, listPaymentProviders, registerPaymentProvider, requirePaymentProvider, certifyPaymentProviderCapabilities, certifyAllPaymentProviders } from './lib/payments/provider-registry.js';
 import { PROVIDER_ADAPTERS } from './lib/payments/provider-adapters.js';
@@ -1734,10 +1734,7 @@ async function handleAuthorizationScopeContext(req, res, chatId) {
   await locationView;
 
   const locations = await listOrganizationLocations(chatId, { includeInactive: true });
-  const canManageLocations = (() => {
-    try { authorize(session, tenant, null, 'scope_context', 'locations:manage'); return true; }
-    catch (_) { return false; }
-  })();
+  const canManageLocations = hasAuthorization(session, tenant, null, 'scope_context', 'locations:manage');
 
   const currentLocationId = session.locationId || null;
   const currentLocation = currentLocationId
