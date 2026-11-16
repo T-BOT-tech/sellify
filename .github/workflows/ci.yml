@@ -316,6 +316,16 @@ jobs:
         run: npm run test:fux-55
       - name: TG-1 Telegram storefront lifecycle regression
         run: npm run tg1:telegram-storefront-test
+      - name: TG-4 Telegram buyer storefront API regression
+        run: npm run tg4:telegram-buyer-test
+      - name: TG-5 Telegram buyer identity regression
+        run: npm run tg5:telegram-buyer-test
+      - name: TG-6 Telegram checkout authority regression
+        run: npm run tg6:telegram-checkout-test
+      - name: TG-7 Telegram buyer orders isolation regression
+        run: npm run tg7:telegram-buyer-orders-test
+      - name: TG-8 Telegram fulfillment boundary regression
+        run: npm run tg8:telegram-fulfillment-test
       - name: TG-10 Telegram storefront verification security regression
         run: npm run tg10:telegram-security-test
       - name: FUX-56 B2B customer pricing authority regression
