@@ -77,7 +77,7 @@ export function checkoutTelegramWebApp() {
 
   const result = getActivePlatform().submitOrder(payload);
   if (result && result.ok) {
-    showToast("Order submitted to Telegram! 💬");
+    showToast("Order handed off to Telegram; server confirmation is pending. 💬");
     recordTelegramSentOrder(items, total, custName, custPhone);
     return;
   }
@@ -104,7 +104,10 @@ export function recordTelegramSentOrder(items, total, custName, custPhone) {
     payment_method_id: 'telegram',
     payment_method_name: 'Telegram',
     payment_proof: null,
-    status: 'synced',
+    // Telegram sendData only confirms the client handoff call returned. It is not
+    // a canonical backend order acknowledgement, so never mark this local record synced.
+    status: 'handoff_pending',
+    handoff_state: 'TRANSPORT_SUBMITTED_UNCONFIRMED',
     source: 'Telegram Mini App (TWA)',
     created_at: Date.now(),
     created_by_role: currentStaff ? currentStaff.role : 'owner',

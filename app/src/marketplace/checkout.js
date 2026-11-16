@@ -110,6 +110,35 @@ function isParcelDeliveryListing(listing) {
 }
 
 const MARKETPLACE_INTENT_KEY = STORAGE_KEYS.marketplaceCheckoutIntents;
+const MARKETPLACE_TELEGRAM_HANDOFF_KEY = 'sellify_marketplace_telegram_handoff_pending';
+
+async function readPendingMarketplaceTelegramHandoff() {
+  try {
+    const stored = await idbGet(MARKETPLACE_TELEGRAM_HANDOFF_KEY);
+    if (stored) return stored;
+  } catch (error) {}
+  try { return JSON.parse(localStorage.getItem(MARKETPLACE_TELEGRAM_HANDOFF_KEY) || 'null'); }
+  catch (error) { return null; }
+}
+
+async function writePendingMarketplaceTelegramHandoff(intent) {
+  const handoff = {
+    ...intent,
+    status: 'handoff_pending',
+    handoff_state: 'TRANSPORT_SUBMITTED_UNCONFIRMED',
+  };
+  try {
+    await idbSet(MARKETPLACE_TELEGRAM_HANDOFF_KEY, handoff);
+    try { localStorage.removeItem(MARKETPLACE_TELEGRAM_HANDOFF_KEY); } catch (error) {}
+  } catch (error) {
+    localStorage.setItem(MARKETPLACE_TELEGRAM_HANDOFF_KEY, JSON.stringify(handoff));
+  }
+}
+
+async function clearPendingMarketplaceTelegramHandoff() {
+  try { await idbSet(MARKETPLACE_TELEGRAM_HANDOFF_KEY, null); } catch (error) {}
+  try { localStorage.removeItem(MARKETPLACE_TELEGRAM_HANDOFF_KEY); } catch (error) {}
+}
 
 async function readPendingMarketplaceIntent() {
   try {
@@ -187,7 +216,11 @@ async function submitMarketplaceOrderOnce() {
   const entries = Object.values(marketplaceCart);
   if (entries.length === 0) return;
 
-  // Do not create a second order while a prior checkout has an ambiguous outcome.
+  // Never create a second order while an earlier checkout/handoff has an ambiguous outcome.
+  if (await readPendingMarketplaceTelegramHandoff()) {
+    showToast('A previous Telegram handoff is still awaiting server confirmation. Do not resubmit it; verify the order with the seller first.');
+    return;
+  }
   if (await readPendingMarketplaceIntent()) {
     await retryPendingMarketplaceCheckouts();
     return;
@@ -248,12 +281,26 @@ async function submitMarketplaceOrderOnce() {
     total: items.reduce((sum, item) => sum + (item.qty * item.price), 0),
     items,
   };
-  const twaResult = getActivePlatform().submitOrder(twaPayload);
-  if (twaResult && twaResult.ok) {
-    setMarketplaceCart({});
-    closeMarketCheckoutModal();
-    renderMarketplace();
-    showToast('Marketplace order sent to Telegram for processing.');
+  const platform = getActivePlatform();
+  if (platform.id === 'telegram' && platform.isActive()) {
+    // Persist a separate handoff record before transport. Do not reuse the API
+    // retry queue: an unacknowledged Telegram handoff must not be POSTed again
+    // automatically, because the bot may already have received it.
+    try {
+      await writePendingMarketplaceTelegramHandoff(intent);
+    } catch (error) {
+      showToast('Could not safely record this Telegram handoff. Nothing was submitted; check device storage and try again.');
+      return;
+    }
+    const twaResult = platform.submitOrder(twaPayload);
+    if (twaResult && twaResult.ok) {
+      showToast('Telegram handoff submitted; server confirmation is pending. Do not resubmit until the seller confirms the order.');
+      return;
+    }
+    // A failed/ambiguous transport result is not proof that Telegram did not
+    // receive the payload. Keep the marker and do not fall through to API checkout,
+    // which could create a duplicate order if the bot received the first handoff.
+    showToast('Telegram handoff could not be confirmed. Do not submit again; verify with the seller before retrying.');
     return;
   }
 

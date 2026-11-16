@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { normalizeTelegramCheckoutContext, buildTelegramPaymentBoundary, TELEGRAM_CHECKOUT_CONSTITUTION } from '../app/src/platform/telegram-checkout-contract.js';
 import { spawn } from 'node:child_process';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -9,6 +9,27 @@ import { setTimeout as sleep } from 'node:timers/promises';
 assert.equal(TELEGRAM_CHECKOUT_CONSTITUTION.telegramPaymentLedger, false);
 assert.equal(TELEGRAM_CHECKOUT_CONSTITUTION.telegramPaymentExecution, false);
 assert.equal(TELEGRAM_CHECKOUT_CONSTITUTION.orderAuthority, 'existing_commerce_marketplace');
+const sellerCheckoutSource = await readFile(new URL('../app/src/orders/checkout.js', import.meta.url), 'utf8');
+const telegramRecordSource = sellerCheckoutSource.slice(
+  sellerCheckoutSource.indexOf('export function recordTelegramSentOrder'),
+  sellerCheckoutSource.indexOf('export function saveOrder')
+);
+assert.match(telegramRecordSource, /status: 'handoff_pending'/);
+assert.match(telegramRecordSource, /TRANSPORT_SUBMITTED_UNCONFIRMED/);
+assert.doesNotMatch(telegramRecordSource, /status: 'synced'/);
+assert.match(sellerCheckoutSource, /server confirmation is pending/i);
+const orderQueueSource = await readFile(new URL('../app/src/orders/queue.js', import.meta.url), 'utf8');
+assert.match(orderQueueSource, /o\.status === 'queued'\)\.length/);
+assert.match(orderQueueSource, /Telegram handoff pending — not server-confirmed/);
+const marketplaceCheckoutSource = await readFile(new URL('../app/src/marketplace/checkout.js', import.meta.url), 'utf8');
+assert.match(marketplaceCheckoutSource, /sellify_marketplace_telegram_handoff_pending/);
+assert.match(marketplaceCheckoutSource, /status: 'handoff_pending'/);
+assert.match(marketplaceCheckoutSource, /TRANSPORT_SUBMITTED_UNCONFIRMED/);
+assert.match(marketplaceCheckoutSource, /server confirmation is pending/i);
+assert.match(marketplaceCheckoutSource, /Do not resubmit until the seller confirms/i);
+assert.match(marketplaceCheckoutSource, /readPendingMarketplaceTelegramHandoff\(\)/);
+
+
 const ctx = normalizeTelegramCheckoutContext({ enabledCapabilities: ['checkout','order_status'], metadata: { payment: { mode: 'payment_core' } } });
 assert.equal(ctx.checkoutEnabled, true);
 assert.equal(ctx.payment.authority, 'existing_payment_core');
