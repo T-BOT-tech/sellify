@@ -9,6 +9,15 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 
+const serviceBookingServerSource = await readFile(new URL('../backend/server.js', import.meta.url), 'utf8');
+const resourceScopeGuard = serviceBookingServerSource.slice(
+  serviceBookingServerSource.indexOf('// Confirmation binds a resource as well as a booking.'),
+  serviceBookingServerSource.indexOf("if (req.method === 'POST')", serviceBookingServerSource.indexOf('// Confirmation binds a resource as well as a booking.')),
+);
+assert.match(resourceScopeGuard, /authorizationAction === 'service:booking:confirm'/);
+assert.match(resourceScopeGuard, /requireAuthorization\(session, tenant, 'service_booking', authorizationAction/);
+assert.doesNotMatch(resourceScopeGuard, /logistics:scheduling:confirm/);
+
 const tempDir = await mkdtemp(path.join(os.tmpdir(), 'sellify-service-catalog-http-'));
 const dbPath = path.join(tempDir, 'sellify.sqlite');
 process.env.SELLIFY_DATA_DIR = tempDir;
