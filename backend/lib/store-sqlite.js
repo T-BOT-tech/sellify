@@ -3481,32 +3481,39 @@ if (!applied.includes(39)) {
         'id', 'organization_id', 'chat_id', 'resource_id', 'booking_id',
         'starts_at', 'ends_at', 'status', 'created_by', 'created_at', 'updated_at',
       ];
-      if (requiredStatusColumns.every(name => statusLegacyColumns.has(name))) {
-        db.prepare(`
-          INSERT OR IGNORE INTO service_resource_commitments
-            (id, organization_id, chat_id, resource_id, booking_id, starts_at, ends_at,
-             state, committed_by, committed_at, released_by, released_at)
-          SELECT
-            'migration-81:status-v80:' || c.id,
-            c.organization_id, c.chat_id, c.resource_id, c.booking_id, c.starts_at, c.ends_at,
-            CASE WHEN c.status = 'ACTIVE' AND b.status IN ('CONFIRMED','IN_PROGRESS')
-              THEN 'COMMITTED' ELSE 'RELEASED' END,
-            c.created_by, COALESCE(c.created_at, b.created_at, ?),
-            NULL,
-            CASE WHEN c.status = 'ACTIVE' AND b.status IN ('CONFIRMED','IN_PROGRESS')
-              THEN NULL ELSE COALESCE(c.updated_at, c.created_at, ?) END
-          FROM service_resource_commitments_v80_status_legacy c
-          JOIN service_bookings b
-            ON b.id = c.booking_id
-           AND b.organization_id = c.organization_id
-           AND b.chat_id = c.chat_id
-          JOIN service_resources r
-            ON r.id = c.resource_id
-           AND r.organization_id = c.organization_id
-           AND r.chat_id = c.chat_id
-          WHERE c.ends_at > c.starts_at
-        `).run(nowIso(), nowIso());
+      const missingStatusColumns = requiredStatusColumns.filter(name => !statusLegacyColumns.has(name));
+      if (missingStatusColumns.length) {
+        // Never discard an unrecognized legacy ledger: failing startup is safer
+        // than silently losing resource-commitment evidence during migration.
+        throw Object.assign(
+          new Error(`Unsupported v80 service_resource_commitments schema; preserved legacy table because required columns are missing: ${missingStatusColumns.join(', ')}`),
+          { code: 'SERVICE_RESOURCE_COMMITMENT_MIGRATION_UNSUPPORTED_LEGACY_SCHEMA' },
+        );
       }
+      db.prepare(`
+        INSERT OR IGNORE INTO service_resource_commitments
+          (id, organization_id, chat_id, resource_id, booking_id, starts_at, ends_at,
+           state, committed_by, committed_at, released_by, released_at)
+        SELECT
+          'migration-81:status-v80:' || c.id,
+          c.organization_id, c.chat_id, c.resource_id, c.booking_id, c.starts_at, c.ends_at,
+          CASE WHEN c.status = 'ACTIVE' AND b.status IN ('CONFIRMED','IN_PROGRESS')
+            THEN 'COMMITTED' ELSE 'RELEASED' END,
+          c.created_by, COALESCE(c.created_at, b.created_at, ?),
+          NULL,
+          CASE WHEN c.status = 'ACTIVE' AND b.status IN ('CONFIRMED','IN_PROGRESS')
+            THEN NULL ELSE COALESCE(c.updated_at, c.created_at, ?) END
+        FROM service_resource_commitments_v80_status_legacy c
+        JOIN service_bookings b
+          ON b.id = c.booking_id
+         AND b.organization_id = c.organization_id
+         AND b.chat_id = c.chat_id
+        JOIN service_resources r
+          ON r.id = c.resource_id
+         AND r.organization_id = c.organization_id
+         AND r.chat_id = c.chat_id
+        WHERE c.ends_at > c.starts_at
+      `).run(nowIso(), nowIso());
       db.exec('DROP TABLE service_resource_commitments_v80_status_legacy');
     }
 
