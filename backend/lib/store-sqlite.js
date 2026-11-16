@@ -5468,14 +5468,50 @@ export async function createInvoice(chatId, input = {}, actor = null) {
 const INVOICE_TRANSITIONS = Object.freeze({ DRAFT: new Set(['ISSUED','CANCELLED']), ISSUED: new Set(['VOID']), VOID: new Set([]), CANCELLED: new Set([]) });
 
 export async function transitionInvoice(chatId, invoiceId, targetState, actor = null, reason = '') {
-  const current = await getInvoice(chatId, invoiceId);
-  if (!current) throw Object.assign(new Error('Invoice not found'), { statusCode: 404, code: 'INVOICE_NOT_FOUND' });
-  const target = String(targetState || '').toUpperCase();
-  if (!INVOICE_TRANSITIONS[current.status]?.has(target)) throw Object.assign(new Error(`Invalid invoice transition ${current.status} -> ${target}`), { statusCode: 409, code: 'INVALID_INVOICE_TRANSITION' });
-  const now = nowIso(); const issuedAt = target === 'ISSUED' ? now : current.issuedAt;
-  db.prepare('UPDATE invoices SET status = ?, issued_at = ?, updated_at = ? WHERE id = ? AND organization_id = ?').run(target, issuedAt, now, current.id, current.organizationId);
-  audit(String(chatId), 'b2b.invoice.transitioned', 'invoices', current.id, { from: current.status, to: target, reason: String(reason || '') }, { organizationId: current.organizationId, actorId: actor?.userId || null, reason });
-  return getInvoice(chatId, current.id);
+  ensureDatabase();
+  const organizationId = await tenantOrganizationId(chatId);
+
+  // Resolve and transition the invoice under one SQLite write transaction.
+  // Do not await inside the transaction: concurrent calls share this DB
+  // connection, and an async yield could let another call start a nested txn.
+  db.exec('BEGIN IMMEDIATE');
+  let invoiceIdForRead = String(invoiceId);
+  try {
+    const row = db.prepare('SELECT * FROM invoices WHERE id = ? AND organization_id = ?')
+      .get(invoiceIdForRead, organizationId);
+    const current = invoiceFromRow(row, row ? invoiceItems(row.id) : []);
+    if (!current) throw Object.assign(new Error('Invoice not found'), { statusCode: 404, code: 'INVOICE_NOT_FOUND' });
+
+    const target = String(targetState || '').toUpperCase();
+    if (!INVOICE_TRANSITIONS[current.status]?.has(target)) {
+      throw Object.assign(new Error(`Invalid invoice transition ${current.status} -> ${target}`), {
+        statusCode: 409,
+        code: 'INVALID_INVOICE_TRANSITION',
+      });
+    }
+
+    const now = nowIso();
+    const issuedAt = target === 'ISSUED' ? now : current.issuedAt;
+    const update = db.prepare(
+      'UPDATE invoices SET status = ?, issued_at = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND status = ?'
+    ).run(target, issuedAt, now, current.id, current.organizationId, current.status);
+    if (Number(update.changes) !== 1) {
+      throw Object.assign(new Error('Invoice state changed; reload and retry'), {
+        statusCode: 409,
+        code: 'INVOICE_STATE_CONFLICT',
+      });
+    }
+
+    audit(String(chatId), 'b2b.invoice.transitioned', 'invoices', current.id,
+      { from: current.status, to: target, reason: String(reason || '') },
+      { organizationId: current.organizationId, actorId: actor?.userId || null, reason });
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+
+  return getInvoice(chatId, invoiceIdForRead);
 }
 
 function importLegacyJSON() {
