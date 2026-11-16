@@ -50,11 +50,14 @@ assert.throws(() => normalizeServiceBookingRequest({
   requested_start: '2026-11-01T10:00:00Z', requested_end: '2026-11-01T09:00:00Z',
 }), error => error?.code === 'SERVICE_BOOKING_TIME_WINDOW_INVALID');
 
-assert.throws(() => normalizeServiceBookingRequest({
-  order_id: 'o1', service_item_id: 's1',
-  requested_start: '2026-11-01T09:00:00Z', requested_end: '2026-11-01T10:00:00Z',
-  payment_id: 'caller-controlled',
-}), error => error?.code === 'SERVICE_BOOKING_AUTHORITY_FIELD_FORBIDDEN');
+for (const field of ['payment_id', 'service_resource_id', 'serviceResourceId', 'resource_id', 'resourceId']) {
+  assert.throws(() => normalizeServiceBookingRequest({
+    order_id: 'o1', service_item_id: 's1',
+    requested_start: '2026-11-01T09:00:00Z', requested_end: '2026-11-01T10:00:00Z',
+    [field]: 'caller-controlled',
+  }), error => error?.code === 'SERVICE_BOOKING_AUTHORITY_FIELD_FORBIDDEN',
+  `${field} must not be caller-controlled booking input`);
+}
 
 assert.throws(() => normalizeServiceBookingRequest({
   order_id: 'o1', service_item_id: 's1',
