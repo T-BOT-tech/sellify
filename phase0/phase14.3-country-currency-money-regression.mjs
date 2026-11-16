@@ -37,6 +37,7 @@ const identity = resolveEthiopiaIdentity({
 assert.equal(identity.currency, 'ETB');
 assert.equal(identity.language, 'am');
 
+assert.equal(COUNTRY_MONEY_LOCALIZATION_CONTRACT.currencyMetadataAuthority, 'app/src/currency-money-contract.js');
 assert.equal(COUNTRY_MONEY_LOCALIZATION_CONTRACT.persistence, 'none');
 assert.equal(COUNTRY_MONEY_LOCALIZATION_CONTRACT.ownsMoneyLedger, false);
 assert.equal(COUNTRY_MONEY_LOCALIZATION_CONTRACT.ownsExchangeRates, false);
