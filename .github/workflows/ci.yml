@@ -9,6 +9,20 @@ permissions:
   contents: read
 
 jobs:
+  service_migration_compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install root dependencies
+        run: npm install --ignore-scripts
+      - name: Service Resource migration 80/81 compatibility regression
+        run: npm run test:service-resource-migration-compatibility
+
   logistics_l18:
     runs-on: ubuntu-latest
     strategy:
@@ -128,8 +142,6 @@ jobs:
         run: npm run test:service-booking-contract
       - name: Service booking persistence regression
         run: npm run test:service-booking-persistence
-      - name: Service Resource migration 80/81 compatibility regression
-        run: npm run test:service-resource-migration-compatibility
       - name: Service booking scheduling authority boundary regression
         run: npm run test:service-booking-scheduling-boundary
       - name: Service booking operator workspace regression
