@@ -165,4 +165,8 @@ export default {
     serviceResourceProviderAssignFailed: "No se pudo actualizar el acceso del proveedor.",
     serviceResourceNoProviderMembers: "No hay miembros del personal elegibles.",
     serviceResourceProviderDescription: "Consulta los recursos de servicio que tienes asignados y mantén sus horarios declarados. La disponibilidad no se confirma hasta revisar los compromisos existentes.",
+    serviceBookingSelectResource: "Recurso de servicio",
+    serviceBookingNoEligibleResource: "No hay un recurso activo con horario declarado para este servicio.",
+    serviceBookingResourceRequired: "Selecciona un recurso de servicio antes de confirmar la cita.",
+    serviceBookingAssignedResource: "Recurso asignado",
 };
