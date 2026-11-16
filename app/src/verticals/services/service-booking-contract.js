@@ -36,6 +36,7 @@ const FORBIDDEN_AUTHORITY_FIELDS = new Set([
   'fulfillment_id', 'fulfillmentId', 'inventory_reservation_id',
   'inventoryReservationId', 'courier_id', 'courierId',
   'provider_id', 'providerId', 'organization_id', 'organizationId',
+  'service_resource_id', 'serviceResourceId', 'resource_id', 'resourceId',
 ]);
 
 function invalid(message, code = 'SERVICE_BOOKING_INVALID') {
