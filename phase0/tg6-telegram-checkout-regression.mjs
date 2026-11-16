@@ -18,6 +18,10 @@ assert.match(telegramRecordSource, /status: 'handoff_pending'/);
 assert.match(telegramRecordSource, /TRANSPORT_SUBMITTED_UNCONFIRMED/);
 assert.doesNotMatch(telegramRecordSource, /status: 'synced'/);
 assert.match(sellerCheckoutSource, /server confirmation is pending/i);
+const orderQueueSource = await readFile(new URL('../app/src/orders/queue.js', import.meta.url), 'utf8');
+assert.match(orderQueueSource, /o\.status === 'queued'\)\.length/);
+assert.match(orderQueueSource, /Telegram handoff pending — not server-confirmed/);
+
 
 const ctx = normalizeTelegramCheckoutContext({ enabledCapabilities: ['checkout','order_status'], metadata: { payment: { mode: 'payment_core' } } });
 assert.equal(ctx.checkoutEnabled, true);
