@@ -117,7 +117,8 @@ try {
   const authHeaders={'Content-Type':'application/json','X-Telegram-Init-Data':initData};
 
   const history=await request(`/api/telegram-storefront/${encodeURIComponent(tenant.chatId)}/orders`,{headers:authHeaders});
-  assert.equal(history.response.status,200,JSON.stringify({response:history.body.error||history.body,serverStderr:serverStderr.slice(-8000)}));
+  if (history.response.status !== 200) console.error('TG-11 buyer order-history failure diagnostics', JSON.stringify({status:history.response.status,body:history.body,serverStderr}));
+  assert.equal(history.response.status,200,JSON.stringify({response:history.body.error||history.body,serverStderr:serverStderr.slice(-12000)}));
   assert.equal(history.body.orders[0].sellers[0].service_items[0].id,'tg11-consultation');
 
   const assessment=await request(baseUrl+'/assessment',{
