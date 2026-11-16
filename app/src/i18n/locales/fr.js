@@ -81,4 +81,8 @@ export default {
     serviceResourceProviderAssignFailed: "Impossible de modifier l’accès du prestataire.",
     serviceResourceNoProviderMembers: "Aucun membre du personnel admissible.",
     serviceResourceProviderDescription: "Consultez les ressources de service qui vous sont attribuées et mettez à jour leurs horaires déclarés. La disponibilité n’est pas confirmée tant que les engagements existants ne sont pas vérifiés.",
+    serviceBookingSelectResource: "Ressource de service",
+    serviceBookingNoEligibleResource: "Aucune ressource active avec un horaire déclaré n'est configurée pour ce service.",
+    serviceBookingResourceRequired: "Sélectionnez une ressource avant de confirmer ce rendez-vous.",
+    serviceBookingAssignedResource: "Ressource attribuée",
 };
