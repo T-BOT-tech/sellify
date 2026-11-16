@@ -66,9 +66,12 @@ const fs = await import('node:fs/promises');
 const backendSource = await fs.readFile(new URL('../backend/lib/store-sqlite.js', import.meta.url), 'utf8');
 assert.match(backendSource, /from '\.\.\/\.\.\/shared\/service-window-assessment-contract\.js'/);
 assert.doesNotMatch(backendSource, /from ['\"]\.\.\/\.\.\/app\/src\/verticals\/services\/service-window-assessment-contract\.js['\"]/);
-const sharedSource = await fs.readFile(new URL('../shared/service-window-assessment-contract.js', import.meta.url), 'utf8');
-assert.match(sharedSource, /export function assessServiceResourceDeclaredWindow/);
-assert.match(sharedSource, /export function serviceLocalDateTimeToIso/);
+const backendContract = await fs.readFile(new URL('../backend/lib/service-window-assessment-contract.js', import.meta.url), 'utf8');
+const frontendContract = await fs.readFile(new URL('../app/src/verticals/services/service-window-assessment-contract.js', import.meta.url), 'utf8');
+assert.match(backendContract, /export function assessServiceResourceDeclaredWindow/);
+assert.match(backendContract, /export function serviceLocalDateTimeToIso/);
+assert.match(frontendContract, /export function assessServiceResourceDeclaredWindow/);
+assert.match(frontendContract, /export function serviceLocalDateTimeToIso/);
 
 const uiSource = await (await import('node:fs/promises')).readFile(new URL('../app/src/logistics/service-bookings.js', import.meta.url), 'utf8');
 assert.match(uiSource, /assessServiceResourceDeclaredWindow/);
