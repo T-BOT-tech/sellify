@@ -25,6 +25,9 @@ process.env.SELLIFY_DATA_DIR=dataDir;
 process.env.SELLIFY_DB_PATH=path.join(dataDir,'sellify.sqlite');
 process.env.SELLIFY_BACKUP_DIR=path.join(dataDir,'backups');
 const child = spawn(process.execPath,[path.join(root,'backend/server.js')],{cwd:root,env,stdio:['ignore','ignore','pipe']});
+let serverStderr = '';
+child.stderr.setEncoding('utf8');
+child.stderr.on('data', chunk => { serverStderr += chunk; });
 const request = async (url,options={}) => {
   const response=await fetch(`http://127.0.0.1:${port}${url}`,options);
   return {response,body:await response.json().catch(()=>({}))};
@@ -114,7 +117,7 @@ try {
   const authHeaders={'Content-Type':'application/json','X-Telegram-Init-Data':initData};
 
   const history=await request(`/api/telegram-storefront/${encodeURIComponent(tenant.chatId)}/orders`,{headers:authHeaders});
-  assert.equal(history.response.status,200,JSON.stringify(history.body.error||history.body));
+  assert.equal(history.response.status,200,JSON.stringify({response:history.body.error||history.body,serverStderr:serverStderr.slice(-8000)}));
   assert.equal(history.body.orders[0].sellers[0].service_items[0].id,'tg11-consultation');
 
   const assessment=await request(baseUrl+'/assessment',{
