@@ -77,9 +77,8 @@ try {
     .all(legacyLedgerBooking.id, assignedColumnBooking.id);
   assert.equal(originalCommitments.length, 2);
 
-  // Emulate the PR #234 v80 shape: assigned_resource_id plus a differently
-  // named commitment ledger. The canonical service_resource_id is absent for
-  // this booking, so migration 81 must map only this explicit assignment.
+  // Emulate the alternative assigned_resource_id + separately named ledger
+  // schema for one booking. Migration 81 must map only this explicit assignment.
   db.exec(`
     ALTER TABLE service_bookings ADD COLUMN assigned_resource_id TEXT;
     ALTER TABLE service_bookings ADD COLUMN resource_commitment_state TEXT NOT NULL DEFAULT 'NONE';
@@ -114,8 +113,33 @@ try {
     .run(old.id, old.organization_id, old.chat_id, old.booking_id, old.resource_id,
       old.starts_at, old.ends_at, old.state, old.committed_by, old.committed_at, old.released_by, old.released_at);
 
-  // Emulate PR #235 v80: service_resource_id + index, but no commitment ledger.
-  db.exec('DROP TABLE service_resource_commitments');
+  // Emulate the conflicting Telegram-journey v80 shape: same table name,
+  // but status/created_at columns instead of state/commit timestamps.
+  const assigned = originalCommitments.find(row => row.booking_id === assignedColumnBooking.id);
+  db.exec(`
+    DROP TABLE service_resource_commitments;
+    CREATE TABLE service_resource_commitments (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      chat_id TEXT NOT NULL,
+      resource_id TEXT NOT NULL,
+      booking_id TEXT NOT NULL UNIQUE,
+      starts_at TEXT NOT NULL,
+      ends_at TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('ACTIVE','RELEASED','COMPLETED')),
+      created_by TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      CHECK (ends_at > starts_at)
+    );
+    CREATE INDEX idx_service_resource_commitments_overlap
+      ON service_resource_commitments(organization_id, resource_id, status, starts_at, ends_at);
+  `);
+  db.prepare(`INSERT INTO service_resource_commitments
+    (id, organization_id, chat_id, resource_id, booking_id, starts_at, ends_at, status, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?)`)
+    .run(assigned.id, assigned.organization_id, assigned.chat_id, assigned.resource_id, assigned.booking_id,
+      assigned.starts_at, assigned.ends_at, assigned.committed_by, assigned.committed_at, assigned.committed_at);
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_service_bookings_resource_window
       ON service_bookings(organization_id, chat_id, service_resource_id, status, requested_start, requested_end);
