@@ -48,10 +48,9 @@ const DEFINITIONS = [
   ['warehouse', 'stock_adjustment', 'view', 'inventory:view'],
   ['warehouse', 'stock_adjustment', 'manage', 'inventory:edit'],
 
-  // Logistics currently has no pack-level permission metadata and no central
-  // logistics-specific permission in Phase 10.3. Register the vocabulary
-  // without inventing policy. Later enforcement must remain DENY until a
-  // deliberate central authorization change exists.
+  // Logistics vocabulary. Logistics lifecycle and delivery authority remain
+  // unchanged; null permissions are deliberately non-executable for all
+  // non-owner roles until the central policy is deliberately extended.
   ['logistics', 'shipment', 'view', null],
   ['logistics', 'shipment', 'manage', null],
   ['logistics', 'route', 'view', null],
@@ -69,6 +68,17 @@ const DEFINITIONS = [
   ['logistics', 'scheduling', 'manage', 'logistics:scheduling:manage'],
   ['logistics', 'scheduling', 'confirm', 'logistics:scheduling:confirm'],
   ['logistics', 'scheduling', 'cancel', 'logistics:scheduling:cancel'],
+
+  // Service Pack resource administration uses explicit central permissions.
+  // Owner remains covered by the existing wildcard; Manager receives only
+  // these two resource-management permissions. Availability and feasibility
+  // remain vocabulary-only until their own policy and evidence contracts exist.
+  ['service', 'service_resource', 'view', 'service:service_resource:view'],
+  ['service', 'service_resource', 'manage', 'service:service_resource:manage'],
+  ['service', 'resource_availability', 'view', null],
+  ['service', 'resource_availability', 'manage', null],
+  ['service', 'appointment_feasibility', 'view', null],
+  ['service', 'appointment_feasibility', 'assess', null],
 ];
 
 const RESOURCE_ACTIONS = new Map();
@@ -114,7 +124,7 @@ export function resourceActionRegistryContract() {
     evaluator: 'none',
     permission_store: 'none',
     registry_entries: RESOURCE_ACTION_REGISTRY.length,
-    packs: freeze(['agriculture', 'restaurant', 'warehouse', 'logistics']),
+    packs: freeze(['agriculture', 'restaurant', 'warehouse', 'logistics', 'service']),
     policy_defined_entries: RESOURCE_ACTION_REGISTRY.filter((entry) => entry.policyDefined).length,
     vocabulary_only_entries: RESOURCE_ACTION_REGISTRY.filter((entry) => !entry.policyDefined).length,
   });

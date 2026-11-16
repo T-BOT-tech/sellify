@@ -75,6 +75,18 @@ check('Valid organization is accepted by the canonical authority for existing po
   assert.equal(authorize(actor('staff'), organization, null, 'storage', 'inventory:view'), AUTHZ.ALLOW);
 });
 
+check('Service resource administration is explicitly granted only to Org Admin and Manager', () => {
+  assert.equal(authorize(actor('owner'), organization, null, 'service_resource', 'service:service_resource:view'), AUTHZ.ALLOW);
+  assert.equal(authorize(actor('owner'), organization, null, 'service_resource', 'service:service_resource:manage'), AUTHZ.ALLOW);
+  assert.equal(authorize(actor('manager'), organization, null, 'service_resource', 'service:service_resource:view'), AUTHZ.ALLOW);
+  assert.equal(authorize(actor('manager'), organization, null, 'service_resource', 'service:service_resource:manage'), AUTHZ.ALLOW);
+  for (const role of ['cashier', 'staff', 'buyer', 'viewer']) {
+    assert.equal(authorize(actor(role), organization, null, 'service_resource', 'service:service_resource:view'), AUTHZ.DENY);
+    assert.equal(authorize(actor(role), organization, null, 'service_resource', 'service:service_resource:manage'), AUTHZ.DENY);
+  }
+  assert.equal(authorize(actor('manager', 'org-a'), foreignOrganization, null, 'service_resource', 'service:service_resource:manage'), AUTHZ.DENY);
+});
+
 check('Named unsupported policy remains DENY for non-owner roles', () => {
   assert.equal(authorize(actor('owner'), organization, null, 'shipment', 'logistics:manage'), AUTHZ.ALLOW);
   assert.equal(authorize(actor('owner'), organization, null, 'recipe', 'recipe:manage'), AUTHZ.ALLOW);

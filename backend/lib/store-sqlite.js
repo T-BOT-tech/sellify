@@ -3298,6 +3298,47 @@ if (!applied.includes(39)) {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(77, nowIso());
   }
+
+  // SC-03.1 — service-owned resource registry. This is resource identity and
+  // administration only: no availability calendar, slot, booking or capacity
+  // commitment is inferred or persisted here.
+  if (!applied.includes(78)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS service_resources (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        chat_id TEXT NOT NULL REFERENCES tenants(chat_id) ON DELETE CASCADE,
+        resource_type TEXT NOT NULL CHECK (resource_type IN ('PROVIDER','FACILITY','EQUIPMENT','OTHER')),
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        service_item_id TEXT,
+        location_id TEXT,
+        status TEXT NOT NULL CHECK (status IN ('ACTIVE','INACTIVE')) DEFAULT 'ACTIVE',
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+        created_by TEXT,
+        updated_by TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_service_resources_org_status
+        ON service_resources(organization_id, status, name);
+      CREATE INDEX IF NOT EXISTS idx_service_resources_service
+        ON service_resources(organization_id, service_item_id, status);
+      CREATE TABLE IF NOT EXISTS service_resource_commands (
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        command_key TEXT NOT NULL,
+        resource_id TEXT NOT NULL REFERENCES service_resources(id) ON DELETE CASCADE,
+        command_type TEXT NOT NULL CHECK (command_type IN ('CREATE','UPDATE')),
+        command_fingerprint TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (organization_id, command_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_service_resource_commands_resource
+        ON service_resource_commands(organization_id, resource_id, created_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(78, nowIso());
+  }
 }
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({
@@ -5868,6 +5909,185 @@ function assertServiceBookingAuthorityBoundary(input) {
     }
   }
 }
+
+function serviceResourceFromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    resourceType: row.resource_type,
+    name: row.name,
+    description: row.description || '',
+    serviceItemId: row.service_item_id || null,
+    locationId: row.location_id || null,
+    status: row.status,
+    metadata: parseJSON(row.metadata_json, {}),
+    version: Number(row.version || 1),
+    createdBy: row.created_by || null,
+    updatedBy: row.updated_by || null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+const SERVICE_RESOURCE_TYPES = new Set(['PROVIDER', 'FACILITY', 'EQUIPMENT', 'OTHER']);
+
+function validateServiceResourceReferences(chatId, organizationId, input) {
+  const serviceItemId = input.serviceItemId == null && input.service_item_id == null
+    ? null : String(input.serviceItemId ?? input.service_item_id).trim();
+  const locationId = input.locationId == null && input.location_id == null
+    ? null : String(input.locationId ?? input.location_id).trim();
+  if (serviceItemId) {
+    const catalogRow = db.prepare('SELECT product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?')
+      .get(String(chatId), serviceItemId);
+    const product = catalogRow ? parseJSON(catalogRow.product_json, {}) : null;
+    if (!product || String(product.item_type ?? product.type ?? '').trim().toLowerCase() !== 'service') {
+      throw Object.assign(new Error('Service resource must reference an existing Catalog item of type service'), {
+        statusCode: 409, code: 'SERVICE_RESOURCE_CATALOG_BINDING_INVALID',
+      });
+    }
+  }
+  if (locationId) {
+    const location = db.prepare("SELECT id FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'")
+      .get(locationId, String(organizationId));
+    if (!location) throw Object.assign(new Error('Service resource location is not active in this organization'), {
+      statusCode: 409, code: 'SERVICE_RESOURCE_LOCATION_INVALID',
+    });
+  }
+  return { serviceItemId: serviceItemId || null, locationId: locationId || null };
+}
+
+function serviceResourceInput(input = {}, existing = null) {
+  const resourceType = String(input.resourceType ?? input.resource_type ?? existing?.resource_type ?? 'PROVIDER').trim().toUpperCase();
+  if (!SERVICE_RESOURCE_TYPES.has(resourceType)) throw Object.assign(new Error('Unsupported service resource type'), { statusCode: 400, code: 'SERVICE_RESOURCE_TYPE_INVALID' });
+  const name = String(input.name ?? existing?.name ?? '').trim();
+  if (!name || name.length > 120) throw Object.assign(new Error('Resource name must be 1–120 characters'), { statusCode: 400, code: 'SERVICE_RESOURCE_NAME_INVALID' });
+  const description = String(input.description ?? existing?.description ?? '').trim();
+  if (description.length > 1000) throw Object.assign(new Error('Resource description must not exceed 1000 characters'), { statusCode: 400, code: 'SERVICE_RESOURCE_DESCRIPTION_INVALID' });
+  const status = String(input.status ?? existing?.status ?? 'ACTIVE').trim().toUpperCase();
+  if (!['ACTIVE', 'INACTIVE'].includes(status)) throw Object.assign(new Error('Resource status must be ACTIVE or INACTIVE'), { statusCode: 400, code: 'SERVICE_RESOURCE_STATUS_INVALID' });
+  const metadata = input.metadata == null ? parseJSON(existing?.metadata_json, {}) : input.metadata;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) throw Object.assign(new Error('Resource metadata must be an object'), { statusCode: 400, code: 'SERVICE_RESOURCE_METADATA_INVALID' });
+  return { resourceType, name, description, status, metadata };
+}
+
+export async function listServiceResources(chatId, { includeInactive = false, serviceItemId = null, locationId = null } = {}) {
+  ensureDatabase();
+  const organizationId = ensureCanonicalIdentityForTenant(chatId);
+  if (!organizationId) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const clauses = ['organization_id = ?', 'chat_id = ?'];
+  const params = [String(organizationId), String(chatId)];
+  if (!includeInactive) clauses.push("status = 'ACTIVE'");
+  if (serviceItemId) { clauses.push('service_item_id = ?'); params.push(String(serviceItemId)); }
+  if (locationId) { clauses.push('(location_id IS NULL OR location_id = ?)'); params.push(String(locationId)); }
+  return db.prepare(`SELECT * FROM service_resources WHERE ${clauses.join(' AND ')} ORDER BY name COLLATE NOCASE, id`)
+    .all(...params).map(serviceResourceFromRow);
+}
+
+export async function createServiceResource(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const organizationId = ensureCanonicalIdentityForTenant(chatId);
+  if (!organizationId) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const values = serviceResourceInput(input);
+  const refs = validateServiceResourceReferences(chatId, organizationId, input);
+  const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  if (!commandKey) throw Object.assign(new Error('Idempotency-Key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
+  const fingerprint = crypto.createHash('sha256').update(JSON.stringify({ ...values, ...refs })).digest('hex');
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const fresh = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(String(chatId));
+    if (String(fresh?.organization_id || '') !== String(organizationId)) throw Object.assign(new Error('Tenant organization changed'), { statusCode: 409, code: 'SERVICE_RESOURCE_ORGANIZATION_MISMATCH' });
+    // Revalidate references within the write transaction, including Catalog
+    // item type and canonical location ownership.
+    validateServiceResourceReferences(chatId, organizationId, input);
+    const prior = db.prepare('SELECT * FROM service_resource_commands WHERE organization_id = ? AND command_key = ?')
+      .get(String(organizationId), commandKey);
+    if (prior) {
+      if (prior.command_type !== 'CREATE' || prior.command_fingerprint !== fingerprint) throw Object.assign(new Error('Idempotency key was reused for a different resource command'), { statusCode: 409, code: 'SERVICE_RESOURCE_IDEMPOTENCY_CONFLICT' });
+      const replay = db.prepare('SELECT * FROM service_resources WHERE id = ? AND organization_id = ? AND chat_id = ?')
+        .get(prior.resource_id, String(organizationId), String(chatId));
+      if (!replay) throw Object.assign(new Error('Resource replay state is missing'), { statusCode: 409, code: 'SERVICE_RESOURCE_REPLAY_STATE_MISSING' });
+      db.exec('COMMIT');
+      return { resource: serviceResourceFromRow(replay), replayed: true };
+    }
+    const id = crypto.randomUUID(), now = nowIso(), actorId = actor?.userId || actor?.user_id || null;
+    db.prepare(`INSERT INTO service_resources
+      (id,organization_id,chat_id,resource_type,name,description,service_item_id,location_id,status,metadata_json,version,created_by,updated_by,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?,?,?)`).run(
+      id, String(organizationId), String(chatId), values.resourceType, values.name, values.description,
+      refs.serviceItemId, refs.locationId, values.status, json(values.metadata), actorId, actorId, now, now,
+    );
+    db.prepare(`INSERT INTO service_resource_commands
+      (organization_id,command_key,resource_id,command_type,command_fingerprint,created_at)
+      VALUES (?,?,?,'CREATE',?,?)`).run(String(organizationId), commandKey, id, fingerprint, now);
+    audit(String(chatId), 'services.resource.created', 'service_resource', id, {
+      resource_type: values.resourceType, service_item_id: refs.serviceItemId, location_id: refs.locationId, version: 1,
+    }, { organizationId, locationId: refs.locationId, actorId, deviceId: actor?.deviceId || null });
+    const created = db.prepare('SELECT * FROM service_resources WHERE id = ?').get(id);
+    db.exec('COMMIT');
+    return { resource: serviceResourceFromRow(created), replayed: false };
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
+
+export async function updateServiceResource(chatId, resourceId, input = {}, actor = null) {
+  ensureDatabase();
+  const organizationId = ensureCanonicalIdentityForTenant(chatId);
+  if (!organizationId) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const expectedVersion = Number(input.expectedVersion ?? input.expected_version);
+  if (!Number.isInteger(expectedVersion) || expectedVersion < 1) throw Object.assign(new Error('expected_version must be a positive integer'), { statusCode: 400, code: 'SERVICE_RESOURCE_VERSION_REQUIRED' });
+  const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
+  if (!commandKey) throw Object.assign(new Error('Idempotency-Key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const fresh = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(String(chatId));
+    if (String(fresh?.organization_id || '') !== String(organizationId)) throw Object.assign(new Error('Tenant organization changed'), { statusCode: 409, code: 'SERVICE_RESOURCE_ORGANIZATION_MISMATCH' });
+    const row = db.prepare('SELECT * FROM service_resources WHERE id = ? AND organization_id = ? AND chat_id = ?')
+      .get(String(resourceId), String(organizationId), String(chatId));
+    if (!row) throw Object.assign(new Error('Service resource not found'), { statusCode: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' });
+    const values = serviceResourceInput(input, row);
+    const serviceItemInput = Object.prototype.hasOwnProperty.call(input, 'serviceItemId')
+      ? input.serviceItemId
+      : Object.prototype.hasOwnProperty.call(input, 'service_item_id') ? input.service_item_id : row.service_item_id;
+    const locationInput = Object.prototype.hasOwnProperty.call(input, 'locationId')
+      ? input.locationId
+      : Object.prototype.hasOwnProperty.call(input, 'location_id') ? input.location_id : row.location_id;
+    const refs = validateServiceResourceReferences(chatId, organizationId, {
+      serviceItemId: serviceItemInput,
+      locationId: locationInput,
+    });
+    const fingerprint = crypto.createHash('sha256').update(JSON.stringify({
+      resourceId: String(resourceId), expectedVersion, ...values, ...refs,
+    })).digest('hex');
+    const prior = db.prepare('SELECT * FROM service_resource_commands WHERE organization_id = ? AND command_key = ?')
+      .get(String(organizationId), commandKey);
+    if (prior) {
+      if (prior.command_type !== 'UPDATE' || String(prior.resource_id) !== String(resourceId) || prior.command_fingerprint !== fingerprint) throw Object.assign(new Error('Idempotency key was reused for a different resource command'), { statusCode: 409, code: 'SERVICE_RESOURCE_IDEMPOTENCY_CONFLICT' });
+      db.exec('COMMIT');
+      return { resource: serviceResourceFromRow(row), replayed: true };
+    }
+    if (Number(row.version) !== expectedVersion) throw Object.assign(new Error('Service resource version conflict'), { statusCode: 409, code: 'SERVICE_RESOURCE_VERSION_CONFLICT' });
+    const now = nowIso(), actorId = actor?.userId || actor?.user_id || null, nextVersion = expectedVersion + 1;
+    const changed = db.prepare(`UPDATE service_resources SET
+      resource_type=?,name=?,description=?,service_item_id=?,location_id=?,status=?,metadata_json=?,
+      version=?,updated_by=?,updated_at=?
+      WHERE id=? AND organization_id=? AND chat_id=? AND version=?`).run(
+      values.resourceType, values.name, values.description, refs.serviceItemId, refs.locationId, values.status,
+      json(values.metadata), nextVersion, actorId, now, String(resourceId), String(organizationId), String(chatId), expectedVersion,
+    );
+    if (Number(changed.changes) !== 1) throw Object.assign(new Error('Service resource version conflict'), { statusCode: 409, code: 'SERVICE_RESOURCE_VERSION_CONFLICT' });
+    db.prepare(`INSERT INTO service_resource_commands
+      (organization_id,command_key,resource_id,command_type,command_fingerprint,created_at)
+      VALUES (?,?,?,'UPDATE',?,?)`).run(String(organizationId), commandKey, String(resourceId), fingerprint, now);
+    audit(String(chatId), 'services.resource.updated', 'service_resource', String(resourceId), {
+      version: nextVersion, resource_type: values.resourceType, service_item_id: refs.serviceItemId,
+      location_id: refs.locationId, status: values.status,
+    }, { organizationId, locationId: refs.locationId, actorId, deviceId: actor?.deviceId || null });
+    const updated = db.prepare('SELECT * FROM service_resources WHERE id = ?').get(String(resourceId));
+    db.exec('COMMIT');
+    return { resource: serviceResourceFromRow(updated), replayed: false };
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
+
 export async function createServiceBooking(chatId, serverOrderId, input = {}, actor = null) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
