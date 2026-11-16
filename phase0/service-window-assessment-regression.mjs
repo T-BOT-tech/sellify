@@ -3,6 +3,19 @@ import {
   assessServiceResourceDeclaredWindow,
   serviceLocalDateTimeToIso,
 } from '../app/src/verticals/services/service-window-assessment-contract.js';
+import { assessServiceResourceDeclaredWindow as assessBackendServiceResourceDeclaredWindow } from '../backend/lib/service-window-assessment-contract.js';
+
+const storeSource = await (await import('node:fs/promises')).readFile(new URL('../backend/lib/store-sqlite.js', import.meta.url), 'utf8');
+assert.match(storeSource, /from '\.\/service-window-assessment-contract\.js'/);
+assert.doesNotMatch(storeSource, /from ['"]\.\.\/\.\.\/app\/src\/verticals\/services\/service-window-assessment-contract\.js['"]/);
+assert.deepEqual(
+  assessBackendServiceResourceDeclaredWindow({
+    timeZone: zone, workingHours, exceptions: [],
+    start: '2026-11-16T06:00:00.000Z', end: '2026-11-16T07:00:00.000Z',
+  }),
+  within,
+  'backend and frontend declared-window assessments must remain behaviorally aligned',
+);
 
 const zone = 'Africa/Addis_Ababa';
 const workingHours = [
