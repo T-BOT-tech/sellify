@@ -135,7 +135,7 @@ export function renderDailySummary() {
   const orderValueTotal = todaysOrders.reduce((sum, o) => sum + (o.total || 0), 0);
   const totalOrdersCount = todaysOrders.length;
   const avgOrderValue = totalOrdersCount > 0 ? (orderValueTotal / totalOrdersCount) : 0;
-  const queuedCount = todaysOrders.filter(o => o.status !== 'synced').length;
+  const queuedCount = todaysOrders.filter(o => o.status === 'queued').length;
   const syncedCount = todaysOrders.filter(o => o.status === 'synced').length;
 
   container.innerHTML = `
@@ -208,7 +208,9 @@ export function ticketInnerHtml(o) {
     ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-building"/></svg> ${escapeHtml(o.b2b_account_name)}${o.pricing_tier_name ? ' · ' + escapeHtml(o.pricing_tier_name) : ''}</div>` : '';
   const hasVolumeDiscount = isVolumeDiscountEnabled() && o.items.some(i => getVolumeDiscountForQty(i.qty));
   const volumeLine = hasVolumeDiscount ? `<div class="ticket-customer"><svg class="icon icon-sm"><use href="#i-box"/></svg> ${t('volumeDiscountApplied')}</div>` : '';
-  const statusLabel = o.is_marketplace ? String(o.status || 'queued').replaceAll('_', ' ') : (o.status === 'synced' ? t('synced') : t('queued'));
+  const statusLabel = o.status === 'handoff_pending'
+    ? 'Telegram handoff pending — not server-confirmed'
+    : (o.is_marketplace ? String(o.status || 'queued').replaceAll('_', ' ') : (o.status === 'synced' ? t('synced') : t('queued')));
   // W5: provenance line, only shown for still-queued tickets — this is
   // what answers "is my data safe?" per-record instead of a bare badge.
   // Silent once retry count is 0 and it just went in seconds ago; only
