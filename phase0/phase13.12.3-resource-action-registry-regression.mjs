@@ -23,8 +23,8 @@ assert.doesNotMatch(registrySource, /CREATE TABLE|INSERT INTO|UPDATE\s+.*permiss
 const { RESOURCE_ACTION_REGISTRY, getResourceAction, listResourceActions, resourceActionRegistryContract } =
   await import('../backend/lib/resource-action-registry.js');
 
-assert.equal(RESOURCE_ACTION_REGISTRY.length, 48);
-assert.equal(new Set(RESOURCE_ACTION_REGISTRY.map((entry) => entry.key)).size, 48);
+assert.equal(RESOURCE_ACTION_REGISTRY.length, 53);
+assert.equal(new Set(RESOURCE_ACTION_REGISTRY.map((entry) => entry.key)).size, 53);
 
 for (const packId of ['agriculture', 'restaurant', 'warehouse', 'logistics', 'service']) {
   assert.ok(listResourceActions({ packId }).length > 0, `${packId} registry missing`);
@@ -74,7 +74,7 @@ assert.equal(contract.authority.includes('authorize(actor, organization, locatio
 assert.equal(contract.persistence, 'none');
 assert.equal(contract.evaluator, 'none');
 assert.equal(contract.permission_store, 'none');
-assert.equal(contract.registry_entries, 48);
+assert.equal(contract.registry_entries, 53);
 assert.equal(contract.packs.length, 5);
 
 // Phase 10.3 remains the only policy implementation.
