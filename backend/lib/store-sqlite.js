@@ -19,7 +19,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import { normalizeWorkingHours, normalizeAvailabilityExceptions, isIanaTimeZone } from './service-availability-contract.js';
-import { assessServiceResourceDeclaredWindow } from '../../app/src/verticals/services/service-window-assessment-contract.js';
+import { assessServiceResourceDeclaredWindow } from './service-window-assessment-contract.js';
 import { resolveOnboardingCountry } from './country-pack-onboarding.js';
 import { assertVerificationFreshness } from './payments/verification-freshness.js';
 import { requirePaymentProvider } from './payments/provider-registry.js';
