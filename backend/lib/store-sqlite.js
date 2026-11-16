@@ -3395,11 +3395,11 @@ if (!applied.includes(39)) {
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(80, nowIso());
   }
 
-  // SC-03.4 compatibility bridge. Migration 80 existed in two incompatible
-  // deployed branch histories: one added only service_bookings.service_resource_id,
-  // while the other added the commitment ledger. Never rewrite migration 80:
-  // databases that already recorded it will not rerun it. Version 81 reconciles
-  // both shapes, and backfills only explicit, tenant-matching resource assignments.
+  // SC-03.4 compatibility bridge. Version 80 was independently implemented in
+  // three branches: booking-column-only, a service_resource_commitments ledger,
+  // and a service_booking_resource_commitments ledger. Never rewrite migration
+  // 80: databases that recorded it will not rerun it. Version 81 reconciles all
+  // known shapes while preserving only explicit, tenant-scoped resource evidence.
   if (!applied.includes(81)) {
     const bookingColumns = new Set(
       db.prepare('PRAGMA table_info(service_bookings)').all().map(column => String(column.name))
@@ -3407,6 +3407,25 @@ if (!applied.includes(39)) {
     if (!bookingColumns.has('service_resource_id')) {
       db.exec('ALTER TABLE service_bookings ADD COLUMN service_resource_id TEXT');
     }
+
+    // The alternative v80 implementation named the binding assigned_resource_id.
+    // Copy it only when the resource resolves in the same organization and tenant.
+    if (bookingColumns.has('assigned_resource_id')) {
+      db.exec(`
+        UPDATE service_bookings AS b
+        SET service_resource_id = b.assigned_resource_id
+        WHERE (b.service_resource_id IS NULL OR trim(b.service_resource_id) = '')
+          AND b.assigned_resource_id IS NOT NULL
+          AND trim(b.assigned_resource_id) <> ''
+          AND EXISTS (
+            SELECT 1 FROM service_resources r
+            WHERE r.id = b.assigned_resource_id
+              AND r.organization_id = b.organization_id
+              AND r.chat_id = b.chat_id
+          )
+      `);
+    }
+
     db.exec(`
       CREATE TABLE IF NOT EXISTS service_resource_commitments (
         id TEXT PRIMARY KEY,
@@ -3428,11 +3447,56 @@ if (!applied.includes(39)) {
         ON service_bookings(organization_id, chat_id, service_resource_id, status, requested_start, requested_end);
     `);
 
-    // Only a resource ID already persisted on the booking and resolving inside
-    // the same tenant/organization is evidence of assignment. Do not infer a
-    // resource for legacy unassigned bookings; leave those UNKNOWN/fail-closed.
-    // Existing overlapping legacy rows are retained as COMMITTED so new writes
-    // see the conflict instead of silently treating the interval as free.
+    // Bridge the third v80 shape when its legacy ledger exists. The booking's
+    // canonical status controls whether the migrated slot is active; terminal
+    // bookings are released so completed/cancelled appointments cannot block
+    // capacity indefinitely. The resource must still match tenant and org.
+    const legacyCommitmentTable = db.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='service_booking_resource_commitments'"
+    ).get();
+    if (legacyCommitmentTable) {
+      const legacyColumns = new Set(
+        db.prepare('PRAGMA table_info(service_booking_resource_commitments)').all().map(column => String(column.name))
+      );
+      const requiredLegacyColumns = [
+        'id', 'organization_id', 'chat_id', 'booking_id', 'resource_id',
+        'requested_start', 'requested_end', 'state', 'committed_by', 'committed_at',
+        'released_by', 'released_at',
+      ];
+      if (requiredLegacyColumns.every(name => legacyColumns.has(name))) {
+        db.prepare(`
+          INSERT OR IGNORE INTO service_resource_commitments
+            (id, organization_id, chat_id, resource_id, booking_id, starts_at, ends_at,
+             state, committed_by, committed_at, released_by, released_at)
+          SELECT
+            'migration-81:legacy:' || c.id,
+            c.organization_id, c.chat_id, c.resource_id, c.booking_id,
+            c.requested_start, c.requested_end,
+            CASE WHEN b.status IN ('CONFIRMED','IN_PROGRESS') THEN 'COMMITTED' ELSE 'RELEASED' END,
+            c.committed_by,
+            COALESCE(NULLIF(c.committed_at, ''), NULLIF(b.updated_at, ''), b.created_at, ?),
+            CASE WHEN b.status IN ('CONFIRMED','IN_PROGRESS') THEN NULL ELSE c.released_by END,
+            CASE WHEN b.status IN ('CONFIRMED','IN_PROGRESS') THEN NULL
+              ELSE COALESCE(NULLIF(c.released_at, ''), NULLIF(b.updated_at, ''), b.created_at, ?) END
+          FROM service_booking_resource_commitments c
+          JOIN service_bookings b
+            ON b.id = c.booking_id
+           AND b.organization_id = c.organization_id
+           AND b.chat_id = c.chat_id
+          JOIN service_resources r
+            ON r.id = c.resource_id
+           AND r.organization_id = c.organization_id
+           AND r.chat_id = c.chat_id
+          WHERE c.requested_start IS NOT NULL
+            AND c.requested_end IS NOT NULL
+            AND julianday(c.requested_end) > julianday(c.requested_start)
+        `).run(nowIso(), nowIso());
+      }
+    }
+
+    // Backfill only explicit active booking assignments that resolve inside the
+    // same tenant/organization. Never invent a resource for unassigned history.
+    // If old rows overlap, retain them as COMMITTED so new confirmations fail closed.
     db.prepare(`
       INSERT OR IGNORE INTO service_resource_commitments
         (id, organization_id, chat_id, resource_id, booking_id, starts_at, ends_at,
