@@ -21,6 +21,13 @@ assert.match(sellerCheckoutSource, /server confirmation is pending/i);
 const orderQueueSource = await readFile(new URL('../app/src/orders/queue.js', import.meta.url), 'utf8');
 assert.match(orderQueueSource, /o\.status === 'queued'\)\.length/);
 assert.match(orderQueueSource, /Telegram handoff pending — not server-confirmed/);
+const marketplaceCheckoutSource = await readFile(new URL('../app/src/marketplace/checkout.js', import.meta.url), 'utf8');
+assert.match(marketplaceCheckoutSource, /sellify_marketplace_telegram_handoff_pending/);
+assert.match(marketplaceCheckoutSource, /status: 'handoff_pending'/);
+assert.match(marketplaceCheckoutSource, /TRANSPORT_SUBMITTED_UNCONFIRMED/);
+assert.match(marketplaceCheckoutSource, /server confirmation is pending/i);
+assert.match(marketplaceCheckoutSource, /Do not resubmit until the seller confirms/i);
+assert.match(marketplaceCheckoutSource, /readPendingMarketplaceTelegramHandoff\(\)/);
 
 
 const ctx = normalizeTelegramCheckoutContext({ enabledCapabilities: ['checkout','order_status'], metadata: { payment: { mode: 'payment_core' } } });
