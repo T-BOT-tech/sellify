@@ -440,10 +440,30 @@ try {
   assert.equal(bookingAcceptBody.booking.status, 'ACCEPTED');
   assert.equal(bookingAcceptBody.booking.version, 2);
 
+  const serviceResourcesUrl = baseUrl + '/tenants/' + encodeURIComponent(tenant.chatId) + '/service-resources';
+  const resourceCreate = await fetch(serviceResourcesUrl, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-resource-1' },
+    body: JSON.stringify({ name: 'HTTP Consultation Room', resource_type: 'FACILITY', service_item_id: 'consultation-http' }),
+  });
+  assert.equal(resourceCreate.status, 201, 'authorized merchant should create an appointment resource');
+  const resourceCreatedBody = await resourceCreate.json();
+  const serviceResourceId = resourceCreatedBody.resource.id;
+  const resourceAvailability = await fetch(serviceResourcesUrl + '/' + encodeURIComponent(serviceResourceId) + '/availability', {
+    method: 'PUT',
+    headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-hours-1' },
+    body: JSON.stringify({
+      expected_version: 0,
+      working_hours: [0, 1, 2, 3, 4, 5, 6].map(weekday => ({ weekday, start_time: '08:00', end_time: '18:00' })),
+      exceptions: [],
+    }),
+  });
+  assert.equal(resourceAvailability.status, 200, 'merchant should declare resource working hours');
+
   const bookingConfirm = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
     method: 'PATCH',
     headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
-    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2, service_resource_id: serviceResourceId }),
   });
   assert.equal(bookingConfirm.status, 200, 'authorized merchant should confirm an accepted appointment');
   const bookingConfirmBody = await bookingConfirm.json();
@@ -455,7 +475,7 @@ try {
   const bookingConfirmReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
     method: 'PATCH',
     headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
-    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2, service_resource_id: serviceResourceId }),
   });
   assert.equal(bookingConfirmReplay.status, 200, 'exact confirmation retry should replay successfully');
   const bookingConfirmReplayBody = await bookingConfirmReplay.json();
@@ -487,7 +507,7 @@ try {
   const delayedConfirmReplay = await fetch(bookingsUrl + '/' + encodeURIComponent(bookingCreatedBody.booking.id), {
     method: 'PATCH',
     headers: { ...authHeaders, 'Idempotency-Key': 'service-booking-http-confirm-1' },
-    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2 }),
+    body: JSON.stringify({ status: 'CONFIRMED', expected_version: 2, service_resource_id: serviceResourceId }),
   });
   assert.equal(delayedConfirmReplay.status, 200, 'delayed exact retry should remain idempotent after later transitions');
   const delayedConfirmReplayBody = await delayedConfirmReplay.json();
@@ -595,7 +615,7 @@ try {
   const failedBooking = (await failedBookingCreate.json()).booking;
   for (const step of [
     { status: 'ACCEPTED', expected_version: 1, key: 'service-booking-http-fail-accept-1' },
-    { status: 'CONFIRMED', expected_version: 2, key: 'service-booking-http-fail-confirm-1' },
+    { status: 'CONFIRMED', expected_version: 2, service_resource_id: serviceResourceId, key: 'service-booking-http-fail-confirm-1' },
     {
       status: 'IN_PROGRESS',
       expected_version: 3,
@@ -811,7 +831,7 @@ try {
   const completedBooking = (await completedBookingCreate.json()).booking;
   for (const step of [
     { status: 'ACCEPTED', expected_version: 1, key: 'service-booking-http-complete-accept-1' },
-    { status: 'CONFIRMED', expected_version: 2, key: 'service-booking-http-complete-confirm-1' },
+    { status: 'CONFIRMED', expected_version: 2, service_resource_id: serviceResourceId, key: 'service-booking-http-complete-confirm-1' },
     { status: 'IN_PROGRESS', expected_version: 3, key: 'service-booking-http-complete-start-1' },
   ]) {
     const response = await fetch(bookingsUrl + '/' + encodeURIComponent(completedBooking.id), {
