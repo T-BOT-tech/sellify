@@ -244,6 +244,51 @@ try {
   ).get().id, 'orphan-row');
   preservedUnbridgeableDb.close();
 
+  // The separately named v80 ledger must also fail closed on orphan rows.
+  // Previously its INNER JOIN + INSERT OR IGNORE silently omitted these rows.
+  const separateLedgerDbPath = path.join(tempDir, 'separately-named-ledger.sqlite');
+  const separateLedgerEnv = { ...env, SELLIFY_DB_PATH: separateLedgerDbPath };
+  const separateSeed = spawnSync(process.execPath, ['--input-type=module', '-e',
+    "const store = await import('./backend/lib/store-sqlite.js'); store.getDatabaseForTests().close()"
+  ], { cwd: process.cwd(), env: separateLedgerEnv, encoding: 'utf8' });
+  assert.equal(separateSeed.status, 0,
+    `separately named ledger fixture initialization failed:\\n${separateSeed.stdout}\\n${separateSeed.stderr}`);
+  const separateDb = new DatabaseSync(separateLedgerDbPath);
+  separateDb.exec(`
+    CREATE TABLE service_booking_resource_commitments (
+      id TEXT PRIMARY KEY, organization_id TEXT NOT NULL, chat_id TEXT NOT NULL,
+      booking_id TEXT NOT NULL UNIQUE, resource_id TEXT NOT NULL,
+      requested_start TEXT NOT NULL, requested_end TEXT NOT NULL,
+      state TEXT NOT NULL, committed_by TEXT, committed_at TEXT NOT NULL,
+      released_by TEXT, released_at TEXT, release_reason TEXT
+    );
+    INSERT INTO service_booking_resource_commitments
+      (id, organization_id, chat_id, booking_id, resource_id, requested_start,
+       requested_end, state, committed_by, committed_at)
+    VALUES
+      ('orphan-separate-ledger', 'missing-org', 'missing-tenant', 'missing-booking',
+       'missing-resource', '2026-12-01T10:00:00.000Z', '2026-12-01T11:00:00.000Z',
+       'COMMITTED', 'migration-test', '2026-11-17T00:00:00.000Z');
+    DELETE FROM schema_migrations WHERE version = 81;
+  `);
+  separateDb.close();
+
+  const separateRejected = spawnSync(process.execPath, ['--input-type=module', '-e',
+    "const store = await import('./backend/lib/store-sqlite.js'); store.getDatabaseForTests().close()"
+  ], { cwd: process.cwd(), env: separateLedgerEnv, encoding: 'utf8' });
+  assert.notEqual(separateRejected.status, 0,
+    'migration must reject orphan rows in the separately named legacy ledger');
+  assert.match(separateRejected.stderr, /Cannot safely migrate separately named v80 service resource commitments/);
+  const preservedSeparateDb = new DatabaseSync(separateLedgerDbPath);
+  assert.equal(preservedSeparateDb.prepare(
+    "SELECT id FROM service_booking_resource_commitments WHERE id='orphan-separate-ledger'"
+  ).get().id, 'orphan-separate-ledger',
+  'the legacy row must remain available for reconciliation');
+  assert.equal(preservedSeparateDb.prepare(
+    'SELECT count(*) AS count FROM schema_migrations WHERE version = 81'
+  ).get().count, 0, 'failed migration must not mark version 81 as applied');
+  preservedSeparateDb.close();
+
   console.log('Service Resource Migration 80/81 Compatibility Regression: PASS');
 } finally {
   await rm(tempDir, { recursive: true, force: true });
