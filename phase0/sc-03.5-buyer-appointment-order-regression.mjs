@@ -60,6 +60,16 @@ try {
   // governed by the Pack lifecycle authority.
   const db = store.getDatabaseForTests();
   const organizationId = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(seller.chatId).organization_id;
+  const providerUser = await store.getOrCreateUserByTelegram('sc035-provider-' + suffix, 'SC035 Provider');
+  const providerMembership = await store.ensureMembership(providerUser.id, seller.chatId, 'staff');
+  await assert.rejects(
+    store.assignMembershipContextualRole({
+      actorUserId: sellerUser.id, chatId: seller.chatId, membershipId: providerMembership.id,
+      role: 'service_provider', scopeType: 'RESOURCE', scopeId: resource.resource.id,
+    }),
+    error => error?.statusCode === 409,
+    'Service Provider role assignment must remain unavailable until the Service Pack is ACTIVE',
+  );
   const now = new Date().toISOString();
   db.prepare(`INSERT INTO pack_lifecycle (
     id, organization_id, pack_id, pack_version, state, installed_at, activated_at,
@@ -69,8 +79,6 @@ try {
     sellerUser.id, sellerUser.id, now, now,
   );
 
-  const providerUser = await store.getOrCreateUserByTelegram('sc035-provider-' + suffix, 'SC035 Provider');
-  const providerMembership = await store.ensureMembership(providerUser.id, seller.chatId, 'staff');
   await store.assignMembershipContextualRole({
     actorUserId: sellerUser.id, chatId: seller.chatId, membershipId: providerMembership.id,
     role: 'service_provider', scopeType: 'RESOURCE', scopeId: resource.resource.id,
