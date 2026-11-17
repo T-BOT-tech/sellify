@@ -201,6 +201,49 @@ try {
   assert.equal(preservedDb.prepare("SELECT id FROM service_resource_commitments_v80_status_legacy WHERE id='preserve-me'").get().id, 'preserve-me');
   preservedDb.close();
 
+  // Existing status-shaped ledgers with orphaned/cross-tenant references must
+  // fail closed and retain the exact legacy row for operator reconciliation.
+  const unbridgeableDbPath = path.join(tempDir, 'unbridgeable-ledger.sqlite');
+  const unbridgeableEnv = { ...env, SELLIFY_DB_PATH: unbridgeableDbPath };
+  const unbridgeableSeed = spawnSync(process.execPath, ['--input-type=module', '-e',
+    "const store = await import('./backend/lib/store-sqlite.js'); store.getDatabaseForTests().close()"
+  ], { cwd: process.cwd(), env: unbridgeableEnv, encoding: 'utf8' });
+  assert.equal(unbridgeableSeed.status, 0,
+    `unbridgeable-ledger fixture initialization failed:\\n${unbridgeableSeed.stdout}\\n${unbridgeableSeed.stderr}`);
+  const unbridgeableDb = new DatabaseSync(unbridgeableDbPath);
+  unbridgeableDb.exec(`
+    DROP TABLE service_resource_commitments;
+    CREATE TABLE service_resource_commitments (
+      id TEXT PRIMARY KEY, organization_id TEXT NOT NULL, chat_id TEXT NOT NULL,
+      resource_id TEXT NOT NULL, booking_id TEXT NOT NULL UNIQUE,
+      starts_at TEXT NOT NULL, ends_at TEXT NOT NULL,
+      status TEXT NOT NULL, created_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+    INSERT INTO service_resource_commitments
+      (id, organization_id, chat_id, resource_id, booking_id, starts_at, ends_at, status, created_by, created_at, updated_at)
+    VALUES
+      ('orphan-row', 'missing-org', 'missing-tenant', 'missing-resource', 'missing-booking',
+       '2026-12-01T10:00:00.000Z', '2026-12-01T11:00:00.000Z', 'ACTIVE', 'migration-test',
+       '2026-11-17T00:00:00.000Z', '2026-11-17T00:00:00.000Z');
+    DELETE FROM schema_migrations WHERE version = 81;
+  `);
+  unbridgeableDb.close();
+
+  const unbridgeableRejected = spawnSync(process.execPath, ['--input-type=module', '-e',
+    "const store = await import('./backend/lib/store-sqlite.js'); store.getDatabaseForTests().close()"
+  ], { cwd: process.cwd(), env: unbridgeableEnv, encoding: 'utf8' });
+  assert.notEqual(unbridgeableRejected.status, 0,
+    'migration must stop rather than silently discard an orphaned commitment');
+  assert.match(unbridgeableRejected.stderr, /Cannot safely migrate v80 service resource commitments/);
+  const preservedUnbridgeableDb = new DatabaseSync(unbridgeableDbPath);
+  assert.equal(preservedUnbridgeableDb.prepare(
+    "SELECT count(*) AS count FROM sqlite_master WHERE type='table' AND name='service_resource_commitments_v80_status_legacy'"
+  ).get().count, 1);
+  assert.equal(preservedUnbridgeableDb.prepare(
+    "SELECT id FROM service_resource_commitments_v80_status_legacy WHERE id='orphan-row'"
+  ).get().id, 'orphan-row');
+  preservedUnbridgeableDb.close();
+
   console.log('Service Resource Migration 80/81 Compatibility Regression: PASS');
 } finally {
   await rm(tempDir, { recursive: true, force: true });
