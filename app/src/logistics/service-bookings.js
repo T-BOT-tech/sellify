@@ -153,6 +153,7 @@ async function refreshServiceResources(root = document) {
   if (!workspace || !status || !list || !canAccessServiceResources()) return;
   if (!config.chatId || !config.sessionToken) {
     status.textContent = t('serviceBookingsSignIn');
+    status.dataset.state = 'DENIED';
     list.replaceChildren();
     return;
   }
