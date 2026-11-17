@@ -12089,11 +12089,14 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
       ON c.booking_id = b.id
      AND c.organization_id = b.organization_id
      AND c.chat_id = b.chat_id
+     AND c.resource_id = b.service_resource_id
+     AND c.starts_at = b.requested_start
+     AND c.ends_at = b.requested_end
      AND c.state = 'COMMITTED'
     WHERE b.organization_id = ?
       AND b.chat_id = ?
       AND b.service_item_id = ?
-      AND b.status = 'CONFIRMED'
+      AND b.status IN ('CONFIRMED', 'IN_PROGRESS')
       AND b.requested_start < ?
       AND b.requested_end > ?
       AND (b.service_resource_id IS NULL OR c.id IS NULL)
