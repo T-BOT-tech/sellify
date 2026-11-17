@@ -3621,10 +3621,17 @@ if (!applied.includes(39)) {
          AND r.organization_id = c.organization_id
          AND r.chat_id = c.chat_id
       `).run(nowIso(), nowIso());
-      const remainingLegacyRows = db.prepare('SELECT id FROM service_booking_resource_commitments').all();
-      if (remainingLegacyRows.length) {
+      const unaccountedLegacyRows = db.prepare(`
+        SELECT c.id
+        FROM service_booking_resource_commitments c
+        LEFT JOIN service_resource_commitments migrated
+          ON migrated.id = 'migration-81:legacy:' || c.id
+         AND migrated.booking_id = c.booking_id
+        WHERE migrated.id IS NULL
+      `).all();
+      if (unaccountedLegacyRows.length) {
         throw Object.assign(
-          new Error(`Migration did not account for every separately named legacy commitment row: ${remainingLegacyRows.map(row => row.id).join(', ')}`),
+          new Error(`Migration did not account for every separately named legacy commitment row: ${unaccountedLegacyRows.map(row => row.id).join(', ')}`),
           { code: 'SERVICE_RESOURCE_COMMITMENT_MIGRATION_INCOMPLETE' },
         );
       }
