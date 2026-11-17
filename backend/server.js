@@ -117,7 +117,7 @@ import {
   createPairingChallenge, consumePairingChallenge,
   createInvite, listInvites, revokeInvite, consumeInvite, changeMembershipRole, assignMembershipContextualRole, revokeMembershipContextualRole,
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment, recordServiceDeliveryAssessment,
-  createServiceBooking, transitionServiceBooking, listServiceBookings,
+  createServiceBooking, transitionServiceBooking, listServiceBookings, listServiceProviderBookings,
   listServiceResources, createServiceResource, updateServiceResource,
   getServiceResourceAvailability, setServiceResourceAvailability,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
@@ -3198,6 +3198,39 @@ async function handleServiceResourceAvailability(req, res, chatId, resourceId) {
   return sendJSON(res, 200, { availability: result.availability, replayed: result.replayed, state: 'DECLARED' }, req);
 }
 
+async function handleServiceProviderBookings(req, res, chatId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, chatId);
+  if (req.method !== 'GET') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+  const assignedIds = [...new Set((Array.isArray(session.contextualRoles) ? session.contextualRoles : [])
+    .filter(item => String(item?.role || '').toLowerCase() === 'service_provider'
+      && String(item?.scopeType || '').toUpperCase() === 'RESOURCE' && item?.scopeId)
+    .map(item => String(item.scopeId)))];
+  if (!assignedIds.length) throw Object.assign(new Error('An active resource-scoped Service Provider assignment is required'), {
+    statusCode: 403, code: 'SERVICE_PROVIDER_ASSIGNMENT_REQUIRED',
+  });
+  const activeResources = (await listServiceResources(chatId, { includeInactive: false }))
+    .filter(resource => assignedIds.includes(String(resource.id)));
+  for (const resource of activeResources) {
+    const location = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
+    if (resource.locationId && !location) throw Object.assign(new Error('Assigned Service Resource location is unavailable in tenant scope'), {
+      statusCode: 403, code: 'LOCATION_SCOPE_DENIED',
+    });
+    await requireAuthorization(session, tenant, 'service_resource', 'service:service_booking:view', {
+      location,
+      resourceContext: { resourceType: 'service_resource', resourceId: resource.id,
+        organizationId: resource.organizationId, locationId: resource.locationId },
+      deniedMessage: 'Assigned Service Provider booking view permission required',
+    });
+  }
+  const bookings = await listServiceProviderBookings(chatId, activeResources.map(resource => resource.id));
+  return sendJSON(res, 200, { bookings, state: bookings.length ? 'READY' : 'EMPTY',
+    authority: 'service_bookings + service_resource_commitments',
+    scope: 'ACTIVE_ASSIGNED_RESOURCES', resource_count: activeResources.length }, req);
+}
+
+
 async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId = null) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -3349,6 +3382,7 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/events\/([^/]+)$/, handler: (req, res, m) => handleSyncEvents(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/sync\/([^/]+)$/, handler: (req, res, m) => handleSyncPull(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/orders\/([^/]+)$/, handler: (req, res, m) => handleOrdersFeed(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-provider\/bookings$/, handler: (req, res, m) => handleServiceProviderBookings(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-resources$/, handler: (req, res, m) => handleServiceResources(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/service-resources$/, handler: (req, res, m) => handleServiceResources(req, res, decodeURIComponent(m[1])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/service-resources\/([^/]+)$/, handler: (req, res, m) => handleServiceResources(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
