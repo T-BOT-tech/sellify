@@ -80,6 +80,8 @@ jobs:
         run: npm run test:phase13.10.24-marketplace-fulfillment
       - name: Service Booking operator workspace regression
         run: npm run test:service-booking-operator-workspace
+      - name: SC-03.4 resource commitment migration regression
+        run: npm run test:sc-03.4-resource-commitment-migration
       - name: Service Booking operator browser regression
         run: node phase0/service-booking-operator-browser-regression.mjs
 
