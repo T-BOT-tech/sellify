@@ -276,13 +276,17 @@ try {
   assert.equal(cancelledReplay.booking.status, 'CANCELLED');
 
   const after = await store.getTelegramBuyerServiceBookings(seller.chatId, buyer, checkout.marketplace_order_id);
-  assert.equal(after.bookings.length, 3,
-    'buyer projection includes both committed appointments and the cancelled request');
+  assert.equal(after.bookings.length, 4,
+    'buyer projection includes both committed appointments, the legacy confirmed appointment, and the cancelled request');
   assert.ok(after.bookings.some(item => item.id === secondRequest.booking.id),
     'buyer projection retains the second provider appointment after its resource is inactivated');
   const visibleConfirmed = after.bookings.find(item => item.id === created.booking.id);
+  const visibleLegacy = after.bookings.find(item => item.id === legacyBooking.booking.id);
   const visibleCancelled = after.bookings.find(item => item.id === cancellable.booking.id);
   assert.equal(visibleConfirmed?.service_resource_name, 'Customer-facing Consultation Resource');
+  assert.equal(visibleLegacy?.status, 'CONFIRMED');
+  assert.equal(visibleLegacy?.service_resource_name, null,
+    'legacy appointments without a proven commitment must not be presented as resource-bound');
   assert.equal(visibleConfirmed?.status, 'CONFIRMED');
   assert.equal(visibleCancelled?.status, 'CANCELLED');
   assert.equal(visibleCancelled?.service_resource_name, null,
