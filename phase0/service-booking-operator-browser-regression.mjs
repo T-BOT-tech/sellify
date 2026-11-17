@@ -139,6 +139,8 @@ try {
   });
 
   await page.locator('.service-booking-card').waitFor();
+  assert.equal(await page.locator('#serviceBookingsStatus').getAttribute('data-state'), 'READY',
+    'manager appointment workspace exposes an explicit ready state');
   await page.locator('#serviceResourceForm').waitFor();
   await page.locator('#serviceResourcesStatus').filter({ hasText: 'No service resources yet' }).waitFor();
 
