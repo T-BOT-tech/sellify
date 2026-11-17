@@ -3314,6 +3314,36 @@ async function handleServiceResources(req, res, chatId, resourceId = null) {
   if (req.method === 'GET') {
     if (resourceId) return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
     const url = new URL(req.url, 'http://localhost');
+    const providerResourceIds = [...new Set((Array.isArray(session.contextualRoles) ? session.contextualRoles : [])
+      .filter(item => String(item?.role || '').toLowerCase() === 'service_provider'
+        && String(item?.scopeType || '').toUpperCase() === 'RESOURCE' && item?.scopeId)
+      .map(item => String(item.scopeId)))];
+
+    if (providerResourceIds.length) {
+      // Service Providers may read only the active resources explicitly assigned
+      // to them. Never authorize a tenant-wide resource list with a contextual role.
+      const assignedResources = (await listServiceResources(chatId, { includeInactive: false }))
+        .filter(resource => providerResourceIds.includes(String(resource.id)));
+      const scopedResources = [];
+      for (const resource of assignedResources) {
+        if (session.locationId && String(resource.locationId || '') !== String(session.locationId)) continue;
+        const location = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
+        if (resource.locationId && !location) throw Object.assign(new Error('Assigned Service Resource location is not available in tenant scope'), {
+          statusCode: 403, code: 'LOCATION_SCOPE_DENIED',
+        });
+        if (!resource.locationId && session.locationId) continue;
+        await requireAuthorization(session, tenant, 'service_resource', 'service:service_resource:view', {
+          location,
+          resourceContext: { resourceType: 'service_resource', resourceId: resource.id,
+            organizationId: resource.organizationId, locationId: resource.locationId },
+          deniedMessage: 'Assigned Service Provider resource view permission required',
+        });
+        scopedResources.push(resource);
+      }
+      return sendJSON(res, 200, { resources: scopedResources, state: scopedResources.length ? 'READY' : 'EMPTY',
+        authority: 'service_resource_registry', scope: 'ACTIVE_ASSIGNED_RESOURCES' }, req);
+    }
+
     const requestedLocationId = url.searchParams.get('location_id') || session.locationId || null;
     const location = requestedLocationId ? await getOrganizationLocation(chatId, requestedLocationId) : null;
     if (requestedLocationId && !location) throw Object.assign(new Error('Service resource location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
