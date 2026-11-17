@@ -111,6 +111,40 @@ try {
   assert.equal(providerQueue.response.status, 200, 'active resource-scoped provider assignment may read its queue');
   assert.equal(providerQueue.json.state, 'EMPTY');
   assert.equal(providerQueue.json.resource_count, 1);
+  const providerResourcesUrl = `/tenants/${encodeURIComponent(tenant.chatId)}/service-provider/resources`;
+  const providerResources = await request(providerResourcesUrl, { headers: providerHeaders });
+  assert.equal(providerResources.response.status, 200,
+    'provider can view its exact assigned resource and declared availability');
+  assert.equal(providerResources.json.resources.length, 1);
+  assert.equal(providerResources.json.resources[0].id, providerResource.resource.id);
+  assert.equal(providerResources.json.resources[0].availability.state, 'EMPTY');
+  const providerAvailabilityUrl = `/tenants/${encodeURIComponent(tenant.chatId)}/service-resources/${encodeURIComponent(providerResource.resource.id)}/availability`;
+  const providerAvailabilitySave = await request(providerAvailabilityUrl, {
+    method: 'PUT',
+    headers: { ...providerHeaders, 'Content-Type': 'application/json', 'Idempotency-Key': 'sc035-provider-hours-' + suffix },
+    body: JSON.stringify({
+      expected_version: 0,
+      working_hours: [0, 1, 2, 3, 4, 5, 6].map(weekday => ({
+        weekday, startTime: '08:00', endTime: '18:00',
+      })),
+      exceptions: [],
+    }),
+  });
+  assert.equal(providerAvailabilitySave.response.status, 200,
+    'provider may maintain declared hours for its exact assigned resource');
+  const providerResourcesAfterSave = await request(providerResourcesUrl, { headers: providerHeaders });
+  assert.equal(providerResourcesAfterSave.json.resources[0].availability.state, 'DECLARED');
+  const unassignedResource = await store.createServiceResource(tenant.chatId, {
+    name: 'Unassigned Provider Resource', resourceType: 'PROVIDER',
+    serviceItemId: 'sc035-http-consultation',
+    idempotencyKey: 'sc035-http-unassigned-resource-' + suffix,
+  }, null);
+  const unassignedAvailability = await request(
+    `/tenants/${encodeURIComponent(tenant.chatId)}/service-resources/${encodeURIComponent(unassignedResource.resource.id)}/availability`,
+    { headers: providerHeaders },
+  );
+  assert.equal(unassignedAvailability.response.status, 403,
+    'provider cannot view or manage availability for another unassigned resource');
   await store.revokeMembershipContextualRole({
     actorUserId: owner.id, chatId: tenant.chatId, membershipId: providerMembership.id,
     role: 'service_provider', scopeType: 'RESOURCE', scopeId: providerResource.resource.id,
