@@ -106,6 +106,28 @@ try {
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM service_resource_commitments').get().count, commitmentsBeforeAssessment,
     'feasibility must not reserve or commit a resource');
 
+  // Simulate a pre-SC-03.4 confirmed appointment that has no proven resource
+  // binding or commitment. Candidate feasibility must fail closed for overlap.
+  const legacyStart = '2027-01-24T09:00:00+03:00';
+  const legacyEnd = '2027-01-24T10:00:00+03:00';
+  const legacyBooking = await store.createServiceBooking(seller.chatId, owned.orderId, {
+    service_item_id: 'sc035-consultation',
+    requested_start: legacyStart,
+    requested_end: legacyEnd,
+    appointment_mode: 'REMOTE',
+    idempotencyKey: 'sc035-legacy-booking-' + suffix,
+  }, null);
+  db.prepare(`UPDATE service_bookings
+    SET status = 'CONFIRMED', service_resource_id = NULL
+    WHERE id = ? AND organization_id = ?`).run(legacyBooking.booking.id, organizationId);
+  const legacyAssessment = await store.assessTelegramBuyerServiceFeasibility(
+    seller.chatId, buyer, checkout.marketplace_order_id,
+    { service_item_id: 'sc035-consultation', start: legacyStart, end: legacyEnd },
+  );
+  assert.equal(legacyAssessment.state, 'UNKNOWN',
+    'overlapping legacy confirmed appointments without a committed resource must not be reported feasible');
+  assert.equal(legacyAssessment.reasonCode, 'OVERLAPPING_LEGACY_CONFIRMED_BOOKING_WITHOUT_RESOURCE');
+
   const created = await store.createServiceBooking(seller.chatId, owned.orderId, {
     service_item_id: 'sc035-consultation',
     requested_start: start,
