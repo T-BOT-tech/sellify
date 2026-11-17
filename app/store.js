@@ -1,6 +1,7 @@
 import { applyTelegramBuyerChrome, getTelegramBuyerProfile, getTelegramInitData, isTelegramWebApp, hasTelegramCapability } from './src/telegram-buyer-storefront.js';
 
 const state = { products: [], query: '', category: 'ALL', branding: null, cart: {}, storefront: null, telegram: false, telegramBuyer: null, orderIdempotencyKey: null };
+let telegramOrdersDialogOpener = null;
 const pathParts = location.pathname.split('/').filter(Boolean);
 const chatId = pathParts[0] === 'store' ? decodeURIComponent(pathParts[1] || '') : new URLSearchParams(location.search).get('store') || '';
 
@@ -89,9 +90,51 @@ async function submitCheckout() {
     document.getElementById('successModal').style.display = 'flex';
   } catch (err) { document.getElementById('checkoutError').textContent = err.message || 'Unable to place order.'; } finally { btn.disabled = false; }
 }
+function closeTelegramOrdersDialog() {
+  const modal = document.getElementById('ordersModal');
+  if (!modal) return;
+  modal.style.display = 'none';
+  modal.setAttribute('aria-hidden', 'true');
+  if (telegramOrdersDialogOpener?.isConnected) telegramOrdersDialogOpener.focus();
+  telegramOrdersDialogOpener = null;
+}
+
+function trapTelegramOrdersDialogFocus(event) {
+  const modal = document.getElementById('ordersModal');
+  if (!modal || modal.getAttribute('aria-hidden') === 'true') return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeTelegramOrdersDialog();
+    return;
+  }
+  if (event.key !== 'Tab') return;
+  const focusable = [...modal.querySelectorAll(
+    'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+  )].filter(node => !node.hidden && node.getAttribute('aria-hidden') !== 'true'
+    && node.getClientRects().length > 0);
+  if (!focusable.length) {
+    event.preventDefault();
+    modal.focus();
+    return;
+  }
+  const first = focusable[0], last = focusable[focusable.length - 1];
+  if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+document.getElementById('ordersModal')?.addEventListener('keydown', trapTelegramOrdersDialogFocus);
+
 async function loadTelegramOrders() {
   if (!state.telegram || !hasTelegramCapability(state.storefront, 'order_status')) return;
   const modal = document.getElementById('ordersModal'); const stateEl = document.getElementById('ordersState'); const list = document.getElementById('ordersList');
+  if (modal.getAttribute('aria-hidden') === 'true' || modal.style.display === 'none' || !modal.style.display) {
+    telegramOrdersDialogOpener = document.activeElement;
+  }
   modal.style.display = 'flex';
   modal.setAttribute('aria-hidden', 'false');
   document.getElementById('closeOrders').focus();
@@ -337,4 +380,4 @@ document.getElementById('submitOrder').addEventListener('click', submitCheckout)
 document.getElementById('closeSuccess').addEventListener('click', () => { document.getElementById('successModal').style.display = 'none'; });
 
 document.getElementById('openOrders').addEventListener('click', loadTelegramOrders);
-document.getElementById('closeOrders').addEventListener('click', () => { document.getElementById('ordersModal').style.display = 'none'; });
+document.getElementById('closeOrders').addEventListener('click', closeTelegramOrdersDialog);
