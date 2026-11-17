@@ -91,7 +91,11 @@ function hasServiceProviderResourceScope(resourceId = null) {
 }
 
 function canAccessServiceResources() {
-  return canManageServiceResources() || hasServiceProviderResourceScope();
+  const roles = Array.isArray(config.contextualRoles) ? config.contextualRoles : [];
+  const roleNames = roles.map(item => String(item?.role || '').toLowerCase());
+  return canManageServiceResources()
+    || roleNames.some(role => ['logistics_manager', 'logistics_dispatcher'].includes(role))
+    || hasServiceProviderResourceScope();
 }
 
 function serviceResourceEndpoint() {
