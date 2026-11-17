@@ -417,11 +417,11 @@ async function requireTenantAuth(req, tenant) {
   throw Object.assign(new Error('Invalid or missing session'), { statusCode: 401 });
 }
 
-async function requireAuthorization(session, tenant, resource, action, { location = null, deniedMessage = 'Permission denied' } = {}) {
+async function requireAuthorization(session, tenant, resource, action, { location = null, resourceContext = null, deniedMessage = 'Permission denied' } = {}) {
   assertTenantScope(session, tenant);
   if (location) assertLocationScope(session, tenant, location);
   const organization = tenant?.organizationId || session?.organizationId;
-  const decision = authorize(session, organization, location, resource, action);
+  const decision = authorize(session, organization, location, resource, action, resourceContext);
   if (decision === AUTHZ.ALLOW) return decision;
   // Authorization failures use the existing audit_events table; this does not
   // create a second audit system. Best-effort logging must never turn a 403
