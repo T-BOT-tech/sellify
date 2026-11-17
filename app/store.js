@@ -159,9 +159,14 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
     const headers = { Accept: 'application/json', 'X-Telegram-Init-Data': getTelegramInitData() };
     const res = await fetch(endpoint, { headers });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.error?.message || 'Unable to load appointments.');
+    if (!res.ok) {
+      const error = new Error(data?.error?.message || 'Unable to load appointments.');
+      error.status = res.status;
+      throw error;
+    }
     const lines = Array.isArray(data.order?.serviceLines) ? data.order.serviceLines : [];
     const bookings = Array.isArray(data.bookings) ? data.bookings : [];
+    panel.dataset.state = bookings.length ? 'READY' : 'EMPTY';
     const lineLabel = line => line.name || line.title || line.product_name || line.item_name || line.item_id || line.product_id || 'Service';
     const bookingCards = bookings.map(b => `<article class="customer-appointment-card"><div class="customer-appointment-card-head"><strong>${esc(b.status || 'UNKNOWN')}</strong><span class="customer-appointment-status">${esc(b.appointment_mode || 'Appointment')}</span></div><div class="customer-appointment-service">${esc(lineLabel(lines.find(x => String(x.item_id ?? x.product_id ?? x.id ?? '') === String(b.service_item_id)) || {}))}</div><div class="customer-appointment-time">${esc(new Date(b.requested_start).toLocaleString())} – ${esc(new Date(b.requested_end).toLocaleString())}</div>${b.service_resource_name ? `<div class="customer-appointment-detail">Committed resource: ${esc(b.service_resource_name)}</div>` : ''}${b.status_reason ? `<div class="customer-appointment-detail">${esc(b.status_reason)}</div>` : ''}${Array.isArray(b.allowed_actions) && b.allowed_actions.includes('CANCEL') ? `<button class="fulfillment-btn customer-appointment-cancel" data-cancel-booking="${esc(b.id)}" data-booking-version="${esc(b.version)}">Cancel request</button>` : ''}</article>`).join('');
     const options = lines.map(line => {
