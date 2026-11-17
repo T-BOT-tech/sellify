@@ -299,15 +299,6 @@ try {
   assert.equal(cancelledReplay.replayed, true);
   assert.equal(cancelledReplay.booking.status, 'CANCELLED');
 
-  const commitmentDiagnostics = db.prepare(`
-    SELECT b.id, b.service_resource_id, c.resource_id, c.state, r.name
-    FROM service_bookings b
-    LEFT JOIN service_resource_commitments c ON c.booking_id=b.id
-    LEFT JOIN service_resources r ON r.id=c.resource_id
-    WHERE b.organization_id=? AND b.chat_id=? AND b.server_order_id=?
-    ORDER BY b.created_at DESC, b.id DESC
-  `).all(organizationId, seller.chatId, owned.orderId);
-  console.log('SC-03.5 buyer projection commitment diagnostics:', JSON.stringify(commitmentDiagnostics));
   const after = await store.getTelegramBuyerServiceBookings(seller.chatId, buyer, checkout.marketplace_order_id);
   assert.equal(after.bookings.length, 4,
     'buyer projection includes both committed appointments, the legacy confirmed appointment, and the cancelled request');
