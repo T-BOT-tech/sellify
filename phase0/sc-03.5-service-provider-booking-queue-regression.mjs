@@ -39,6 +39,17 @@ assert.match(handler, /requireAuthorization\(session, tenant, 'service_resource'
 assert.match(handler, /resourceContext:/);
 assert.match(handler, /listServiceProviderBookings\(chatId, activeResources\.map/);
 assert.doesNotMatch(handler, /readBody|PATCH|POST|transitionServiceBooking/);
+const resourceHandlerStart = server.indexOf('async function handleServiceProviderResources');
+const resourceHandlerEnd = server.indexOf('async function handleServiceProviderBookings', resourceHandlerStart);
+assert.ok(resourceHandlerStart >= 0 && resourceHandlerEnd > resourceHandlerStart);
+const resourceHandler = server.slice(resourceHandlerStart, resourceHandlerEnd);
+assert.match(resourceHandler, /session\.contextualRoles/);
+assert.match(resourceHandler, /resourceContext/);
+assert.match(resourceHandler, /getServiceResourceAvailability\(chatId, resource\.id\)/);
+assert.ok(server.includes('service-provider' + String.fromCharCode(92) + '/resources'));
+assert.match(ui, /service-provider\/resources/);
+assert.match(ui, /if \(!workspace \|\| !status \|\| !list \|\| !canAccessServiceResources\(\)\) return/);
+assert.match(ui, /hasServiceProviderResourceScope\(resource\.id\)/);
 assert.ok(server.includes('service-provider' + String.fromCharCode(92) + '/bookings'));
 assert.match(server, /authorize\(session, organization, location, resource, action, resourceContext\)/);
 
