@@ -16,6 +16,12 @@ assert.match(providerPolicy, /service:service_booking:view/);
 assert.match(authorization, /validServiceResourceContext/);
 assert.match(authorization, /String\(context\.resourceId\) === item\.scopeId/);
 assert.match(authorization, /if \(role === 'service_provider'\) return AUTHZ\.DENY/);
+for (const role of ['logistics_manager: new Set([', 'logistics_dispatcher: new Set([']) {
+  const start = authorization.indexOf(role);
+  const end = authorization.indexOf(']),', start);
+  assert.ok(start >= 0 && end > start && authorization.slice(start, end).includes('service:service_resource:view'),
+    role.split(':')[0] + ' must be able to read service resources for appointment assignment');
+}
 const managerPolicy = authorization.slice(
   authorization.indexOf('manager: new Set(['),
   authorization.indexOf(']),', authorization.indexOf('manager: new Set([')) + 3,
