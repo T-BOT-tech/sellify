@@ -40,6 +40,8 @@ const ROLE_PERMISSIONS = Object.freeze({
     'supplier-network:view', 'supplier-network:manage', 'supplier-network:publish', 'supplier-network:suspend', 'supplier-network:capability:view', 'supplier-network:capability:manage', 'supplier-network:capability:activate', 'supplier-network:capability:deactivate', 'supplier-network:catalog:view', 'supplier-network:catalog:manage', 'supplier-network:catalog:activate', 'supplier-network:catalog:deactivate', 'supplier-network:service-area:view', 'supplier-network:service-area:manage', 'supplier-network:service-area:activate', 'supplier-network:service-area:deactivate', 'supplier-network:commercial:view', 'supplier-network:commercial:manage', 'supplier-network:commercial:activate', 'supplier-network:commercial:deactivate', 'supplier-network:qualification:view', 'supplier-network:qualification:manage', 'supplier-network:qualification:document', 'supplier-network:qualification:verify', 'supplier-network:qualification:revoke', 'supplier-network:performance:view', 'supplier-network:performance:recalculate', 'supplier-network:trust:view', 'supplier-network:trust:refresh', 'supplier-network:discovery:discover', 'supplier-network:marketplace-integration:view',
     'procurement:demand:view', 'procurement:demand:create', 'procurement:demand:manage', 'procurement:demand:submit', 'procurement:demand:cancel', 'procurement:demand:sourcing', 'procurement:supplier:view', 'procurement:supplier:manage', 'procurement:supplier:discover', 'procurement:supplier:relationship:view', 'procurement:supplier:relationship:manage', 'procurement:rfq:view', 'procurement:rfq:create', 'procurement:rfq:manage', 'procurement:rfq:send', 'procurement:rfq:close', 'procurement:rfq:respond', 'procurement:comparison:view', 'procurement:comparison:create', 'procurement:award:view', 'procurement:award:create', 'procurement:award:confirm', 'procurement:award:cancel', 'procurement:award:execute', 'procurement:receipt:view', 'procurement:receipt:create', 'procurement:receipt:cancel', 'procurement:payment:create',
     'service:service_resource:view', 'service:service_resource:manage',
+    'service:resource_availability:view', 'service:resource_availability:manage',
+    'service:service_booking:view',
   ]),
   cashier: new Set([
     'orders:create', 'orders:view', 'fulfillment:view', 'fulfillment:update', 'payments:accept', 'payments:view',
@@ -51,6 +53,13 @@ const ROLE_PERMISSIONS = Object.freeze({
   staff: new Set(['locations:view', 'customers:view', 'inventory:view', 'fulfillment:view']),
   buyer: new Set(['orders:create', 'b2b:po:view', 'b2b:po:create', 'supplier-network:trust:view', 'supplier-network:discovery:discover', 'supplier-network:marketplace-integration:view', 'procurement:demand:view', 'procurement:demand:create', 'procurement:demand:manage', 'procurement:demand:submit', 'procurement:demand:cancel', 'procurement:demand:sourcing', 'procurement:rfq:view', 'procurement:rfq:create', 'procurement:rfq:manage', 'procurement:rfq:send', 'procurement:rfq:close', 'procurement:comparison:view', 'procurement:comparison:create', 'procurement:award:execute', 'procurement:receipt:view', 'procurement:receipt:create']),
   viewer: new Set([]),
+  // Service Provider is resource-scoped; authorization also requires an exact
+  // service_resource context match before these permissions become effective.
+  service_provider: new Set([
+    'service:service_resource:view',
+    'service:resource_availability:view', 'service:resource_availability:manage',
+    'service:service_booking:view',
+  ]),
   // FUX-6 Restaurant contextual roles. These are executable only when the
   // Restaurant Pack is active; assignment is handled through membership_roles.
   restaurant_waiter: new Set([
