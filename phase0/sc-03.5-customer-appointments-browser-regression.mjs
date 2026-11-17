@@ -164,6 +164,8 @@ try {
   await openOrdersButton.click();
   await page.getByRole('button', { name: 'Appointments' }).click();
   await page.locator('#customerAppointmentForm').waitFor();
+  assert.equal(await page.locator('#appointmentsState').getAttribute('data-state'), 'EMPTY',
+    'customer appointment history exposes its empty state explicitly');
 
   const appointmentForm = page.locator('#customerAppointmentForm');
   assert.equal(await appointmentForm.evaluate(node => getComputedStyle(node).display), 'grid',
@@ -319,6 +321,8 @@ try {
   denyServiceBookingReads = true;
   await page.locator('[data-appointment-order]').click();
   await page.getByText('Appointment access is unavailable for this store.').waitFor();
+  assert.equal(await page.locator('#appointmentsState').getAttribute('data-state'), 'DENIED',
+    'customer appointment access denial has an explicit state');
   assert.equal(await page.locator('#appointmentsState [role="alert"]').count(), 1,
     'server-side denial is announced as an alert to assistive technology');
   assert.equal(await page.locator('#customerAppointmentForm').count(), 0,
