@@ -322,7 +322,7 @@ try {
   `).get(created.booking.id, organizationId, seller.chatId);
   assert.ok(exactCommitment, 'confirmed appointment has a canonical commitment row');
   db.prepare('UPDATE service_resource_commitments SET starts_at=? WHERE id=?')
-    .run('2027-01-20T09:01:00.000Z', exactCommitment.id);
+    .run('2027-01-20T06:01:00.000Z', exactCommitment.id);
   const mismatchedBuyerProjection = await store.getTelegramBuyerServiceBookings(seller.chatId, buyer, checkout.marketplace_order_id);
   assert.equal(mismatchedBuyerProjection.bookings.find(item => item.id === created.booking.id)?.service_resource_name, null,
     'buyer projection must not expose a resource for a mismatched commitment interval');
