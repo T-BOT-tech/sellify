@@ -350,6 +350,7 @@ export async function refreshServiceBookings(root = document) {
   const sessionToken = String(config.sessionToken);
   const context = { tenantId, baseUrl: apiBase(), headers: authHeaders() };
   status.textContent = t('serviceBookingsLoading');
+  status.dataset.state = 'LOADING';
   list.replaceChildren();
   if (hasServiceProviderResourceScope() && !canManageServiceResources()) {
     try {
@@ -404,6 +405,7 @@ export async function refreshServiceBookings(root = document) {
     if (workspace.dataset.refreshSequence === String(sequence)
         && String(config.chatId) === tenantId && String(config.sessionToken) === sessionToken) {
       status.textContent = t('serviceBookingsNoOrders');
+      status.dataset.state = 'EMPTY';
     }
     return;
   }
@@ -423,11 +425,15 @@ export async function refreshServiceBookings(root = document) {
   list.innerHTML = bookings.map(({ order, booking }) => renderBookingCard(order, booking)).join('');
   const denied = results.filter(result => result.error?.status === 403).length;
   const failures = results.filter(result => result.error && result.error.status !== 403).length;
+  const incomplete = denied > 0 || failures > 0;
+  status.dataset.state = denied === results.length ? 'DENIED'
+    : incomplete ? (!navigator.onLine ? 'UNKNOWN_STALE' : 'ERROR')
+      : bookings.length ? 'READY' : 'EMPTY';
   status.textContent = bookings.length
-    ? bookings.length + ' ' + t(bookings.length === 1 ? 'serviceBookingSingular' : 'serviceBookingPlural') + ' ' + t('serviceBookingsLoaded')
+    ? bookings.length + ' ' + t(bookings.length === 1 ? 'serviceBookingSingular' : 'serviceBookingPlural') + ' ' + t(incomplete ? 'serviceBookingsPartialFailure' : 'serviceBookingsLoaded')
     : denied === results.length
       ? t('serviceBookingsDenied')
-      : failures
+      : incomplete
         ? t('serviceBookingsPartialFailure')
         : t('serviceBookingsEmpty');
 }
