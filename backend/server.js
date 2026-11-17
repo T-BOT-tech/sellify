@@ -421,7 +421,9 @@ async function requireAuthorization(session, tenant, resource, action, { locatio
   assertTenantScope(session, tenant);
   if (location) assertLocationScope(session, tenant, location);
   const organization = tenant?.organizationId || session?.organizationId;
-  const decision = authorize(session, organization, location, resource, action, resourceContext);
+  const decision = resourceContext
+    ? authorize(session, organization, location, resource, action, resourceContext)
+    : authorize(session, organization, location, resource, action);
   if (decision === AUTHZ.ALLOW) return decision;
   // Authorization failures use the existing audit_events table; this does not
   // create a second audit system. Best-effort logging must never turn a 403
