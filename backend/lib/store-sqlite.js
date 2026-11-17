@@ -12361,6 +12361,7 @@ const CONTEXTUAL_ROLE_IDS = new Set([
   'logistics_dispatcher',
   'logistics_courier',
   'logistics_viewer',
+  'service_provider',
 ]);
 
 function assertContextualRoleAssignable(chatId, role) {
@@ -12373,6 +12374,7 @@ function assertContextualRoleAssignable(chatId, role) {
   const requiredPack = normalizedRole.startsWith('warehouse_') ? 'warehouse'
     : normalizedRole.startsWith('restaurant_') ? 'restaurant'
     : normalizedRole.startsWith('logistics_') ? 'logistics'
+    : normalizedRole === 'service_provider' ? 'service'
     : null;
   // Retail/POS contextual roles are backed by existing Platform/Core retail authorities.
   // Retail/POS and Agriculture contextual roles are backed by existing
@@ -12391,6 +12393,7 @@ function assertContextualRoleAssignable(chatId, role) {
     );
   }
 }
+
 
 export async function assignMembershipContextualRole({
   actorUserId, chatId, membershipId, role, scopeType = 'ORGANIZATION', scopeId = null,
