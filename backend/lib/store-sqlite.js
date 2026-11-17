@@ -12079,6 +12079,35 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
     return { state: 'UNKNOWN', reasonCode: 'NO_ACTIVE_MATCHING_RESOURCES', timeZone, confirmsAvailability: false };
   }
 
+  // A legacy CONFIRMED appointment without a matching committed resource
+  // cannot be safely assigned to a candidate resource. Treat an overlapping
+  // interval as UNKNOWN instead of reporting FEASIBLE from incomplete evidence.
+  const legacyUncommittedBooking = db.prepare(`
+    SELECT 1
+    FROM service_bookings b
+    LEFT JOIN service_resource_commitments c
+      ON c.booking_id = b.id
+     AND c.organization_id = b.organization_id
+     AND c.chat_id = b.chat_id
+     AND c.state = 'COMMITTED'
+    WHERE b.organization_id = ?
+      AND b.chat_id = ?
+      AND b.service_item_id = ?
+      AND b.status = 'CONFIRMED'
+      AND b.requested_start < ?
+      AND b.requested_end > ?
+      AND (b.service_resource_id IS NULL OR c.id IS NULL)
+    LIMIT 1
+  `).get(organizationId, String(chatId), serviceItemId, end, start);
+  if (legacyUncommittedBooking) {
+    return {
+      state: 'UNKNOWN',
+      reasonCode: 'OVERLAPPING_LEGACY_CONFIRMED_BOOKING_WITHOUT_RESOURCE',
+      timeZone,
+      confirmsAvailability: false,
+    };
+  }
+
   let scheduleUnknown = false;
   let scheduleMatched = 0;
   let overlapCount = 0;
