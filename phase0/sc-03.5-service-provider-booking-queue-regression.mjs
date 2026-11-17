@@ -66,6 +66,13 @@ assert.match(ui, /if \(!workspace \|\| !status \|\| !list \|\| !canAccessService
 assert.match(ui, /hasServiceProviderResourceScope\(resource\.id\)/);
 assert.ok(server.includes('service-provider' + String.fromCharCode(92) + '/bookings'));
 assert.match(server, /authorize\(session, organization, location, resource, action, resourceContext\)/);
+const resourceListStart = server.indexOf('async function handleServiceResources');
+const resourceListEnd = server.indexOf('async function handleServiceResourceAvailability', resourceListStart);
+const resourceListHandler = server.slice(resourceListStart, resourceListEnd);
+assert.match(resourceListHandler, /providerResourceIds/);
+assert.match(resourceListHandler, /providerResourceIds\.includes\(String\(resource\.id\)\)/);
+assert.match(resourceListHandler, /scope: 'ACTIVE_ASSIGNED_RESOURCES'/);
+assert.match(resourceListHandler, /resourceContext: \{ resourceType: 'service_resource'/);
 
 assert.match(ui, /\/service-provider\/bookings/);
 assert.match(ui, /serviceProviderAppointmentsTitle/);
