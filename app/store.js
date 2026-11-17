@@ -171,6 +171,7 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
         delete form.dataset.appointmentIdempotencyKey;
         if (['service_item_id', 'requested_start', 'requested_end'].includes(event.target?.name)) {
           delete form.dataset.feasibilitySignature;
+          delete form.dataset.feasibilityCheckedAt;
           feasibilityState.dataset.state = '';
           feasibilityState.textContent = 'Selection changed. Check the new time before sending your request.';
         }
@@ -179,6 +180,7 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
         delete form.dataset.appointmentIdempotencyKey;
         if (['service_item_id', 'requested_start', 'requested_end'].includes(event.target?.name)) {
           delete form.dataset.feasibilitySignature;
+          delete form.dataset.feasibilityCheckedAt;
           feasibilityState.dataset.state = '';
           feasibilityState.textContent = 'Selection changed. Check the new time before sending your request.';
         }
@@ -199,6 +201,7 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
           if (!response.ok) throw new Error(result?.error?.message || 'Unable to check this time.');
           const assessment = result.feasibility || {};
           form.dataset.feasibilitySignature = feasibilitySignature(values, start, end);
+          form.dataset.feasibilityCheckedAt = String(Date.now());
           feasibilityState.dataset.state = assessment.state || 'UNKNOWN';
           const zone = assessment.timeZone ? ` · ${assessment.timeZone}` : '';
           if (assessment.state === 'FEASIBLE') feasibilityState.textContent = `Likely feasible based on declared hours and current commitments${zone}. This is not a reservation.`;
@@ -206,6 +209,7 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
           else feasibilityState.textContent = `Availability is unknown${zone}. You may still send a request for provider review; no availability is guaranteed.`;
         } catch (error) {
           delete form.dataset.feasibilitySignature;
+          delete form.dataset.feasibilityCheckedAt;
           feasibilityState.dataset.state = 'UNKNOWN';
           feasibilityState.textContent = !navigator.onLine ? 'Offline: time feasibility cannot be checked until you reconnect.' : (error.message || 'Time feasibility is unknown.');
         } finally { checkButton.disabled = false; }
@@ -216,6 +220,16 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
       const errorEl = document.getElementById('appointmentRequestError');
       const values = new FormData(form);
       const checkedState = feasibilityState.dataset.state || '';
+      const checkedAt = Number(form.dataset.feasibilityCheckedAt || 0);
+      const feasibilityAge = Date.now() - checkedAt;
+      if (!checkedAt || !Number.isFinite(feasibilityAge) || feasibilityAge < 0 || feasibilityAge > 60_000) {
+        delete form.dataset.feasibilitySignature;
+        delete form.dataset.feasibilityCheckedAt;
+        feasibilityState.dataset.state = 'UNKNOWN_STALE';
+        feasibilityState.textContent = 'The previous time check is stale. Check the selected time again before sending your request.';
+        errorEl.textContent = 'Refresh the time check before sending this appointment request.';
+        return;
+      }
       if (!['FEASIBLE', 'UNKNOWN'].includes(checkedState)) {
         errorEl.textContent = checkedState === 'CONFLICT'
           ? 'This time has a known conflict. Choose another interval and check again.'
