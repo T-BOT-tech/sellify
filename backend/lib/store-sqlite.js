@@ -3490,8 +3490,35 @@ if (!applied.includes(39)) {
           { code: 'SERVICE_RESOURCE_COMMITMENT_MIGRATION_UNSUPPORTED_LEGACY_SCHEMA' },
         );
       }
+      // Never drop legacy evidence that cannot be bridged exactly. An INNER JOIN
+      // or INSERT OR IGNORE alone would silently discard orphaned, cross-tenant,
+      // malformed-window, or duplicate-booking rows.
+      const unbridgeableStatusRows = db.prepare(`
+        SELECT c.id
+        FROM service_resource_commitments_v80_status_legacy c
+        LEFT JOIN service_bookings b
+          ON b.id = c.booking_id
+         AND b.organization_id = c.organization_id
+         AND b.chat_id = c.chat_id
+        LEFT JOIN service_resources r
+          ON r.id = c.resource_id
+         AND r.organization_id = c.organization_id
+         AND r.chat_id = c.chat_id
+        LEFT JOIN service_resource_commitments existing
+          ON existing.booking_id = c.booking_id
+        WHERE b.id IS NULL
+           OR r.id IS NULL
+           OR c.ends_at <= c.starts_at
+           OR existing.booking_id IS NOT NULL
+      `).all();
+      if (unbridgeableStatusRows.length) {
+        throw Object.assign(
+          new Error(`Cannot safely migrate v80 service resource commitments; preserved legacy rows require reconciliation: ${unbridgeableStatusRows.map(row => row.id).join(', ')}`),
+          { code: 'SERVICE_RESOURCE_COMMITMENT_MIGRATION_UNBRIDGEABLE_LEGACY_ROWS' },
+        );
+      }
       db.prepare(`
-        INSERT OR IGNORE INTO service_resource_commitments
+        INSERT INTO service_resource_commitments
           (id, organization_id, chat_id, resource_id, booking_id, starts_at, ends_at,
            state, committed_by, committed_at, released_by, released_at)
         SELECT
