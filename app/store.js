@@ -264,7 +264,8 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
       const checkedState = feasibilityState.dataset.state || '';
       const checkedAt = Number(form.dataset.feasibilityCheckedAt || 0);
       const feasibilityAge = Date.now() - checkedAt;
-      if (!checkedAt || !Number.isFinite(feasibilityAge) || feasibilityAge < 0 || feasibilityAge > 60_000) {
+      const hasFeasibilityAssessment = ['FEASIBLE', 'UNKNOWN'].includes(checkedState) || checkedAt > 0;
+      if (hasFeasibilityAssessment && (!checkedAt || !Number.isFinite(feasibilityAge) || feasibilityAge < 0 || feasibilityAge > 60_000)) {
         delete form.dataset.feasibilitySignature;
         delete form.dataset.feasibilityCheckedAt;
         feasibilityState.dataset.state = 'UNKNOWN_STALE';
