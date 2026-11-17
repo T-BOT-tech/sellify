@@ -223,7 +223,6 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
         delete form.dataset.appointmentIdempotencyKey;
         if (['service_item_id', 'requested_start', 'requested_end'].includes(event.target?.name)) {
           delete form.dataset.feasibilitySignature;
-          delete form.dataset.feasibilityCheckedAt;
           feasibilityState.dataset.state = '';
           feasibilityState.textContent = 'Selection changed. Check the new time before sending your request.';
         }
