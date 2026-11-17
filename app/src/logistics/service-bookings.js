@@ -83,6 +83,17 @@ function canManageServiceResources() {
   return role === 'owner' || role === 'manager';
 }
 
+function hasServiceProviderResourceScope(resourceId = null) {
+  const roles = Array.isArray(config.contextualRoles) ? config.contextualRoles : [];
+  return roles.some(item => String(item?.role || '').toLowerCase() === 'service_provider'
+    && String(item?.scopeType || '').toUpperCase() === 'RESOURCE'
+    && (!resourceId || String(item?.scopeId || '') === String(resourceId)));
+}
+
+function canAccessServiceResources() {
+  return canManageServiceResources() || hasServiceProviderResourceScope();
+}
+
 function serviceResourceEndpoint() {
   return apiBase() + '/tenants/' + encodeURIComponent(config.chatId) + '/service-resources';
 }
@@ -279,24 +290,34 @@ async function saveServiceResourceAvailability(button, root) {
 }
 
 export function serviceBookingsWorkspaceShell() {
-  return '<section id="serviceBookingsWorkspace" class="settings-section" aria-label="' + escapeAttr(t('serviceBookingsTitle')) + '">'
-    + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
-    + '<h3 style="margin:0;">' + escapeHtml(t('serviceBookingsTitle')) + '</h3>'
-    + '<button type="button" class="btn-secondary" id="serviceBookingsRefresh">' + escapeHtml(t('serviceBookingsRefresh')) + '</button></div>'
-    + '<p class="logistics-meta">' + escapeHtml(t('serviceBookingsDescription')) + '</p>'
-    + '<div id="serviceBookingsStatus" class="logistics-meta" role="status">' + escapeHtml(t('serviceBookingsLoading')) + '</div>'
-    + '<div id="serviceBookingsList"></div>'
-    + (canManageServiceResources()
+  const providerOnly = hasServiceProviderResourceScope() && !canManageServiceResources();
+  return '<section id="serviceBookingsWorkspace" class="settings-section" aria-label="' + escapeAttr(t(providerOnly ? 'serviceResourceTitle' : 'serviceBookingsTitle')) + '">'
+    + (providerOnly
+      ? '<h3 style="margin:0;">' + escapeHtml(t('serviceResourceTitle')) + '</h3>'
+        + '<p class="logistics-meta">' + escapeHtml(t('serviceResourceProviderDescription')) + '</p>'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h4>' + escapeHtml(t('serviceProviderAppointmentsTitle')) + '</h4>'
+        + '<button type="button" class="btn-secondary" id="serviceBookingsRefresh">' + escapeHtml(t('serviceProviderAppointmentsRefresh')) + '</button></div>'
+        + '<div id="serviceBookingsStatus" class="logistics-meta" role="status">' + escapeHtml(t('serviceProviderAppointmentsLoading')) + '</div>'
+        + '<div id="serviceBookingsList" aria-live="polite"></div>'
+      : '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
+        + '<h3 style="margin:0;">' + escapeHtml(t('serviceBookingsTitle')) + '</h3>'
+        + '<button type="button" class="btn-secondary" id="serviceBookingsRefresh">' + escapeHtml(t('serviceBookingsRefresh')) + '</button></div>'
+        + '<p class="logistics-meta">' + escapeHtml(t('serviceBookingsDescription')) + '</p>'
+        + '<div id="serviceBookingsStatus" class="logistics-meta" role="status">' + escapeHtml(t('serviceBookingsLoading')) + '</div>'
+        + '<div id="serviceBookingsList"></div>')
+    + (canAccessServiceResources()
       ? '<section class="settings-section" aria-label="' + escapeAttr(t('serviceResourceTitle')) + '">'
-        + '<h4>' + escapeHtml(t('serviceResourceTitle')) + '</h4>'
-        + '<p class="logistics-meta">' + escapeHtml(t('serviceResourceDescription')) + '</p>'
-        + '<form id="serviceResourceForm" class="settings-form" style="display:grid;gap:8px;">'
-        + '<input name="name" maxlength="120" required placeholder="' + escapeAttr(t('serviceResourceName')) + '">'
-        + '<select name="resource_type"><option value="PROVIDER">' + escapeHtml(t('serviceResourceTypeProvider')) + '</option><option value="FACILITY">' + escapeHtml(t('serviceResourceTypeFacility')) + '</option><option value="EQUIPMENT">' + escapeHtml(t('serviceResourceTypeEquipment')) + '</option><option value="OTHER">' + escapeHtml(t('serviceResourceTypeOther')) + '</option></select>'
-        + '<select name="service_item_id">' + serviceResourceCatalogOptions() + '</select>'
-        + '<select name="location_id">' + serviceResourceLocationOptions() + '</select>'
-        + '<textarea name="description" maxlength="1000" placeholder="' + escapeAttr(t('serviceResourceDescriptionField')) + '"></textarea>'
-        + '<button type="submit" class="btn-primary" id="serviceResourceCreate">' + escapeHtml(t('serviceResourceCreate')) + '</button></form>'
+        + (providerOnly ? '' : '<h4>' + escapeHtml(t('serviceResourceTitle')) + '</h4>')
+        + (providerOnly ? '' : '<p class="logistics-meta">' + escapeHtml(t('serviceResourceDescription')) + '</p>')
+        + (canManageServiceResources()
+          ? '<form id="serviceResourceForm" class="settings-form" style="display:grid;gap:8px;">'
+            + '<input name="name" maxlength="120" required placeholder="' + escapeAttr(t('serviceResourceName')) + '">'
+            + '<select name="resource_type"><option value="PROVIDER">' + escapeHtml(t('serviceResourceTypeProvider')) + '</option><option value="FACILITY">' + escapeHtml(t('serviceResourceTypeFacility')) + '</option><option value="EQUIPMENT">' + escapeHtml(t('serviceResourceTypeEquipment')) + '</option><option value="OTHER">' + escapeHtml(t('serviceResourceTypeOther')) + '</option></select>'
+            + '<select name="service_item_id">' + serviceResourceCatalogOptions() + '</select>'
+            + '<select name="location_id">' + serviceResourceLocationOptions() + '</select>'
+            + '<textarea name="description" maxlength="1000" placeholder="' + escapeAttr(t('serviceResourceDescriptionField')) + '"></textarea>'
+            + '<button type="submit" class="btn-primary" id="serviceResourceCreate">' + escapeHtml(t('serviceResourceCreate')) + '</button></form>'
+          : '')
         + '<div id="serviceResourcesStatus" class="logistics-meta" role="status">' + escapeHtml(t('serviceResourceLoading')) + '</div>'
         + '<div id="serviceResourcesList"></div></section>'
       : '') + '</section>';
@@ -319,6 +340,54 @@ export async function refreshServiceBookings(root = document) {
   const context = { tenantId, baseUrl: apiBase(), headers: authHeaders() };
   status.textContent = t('serviceBookingsLoading');
   list.replaceChildren();
+  if (hasServiceProviderResourceScope() && !canManageServiceResources()) {
+    try {
+      const response = await fetch(context.baseUrl + '/tenants/' + encodeURIComponent(tenantId) + '/service-provider/bookings', { headers: context.headers });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { const error = new Error(data?.error?.message || t('serviceBookingsLoadFailed')); error.status = response.status; throw error; }
+      if (workspace.isConnected === false || workspace.dataset.refreshSequence !== String(sequence)
+          || String(config.chatId) !== tenantId || String(config.sessionToken) !== sessionToken) return;
+      const bookings = (Array.isArray(data.bookings) ? data.bookings : []).slice().sort((a, b) => {
+        const startOf = booking => {
+          const value = booking.commitment_starts_at || booking.requested_start;
+          const timestamp = value ? new Date(value).getTime() : Number.NaN;
+          return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
+        };
+        const difference = startOf(a) - startOf(b);
+        return Number.isNaN(difference) || difference === 0
+          ? String(a.id || '').localeCompare(String(b.id || '')) : difference;
+      });
+      list.innerHTML = bookings.map(booking => {
+        const date = value => { const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? String(value || '—') : parsed.toLocaleString(); };
+        const start = booking.commitment_starts_at || booking.requested_start;
+        const end = booking.commitment_ends_at || booking.requested_end;
+        const timeMarkup = value => {
+          const parsed = value ? new Date(value) : null;
+          const valid = parsed && Number.isFinite(parsed.getTime());
+          return '<time' + (valid ? ' datetime="' + escapeAttr(parsed.toISOString()) + '"' : '')
+            + '>' + escapeHtml(date(value)) + '</time>';
+        };
+        return '<article class="logistics-card service-booking-card"><div class="logistics-top"><strong>'
+          + escapeHtml(booking.service_item_id || 'Service') + '</strong><span class="logistics-status">'
+          + escapeHtml(String(booking.status || '').replaceAll('_', ' ')) + '</span></div>'
+          + '<div class="logistics-meta">Order ' + escapeHtml(booking.order_id) + ' · ' + escapeHtml(booking.service_resource_name || 'Assigned resource') + '</div>'
+          + '<div class="logistics-meta service-booking-time">' + timeMarkup(start) + ' – '
+          + timeMarkup(end) + '</div>'
+          + (booking.customer_note ? '<div class="logistics-meta">' + escapeHtml(booking.customer_note) + '</div>' : '') + '</article>';
+      }).join('');
+      status.textContent = bookings.length
+        ? t('serviceProviderAppointmentsReady').replace('{count}', String(bookings.length))
+        : t('serviceProviderAppointmentsEmpty');
+      status.dataset.state = bookings.length ? 'READY' : 'EMPTY';
+    } catch (error) {
+      if (workspace.dataset.refreshSequence !== String(sequence) || String(config.chatId) !== tenantId || String(config.sessionToken) !== sessionToken) return;
+      status.textContent = error.status === 403 ? t('serviceProviderAppointmentsDenied')
+        : !navigator.onLine ? t('serviceProviderAppointmentsUnknownStale') : t('serviceProviderAppointmentsUnavailable');
+      status.dataset.state = error.status === 403 ? 'DENIED' : !navigator.onLine ? 'UNKNOWN_STALE' : 'ERROR';
+      list.replaceChildren();
+    }
+    return;
+  }
   const candidates = serviceOrders();
   if (!candidates.length) {
     if (workspace.dataset.refreshSequence === String(sequence)
