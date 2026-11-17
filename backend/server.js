@@ -3419,6 +3419,39 @@ async function handleServiceResourceAvailability(req, res, chatId, resourceId) {
   return sendJSON(res, 200, { availability: result.availability, replayed: result.replayed, state: 'DECLARED' }, req);
 }
 
+async function handleServiceProviderResources(req, res, chatId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, chatId);
+  if (req.method !== 'GET') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+  const assignedIds = [...new Set((Array.isArray(session.contextualRoles) ? session.contextualRoles : [])
+    .filter(item => String(item?.role || '').toLowerCase() === 'service_provider'
+      && String(item?.scopeType || '').toUpperCase() === 'RESOURCE' && item?.scopeId)
+    .map(item => String(item.scopeId)))];
+  if (!assignedIds.length) throw Object.assign(new Error('An active resource-scoped Service Provider assignment is required'), {
+    statusCode: 403, code: 'SERVICE_PROVIDER_ASSIGNMENT_REQUIRED',
+  });
+  const assignedResources = (await listServiceResources(chatId, { includeInactive: false }))
+    .filter(resource => assignedIds.includes(String(resource.id)));
+  const resources = [];
+  for (const resource of assignedResources) {
+    const location = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
+    if (resource.locationId && !location) throw Object.assign(new Error('Assigned Service Resource location is unavailable in tenant scope'), {
+      statusCode: 403, code: 'LOCATION_SCOPE_DENIED',
+    });
+    const resourceContext = { resourceType: 'service_resource', resourceId: resource.id,
+      organizationId: resource.organizationId, locationId: resource.locationId };
+    await requireAuthorization(session, tenant, 'service_resource', 'service:service_resource:view', {
+      location, resourceContext, deniedMessage: 'Assigned Service Provider resource view permission required',
+    });
+    const availability = await getServiceResourceAvailability(chatId, resource.id);
+    resources.push({ ...resource, availability });
+  }
+  return sendJSON(res, 200, { resources, state: resources.length ? 'READY' : 'EMPTY',
+    authority: 'service_resource_registry + service_resource_availability',
+    scope: 'ACTIVE_ASSIGNED_RESOURCES' }, req);
+}
+
 async function handleServiceProviderBookings(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -3603,6 +3636,7 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/events\/([^/]+)$/, handler: (req, res, m) => handleSyncEvents(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/sync\/([^/]+)$/, handler: (req, res, m) => handleSyncPull(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/orders\/([^/]+)$/, handler: (req, res, m) => handleOrdersFeed(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-provider\/resources$/, handler: (req, res, m) => handleServiceProviderResources(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-provider\/bookings$/, handler: (req, res, m) => handleServiceProviderBookings(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-resources$/, handler: (req, res, m) => handleServiceResources(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/service-resources$/, handler: (req, res, m) => handleServiceResources(req, res, decodeURIComponent(m[1])) },
