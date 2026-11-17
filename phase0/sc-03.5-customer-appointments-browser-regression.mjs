@@ -224,6 +224,18 @@ try {
   await page.getByRole('button', { name: 'Check time' }).click();
   await page.getByText(/Likely feasible based on declared hours/).waitFor();
 
+  await appointmentForm.evaluate(form => {
+    form.dataset.feasibilityCheckedAt = String(Date.now() - 61_000);
+  });
+  await page.getByRole('button', { name: 'Send appointment request' }).click();
+  await page.getByText(/previous time check is stale/i).waitFor();
+  assert.equal(await page.locator('#appointmentFeasibilityState').getAttribute('data-state'), 'UNKNOWN_STALE',
+    'an expired feasibility assessment must be surfaced as UNKNOWN_STALE');
+  assert.equal(calls.filter(call => call.method === 'POST' && call.path.endsWith('/service-bookings')).length, 0,
+    'an expired feasibility assessment must not authorize request submission');
+  await page.getByRole('button', { name: 'Check time' }).click();
+  await page.getByText(/Likely feasible based on declared hours/).waitFor();
+
   await page.getByRole('button', { name: 'Send appointment request' }).click();
   await page.getByText('REQUESTED', { exact: true }).waitFor();
   assert.equal(calls.filter(call => call.method === 'POST' && call.path.endsWith('/service-bookings')).length, 1,
