@@ -6490,7 +6490,9 @@ export async function listServiceProviderBookings(chatId, resourceIds = []) {
     FROM service_bookings b
     JOIN service_resource_commitments c ON c.booking_id = b.id
       AND c.organization_id = b.organization_id AND c.chat_id = b.chat_id
-      AND c.resource_id = b.service_resource_id AND c.state = 'COMMITTED'
+      AND c.resource_id = b.service_resource_id
+      AND c.starts_at = b.requested_start AND c.ends_at = b.requested_end
+      AND c.state = 'COMMITTED'
     JOIN service_resources r ON r.id = c.resource_id
       AND r.organization_id = c.organization_id AND r.chat_id = c.chat_id
       AND r.status = 'ACTIVE'
@@ -12042,6 +12044,9 @@ export async function getTelegramBuyerServiceBookings(chatId, telegramUserId, ma
       ON commitment.booking_id = b.id
      AND commitment.organization_id = b.organization_id
      AND commitment.chat_id = b.chat_id
+     AND commitment.resource_id = b.service_resource_id
+     AND commitment.starts_at = b.requested_start
+     AND commitment.ends_at = b.requested_end
      AND commitment.state = 'COMMITTED'
     LEFT JOIN service_resources r
       ON r.id = commitment.resource_id
