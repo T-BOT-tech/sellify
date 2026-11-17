@@ -6328,6 +6328,11 @@ export async function createServiceBooking(chatId, serverOrderId, input = {}, ac
     if (String(freshTenant?.organization_id || '') !== organizationId) throw Object.assign(new Error('Tenant organization changed during booking'), { statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH' });
     const orderRow = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?').get(String(chatId), orderId);
     if (!orderRow) throw Object.assign(new Error('Canonical order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    if (actor?.actorType === 'TELEGRAM_BUYER') {
+      assertTelegramBuyerOwnsCanonicalServiceOrder(
+        chatId, organizationId, actor.buyerTelegramUserId, actor.marketplaceOrderId, orderId,
+      );
+    }
     const order = orderFromRow(orderRow);
     const lines = Array.isArray(order?.items) ? order.items : [];
     if (!lines.some(item => String(item.item_id ?? item.product_id ?? item.id ?? '') === serviceItemId && String(item.item_type || '').toLowerCase() === 'service')) {
