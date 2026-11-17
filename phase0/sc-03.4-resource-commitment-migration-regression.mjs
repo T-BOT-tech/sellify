@@ -58,8 +58,8 @@ try {
   assert.match(duplicateBookingUnique, /booking_id\s+TEXT\s+NOT NULL\s+UNIQUE/i,
     'a booking may have at most one commitment record');
 
-  const stateCheck = /state\s+TEXT\s+NOT NULL\s+CHECK\s*\(state\s+IN\s*\('COMMITTED','RELEASED'\)\)/i;
-  assert.match(duplicateBookingUnique, stateCheck,
+  const normalizedCommitmentSql = duplicateBookingUnique.replace(/\s+/g, ' ');
+  assert.ok(normalizedCommitmentSql.includes("state TEXT NOT NULL CHECK (state IN ('COMMITTED','RELEASED'))"),
     'commitment lifecycle must use the canonical COMMITTED/RELEASED vocabulary');
 
   assert.equal(
