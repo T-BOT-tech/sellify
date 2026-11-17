@@ -321,6 +321,25 @@ try {
   assert.equal(visibleLegacy?.service_resource_name, null,
     'legacy appointments without a proven commitment must not be presented as resource-bound');
   assert.equal(visibleConfirmed?.status, 'CONFIRMED');
+
+  // A commitment row is not sufficient on its own: its resource and interval
+  // must still match the canonical booking before either buyer or provider
+  // projections describe the appointment as resource-bound.
+  const exactCommitment = db.prepare(`
+    SELECT id, starts_at FROM service_resource_commitments
+    WHERE booking_id=? AND organization_id=? AND chat_id=? AND state='COMMITTED'
+  `).get(created.booking.id, organizationId, seller.chatId);
+  assert.ok(exactCommitment, 'confirmed appointment has a canonical commitment row');
+  db.prepare('UPDATE service_resource_commitments SET starts_at=? WHERE id=?')
+    .run('2027-01-20T09:01:00.000Z', exactCommitment.id);
+  const mismatchedBuyerProjection = await store.getTelegramBuyerServiceBookings(seller.chatId, buyer, checkout.marketplace_order_id);
+  assert.equal(mismatchedBuyerProjection.bookings.find(item => item.id === created.booking.id)?.service_resource_name, null,
+    'buyer projection must not expose a resource for a mismatched commitment interval');
+  assert.deepEqual(await store.listServiceProviderBookings(seller.chatId, [resource.resource.id]).then(rows => rows.filter(item => item.id === created.booking.id)), [],
+    'provider queue must exclude a commitment whose interval no longer matches the booking');
+  db.prepare('UPDATE service_resource_commitments SET starts_at=? WHERE id=?')
+    .run(exactCommitment.starts_at, exactCommitment.id);
+
   assert.equal(visibleCancelled?.status, 'CANCELLED');
   assert.equal(visibleCancelled?.service_resource_name, null,
     'released or never-committed resources must not be presented as committed');
