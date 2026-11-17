@@ -84,6 +84,12 @@ jobs:
         run: npm run test:sc-03.4-resource-commitment-migration
       - name: SC-03.5 service provider booking queue regression
         run: npm run test:sc-03.5-service-provider-queue
+      - name: SC-03.5 Telegram buyer appointment order isolation regression
+        run: npm run test:sc-03.5-buyer-appointments
+      - name: SC-03.5 customer appointment browser regression
+        run: npm run test:sc-03.5-appointments-browser
+      - name: SC-03.5 authenticated Telegram appointment HTTP regression
+        run: npm run test:sc-03.5-appointments-http
       - name: Service Booking operator browser regression
         run: node phase0/service-booking-operator-browser-regression.mjs
 
