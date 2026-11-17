@@ -201,7 +201,7 @@ try {
     status: 'ACCEPTED', expectedVersion: secondRequest.booking.version,
     idempotencyKey: 'sc035-accept-two-' + suffix,
   }, null);
-  await store.transitionServiceBooking(seller.chatId, owned.orderId, secondRequest.booking.id, {
+  const secondConfirmed = await store.transitionServiceBooking(seller.chatId, owned.orderId, secondRequest.booking.id, {
     status: 'CONFIRMED', expectedVersion: secondAccepted.booking.version,
     service_resource_id: secondResource.resource.id,
     idempotencyKey: 'sc035-confirm-two-' + suffix,
@@ -221,6 +221,22 @@ try {
   assert.deepEqual(await store.listServiceProviderBookings(seller.chatId, [foreignResource.resource.id]), [],
     'a resource identifier from another organization must not expose appointments');
 
+  await assert.rejects(
+    store.updateServiceResource(seller.chatId, secondResource.resource.id, {
+      expectedVersion: secondResource.resource.version, status: 'INACTIVE',
+      idempotencyKey: 'sc035-inactivate-resource-two-active-' + suffix,
+    }, null),
+    error => error?.code === 'SERVICE_RESOURCE_HAS_ACTIVE_COMMITMENTS',
+    'a resource with a confirmed appointment cannot be deactivated and orphan its provider assignment',
+  );
+  const completedSecondBooking = await store.transitionServiceBooking(seller.chatId, owned.orderId, secondRequest.booking.id, {
+    status: 'COMPLETED', expectedVersion: secondConfirmed.booking.version,
+    completion_note: 'SC-03.5 regression completion',
+    idempotencyKey: 'sc035-complete-two-' + suffix,
+  }, null);
+  assert.equal(completedSecondBooking.booking.status, 'COMPLETED');
+  assert.equal(db.prepare("SELECT state FROM service_resource_commitments WHERE booking_id=?").get(secondRequest.booking.id).state, 'RELEASED',
+    'completion releases the resource commitment atomically');
   const inactivatedResource = await store.updateServiceResource(seller.chatId, secondResource.resource.id, {
     expectedVersion: secondResource.resource.version, status: 'INACTIVE',
     idempotencyKey: 'sc035-inactivate-resource-two-' + suffix,
