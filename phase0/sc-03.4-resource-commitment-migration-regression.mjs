@@ -61,6 +61,8 @@ try {
   const normalizedCommitmentSql = duplicateBookingUnique.replace(/\s+/g, ' ');
   assert.ok(normalizedCommitmentSql.includes("state TEXT NOT NULL CHECK (state IN ('COMMITTED','RELEASED'))"),
     'commitment lifecycle must use the canonical COMMITTED/RELEASED vocabulary');
+  assert.ok(normalizedCommitmentSql.includes('ends_at TEXT NOT NULL CHECK (ends_at > starts_at)'),
+    'database must reject empty or reversed commitment intervals');
 
   assert.equal(
     db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = 80').get().count,
