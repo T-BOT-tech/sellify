@@ -240,6 +240,8 @@ try {
 
   await page.getByRole('button', { name: 'Send appointment request' }).click();
   await page.getByText('REQUESTED', { exact: true }).waitFor();
+  assert.equal(await page.locator('#appointmentsState').getAttribute('data-state'), 'READY',
+    'customer appointment history exposes its ready state after a request is recorded');
   assert.equal(calls.filter(call => call.method === 'POST' && call.path.endsWith('/service-bookings')).length, 1,
     'one customer request is submitted through the existing service booking authority');
   const createCall = calls.find(call => call.method === 'POST' && call.path.endsWith('/service-bookings'));
