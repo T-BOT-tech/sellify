@@ -62,13 +62,14 @@ function renderBookingCard(order, booking) {
   const actions = canOperate() ? transitions.map(target =>
     '<button type="button" class="btn-secondary service-booking-action" data-order-id="' + escapeAttr(order.server_order_id)
     + '" data-booking-id="' + escapeAttr(booking.id) + '" data-version="' + escapeAttr(booking.version)
-    + '" data-target="' + escapeAttr(target) + '">' + escapeHtml(target.replaceAll('_', ' ')) + '</button>'
+    + '" data-target="' + escapeAttr(target) + '" data-service-item-id="' + escapeAttr(booking.service_item_id) + '">' + escapeHtml(target.replaceAll('_', ' ')) + '</button>'
   ).join('') : '';
   return '<article class="logistics-card service-booking-card">'
     + '<div class="logistics-top"><strong>' + escapeHtml(booking.service_item_id || 'Service')
     + '</strong><span class="logistics-status">' + escapeHtml(status.replaceAll('_', ' ')) + '</span></div>'
     + '<div class="logistics-meta">Order ' + escapeHtml(order.server_order_id) + ' · ' + escapeHtml(mode || 'appointment')
     + ' · v' + escapeHtml(booking.version) + '</div>'
+    + (booking.service_resource_id ? '<div class="logistics-meta">Committed resource: ' + escapeHtml(booking.service_resource_name || booking.service_resource_id) + '</div>' : '')
     + '<div class="logistics-meta">' + escapeHtml(date(booking.requested_start)) + ' – ' + escapeHtml(date(booking.requested_end)) + '</div>'
     + (booking.customer_note ? '<div class="logistics-meta">' + escapeHtml(booking.customer_note) + '</div>' : '')
     + (booking.status_reason ? '<div class="logistics-meta">Reason: ' + escapeHtml(booking.status_reason) + '</div>' : '')
@@ -76,7 +77,6 @@ function renderBookingCard(order, booking) {
     + (actions ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">' + actions + '</div>' : '')
     + '</article>';
 }
-
 
 function canManageServiceResources() {
   const role = String(config.currentStaffRole || config.authRole || config.tenantRole || '').toLowerCase();
@@ -425,25 +425,40 @@ async function transitionBooking(button, root) {
   const target = button.dataset.target;
   let reason = '';
   let completion_note = '';
+  let service_resource_id = null;
   if (['REJECTED', 'FAILED', 'CANCELLED'].includes(target)) {
     reason = window.prompt(t('serviceBookingReasonPrompt') + ' ' + target.toLowerCase() + ':')?.trim() || '';
     if (!reason) return;
   }
-  if (target === 'COMPLETED') {
-    completion_note = window.prompt(t('serviceBookingCompletionPrompt'))?.trim() || '';
-  }
-  const orderId = button.dataset.orderId;
-  const bookingId = button.dataset.bookingId;
-  const url = apiBase() + '/tenants/' + encodeURIComponent(config.chatId)
-    + '/orders/' + encodeURIComponent(orderId) + '/service-bookings/' + encodeURIComponent(bookingId);
+  if (target === 'COMPLETED') completion_note = window.prompt(t('serviceBookingCompletionPrompt'))?.trim() || '';
   button.disabled = true;
   try {
+    if (target === 'CONFIRMED') {
+      const resourcesResponse = await fetch(serviceResourceEndpoint(), { headers: authHeaders() });
+      const resourcesData = await resourcesResponse.json().catch(() => ({}));
+      if (!resourcesResponse.ok) throw new Error(resourcesData?.error?.message || 'Could not load service resources. Refresh and retry.');
+      const eligible = (Array.isArray(resourcesData.resources) ? resourcesData.resources : [])
+        .filter(resource => String(resource.status || '').toUpperCase() === 'ACTIVE'
+          && (!resource.serviceItemId || String(resource.serviceItemId) === String(button.dataset.serviceItemId)));
+      if (!eligible.length) throw new Error('No active service resource is available for this service. Create or activate a resource first.');
+      const choices = eligible.map((resource, index) => (index + 1) + '. ' + resource.name + ' (' + resource.resourceType + ')').join('\n');
+      const selected = window.prompt('Select the resource for this appointment by number:\n' + choices);
+      if (selected === null) { button.disabled = false; return; }
+      const index = Number(selected) - 1;
+      if (!Number.isInteger(index) || index < 0 || index >= eligible.length) throw new Error('Choose a valid resource number.');
+      service_resource_id = eligible[index].id;
+    }
+    const orderId = button.dataset.orderId;
+    const bookingId = button.dataset.bookingId;
+    const url = apiBase() + '/tenants/' + encodeURIComponent(config.chatId)
+      + '/orders/' + encodeURIComponent(orderId) + '/service-bookings/' + encodeURIComponent(bookingId);
     const response = await fetch(url, {
       method: 'PATCH',
       headers: { ...authHeaders(), 'Content-Type': 'application/json', 'Idempotency-Key': 'service-booking-ui-' + crypto.randomUUID() },
       body: JSON.stringify({
         status: target,
         expected_version: Number(button.dataset.version),
+        ...(service_resource_id ? { service_resource_id } : {}),
         ...(reason ? { reason } : {}),
         ...(completion_note ? { completion_note } : {}),
       }),
