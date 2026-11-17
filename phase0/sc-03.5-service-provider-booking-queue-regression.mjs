@@ -16,6 +16,14 @@ assert.match(providerPolicy, /service:service_booking:view/);
 assert.match(authorization, /validServiceResourceContext/);
 assert.match(authorization, /String\(context\.resourceId\) === item\.scopeId/);
 assert.match(authorization, /if \(role === 'service_provider'\) return AUTHZ\.DENY/);
+const managerPolicy = authorization.slice(
+  authorization.indexOf('manager: new Set(['),
+  authorization.indexOf(']),', authorization.indexOf('manager: new Set([')) + 3,
+);
+for (const action of ['logistics:scheduling:view', 'logistics:scheduling:request',
+  'logistics:scheduling:manage', 'logistics:scheduling:confirm', 'logistics:scheduling:cancel']) {
+  assert.ok(managerPolicy.includes(action), 'Manager must be authorized for appointment action ' + action);
+}
 
 const projectionStart = store.indexOf('export async function listServiceProviderBookings');
 const projectionEnd = store.indexOf('export async function listServiceBookings', projectionStart);
