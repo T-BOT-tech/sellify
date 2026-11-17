@@ -127,7 +127,7 @@ function trapTelegramOrdersDialogFocus(event) {
   }
 }
 
-document.getElementById('ordersModal')?.addEventListener('keydown', trapTelegramOrdersDialogFocus);
+document.addEventListener('keydown', trapTelegramOrdersDialogFocus, true);
 
 async function loadTelegramOrders() {
   if (!state.telegram || !hasTelegramCapability(state.storefront, 'order_status')) return;
