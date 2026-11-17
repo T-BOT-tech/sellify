@@ -117,7 +117,8 @@ import {
   createPairingChallenge, consumePairingChallenge,
   createInvite, listInvites, revokeInvite, consumeInvite, changeMembershipRole, assignMembershipContextualRole, revokeMembershipContextualRole,
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment, recordServiceDeliveryAssessment,
-  createServiceBooking, transitionServiceBooking, listServiceBookings, listServiceProviderBookings,
+  createServiceBooking, transitionServiceBooking, listServiceBookings, getTelegramBuyerServiceBookings,
+  assessTelegramBuyerServiceFeasibility, listServiceProviderBookings,
   listServiceResources, createServiceResource, updateServiceResource,
   getServiceResourceAvailability, setServiceResourceAvailability,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
@@ -590,6 +591,213 @@ async function handleTelegramStorefrontOrderHistory(req, res, chatId) {
     return sendJSON(res, 200, { buyer: { telegramUserId: verified.telegramUserId }, orders }, req);
   } catch (e) {
     try { await recordAuditEvent({ chatId: String(chatId), organizationId: tenant.organizationId, action: 'telegram.storefront.buyer_order_history_failed', entityType: 'telegram_buyer_orders', entityId: null, metadata: { code: e.code || 'TELEGRAM_BUYER_ORDER_HISTORY_FAILED' } }); } catch {}
+    throw e;
+  }
+}
+
+async function handleTelegramStorefrontServiceFeasibility(req, res, chatId, marketplaceOrderId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const config = getTelegramStorefrontConfig(chatId);
+  if (!config || config.status !== 'PUBLISHED') return sendJSON(res, 404, { error: { message: 'Telegram storefront is not published', status: 404 } }, req);
+  if (!Array.isArray(config.enabledCapabilities) || !config.enabledCapabilities.includes('order_status')) {
+    return sendJSON(res, 403, { error: { message: 'Telegram order status capability is disabled', status: 403, code: 'TELEGRAM_ORDER_STATUS_DISABLED' } }, req);
+  }
+  const initData = String(req.headers['x-telegram-init-data'] || '').trim();
+  if (!initData) throw Object.assign(new Error('Telegram buyer authentication is required'), { statusCode: 401, code: 'TELEGRAM_BUYER_AUTH_REQUIRED' });
+  try {
+    const secret = await resolveTelegramBotCredential(config.credentialRef);
+    const verified = verifyTelegramBuyerInitDataWithSecret(initData, secret, TELEGRAM_AUTH_MAX_AGE_SEC);
+    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const assessment = await assessTelegramBuyerServiceFeasibility(
+      chatId,
+      verified.telegramUserId,
+      decodeURIComponent(marketplaceOrderId),
+      {
+        service_item_id: url.searchParams.get('service_item_id'),
+        start: url.searchParams.get('start'),
+        end: url.searchParams.get('end'),
+      },
+    );
+    return sendJSON(res, 200, {
+      feasibility: {
+        state: assessment.state,
+        reasonCode: assessment.reasonCode,
+        timeZone: assessment.timeZone,
+        confirmsAvailability: false,
+        reservesResource: false,
+      },
+    }, req);
+  } catch (e) {
+    throw e;
+  }
+}
+
+async function handleTelegramStorefrontServiceBookingCancel(req, res, chatId, marketplaceOrderId, bookingId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const config = getTelegramStorefrontConfig(chatId);
+  if (!config || config.status !== 'PUBLISHED') return sendJSON(res, 404, { error: { message: 'Telegram storefront is not published', status: 404 } }, req);
+  if (!Array.isArray(config.enabledCapabilities) || !config.enabledCapabilities.includes('order_status')) {
+    return sendJSON(res, 403, { error: { message: 'Telegram order status capability is disabled', status: 403, code: 'TELEGRAM_ORDER_STATUS_DISABLED' } }, req);
+  }
+  const initData = String(req.headers['x-telegram-init-data'] || '').trim();
+  if (!initData) throw Object.assign(new Error('Telegram buyer authentication is required'), { statusCode: 401, code: 'TELEGRAM_BUYER_AUTH_REQUIRED' });
+  try {
+    const secret = await resolveTelegramBotCredential(config.credentialRef);
+    const verified = verifyTelegramBuyerInitDataWithSecret(initData, secret, TELEGRAM_AUTH_MAX_AGE_SEC);
+    const ownedOrder = await getTelegramBuyerServiceBookings(chatId, verified.telegramUserId, decodeURIComponent(marketplaceOrderId));
+    const booking = ownedOrder.bookings.find(item => String(item.id) === String(bookingId));
+    if (!booking) throw Object.assign(new Error('Appointment not found'), { statusCode: 404, code: 'SERVICE_BOOKING_NOT_FOUND' });
+
+    const body = await readBody(req);
+    const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
+    if (!idempotencyKey) throw Object.assign(new Error('Idempotency-Key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
+    const expectedVersion = Number(body.expected_version ?? body.expectedVersion);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 1) {
+      throw Object.assign(new Error('expected_version must be a positive integer'), { statusCode: 400, code: 'SERVICE_BOOKING_VERSION_REQUIRED' });
+    }
+    const result = await transitionServiceBooking(
+      chatId,
+      ownedOrder.orderId,
+      booking.id,
+      { status: 'CANCELLED', expected_version: expectedVersion, idempotencyKey },
+      {
+        actorType: 'TELEGRAM_BUYER',
+        buyerTelegramUserId: verified.telegramUserId,
+        marketplaceOrderId: ownedOrder.marketplaceOrderId,
+      },
+    );
+    const safeBooking = {
+      id: result.booking.id,
+      service_item_id: result.booking.service_item_id,
+      requested_start: result.booking.requested_start,
+      requested_end: result.booking.requested_end,
+      appointment_mode: result.booking.appointment_mode,
+      customer_note: result.booking.customer_note,
+      status: result.booking.status,
+      version: result.booking.version,
+      service_resource_name: result.booking.service_resource_name,
+      created_at: result.booking.created_at,
+      updated_at: result.booking.updated_at,
+    };
+    return sendJSON(res, 200, {
+      booking: safeBooking,
+      replayed: result.replayed,
+      message: result.replayed ? 'Appointment cancellation already recorded' : 'Appointment cancelled',
+    }, req);
+  } catch (e) {
+    try {
+      await recordAuditEvent({
+        chatId: String(chatId), organizationId: tenant.organizationId,
+        action: 'telegram.storefront.service_booking_cancellation_failed',
+        entityType: 'telegram_buyer_service_booking', entityId: String(bookingId),
+        metadata: { code: e.code || 'TELEGRAM_SERVICE_BOOKING_CANCELLATION_FAILED' },
+      });
+    } catch {}
+    throw e;
+  }
+}
+
+async function handleTelegramStorefrontServiceBookings(req, res, chatId, marketplaceOrderId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const config = getTelegramStorefrontConfig(chatId);
+  if (!config || config.status !== 'PUBLISHED') return sendJSON(res, 404, { error: { message: 'Telegram storefront is not published', status: 404 } }, req);
+  if (!Array.isArray(config.enabledCapabilities) || !config.enabledCapabilities.includes('order_status')) {
+    return sendJSON(res, 403, { error: { message: 'Telegram order status capability is disabled', status: 403, code: 'TELEGRAM_ORDER_STATUS_DISABLED' } }, req);
+  }
+  const initData = String(req.headers['x-telegram-init-data'] || '').trim();
+  if (!initData) throw Object.assign(new Error('Telegram buyer authentication is required'), { statusCode: 401, code: 'TELEGRAM_BUYER_AUTH_REQUIRED' });
+  try {
+    const secret = await resolveTelegramBotCredential(config.credentialRef);
+    const verified = verifyTelegramBuyerInitDataWithSecret(initData, secret, TELEGRAM_AUTH_MAX_AGE_SEC);
+    const ownedOrder = await getTelegramBuyerServiceBookings(chatId, verified.telegramUserId, decodeURIComponent(marketplaceOrderId));
+    const customerBookings = ownedOrder.bookings.map(booking => ({
+      id: booking.id,
+      service_item_id: booking.service_item_id,
+      requested_start: booking.requested_start,
+      requested_end: booking.requested_end,
+      appointment_mode: booking.appointment_mode,
+      customer_note: booking.customer_note,
+      status: booking.status,
+      // Customer-safe affordances only; transitionServiceBooking re-authorizes every cancellation.
+      allowed_actions: ['REQUESTED', 'ACCEPTED'].includes(String(booking.status || '').toUpperCase()) ? ['CANCEL'] : [],
+      version: booking.version,
+      service_resource_name: booking.service_resource_name,
+      created_at: booking.created_at,
+      updated_at: booking.updated_at,
+    }));
+    const customerServiceLines = ownedOrder.serviceLines.map(line => ({
+      item_id: line.item_id ?? line.product_id ?? line.id ?? null,
+      name: line.name ?? line.title ?? line.product_name ?? line.item_name ?? null,
+      item_type: 'service',
+      quantity: line.quantity ?? line.qty ?? null,
+      unit: line.unit ?? null,
+    }));
+    if (req.method === 'GET') {
+      return sendJSON(res, 200, {
+        order: { marketplaceOrderId: ownedOrder.marketplaceOrderId, serviceLines: customerServiceLines },
+        bookings: customerBookings,
+        authority: 'canonical_service_booking',
+      }, req);
+    }
+    if (req.method !== 'POST') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+
+    const body = await readBody(req);
+    const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
+    if (!idempotencyKey) throw Object.assign(new Error('Idempotency-Key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
+    const serviceItemId = String(body.service_item_id || body.serviceItemId || '').trim();
+    if (!ownedOrder.serviceLines.some(line => String(line.item_id ?? line.product_id ?? line.id ?? '') === serviceItemId)) {
+      throw Object.assign(new Error('Booking must reference a service line in this buyer-owned order'), { statusCode: 409, code: 'SERVICE_BOOKING_ORDER_LINE_INVALID' });
+    }
+    const result = await createServiceBooking(chatId, ownedOrder.orderId, {
+      service_item_id: serviceItemId,
+      requested_start: body.requested_start ?? body.requestedStart,
+      requested_end: body.requested_end ?? body.requestedEnd,
+      appointment_mode: body.appointment_mode ?? body.appointmentMode,
+      customer_note: body.customer_note ?? body.customerNote,
+      idempotencyKey,
+    }, {
+      actorType: 'TELEGRAM_BUYER',
+      buyerTelegramUserId: verified.telegramUserId,
+      marketplaceOrderId: ownedOrder.marketplaceOrderId,
+    });
+    const refreshed = await getTelegramBuyerServiceBookings(chatId, verified.telegramUserId, ownedOrder.marketplaceOrderId);
+    return sendJSON(res, result.replayed ? 200 : 201, {
+      booking: {
+        id: result.booking.id,
+        service_item_id: result.booking.service_item_id,
+        requested_start: result.booking.requested_start,
+        requested_end: result.booking.requested_end,
+        appointment_mode: result.booking.appointment_mode,
+        customer_note: result.booking.customer_note,
+        status: result.booking.status,
+        version: result.booking.version,
+        service_resource_name: result.booking.service_resource_name,
+        created_at: result.booking.created_at,
+        updated_at: result.booking.updated_at,
+      },
+      replayed: result.replayed,
+      bookings: refreshed.bookings.map(booking => ({
+        id: booking.id, service_item_id: booking.service_item_id,
+        requested_start: booking.requested_start, requested_end: booking.requested_end,
+        appointment_mode: booking.appointment_mode, customer_note: booking.customer_note,
+        status: booking.status, version: booking.version,
+        service_resource_name: booking.service_resource_name,
+        created_at: booking.created_at, updated_at: booking.updated_at,
+      })),
+      message: result.replayed ? 'Appointment request already received' : 'Appointment request received',
+    }, req);
+  } catch (e) {
+    try {
+      await recordAuditEvent({
+        chatId: String(chatId), organizationId: tenant.organizationId,
+        action: 'telegram.storefront.service_booking_request_failed',
+        entityType: 'telegram_buyer_service_booking', entityId: null,
+        metadata: { code: e.code || 'TELEGRAM_SERVICE_BOOKING_FAILED' },
+      });
+    } catch {}
     throw e;
   }
 }
@@ -3417,6 +3625,10 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/telegram-storefront$/, handler: (req, res, m) => handleTelegramStorefrontGet(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/api\/telegram-storefront\/([^/]+)$/, handler: (req, res, m) => handleTelegramStorefrontPublicGet(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/api\/telegram-storefront\/([^/]+)\/buyer-session$/, handler: (req, res, m) => handleTelegramStorefrontBuyerSession(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/service-bookings$/, handler: (req, res, m) => handleTelegramStorefrontServiceBookings(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/service-bookings$/, handler: (req, res, m) => handleTelegramStorefrontServiceBookings(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'GET', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/service-feasibility$/, handler: (req, res, m) => handleTelegramStorefrontServiceFeasibility(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/service-bookings\/([^/]+)\/cancel$/, handler: (req, res, m) => handleTelegramStorefrontServiceBookingCancel(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
   { method: 'GET', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleTelegramStorefrontFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)$/, handler: (req, res, m) => handleTelegramStorefrontOrder(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders$/, handler: (req, res, m) => handleTelegramStorefrontOrderHistory(req, res, decodeURIComponent(m[1])) },
