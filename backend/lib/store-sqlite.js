@@ -19,6 +19,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import { normalizeWorkingHours, normalizeAvailabilityExceptions, isIanaTimeZone } from './service-availability-contract.js';
+import { assessServiceResourceDeclaredWindow } from '../../app/src/verticals/services/service-window-assessment-contract.js';
 import { resolveOnboardingCountry } from './country-pack-onboarding.js';
 import { assertVerificationFreshness } from './payments/verification-freshness.js';
 import { requirePaymentProvider } from './payments/provider-registry.js';
@@ -5976,6 +5977,33 @@ const SERVICE_BOOKING_FORBIDDEN_AUTHORITY_FIELDS = new Set([
   'inventoryReservationId', 'courier_id', 'courierId',
   'provider_id', 'providerId', 'organization_id', 'organizationId',
 ]);
+function assertTelegramBuyerOwnsCanonicalServiceOrder(chatId, organizationId, buyerTelegramUserId, marketplaceOrderId, serverOrderId) {
+  const buyer = String(buyerTelegramUserId || '').trim();
+  const marketplaceId = String(marketplaceOrderId || '').trim();
+  if (!buyer || !marketplaceId) {
+    throw Object.assign(new Error('Verified Telegram buyer order context is required'), {
+      statusCode: 401, code: 'TELEGRAM_BUYER_ORDER_CONTEXT_REQUIRED',
+    });
+  }
+  const owned = db.prepare(`
+    SELECT 1
+    FROM marketplace_orders mo
+    JOIN marketplace_seller_orders mso ON mso.marketplace_order_id = mo.id
+    JOIN orders o
+      ON o.chat_id = mso.seller_id
+     AND o.local_id = mso.seller_order_id
+     AND o.is_marketplace = 1
+    WHERE mo.id = ?
+      AND mo.buyer_identity = ?
+      AND mso.seller_id = ?
+      AND mso.organization_id = ?
+      AND o.server_order_id = ?
+    LIMIT 1
+  `).get(marketplaceId, buyer, String(chatId), String(organizationId), String(serverOrderId));
+  if (!owned) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+}
+
+
 function assertServiceBookingAuthorityBoundary(input) {
   for (const field of Object.keys(input || {})) {
     if (SERVICE_BOOKING_FORBIDDEN_AUTHORITY_FIELDS.has(field)) {
