@@ -5944,6 +5944,7 @@ function serviceBookingFromRow(row) {
     requested_start: String(row.requested_start), requested_end: String(row.requested_end),
     appointment_mode: String(row.appointment_mode), customer_note: row.customer_note ?? null,
     service_resource_id: row.service_resource_id || null,
+    service_resource_name: row.service_resource_name ?? null,
     status: String(row.status), version: Number(row.version),
     created_by: row.created_by || null, updated_by: row.updated_by || null,
     started_at: row.started_at || null, started_by: row.started_by || null,
