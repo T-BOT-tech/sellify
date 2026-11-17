@@ -3544,51 +3544,91 @@ if (!applied.includes(39)) {
       db.exec('DROP TABLE service_resource_commitments_v80_status_legacy');
     }
 
-    // Bridge the third v80 shape when its legacy ledger exists. The booking's
-    // canonical status controls whether the migrated slot is active; terminal
-    // bookings are released so completed/cancelled appointments cannot block
-    // capacity indefinitely. The resource must still match tenant and org.
+    // Bridge the separately named v80 ledger only after proving every row is
+    // representable. INNER JOIN + INSERT OR IGNORE silently discarded orphaned,
+    // cross-tenant, malformed, and conflicting rows while still marking v81 done.
     const legacyCommitmentTable = db.prepare(
       "SELECT 1 FROM sqlite_master WHERE type='table' AND name='service_booking_resource_commitments'"
     ).get();
     if (legacyCommitmentTable) {
       const legacyColumns = new Set(
-        db.prepare('PRAGMA table_info(service_booking_resource_commitments)').all().map(column => String(column.name))
+        db.prepare("PRAGMA table_info('service_booking_resource_commitments')").all().map(column => String(column.name))
       );
       const requiredLegacyColumns = [
         'id', 'organization_id', 'chat_id', 'booking_id', 'resource_id',
         'requested_start', 'requested_end', 'state', 'committed_by', 'committed_at',
         'released_by', 'released_at',
       ];
-      if (requiredLegacyColumns.every(name => legacyColumns.has(name))) {
-        db.prepare(`
-          INSERT OR IGNORE INTO service_resource_commitments
-            (id, organization_id, chat_id, resource_id, booking_id, starts_at, ends_at,
-             state, committed_by, committed_at, released_by, released_at)
-          SELECT
-            'migration-81:legacy:' || c.id,
-            c.organization_id, c.chat_id, c.resource_id, c.booking_id,
-            c.requested_start, c.requested_end,
-            CASE WHEN b.status IN ('CONFIRMED','IN_PROGRESS') THEN 'COMMITTED' ELSE 'RELEASED' END,
-            c.committed_by,
-            COALESCE(NULLIF(c.committed_at, ''), NULLIF(b.updated_at, ''), b.created_at, ?),
-            CASE WHEN b.status IN ('CONFIRMED','IN_PROGRESS') THEN NULL ELSE c.released_by END,
-            CASE WHEN b.status IN ('CONFIRMED','IN_PROGRESS') THEN NULL
-              ELSE COALESCE(NULLIF(c.released_at, ''), NULLIF(b.updated_at, ''), b.created_at, ?) END
-          FROM service_booking_resource_commitments c
-          JOIN service_bookings b
-            ON b.id = c.booking_id
-           AND b.organization_id = c.organization_id
-           AND b.chat_id = c.chat_id
-          JOIN service_resources r
-            ON r.id = c.resource_id
-           AND r.organization_id = c.organization_id
-           AND r.chat_id = c.chat_id
-          WHERE c.requested_start IS NOT NULL
-            AND c.requested_end IS NOT NULL
-            AND julianday(c.requested_end) > julianday(c.requested_start)
-        `).run(nowIso(), nowIso());
+      const missingLegacyColumns = requiredLegacyColumns.filter(name => !legacyColumns.has(name));
+      if (missingLegacyColumns.length) {
+        throw Object.assign(
+          new Error(`Unsupported separately named v80 service resource commitment schema; preserved legacy table because required columns are missing: ${missingLegacyColumns.join(', ')}`),
+          { code: 'SERVICE_RESOURCE_COMMITMENT_MIGRATION_UNSUPPORTED_LEGACY_SCHEMA' },
+        );
       }
+      const unbridgeableLegacyRows = db.prepare(`
+        SELECT c.id
+        FROM service_booking_resource_commitments c
+        LEFT JOIN service_bookings b
+          ON b.id = c.booking_id
+         AND b.organization_id = c.organization_id
+         AND b.chat_id = c.chat_id
+        LEFT JOIN service_resources r
+          ON r.id = c.resource_id
+         AND r.organization_id = c.organization_id
+         AND r.chat_id = c.chat_id
+        LEFT JOIN service_resource_commitments existing
+          ON existing.booking_id = c.booking_id
+        WHERE b.id IS NULL
+           OR r.id IS NULL
+           OR c.requested_start IS NULL
+           OR c.requested_end IS NULL
+           OR julianday(c.requested_end) IS NULL
+           OR julianday(c.requested_start) IS NULL
+           OR julianday(c.requested_end) <= julianday(c.requested_start)
+           OR upper(c.state) NOT IN ('COMMITTED', 'RELEASED')
+           OR existing.booking_id IS NOT NULL
+      `).all();
+      if (unbridgeableLegacyRows.length) {
+        throw Object.assign(
+          new Error(`Cannot safely migrate separately named v80 service resource commitments; preserved legacy rows require reconciliation: ${unbridgeableLegacyRows.map(row => row.id).join(', ')}`),
+          { code: 'SERVICE_RESOURCE_COMMITMENT_MIGRATION_UNBRIDGEABLE_LEGACY_ROWS' },
+        );
+      }
+      db.prepare(`
+        INSERT INTO service_resource_commitments
+          (id, organization_id, chat_id, resource_id, booking_id, starts_at, ends_at,
+           state, committed_by, committed_at, released_by, released_at)
+        SELECT
+          'migration-81:legacy:' || c.id,
+          c.organization_id, c.chat_id, c.resource_id, c.booking_id,
+          c.requested_start, c.requested_end,
+          CASE WHEN upper(c.state) = 'COMMITTED' AND b.status IN ('CONFIRMED','IN_PROGRESS')
+            THEN 'COMMITTED' ELSE 'RELEASED' END,
+          c.committed_by,
+          COALESCE(NULLIF(c.committed_at, ''), NULLIF(b.updated_at, ''), b.created_at, ?),
+          CASE WHEN upper(c.state) = 'COMMITTED' AND b.status IN ('CONFIRMED','IN_PROGRESS')
+            THEN NULL ELSE c.released_by END,
+          CASE WHEN upper(c.state) = 'COMMITTED' AND b.status IN ('CONFIRMED','IN_PROGRESS')
+            THEN NULL ELSE COALESCE(NULLIF(c.released_at, ''), NULLIF(b.updated_at, ''), b.created_at, ?) END
+        FROM service_booking_resource_commitments c
+        JOIN service_bookings b
+          ON b.id = c.booking_id
+         AND b.organization_id = c.organization_id
+         AND b.chat_id = c.chat_id
+        JOIN service_resources r
+          ON r.id = c.resource_id
+         AND r.organization_id = c.organization_id
+         AND r.chat_id = c.chat_id
+      `).run(nowIso(), nowIso());
+      const remainingLegacyRows = db.prepare('SELECT id FROM service_booking_resource_commitments').all();
+      if (remainingLegacyRows.length) {
+        throw Object.assign(
+          new Error(`Migration did not account for every separately named legacy commitment row: ${remainingLegacyRows.map(row => row.id).join(', ')}`),
+          { code: 'SERVICE_RESOURCE_COMMITMENT_MIGRATION_INCOMPLETE' },
+        );
+      }
+      db.exec('DROP TABLE service_booking_resource_commitments');
     }
 
     // Backfill only explicit active booking assignments that resolve inside the
