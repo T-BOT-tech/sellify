@@ -3398,7 +3398,7 @@ if (!applied.includes(39)) {
         resource_id TEXT NOT NULL REFERENCES service_resources(id) ON DELETE CASCADE,
         booking_id TEXT NOT NULL UNIQUE REFERENCES service_bookings(id) ON DELETE CASCADE,
         starts_at TEXT NOT NULL,
-        ends_at TEXT NOT NULL,
+        ends_at TEXT NOT NULL CHECK (ends_at > starts_at),
         state TEXT NOT NULL CHECK (state IN ('COMMITTED','RELEASED')),
         committed_by TEXT,
         committed_at TEXT NOT NULL,
