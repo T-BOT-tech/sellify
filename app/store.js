@@ -110,7 +110,7 @@ async function loadTelegramOrders() {
 
 async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
   const panel = document.getElementById('appointmentsState');
-  panel.style.display = 'block'; panel.textContent = 'Loading appointment information…';
+  panel.style.display = 'block'; panel.dataset.state = 'LOADING'; panel.textContent = 'Loading appointment information…';
   try {
     const endpoint = `/api/telegram-storefront/${encodeURIComponent(chatId)}/orders/${encodeURIComponent(marketplaceOrderId)}/service-bookings`;
     const headers = { Accept: 'application/json', 'X-Telegram-Init-Data': getTelegramInitData() };
@@ -125,6 +125,7 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
       const id = line.item_id ?? line.product_id ?? line.id;
       return id == null ? '' : `<option value="${esc(id)}">${esc(lineLabel(line))}</option>`;
     }).join('');
+    panel.dataset.state = bookings.length ? 'READY' : 'EMPTY';
     panel.innerHTML = `<section class="customer-appointments" aria-labelledby="customerAppointmentsTitle">${notice ? `<div class="customer-appointment-notice" role="status">${esc(notice)}</div>` : ''}<div class="customer-appointment-section-head"><div><strong id="customerAppointmentsTitle">Appointments</strong><p>Manage appointment requests for services in this order.</p></div><span class="customer-appointment-count">${bookings.length}</span></div><div class="customer-appointment-list">${bookingCards || '<div class="customer-appointment-empty">No appointment requests yet.</div>'}</div>${options ? `<form id="customerAppointmentForm" class="customer-appointment-form"><div class="customer-appointment-form-head"><strong>Request an appointment</strong><p>Choose a service and a time that works for you.</p></div><div class="customer-appointment-fields"><label>Service<select name="service_item_id" required>${options}</select></label><label>Start (your device local time)<input name="requested_start" type="datetime-local" required></label><label>End (your device local time)<input name="requested_end" type="datetime-local" required></label><label>Appointment type<select name="appointment_mode"><option value="ON_SITE">At provider location</option><option value="CUSTOMER_LOCATION">At my location</option><option value="REMOTE">Remote</option></select></label><label class="customer-appointment-note-field">Note (optional)<input name="customer_note" maxlength="500" placeholder="Anything the provider should know"></label></div><div class="customer-appointment-actions"><button id="checkAppointmentFeasibility" class="fulfillment-btn customer-appointment-check" type="button">Check time</button><button class="submit customer-appointment-submit" type="submit">Send appointment request</button></div><div id="appointmentFeasibilityState" class="customer-appointment-feasibility" role="status">Check the selected time before sending your request.</div><div id="appointmentRequestError" class="error" role="alert"></div><p class="customer-appointment-advisory">Times are converted from your device local timezone. A request is not a confirmed appointment. The provider must accept it and commit a resource. No time is reserved by submitting this request.</p></form>` : '<div class="customer-appointment-empty customer-appointment-no-service">This order has no appointment-based service lines.</div>'}</section>`;
     panel.querySelectorAll('[data-cancel-booking]').forEach(button => {
       button.addEventListener('click', async () => {
@@ -276,7 +277,11 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
       });
     }
   } catch (error) {
-    panel.innerHTML = `<div role="alert">${esc(error.message || 'Unable to load appointment information.')}</div>`;
+    panel.dataset.state = error.status === 403 ? 'DENIED' : !navigator.onLine ? 'UNKNOWN_STALE' : 'ERROR';
+    const message = !navigator.onLine
+      ? 'Offline: appointment information may be stale. Reconnect and refresh before relying on it.'
+      : (error.message || 'Unable to load appointment information.');
+    panel.innerHTML = `<div role="alert">${esc(message)}</div>`;
   }
 }
 
