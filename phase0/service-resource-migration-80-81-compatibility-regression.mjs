@@ -156,7 +156,9 @@ try {
     assert.ok(bridged, `migration 81 must bridge booking ${booking.id}; diagnostics=${JSON.stringify({
       migrations: migrated.prepare('SELECT version FROM schema_migrations WHERE version IN (80,81)').all(),
       booking: migrated.prepare('SELECT id,status,service_resource_id,assigned_resource_id,organization_id,chat_id,requested_start,requested_end FROM service_bookings WHERE id=?').get(booking.id),
-      legacy: migrated.prepare('SELECT * FROM service_booking_resource_commitments WHERE booking_id=?').get(booking.id),
+      legacy: migrated.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='service_booking_resource_commitments'").get()
+        ? migrated.prepare('SELECT * FROM service_booking_resource_commitments WHERE booking_id=?').get(booking.id)
+        : null,
       commitments: migrated.prepare('SELECT * FROM service_resource_commitments').all(),
     })}`);
     assert.equal(bridged.resource_id, resource.resource.id);
