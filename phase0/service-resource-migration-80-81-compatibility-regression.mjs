@@ -77,9 +77,8 @@ try {
     .all(legacyLedgerBooking.id, assignedColumnBooking.id);
   assert.equal(originalCommitments.length, 2);
 
-  // Emulate the PR #234 v80 shape: assigned_resource_id plus a differently
-  // named commitment ledger. The canonical service_resource_id is absent for
-  // this booking, so migration 81 must map only this explicit assignment.
+  // Emulate the alternative assigned_resource_id + separately named ledger
+  // schema for one booking. Migration 81 must map only this explicit assignment.
   db.exec(`
     ALTER TABLE service_bookings ADD COLUMN assigned_resource_id TEXT;
     ALTER TABLE service_bookings ADD COLUMN resource_commitment_state TEXT NOT NULL DEFAULT 'NONE';
@@ -114,8 +113,33 @@ try {
     .run(old.id, old.organization_id, old.chat_id, old.booking_id, old.resource_id,
       old.starts_at, old.ends_at, old.state, old.committed_by, old.committed_at, old.released_by, old.released_at);
 
-  // Emulate PR #235 v80: service_resource_id + index, but no commitment ledger.
-  db.exec('DROP TABLE service_resource_commitments');
+  // Emulate the conflicting Telegram-journey v80 shape: same table name,
+  // but status/created_at columns instead of state/commit timestamps.
+  const assigned = originalCommitments.find(row => row.booking_id === assignedColumnBooking.id);
+  db.exec(`
+    DROP TABLE service_resource_commitments;
+    CREATE TABLE service_resource_commitments (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      chat_id TEXT NOT NULL,
+      resource_id TEXT NOT NULL,
+      booking_id TEXT NOT NULL UNIQUE,
+      starts_at TEXT NOT NULL,
+      ends_at TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('ACTIVE','RELEASED','COMPLETED')),
+      created_by TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      CHECK (ends_at > starts_at)
+    );
+    CREATE INDEX idx_service_resource_commitments_overlap
+      ON service_resource_commitments(organization_id, resource_id, status, starts_at, ends_at);
+  `);
+  db.prepare(`INSERT INTO service_resource_commitments
+    (id, organization_id, chat_id, resource_id, booking_id, starts_at, ends_at, status, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?)`)
+    .run(assigned.id, assigned.organization_id, assigned.chat_id, assigned.resource_id, assigned.booking_id,
+      assigned.starts_at, assigned.ends_at, assigned.committed_by, assigned.committed_at, assigned.committed_at);
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_service_bookings_resource_window
       ON service_bookings(organization_id, chat_id, service_resource_id, status, requested_start, requested_end);
@@ -150,6 +174,75 @@ try {
   assert.equal(migrated.prepare('SELECT count(*) AS count FROM service_resource_commitments').get().count, 2,
     'replaying migration 81 must not duplicate commitments');
   migrated.close();
+
+  // Unsupported status-shaped ledgers must fail safely without dropping evidence.
+  const malformedDbPath = path.join(tempDir, 'malformed-ledger.sqlite');
+  const malformedEnv = { ...env, SELLIFY_DB_PATH: malformedDbPath };
+  const seed = spawnSync(process.execPath, ['--input-type=module', '-e',
+    "const store = await import('./backend/lib/store-sqlite.js'); store.getDatabaseForTests().close()"
+  ], { cwd: process.cwd(), env: malformedEnv, encoding: 'utf8' });
+  assert.equal(seed.status, 0, `malformed-ledger fixture initialization failed:\n${seed.stdout}\n${seed.stderr}`);
+  const malformedDb = new DatabaseSync(malformedDbPath);
+  malformedDb.exec(`
+    DROP TABLE service_resource_commitments;
+    CREATE TABLE service_resource_commitments (id TEXT PRIMARY KEY, status TEXT NOT NULL);
+    INSERT INTO service_resource_commitments (id, status) VALUES ('preserve-me', 'ACTIVE');
+    DELETE FROM schema_migrations WHERE version = 81;
+  `);
+  malformedDb.close();
+
+  const rejected = spawnSync(process.execPath, ['--input-type=module', '-e',
+    "const store = await import('./backend/lib/store-sqlite.js'); store.getDatabaseForTests().close()"
+  ], { cwd: process.cwd(), env: malformedEnv, encoding: 'utf8' });
+  assert.notEqual(rejected.status, 0, 'unsupported legacy ledger schema must stop startup rather than be silently discarded');
+  assert.match(rejected.stderr, /Unsupported v80 service_resource_commitments schema/);
+  const preservedDb = new DatabaseSync(malformedDbPath);
+  assert.equal(preservedDb.prepare("SELECT count(*) AS count FROM sqlite_master WHERE type='table' AND name='service_resource_commitments_v80_status_legacy'").get().count, 1);
+  assert.equal(preservedDb.prepare("SELECT id FROM service_resource_commitments_v80_status_legacy WHERE id='preserve-me'").get().id, 'preserve-me');
+  preservedDb.close();
+
+  // Existing status-shaped ledgers with orphaned/cross-tenant references must
+  // fail closed and retain the exact legacy row for operator reconciliation.
+  const unbridgeableDbPath = path.join(tempDir, 'unbridgeable-ledger.sqlite');
+  const unbridgeableEnv = { ...env, SELLIFY_DB_PATH: unbridgeableDbPath };
+  const unbridgeableSeed = spawnSync(process.execPath, ['--input-type=module', '-e',
+    "const store = await import('./backend/lib/store-sqlite.js'); store.getDatabaseForTests().close()"
+  ], { cwd: process.cwd(), env: unbridgeableEnv, encoding: 'utf8' });
+  assert.equal(unbridgeableSeed.status, 0,
+    `unbridgeable-ledger fixture initialization failed:\\n${unbridgeableSeed.stdout}\\n${unbridgeableSeed.stderr}`);
+  const unbridgeableDb = new DatabaseSync(unbridgeableDbPath);
+  unbridgeableDb.exec(`
+    DROP TABLE service_resource_commitments;
+    CREATE TABLE service_resource_commitments (
+      id TEXT PRIMARY KEY, organization_id TEXT NOT NULL, chat_id TEXT NOT NULL,
+      resource_id TEXT NOT NULL, booking_id TEXT NOT NULL UNIQUE,
+      starts_at TEXT NOT NULL, ends_at TEXT NOT NULL,
+      status TEXT NOT NULL, created_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+    INSERT INTO service_resource_commitments
+      (id, organization_id, chat_id, resource_id, booking_id, starts_at, ends_at, status, created_by, created_at, updated_at)
+    VALUES
+      ('orphan-row', 'missing-org', 'missing-tenant', 'missing-resource', 'missing-booking',
+       '2026-12-01T10:00:00.000Z', '2026-12-01T11:00:00.000Z', 'ACTIVE', 'migration-test',
+       '2026-11-17T00:00:00.000Z', '2026-11-17T00:00:00.000Z');
+    DELETE FROM schema_migrations WHERE version = 81;
+  `);
+  unbridgeableDb.close();
+
+  const unbridgeableRejected = spawnSync(process.execPath, ['--input-type=module', '-e',
+    "const store = await import('./backend/lib/store-sqlite.js'); store.getDatabaseForTests().close()"
+  ], { cwd: process.cwd(), env: unbridgeableEnv, encoding: 'utf8' });
+  assert.notEqual(unbridgeableRejected.status, 0,
+    'migration must stop rather than silently discard an orphaned commitment');
+  assert.match(unbridgeableRejected.stderr, /Cannot safely migrate v80 service resource commitments/);
+  const preservedUnbridgeableDb = new DatabaseSync(unbridgeableDbPath);
+  assert.equal(preservedUnbridgeableDb.prepare(
+    "SELECT count(*) AS count FROM sqlite_master WHERE type='table' AND name='service_resource_commitments_v80_status_legacy'"
+  ).get().count, 1);
+  assert.equal(preservedUnbridgeableDb.prepare(
+    "SELECT id FROM service_resource_commitments_v80_status_legacy WHERE id='orphan-row'"
+  ).get().id, 'orphan-row');
+  preservedUnbridgeableDb.close();
 
   console.log('Service Resource Migration 80/81 Compatibility Regression: PASS');
 } finally {

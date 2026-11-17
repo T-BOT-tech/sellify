@@ -3426,6 +3426,26 @@ if (!applied.includes(39)) {
       `);
     }
 
+    // One earlier v80 implementation used the same table name but a different
+    // schema (status/created_by/created_at/updated_at). CREATE TABLE IF NOT EXISTS
+    // cannot reconcile that table: rebuild it under a temporary name so runtime
+    // code sees the canonical state/committed_at/released_at contract.
+    const existingCommitmentTable = db.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='service_resource_commitments'"
+    ).get();
+    if (existingCommitmentTable) {
+      const existingColumns = new Set(
+        db.prepare("PRAGMA table_info('service_resource_commitments')").all().map(column => String(column.name))
+      );
+      if (existingColumns.has('status') && !existingColumns.has('state')) {
+        db.exec(`
+          DROP INDEX IF EXISTS idx_service_resource_commitments_overlap;
+          DROP INDEX IF EXISTS idx_service_resource_commitments_booking;
+          ALTER TABLE service_resource_commitments RENAME TO service_resource_commitments_v80_status_legacy;
+        `);
+      }
+    }
+
     db.exec(`
       CREATE TABLE IF NOT EXISTS service_resource_commitments (
         id TEXT PRIMARY KEY,
@@ -3446,6 +3466,83 @@ if (!applied.includes(39)) {
       CREATE INDEX IF NOT EXISTS idx_service_bookings_resource_window
         ON service_bookings(organization_id, chat_id, service_resource_id, status, requested_start, requested_end);
     `);
+
+    // Preserve explicit bindings from the status-shaped v80 ledger. Only an
+    // active slot for a still-confirmed/in-progress booking remains committed;
+    // terminal, released, or otherwise inconsistent rows become released.
+    const statusLegacyTable = db.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='service_resource_commitments_v80_status_legacy'"
+    ).get();
+    if (statusLegacyTable) {
+      const statusLegacyColumns = new Set(
+        db.prepare("PRAGMA table_info('service_resource_commitments_v80_status_legacy')").all().map(column => String(column.name))
+      );
+      const requiredStatusColumns = [
+        'id', 'organization_id', 'chat_id', 'resource_id', 'booking_id',
+        'starts_at', 'ends_at', 'status', 'created_by', 'created_at', 'updated_at',
+      ];
+      const missingStatusColumns = requiredStatusColumns.filter(name => !statusLegacyColumns.has(name));
+      if (missingStatusColumns.length) {
+        // Never discard an unrecognized legacy ledger: failing startup is safer
+        // than silently losing resource-commitment evidence during migration.
+        throw Object.assign(
+          new Error(`Unsupported v80 service_resource_commitments schema; preserved legacy table because required columns are missing: ${missingStatusColumns.join(', ')}`),
+          { code: 'SERVICE_RESOURCE_COMMITMENT_MIGRATION_UNSUPPORTED_LEGACY_SCHEMA' },
+        );
+      }
+      // Never drop legacy evidence that cannot be bridged exactly. An INNER JOIN
+      // or INSERT OR IGNORE alone would silently discard orphaned, cross-tenant,
+      // malformed-window, or duplicate-booking rows.
+      const unbridgeableStatusRows = db.prepare(`
+        SELECT c.id
+        FROM service_resource_commitments_v80_status_legacy c
+        LEFT JOIN service_bookings b
+          ON b.id = c.booking_id
+         AND b.organization_id = c.organization_id
+         AND b.chat_id = c.chat_id
+        LEFT JOIN service_resources r
+          ON r.id = c.resource_id
+         AND r.organization_id = c.organization_id
+         AND r.chat_id = c.chat_id
+        LEFT JOIN service_resource_commitments existing
+          ON existing.booking_id = c.booking_id
+        WHERE b.id IS NULL
+           OR r.id IS NULL
+           OR c.ends_at <= c.starts_at
+           OR existing.booking_id IS NOT NULL
+      `).all();
+      if (unbridgeableStatusRows.length) {
+        throw Object.assign(
+          new Error(`Cannot safely migrate v80 service resource commitments; preserved legacy rows require reconciliation: ${unbridgeableStatusRows.map(row => row.id).join(', ')}`),
+          { code: 'SERVICE_RESOURCE_COMMITMENT_MIGRATION_UNBRIDGEABLE_LEGACY_ROWS' },
+        );
+      }
+      db.prepare(`
+        INSERT INTO service_resource_commitments
+          (id, organization_id, chat_id, resource_id, booking_id, starts_at, ends_at,
+           state, committed_by, committed_at, released_by, released_at)
+        SELECT
+          'migration-81:status-v80:' || c.id,
+          c.organization_id, c.chat_id, c.resource_id, c.booking_id, c.starts_at, c.ends_at,
+          CASE WHEN c.status = 'ACTIVE' AND b.status IN ('CONFIRMED','IN_PROGRESS')
+            THEN 'COMMITTED' ELSE 'RELEASED' END,
+          c.created_by, COALESCE(c.created_at, b.created_at, ?),
+          NULL,
+          CASE WHEN c.status = 'ACTIVE' AND b.status IN ('CONFIRMED','IN_PROGRESS')
+            THEN NULL ELSE COALESCE(c.updated_at, c.created_at, ?) END
+        FROM service_resource_commitments_v80_status_legacy c
+        JOIN service_bookings b
+          ON b.id = c.booking_id
+         AND b.organization_id = c.organization_id
+         AND b.chat_id = c.chat_id
+        JOIN service_resources r
+          ON r.id = c.resource_id
+         AND r.organization_id = c.organization_id
+         AND r.chat_id = c.chat_id
+        WHERE c.ends_at > c.starts_at
+      `).run(nowIso(), nowIso());
+      db.exec('DROP TABLE service_resource_commitments_v80_status_legacy');
+    }
 
     // Bridge the third v80 shape when its legacy ledger exists. The booking's
     // canonical status controls whether the migrated slot is active; terminal
