@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {supplierNetworkDiscoveryContract} from '../app/src/supplier-network/discovery-contract.js';
-import {getDatabaseForTests,getOrCreateUserByTelegram,createTenantForUser,setProcurementSupplierParticipation,upsertSupplierNetworkProfile,discoverSupplierNetwork} from '../backend/lib/store-sqlite.js';
+import {getDatabaseForTests,getOrCreateUserByTelegram,createTenantForUser,setProcurementSupplierParticipation,upsertSupplierNetworkProfile,upsertSupplierNetworkCapability,upsertSupplierNetworkCapacity,discoverSupplierNetwork} from '../backend/lib/store-sqlite.js';
 
 const c=supplierNetworkDiscoveryContract();
 assert.equal(c.version,'1.0');
@@ -21,11 +21,17 @@ const buyerActor={userId:buyerUser.id,role:'owner',organizationId:buyer.organiza
 const supplierActor={userId:supplierUser.id,role:'owner',organizationId:supplier.organization_id,chatId:supplier.chat_id};
 await setProcurementSupplierParticipation(supplier.chat_id,{status:'ACTIVE',discoverable:true},supplierActor);
 await upsertSupplierNetworkProfile(supplier.chat_id,{displayName:'Kaffa Supply '+x,description:'Wholesale agricultural inputs',businessCategories:['AGRICULTURE','WHOLESALE'],serviceSummary:'Seeds and fertilizer',visibility:'PUBLIC',status:'PUBLISHED'},supplierActor);
+const capability=await upsertSupplierNetworkCapability(supplier.chat_id,{code:'WHOLESALE',name:'Wholesale supply',category:'distribution',visibility:'PUBLIC'},supplierActor);
+await upsertSupplierNetworkCapacity(supplier.chat_id,{subjectType:'CAPABILITY',subjectId:capability.id,quantity:500,unit:'kg',periodType:'RANGE',periodStart:'2026-12-01T00:00:00.000Z',periodEnd:'2026-12-31T23:59:59.999Z',availability:'AVAILABLE',visibility:'PUBLIC'},supplierActor);
 let results=await discoverSupplierNetwork(buyer.chat_id,{search:'Kaffa Supply '+x,limit:10},buyerActor);
 assert.equal(results.length,1);
 assert.equal(results[0].organizationId,supplier.organization_id);
 assert.equal(results[0].deterministic,undefined);
-assert.ok(results[0].matchReasons.some(r=>r.dimension==='CAPACITY')===false);
+assert.ok(results[0].matchReasons.some(r=>r.dimension==='CAPACITY')===true);
+let capacityResults=await discoverSupplierNetwork(buyer.chat_id,{search:'Kaffa Supply '+x,capabilityCode:'WHOLESALE',minimumQuantity:100,limit:10},buyerActor);
+assert.equal(capacityResults.length,1,'capability-bound declared capacity is discoverable by canonical capability ID');
+assert.equal(capacityResults[0].capacitySignals[0].subjectId,capability.id);
+assert.equal(capacityResults[0].capacitySignals[0].periodStart,'2026-12-01T00:00:00.000Z');
 await setProcurementSupplierParticipation(supplier.chat_id,{status:'ACTIVE',discoverable:false},supplierActor);
 results=await discoverSupplierNetwork(buyer.chat_id,{search:'Kaffa Supply '+x,limit:10},buyerActor);
 assert.equal(results.length,0);

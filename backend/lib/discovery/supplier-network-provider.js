@@ -10,7 +10,7 @@ export const supplierNetworkDiscoveryProvider = Object.freeze({
   version: '1.0',
   entityTypes: ['supplier'],
   capabilities: ['supplier-discovery', 'supplier-network-federation'],
-  filters: ['search', 'productId', 'capabilityCode', 'countryCode', 'geoCode', 'currency', 'minimumQuantity', 'wholesale', 'bulkOrder', 'qualificationType', 'limit'],
+  filters: ['search', 'productId', 'capabilityCode', 'countryCode', 'geoCode', 'currency', 'minimumQuantity', 'unit', 'availabilityFrom', 'availabilityTo', 'wholesale', 'bulkOrder', 'qualificationType', 'limit'],
   async search(intent = {}) {
     const chatId = String(intent.chatId || '').trim();
     if (!chatId) throw Object.assign(new Error('chatId is required for supplier-network discovery'), { code: 'DISCOVERY_PROVIDER_CONTEXT_REQUIRED', statusCode: 400 });
@@ -35,9 +35,22 @@ export const supplierNetworkDiscoveryProvider = Object.freeze({
       organizationId: row.organizationId,
       organization: { id: row.organizationId, name: row.organizationName },
       profile: row.profile,
+      catalog: Array.isArray(row.catalog) ? row.catalog.map(item => ({
+        id: item.id, productId: item.productId, productName: item.productName,
+        unit: item.unit, availabilityStatus: item.availabilityStatus,
+      })) : [],
+      capabilities: Array.isArray(row.capabilities) ? row.capabilities.map(item => ({
+        id: item.id, code: item.code, name: item.name, category: item.category,
+      })) : [],
       availability: {
         catalogCount: Array.isArray(row.catalog) ? row.catalog.length : 0,
         capacitySignalCount: Array.isArray(row.capacitySignals) ? row.capacitySignals.length : 0,
+        capacitySignals: Array.isArray(row.capacitySignals) ? row.capacitySignals.map(signal => ({
+          id: signal.id, subjectType: signal.subjectType, subjectId: signal.subjectId,
+          quantity: signal.quantity, unit: signal.unit, periodType: signal.periodType,
+          periodStart: signal.periodStart, periodEnd: signal.periodEnd,
+          availability: signal.availability, source: 'DECLARED', status: signal.status || 'ACTIVE',
+        })) : [],
       },
       commercialSignals: {
         commercialTermCount: Array.isArray(row.commercialTerms) ? row.commercialTerms.length : 0,

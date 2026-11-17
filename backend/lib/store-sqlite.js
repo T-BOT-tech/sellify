@@ -4351,8 +4351,15 @@ export async function discoverSupplierNetwork(chatId, input={}, actor=null){
     if(countryCode){areaMatches=areas.filter(r=>String(r.country_code).toUpperCase()===countryCode); if(areaMatches.length){score+=10;matches.push({dimension:'COUNTRY',reason:'Service country match',countryCode});}}
     if(geoCode){const gm=areaMatches.filter(r=>String(r.geo_code)===geoCode); if(gm.length){score+=15;matches.push({dimension:'GEOGRAPHY',reason:'Service area match',geoCode});} else if(countryCode) areaMatches=[];}
     let capacityMatches=capacities;
-    if(productId) capacityMatches=capacityMatches.filter(r=>r.subject_type==='PRODUCT'&&String(r.subject_id)===productId);
-    if(capabilityCode) capacityMatches=capacityMatches.filter(r=>r.subject_type==='CAPABILITY'&&String(r.subject_id)===String(capabilityMatches.find(c=>String(c.code).toUpperCase()===capabilityCode)?.id));
+    if(productId || capabilityCode) {
+      const requestedCapability = capabilityCode
+        ? capabilities.find(item => String(item.code).toUpperCase() === capabilityCode)
+        : null;
+      capacityMatches = capacityMatches.filter(r =>
+        (productId && r.subject_type === 'PRODUCT' && String(r.subject_id) === productId)
+        || (requestedCapability && r.subject_type === 'CAPABILITY' && String(r.subject_id) === String(requestedCapability.id))
+      );
+    }
     if(minQty!=null){capacityMatches=capacityMatches.filter(r=>Number(r.quantity)>=minQty); if(capacityMatches.length){score+=10;matches.push({dimension:'CAPACITY',reason:'Declared capacity meets requested minimum',minimumQuantity:minQty});}}
     else if(capacities.length){score+=5;matches.push({dimension:'CAPACITY',reason:'Declared capacity signal available'});}
     let commercialMatches=commercial;
@@ -4374,7 +4381,7 @@ export async function discoverSupplierNetwork(chatId, input={}, actor=null){
   }
   results.sort((a,b)=>b.matchScore-a.matchScore||a.organizationName.localeCompare(b.organizationName)||a.organizationId.localeCompare(b.organizationId));
   const out=results.slice(0,n);
-  audit(String(chatId),'supplier.network.discovery.performed','supplier_network_discovery',String(buyerOrg),{filters:{search:q||null,productId:productId||null,capabilityCode:capabilityCode||null,countryCode:countryCode||null,geoCode:geoCode||null,currency:currency||null,minimumQuantity:minQty,wholesale,bulkOrder:bulk,qualificationType:qualificationType||null},resultCount:out.length},{organizationId:buyerOrg,actorId:actor?.userId||null});
+  audit(String(chatId),'supplier.network.discovery.performed','supplier_network_discovery',String(buyerOrg),{filters:{search:q||null,productId:productId||null,capabilityCode:capabilityCode||null,countryCode:countryCode||null,geoCode:geoCode||null,currency:currency||null,minimumQuantity:minQty,wholesale,bulkOrder:bulk,qualificationType:qualificationType||null,unit:String(input.unit||'').trim()||null,availabilityFrom:input.availabilityFrom||input.availability_from||null,availabilityTo:input.availabilityTo||input.availability_to||null},resultCount:out.length},{organizationId:buyerOrg,actorId:actor?.userId||null});
   return out;
 }
 

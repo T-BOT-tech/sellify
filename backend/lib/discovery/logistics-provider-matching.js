@@ -47,9 +47,17 @@ function normalizeServiceAreas(value) {
 function normalizeCapacitySignals(value) {
   if (!Array.isArray(value)) return [];
   return value.map((signal) => ({
+    id: signal.id,
+    subjectType: signal.subjectType ?? signal.subject_type,
     subjectId: signal.subjectId ?? signal.subject_id,
     quantity: signal.quantity,
     unit: signal.unit,
+    periodType: signal.periodType ?? signal.period_type,
+    periodStart: signal.periodStart ?? signal.period_start,
+    periodEnd: signal.periodEnd ?? signal.period_end,
+    availability: signal.availability,
+    source: signal.source || 'DECLARED',
+    status: signal.status || 'ACTIVE',
   }));
 }
 
@@ -95,6 +103,8 @@ export function matchLogisticsProviders(providers = [], requirements = {}) {
     minimumQuantity: requirements.minimumQuantity,
     productId: requirements.productId,
     unit: requirements.unit,
+    availabilityFrom: requirements.availabilityFrom ?? requirements.availability_from,
+    availabilityTo: requirements.availabilityTo ?? requirements.availability_to,
   };
 
   return Object.freeze({

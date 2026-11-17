@@ -26,11 +26,24 @@ ok('Sourcing productization surfaces are mounted', () => {
 });
 
 ok('Supplier discovery UI uses the unified Discovery boundary', () => {
-  assert.match(sourcing, /\/api\/discovery\?chatId=/);
-  assert.match(sourcing, /providers=supplier-network/);
+  assert.match(sourcing, /\/api\/discovery\?/);
+  assert.match(sourcing, /providers: 'supplier-network'/);
   assert.doesNotMatch(sourcing, /\/supplier-network\/discovery\?search=/);
   assert.match(server, /handleUnifiedDiscovery/);
   assert.match(server, /discoverUnified/);
+});
+
+ok('Supplier capacity time-window search is surfaced in the operational UI', () => {
+  for (const id of ['sourcingProductId','sourcingCapabilityCode','sourcingMinimumQuantity','sourcingCapacityUnit','sourcingAvailabilityFrom','sourcingAvailabilityTo']) {
+    assert.match(html, new RegExp(`id=["']${id}["']`));
+  }
+  for (const field of ['productId','capabilityCode','minimumQuantity','unit','availabilityFrom','availabilityTo']) {
+    assert.match(sourcing, new RegExp(field));
+  }
+  assert.match(sourcing, /A product reference ID or capability code is required for a time-window search/);
+  assert.match(store, /availabilityFrom:input\.availabilityFrom/);
+  assert.match(sourcing, /Capacity is supplier-declared/);
+  assert.match(sourcing, /not a reservation, verification, supplier selection or authorization/);
 });
 
 ok('Procurement UI actions map to existing canonical routes', () => {

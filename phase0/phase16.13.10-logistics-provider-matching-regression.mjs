@@ -11,7 +11,7 @@ const providers = [
     name: 'Carrier A',
     capabilities: ['delivery', 'tracking'],
     serviceAreas: [{ countryCode: 'ET', geoCode: 'ADDIS_ABABA' }],
-    capacitySignals: [{ subjectId: 'parcel', quantity: 100, unit: 'parcel' }],
+    capacitySignals: [{ subjectType: 'CAPABILITY', subjectId: 'delivery', quantity: 100, unit: 'parcel', periodStart: '2026-12-01T00:00:00.000Z', periodEnd: '2026-12-31T23:59:59.999Z', availability: 'AVAILABLE', status: 'ACTIVE' }],
   },
   {
     provider_id: 'carrier-b',
@@ -25,6 +25,8 @@ const providers = [
 const projection = projectLogisticsProviderForDiscovery(providers[0]);
 assert.equal(projection.providerId, 'carrier-a');
 assert.deepEqual(projection.capabilities.map((item) => item.code), ['delivery', 'tracking']);
+assert.equal(projection.capacitySignals[0].periodStart, '2026-12-01T00:00:00.000Z');
+assert.equal(projection.capacitySignals[0].availability, 'AVAILABLE');
 
 const matched = matchLogisticsProviders(providers, {
   capability: 'delivery',
@@ -32,6 +34,8 @@ const matched = matchLogisticsProviders(providers, {
   geoCode: 'ADDIS_ABABA',
   minimumQuantity: 20,
   unit: 'parcel',
+  availabilityFrom: '2026-12-10T00:00:00.000Z',
+  availabilityTo: '2026-12-12T23:59:59.999Z',
 });
 
 assert.equal(matched.authority, 'discovery_matching');
@@ -43,9 +47,9 @@ assert.equal(matched.execution, false);
 assert.equal(matched.persistence, 'none');
 
 assert.equal(logisticsProviderMatchingContract().duplicate_matching_authority, false);
-assert.throws(
-  () => projectLogisticsProviderForDiscovery({ provider_id: 'x', capabilities: ['delivery'], serviceAreas: [{ countryCode: 'ET' }] }),
-  /provider name must be a non-empty string/,
-);
+const idOnlyProjection = projectLogisticsProviderForDiscovery({
+  provider_id: 'x', capabilities: ['delivery'], serviceAreas: [{ countryCode: 'ET' }],
+});
+assert.equal(idOnlyProjection.title, 'x', 'provider ID is the documented fallback display title when a name is absent');
 
 console.log('Phase 16.13.10 Logistics Provider Matching Regression: PASS');

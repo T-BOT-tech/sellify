@@ -41,6 +41,12 @@ const phase16 = run('phase16.12-platform-regression.mjs');
 if (!phase16.pass) throw new Error('Phase 16.12 platform regression failed');
 console.log('Phase 16.12 platform regression: PASS');
 
+const sc02 = run('sc02-supplier-capacity-temporal-eligibility-regression-gate.mjs');
+process.stdout.write(sc02.stdout || '');
+process.stderr.write(sc02.stderr || '');
+if (!sc02.pass) throw new Error('SC-02 supplier capacity temporal eligibility gate failed');
+console.log('SC-02 supplier capacity temporal eligibility: PASS');
+
 const golden = run('golden-regression.mjs');
 if (!golden.pass) throw new Error('Phase 0 Golden failed');
 console.log('Phase 0 Golden: PASS');
