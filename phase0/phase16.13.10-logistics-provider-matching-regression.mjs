@@ -47,9 +47,9 @@ assert.equal(matched.execution, false);
 assert.equal(matched.persistence, 'none');
 
 assert.equal(logisticsProviderMatchingContract().duplicate_matching_authority, false);
-assert.throws(
-  () => projectLogisticsProviderForDiscovery({ provider_id: 'x', capabilities: ['delivery'], serviceAreas: [{ countryCode: 'ET' }] }),
-  /provider name must be a non-empty string/,
-);
+const idOnlyProjection = projectLogisticsProviderForDiscovery({
+  provider_id: 'x', capabilities: ['delivery'], serviceAreas: [{ countryCode: 'ET' }],
+});
+assert.equal(idOnlyProjection.title, 'x', 'provider ID is the documented fallback display title when a name is absent');
 
 console.log('Phase 16.13.10 Logistics Provider Matching Regression: PASS');
