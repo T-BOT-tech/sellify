@@ -221,8 +221,8 @@ try {
   assert.deepEqual(await store.listServiceProviderBookings(seller.chatId, [foreignResource.resource.id]), [],
     'a resource identifier from another organization must not expose appointments');
 
-  assert.throws(
-    () => store.updateServiceResource(seller.chatId, secondResource.resource.id, {
+  await assert.rejects(
+    store.updateServiceResource(seller.chatId, secondResource.resource.id, {
       expectedVersion: secondResource.resource.version, status: 'INACTIVE',
       idempotencyKey: 'sc035-inactivate-resource-two-active-' + suffix,
     }, null),
