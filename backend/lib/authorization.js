@@ -145,7 +145,7 @@ const ROLE_PERMISSIONS = Object.freeze({
   // intentionally not implied by these permissions; courier mutation remains
   // gated until the canonical delivery-assignment authority is enforced.
   logistics_manager: new Set([
-    'fulfillment:view', 'fulfillment:update', 'logistics:deliveries:view',
+    'fulfillment:view', 'fulfillment:update', 'service:service_resource:view', 'logistics:deliveries:view',
     'logistics:deliveries:assign', 'logistics:deliveries:reassign',
     'logistics:deliveries:update_assigned', 'locations:view', 'audit:view',
     'logistics:scheduling:view', 'logistics:scheduling:request',
@@ -153,7 +153,7 @@ const ROLE_PERMISSIONS = Object.freeze({
     'logistics:scheduling:cancel',
   ]),
   logistics_dispatcher: new Set([
-    'fulfillment:view', 'fulfillment:update', 'logistics:deliveries:view',
+    'fulfillment:view', 'fulfillment:update', 'service:service_resource:view', 'logistics:deliveries:view',
     'logistics:deliveries:assign', 'logistics:deliveries:reassign',
     'locations:view',
     'logistics:scheduling:view', 'logistics:scheduling:request',
