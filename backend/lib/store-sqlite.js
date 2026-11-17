@@ -3586,6 +3586,7 @@ if (!applied.includes(39)) {
            OR julianday(c.requested_end) IS NULL
            OR julianday(c.requested_start) IS NULL
            OR julianday(c.requested_end) <= julianday(c.requested_start)
+           OR c.state IS NULL
            OR upper(c.state) NOT IN ('COMMITTED', 'RELEASED')
            OR existing.booking_id IS NOT NULL
       `).all();
