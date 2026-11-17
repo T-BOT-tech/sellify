@@ -42,6 +42,8 @@ const ROLE_PERMISSIONS = Object.freeze({
     'service:service_resource:view', 'service:service_resource:manage',
     'service:resource_availability:view', 'service:resource_availability:manage',
     'service:service_booking:view',
+    'logistics:scheduling:view', 'logistics:scheduling:request',
+    'logistics:scheduling:manage', 'logistics:scheduling:confirm', 'logistics:scheduling:cancel',
   ]),
   cashier: new Set([
     'orders:create', 'orders:view', 'fulfillment:view', 'fulfillment:update', 'payments:accept', 'payments:view',
