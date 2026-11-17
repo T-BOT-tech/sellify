@@ -5943,6 +5943,7 @@ function serviceBookingFromRow(row) {
     order_id: String(row.server_order_id), service_item_id: String(row.service_item_id),
     requested_start: String(row.requested_start), requested_end: String(row.requested_end),
     appointment_mode: String(row.appointment_mode), customer_note: row.customer_note ?? null,
+    service_resource_id: row.service_resource_id || null,
     status: String(row.status), version: Number(row.version),
     created_by: row.created_by || null, updated_by: row.updated_by || null,
     started_at: row.started_at || null, started_by: row.started_by || null,
@@ -6264,6 +6265,24 @@ export async function setServiceResourceAvailability(chatId, resourceId, input =
       .get(String(resourceId),String(organizationId),String(chatId));
     const currentVersion = Number(current?.version || 0);
     if (currentVersion !== expectedVersion) throw Object.assign(new Error('Service availability version conflict'), { statusCode:409, code:'SERVICE_AVAILABILITY_VERSION_CONFLICT' });
+    // A schedule edit must not invalidate an appointment already committed
+    // to this resource. Evaluate the proposed declaration within the same
+    // write transaction so concurrent changes cannot bypass this guard.
+    const commitments = db.prepare(`SELECT booking_id,starts_at,ends_at FROM service_resource_commitments
+      WHERE organization_id=? AND chat_id=? AND resource_id=? AND state='COMMITTED'`)
+      .all(String(organizationId),String(chatId),String(resourceId));
+    for (const commitment of commitments) {
+      const assessment = assessServiceResourceDeclaredWindow({
+        timeZone, workingHours: working.entries, exceptions,
+        start: commitment.starts_at, end: commitment.ends_at,
+      });
+      if (assessment.scheduleAssessment !== 'WITHIN_DECLARED_HOURS') {
+        throw Object.assign(new Error('The proposed working hours would invalidate an already committed appointment'), {
+          statusCode: 409, code: 'SERVICE_AVAILABILITY_CONFLICTS_WITH_COMMITMENTS',
+          details: { booking_id: commitment.booking_id, reason: assessment.reason },
+        });
+      }
+    }
     const now = nowIso(), nextVersion = currentVersion + 1, actorId = actor?.userId || actor?.user_id || null;
     db.prepare(`INSERT INTO service_resource_availability
       (resource_id,organization_id,chat_id,timezone,working_hours_json,exceptions_json,version,updated_by,updated_at)
