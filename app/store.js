@@ -324,7 +324,7 @@ async function loadTelegramAppointments(marketplaceOrderId, notice = '') {
       });
     }
   } catch (error) {
-    panel.dataset.state = error.status === 403 ? 'DENIED' : !navigator.onLine ? 'UNKNOWN_STALE' : 'ERROR';
+    panel.dataset.state = [401, 403].includes(Number(error.status)) ? 'DENIED' : !navigator.onLine ? 'UNKNOWN_STALE' : 'ERROR';
     const message = !navigator.onLine
       ? 'Offline: appointment information may be stale. Reconnect and refresh before relying on it.'
       : (error.message || 'Unable to load appointment information.');
