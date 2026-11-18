@@ -77,6 +77,38 @@ try {
     'another organization must not reuse an existing globally unique event ID',
   );
 
+  const concurrentEventId = eventId + '-concurrent';
+  const concurrentCommand = { ...command, eventId: concurrentEventId, locationId: undefined };
+  const duplicateResults = await Promise.all([
+    store.appendInventoryMovement(otherSeller.chatId, { ...concurrentCommand, eventId: concurrentEventId + '-other-org' }, { userId: otherOwner.id }),
+    store.appendInventoryMovement(seller.chatId, concurrentCommand, { userId: owner.id }),
+    store.appendInventoryMovement(seller.chatId, concurrentCommand, { userId: owner.id }),
+  ]);
+  assert.equal(duplicateResults[1].id, duplicateResults[2].id,
+    'concurrent identical submissions must resolve to one canonical movement');
+
+  const conflictEventId = eventId + '-concurrent-conflict';
+  const conflictResults = await Promise.allSettled([
+    store.appendInventoryMovement(seller.chatId, { ...command, eventId: conflictEventId, quantity: 4 }, { userId: owner.id }),
+    store.appendInventoryMovement(seller.chatId, { ...command, eventId: conflictEventId, quantity: 5 }, { userId: owner.id }),
+  ]);
+  assert.equal(conflictResults.filter(x => x.status === 'fulfilled').length, 1,
+    'only one concurrent intent may claim an event ID');
+  assert.equal(conflictResults.filter(x => x.status === 'rejected' && x.reason?.code === 'INVENTORY_EVENT_ID_REUSED').length, 1,
+    'the competing altered intent must fail closed');
+
+  const outerEventId = eventId + '-outer-transaction';
+  db.exec('BEGIN IMMEDIATE');
+  const nestedMovement = await store.appendInventoryMovement(seller.chatId, {
+    ...command, eventId: outerEventId, locationId: undefined,
+  }, { userId: owner.id });
+  assert.equal(db.isTransaction, true,
+    'appendInventoryMovement must leave a caller-owned transaction open');
+  db.exec('ROLLBACK');
+  assert.equal(db.isTransaction, false);
+  assert.equal(db.prepare('SELECT id FROM inventory_movements WHERE event_id = ?').get(outerEventId), undefined,
+    'rolling back the outer sync transaction must roll back the nested Inventory movement');
+
   const rows = db.prepare('SELECT id, organization_id, event_id FROM inventory_movements WHERE event_id = ?').all(eventId);
   assert.equal(rows.length, 1, 'exact retries must not create duplicate movements');
   assert.equal(rows[0].id, first.id);
@@ -90,6 +122,9 @@ try {
   console.log('Exact replay after location deactivation: PASS');
   console.log('New movement at inactive location rejected: PASS');
   console.log('Cross-organization event ID reuse rejected: PASS');
+  console.log('Concurrent identical submissions: PASS');
+  console.log('Concurrent conflicting submissions: PASS');
+  console.log('Caller-owned sync transaction rollback: PASS');
   console.log('Single canonical movement persisted: PASS');
 } finally {
   await rm(tempDir, { recursive: true, force: true });
