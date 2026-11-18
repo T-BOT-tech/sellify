@@ -2,6 +2,46 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const workerPath = fileURLToPath(new URL('./inventory-movement-replay-worker.mjs', import.meta.url));
+function startInventoryWorker(chatId) {
+  const child = spawn(process.execPath, [workerPath, String(chatId)], {
+    env: process.env,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  let stdout = '';
+  let stderr = '';
+  let resolveReady;
+  let rejectReady;
+  const ready = new Promise((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  child.stdout.on('data', chunk => {
+    stdout += chunk;
+    if (stdout.includes('READY\\n')) resolveReady();
+  });
+  child.stderr.on('data', chunk => { stderr += chunk; });
+  child.on('error', rejectReady);
+  const result = new Promise((resolve, reject) => {
+    child.on('close', code => {
+      const outputLine = stdout.trim().split('\\n').filter(Boolean).at(-1);
+      let parsed;
+      try { parsed = JSON.parse(outputLine || 'null'); }
+      catch { reject(new Error('Inventory worker returned invalid output. stderr=' + stderr + ' stdout=' + stdout)); return; }
+      if (code !== 0) {
+        reject(new Error('Inventory worker exited with code ' + code + '. stderr=' + stderr + ' stdout=' + stdout));
+        return;
+      }
+      resolve(parsed);
+    });
+  });
+  return { child, ready, result };
+}
 
 const tempDir = await mkdtemp(path.join(os.tmpdir(), 'sellify-inventory-replay-'));
 process.env.SELLIFY_DATA_DIR = tempDir;
@@ -79,22 +119,40 @@ try {
 
   const concurrentEventId = eventId + '-concurrent';
   const concurrentCommand = { ...command, eventId: concurrentEventId, locationId: undefined };
-  const duplicateResults = await Promise.all([
-    store.appendInventoryMovement(otherSeller.chatId, concurrentCommand, { userId: otherOwner.id }),
-    store.appendInventoryMovement(otherSeller.chatId, concurrentCommand, { userId: otherOwner.id }),
-  ]);
+  const duplicateWorkers = [
+    startInventoryWorker(otherSeller.chatId),
+    startInventoryWorker(otherSeller.chatId),
+  ];
+  await Promise.all(duplicateWorkers.map(worker => worker.ready));
+  for (const worker of duplicateWorkers) {
+    worker.child.stdin.end(JSON.stringify({ command: concurrentCommand, actor: { userId: otherOwner.id } }));
+  }
+  const duplicateResults = await Promise.all(duplicateWorkers.map(worker => worker.result));
+  assert.equal(duplicateResults.every(result => result.ok), true,
+    'concurrent exact submissions from independent SQLite connections must both succeed');
   assert.equal(duplicateResults[0].id, duplicateResults[1].id,
-    'concurrent identical submissions must resolve to one canonical movement');
+    'independent SQLite connections must resolve exact concurrent submissions to one movement');
 
   const conflictEventId = eventId + '-concurrent-conflict';
-  const conflictResults = await Promise.allSettled([
-    store.appendInventoryMovement(otherSeller.chatId, { ...command, eventId: conflictEventId, quantity: 4, locationId: undefined }, { userId: otherOwner.id }),
-    store.appendInventoryMovement(otherSeller.chatId, { ...command, eventId: conflictEventId, quantity: 5, locationId: undefined }, { userId: otherOwner.id }),
-  ]);
-  assert.equal(conflictResults.filter(x => x.status === 'fulfilled').length, 1,
-    'only one concurrent intent may claim an event ID');
-  assert.equal(conflictResults.filter(x => x.status === 'rejected' && x.reason?.code === 'INVENTORY_EVENT_ID_REUSED').length, 1,
-    'the competing altered intent must fail closed');
+  const conflictWorkers = [
+    startInventoryWorker(otherSeller.chatId),
+    startInventoryWorker(otherSeller.chatId),
+  ];
+  await Promise.all(conflictWorkers.map(worker => worker.ready));
+  conflictWorkers[0].child.stdin.end(JSON.stringify({
+    command: { ...command, eventId: conflictEventId, quantity: 4, locationId: undefined },
+    actor: { userId: otherOwner.id },
+  }));
+  conflictWorkers[1].child.stdin.end(JSON.stringify({
+    command: { ...command, eventId: conflictEventId, quantity: 5, locationId: undefined },
+    actor: { userId: otherOwner.id },
+  }));
+  const conflictResults = await Promise.all(conflictWorkers.map(worker => worker.result));
+  assert.equal(conflictResults.filter(result => result.ok).length, 1,
+    'only one cross-connection intent may claim an event ID');
+  assert.equal(conflictResults.filter(result =>
+    !result.ok && result.statusCode === 409 && result.code === 'INVENTORY_EVENT_ID_REUSED').length, 1,
+    'the competing altered intent must fail closed across SQLite connections');
 
   const outerEventId = eventId + '-outer-transaction';
   db.exec('BEGIN IMMEDIATE');
