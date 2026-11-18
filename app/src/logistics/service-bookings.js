@@ -550,57 +550,78 @@ export async function refreshServiceBookings(root = document) {
         : t('serviceBookingsEmpty');
 }
 
-async function transitionBooking(button, root) {
+function closeInlineServiceForm(form) { form?.remove(); }
+
+async function openBookingActionForm(button, root) {
+  const card = button.closest('.service-booking-card');
+  if (!card) return;
+  card.querySelector('.service-booking-action-form')?.remove();
   const target = button.dataset.target;
-  let reason = '';
-  let completion_note = '';
-  let service_resource_id = null;
-  if (['REJECTED', 'FAILED', 'CANCELLED'].includes(target)) {
-    reason = window.prompt(t('serviceBookingReasonPrompt') + ' ' + target.toLowerCase() + ':')?.trim() || '';
-    if (!reason) return;
-  }
-  if (target === 'COMPLETED') completion_note = window.prompt(t('serviceBookingCompletionPrompt'))?.trim() || '';
-  button.disabled = true;
-  try {
-    if (target === 'CONFIRMED') {
-      const resourcesResponse = await fetch(serviceResourceEndpoint(), { headers: authHeaders() });
-      const resourcesData = await resourcesResponse.json().catch(() => ({}));
-      if (!resourcesResponse.ok) throw new Error(resourcesData?.error?.message || 'Could not load service resources. Refresh and retry.');
-      const eligible = (Array.isArray(resourcesData.resources) ? resourcesData.resources : [])
+  const needsReason = ['REJECTED', 'FAILED', 'CANCELLED'].includes(target);
+  const panel = document.createElement('form');
+  panel.className = 'service-booking-action-form';
+  panel.style.cssText = 'display:grid;gap:10px;margin-top:12px;padding:12px;border:1px solid var(--border-color,#dbe2ea);border-radius:12px;';
+  panel.setAttribute('aria-label', target.replaceAll('_', ' ') + ' appointment');
+  panel.innerHTML = '<h4 style="margin:0;">' + escapeHtml(target.replaceAll('_', ' ')) + '</h4>'
+    + (needsReason ? '<label>' + escapeHtml(t('serviceBookingReasonPrompt')) + '<textarea name="reason" rows="2" maxlength="500" required></textarea></label>' : '')
+    + (target === 'COMPLETED' ? '<label>' + escapeHtml(t('serviceBookingCompletionPrompt')) + '<textarea name="completion_note" rows="2" maxlength="500"></textarea></label>' : '')
+    + (target === 'CONFIRMED' ? '<label>' + escapeHtml(t('serviceResourceTitle')) + '<select name="service_resource_id" required><option value="">Select a resource…</option></select></label>' : '')
+    + '<p class="logistics-meta service-booking-action-status" role="status" aria-live="polite"></p>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="submit" class="btn-primary">' + escapeHtml(t('serviceAvailabilitySave')) + '</button>'
+    + '<button type="button" class="btn-secondary service-booking-action-cancel">' + escapeHtml(t('cancel')) + '</button></div>';
+  card.append(panel);
+  if (target === 'CONFIRMED') {
+    const select = panel.querySelector('[name="service_resource_id"]');
+    try {
+      const response = await fetch(serviceResourceEndpoint(), { headers: authHeaders() });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error?.message || 'Could not load service resources.');
+      const eligible = (Array.isArray(data.resources) ? data.resources : [])
         .filter(resource => String(resource.status || '').toUpperCase() === 'ACTIVE'
           && (!resource.serviceItemId || String(resource.serviceItemId) === String(button.dataset.serviceItemId)));
-      if (!eligible.length) throw new Error('No active service resource is available for this service. Create or activate a resource first.');
-      const choices = eligible.map((resource, index) => (index + 1) + '. ' + resource.name + ' (' + resource.resourceType + ')').join('\n');
-      const selected = window.prompt('Select the resource for this appointment by number:\n' + choices);
-      if (selected === null) { button.disabled = false; return; }
-      const index = Number(selected) - 1;
-      if (!Number.isInteger(index) || index < 0 || index >= eligible.length) throw new Error('Choose a valid resource number.');
-      service_resource_id = eligible[index].id;
+      select.innerHTML = '<option value="">Select a resource…</option>'
+        + eligible.map(resource => '<option value="' + escapeAttr(resource.id) + '">' + escapeHtml(resource.name + ' (' + resource.resourceType + ')') + '</option>').join('');
+      if (!eligible.length) throw new Error('No active resource is configured for this service. Create or activate a resource first.');
+    } catch (error) {
+      panel.querySelector('.service-booking-action-status').textContent = error.message || t('serviceResourceLoadFailed');
+      panel.querySelector('[type="submit"]').disabled = true;
     }
-    const orderId = button.dataset.orderId;
-    const bookingId = button.dataset.bookingId;
+  }
+  panel.querySelector('textarea,select')?.focus();
+}
+
+async function submitBookingTransition(form, button, root) {
+  const target = button.dataset.target;
+  const values = new FormData(form);
+  const reason = String(values.get('reason') || '').trim();
+  const completion_note = String(values.get('completion_note') || '').trim();
+  const service_resource_id = String(values.get('service_resource_id') || '').trim() || null;
+  if (['REJECTED', 'FAILED', 'CANCELLED'].includes(target) && !reason) return;
+  if (target === 'CONFIRMED' && !service_resource_id) return;
+  const submit = form.querySelector('[type="submit"]');
+  const status = form.querySelector('.service-booking-action-status');
+  submit.disabled = true;
+  status.textContent = t('serviceAvailabilitySaving');
+  try {
     const url = apiBase() + '/tenants/' + encodeURIComponent(config.chatId)
-      + '/orders/' + encodeURIComponent(orderId) + '/service-bookings/' + encodeURIComponent(bookingId);
+      + '/orders/' + encodeURIComponent(button.dataset.orderId) + '/service-bookings/' + encodeURIComponent(button.dataset.bookingId);
     const response = await fetch(url, {
       method: 'PATCH',
       headers: { ...authHeaders(), 'Content-Type': 'application/json', 'Idempotency-Key': 'service-booking-ui-' + crypto.randomUUID() },
       body: JSON.stringify({
-        status: target,
-        expected_version: Number(button.dataset.version),
+        status: target, expected_version: Number(button.dataset.version),
         ...(service_resource_id ? { service_resource_id } : {}),
-        ...(reason ? { reason } : {}),
-        ...(completion_note ? { completion_note } : {}),
+        ...(reason ? { reason } : {}), ...(completion_note ? { completion_note } : {}),
       }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data?.error?.message || t('serviceBookingUpdateFailed'));
     await refreshServiceBookings(root);
   } catch (error) {
-    window.alert(error.message || 'Booking update failed. Refresh and retry.');
-    button.disabled = false;
+    status.textContent = error.message || t('serviceBookingUpdateFailed');
+    submit.disabled = false;
   }
 }
-
 export function mountServiceBookingsWorkspace(root = document) {
   const workspace = root.querySelector('#serviceBookingsWorkspace');
   if (!workspace) return;
@@ -622,7 +643,7 @@ export function mountServiceBookingsWorkspace(root = document) {
       const windowAssess = event.target.closest('.service-window-assess');
       const createResource = event.target.closest('#serviceResourceCreate');
       if (refresh) { refreshServiceBookings(root); refreshServiceResources(root); }
-      if (action) transitionBooking(action, root);
+      if (action) openBookingActionForm(action, root);
       if (resourceToggle) updateServiceResource(resourceToggle, root, { status: resourceToggle.dataset.status });
       if (resourceAvailability) openServiceResourceAvailability(resourceAvailability, root);
       if (resourceProviders) openServiceResourceProviders(resourceProviders);
@@ -631,16 +652,46 @@ export function mountServiceBookingsWorkspace(root = document) {
       if (availabilitySave) saveServiceResourceAvailability(availabilitySave, root);
       if (windowAssess) assessServiceResourceWindow(windowAssess);
       if (resourceRename) {
-        const nextName = window.prompt(t('serviceResourceRenamePrompt'))?.trim();
-        if (nextName) updateServiceResource(resourceRename, root, { name: nextName });
+        const card = resourceRename.closest('.service-resource-card');
+        if (card) {
+          card.querySelector('.service-resource-rename-form')?.remove();
+          const form = document.createElement('form');
+          form.className = 'service-resource-rename-form';
+          form.style.cssText = 'display:grid;gap:8px;margin-top:10px;';
+          form.innerHTML = '<label>' + escapeHtml(t('serviceResourceRenamePrompt')) + '<input name="name" maxlength="120" required value="' + escapeAttr(card.querySelector('.logistics-top strong')?.textContent || '') + '"></label>'
+            + '<div style="display:flex;gap:8px;"><button type="submit" class="btn-primary">' + escapeHtml(t('serviceAvailabilitySave')) + '</button>'
+            + '<button type="button" class="btn-secondary service-inline-cancel">' + escapeHtml(t('cancel')) + '</button></div><p class="logistics-meta" role="status"></p>';
+          card.append(form);
+          form.querySelector('input')?.focus();
+        }
       }
       if (createResource) { event.preventDefault(); saveServiceResource(createResource, root); }
     });
     root.addEventListener('submit', event => {
-      if (event.target?.id !== 'serviceResourceForm') return;
+      const form = event.target;
+      if (form?.matches('.service-booking-action-form')) {
+        event.preventDefault();
+        const card = form.closest('.service-booking-card');
+        const target = form.querySelector('h4')?.textContent?.replaceAll(' ', '_').toUpperCase();
+        const source = Array.from(card?.querySelectorAll('.service-booking-action') || []).find(item => item.dataset.target === target);
+        if (source) submitBookingTransition(form, source, root);
+        return;
+      }
+      if (form?.matches('.service-resource-rename-form')) {
+        event.preventDefault();
+        const card = form.closest('.service-resource-card');
+        const button = card?.querySelector('.service-resource-rename');
+        const name = String(new FormData(form).get('name') || '').trim();
+        if (button && name) updateServiceResource(button, root, { name });
+        return;
+      }
+      if (form?.id !== 'serviceResourceForm') return;
       event.preventDefault();
-      const button = event.target.querySelector('#serviceResourceCreate');
+      const button = form.querySelector('#serviceResourceCreate');
       if (button) saveServiceResource(button, root);
+    });
+    root.addEventListener('click', event => {
+      if (event.target.closest('.service-booking-action-cancel, .service-inline-cancel')) closeInlineServiceForm(event.target.closest('form'));
     });
   }
   const tenantKey = config.chatId && config.sessionToken
