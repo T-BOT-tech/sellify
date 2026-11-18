@@ -80,7 +80,8 @@ try {
   const rows = db.prepare('SELECT id, organization_id, event_id FROM inventory_movements WHERE event_id = ?').all(eventId);
   assert.equal(rows.length, 1, 'exact retries must not create duplicate movements');
   assert.equal(rows[0].id, first.id);
-  assert.equal(rows[0].organization_id, seller.organizationId);
+  const sellerOrgId = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(seller.chatId).organization_id;
+  assert.equal(rows[0].organization_id, sellerOrgId);
   assert.equal(db.isTransaction, false, 'all operations must leave the connection outside a transaction');
 
   console.log('Inventory Movement Replay Runtime Regression: PASS');
