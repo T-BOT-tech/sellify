@@ -7151,9 +7151,9 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null) 
   const defaultLocation = db.prepare(
     "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
   ).get(organizationId);
-  const locationId = String(input.locationId || input.location_id || defaultLocation?.id || '');
-  const location = db.prepare("SELECT id FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'").get(locationId, organizationId);
-  if (!location) throw Object.assign(new Error('Inventory location does not belong to this organization'), { statusCode: 400 });
+  // For a retry with no explicit location, bind the request to the original
+  // movement's location even if that location is no longer active.
+  const locationId = String(input.locationId || input.location_id || priorByEventId?.location_id || defaultLocation?.id || '');
 
   const referenceType = input.referenceType || input.reference_type || null;
   const referenceId = input.referenceId || input.reference_id || null;
@@ -7194,6 +7194,13 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null) 
       }
       if (ownsTransaction) db.exec('COMMIT');
       return inventoryMovementFromRow(existing);
+    }
+
+    // Current location eligibility applies to new movements, not exact replays.
+    // A committed movement remains replayable after its location is deactivated.
+    const location = db.prepare("SELECT id FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'").get(locationId, organizationId);
+    if (!location) {
+      throw Object.assign(new Error('Inventory location does not belong to this organization'), { statusCode: 400 });
     }
 
     const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
