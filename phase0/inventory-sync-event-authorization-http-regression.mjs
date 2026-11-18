@@ -144,6 +144,39 @@ try {
   ).get(allowedEvent.payload.eventId);
   assert.equal(allowedMovement.location_id, sameOrgLocation.id);
 
+  // The location may be deactivated after a movement has committed. An exact
+  // retry under a fresh sync-envelope ID must still resolve to the original
+  // canonical movement, while a genuinely new movement at that inactive
+  // location must fail closed.
+  await store.updateOrganizationLocation(tenant.chatId, sameOrgLocation.id, { status: 'inactive' });
+  const replayEvent = {
+    ...allowedEvent,
+    eventId: allowedEvent.eventId + '-retry',
+    aggregateId: allowedEvent.aggregateId + '-retry',
+  };
+  const replayResponse = await postEvents(baseUrl, tenant.chatId, ownerSession.token, [replayEvent]);
+  assert.equal(replayResponse.status, 200);
+  const replayBody = await replayResponse.json();
+  assert.equal(replayBody.results[0].status, 'processed',
+    'exact movement replay remains valid after its location is deactivated');
+  assert.equal(store.getDatabaseForTests().prepare(
+    'SELECT COUNT(*) AS count FROM inventory_movements WHERE event_id = ?'
+  ).get(allowedEvent.payload.eventId).count, 1,
+  'replay after deactivation must not create a second canonical movement');
+
+  const inactiveNewEvent = movementEvent('owner-inactive-new', { locationId: sameOrgLocation.id });
+  const inactiveResponse = await postEvents(baseUrl, tenant.chatId, ownerSession.token, [inactiveNewEvent]);
+  assert.equal(inactiveResponse.status, 200);
+  const inactiveBody = await inactiveResponse.json();
+  assert.equal(inactiveBody.results[0].status, 'rejected',
+    'new movement at an inactive location must be rejected');
+  assert.equal(inactiveBody.results[0].code, 'INVALID_INVENTORY_LOCATION',
+    'inactive-location rejection must retain the canonical Inventory error taxonomy');
+  assert.equal(store.getDatabaseForTests().prepare(
+    'SELECT COUNT(*) AS count FROM inventory_movements WHERE event_id = ?'
+  ).get(inactiveNewEvent.payload.eventId).count, 0,
+  'inactive location must not accept a new movement');
+
   const foreignEvent = movementEvent('owner-foreign-org', { locationId: foreignLocation.id });
   const foreignResponse = await postEvents(baseUrl, tenant.chatId, ownerSession.token, [foreignEvent]);
   assert.equal(foreignResponse.status, 200);
