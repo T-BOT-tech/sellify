@@ -12361,16 +12361,16 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
       LIMIT 1
     `).get(organizationId, String(chatId), String(resource.id), end, start);
     if (overlap) { overlapCount += 1; continue; }
-    return { state: 'FEASIBLE', reasonCode: 'DECLARED_HOURS_AND_COMMITMENTS_MATCH', timeZone, confirmsAvailability: false };
+    return { state: 'FEASIBLE', reasonCode: 'DECLARED_HOURS_AND_COMMITMENTS_MATCH', timeZone: resourceTimeZone, confirmsAvailability: false };
   }
 
   if (scheduleUnknown) {
-    return { state: 'UNKNOWN', reasonCode: 'RESOURCE_SCHEDULE_EVIDENCE_INCOMPLETE', timeZone, confirmsAvailability: false };
+    return { state: 'UNKNOWN', reasonCode: 'RESOURCE_SCHEDULE_EVIDENCE_INCOMPLETE', timeZone: organizationTimeZone, confirmsAvailability: false };
   }
   if (scheduleMatched > 0 && overlapCount === scheduleMatched) {
-    return { state: 'CONFLICT', reasonCode: 'ALL_MATCHING_RESOURCES_COMMITTED', timeZone, confirmsAvailability: false };
+    return { state: 'CONFLICT', reasonCode: 'ALL_MATCHING_RESOURCES_COMMITTED', timeZone: organizationTimeZone, confirmsAvailability: false };
   }
-  return { state: 'CONFLICT', reasonCode: 'OUTSIDE_DECLARED_WORKING_HOURS', timeZone, confirmsAvailability: false };
+  return { state: 'CONFLICT', reasonCode: 'OUTSIDE_DECLARED_WORKING_HOURS', timeZone: organizationTimeZone, confirmsAvailability: false };
 }
 
 export async function listAuditEvents(chatId, limit = 100, filters = {}) {
