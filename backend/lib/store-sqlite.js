@@ -6326,18 +6326,33 @@ export async function getServiceResourceAvailability(chatId, resourceId) {
   ensureDatabase();
   const organizationId = ensureCanonicalIdentityForTenant(chatId);
   if (!organizationId) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
-  const resource = db.prepare('SELECT id FROM service_resources WHERE id=? AND organization_id=? AND chat_id=?')
-    .get(String(resourceId), String(organizationId), String(chatId));
+  const resource = db.prepare(`
+    SELECT r.id, r.location_id, l.timezone AS location_timezone, o.timezone AS organization_timezone
+    FROM service_resources r
+    JOIN organizations o ON o.id = r.organization_id
+    LEFT JOIN locations l ON l.id = r.location_id AND l.organization_id = r.organization_id
+    WHERE r.id=? AND r.organization_id=? AND r.chat_id=?
+  `).get(String(resourceId), String(organizationId), String(chatId));
   if (!resource) throw Object.assign(new Error('Service resource not found'), { statusCode: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' });
   const row = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=? AND organization_id=? AND chat_id=?')
     .get(String(resourceId), String(organizationId), String(chatId));
-  const organization = db.prepare('SELECT o.timezone FROM organizations o WHERE o.id=?').get(String(organizationId));
-  const timeZone = String(row?.timezone || organization?.timezone || '');
-  if (!isIanaTimeZone(timeZone)) throw Object.assign(new Error('Organization timezone is invalid; availability configuration is unavailable'), { statusCode: 409, code: 'SERVICE_AVAILABILITY_TIMEZONE_INVALID' });
-  return serviceResourceAvailabilityFromRow(row) || {
+  const effectiveTimeZone = String(resource.location_timezone || resource.organization_timezone || '');
+  const timeZone = String(row?.timezone || effectiveTimeZone);
+  if (!isIanaTimeZone(timeZone) || !isIanaTimeZone(effectiveTimeZone)) {
+    throw Object.assign(new Error('The schedule or effective location timezone is invalid; availability configuration is unavailable'), {
+      statusCode: 409, code: 'SERVICE_AVAILABILITY_TIMEZONE_INVALID',
+    });
+  }
+  const availability = serviceResourceAvailabilityFromRow(row) || {
     resourceId: String(resourceId), organizationId: String(organizationId), timeZone,
     workingHours: [], exceptions: [], version: 0, updatedBy: null, updatedAt: null,
     state: 'EMPTY', confirmsAvailability: false,
+  };
+  return {
+    ...availability,
+    effectiveTimeZone,
+    timeZoneSource: row?.timezone ? 'DECLARED_SCHEDULE' : (resource.location_timezone ? 'LOCATION' : 'ORGANIZATION'),
+    scheduleUsesCurrentLocationTimeZone: timeZone === effectiveTimeZone,
   };
 }
 
@@ -6349,11 +6364,7 @@ export async function setServiceResourceAvailability(chatId, resourceId, input =
   if (!Number.isInteger(expectedVersion) || expectedVersion < 0) throw Object.assign(new Error('expected_version must be a non-negative integer'), { statusCode: 400, code: 'SERVICE_AVAILABILITY_VERSION_REQUIRED' });
   const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
   if (!commandKey) throw Object.assign(new Error('Idempotency-Key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
-  const organization = db.prepare('SELECT timezone FROM organizations WHERE id=?').get(String(organizationId));
-  const timeZone = String(organization?.timezone || '');
-  const working = normalizeWorkingHours(input.workingHours ?? input.working_hours ?? [], timeZone);
   const exceptions = normalizeAvailabilityExceptions(input.exceptions ?? []);
-  const fingerprint = crypto.createHash('sha256').update(JSON.stringify({resourceId:String(resourceId),expectedVersion,workingHours:working.entries,exceptions})).digest('hex');
   db.exec('BEGIN IMMEDIATE');
   try {
     const freshTenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id=?').get(String(chatId));
@@ -6361,6 +6372,22 @@ export async function setServiceResourceAvailability(chatId, resourceId, input =
     const resource = db.prepare('SELECT * FROM service_resources WHERE id=? AND organization_id=? AND chat_id=?')
       .get(String(resourceId),String(organizationId),String(chatId));
     if (!resource) throw Object.assign(new Error('Service resource not found'), { statusCode:404, code:'SERVICE_RESOURCE_NOT_FOUND' });
+    const location = resource.location_id
+      ? db.prepare('SELECT timezone FROM locations WHERE id=? AND organization_id=?').get(String(resource.location_id), String(organizationId))
+      : null;
+    if (resource.location_id && !location) throw Object.assign(new Error('Service resource location is not available in organization scope'), {
+      statusCode: 409, code: 'SERVICE_RESOURCE_LOCATION_NOT_FOUND',
+    });
+    const organization = db.prepare('SELECT timezone FROM organizations WHERE id=?').get(String(organizationId));
+    const timeZone = String(location?.timezone || organization?.timezone || '');
+    if (!isIanaTimeZone(timeZone)) throw Object.assign(new Error('Effective service resource timezone is invalid'), {
+      statusCode: 409, code: 'SERVICE_AVAILABILITY_TIMEZONE_INVALID',
+    });
+    const working = normalizeWorkingHours(input.workingHours ?? input.working_hours ?? [], timeZone);
+    const fingerprint = crypto.createHash('sha256').update(JSON.stringify({
+      resourceId:String(resourceId), expectedVersion, timeZone,
+      workingHours:working.entries, exceptions,
+    })).digest('hex');
     const prior = db.prepare('SELECT * FROM service_resource_availability_commands WHERE organization_id=? AND command_key=?')
       .get(String(organizationId),commandKey);
     if (prior) {
