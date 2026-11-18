@@ -7285,6 +7285,41 @@ export async function processSyncEvent(chatId, event = {}, actor = null) {
     }
     if (eventType === 'inventory.movement.record') {
       await appendInventoryMovement(chatId, event.payload, actor);
+    } else if (eventType === 'inventory.movement.batch.record') {
+      const movements = event.payload.movements;
+      if (!Array.isArray(movements) || movements.length < 1 || movements.length > 100) {
+        throw Object.assign(new Error('Batch payload must contain 1-100 movements'), {
+          statusCode: 400, code: 'INVALID_INVENTORY_MOVEMENT_BATCH',
+        });
+      }
+      const movementEventIds = movements.map(movement =>
+        String(movement?.eventId || movement?.event_id || '').trim()
+      );
+      if (movementEventIds.some(id => !id) || new Set(movementEventIds).size !== movementEventIds.length) {
+        throw Object.assign(new Error('Every batch movement requires a unique eventId'), {
+          statusCode: 400, code: 'INVALID_INVENTORY_MOVEMENT_BATCH',
+        });
+      }
+
+      // Preflight every line through the canonical Inventory append path inside
+      // a savepoint. The outer BEGIN IMMEDIATE prevents competing writers; the
+      // savepoint then removes all provisional movements and audit evidence.
+      // Only after every line validates do we append the durable batch.
+      db.exec('SAVEPOINT inventory_movement_batch_preflight');
+      try {
+        for (const movement of movements) {
+          await appendInventoryMovement(chatId, movement, actor);
+        }
+        db.exec('ROLLBACK TO SAVEPOINT inventory_movement_batch_preflight');
+        db.exec('RELEASE SAVEPOINT inventory_movement_batch_preflight');
+      } catch (preflightError) {
+        db.exec('ROLLBACK TO SAVEPOINT inventory_movement_batch_preflight');
+        db.exec('RELEASE SAVEPOINT inventory_movement_batch_preflight');
+        throw preflightError;
+      }
+      for (const movement of movements) {
+        await appendInventoryMovement(chatId, movement, actor);
+      }
     } else if (eventType === 'customer.upsert') {
       await upsertCustomer(chatId, event.payload);
     } else {
