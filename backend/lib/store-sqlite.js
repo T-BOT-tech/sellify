@@ -6477,6 +6477,23 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
       if(!resource) throw Object.assign(new Error('Service resource not found in this organization'),{statusCode:404,code:'SERVICE_RESOURCE_NOT_FOUND'});
       if(String(resource.status).toUpperCase()!=='ACTIVE') throw Object.assign(new Error('Only an active service resource can be committed'),{statusCode:409,code:'SERVICE_RESOURCE_INACTIVE'});
       if(resource.service_item_id && String(resource.service_item_id)!==String(row.service_item_id)) throw Object.assign(new Error('Service resource is bound to a different service'),{statusCode:409,code:'SERVICE_RESOURCE_SERVICE_MISMATCH'});
+      // An ON_SITE appointment is fulfilled at the canonical seller-order
+      // location. A location-bound resource must match that location; never
+      // infer a branch from the UI or silently treat a missing order location
+      // as organization-wide scope.
+      if (String(row.appointment_mode).toUpperCase() === 'ON_SITE' && resource.location_id) {
+        const canonicalOrderRow = db.prepare('SELECT order_json FROM orders WHERE chat_id=? AND server_order_id=?')
+          .get(String(chatId), String(serverOrderId));
+        const canonicalOrder = orderFromRow(canonicalOrderRow || {});
+        const orderLocationId = String(canonicalOrder?.location_id || canonicalOrder?.locationId || '').trim();
+        if (!orderLocationId) throw Object.assign(new Error('The canonical order has no location, so this location-bound resource cannot be assigned to an on-site appointment'), {
+          statusCode: 409, code: 'SERVICE_BOOKING_ORDER_LOCATION_REQUIRED',
+        });
+        if (orderLocationId !== String(resource.location_id)) throw Object.assign(new Error('This service resource is assigned to a different location than the on-site appointment'), {
+          statusCode: 409, code: 'SERVICE_RESOURCE_LOCATION_MISMATCH',
+          details: { order_location_id: orderLocationId, resource_location_id: String(resource.location_id) },
+        });
+      }
       const availabilityRow=db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=? AND organization_id=? AND chat_id=?').get(resourceId,organizationId,String(chatId));
       const organization=db.prepare('SELECT timezone FROM organizations WHERE id=?').get(organizationId);
       const timeZone=String(availabilityRow?.timezone||organization?.timezone||'');
