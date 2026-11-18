@@ -324,6 +324,24 @@ try {
     'preflight must roll back valid earlier lines when a later line is invalid');
   assert.equal(db.prepare('SELECT event_id FROM sync_events WHERE event_id = ?').get(invalidBatchEventId), undefined,
     'a rejected batch must not persist an outer receipt');
+  const crossOrgBatchId = eventId + '-batch-cross-org-collision';
+  const crossOrgBatchFirstLineId = crossOrgBatchId + '-new-line';
+  await assert.rejects(store.processSyncEvent(otherSeller.chatId, {
+    eventId: crossOrgBatchId,
+    eventType: 'inventory.movement.batch.record',
+    payload: { movements: [
+      { eventId: crossOrgBatchFirstLineId, productId: 'rice', quantity: 1, movementType: 'PURCHASE' },
+      { ...command, locationId: undefined },
+    ] },
+  }, { userId: otherOwner.id }), error =>
+    error?.statusCode === 409 && error?.code === 'INVENTORY_EVENT_ID_REUSED',
+  'a batch must reject a movement event ID already owned by another organization');
+  assert.equal(db.prepare('SELECT event_id FROM inventory_movements WHERE event_id = ?')
+    .get(crossOrgBatchFirstLineId), undefined,
+  'cross-organization movement ID collision must roll back earlier valid batch lines');
+  assert.equal(db.prepare('SELECT event_id FROM sync_events WHERE event_id = ?').get(crossOrgBatchId), undefined,
+    'cross-organization batch collision must not persist its outer receipt');
+
   const duplicateLineBatchId = eventId + '-batch-duplicate-lines';
   await assert.rejects(store.processSyncEvent(otherSeller.chatId, {
     eventId: duplicateLineBatchId,
