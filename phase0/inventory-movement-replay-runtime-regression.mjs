@@ -80,17 +80,16 @@ try {
   const concurrentEventId = eventId + '-concurrent';
   const concurrentCommand = { ...command, eventId: concurrentEventId, locationId: undefined };
   const duplicateResults = await Promise.all([
-    store.appendInventoryMovement(otherSeller.chatId, { ...concurrentCommand, eventId: concurrentEventId + '-other-org' }, { userId: otherOwner.id }),
-    store.appendInventoryMovement(seller.chatId, concurrentCommand, { userId: owner.id }),
-    store.appendInventoryMovement(seller.chatId, concurrentCommand, { userId: owner.id }),
+    store.appendInventoryMovement(otherSeller.chatId, concurrentCommand, { userId: otherOwner.id }),
+    store.appendInventoryMovement(otherSeller.chatId, concurrentCommand, { userId: otherOwner.id }),
   ]);
   assert.equal(duplicateResults[1].id, duplicateResults[2].id,
     'concurrent identical submissions must resolve to one canonical movement');
 
   const conflictEventId = eventId + '-concurrent-conflict';
   const conflictResults = await Promise.allSettled([
-    store.appendInventoryMovement(seller.chatId, { ...command, eventId: conflictEventId, quantity: 4 }, { userId: owner.id }),
-    store.appendInventoryMovement(seller.chatId, { ...command, eventId: conflictEventId, quantity: 5 }, { userId: owner.id }),
+    store.appendInventoryMovement(otherSeller.chatId, { ...command, eventId: conflictEventId, quantity: 4 }, { userId: otherOwner.id }),
+    store.appendInventoryMovement(otherSeller.chatId, { ...command, eventId: conflictEventId, quantity: 5 }, { userId: otherOwner.id }),
   ]);
   assert.equal(conflictResults.filter(x => x.status === 'fulfilled').length, 1,
     'only one concurrent intent may claim an event ID');
@@ -99,9 +98,9 @@ try {
 
   const outerEventId = eventId + '-outer-transaction';
   db.exec('BEGIN IMMEDIATE');
-  const nestedMovement = await store.appendInventoryMovement(seller.chatId, {
+  const nestedMovement = await store.appendInventoryMovement(otherSeller.chatId, {
     ...command, eventId: outerEventId, locationId: undefined,
-  }, { userId: owner.id });
+  }, { userId: otherOwner.id });
   assert.equal(db.isTransaction, true,
     'appendInventoryMovement must leave a caller-owned transaction open');
   db.exec('ROLLBACK');
