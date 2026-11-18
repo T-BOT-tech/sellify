@@ -735,6 +735,10 @@
     </div>
   </section>
 
+  <section id="tab-appointments" style="display:none;">
+    <div id="appointmentsWorkspace"></div>
+  </section>
+
   <section id="tab-logistics" style="display:none;">
     <h2 data-i18n="logisticsNav">Logistics</h2>
     <div class="sync-note" data-i18n="logisticsHint">Orders with a pickup or delivery method chosen at checkout show up here. Tap to move them to the next step.</div>
@@ -789,6 +793,9 @@
       </button>
       <button id="navWarehouse" class="btn-ghost more-sheet-item" onclick="switchTab('warehouse'); closeMoreSheet();" style="display:none;">
         <svg class="icon"><use href="#i-box"/></svg><span data-i18n="warehouseNav">Warehouse</span>
+      </button>
+      <button id="navAppointments" class="btn-ghost more-sheet-item" onclick="switchTab('appointments'); closeMoreSheet();" style="display:none;">
+        <svg class="icon"><use href="#i-clock"/></svg><span data-i18n="serviceBookingsTitle">Appointments</span>
       </button>
       <button id="navLogistics" class="btn-ghost more-sheet-item" onclick="switchTab('logistics'); closeMoreSheet();" style="display:none;">
         <svg class="icon"><use href="#i-truck"/></svg><span data-i18n="logisticsNav">Logistics</span>
