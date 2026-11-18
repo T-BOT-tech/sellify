@@ -201,6 +201,67 @@ try {
     'failed sync command must not leave a partial Inventory movement');
   assert.equal(db.isTransaction, false, 'sync failure must roll back and close its transaction');
 
+  const batchEventId = eventId + '-batch';
+  const batchMovementA = {
+    eventId: batchEventId + '-line-a', productId: 'rice', quantity: 4,
+    movementType: 'PURCHASE', reason: 'Atomic batch line A',
+  };
+  const batchMovementB = {
+    eventId: batchEventId + '-line-b', productId: 'rice', quantity: 6,
+    movementType: 'PURCHASE', reason: 'Atomic batch line B',
+  };
+  const batchEnvelope = {
+    eventId: batchEventId,
+    eventType: 'inventory.movement.batch.record',
+    aggregateType: 'inventory_movement_batch',
+    aggregateId: batchEventId,
+    payload: { movements: [batchMovementA, batchMovementB] },
+  };
+  const batchResult = await store.processSyncEvent(otherSeller.chatId, batchEnvelope, { userId: otherOwner.id });
+  assert.equal(batchResult.status, 'processed');
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM inventory_movements WHERE event_id IN (?, ?)')
+    .get(batchMovementA.eventId, batchMovementB.eventId).count, 2,
+  'batch command must persist every canonical movement line');
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM sync_events WHERE event_id = ?').get(batchEventId).count, 1,
+    'batch command must persist one outer sync receipt');
+  const batchReplay = await store.processSyncEvent(otherSeller.chatId, batchEnvelope, { userId: otherOwner.id });
+  assert.equal(batchReplay.duplicate, true, 'exact batch replay must return the existing outer receipt');
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM inventory_movements WHERE event_id IN (?, ?)')
+    .get(batchMovementA.eventId, batchMovementB.eventId).count, 2,
+  'exact batch replay must not create additional movements');
+  await assert.rejects(store.processSyncEvent(otherSeller.chatId, {
+    ...batchEnvelope, payload: { movements: [{ ...batchMovementA, quantity: 99 }, batchMovementB] },
+  }, { userId: otherOwner.id }), error => error?.statusCode === 409 && error?.code === 'EVENT_ID_REUSED',
+  'conflicting outer batch replay must be rejected');
+
+  const invalidBatchEventId = eventId + '-batch-invalid';
+  const invalidBatchLineId = invalidBatchEventId + '-valid-first-line';
+  await assert.rejects(store.processSyncEvent(otherSeller.chatId, {
+    eventId: invalidBatchEventId,
+    eventType: 'inventory.movement.batch.record',
+    payload: { movements: [
+      { ...batchMovementA, eventId: invalidBatchLineId },
+      { eventId: invalidBatchEventId + '-service-line', productId: 'consultation', quantity: 1, movementType: 'PURCHASE' },
+    ] },
+  }, { userId: otherOwner.id }), error => error?.statusCode === 422,
+  'an invalid line must reject the entire batch');
+  assert.equal(db.prepare('SELECT event_id FROM inventory_movements WHERE event_id = ?').get(invalidBatchLineId), undefined,
+    'preflight must roll back valid earlier lines when a later line is invalid');
+  assert.equal(db.prepare('SELECT event_id FROM sync_events WHERE event_id = ?').get(invalidBatchEventId), undefined,
+    'a rejected batch must not persist an outer receipt');
+  const duplicateLineBatchId = eventId + '-batch-duplicate-lines';
+  await assert.rejects(store.processSyncEvent(otherSeller.chatId, {
+    eventId: duplicateLineBatchId,
+    eventType: 'inventory.movement.batch.record',
+    payload: { movements: [
+      { ...batchMovementA, eventId: duplicateLineBatchId + '-same' },
+      { ...batchMovementB, eventId: duplicateLineBatchId + '-same' },
+    ] },
+  }, { userId: otherOwner.id }), error => error?.code === 'INVALID_INVENTORY_MOVEMENT_BATCH',
+  'duplicate movement event IDs within one batch must be rejected');
+  assert.equal(db.prepare('SELECT event_id FROM sync_events WHERE event_id = ?').get(duplicateLineBatchId), undefined);
+  assert.equal(db.isTransaction, false, 'batch success and failure paths must close the transaction');
+
   const rows = db.prepare('SELECT id, organization_id, event_id FROM inventory_movements WHERE event_id = ?').all(eventId);
   assert.equal(rows.length, 1, 'exact retries must not create duplicate movements');
   assert.equal(rows[0].id, first.id);
