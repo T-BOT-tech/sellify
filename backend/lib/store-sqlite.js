@@ -6392,9 +6392,8 @@ export async function setServiceResourceAvailability(chatId, resourceId, input =
       .get(String(organizationId),commandKey);
     if (prior) {
       if (String(prior.resource_id)!==String(resourceId) || prior.command_fingerprint!==fingerprint) throw Object.assign(new Error('Idempotency key was reused for a different availability command'), { statusCode:409, code:'SERVICE_AVAILABILITY_IDEMPOTENCY_CONFLICT' });
-      const replay = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=?').get(String(resourceId));
       db.exec('COMMIT');
-      return { availability: serviceResourceAvailabilityFromRow(replay), replayed: true };
+      return { availability: await getServiceResourceAvailability(chatId, resourceId), replayed: true };
     }
     const current = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=? AND organization_id=? AND chat_id=?')
       .get(String(resourceId),String(organizationId),String(chatId));
@@ -6433,9 +6432,8 @@ export async function setServiceResourceAvailability(chatId, resourceId, input =
       version:nextVersion,timezone:timeZone,working_hours_count:working.entries.length,exception_count:exceptions.length,
       state:'DECLARED_ONLY',availability_confirmed:false,
     },{organizationId,locationId:resource.location_id,actorId,deviceId:actor?.deviceId||null});
-    const saved = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=?').get(String(resourceId));
     db.exec('COMMIT');
-    return { availability: serviceResourceAvailabilityFromRow(saved), replayed:false };
+    return { availability: await getServiceResourceAvailability(chatId, resourceId), replayed:false };
   } catch(error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
 
