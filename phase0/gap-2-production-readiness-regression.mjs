@@ -19,8 +19,8 @@ assert.match(ci, /node-version: \[24\]/);
 for (const script of requiredScripts) assert.ok(ci.includes('npm run ' + script), 'CI missing ' + script);
 
 const migrations = [...store.matchAll(/if \(!applied\.includes\((\d+)\)\)/g)].map(m => Number(m[1]));
-assert.equal(Math.max(...migrations), 80, 'latest migration must remain explicit');
-for (const version of [45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]) {
+assert.equal(Math.max(...migrations), 81, 'latest migration must remain explicit');
+for (const version of [45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81]) {
   assert.ok(migrations.includes(version), 'missing explicit migration ' + version);
 }
 const migrationPosition = version => store.indexOf(`if (!applied.includes(${version}))`);
@@ -44,6 +44,7 @@ assert.ok(migrationPosition(77) > migrationPosition(76), 'tenant creation replay
 assert.ok(migrationPosition(78) > migrationPosition(77), 'service resource foundation migration must follow tenant creation replay persistence');
 assert.ok(migrationPosition(79) > migrationPosition(78), 'service availability migration must follow service resource foundation migration');
 assert.ok(migrationPosition(80) > migrationPosition(79), 'service resource commitment migration must follow service availability migration');
+assert.ok(migrationPosition(81) > migrationPosition(80), 'service resource compatibility bridge must follow migration 80');
 assert.ok(store.includes('CREATE TABLE IF NOT EXISTS service_resource_commitments'), 'service appointment commitment table must be present');
 assert.ok(store.includes('booking_id TEXT NOT NULL UNIQUE'), 'a booking must have at most one resource commitment');
 assert.ok(store.includes("state TEXT NOT NULL CHECK (state IN ('COMMITTED','RELEASED'))"), 'resource commitments must have explicit committed/released lifecycle states');
