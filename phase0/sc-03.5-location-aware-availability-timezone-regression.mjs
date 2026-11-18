@@ -63,6 +63,17 @@ try {
   assert.equal(second.availability.effectiveTimeZone, 'Europe/Paris');
   assert.equal(second.availability.scheduleUsesCurrentLocationTimeZone, true);
 
+  const organizationWide = await store.createServiceResource(seller.chatId, {
+    resource_type: 'PROVIDER', name: 'Organization Provider', service_item_id: 'consultation',
+    location_id: null, idempotency_key: 'resource-org-' + suffix,
+  }, { userId: owner.id });
+  const organizationSchedule = await store.setServiceResourceAvailability(seller.chatId, organizationWide.resource.id, {
+    expected_version: 0, idempotency_key: 'availability-org-' + suffix,
+    working_hours: [{ weekday: 1, start_time: '09:00', end_time: '17:00' }], exceptions: [],
+  }, { userId: owner.id });
+  assert.equal(organizationSchedule.availability.timeZone, 'Africa/Addis_Ababa',
+    'organization-wide resources must fall back to organization timezone');
+
   // The saved schedule must be evaluated in the location's DST-aware local clock.
   const dstWindow = assessServiceResourceDeclaredWindow({
     timeZone: 'Europe/London',
