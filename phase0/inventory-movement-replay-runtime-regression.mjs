@@ -88,8 +88,8 @@ try {
 
   const conflictEventId = eventId + '-concurrent-conflict';
   const conflictResults = await Promise.allSettled([
-    store.appendInventoryMovement(otherSeller.chatId, { ...command, eventId: conflictEventId, quantity: 4 }, { userId: otherOwner.id }),
-    store.appendInventoryMovement(otherSeller.chatId, { ...command, eventId: conflictEventId, quantity: 5 }, { userId: otherOwner.id }),
+    store.appendInventoryMovement(otherSeller.chatId, { ...command, eventId: conflictEventId, quantity: 4, locationId: undefined }, { userId: otherOwner.id }),
+    store.appendInventoryMovement(otherSeller.chatId, { ...command, eventId: conflictEventId, quantity: 5, locationId: undefined }, { userId: otherOwner.id }),
   ]);
   assert.equal(conflictResults.filter(x => x.status === 'fulfilled').length, 1,
     'only one concurrent intent may claim an event ID');
