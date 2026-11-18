@@ -133,6 +133,26 @@ try {
   assert.equal(store.getDatabaseForTests().prepare('SELECT COUNT(*) AS count FROM inventory_movements').get().count, 0,
     'unauthorized event must not create a canonical Inventory movement');
 
+  const deniedBatchEventId = 'sync-auth-cashier-batch-denied-' + suffix;
+  const deniedBatchEvent = {
+    eventId: deniedBatchEventId,
+    eventType: 'inventory.movement.batch.record',
+    aggregateType: 'inventory_movement_batch',
+    aggregateId: deniedBatchEventId,
+    payload: { movements: [
+      { eventId: deniedBatchEventId + '-line-a', productId: 'sync-rice', quantity: 1, movementType: 'PURCHASE' },
+      { eventId: deniedBatchEventId + '-line-b', productId: 'sync-rice', quantity: 2, movementType: 'PURCHASE' },
+    ] },
+  };
+  const deniedBatchResponse = await postEvents(baseUrl, tenant.chatId, cashierSession.token, [deniedBatchEvent]);
+  const deniedBatchBody = await deniedBatchResponse.json();
+  assert.equal(deniedBatchBody.results[0].status, 'rejected',
+    'cashier without Inventory edit permission must not submit a movement batch');
+  assert.equal(store.getDatabaseForTests().prepare(
+    'SELECT COUNT(*) AS count FROM inventory_movements WHERE event_id IN (?, ?)'
+  ).get(deniedBatchEventId + '-line-a', deniedBatchEventId + '-line-b').count, 0,
+  'unauthorized batch must not create any canonical movement lines');
+
   const allowedEvent = movementEvent('owner-same-org', { locationId: sameOrgLocation.id });
   const allowedResponse = await postEvents(baseUrl, tenant.chatId, ownerSession.token, [allowedEvent]);
   assert.equal(allowedResponse.status, 200);
@@ -143,6 +163,28 @@ try {
     'SELECT location_id FROM inventory_movements WHERE event_id = ?'
   ).get(allowedEvent.payload.eventId);
   assert.equal(allowedMovement.location_id, sameOrgLocation.id);
+
+  const allowedBatchEventId = 'sync-auth-owner-batch-' + suffix;
+  const allowedBatchEvent = {
+    eventId: allowedBatchEventId,
+    eventType: 'inventory.movement.batch.record',
+    aggregateType: 'inventory_movement_batch',
+    aggregateId: allowedBatchEventId,
+    payload: { movements: [
+      { eventId: allowedBatchEventId + '-line-a', productId: 'sync-rice', quantity: 3,
+        movementType: 'PURCHASE', locationId: sameOrgLocation.id },
+      { eventId: allowedBatchEventId + '-line-b', productId: 'sync-rice', quantity: 5,
+        movementType: 'PURCHASE' },
+    ] },
+  };
+  const allowedBatchResponse = await postEvents(baseUrl, tenant.chatId, ownerSession.token, [allowedBatchEvent]);
+  const allowedBatchBody = await allowedBatchResponse.json();
+  assert.equal(allowedBatchBody.results[0].status, 'processed',
+    'authorized owner may submit an atomic batch with same-organization and default locations');
+  assert.equal(store.getDatabaseForTests().prepare(
+    'SELECT COUNT(*) AS count FROM inventory_movements WHERE event_id IN (?, ?)'
+  ).get(allowedBatchEventId + '-line-a', allowedBatchEventId + '-line-b').count, 2,
+  'authorized batch must persist every movement line');
 
   // The location may be deactivated after a movement has committed. An exact
   // retry under a fresh sync-envelope ID must still resolve to the original
