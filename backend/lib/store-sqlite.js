@@ -7128,6 +7128,7 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null) 
   ensureDatabase();
   const tenant = await getTenant(chatId);
   if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
+  const organizationId = String(tenant.organizationId);
   const productId = String(input.productId ?? input.product_id ?? '').trim();
   const movementType = String(input.movementType ?? input.movement_type ?? '').trim().toUpperCase();
   const quantity = Number(input.quantity);
@@ -7135,47 +7136,111 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null) 
   if (!productId || !Number.isFinite(quantity) || quantity === 0 || !allowedTypes.has(movementType)) {
     throw Object.assign(new Error('Valid productId, non-zero quantity, and movementType are required'), { statusCode: 400 });
   }
-  const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
-  if (!product) throw Object.assign(new Error('Product not found'), { statusCode: 404 });
-  const servicePayload = parseJSON(product.product_json, {});
-  const isService = String(servicePayload.item_type ?? servicePayload.type ?? '').trim().toLowerCase() === 'service';
-  const defaultLocation = db.prepare(
-    "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
-  ).get(String(tenant.organizationId));
-  const locationId = String(input.locationId || defaultLocation?.id || '');
-  const location = db.prepare("SELECT id FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'").get(locationId, String(tenant.organizationId));
-  if (!location) throw Object.assign(new Error('Inventory location does not belong to this organization'), { statusCode: 400 });
-  const eventId = String(input.eventId || crypto.randomUUID()).trim();
-  const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
-  if (existing) return inventoryMovementFromRow(existing);
-  if (isService) {
-    throw Object.assign(new Error('Service catalog items do not support physical inventory movements'), {
-      statusCode: 422,
-      code: 'SERVICE_HAS_NO_INVENTORY',
+  const eventId = String(input.eventId || input.event_id || crypto.randomUUID()).trim();
+  if (!eventId) throw Object.assign(new Error('eventId must not be empty'), { statusCode: 400, code: 'INVALID_INVENTORY_EVENT_ID' });
+
+  // Check ownership before resolving caller-controlled product/location references.
+  // A globally unique event ID must never disclose another organization's movement.
+  const priorByEventId = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
+  if (priorByEventId && String(priorByEventId.organization_id) !== organizationId) {
+    throw Object.assign(new Error('Inventory event ID is already owned by another organization'), {
+      statusCode: 409, code: 'INVENTORY_EVENT_ID_REUSED',
     });
   }
-  const now = nowIso();
-  const id = crypto.randomUUID();
-  db.prepare(`
-    INSERT INTO inventory_movements
-      (id, event_id, organization_id, location_id, product_id, quantity, movement_type,
-       reference_type, reference_id, actor_id, device_id, occurred_at, reason, metadata_json, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    id, eventId, String(tenant.organizationId), locationId, productId, quantity, movementType,
-    input.referenceType || input.reference_type || null, input.referenceId || input.reference_id || null,
-    actor?.userId || null, actor?.deviceId || null, input.occurredAt || input.occurred_at || now,
-    String(input.reason || '').slice(0, 500), json(input.metadata || {}), now
-  );
-  audit(String(chatId), 'inventory.movement.recorded', 'inventory_movement', id, {
-    productId, locationId, movementType, quantity, eventId,
-  }, {
-    organizationId: tenant.organizationId,
-    locationId,
-    actorId: actor?.userId || null,
-    deviceId: actor?.deviceId || null,
-  });
-  return inventoryMovementFromRow(db.prepare('SELECT * FROM inventory_movements WHERE id = ?').get(id));
+
+  const defaultLocation = db.prepare(
+    "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
+  ).get(organizationId);
+  const locationId = String(input.locationId || input.location_id || defaultLocation?.id || '');
+  const location = db.prepare("SELECT id FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'").get(locationId, organizationId);
+  if (!location) throw Object.assign(new Error('Inventory location does not belong to this organization'), { statusCode: 400 });
+
+  const referenceType = input.referenceType || input.reference_type || null;
+  const referenceId = input.referenceId || input.reference_id || null;
+  const suppliedOccurredAt = input.occurredAt ?? input.occurred_at;
+  const reason = String(input.reason || '').slice(0, 500);
+  const metadata = input.metadata || {};
+  const canonicalize = value => {
+    if (Array.isArray(value)) return value.map(canonicalize);
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalize(value[key])]));
+    }
+    return value;
+  };
+  const metadataIntent = JSON.stringify(canonicalize(metadata));
+  const replayMatches = row => String(row.organization_id) === organizationId
+    && String(row.location_id) === locationId
+    && String(row.product_id) === productId
+    && Number(row.quantity) === quantity
+    && String(row.movement_type) === movementType
+    && (row.reference_type || null) === referenceType
+    && (row.reference_id || null) === referenceId
+    && row.reason === reason
+    && JSON.stringify(canonicalize(parseJSON(row.metadata_json, {}))) === metadataIntent
+    && (suppliedOccurredAt == null || String(row.occurred_at) === String(suppliedOccurredAt));
+
+  // A matching replay returns the canonical movement; a reused key with altered
+  // intent fails closed. BEGIN IMMEDIATE serializes direct writers. Sync replay
+  // may already own the surrounding transaction, so do not nest one here.
+  const ownsTransaction = !db.inTransaction;
+  if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
+  try {
+    const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
+    if (existing) {
+      if (!replayMatches(existing)) {
+        throw Object.assign(new Error('Inventory event ID was already used with a different movement intent'), {
+          statusCode: 409, code: 'INVENTORY_EVENT_ID_REUSED',
+        });
+      }
+      if (ownsTransaction) db.exec('COMMIT');
+      return inventoryMovementFromRow(existing);
+    }
+
+    const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
+    if (!product) throw Object.assign(new Error('Product not found'), { statusCode: 404 });
+    const servicePayload = parseJSON(product.product_json, {});
+    const isService = String(servicePayload.item_type ?? servicePayload.type ?? '').trim().toLowerCase() === 'service';
+    if (isService) {
+      throw Object.assign(new Error('Service catalog items do not support physical inventory movements'), {
+        statusCode: 422, code: 'SERVICE_HAS_NO_INVENTORY',
+      });
+    }
+
+    const now = nowIso();
+    const id = crypto.randomUUID();
+    db.prepare(`
+      INSERT INTO inventory_movements
+        (id, event_id, organization_id, location_id, product_id, quantity, movement_type,
+         reference_type, reference_id, actor_id, device_id, occurred_at, reason, metadata_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, eventId, organizationId, locationId, productId, quantity, movementType,
+      referenceType, referenceId, actor?.userId || null, actor?.deviceId || null,
+      suppliedOccurredAt == null ? now : String(suppliedOccurredAt),
+      reason, json(metadata), now
+    );
+    audit(String(chatId), 'inventory.movement.recorded', 'inventory_movement', id, {
+      productId, locationId, movementType, quantity, eventId,
+    }, {
+      organizationId,
+      locationId,
+      actorId: actor?.userId || null,
+      deviceId: actor?.deviceId || null,
+    });
+    const movement = inventoryMovementFromRow(db.prepare('SELECT * FROM inventory_movements WHERE id = ?').get(id));
+    if (ownsTransaction) db.exec('COMMIT');
+    return movement;
+  } catch (error) {
+    if (ownsTransaction && db.inTransaction) db.exec('ROLLBACK');
+    if (error?.code === 'SQLITE_CONSTRAINT_UNIQUE' || error?.code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
+      const winner = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
+      if (winner && replayMatches(winner)) return inventoryMovementFromRow(winner);
+      throw Object.assign(new Error('Inventory event ID was already used with a different movement intent'), {
+        statusCode: 409, code: 'INVENTORY_EVENT_ID_REUSED',
+      });
+    }
+    throw error;
+  }
 }
 
 export async function processSyncEvent(chatId, event = {}, actor = null) {
