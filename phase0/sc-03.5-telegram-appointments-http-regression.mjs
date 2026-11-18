@@ -225,6 +225,156 @@ try {
   assert.equal(replay.response.status, 200);
   assert.equal(replay.json.replayed, true);
 
+  // Exercise the authenticated seller booking command path over HTTP.
+  // This complements the Telegram buyer route tests above: seller lifecycle
+  // authorization, idempotency conflicts, stale versions, and server-authored
+  // execution evidence must hold at the actual API boundary.
+  const ownerSession = await store.createSession({
+    userId: owner.id, chatId: tenant.chatId, deviceName: 'SC-03.5 seller booking HTTP regression',
+  });
+  const ownerHeaders = {
+    Authorization: 'Bearer ' + ownerSession.token,
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
+  const sellerOrder = (await store.getOrders(tenant.chatId)).find(item =>
+    item.is_marketplace && item.items?.some(line => line.item_id === 'sc035-http-consultation'));
+  assert.ok(sellerOrder?.server_order_id, 'seller lifecycle test must use the canonical seller order');
+
+  await store.setServiceResourceAvailability(tenant.chatId, providerResource.resource.id, {
+    expected_version: 0,
+    idempotency_key: 'sc035-http-resource-hours-' + suffix,
+    workingHours: [0, 1, 2, 3, 4, 5, 6].map(weekday => ({
+      weekday, startTime: '00:00', endTime: '23:59',
+    })),
+    exceptions: [],
+  }, { userId: owner.id });
+
+  const sellerBookingStart = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+  sellerBookingStart.setUTCHours(9, 0, 0, 0);
+  const sellerBookingEnd = new Date(sellerBookingStart.getTime() + 60 * 60 * 1000);
+  const sellerBookingPath = `/tenants/${encodeURIComponent(tenant.chatId)}/orders/${encodeURIComponent(sellerOrder.server_order_id)}/service-bookings`;
+  const sellerBookingPayload = {
+    service_item_id: 'sc035-http-consultation',
+    requested_start: sellerBookingStart.toISOString(),
+    requested_end: sellerBookingEnd.toISOString(),
+    appointment_mode: 'REMOTE',
+    customer_note: 'Seller lifecycle HTTP test.',
+  };
+  const sellerCreateKey = 'sc035-http-seller-create-' + suffix;
+  const sellerCreate = await request(sellerBookingPath, {
+    method: 'POST',
+    headers: { ...ownerHeaders, 'Idempotency-Key': sellerCreateKey },
+    body: JSON.stringify(sellerBookingPayload),
+  });
+  assert.equal(sellerCreate.response.status, 201, 'authorized seller may create a canonical service booking');
+  const sellerBookingId = sellerCreate.json.booking.id;
+  const sellerConflict = await request(sellerBookingPath, {
+    method: 'POST',
+    headers: { ...ownerHeaders, 'Idempotency-Key': sellerCreateKey },
+    body: JSON.stringify({ ...sellerBookingPayload, customer_note: 'Different payload under same key.' }),
+  });
+  assert.equal(sellerConflict.response.status, 409,
+    'same organization/idempotency key with a different booking payload must conflict');
+  assert.equal(sellerConflict.json.error?.code, 'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT');
+
+  const transitionPath = sellerBookingPath + '/' + encodeURIComponent(sellerBookingId);
+  const revokedProviderAttempt = await request(transitionPath, {
+    method: 'PATCH',
+    headers: { ...providerHeaders, 'Content-Type': 'application/json', 'Idempotency-Key': 'sc035-http-revoked-provider-' + suffix },
+    body: JSON.stringify({ status: 'ACCEPTED', expected_version: 1 }),
+  });
+  assert.equal(revokedProviderAttempt.response.status, 403,
+    'revoked resource provider must not transition a booking using a still-valid session');
+  assert.equal(revokedProviderAttempt.json.error?.code, 'AUTHORIZATION_DENIED');
+
+  const acceptedHttp = await request(transitionPath, {
+    method: 'PATCH',
+    headers: { ...ownerHeaders, 'Idempotency-Key': 'sc035-http-seller-accept-' + suffix },
+    body: JSON.stringify({ status: 'ACCEPTED', expected_version: 1 }),
+  });
+  assert.equal(acceptedHttp.response.status, 200);
+  assert.equal(acceptedHttp.json.booking.status, 'ACCEPTED');
+
+  const confirmedHttp = await request(transitionPath, {
+    method: 'PATCH',
+    headers: { ...ownerHeaders, 'Idempotency-Key': 'sc035-http-seller-confirm-' + suffix },
+    body: JSON.stringify({
+      status: 'CONFIRMED', expected_version: 2,
+      service_resource_id: providerResource.resource.id,
+    }),
+  });
+  assert.equal(confirmedHttp.response.status, 200);
+  assert.equal(confirmedHttp.json.booking.status, 'CONFIRMED');
+
+  const startedHttp = await request(transitionPath, {
+    method: 'PATCH',
+    headers: { ...ownerHeaders, 'Idempotency-Key': 'sc035-http-seller-start-' + suffix },
+    body: JSON.stringify({
+      status: 'IN_PROGRESS', expected_version: 3,
+      completed_at: '1999-01-01T00:00:00.000Z',
+      completed_by: 'forged-client-actor',
+    }),
+  });
+  assert.equal(startedHttp.response.status, 200);
+  assert.equal(startedHttp.json.booking.status, 'IN_PROGRESS');
+  assert.equal(startedHttp.json.booking.completed_at, null,
+    'client-supplied completion timestamp must not be applied during service start');
+  assert.equal(startedHttp.json.booking.completed_by, null,
+    'client-supplied completion actor must not be applied during service start');
+
+  const staleHttp = await request(transitionPath, {
+    method: 'PATCH',
+    headers: { ...ownerHeaders, 'Idempotency-Key': 'sc035-http-seller-stale-' + suffix },
+    body: JSON.stringify({ status: 'FAILED', expected_version: 3, reason: 'Stale request.' }),
+  });
+  assert.equal(staleHttp.response.status, 409, 'stale lifecycle versions must fail with conflict');
+  assert.equal(staleHttp.json.error?.code, 'SERVICE_BOOKING_VERSION_CONFLICT');
+
+  const completionPayload = {
+    status: 'COMPLETED',
+    expected_version: 4,
+    completion_note: 'HTTP service completed.',
+    completed_at: '1999-01-01T00:00:00.000Z',
+    completed_by: 'forged-client-actor',
+  };
+  const completedHttp = await request(transitionPath, {
+    method: 'PATCH',
+    headers: { ...ownerHeaders, 'Idempotency-Key': 'sc035-http-seller-complete-' + suffix },
+    body: JSON.stringify(completionPayload),
+  });
+  assert.equal(completedHttp.response.status, 200);
+  assert.equal(completedHttp.json.booking.status, 'COMPLETED');
+  assert.notEqual(completedHttp.json.booking.completed_at, completionPayload.completed_at,
+    'completion timestamp must be generated by the server');
+  assert.equal(completedHttp.json.booking.completed_by, owner.id,
+    'completion actor must be derived from the authenticated seller session');
+
+  const completionReplay = await request(transitionPath, {
+    method: 'PATCH',
+    headers: { ...ownerHeaders, 'Idempotency-Key': 'sc035-http-seller-complete-' + suffix },
+    body: JSON.stringify(completionPayload),
+  });
+  assert.equal(completionReplay.response.status, 200);
+  assert.equal(completionReplay.json.replayed, true,
+    'exact completion command replay must return the original result after later lifecycle state');
+
+  const otherOwner = await store.getOrCreateUserByTelegram('sc035-http-other-owner-' + suffix, 'Other Tenant Owner');
+  const otherTenant = await store.createTenantForUser({
+    userId: otherOwner.id, sellerName: 'Other HTTP Tenant', businessType: 'services',
+    country: 'ET', currency: 'ETB', timezone: 'Africa/Addis_Ababa',
+  });
+  const otherSession = await store.createSession({
+    userId: otherOwner.id, chatId: otherTenant.chatId, deviceName: 'SC-03.5 cross-tenant order regression',
+  });
+  const crossTenantOrder = await request(
+    `/tenants/${encodeURIComponent(otherTenant.chatId)}/orders/${encodeURIComponent(sellerOrder.server_order_id)}/service-bookings`,
+    { headers: { Authorization: 'Bearer ' + otherSession.token, Accept: 'application/json' } },
+  );
+  assert.equal(crossTenantOrder.response.status, 404,
+    'a valid session for another tenant cannot resolve this tenant\'s canonical seller order');
+  assert.equal(crossTenantOrder.json.error?.code, 'ORDER_NOT_FOUND');
+
   const missingCredentialUser = await store.getOrCreateUserByTelegram('sc035-http-missing-' + suffix, 'Missing Credential');
   const missingTenant = await store.createTenantForUser({
     userId: missingCredentialUser.id, sellerName: 'Missing Credential Store', businessType: 'services',
