@@ -104,6 +104,7 @@
     "test:service-catalog-contract": "node phase0/first-experience-service-catalog-contract-regression.mjs",
     "test:service-booking-contract": "node phase0/service-booking-contract-regression.mjs",
     "test:service-booking-persistence": "node phase0/service-booking-persistence-regression.mjs",
+    "test:service-resource-migration-compatibility": "node phase0/service-resource-migration-80-81-compatibility-regression.mjs",
     "test:logistics-scheduling-api-workspace": "node phase0/logistics-scheduling-api-workspace-regression.mjs",
     "test:logistics-scheduling-http": "node phase0/logistics-scheduling-http-regression.mjs",
     "test:sc-03.5-buyer-appointments": "node phase0/sc-03.5-buyer-appointment-order-regression.mjs",
