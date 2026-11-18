@@ -276,6 +276,33 @@ try {
   assert.notEqual(completed.booking.completed_at, '1999-01-01T00:00:00.000Z');
   assert.equal(completed.booking.completed_by, owner.id, 'service completer must come from authenticated actor context');
   assert.equal(completed.booking.completion_note, 'Consultation completed; follow-up plan provided.');
+  const completedCommitment = db.prepare(
+    'SELECT state, released_by, released_at FROM service_resource_commitments WHERE booking_id = ?'
+  ).get(executionBooking.booking.id);
+  assert.equal(completedCommitment.state, 'RELEASED',
+    'completing a service appointment must release its committed resource capacity');
+  assert.equal(completedCommitment.released_by, owner.id);
+  assert.ok(completedCommitment.released_at, 'resource release must have a server-authored timestamp');
+
+  const reusedSlot = await store.createServiceBooking(seller.chatId, order.server_order_id, {
+    ...request,
+    requested_start: '2026-11-05T09:00:00+03:00',
+    requested_end: '2026-11-05T10:00:00+03:00',
+    customer_note: 'Rebook the completed appointment slot.',
+    idempotency_key: 'booking-reuse-completed-slot-' + suffix,
+  }, { userId: owner.id });
+  const reusedSlotAccepted = await store.transitionServiceBooking(seller.chatId, order.server_order_id, reusedSlot.booking.id, {
+    status: 'ACCEPTED', expected_version: 1,
+    idempotency_key: 'booking-reuse-completed-slot-accept-' + suffix,
+  }, { userId: owner.id });
+  const reusedSlotConfirmed = await store.transitionServiceBooking(seller.chatId, order.server_order_id, reusedSlot.booking.id, {
+    status: 'CONFIRMED', expected_version: reusedSlotAccepted.booking.version,
+    service_resource_id: serviceResourceId,
+    idempotency_key: 'booking-reuse-completed-slot-confirm-' + suffix,
+  }, { userId: owner.id });
+  assert.equal(reusedSlotConfirmed.booking.status, 'CONFIRMED',
+    'a completed appointment must no longer block its released time slot');
+
   const completedReplay = await store.transitionServiceBooking(seller.chatId, order.server_order_id, executionBooking.booking.id, {
     status: 'COMPLETED', expected_version: 4, completion_note: 'Consultation completed; follow-up plan provided.',
     idempotency_key: 'booking-execution-complete-' + suffix,
