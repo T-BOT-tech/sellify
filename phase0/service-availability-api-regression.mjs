@@ -27,6 +27,12 @@ assert.match(contract, /SERVICE_AVAILABILITY_EXCEPTION_DUPLICATE/);
 assert.match(contract, /RESOURCE_COMMITMENTS_NOT_EVALUATED/);
 assert.match(ui, /service-resource-availability/);
 assert.match(ui, /availability\.timeZone/, 'availability editor must consume the canonical camelCase timeZone field');
+assert.match(store, /effectiveTimeZone/, 'availability must expose the effective location timezone');
+assert.match(store, /location\?\.timezone \|\| organization\?\.timezone/, 'new declarations must inherit location timezone before organization timezone');
+assert.match(store, /scheduleUsesCurrentLocationTimeZone/, 'existing schedule timezone drift must be explicit');
+assert.match(store, /resource\.location_timezone/, 'buyer feasibility must resolve resource location timezone');
+assert.match(ui, /effectiveTimeZone/, 'availability UI must explain the current effective location timezone');
+assert.match(ui, /Existing appointments are checked before the change is accepted/, 'timezone changes must communicate commitment safety');
 
 const localeNames = ['en', 'am', 'om', 'so', 'sw', 'es', 'hi', 'fr', 'ar', 'ha', 'yo', 'ru', 'pt'];
 const localeKeys = [
