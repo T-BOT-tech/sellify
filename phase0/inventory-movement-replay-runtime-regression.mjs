@@ -83,7 +83,7 @@ try {
     store.appendInventoryMovement(otherSeller.chatId, concurrentCommand, { userId: otherOwner.id }),
     store.appendInventoryMovement(otherSeller.chatId, concurrentCommand, { userId: otherOwner.id }),
   ]);
-  assert.equal(duplicateResults[1].id, duplicateResults[2].id,
+  assert.equal(duplicateResults[0].id, duplicateResults[1].id,
     'concurrent identical submissions must resolve to one canonical movement');
 
   const conflictEventId = eventId + '-concurrent-conflict';
