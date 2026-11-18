@@ -21,6 +21,8 @@ assert.doesNotMatch(ui, /mountServiceBookingsWorkspace\(list\)/,
 
 assert.match(tabs, /renderLogistics, renderAppointments/);
 assert.match(tabs, /'appointments'/);
+assert.match(tabs, /const overflowTabs = \[[^\]]*'appointments'/,
+  'the shared More destination must remain active while the Appointments tab is open');
 assert.match(tabs, /if \(tab === 'appointments'\) renderAppointments\(\)/);
 assert.match(tabs, /navAppointments/,
   'Appointments participates in the shared More navigation visibility manager');
