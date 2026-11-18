@@ -108,6 +108,41 @@ try {
   assert.equal(db.prepare('SELECT id FROM inventory_movements WHERE event_id = ?').get(outerEventId), undefined,
     'rolling back the outer sync transaction must roll back the nested Inventory movement');
 
+  const syncEventId = eventId + '-sync-success';
+  const syncMovementEventId = eventId + '-sync-movement';
+  const syncResult = await store.processSyncEvent(otherSeller.chatId, {
+    eventId: syncEventId,
+    eventType: 'inventory.movement.record',
+    aggregateType: 'inventory_movement',
+    aggregateId: syncMovementEventId,
+    payload: {
+      eventId: syncMovementEventId, productId: 'rice', quantity: 3,
+      movementType: 'PURCHASE',
+    },
+  }, { userId: otherOwner.id });
+  assert.equal(syncResult.status, 'processed');
+  assert.equal(db.prepare('SELECT event_id FROM sync_events WHERE event_id = ?').get(syncEventId).event_id, syncEventId);
+  assert.ok(db.prepare('SELECT event_id FROM inventory_movements WHERE event_id = ?').get(syncMovementEventId),
+    'successful sync must persist the canonical movement and sync receipt together');
+
+  const failedSyncEventId = eventId + '-sync-failure';
+  const failedMovementEventId = eventId + '-sync-movement-failure';
+  await assert.rejects(store.processSyncEvent(otherSeller.chatId, {
+    eventId: failedSyncEventId,
+    eventType: 'inventory.movement.record',
+    aggregateType: 'inventory_movement',
+    aggregateId: failedMovementEventId,
+    payload: {
+      eventId: failedMovementEventId, productId: 'rice', quantity: 3,
+      movementType: 'PURCHASE', locationId: 'location-does-not-exist',
+    },
+  }, { userId: otherOwner.id }), error => error?.statusCode === 400);
+  assert.equal(db.prepare('SELECT event_id FROM sync_events WHERE event_id = ?').get(failedSyncEventId), undefined,
+    'failed sync command must not leave a processed sync receipt');
+  assert.equal(db.prepare('SELECT event_id FROM inventory_movements WHERE event_id = ?').get(failedMovementEventId), undefined,
+    'failed sync command must not leave a partial Inventory movement');
+  assert.equal(db.isTransaction, false, 'sync failure must roll back and close its transaction');
+
   const rows = db.prepare('SELECT id, organization_id, event_id FROM inventory_movements WHERE event_id = ?').all(eventId);
   assert.equal(rows.length, 1, 'exact retries must not create duplicate movements');
   assert.equal(rows[0].id, first.id);
@@ -124,6 +159,8 @@ try {
   console.log('Concurrent identical submissions: PASS');
   console.log('Concurrent conflicting submissions: PASS');
   console.log('Caller-owned sync transaction rollback: PASS');
+  console.log('Successful Inventory sync event atomicity: PASS');
+  console.log('Failed Inventory sync event rollback: PASS');
   console.log('Single canonical movement persisted: PASS');
 } finally {
   await rm(tempDir, { recursive: true, force: true });
