@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { assessServiceResourceDeclaredWindow, serviceLocalDateTimeToIso } from '../app/src/verticals/services/service-window-assessment-contract.js';
 
 const tempDir = await mkdtemp(path.join(os.tmpdir(), 'sellify-location-schedule-timezone-'));
 process.env.SELLIFY_DATA_DIR = tempDir;
@@ -61,6 +62,29 @@ try {
     'explicit schedule save adopts the current location timezone');
   assert.equal(second.availability.effectiveTimeZone, 'Europe/Paris');
   assert.equal(second.availability.scheduleUsesCurrentLocationTimeZone, true);
+
+  // The saved schedule must be evaluated in the location's DST-aware local clock.
+  const dstWindow = assessServiceResourceDeclaredWindow({
+    timeZone: 'Europe/London',
+    workingHours: [{ weekday: 0, startTime: '09:00', endTime: '17:00' }],
+    exceptions: [],
+    start: '2026-03-29T08:00:00.000Z',
+    end: '2026-03-29T09:00:00.000Z',
+  });
+  assert.equal(dstWindow.scheduleAssessment, 'WITHIN_DECLARED_HOURS',
+    'the 2026 spring-forward Sunday window must be evaluated in London local time');
+  assert.equal(serviceLocalDateTimeToIso('2026-03-29T02:30', 'Europe/London'), '2026-03-29T01:30:00.000Z',
+    'valid post-transition local time must resolve to its correct instant');
+  assert.throws(
+    () => serviceLocalDateTimeToIso('2026-03-29T01:30', 'Europe/London'),
+    error => error?.code === 'SERVICE_WINDOW_LOCAL_TIME_AMBIGUOUS',
+    'nonexistent spring-forward wall time must fail closed',
+  );
+  assert.throws(
+    () => serviceLocalDateTimeToIso('2026-10-25T01:30', 'Europe/London'),
+    error => error?.code === 'SERVICE_WINDOW_LOCAL_TIME_AMBIGUOUS',
+    'ambiguous fall-back wall time must fail closed',
+  );
 
   const db = store.getDatabaseForTests();
   const audit = db.prepare(
