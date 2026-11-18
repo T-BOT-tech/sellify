@@ -138,6 +138,8 @@ jobs:
         run: npm run test:sc-03.5-appointments-http
       - name: SC-03.5 service provider booking queue authorization and projection regression
         run: npm run test:sc-03.5-service-provider-bookings
+      - name: Service booking standalone Appointments navigation regression
+        run: npm run test:service-bookings-appointments-navigation
       - name: Service booking scheduling authority boundary regression
         run: npm run test:service-booking-scheduling-boundary
       - name: Logistics Scheduling API and workspace integration regression
