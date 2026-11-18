@@ -96,12 +96,14 @@ try {
   const canonicalOrderRow = locationDb.prepare('SELECT order_json FROM orders WHERE chat_id=? AND server_order_id=?')
     .get(seller.chatId, order.server_order_id);
   const canonicalOrder = JSON.parse(canonicalOrderRow.order_json);
+  const sellerOrganizationId = locationDb.prepare('SELECT organization_id FROM tenants WHERE chat_id=?').get(seller.chatId)?.organization_id;
+  assert.ok(sellerOrganizationId, 'seller tenant must resolve its canonical organization');
   const defaultLocation = locationDb.prepare("SELECT id FROM locations WHERE organization_id=? AND code='DEFAULT'")
-    .get(seller.organizationId);
+    .get(sellerOrganizationId);
   assert.ok(defaultLocation?.id, 'seller must have its canonical default location');
   const alternateLocationId = 'booking-alt-location-' + suffix;
   locationDb.prepare('INSERT INTO locations (id,organization_id,code,name,type,status,created_at) VALUES (?,?,?,\'Alternate Branch\',\'STORE\',\'active\',?)')
-    .run(alternateLocationId, seller.organizationId, 'ALT-' + suffix, new Date().toISOString());
+    .run(alternateLocationId, sellerOrganizationId, 'ALT-' + suffix, new Date().toISOString());
   canonicalOrder.location_id = defaultLocation.id;
   locationDb.prepare('UPDATE orders SET order_json=? WHERE chat_id=? AND server_order_id=?')
     .run(JSON.stringify(canonicalOrder), seller.chatId, order.server_order_id);
