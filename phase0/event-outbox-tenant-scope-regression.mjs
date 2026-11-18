@@ -43,6 +43,20 @@ assert.ok(handler.includes('assertEventTenantScope(candidate, { chatId: tenant.c
   'each event is checked against authoritative route tenant and organization');
 assert.ok(handler.indexOf('assertEventTenantScope(candidate') < handler.indexOf('processSyncEvent(chatId, candidate, session)'),
   'scope validation runs before canonical event processing');
+assert.ok(handler.includes("eventType === 'inventory.movement.record'"),
+  'Inventory movement sync events receive dedicated authorization enforcement');
+assert.ok(handler.includes("requireAuthorization(session, tenant, 'inventory', 'inventory:edit'"),
+  'Inventory sync events require the canonical Inventory edit permission');
+assert.ok(handler.includes('getOrganizationLocation(chatId, locationId)'),
+  'explicit Inventory movement locations are resolved inside the authenticated tenant');
+assert.ok(handler.includes('assertLocationScope(session, tenant, location)'),
+  'explicit Inventory movement locations pass the existing organization scope guard');
+assert.ok(handler.indexOf("requireAuthorization(session, tenant, 'inventory', 'inventory:edit'") < handler.indexOf('processSyncEvent(chatId, candidate, session)'),
+  'Inventory authorization runs before canonical event processing');
+assert.ok(handler.indexOf('getOrganizationLocation(chatId, locationId)') < handler.indexOf('processSyncEvent(chatId, candidate, session)'),
+  'explicit location validation runs before canonical event processing');
+assert.ok(handler.includes('return processSyncEvent(chatId, candidate, session)'),
+  'authorized Inventory and existing non-Inventory events retain the canonical sync processor');
 
 console.log('Event outbox tenant-scope regression: PASS');
 console.log('Legacy unscoped compatibility with authenticated route: PASS');
