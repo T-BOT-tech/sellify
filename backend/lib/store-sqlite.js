@@ -6558,8 +6558,14 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
         });
       }
       const availabilityRow=db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=? AND organization_id=? AND chat_id=?').get(resourceId,organizationId,String(chatId));
-      const organization=db.prepare('SELECT timezone FROM organizations WHERE id=?').get(organizationId);
-      const timeZone=String(availabilityRow?.timezone||organization?.timezone||'');
+      const timezoneContext=db.prepare(`
+        SELECT l.timezone AS location_timezone, o.timezone AS organization_timezone
+        FROM service_resources r
+        JOIN organizations o ON o.id=r.organization_id
+        LEFT JOIN locations l ON l.id=r.location_id AND l.organization_id=r.organization_id
+        WHERE r.id=? AND r.organization_id=? AND r.chat_id=?
+      `).get(resourceId,organizationId,String(chatId));
+      const timeZone=String(availabilityRow?.timezone||timezoneContext?.location_timezone||timezoneContext?.organization_timezone||'');
       if(!isIanaTimeZone(timeZone)) throw Object.assign(new Error('Resource timezone is not configured'),{statusCode:409,code:'SERVICE_AVAILABILITY_TIMEZONE_INVALID'});
       if(!availabilityRow) throw Object.assign(new Error('Resource has no declared working schedule'),{statusCode:409,code:'SERVICE_AVAILABILITY_UNKNOWN'});
       const assessment=assessServiceResourceDeclaredWindow({
@@ -12269,18 +12275,21 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
   const tenant = await getTenant(chatId);
   const organizationId = String(tenant?.organization_id || tenant?.organizationId || '');
   const organization = db.prepare('SELECT timezone FROM organizations WHERE id = ?').get(organizationId);
-  const timeZone = String(organization?.timezone || '');
-  if (!isIanaTimeZone(timeZone)) {
+  const organizationTimeZone = String(organization?.timezone || '');
+  if (!isIanaTimeZone(organizationTimeZone)) {
     return { state: 'UNKNOWN', reasonCode: 'ORGANIZATION_TIMEZONE_INVALID', timeZone: null, confirmsAvailability: false };
   }
 
   const resources = db.prepare(`
-    SELECT r.id, r.location_id, a.timezone, a.working_hours_json, a.exceptions_json
+    SELECT r.id, r.location_id, a.timezone, l.timezone AS location_timezone,
+      a.working_hours_json, a.exceptions_json
     FROM service_resources r
     LEFT JOIN service_resource_availability a
       ON a.resource_id = r.id
      AND a.organization_id = r.organization_id
      AND a.chat_id = r.chat_id
+    LEFT JOIN locations l
+      ON l.id = r.location_id AND l.organization_id = r.organization_id
     WHERE r.organization_id = ?
       AND r.chat_id = ?
       AND r.status = 'ACTIVE'
@@ -12290,7 +12299,7 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
   `).all(organizationId, String(chatId), serviceItemId, ownedOrder.locationId);
 
   if (!resources.length) {
-    return { state: 'UNKNOWN', reasonCode: 'NO_ACTIVE_MATCHING_RESOURCES', timeZone, confirmsAvailability: false };
+    return { state: 'UNKNOWN', reasonCode: 'NO_ACTIVE_MATCHING_RESOURCES', timeZone: organizationTimeZone, confirmsAvailability: false };
   }
 
   // A legacy CONFIRMED appointment without a matching committed resource
@@ -12320,7 +12329,7 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
     return {
       state: 'UNKNOWN',
       reasonCode: 'OVERLAPPING_LEGACY_CONFIRMED_BOOKING_WITHOUT_RESOURCE',
-      timeZone,
+      timeZone: organizationTimeZone,
       confirmsAvailability: false,
     };
   }
@@ -12329,7 +12338,7 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
   let scheduleMatched = 0;
   let overlapCount = 0;
   for (const resource of resources) {
-    const resourceTimeZone = String(resource.timezone || timeZone);
+    const resourceTimeZone = String(resource.timezone || resource.location_timezone || organizationTimeZone);
     if (!isIanaTimeZone(resourceTimeZone)) { scheduleUnknown = true; continue; }
     const schedule = assessServiceResourceDeclaredWindow({
       timeZone: resourceTimeZone,
