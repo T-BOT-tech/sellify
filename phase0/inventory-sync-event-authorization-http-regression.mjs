@@ -186,6 +186,29 @@ try {
   ).get(allowedBatchEventId + '-line-a', allowedBatchEventId + '-line-b').count, 2,
   'authorized batch must persist every movement line');
 
+  const foreignLocationBatchId = 'sync-auth-owner-foreign-location-batch-' + suffix;
+  const foreignLocationBatch = {
+    eventId: foreignLocationBatchId,
+    eventType: 'inventory.movement.batch.record',
+    aggregateType: 'inventory_movement_batch',
+    aggregateId: foreignLocationBatchId,
+    payload: { movements: [
+      { eventId: foreignLocationBatchId + '-line-a', productId: 'sync-rice', quantity: 1,
+        movementType: 'PURCHASE', locationId: sameOrgLocation.id },
+      { eventId: foreignLocationBatchId + '-line-b', productId: 'sync-rice', quantity: 1,
+        movementType: 'PURCHASE', locationId: foreignLocation.id },
+    ] },
+  };
+  const foreignLocationBatchResponse = await postEvents(baseUrl, tenant.chatId, ownerSession.token, [foreignLocationBatch]);
+  const foreignLocationBatchBody = await foreignLocationBatchResponse.json();
+  assert.equal(foreignLocationBatchBody.results[0].status, 'rejected',
+    'a batch containing a foreign-organization location must be rejected');
+  assert.equal(foreignLocationBatchBody.results[0].code, 'LOCATION_SCOPE_DENIED');
+  assert.equal(store.getDatabaseForTests().prepare(
+    'SELECT COUNT(*) AS count FROM inventory_movements WHERE event_id IN (?, ?)'
+  ).get(foreignLocationBatchId + '-line-a', foreignLocationBatchId + '-line-b').count, 0,
+  'foreign location rejection must occur before any batch movement is persisted');
+
   // The location may be deactivated after a movement has committed. An exact
   // retry under a fresh sync-envelope ID must still resolve to the original
   // canonical movement, while a genuinely new movement at that inactive
