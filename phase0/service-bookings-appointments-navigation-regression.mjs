@@ -42,7 +42,7 @@ console.log('Service providers with resource-scoped assignments have a dedicated
 console.log('Service operators with service catalog offerings can access appointments without enabling Logistics.');
 console.log('Booking and provider queue authority remains in the existing service-bookings module.');
 
-assert.doesNotMatch(bookingModule, /window\\.(?:prompt|alert)\\s*\\(/,
+assert.equal(bookingModule.includes('window.prompt') || bookingModule.includes('window.alert'), false,
   'appointment operations must not block the UI with native browser prompts or alerts');
 assert.match(bookingModule, /service-booking-action-form/);
 assert.match(bookingModule, /service-resource-rename-form/);
