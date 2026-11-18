@@ -41,3 +41,11 @@ console.log('Service booking standalone Appointments navigation regression: PASS
 console.log('Service providers with resource-scoped assignments have a dedicated workspace entry point.');
 console.log('Service operators with service catalog offerings can access appointments without enabling Logistics.');
 console.log('Booking and provider queue authority remains in the existing service-bookings module.');
+
+assert.doesNotMatch(bookingModule, /window\\.(?:prompt|alert)\\s*\\(/,
+  'appointment operations must not block the UI with native browser prompts or alerts');
+assert.match(bookingModule, /service-booking-action-form/);
+assert.match(bookingModule, /service-resource-rename-form/);
+assert.match(bookingModule, /submitBookingTransition/);
+assert.match(bookingModule, /service-booking-action-status/);
+console.log('Appointments operator interactions use accessible inline forms instead of blocking browser dialogs: PASS');
