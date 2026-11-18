@@ -23,13 +23,13 @@ function startInventoryWorker(chatId) {
   child.stderr.setEncoding('utf8');
   child.stdout.on('data', chunk => {
     stdout += chunk;
-    if (stdout.includes('READY\\n')) resolveReady();
+    if (stdout.includes('READY\n')) resolveReady();
   });
   child.stderr.on('data', chunk => { stderr += chunk; });
   child.on('error', rejectReady);
   const result = new Promise((resolve, reject) => {
     child.on('close', code => {
-      const outputLine = stdout.trim().split('\\n').filter(Boolean).at(-1);
+      const outputLine = stdout.trim().split('\n').filter(Boolean).at(-1);
       let parsed;
       try { parsed = JSON.parse(outputLine || 'null'); }
       catch { reject(new Error('Inventory worker returned invalid output. stderr=' + stderr + ' stdout=' + stdout)); return; }
