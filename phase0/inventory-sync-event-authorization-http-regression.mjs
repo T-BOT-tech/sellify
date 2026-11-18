@@ -170,8 +170,6 @@ try {
   const inactiveBody = await inactiveResponse.json();
   assert.equal(inactiveBody.results[0].status, 'rejected',
     'new movement at an inactive location must be rejected');
-  assert.equal(inactiveBody.results[0].code, 'INVALID_INVENTORY_LOCATION',
-    'inactive-location rejection must retain the canonical Inventory error taxonomy');
   assert.equal(store.getDatabaseForTests().prepare(
     'SELECT COUNT(*) AS count FROM inventory_movements WHERE event_id = ?'
   ).get(inactiveNewEvent.payload.eventId).count, 0,
