@@ -16,7 +16,7 @@ import { renderEcosystemDiscovery } from '../experience/ecosystem-discovery.js';
 // ---------- Tabs ----------
 export function switchTab(tab) {
   const allTabs = ['home', 'order', 'marketplace', 'queue', 'catalog', 'customers', 'tables', 'kitchen', 'accounts', 'warehouse', 'logistics', 'appointments', 'sourcing'];
-  const overflowTabs = ['queue', 'marketplace', 'tables', 'kitchen', 'accounts', 'warehouse', 'logistics', 'sourcing'];
+  const overflowTabs = ['queue', 'marketplace', 'tables', 'kitchen', 'accounts', 'warehouse', 'logistics', 'appointments', 'sourcing'];
   allTabs.forEach(t => {
     const el = document.getElementById('tab-' + t);
     const nav = document.getElementById('nav' + capitalize(t));
