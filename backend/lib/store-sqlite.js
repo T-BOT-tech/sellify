@@ -7182,7 +7182,7 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null) 
   // A matching replay returns the canonical movement; a reused key with altered
   // intent fails closed. BEGIN IMMEDIATE serializes direct writers. Sync replay
   // may already own the surrounding transaction, so do not nest one here.
-  const ownsTransaction = !db.inTransaction;
+  const ownsTransaction = !db.isTransaction;
   if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
   try {
     const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
@@ -7231,7 +7231,7 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null) 
     if (ownsTransaction) db.exec('COMMIT');
     return movement;
   } catch (error) {
-    if (ownsTransaction && db.inTransaction) db.exec('ROLLBACK');
+    if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
     if (error?.code === 'SQLITE_CONSTRAINT_UNIQUE' || error?.code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
       const winner = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
       if (winner && replayMatches(winner)) return inventoryMovementFromRow(winner);
