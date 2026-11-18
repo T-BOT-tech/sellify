@@ -1193,8 +1193,26 @@ async function handleSyncEvents(req, res, chatId) {
   if (events.length > 100) throw Object.assign(new Error('Too many events in one batch'), { statusCode: 400 });
   const results = [];
   for (const event of events) {
-    results.push(await processEventIsolated(event, (candidate) => {
+    results.push(await processEventIsolated(event, async (candidate) => {
       assertEventTenantScope(candidate, { chatId: tenant.chatId, organizationId: tenant.organizationId });
+      const eventType = String(candidate?.eventType || candidate?.event_type || '').trim();
+      if (eventType === 'inventory.movement.record') {
+        await requireAuthorization(session, tenant, 'inventory', 'inventory:edit', {
+          deniedMessage: 'Inventory edit permission required',
+        });
+        const payload = candidate?.payload || {};
+        const locationId = payload.locationId || payload.location_id || null;
+        if (locationId) {
+          const location = await getOrganizationLocation(chatId, locationId);
+          if (!location) {
+            throw Object.assign(new Error('Location does not belong to this organization'), {
+              statusCode: 403,
+              code: 'LOCATION_SCOPE_DENIED',
+            });
+          }
+          assertLocationScope(session, tenant, location);
+        }
+      }
       return processSyncEvent(chatId, candidate, session);
     }));
   }
