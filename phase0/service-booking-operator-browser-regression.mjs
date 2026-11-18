@@ -244,13 +244,15 @@ try {
   assert.equal(await page.locator('.service-booking-card img').count(), 0, 'customer note is escaped rather than parsed as markup');
   assert.match(await page.locator('.service-booking-card').innerText(), /<img src=x onerror=alert\(1\)>customer note/);
 
-  // Cancel a reason-required transition: it must not send a mutation.
-  page.once('dialog', dialog => dialog.dismiss());
+  // Cancel a reason-required inline action form: it must not send a mutation.
   await page.getByRole('button', { name: 'REJECTED' }).click();
-  assert.equal(calls.filter(call => call.method === 'PATCH').length, 0, 'cancelled reason prompt does not mutate booking');
+  await page.locator('.service-booking-action-form').waitFor();
+  await page.locator('.service-booking-action-form .service-booking-action-cancel').click();
+  assert.equal(calls.filter(call => call.method === 'PATCH').length, 0, 'cancelled inline reason form does not mutate booking');
 
   // A successful transition sends the current version and idempotency key, then reloads canonical state.
   await page.getByRole('button', { name: 'ACCEPTED' }).click();
+  await page.locator('.service-booking-action-form [type="submit"]').click();
   await page.locator('.service-booking-card .logistics-status').filter({ hasText: 'ACCEPTED' }).waitFor();
   const patch = calls.find(call => call.method === 'PATCH');
   assert.ok(patch, 'transition sends PATCH');
@@ -276,8 +278,9 @@ try {
   });
   forceConflict = true;
   resourceSelectionMode = true;
-  page.once('dialog', dialog => dialog.type() === 'prompt' ? dialog.accept('1') : dialog.accept());
   await page.getByRole('button', { name: 'CONFIRMED' }).click();
+  await page.locator('.service-booking-action-form select[name="service_resource_id"]').selectOption('resource-room-1');
+  await page.locator('.service-booking-action-form [type="submit"]').click();
   await page.waitForFunction(() => {
     const button = document.querySelector('.service-booking-action[data-target="CONFIRMED"]');
     return Boolean(button && !button.disabled);
