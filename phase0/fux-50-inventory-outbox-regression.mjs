@@ -30,6 +30,11 @@ check(store.includes("if (eventType === 'inventory.movement.record')"), 'backend
 check(store.includes("SELECT * FROM sync_events WHERE event_id = ?"), 'backend replay is keyed by eventId');
 check(store.includes("code: 'EVENT_ID_REUSED'"), 'reusing an eventId with a different payload is rejected');
 check(store.includes("SELECT * FROM inventory_movements WHERE event_id = ?"), 'inventory application is idempotent at the ledger boundary');
-check(store.includes('if (existing) return inventoryMovementFromRow(existing);'), 'duplicate inventory replay returns the canonical existing movement');
+check(store.includes("String(priorByEventId.organization_id) !== organizationId"), 'cross-organization event-ID reuse is rejected before movement details are returned');
+check(store.includes("code: 'INVENTORY_EVENT_ID_REUSED'"), 'same-key conflicting movement intent is rejected with a stable conflict code');
+check(store.includes('String(row.location_id) === locationId') && store.includes('String(row.product_id) === productId'), 'replay identity binds organization, location, product and quantity');
+check(store.includes('JSON.stringify(canonicalize(parseJSON(row.metadata_json, {}))) === metadataIntent'), 'replay identity binds canonicalized metadata');
+check(store.includes('const ownsTransaction = !db.inTransaction') && store.includes("db.exec('BEGIN IMMEDIATE')"), 'direct movement writes serialize under an immediate transaction without nesting sync transactions');
+check(store.includes("code: 'INVENTORY_EVENT_ID_REUSED'"), 'unique-key races fail closed unless the winning movement matches the complete intent');
 
 console.log('FUX-50 inventory outbox/replay regression: PASS');
