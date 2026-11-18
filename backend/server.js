@@ -1196,21 +1196,26 @@ async function handleSyncEvents(req, res, chatId) {
     results.push(await processEventIsolated(event, async (candidate) => {
       assertEventTenantScope(candidate, { chatId: tenant.chatId, organizationId: tenant.organizationId });
       const eventType = String(candidate?.eventType || candidate?.event_type || '').trim();
-      if (eventType === 'inventory.movement.record') {
+      if (eventType === 'inventory.movement.record' || eventType === 'inventory.movement.batch.record') {
         await requireAuthorization(session, tenant, 'inventory', 'inventory:edit', {
           deniedMessage: 'Inventory edit permission required',
         });
         const payload = candidate?.payload || {};
-        const locationId = payload.locationId || payload.location_id || null;
-        if (locationId) {
-          const location = await getOrganizationLocation(chatId, locationId);
-          if (!location) {
-            throw Object.assign(new Error('Location does not belong to this organization'), {
-              statusCode: 403,
-              code: 'LOCATION_SCOPE_DENIED',
-            });
+        const movements = eventType === 'inventory.movement.batch.record'
+          ? (Array.isArray(payload.movements) ? payload.movements : [])
+          : [payload];
+        for (const movement of movements) {
+          const locationId = movement?.locationId || movement?.location_id || null;
+          if (locationId) {
+            const location = await getOrganizationLocation(chatId, locationId);
+            if (!location) {
+              throw Object.assign(new Error('Location does not belong to this organization'), {
+                statusCode: 403,
+                code: 'LOCATION_SCOPE_DENIED',
+              });
+            }
+            assertLocationScope(session, tenant, location);
           }
-          assertLocationScope(session, tenant, location);
         }
       }
       return processSyncEvent(chatId, candidate, session);
