@@ -245,6 +245,97 @@ try {
   assert.equal(rows[0].organization_id, sellerOrgId);
   assert.equal(db.isTransaction, false, 'all operations must leave the connection outside a transaction');
 
+
+  // Shared-connection regression: a transactional catalog write queued at the
+  // first async boundary must not join or roll back the sync-event transaction.
+  const isolationLocation = (await store.listOrganizationLocations(otherSeller.chatId, { includeInactive: true }))
+    .find(item => item.status === 'active');
+  assert.ok(isolationLocation, 'concurrency fixture must have an active location');
+  const isolationProduct = 'market-rice-' + suffix;
+  await store.saveCatalog(otherSeller.chatId, [
+    { id: isolationProduct, name: 'Marketplace Rice', price: 100, stock: 10, item_type: 'product', marketplace_listed: true },
+    { id: 'rice', name: 'Rice', price: 100, item_type: 'product' },
+  ]);
+
+  async function competingCatalogWrite(label) {
+    return store.saveCatalog(otherSeller.chatId, [
+      { id: isolationProduct, name: 'Marketplace Rice', price: 100, item_type: 'product', marketplace_listed: true },
+      { id: 'rice', name: 'Rice', price: 100, item_type: 'product' },
+      { id: label, name: 'Concurrent Catalog Marker', price: 1, item_type: 'product' },
+    ]);
+  }
+
+  const isolatedSyncId = eventId + '-isolated-sync';
+  const isolatedMovementId = eventId + '-isolated-movement';
+  const isolatedSync = store.processSyncEvent(otherSeller.chatId, {
+    eventId: isolatedSyncId,
+    eventType: 'inventory.movement.record',
+    aggregateType: 'inventory_movement',
+    aggregateId: isolatedMovementId,
+    payload: {
+      eventId: isolatedMovementId, productId: 'rice', quantity: 1,
+      movementType: 'PURCHASE', locationId: isolationLocation.id,
+    },
+  }, { userId: otherOwner.id });
+  const isolatedCatalog = Promise.resolve().then(() => competingCatalogWrite('sync-catalog-' + suffix));
+  const [isolatedSyncResult, isolatedCatalogResult] = await Promise.allSettled([isolatedSync, isolatedCatalog]);
+  assert.equal(isolatedSyncResult.status, 'fulfilled', 'Inventory sync must commit before the competing catalog transaction begins');
+  assert.equal(isolatedCatalogResult.status, 'fulfilled', 'the independent catalog transaction must not join or roll back sync');
+  assert.equal(db.isTransaction, false, 'sync/catalog overlap must leave no transaction open');
+  assert.ok(db.prepare('SELECT event_id FROM inventory_movements WHERE event_id = ?').get(isolatedMovementId));
+  assert.ok(db.prepare('SELECT event_id FROM sync_events WHERE event_id = ?').get(isolatedSyncId));
+  assert.ok((await store.getCatalog(otherSeller.chatId)).products.some(item => item.id === 'sync-catalog-' + suffix));
+
+  // customer.upsert has the same atomic sync receipt boundary and must not
+  // yield while the shared connection is inside its transaction.
+  const customerSyncId = eventId + '-customer-sync';
+  const customerSync = store.processSyncEvent(otherSeller.chatId, {
+    eventId: customerSyncId,
+    eventType: 'customer.upsert',
+    aggregateType: 'customer',
+    aggregateId: 'customer-' + suffix,
+    payload: { id: 'customer-' + suffix, name: 'Sync Customer ' + suffix, source: 'sync' },
+  }, { userId: otherOwner.id });
+  const customerCatalog = Promise.resolve().then(() => competingCatalogWrite('customer-catalog-' + suffix));
+  const [customerSyncResult, customerCatalogResult] = await Promise.allSettled([customerSync, customerCatalog]);
+  assert.equal(customerSyncResult.status, 'fulfilled', 'customer sync must not yield inside its transaction');
+  assert.equal(customerCatalogResult.status, 'fulfilled', 'catalog write must execute independently after customer sync');
+  assert.equal(db.isTransaction, false);
+  assert.ok(db.prepare('SELECT event_id FROM sync_events WHERE event_id = ?').get(customerSyncId));
+  assert.ok((await store.listCustomers(otherSeller.chatId)).some(customer => customer.id === 'customer-' + suffix));
+
+  // Marketplace checkout owns its transaction and must call the synchronous
+  // movement helper. A second transactional write is deliberately queued at
+  // the old async movement boundary.
+  const checkoutKey = 'tx-isolation-checkout-' + suffix;
+  const checkout = store.createMarketplaceOrder({
+    buyer_id: 'tx-isolation-buyer-' + suffix,
+    customer_name: 'Transaction Isolation Buyer',
+    items: [{ seller_id: otherSeller.chatId, item_id: isolationProduct, qty: 1 }],
+    idempotency_key: checkoutKey,
+  });
+  const checkoutCatalog = Promise.resolve().then(() => competingCatalogWrite('checkout-catalog-' + suffix));
+  const [checkoutResult, checkoutCatalogResult] = await Promise.allSettled([checkout, checkoutCatalog]);
+  assert.equal(checkoutResult.status, 'fulfilled', 'marketplace checkout must retain its caller-owned transaction');
+  assert.equal(checkoutCatalogResult.status, 'fulfilled', 'catalog write must run after checkout commits');
+  assert.equal(db.isTransaction, false);
+  const checkoutOrder = checkoutResult.value;
+  const checkoutSellerOrder = (await store.getOrders(otherSeller.chatId)).find(order =>
+    order.is_marketplace && order.marketplace_order_id === checkoutOrder.marketplace_order_id
+  );
+  assert.ok(checkoutSellerOrder, 'checkout must persist its seller order');
+  assert.equal((await store.getInventoryBalances(otherSeller.chatId)).find(row => row.productId === isolationProduct)?.quantity, 9);
+
+  // Cancellation has its own transaction and the same no-yield requirement.
+  const cancellation = store.updateMarketplaceOrderStatus(otherSeller.chatId, checkoutSellerOrder.id, 'cancelled');
+  const cancellationCatalog = Promise.resolve().then(() => competingCatalogWrite('cancel-catalog-' + suffix));
+  const [cancellationResult, cancellationCatalogResult] = await Promise.allSettled([cancellation, cancellationCatalog]);
+  assert.equal(cancellationResult.status, 'fulfilled', 'marketplace cancellation must retain its caller-owned transaction');
+  assert.equal(cancellationCatalogResult.status, 'fulfilled', 'catalog write must run after cancellation commits');
+  assert.equal(db.isTransaction, false);
+  assert.equal(cancellationResult.value.status, 'cancelled');
+  assert.equal((await store.getInventoryBalances(otherSeller.chatId)).find(row => row.productId === isolationProduct)?.quantity, 10);
+
   console.log('Inventory Movement Replay Runtime Regression: PASS');
   console.log('Same-organization exact replay: PASS');
   console.log('Altered intent conflict: PASS');
