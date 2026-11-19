@@ -317,6 +317,9 @@ try {
   // movement helper. A second transactional write is deliberately queued at
   // the old async movement boundary.
   const checkoutKey = 'tx-isolation-checkout-' + suffix;
+  const inventoryBeforeCheckout = (await store.getInventoryBalances(otherSeller.chatId))
+    .find(row => row.productId === isolationProduct)?.quantity;
+  assert.equal(typeof inventoryBeforeCheckout, 'number', 'opening marketplace inventory balance must exist');
   const checkout = store.createMarketplaceOrder({
     buyer_id: 'tx-isolation-buyer-' + suffix,
     customer_name: 'Transaction Isolation Buyer',
@@ -333,7 +336,11 @@ try {
     order.is_marketplace && order.marketplace_order_id === checkoutOrder.marketplace_order_id
   );
   assert.ok(checkoutSellerOrder, 'checkout must persist its seller order');
-  assert.equal((await store.getInventoryBalances(otherSeller.chatId)).find(row => row.productId === isolationProduct)?.quantity, 9);
+  assert.equal(
+    (await store.getInventoryBalances(otherSeller.chatId)).find(row => row.productId === isolationProduct)?.quantity,
+    inventoryBeforeCheckout - 1,
+    'checkout must deduct exactly one unit from the pre-checkout canonical balance',
+  );
 
   // Cancellation has its own transaction and the same no-yield requirement.
   const cancellation = store.updateMarketplaceOrderStatus(otherSeller.chatId, checkoutSellerOrder.id, 'cancelled');
@@ -343,7 +350,11 @@ try {
   assert.equal(cancellationCatalogResult.status, 'fulfilled', 'catalog write must run after cancellation commits');
   assert.equal(db.isTransaction, false);
   assert.equal(cancellationResult.value.status, 'cancelled');
-  assert.equal((await store.getInventoryBalances(otherSeller.chatId)).find(row => row.productId === isolationProduct)?.quantity, 10);
+  assert.equal(
+    (await store.getInventoryBalances(otherSeller.chatId)).find(row => row.productId === isolationProduct)?.quantity,
+    inventoryBeforeCheckout,
+    'cancellation must restore exactly the deducted unit',
+  );
 
   console.log('Inventory Movement Replay Runtime Regression: PASS');
   console.log('Same-organization exact replay: PASS');
