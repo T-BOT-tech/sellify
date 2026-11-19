@@ -1,3 +1,4 @@
+// The recipe HTTP routes are registered in the server ROUTES table (before listen).
 // Revalidated against current mainline after SC-03/Inventory consolidation (PR #256).
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile } from 'node:fs/promises';
