@@ -52,8 +52,8 @@ Every implementation task must record:
 | First Experience persistence + Pack Recovery | PR #276 merged at `d5a0612fe6d75d1408ef2d2d65a9a56a6d2b9f10` | Exact head `d993c55ae4f271eb7f093f3a62e0e9b88a546670` passed all four required CI jobs. Durable IndexedDB tenant-session restoration, pre-reload persistence, async Pack Recovery readiness, stale-tenant repaint protection, and regressions are integrated. Issue #277's five named files were verified already present on main; workspace activation is production-wired and both workspace-activation/country-registry regressions passed in the exact Node 24 baseline. Issue #277 closed as completed. Country evidence registry remains a pure research metadata contract with no production consumer; further integration is deferred pending a product requirement. | Integrated; no remaining PR #214 code delta |
 | UI evaluation environment | PR #278 merged at `ef130935056ed9611fa316f9df3b470f20b08934` | Exact head `f0580b3615701ae67d21a3eefa4f489ef5307c19` passed all four required CI jobs. Private Node 24 Codespaces configuration and evaluation guide are integrated. Codespace launch, forwarded-browser access, and manual visual review remain not runtime-verified. | Prepared; runtime verification pending |
 | Service audit documents | Current-main audits added: `docs/SELLIFY_SERVICE_CAPABILITY_COMPOSITION_MAP_AND_GAP_REGISTER_2026-11-19.md` and `docs/SC03_SERVICE_RESOURCE_AND_APPOINTMENT_FEASIBILITY_SOURCE_AUDIT_2026-11-19.md` | The 14 Nov PR #225/#227 snapshots are stale: SC-03 resource, availability, commitment, customer/operator UI, and concurrency coverage are present; Phase 19.7 already evaluates declared temporal capacity, while Phase 21 freshness/quality remains unwired. Historical PRs #225/#227 are superseded and closed with evidence. | Current audit integrated; next gap is Phase 21.4 freshness composition |
-| Historical SC-03/Telegram branches | #237/#242 closed and retained as audit sources | Unique deltas are tracked in issue #272. Do not merge either historical branch wholesale. | Deferred; issue #272 open |
-| Stage reconciliation documentation | PR #189 remains open | October snapshot is stale against the current integrated implementation. | Refresh against current main before merge |
+| Historical SC-03/Telegram branches | #237/#242 closed and retained as audit sources | Customer appointment deltas are already on main. The unique L11 Scheduling API/workspace is not ready to port until trusted capacity authority is defined; issue #272 closed and follow-up #280 opened. | Deferred to L11 authority decision |
+| Audit/register reconciliation | PR #279 open | Corrects source-code baseline notes and records closure of #189, #272, #277, #225, and #227 plus the focused L11 follow-up #280. | Draft; do not merge until register/source review is complete |
 
 ## 4. Standard implementation workflow
 
@@ -81,15 +81,15 @@ Every implementation task must record:
 
 ## 5. Current execution boundary
 
-**Integrated mainline:** SC-03/Inventory (#256), Appointments workspace (#273), Restaurant Recipe (#275), and Settings UX (#223) are merged to main. The current integration set includes all four merged workstreams listed above; consult GitHub for the live `main` SHA.
+**Integrated mainline:** SC-03/Inventory (#256), Appointments workspace (#273), Restaurant Recipe (#275), Settings UX (#223), First Experience/Pack Recovery (#276), and the private UI evaluation environment (#278) are merged to main. Current source audit docs are present on main; consult GitHub for the live `main` SHA.
 
 **Mainline verification:** post-#256, post-#273, post-#275, post-#223, and post-#276 mainline runs passed all four required jobs. Exact-head PR runs for #273, #275, #223, and #276 passed all four required jobs. The #256 merge-commit security, release, and logistics certifications passed. PR #278's exact head passed all four required jobs; its merge-commit baseline and Phase 13.10.24 runs are still in progress as of this snapshot.
 
-**Closed duplicate/deferred source PRs:** #214, #217, #220–#222, #225, #227, #257–#262, #264–#266, #269, #274, and the historical appointment stack #258/#259 are closed after their unique deltas were integrated, found already present, or explicitly deferred. Source branches are retained as audit references; no branch deletion is implied.
+**Closed duplicate/deferred source PRs:** #189, #214, #217, #220–#222, #225, #227, #237, #241, #242, #257–#262, #264–#266, #269, #274, and the historical appointment stack #258/#259 are closed after their unique deltas were integrated, found already present, or explicitly deferred. Source branches are retained as audit references; no branch deletion is implied.
 
-**Remaining open PR:** #189 (stage reconciliation documentation). The historical service audit PRs #225/#227 were closed as superseded by the 19 November current-main audits.
+**Remaining open PR:** #279 (documentation/register reconciliation). Historical service audit PRs #225/#227 and stage-reconciliation PR #189 are closed as superseded.
 
-**Deferred historical work:** issue #272 remains open for extracting unique deltas from historical SC-03/Telegram branches. Issue #277 tracks the remaining First Experience workspace activation/country evidence deltas from #214. Appointment workspace issue #271 is closed because PR #273 integrated that work.
+**Deferred historical work:** issue #272 is closed after branch-by-branch audit; issue #280 tracks the distinct L11 Logistics Scheduling feasibility/API/workspace follow-up. Issue #277 is closed because the named workspace activation and country evidence files/tests were already in main. Appointment workspace issue #271 is closed because PR #273 integrated that work.
 
 Node >=24 remains mandatory. The successful gates validate the integrated SC-03/Inventory, Appointments, Recipe, and Settings slices; they do not certify unrelated deferred platform work or every open documentation/evaluation PR.
 
