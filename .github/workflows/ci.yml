@@ -322,6 +322,8 @@ jobs:
         run: node phase0/phase10.5-inventory-ledger-regression.mjs
       - name: FUX-51 legacy inventory authority regression
         run: npm run test:fux-51
+      - name: Restaurant Recipe SQLite persistence and tenant isolation regression
+        run: npm run test:restaurant-recipe-persistence
       - name: FUX-52 cross-pack inventory authority regression
         run: npm run test:fux-52
       - name: FUX-53 B2B quotes frontend authority regression
