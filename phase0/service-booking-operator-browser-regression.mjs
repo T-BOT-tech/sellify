@@ -68,6 +68,7 @@ try {
   };
   const calls = [];
   let forceConflict = false;
+  let resourcesAvailable = false;
   await page.route('**/tenants/test-tenant/service-resources**', async route => {
     if (route.request().method() !== 'GET') {
       await route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Method not allowed' } }) });
@@ -76,7 +77,7 @@ try {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ resources: [], state: 'READY', authority: 'service_resource_registry' }),
+      body: JSON.stringify({ resources: resourcesAvailable ? [{ id: 'resource-room-1', name: 'Room 1', resourceType: 'ROOM', status: 'ACTIVE' }] : [], state: 'READY', authority: 'service_resource_registry' }),
     });
   });
 
@@ -181,14 +182,16 @@ try {
     await workspace.refreshServiceBookings(document);
   });
   forceConflict = true;
-  page.once('dialog', dialog => dialog.accept());
+  resourcesAvailable = true;
   await page.getByRole('button', { name: 'CONFIRMED' }).click();
+  await page.locator('.service-booking-action-form select[name="service_resource_id"]').selectOption('resource-room-1');
+  await page.locator('.service-booking-action-form [type="submit"]').click();
   await page.waitForFunction(() => {
-    const button = document.querySelector('.service-booking-action[data-target="CONFIRMED"]');
-    return Boolean(button && !button.disabled);
+    const submit = document.querySelector('.service-booking-action-form [type="submit"]');
+    return Boolean(submit && !submit.disabled);
   }, null, { timeout: 3000 });
-  assert.equal(await page.locator('.service-booking-action[data-target="CONFIRMED"]').isDisabled(), false,
-    'failed version-conflict mutation re-enables the control for refresh/retry');
+  assert.equal(await page.locator('.service-booking-action-form [type="submit"]').isDisabled(), false,
+    'failed version-conflict mutation re-enables the inline form for retry');
   assert.ok(pageErrors.length === 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
 
   console.log('Service booking operator browser regression: PASS');
