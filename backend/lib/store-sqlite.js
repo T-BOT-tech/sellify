@@ -7124,10 +7124,29 @@ export async function getInventoryBalances(chatId, { locationId = '' } = {}) {
   `).all(...params).map(row => ({ locationId: row.location_id, productId: row.product_id, quantity: Number(row.quantity) }));
 }
 
-export async function appendInventoryMovement(chatId, input = {}, actor = null) {
+async function waitForInventoryTransactionSlot() {
+  const deadline = Date.now() + 5000;
+  while (db.isTransaction) {
+    if (Date.now() >= deadline) {
+      throw Object.assign(new Error('Inventory write is waiting for another database transaction'), {
+        statusCode: 503, code: 'INVENTORY_TRANSACTION_BUSY',
+      });
+    }
+    await new Promise(resolve => setImmediate(resolve));
+  }
+}
+
+export async function appendInventoryMovement(chatId, input = {}, actor = null, options = {}) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
   if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
+  const withinTransaction = options?.withinTransaction === true;
+  if (withinTransaction && !db.isTransaction) {
+    throw Object.assign(new Error('Caller-owned Inventory transaction is not active'), {
+      statusCode: 500, code: 'INVENTORY_TRANSACTION_CONTEXT_REQUIRED',
+    });
+  }
+  if (!withinTransaction) await waitForInventoryTransactionSlot();
   const organizationId = String(tenant.organizationId);
   const productId = String(input.productId ?? input.product_id ?? '').trim();
   const movementType = String(input.movementType ?? input.movement_type ?? '').trim().toUpperCase();
@@ -7182,7 +7201,7 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null) 
   // A matching replay returns the canonical movement; a reused key with altered
   // intent fails closed. BEGIN IMMEDIATE serializes direct writers. Sync replay
   // may already own the surrounding transaction, so do not nest one here.
-  const ownsTransaction = !db.isTransaction;
+  const ownsTransaction = !withinTransaction;
   if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
   try {
     const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
@@ -7284,7 +7303,7 @@ export async function processSyncEvent(chatId, event = {}, actor = null) {
       return { eventId, status: existing.status, duplicate: true, replay: true };
     }
     if (eventType === 'inventory.movement.record') {
-      await appendInventoryMovement(chatId, event.payload, actor);
+      await appendInventoryMovement(chatId, event.payload, actor, { withinTransaction: true });
     } else if (eventType === 'customer.upsert') {
       await upsertCustomer(chatId, event.payload);
     } else {
@@ -11622,7 +11641,7 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
             occurredAt: nowIso(),
             reason: 'Marketplace checkout',
             metadata: { marketplaceOrderId, sellerId, quantity: qty },
-          });
+          }, null, { withinTransaction: true });
           product.stock = canonicalBalance - qty;
           product.stock_revision = (Number.isInteger(row.stock_revision) ? row.stock_revision : 0) + 1;
           insertProduct(sellerId, product);
@@ -11830,7 +11849,7 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
           occurredAt: nowIso(),
           reason: 'Marketplace cancellation stock release',
           metadata: { marketplaceOrderId: order.marketplace_order_id, sellerId: key, quantity: qty },
-        });
+        }, null, { withinTransaction: true });
         const product = productFromRow(productRow);
         product.stock = restoredStock;
         product.stock_revision = (Number.isInteger(productRow.stock_revision) ? productRow.stock_revision : 0) + 1;
