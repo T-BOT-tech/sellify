@@ -57,6 +57,7 @@
     "phase13.8.2:restaurant-tables-test": "node phase0/phase13.8.2-restaurant-tables-integration-regression.mjs",
     "phase13.8.3:restaurant-kitchen-test": "node phase0/phase13.8.3-restaurant-kitchen-integration-regression.mjs",
     "phase13.8.4:restaurant-recipe-test": "node phase0/phase13.8.4-restaurant-recipe-ingredient-regression.mjs",
+    "test:restaurant-recipe-persistence": "node phase0/restaurant-recipe-persistence-regression.mjs",
     "phase13.8.5:restaurant-inventory-test": "node phase0/phase13.8.5-restaurant-inventory-consumption-regression.mjs",
     "phase13.8.6:restaurant-order-payment-test": "node phase0/phase13.8.6-restaurant-order-payment-regression.mjs",
     "phase13.8.7:restaurant-regression": "node phase0/phase13.8.7-restaurant-regression-gate.mjs",
