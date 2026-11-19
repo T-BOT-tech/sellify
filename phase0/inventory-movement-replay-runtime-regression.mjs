@@ -507,6 +507,12 @@ try {
     inventoryBeforeCheckout - 1,
     'checkout must deduct exactly one unit from the pre-checkout canonical balance',
   );
+  assert.equal(
+    db.prepare('SELECT 1 FROM inventory_movements WHERE event_id = ?')
+      .get(`inventory-opening:${otherSeller.chatId}:${isolationProduct}`),
+    undefined,
+    'a catalog rewrite must not synthesize an opening balance after canonical movement history exists',
+  );
 
   // Cancellation has its own transaction and the same no-yield requirement.
   const cancellation = store.updateMarketplaceOrderStatus(otherSeller.chatId, checkoutSellerOrder.id, 'cancelled');
