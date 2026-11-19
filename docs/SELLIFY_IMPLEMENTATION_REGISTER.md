@@ -48,7 +48,7 @@ Every implementation task must record:
 | Location-aware availability | Ported from #262 into #256 branch | Effective timezone, schedule drift, commitment-safe updates, UI notice, and regression wired into CI | Verify exact root run; close #262 as superseded after green |
 | Appointment workspace navigation | Historical PR #258 | Closed as deferred; unique behavior retained in source branch | Port through focused issue #271 on current `main` |
 | Inline appointment operator forms | Historical PR #259 | Closed as deferred; unique behavior retained in source branch | Port through focused issue #271 on current `main` |
-| Restaurant Recipe foundation | PR #269 | Separate feature; earlier CI failures were in inherited service/baseline journeys and need fresh exact-base diagnosis | Retarget to the integration root after it stabilizes; rerun exact Node 24 CI |
+| Restaurant Recipe foundation | PR #274 (replacement for closed #269), based on current `main` | Found and fixed malformed route placement after `server.listen`; full-file V8 syntax checks pass, but no fresh GitHub Actions run exists for corrected head `6f1ea3d` | Hold from merge; obtain exact-head Node 24/Phase 13/Logistics CI run before integration |
 | Settings UX | PR #223 | Candidate consolidates #220–#222 features | Validate exact head, then merge once the mainline integration is stable; close #220–#222 as superseded |
 | First Experience | PR #214 | Broad first-experience bundle; CI evidence exists but base is stale | Reconcile changed files and retest against updated main |
 | Service audit documents | PRs #225 and #227 | Historical snapshots; parts are superseded by SC-03 implementation | Update evidence/status before merging; do not merge stale claims |
@@ -88,6 +88,6 @@ Every implementation task must record:
 
 The exact baseline included Inventory FUX-46–FUX-52, replay/auth/batch HTTP and runtime regressions, Phase 10.5, service booking persistence and on-site location scope, migration 80/81 compatibility, migration 82 location timezone persistence, and location-aware availability timezone regressions.
 
-**Deferred work:** #258/#259 were closed and moved to issue #271 for a focused appointment workspace/inline-form port onto current main. #237/#242 were closed and moved to issue #272 for historical branch delta extraction. Their source branches are retained as audit references. The current open implementation PRs are #269 (Restaurant Recipe), #223 (Settings UX), #214 (First Experience), #217 (UI evaluation environment), plus audit/documentation PRs #225, #227, and #189.
+**Deferred work:** #258/#259 were closed and moved to issue #271 for a focused appointment workspace/inline-form port onto current main. #237/#242 were closed and moved to issue #272 for historical branch delta extraction. Their source branches are retained as audit references. The current open implementation PRs are #274 (Restaurant Recipe, validation hold), #223 (Settings UX), #214 (First Experience), and #217 (UI evaluation environment), plus audit/documentation PRs #225, #227, and #189. Focused follow-up issues #271 and #272 own the deferred appointment UI and historical branch-delta work.
 
 Node >=24 remains mandatory. These successful gates validate the integrated SC-03/Inventory mainline slice; they do not certify deferred appointment UI or unrelated platform work.
