@@ -5841,9 +5841,18 @@ function ensureInventoryOpeningBalances(chatId) {
     "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
   ).get(String(tenant.organization_id));
   if (!location) return;
-  const products = db.prepare(
-    'SELECT product_id, stock, product_json FROM catalog_products WHERE chat_id = ? AND stock IS NOT NULL'
-  ).all(String(chatId)).filter(product => {
+  const products = db.prepare(`
+    SELECT cp.product_id, cp.stock, cp.product_json
+    FROM catalog_products cp
+    WHERE cp.chat_id = ?
+      AND cp.stock IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM inventory_movements im
+        WHERE im.organization_id = ?
+          AND im.product_id = cp.product_id
+      )
+  `).all(String(chatId), String(tenant.organization_id)).filter(product => {
     const payload = parseJSON(product.product_json, {});
     // Legacy catalog payloads used `type`; current catalog identity uses `item_type`.
     // Treat either service marker as non-stock-tracked during opening-balance migration.
