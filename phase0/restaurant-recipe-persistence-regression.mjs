@@ -13,7 +13,7 @@ try {
   const serverSource = await readFile(new URL('../backend/server.js', import.meta.url), 'utf8');
   const authSource = await readFile(new URL('../backend/lib/authorization.js', import.meta.url), 'utf8');
   const routesStart = serverSource.indexOf('const ROUTES = [');
-  const routesEnd = serverSource.indexOf('\\n];', routesStart);
+  const routesEnd = serverSource.indexOf('\n];', routesStart);
   const serverListen = serverSource.indexOf('server.listen(');
   assert.ok(routesStart >= 0 && routesEnd > routesStart && serverListen > routesEnd,
     'HTTP route table must be declared before server.listen');
