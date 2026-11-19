@@ -3538,6 +3538,19 @@ if (!applied.includes(39)) {
       `).run(nowIso());
       db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(81, nowIso());
     }
+
+    // 82: optional location-local timezone. NULL deliberately inherits the
+    // canonical organization timezone; existing schedules and commitments
+    // are not rewritten by this schema migration.
+    if (!applied.includes(82)) {
+      const locationColumns = new Set(
+        db.prepare('PRAGMA table_info(locations)').all().map(column => String(column.name))
+      );
+      if (!locationColumns.has('timezone')) {
+        db.exec('ALTER TABLE locations ADD COLUMN timezone TEXT');
+      }
+      db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(82, nowIso());
+    }
 }
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({
