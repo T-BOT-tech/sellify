@@ -33,8 +33,12 @@ try {
   ]);
 
   const db = store.getDatabaseForTests();
+  assert.equal(db.prepare('SELECT version FROM schema_migrations WHERE version = 83').get()?.version, 83,
+    'Restaurant Recipe persistence migration 83 must be applied after SC-03 migrations 81/82');
   assert.equal(db.prepare('SELECT version FROM schema_migrations WHERE version = 81').get()?.version, 81,
-    'Restaurant Recipe persistence migration must be applied');
+    'SC-03.4 resource commitment migration 81 must remain present');
+  assert.equal(db.prepare('SELECT version FROM schema_migrations WHERE version = 82').get()?.version, 82,
+    'location timezone migration 82 must remain present');
 
   const recipeInput = {
     id: 'recipe-' + suffix,
