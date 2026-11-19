@@ -124,7 +124,7 @@ try {
     CREATE INDEX IF NOT EXISTS idx_service_bookings_resource_window
       ON service_bookings(organization_id, chat_id, service_resource_id, status, requested_start, requested_end);
   `);
-  db.prepare('DELETE FROM schema_migrations WHERE version = 81').run();
+  db.prepare('DELETE FROM schema_migrations WHERE version IN (81, 82)').run();
   assert.ok(db.prepare('SELECT version FROM schema_migrations WHERE version = 80').get());
   db.close();
 
