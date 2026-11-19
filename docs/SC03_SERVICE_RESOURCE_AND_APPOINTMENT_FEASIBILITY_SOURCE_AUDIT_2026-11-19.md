@@ -1,7 +1,7 @@
 # SC-03 — Service Resource and Appointment Feasibility: Current-Main Source Audit
 
 **Audit date:** 2026-11-19  
-**Repository baseline:** `main` at `ef130935056ed9611fa316f9df3b470f20b08934`  
+**Source-code baseline:** `main` at `ef130935056ed9611fa316f9df3b470f20b08934` (the subsequent mainline commits through `4dc3873899d271b91c91f15cddc63ad63f09805f` changed documentation only).  
 **Status:** Core SC-03 resource/appointment slice implemented with automated regression evidence. Manual full-stack visual evaluation and broader product-policy follow-ups remain open.
 
 ## 1. Decision
