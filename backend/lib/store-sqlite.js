@@ -5991,6 +5991,15 @@ function ensureDatabase() {
   // surfacing SQLITE_BUSY as a false payment failure.
   db.exec('PRAGMA busy_timeout = 5000');
   runMigrations();
+  // A prior branch may have recorded migration 82 for a different schema shape.
+  // Repair the additive location column even when the shared migration ledger
+  // already contains 82; never let a stale version marker hide missing schema.
+  const locationColumns = new Set(
+    db.prepare('PRAGMA table_info(locations)').all().map(column => String(column.name))
+  );
+  if (!locationColumns.has('timezone')) {
+    db.exec('ALTER TABLE locations ADD COLUMN timezone TEXT');
+  }
   importLegacyJSON();
   for (const tenant of db.prepare('SELECT chat_id FROM tenants ORDER BY chat_id').all()) {
     ensureCanonicalIdentityForTenant(tenant.chat_id);
