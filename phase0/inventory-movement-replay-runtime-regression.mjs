@@ -108,6 +108,7 @@ try {
   });
   await store.saveCatalog(otherSeller.chatId, [
     { id: 'rice', name: 'Rice', price: 100, item_type: 'product' },
+    { id: 'consultation', name: 'Consultation', price: 250, item_type: 'service' },
   ]);
   await assert.rejects(
     store.appendInventoryMovement(otherSeller.chatId, {
