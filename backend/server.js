@@ -113,7 +113,7 @@ import {
   createSession, authenticateSessionToken, revokeSession, createAuthChallenge, consumeAuthChallenge, getAuthChallengeForTenantCreation,
   listOrganizationLocations, createOrganizationLocation, updateOrganizationLocation,
   listCustomers, getCustomer, upsertCustomer, updateCustomer,
-  listInventoryMovements, getInventoryBalances, appendInventoryMovement,
+  listInventoryMovements, getInventoryBalances, appendInventoryMovement, appendInventoryMovementBatch,
   createPairingChallenge, consumePairingChallenge,
   createInvite, listInvites, revokeInvite, consumeInvite, changeMembershipRole, assignMembershipContextualRole, revokeMembershipContextualRole,
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment, recordServiceDeliveryAssessment,
@@ -1900,6 +1900,25 @@ async function handleInventoryMovementCreate(req, res, chatId) {
   }
   const movement = await appendInventoryMovement(chatId, body, session);
   sendJSON(res, 201, { movement }, req);
+}
+
+async function handleInventoryMovementBatchCreate(req, res, chatId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+  await requireAuthorization(session, tenant, 'inventory', 'inventory:edit', { deniedMessage: 'Inventory edit permission required' });
+  const body = await readBody(req);
+  const locationId = body.locationId || body.location_id;
+  if (!locationId) {
+    throw Object.assign(new Error('Location is required for an atomic Inventory command'), {
+      statusCode: 400, code: 'INVALID_INVENTORY_COMMAND_LOCATION',
+    });
+  }
+  const location = await getOrganizationLocation(chatId, locationId);
+  if (!location) throw Object.assign(new Error('Location does not belong to this organization'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
+  assertLocationScope(session, tenant, location);
+  const result = await appendInventoryMovementBatch(chatId, body, session);
+  sendJSON(res, result.duplicate ? 200 : 201, result, req);
 }
 
 async function handleLocationsList(req, res, chatId) {
@@ -3792,6 +3811,7 @@ const ROUTES = [
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/b2b\/credit-terms\/([^/]+)$/, handler: (req, res, m) => handleB2BCreditTerms(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/inventory\/movements$/, handler: (req, res, m) => handleInventoryMovementsList(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/inventory\/balances$/, handler: (req, res, m) => handleInventoryBalances(req, res, decodeURIComponent(m[1])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/inventory\/movements\/batch$/, handler: (req, res, m) => handleInventoryMovementBatchCreate(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/inventory\/movements$/, handler: (req, res, m) => handleInventoryMovementCreate(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/locations$/, handler: (req, res, m) => handleLocationsList(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/locations$/, handler: (req, res, m) => handleLocationCreate(req, res, decodeURIComponent(m[1])) },
