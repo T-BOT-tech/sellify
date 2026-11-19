@@ -20,14 +20,21 @@ assert.equal(movements.length, 1);
 assert.equal(movements[0].movementType, 'OPENING_BALANCE');
 assert.equal(movements[0].quantity, 10);
 
-const sale = await store.appendInventoryMovement(tenant.chatId, {
-  eventId: 'phase105-sale-1', productId: 'coffee', quantity: -3, movementType: 'SALE', referenceType: 'order', referenceId: 'order-1'
-}, session);
+const saleCommand = {
+  eventId: 'phase105-sale-1', productId: 'coffee', quantity: -3,
+  movementType: 'SALE', referenceType: 'order', referenceId: 'order-1',
+};
+const sale = await store.appendInventoryMovement(tenant.chatId, saleCommand, session);
 assert.equal(sale.quantity, -3);
-const duplicate = await store.appendInventoryMovement(tenant.chatId, {
-  eventId: 'phase105-sale-1', productId: 'coffee', quantity: -99, movementType: 'LOSS'
-}, session);
-assert.equal(duplicate.id, sale.id);
+const duplicate = await store.appendInventoryMovement(tenant.chatId, saleCommand, session);
+assert.equal(duplicate.id, sale.id, 'an exact same-intent retry must return the canonical movement');
+await assert.rejects(
+  store.appendInventoryMovement(tenant.chatId, {
+    ...saleCommand, quantity: -99, movementType: 'LOSS',
+  }, session),
+  error => error?.statusCode === 409 && error?.code === 'INVENTORY_EVENT_ID_REUSED',
+  'reusing an event ID with altered quantity or movement type must conflict',
+);
 let balances = await store.getInventoryBalances(tenant.chatId);
 assert.equal(balances.find(x => x.productId === 'coffee').quantity, 7);
 
