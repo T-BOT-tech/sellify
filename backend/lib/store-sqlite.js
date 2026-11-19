@@ -7442,6 +7442,29 @@ export async function processSyncEvent(chatId, event = {}, actor = null) {
     }
     if (eventType === 'inventory.movement.record') {
       appendInventoryMovementInTransaction(chatId, String(tenant.organizationId), event.payload, actor);
+    } else if (eventType === 'inventory.movement.batch.record') {
+      const movements = event.payload.movements;
+      if (!Array.isArray(movements) || movements.length < 1 || movements.length > 100) {
+        throw Object.assign(new Error('Batch payload must contain 1-100 movements'), {
+          statusCode: 400, code: 'INVALID_INVENTORY_MOVEMENT_BATCH',
+        });
+      }
+      const movementEventIds = movements.map(movement =>
+        String(movement?.eventId || movement?.event_id || '').trim()
+      );
+      if (movementEventIds.some(id => !id) || new Set(movementEventIds).size !== movementEventIds.length) {
+        throw Object.assign(new Error('Every batch movement requires a unique eventId'), {
+          statusCode: 400, code: 'INVALID_INVENTORY_MOVEMENT_BATCH',
+        });
+      }
+      // The outer BEGIN IMMEDIATE transaction owns the entire command. Apply
+      // each line synchronously through the canonical movement validator; any
+      // invalid line throws and the outer catch rolls back every prior line
+      // and the outer sync receipt. No savepoint/replay pass or async yield is
+      // needed because all canonical writes and audit records are SQLite-local.
+      for (const movement of movements) {
+        appendInventoryMovementInTransaction(chatId, String(tenant.organizationId), movement, actor);
+      }
     } else if (eventType === 'customer.upsert') {
       upsertCustomerSync(chatId, event.payload);
     } else {
