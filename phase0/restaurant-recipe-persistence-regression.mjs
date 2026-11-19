@@ -58,7 +58,9 @@ try {
   assert.equal(created.recipe.name, 'Tomato Pasta');
   assert.equal(created.recipe.ingredients.length, 2);
   assert.equal(created.recipe.version, 1);
-  assert.equal(created.recipe.organizationId, tenant.organizationId);
+  const canonicalOrganizationId = store.getIdentityForTenant(tenant.chatId)?.organization?.id;
+  assert.ok(canonicalOrganizationId, 'tenant must resolve through canonical organization identity');
+  assert.equal(created.recipe.organizationId, canonicalOrganizationId);
 
   const replay = await store.createRestaurantRecipe(tenant.chatId, recipeInput, { userId: owner.id });
   assert.equal(replay.duplicate, true, 'same recipe ID and exact content must be safe to retry');
