@@ -601,6 +601,9 @@
       <label for="organizationLocationName">Name</label><input id="organizationLocationName" maxlength="120" placeholder="e.g. Main Store">
       <label for="organizationLocationType">Type</label><select id="organizationLocationType"><option value="STORE">Store</option><option value="WAREHOUSE">Warehouse</option><option value="COLLECTION_CENTER">Collection center</option><option value="DELIVERY_HUB">Delivery hub</option><option value="OFFICE">Office</option><option value="RESTAURANT">Restaurant</option></select>
       <label for="organizationLocationStatus">Status</label><select id="organizationLocationStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select>
+      <label for="organizationLocationTimezone">Location timezone (optional)</label>
+      <input id="organizationLocationTimezone" type="text" maxlength="80" autocomplete="off" placeholder="Africa/Addis_Ababa" aria-describedby="organizationLocationTimezoneHint">
+      <div id="organizationLocationTimezoneHint" class="hint">Use an IANA timezone identifier. Leave blank to inherit the organization timezone.</div>
       <div id="organizationLocationError" role="alert" style="display:none;color:var(--amber);font-size:12px;margin-top:8px;"></div>
       <div style="display:flex;gap:8px;margin-top:12px;"><button type="button" class="btn-secondary" onclick="closeOrganizationLocationModal()">Cancel</button><button type="button" class="btn-primary" onclick="saveOrganizationLocationModal()">Save location</button></div>
     </div>
@@ -620,6 +623,15 @@
           <input id="sourcingSearch" type="search" placeholder="Search suppliers, categories or capabilities" style="flex:1;margin-bottom:0;">
           <button id="sourcingSearchBtn" class="btn-secondary" type="button" style="width:auto;margin-top:0;">Search</button>
         </div>
+        <div class="form-grid" style="margin-top:8px;">
+          <label>Product reference ID<input id="sourcingProductId" type="text" placeholder="Canonical product ID" style="display:block;width:100%;box-sizing:border-box;"></label>
+          <label>Capability code<input id="sourcingCapabilityCode" type="text" placeholder="Supplier capability code" style="display:block;width:100%;box-sizing:border-box;"></label>
+          <label>Minimum quantity<input id="sourcingMinimumQuantity" type="number" min="0.000001" step="any" placeholder="Optional" style="display:block;width:100%;box-sizing:border-box;"></label>
+          <label>Unit<input id="sourcingCapacityUnit" type="text" placeholder="e.g. kg, parcel" style="display:block;width:100%;box-sizing:border-box;"></label>
+          <label>Capacity available from<input id="sourcingAvailabilityFrom" type="datetime-local" style="display:block;width:100%;box-sizing:border-box;"></label>
+          <label>Capacity available through<input id="sourcingAvailabilityTo" type="datetime-local" style="display:block;width:100%;box-sizing:border-box;"></label>
+        </div>
+        <div class="muted">Optional resource and time-window filters. For a time-window search, provide one product ID or capability code and both dates. Quantity requires an exact unit match; no implicit unit conversion is performed. Results use supplier-declared active capacity signals and do not reserve or confirm availability.</div>
         <div id="sourcingDiscoveryResults" style="margin-top:10px;"></div>
         <div id="sourcingIntelligenceSummary" class="sync-note" style="margin-top:10px;display:none;"></div>
         <div id="sourcingRelationshipList" style="margin-top:10px;"></div>
@@ -735,6 +747,10 @@
     </div>
   </section>
 
+  <section id="tab-appointments" style="display:none;">
+    <div id="appointmentsWorkspace"></div>
+  </section>
+
   <section id="tab-logistics" style="display:none;">
     <h2 data-i18n="logisticsNav">Logistics</h2>
     <div class="sync-note" data-i18n="logisticsHint">Orders with a pickup or delivery method chosen at checkout show up here. Tap to move them to the next step.</div>
@@ -789,6 +805,9 @@
       </button>
       <button id="navWarehouse" class="btn-ghost more-sheet-item" onclick="switchTab('warehouse'); closeMoreSheet();" style="display:none;">
         <svg class="icon"><use href="#i-box"/></svg><span data-i18n="warehouseNav">Warehouse</span>
+      </button>
+      <button id="navAppointments" class="btn-ghost more-sheet-item" onclick="switchTab('appointments'); closeMoreSheet();" style="display:none;">
+        <svg class="icon"><use href="#i-clock"/></svg><span data-i18n="serviceBookingsTitle">Appointments</span>
       </button>
       <button id="navLogistics" class="btn-ghost more-sheet-item" onclick="switchTab('logistics'); closeMoreSheet();" style="display:none;">
         <svg class="icon"><use href="#i-truck"/></svg><span data-i18n="logisticsNav">Logistics</span>
