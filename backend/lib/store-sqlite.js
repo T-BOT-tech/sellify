@@ -3668,6 +3668,7 @@ export async function transitionPackLifecycle(chatId, packId, targetState, actor
     ? String(existing?.pack_version || manifest?.version || '')
     : String(input.packVersion);
   const now = nowIso();
+  if (n.validUntil && Date.parse(n.validUntil) < Date.parse(now)) throw Object.assign(new Error('validUntil must not be earlier than observation time'), { statusCode: 400, code: 'INVALID_CAPACITY_VALIDITY' });
   db.exec('BEGIN IMMEDIATE');
   try {
     if (!existing) {
