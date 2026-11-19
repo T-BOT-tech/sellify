@@ -89,7 +89,7 @@ Every implementation task must record:
 
 **Remaining open PR:** #279 (documentation/register reconciliation). Historical service audit PRs #225/#227 and stage-reconciliation PR #189 are closed as superseded.
 
-**Deferred historical work:** issue #272 is closed after branch-by-branch audit; issue #280 tracks the distinct L11 Logistics Scheduling feasibility/API/workspace follow-up. Issue #277 is closed because the named workspace activation and country evidence files/tests were already in main. Appointment workspace issue #271 is closed because PR #273 integrated that work.
+**Deferred historical work:** issue #272 is closed after branch-by-branch audit; issue #280 tracks the distinct L11 Logistics Scheduling feasibility/API/workspace follow-up; issue #281 tracks the prerequisite Phase 21.4 freshness/quality evidence composition. Issue #277 is closed because the named workspace activation and country evidence files/tests were already in main. Appointment workspace issue #271 is closed because PR #273 integrated that work.
 
 Node >=24 remains mandatory. The successful gates validate the integrated SC-03/Inventory, Appointments, Recipe, and Settings slices; they do not certify unrelated deferred platform work or every open documentation/evaluation PR.
 
