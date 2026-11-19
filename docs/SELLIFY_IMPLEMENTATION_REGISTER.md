@@ -49,8 +49,8 @@ Every implementation task must record:
 | Appointments workspace and inline operator actions | PR #273 merged at `3b5854bfa0b4b0eac99f66071133a613f2fcaf51` | Exact head `cffb6895e480d16fb341c6c2d0f79e3a2b4fed12` passed all four required CI jobs. Added standalone Appointments navigation, role/scope-aware workspace, inline actions, and browser/navigation regressions. #258/#259 closed as superseded/deferred; issue #271 closed after integration. | Integrated |
 | Restaurant Recipe foundation | PR #275 merged at `eb2fd3e49e3cdec6e00d892a4589a47dfd93751e` | Exact head `f294c849fd6a8ef49eea8b073a0707988f2de6f4` passed Node 24 baseline, Phase 13.10.24, Logistics L18, and Logistics exit certification. Recipe persistence/tenant-isolation regression passed. Recipe schema uses migration 83 after SC-03 migration 81 and location timezone migration 82; GAP-2.12 migration continuity regression was extended through 83 and passed. #269/#274 closed as superseded. | Integrated |
 | Settings UX | PR #223 merged at `bcf1d28686d91e3ef2539fb9f59e52d88775f857` | Consolidated #220–#222: accessible/dismissible dialogs, first-use settings visibility, mobile workspace header, and progressive disclosure. Exact PR head `577ca4b215351f59d91ca3ddece943712f3695c2` passed required checks; merge-commit CI passed. | Integrated |
-| First Experience | PR #214 remains open | Broad first-experience bundle; base and changed-file overlap require a fresh audit against current main. | Audit before merge |
-| UI evaluation environment | PR #217 remains open | Developer/evaluation tooling; verify it remains isolated from production runtime and does not introduce a second frontend build/runtime authority. | Audit before merge |
+| First Experience persistence + Pack Recovery | PR #276 merged at `d5a0612fe6d75d1408ef2d2d65a9a56a6d2b9f10` | Exact head `d993c55ae4f271eb7f093f3a62e0e9b88a546670` passed all four required CI jobs. Durable IndexedDB tenant-session restoration, pre-reload persistence, async Pack Recovery readiness, stale-tenant repaint protection, and regressions are integrated. Remaining workspace activation/country evidence deltas are tracked in issue #277. | Integrated; remaining deltas tracked |
+| UI evaluation environment | PR #278 merged at `ef130935056ed9611fa316f9df3b470f20b08934` | Exact head `f0580b3615701ae67d21a3eefa4f489ef5307c19` passed all four required CI jobs. Private Node 24 Codespaces configuration and evaluation guide are integrated. Codespace launch, forwarded-browser access, and manual visual review remain not runtime-verified. | Prepared; runtime verification pending |
 | Service audit documents | PRs #225 and #227 remain open | Historical snapshots; reconcile every claim against the integrated SC-03 implementation and current tests. Do not merge stale claims. | Update evidence before merge |
 | Historical SC-03/Telegram branches | #237/#242 closed and retained as audit sources | Unique deltas are tracked in issue #272. Do not merge either historical branch wholesale. | Deferred; issue #272 open |
 | Stage reconciliation documentation | PR #189 remains open | October snapshot is stale against the current integrated implementation. | Refresh against current main before merge |
@@ -83,31 +83,31 @@ Every implementation task must record:
 
 **Integrated mainline:** SC-03/Inventory (#256), Appointments workspace (#273), Restaurant Recipe (#275), and Settings UX (#223) are merged to main. The current integration set includes all four merged workstreams listed above; consult GitHub for the live `main` SHA.
 
-**Mainline verification:** the post-#256 mainline run `44567719268` passed all four required jobs. The post-#275 merge-commit run `44569050739` passed all four required jobs. The post-#223 merge-commit run `44569154864` passed all four required jobs. PR-level exact-head runs for #273 and #275 also passed all four required jobs. The #256 merge-commit security, release, and logistics certifications passed.
+**Mainline verification:** post-#256, post-#273, post-#275, post-#223, and post-#276 mainline runs passed all four required jobs. Exact-head PR runs for #273, #275, #223, and #276 passed all four required jobs. The #256 merge-commit security, release, and logistics certifications passed. PR #278's exact head passed all four required jobs; its merge-commit baseline and Phase 13.10.24 runs are still in progress as of this snapshot.
 
-**Closed duplicate/deferred source PRs:** #220–#222, #257–#262, #264–#266, #269, #274, and the historical appointment stack #258/#259 are closed after their unique deltas were integrated or explicitly deferred. Source branches are retained as audit references; no branch deletion is implied.
+**Closed duplicate/deferred source PRs:** #214, #217, #220–#222, #257–#262, #264–#266, #269, #274, and the historical appointment stack #258/#259 are closed after their unique deltas were integrated or explicitly deferred. Source branches are retained as audit references; no branch deletion is implied.
 
-**Remaining open PRs:** #214 (First Experience), #217 (UI evaluation environment), #225 and #227 (service audits), and #189 (stage reconciliation documentation). These are separate review tasks, not permission to create parallel implementations.
+**Remaining open PRs:** #225 and #227 (service audits) and #189 (stage reconciliation documentation). These are separate review tasks, not permission to create parallel implementations.
 
-**Deferred historical work:** issue #272 remains open for extracting unique deltas from historical SC-03/Telegram branches. Appointment workspace issue #271 is closed because PR #273 integrated that work.
+**Deferred historical work:** issue #272 remains open for extracting unique deltas from historical SC-03/Telegram branches. Issue #277 tracks the remaining First Experience workspace activation/country evidence deltas from #214. Appointment workspace issue #271 is closed because PR #273 integrated that work.
 
 Node >=24 remains mandatory. The successful gates validate the integrated SC-03/Inventory, Appointments, Recipe, and Settings slices; they do not certify unrelated deferred platform work or every open documentation/evaluation PR.
 
 ## 6. Branch inventory snapshot (2026-11-19)
 
-A full paginated inventory found **234 branches** and **272 pull requests**:
-- **5 open PRs** remain: #214, #217, #225, #227, and #189.
-- **157 PRs are merged** and **110 are closed without merge**.
-- 213 branches are heads of closed PRs only; 15 branches have no PR as head and are not bases of an open PR.
-- One branch is currently used as the base of an open PR; all other active work is represented by the five open PR heads.
+A full paginated inventory found **236 branches** and **274 pull requests**:
+- **3 open PRs** remain: #225, #227, and #189.
+- **159 PRs are merged** and **112 are closed without merge**.
+- **15 branches** have no PR as head and are not bases of an open PR.
+- All three open PRs target `main`; no feature branch is currently used as the base of an open PR.
 
 ### Untracked branch disposition
 
 Four untracked branches are fully behind current main (zero commits ahead) and are candidates for archival after a final dependent-reference check:
-- `feat/durable-service-booking-commands` — 0 ahead / 457 behind.
-- `feat/sc034-service-resource-commitments-mainline-20261117` — 0 ahead / 242 behind.
-- `fix/payment-ui-stale-state-regression-20261029` — 0 ahead / 407 behind.
-- `test/service-booking-scheduling-boundary-current-main-20261029-v3` — 0 ahead / 413 behind.
+- `feat/durable-service-booking-commands` — 0 ahead / 471 behind.
+- `feat/sc034-service-resource-commitments-mainline-20261117` — 0 ahead / 256 behind.
+- `fix/payment-ui-stale-state-regression-20261029` — 0 ahead / 421 behind.
+- `test/service-booking-scheduling-boundary-current-main-20261029-v3` — 0 ahead / 427 behind.
 
 The other untracked branches are **not safe for bulk deletion**. They contain divergent or ahead commits and need targeted delta review. Examples include:
 - Historical appointment/service branches: `feat/sc03-5-location-timezone-availability-v2`, `feat/sc03-customer-appointment-journey-20261115`, `feat/sc03-service-booking-atomic-commitment`, and `feat/sc03-service-booking-atomic-commitment-authority`. Track unique behavior through issue #272; do not merge wholesale.
