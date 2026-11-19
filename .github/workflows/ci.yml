@@ -146,6 +146,8 @@ jobs:
         run: npm run test:service-booking-contract
       - name: Service booking persistence regression
         run: npm run test:service-booking-persistence
+      - name: Service Resource migration 80/81 compatibility regression
+        run: npm run test:service-resource-migration-compatibility
       - name: Service booking scheduling authority boundary regression
         run: npm run test:service-booking-scheduling-boundary
       - name: Service booking operator workspace regression
