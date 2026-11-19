@@ -5861,28 +5861,47 @@ function normaliseLocationStatus(value) {
   return status;
 }
 
+function normaliseLocationTimeZone(value, existing = null) {
+  if (value === undefined) return existing ?? null;
+  const timeZone = value == null ? '' : String(value).trim();
+  if (!timeZone) return null;
+  if (!isIanaTimeZone(timeZone)) {
+    throw Object.assign(new Error('Timezone must be a valid IANA timezone, such as Africa/Addis_Ababa'), {
+      statusCode: 400, code: 'LOCATION_TIMEZONE_INVALID',
+    });
+  }
+  return timeZone;
+}
+
+function organizationLocationFromRow(row) {
+  return row ? {
+    id: row.id, organizationId: row.organization_id, code: row.code, name: row.name,
+    type: row.type, status: row.status, timeZone: row.timezone || null, createdAt: row.created_at,
+  } : null;
+}
+
 export async function listOrganizationLocations(chatId, { includeInactive = false } = {}) {
   ensureDatabase();
   const organizationId = ensureCanonicalIdentityForTenant(chatId);
   if (!organizationId) return null;
   const rows = db.prepare(`
-    SELECT id, organization_id, code, name, type, status, created_at
+    SELECT id, organization_id, code, name, type, status, timezone, created_at
     FROM locations
     WHERE organization_id = ? ${includeInactive ? '' : "AND status = 'active'"}
     ORDER BY created_at ASC, id ASC
   `).all(organizationId);
-  return rows.map(row => ({ id: row.id, organizationId: row.organization_id, code: row.code, name: row.name, type: row.type, status: row.status, createdAt: row.created_at }));
+  return rows.map(organizationLocationFromRow);
 }
 
 export async function getOrganizationLocation(chatId, locationId) {
   ensureDatabase();
   const organizationId = ensureCanonicalIdentityForTenant(chatId);
   if (!organizationId || !locationId) return null;
-  const row = db.prepare('SELECT id, organization_id, code, name, type, status, created_at FROM locations WHERE id = ? AND organization_id = ?').get(String(locationId), String(organizationId));
-  return row ? { id: row.id, organizationId: row.organization_id, code: row.code, name: row.name, type: row.type, status: row.status, createdAt: row.created_at } : null;
+  const row = db.prepare('SELECT id, organization_id, code, name, type, status, timezone, created_at FROM locations WHERE id = ? AND organization_id = ?').get(String(locationId), String(organizationId));
+  return organizationLocationFromRow(row);
 }
 
-export async function createOrganizationLocation(chatId, { code, name, type = 'STORE', status = 'active' }) {
+export async function createOrganizationLocation(chatId, { code, name, type = 'STORE', status = 'active', timezone, timeZone }) {
   ensureDatabase();
   const organizationId = ensureCanonicalIdentityForTenant(chatId);
   if (!organizationId) throw Object.assign(new Error('Unknown store'), { statusCode: 404 });
@@ -5892,15 +5911,16 @@ export async function createOrganizationLocation(chatId, { code, name, type = 'S
   if (!cleanName || cleanName.length > 120) throw Object.assign(new Error('Location name must be 1–120 characters'), { statusCode: 400 });
   const cleanType = normaliseLocationType(type);
   const cleanStatus = normaliseLocationStatus(status);
+  const cleanTimeZone = normaliseLocationTimeZone(timezone ?? timeZone);
   const id = crypto.randomUUID();
   try {
-    db.prepare(`INSERT INTO locations (id, organization_id, code, name, type, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, organizationId, cleanCode, cleanName, cleanType, cleanStatus, nowIso());
+    db.prepare(`INSERT INTO locations (id, organization_id, code, name, type, status, timezone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(id, organizationId, cleanCode, cleanName, cleanType, cleanStatus, cleanTimeZone, nowIso());
   } catch (error) {
     if (String(error.message).includes('UNIQUE')) throw Object.assign(new Error('Location code already exists in this organization'), { statusCode: 409 });
     throw error;
   }
-  audit(String(chatId), 'location.created', 'location', id, { organizationId, code: cleanCode, type: cleanType });
-  return db.prepare('SELECT id, organization_id, code, name, type, status, created_at FROM locations WHERE id = ?').get(id);
+  audit(String(chatId), 'location.created', 'location', id, { organizationId, code: cleanCode, type: cleanType, timezone: cleanTimeZone });
+  return organizationLocationFromRow(db.prepare('SELECT id, organization_id, code, name, type, status, timezone, created_at FROM locations WHERE id = ?').get(id));
 }
 
 export async function updateOrganizationLocation(chatId, locationId, patch = {}) {
@@ -5915,14 +5935,18 @@ export async function updateOrganizationLocation(chatId, locationId, patch = {})
   const status = patch.status == null ? existing.status : normaliseLocationStatus(patch.status);
   const code = patch.code == null ? existing.code : String(patch.code).trim().toUpperCase();
   if (!/^[A-Z0-9][A-Z0-9_-]{0,39}$/.test(code)) throw Object.assign(new Error('Location code must be 1–40 characters using letters, numbers, _ or -'), { statusCode: 400 });
+  const timeZone = normaliseLocationTimeZone(
+    Object.prototype.hasOwnProperty.call(patch, 'timezone') ? patch.timezone : patch.timeZone,
+    existing.timezone || null,
+  );
   try {
-    db.prepare('UPDATE locations SET code = ?, name = ?, type = ?, status = ? WHERE id = ? AND organization_id = ?').run(code, name, type, status, existing.id, organizationId);
+    db.prepare('UPDATE locations SET code = ?, name = ?, type = ?, status = ?, timezone = ? WHERE id = ? AND organization_id = ?').run(code, name, type, status, timeZone, existing.id, organizationId);
   } catch (error) {
     if (String(error.message).includes('UNIQUE')) throw Object.assign(new Error('Location code already exists in this organization'), { statusCode: 409 });
     throw error;
   }
-  audit(String(chatId), 'location.updated', 'location', existing.id, { organizationId, changes: { code, name, type, status } });
-  return db.prepare('SELECT id, organization_id, code, name, type, status, created_at FROM locations WHERE id = ?').get(existing.id);
+  audit(String(chatId), 'location.updated', 'location', existing.id, { organizationId, changes: { code, name, type, status, timezone: timeZone } });
+  return organizationLocationFromRow(db.prepare('SELECT id, organization_id, code, name, type, status, timezone, created_at FROM locations WHERE id = ?').get(existing.id));
 }
 
 export function getIdentityForTenant(chatId) {
