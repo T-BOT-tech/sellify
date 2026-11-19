@@ -1,3 +1,4 @@
+// Rebased and revalidated against the current mainline integration.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer as createNetServer } from 'node:net';
