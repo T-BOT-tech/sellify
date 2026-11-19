@@ -260,7 +260,12 @@ async function openServiceResourceAvailability(button, root) {
     if (!response.ok) throw new Error(data?.error?.message || t('serviceAvailabilityLoadFailed'));
     const availability = data.availability || {};
     panel.dataset.version = String(availability.version || 0);
+    panel.dataset.effectiveTimeZone = String(availability.effectiveTimeZone || availability.timeZone || '');
+    const timezoneNotice = availability.scheduleUsesCurrentLocationTimeZone === false
+      ? '<p class="logistics-meta" role="status">This existing schedule remains in ' + escapeHtml(availability.timeZone || '') + '. Saving the schedule will apply the current location timezone: ' + escapeHtml(availability.effectiveTimeZone || '') + '. Existing appointments are checked before the change is accepted.</p>'
+      : '<p class="logistics-meta">New schedule declarations use this resource location timezone, or the organization timezone when no location override is set.</p>';
     panel.innerHTML = '<div class="logistics-meta">' + escapeHtml(t('serviceAvailabilityTimezone')) + ': ' + escapeHtml(availability.timeZone || '') + '</div>'
+      + timezoneNotice
       + '<label>' + escapeHtml(t('serviceAvailabilityWorkingHours')) + '<textarea class="service-availability-hours" rows="7" spellcheck="false">' + escapeHtml(JSON.stringify(availability.workingHours || [], null, 2)) + '</textarea></label>'
       + '<label>' + escapeHtml(t('serviceAvailabilityExceptions')) + '<textarea class="service-availability-exceptions" rows="5" spellcheck="false">' + escapeHtml(JSON.stringify(availability.exceptions || [], null, 2)) + '</textarea></label>'
       + '<p class="logistics-meta">' + escapeHtml(t('serviceAvailabilityDeclarationOnly')) + '</p>'
