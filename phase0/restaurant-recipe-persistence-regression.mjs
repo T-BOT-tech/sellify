@@ -12,6 +12,14 @@ process.env.SELLIFY_DB_PATH = path.join(dataDir, 'sellify.sqlite');
 try {
   const serverSource = await readFile(new URL('../backend/server.js', import.meta.url), 'utf8');
   const authSource = await readFile(new URL('../backend/lib/authorization.js', import.meta.url), 'utf8');
+  const routesStart = serverSource.indexOf('const ROUTES = [');
+  const routesEnd = serverSource.indexOf('\\n];', routesStart);
+  const serverListen = serverSource.indexOf('server.listen(');
+  assert.ok(routesStart >= 0 && routesEnd > routesStart && serverListen > routesEnd,
+    'HTTP route table must be declared before server.listen');
+  const routeTable = serverSource.slice(routesStart, routesEnd);
+  assert.ok(routeTable.includes('handleRestaurantRecipes') && !serverSource.slice(serverListen).includes('handleRestaurantRecipes'),
+    'Restaurant Recipe routes must be registered inside the canonical ROUTES table, not appended after listen');
   assert.ok(serverSource.includes('handleRestaurantRecipes(req, res, decodeURIComponent(m[1]))'),
     'Restaurant Recipe API must be registered on the authenticated tenant route');
   assert.ok(serverSource.includes("requireAuthorization(session, tenant, 'restaurant_recipe', 'restaurant:recipes:manage'"),
