@@ -346,8 +346,9 @@ try {
   const feasibleAfterRelease = await store.assessTelegramBuyerServiceFeasibility(seller.chatId, buyer, checkout.marketplace_order_id, {
     service_item_id: 'sc035-consultation', start, end,
   });
-  assert.equal(feasibleAfterRelease.state, 'FEASIBLE',
-    'released commitment must no longer block advisory feasibility');
+  assert.equal(feasibleAfterRelease.state, 'UNKNOWN',
+    'released commitment no longer blocks feasibility, but a revoked provider assignment still prevents feasibility');
+  assert.equal(feasibleAfterRelease.reasonCode, 'RESOURCE_PROVIDER_ASSIGNMENT_INACTIVE');
   console.log('SC-03.5 buyer-owned appointment order resolution regression: PASS');
 } finally {
   await rm(dataDir, { recursive: true, force: true });
