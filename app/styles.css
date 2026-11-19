@@ -1435,6 +1435,39 @@
     font-size: 11px; font-weight: 700; text-transform: uppercase;
     color: var(--ink-soft); letter-spacing: 0.03em; margin: 14px 0 6px;
   }
+  .settings-advanced-group {
+    margin: 12px 0;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+  .settings-advanced-group > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 48px;
+    padding: 10px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 650;
+    list-style: none;
+  }
+  .settings-advanced-group > summary::-webkit-details-marker { display: none; }
+  .settings-advanced-group > summary::after {
+    content: "+";
+    flex: 0 0 auto;
+    color: var(--ink-soft);
+    font-size: 18px;
+    line-height: 1;
+  }
+  .settings-advanced-group[open] > summary::after { content: "−"; }
+  .settings-advanced-group > summary:focus-visible {
+    outline: 2px solid var(--teal);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+  .settings-advanced-content { padding: 0 12px 12px; }
   .paymethod-row {
     display: flex; align-items: center; gap: 8px; background: var(--paper-dim);
     border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px;
@@ -1813,3 +1846,14 @@
 .fux-summary-grid span, .fux-summary-note, .fux-summary-state { color:var(--text-muted); font-size:var(--fs-xs); }
 .fux-summary-note { display:block; margin-top:.75rem; }
 @media (max-width: 640px) { .fux-summary-grid { grid-template-columns:1fr; } }
+
+
+@media (max-width:420px) {
+  .fux-workspace-header { gap:.5rem; }
+  .fux-workspace-header > div { min-width:0; flex:1 1 0; }
+  .fux-workspace-header h2 {
+    font-size:clamp(1.125rem, 5vw, 1.35rem);
+    line-height:1.2;
+    overflow-wrap:anywhere;
+  }
+}

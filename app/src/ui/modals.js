@@ -12,6 +12,10 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeImageModal();
     if (typeof closePinModal === 'function') closePinModal();
+
+    // Settings can be dismissed without implying server-side changes were rolled back.
+    const settings = document.getElementById('settingsModal');
+    if (settings?.classList.contains('open')) settings.classList.remove('open');
   }
 });
 
