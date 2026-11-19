@@ -3410,6 +3410,36 @@ if (!applied.includes(39)) {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(80, nowIso());
   }
+  // Restaurant-owned Recipe definitions. Ingredient identities remain canonical
+  // Commerce catalog products; stock and movements remain canonical Inventory.
+  if (!applied.includes(83)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS restaurant_recipes (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        chat_id TEXT NOT NULL REFERENCES tenants(chat_id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        menu_product_id TEXT,
+        yield_quantity REAL NOT NULL CHECK (yield_quantity > 0),
+        yield_unit TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('ACTIVE','ARCHIVED')) DEFAULT 'ACTIVE',
+        ingredients_json TEXT NOT NULL,
+        fingerprint TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+        created_by TEXT,
+        updated_by TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (organization_id, id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_restaurant_recipes_org_status
+        ON restaurant_recipes(organization_id, status, name);
+      CREATE INDEX IF NOT EXISTS idx_restaurant_recipes_chat_updated
+        ON restaurant_recipes(chat_id, updated_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(83, nowIso());
+  }
 }
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({
@@ -5816,36 +5846,7 @@ export function getIdentityForTenant(chatId) {
     })),
   };
 
-  // Restaurant-owned Recipe definitions. Ingredient identities remain canonical
-  // Commerce catalog products; stock and movements remain canonical Inventory.
-  if (!applied.includes(81)) {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS restaurant_recipes (
-        id TEXT PRIMARY KEY,
-        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-        chat_id TEXT NOT NULL REFERENCES tenants(chat_id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
-        description TEXT NOT NULL DEFAULT '',
-        menu_product_id TEXT,
-        yield_quantity REAL NOT NULL CHECK (yield_quantity > 0),
-        yield_unit TEXT NOT NULL,
-        status TEXT NOT NULL CHECK (status IN ('ACTIVE','ARCHIVED')) DEFAULT 'ACTIVE',
-        ingredients_json TEXT NOT NULL,
-        fingerprint TEXT NOT NULL,
-        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
-        created_by TEXT,
-        updated_by TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        UNIQUE (organization_id, id)
-      );
-      CREATE INDEX IF NOT EXISTS idx_restaurant_recipes_org_status
-        ON restaurant_recipes(organization_id, status, name);
-      CREATE INDEX IF NOT EXISTS idx_restaurant_recipes_chat_updated
-        ON restaurant_recipes(chat_id, updated_at DESC);
-    `);
-    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(81, nowIso());
-  }
+
 }
 
 function ensureDatabase() {
