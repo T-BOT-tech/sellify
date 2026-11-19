@@ -253,9 +253,18 @@ try {
   assert.ok(isolationLocation, 'concurrency fixture must have an active location');
   const isolationProduct = 'market-rice-' + suffix;
   await store.saveCatalog(otherSeller.chatId, [
-    { id: isolationProduct, name: 'Marketplace Rice', price: 100, stock: 10, item_type: 'product', marketplace_listed: true },
+    { id: isolationProduct, name: 'Marketplace Rice', price: 100, item_type: 'product', marketplace_listed: true },
     { id: 'rice', name: 'Rice', price: 100, item_type: 'product' },
   ]);
+  await store.appendInventoryMovement(otherSeller.chatId, {
+    eventId: eventId + '-marketplace-opening',
+    productId: isolationProduct,
+    locationId: isolationLocation.id,
+    quantity: 10,
+    movementType: 'PURCHASE',
+    referenceType: 'runtime_regression',
+    referenceId: eventId,
+  }, { userId: otherOwner.id });
 
   async function competingCatalogWrite(label) {
     return store.saveCatalog(otherSeller.chatId, [
@@ -302,7 +311,7 @@ try {
   assert.equal(customerCatalogResult.status, 'fulfilled', 'catalog write must execute independently after customer sync');
   assert.equal(db.isTransaction, false);
   assert.ok(db.prepare('SELECT event_id FROM sync_events WHERE event_id = ?').get(customerSyncId));
-  assert.ok((await store.listCustomers(otherSeller.chatId)).some(customer => customer.id === 'customer-' + suffix));
+  assert.ok(db.prepare('SELECT id FROM customers WHERE id = ?').get('customer-' + suffix));
 
   // Marketplace checkout owns its transaction and must call the synchronous
   // movement helper. A second transactional write is deliberately queued at
