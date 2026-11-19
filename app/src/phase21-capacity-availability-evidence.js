@@ -98,6 +98,9 @@ export function projectCapacityAvailabilityEvidence(signal = {}, options = {}) {
   }
   const evaluatedAtInput = options.evaluatedAt ?? options.evaluated_at;
   const evaluatedAt = evaluatedAtInput == null ? null : iso(evaluatedAtInput, 'options.evaluatedAt');
+  if (observedAt && evaluatedAt && Date.parse(evaluatedAt) < Date.parse(observedAt)) {
+    invalid('options.evaluatedAt must not be earlier than signal.observedAt');
+  }
   const freshness = !observedAt || !normalizedValidUntil || !evaluatedAt
     ? 'UNKNOWN'
     : Date.parse(normalizedValidUntil) >= Date.parse(evaluatedAt) ? 'CURRENT' : 'STALE';

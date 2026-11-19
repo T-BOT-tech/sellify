@@ -108,8 +108,8 @@ test('consistency is independent from provenance and freshness', () => {
 });
 
 test('invalid observation timestamp fails closed', () => {
-  const { observedAt, ...rest } = base;
-  assert.throws(() => projectCapacityAvailabilityEvidence(rest), /observedAt must be a non-empty string/);
+  assert.throws(() => projectCapacityAvailabilityEvidence({ ...base, observedAt: 'not-a-date' }), /observedAt must be a valid ISO-8601 date\/time/);
+  assert.throws(() => projectCapacityAvailabilityEvidence(base, { evaluatedAt: '2026-09-14T00:00:00Z' }), /must not be earlier than signal.observedAt/);
 });
 
 test('projection is immutable', () => {
