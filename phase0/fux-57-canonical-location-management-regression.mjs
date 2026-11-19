@@ -23,6 +23,13 @@ assert(bridge.includes('saveOrganizationLocationModal'));
 assert(main.includes('openOrganizationLocationModal'));
 assert(html.includes('organizationLocationModal'));
 assert(html.includes('organizationLocationCode'));
+assert(html.includes('organizationLocationTimezone'));
+assert(html.includes('Use an IANA timezone identifier'));
+assert(locations.includes('timezone }),'));
+assert(store.includes('LOCATION_TIMEZONE_INVALID'));
+assert(store.includes('ALTER TABLE locations ADD COLUMN timezone TEXT'));
+assert(store.includes('organizationLocationFromRow'));
+
 assert(server.includes("pattern: /^\\/tenants\\/([^/]+)\\/locations$/"));
 assert(server.includes('handleLocationCreate'));
 assert(server.includes('handleLocationPatch'));

@@ -40,6 +40,10 @@ const ROLE_PERMISSIONS = Object.freeze({
     'supplier-network:view', 'supplier-network:manage', 'supplier-network:publish', 'supplier-network:suspend', 'supplier-network:capability:view', 'supplier-network:capability:manage', 'supplier-network:capability:activate', 'supplier-network:capability:deactivate', 'supplier-network:catalog:view', 'supplier-network:catalog:manage', 'supplier-network:catalog:activate', 'supplier-network:catalog:deactivate', 'supplier-network:service-area:view', 'supplier-network:service-area:manage', 'supplier-network:service-area:activate', 'supplier-network:service-area:deactivate', 'supplier-network:commercial:view', 'supplier-network:commercial:manage', 'supplier-network:commercial:activate', 'supplier-network:commercial:deactivate', 'supplier-network:qualification:view', 'supplier-network:qualification:manage', 'supplier-network:qualification:document', 'supplier-network:qualification:verify', 'supplier-network:qualification:revoke', 'supplier-network:performance:view', 'supplier-network:performance:recalculate', 'supplier-network:trust:view', 'supplier-network:trust:refresh', 'supplier-network:discovery:discover', 'supplier-network:marketplace-integration:view',
     'procurement:demand:view', 'procurement:demand:create', 'procurement:demand:manage', 'procurement:demand:submit', 'procurement:demand:cancel', 'procurement:demand:sourcing', 'procurement:supplier:view', 'procurement:supplier:manage', 'procurement:supplier:discover', 'procurement:supplier:relationship:view', 'procurement:supplier:relationship:manage', 'procurement:rfq:view', 'procurement:rfq:create', 'procurement:rfq:manage', 'procurement:rfq:send', 'procurement:rfq:close', 'procurement:rfq:respond', 'procurement:comparison:view', 'procurement:comparison:create', 'procurement:award:view', 'procurement:award:create', 'procurement:award:confirm', 'procurement:award:cancel', 'procurement:award:execute', 'procurement:receipt:view', 'procurement:receipt:create', 'procurement:receipt:cancel', 'procurement:payment:create',
     'service:service_resource:view', 'service:service_resource:manage',
+    'service:resource_availability:view', 'service:resource_availability:manage',
+    'service:service_booking:view',
+    'logistics:scheduling:view', 'logistics:scheduling:request',
+    'logistics:scheduling:manage', 'logistics:scheduling:confirm', 'logistics:scheduling:cancel',
   ]),
   cashier: new Set([
     'orders:create', 'orders:view', 'fulfillment:view', 'fulfillment:update', 'payments:accept', 'payments:view',
@@ -51,6 +55,13 @@ const ROLE_PERMISSIONS = Object.freeze({
   staff: new Set(['locations:view', 'customers:view', 'inventory:view', 'fulfillment:view']),
   buyer: new Set(['orders:create', 'b2b:po:view', 'b2b:po:create', 'supplier-network:trust:view', 'supplier-network:discovery:discover', 'supplier-network:marketplace-integration:view', 'procurement:demand:view', 'procurement:demand:create', 'procurement:demand:manage', 'procurement:demand:submit', 'procurement:demand:cancel', 'procurement:demand:sourcing', 'procurement:rfq:view', 'procurement:rfq:create', 'procurement:rfq:manage', 'procurement:rfq:send', 'procurement:rfq:close', 'procurement:comparison:view', 'procurement:comparison:create', 'procurement:award:execute', 'procurement:receipt:view', 'procurement:receipt:create']),
   viewer: new Set([]),
+  // Service Provider is resource-scoped; authorization also requires an exact
+  // service_resource context match before these permissions become effective.
+  service_provider: new Set([
+    'service:service_resource:view',
+    'service:resource_availability:view', 'service:resource_availability:manage',
+    'service:service_booking:view',
+  ]),
   // FUX-6 Restaurant contextual roles. These are executable only when the
   // Restaurant Pack is active; assignment is handled through membership_roles.
   restaurant_waiter: new Set([
@@ -134,7 +145,7 @@ const ROLE_PERMISSIONS = Object.freeze({
   // intentionally not implied by these permissions; courier mutation remains
   // gated until the canonical delivery-assignment authority is enforced.
   logistics_manager: new Set([
-    'fulfillment:view', 'fulfillment:update', 'logistics:deliveries:view',
+    'fulfillment:view', 'fulfillment:update', 'service:service_resource:view', 'logistics:deliveries:view',
     'logistics:deliveries:assign', 'logistics:deliveries:reassign',
     'logistics:deliveries:update_assigned', 'locations:view', 'audit:view',
     'logistics:scheduling:view', 'logistics:scheduling:request',
@@ -142,7 +153,7 @@ const ROLE_PERMISSIONS = Object.freeze({
     'logistics:scheduling:cancel',
   ]),
   logistics_dispatcher: new Set([
-    'fulfillment:view', 'fulfillment:update', 'logistics:deliveries:view',
+    'fulfillment:view', 'fulfillment:update', 'service:service_resource:view', 'logistics:deliveries:view',
     'logistics:deliveries:assign', 'logistics:deliveries:reassign',
     'locations:view',
     'logistics:scheduling:view', 'logistics:scheduling:request',
@@ -206,18 +217,48 @@ export function requiredPackForRole(role) {
  * actor is normally the authenticated session object. organization and
  * location may be objects or ids; only ids are used by this policy layer.
  */
-export function authorize(actor, organization, location, resource, action) {
+export function authorize(actor, organization, location, resource, action, resourceContext = null) {
   if (!actor || !actor.userId) return AUTHZ.DENY;
 
   const role = cleanRole(actor.role);
   const permission = cleanAction(action);
   if (!role || !permission || !resource) return AUTHZ.DENY;
+  // Service Provider is a contextual role only. It must never become a base
+  // membership role that bypasses its resource-scoped assignment.
+  if (role === 'service_provider') return AUTHZ.DENY;
+
+  // Resolve the canonical organization before evaluating scoped contextual roles.
+  const actorOrganizationId = actor.organizationId == null ? null : String(actor.organizationId);
+  const organizationId = organization == null
+    ? null
+    : String(typeof organization === 'object' ? organization.id ?? organization.organizationId : organization);
+  if (organizationId && actorOrganizationId && actorOrganizationId !== organizationId) return AUTHZ.DENY;
+  if (organizationId && !actorOrganizationId) return AUTHZ.DENY;
+
+  const requestedLocationId = location && typeof location === 'object'
+    ? location.id ?? location.locationId ?? location.location_id
+    : location == null ? null : String(location);
+  const context = resourceContext && typeof resourceContext === 'object'
+    ? {
+      resourceType: String(resourceContext.resourceType ?? resourceContext.resource_type ?? '').trim().toLowerCase(),
+      resourceId: resourceContext.resourceId ?? resourceContext.resource_id ?? resourceContext.id,
+      organizationId: resourceContext.organizationId ?? resourceContext.organization_id,
+      locationId: resourceContext.locationId ?? resourceContext.location_id ?? null,
+    }
+    : null;
+  const validServiceResourceContext = Boolean(
+    context &&
+    String(resource).trim().toLowerCase() === 'service_resource' &&
+    context.resourceType === 'service_resource' &&
+    context.resourceId != null && String(context.resourceId).trim() &&
+    context.organizationId != null && organizationId &&
+    String(context.organizationId) === organizationId &&
+    String(context.locationId ?? '') === String(requestedLocationId ?? ''),
+  );
 
   // Contextual roles are scoped authorities, not tenant-wide role strings.
-  // Only organization-scoped assignments are effective without an explicit
-  // location/resource scope. Location assignments require the requested
-  // location to match the assignment. Resource-scoped assignments remain
-  // non-executable until a canonical resource-context contract is supplied.
+  // Resource scope is executable only for an exact, organization-bound Service
+  // Resource context; no arbitrary caller-supplied resource id grants access.
   const contextualRoles = Array.isArray(actor.contextualRoles) ? actor.contextualRoles : [];
   const effectiveContextualRoles = contextualRoles
     .map(item => ({
@@ -227,12 +268,14 @@ export function authorize(actor, organization, location, resource, action) {
     }))
     .filter(item => {
       if (!item.role) return false;
+      if (item.role === 'service_provider' && item.scopeType !== 'RESOURCE') return false;
       if (item.scopeType === 'ORGANIZATION') return true;
       if (item.scopeType === 'LOCATION') {
-        const requestedLocationId = location && typeof location === 'object'
-          ? location.id ?? location.locationId
-          : location;
         return requestedLocationId != null && String(requestedLocationId) === item.scopeId;
+      }
+      if (item.scopeType === 'RESOURCE') {
+        return item.role === 'service_provider'
+          && validServiceResourceContext && String(context.resourceId) === item.scopeId;
       }
       return false;
     })
@@ -241,19 +284,6 @@ export function authorize(actor, organization, location, resource, action) {
   const actorRoles = Array.from(new Set([role, ...effectiveContextualRoles]));
   if (!actorRoles.length) return AUTHZ.DENY;
 
-  // A tenant-scoped session is never allowed to operate on another
-  // organization. This is intentionally checked even though legacy chat_id
-  // boundaries are still enforced by requireSession().
-  const actorOrganizationId = actor.organizationId == null ? null : String(actor.organizationId);
-  const organizationId = organization == null
-    ? null
-    : String(typeof organization === 'object' ? organization.id ?? organization.organizationId : organization);
-  if (organizationId && actorOrganizationId && actorOrganizationId !== organizationId) {
-    return AUTHZ.DENY;
-  }
-  if (organizationId && !actorOrganizationId) return AUTHZ.DENY;
-
-  // If a location is supplied, it must belong to the actor's organization.
   const locationOrganizationId = location && typeof location === 'object'
     ? location.organizationId ?? location.organization_id
     : null;
@@ -273,9 +303,10 @@ export function authorize(actor, organization, location, resource, action) {
     : AUTHZ.DENY;
 }
 
-export function hasAuthorization(actor, organization, location, resource, action) {
-  return authorize(actor, organization, location, resource, action) === AUTHZ.ALLOW;
+export function hasAuthorization(actor, organization, location, resource, action, resourceContext = null) {
+  return authorize(actor, organization, location, resource, action, resourceContext) === AUTHZ.ALLOW;
 }
+
 
 export function logisticsSchedulingAuthorizationContract() {
   return Object.freeze({

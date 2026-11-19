@@ -113,11 +113,12 @@ import {
   createSession, authenticateSessionToken, revokeSession, createAuthChallenge, consumeAuthChallenge, getAuthChallengeForTenantCreation,
   listOrganizationLocations, createOrganizationLocation, updateOrganizationLocation,
   listCustomers, getCustomer, upsertCustomer, updateCustomer,
-  listInventoryMovements, getInventoryBalances, appendInventoryMovement,
+  listInventoryMovements, getInventoryBalances, appendInventoryMovement, appendInventoryMovementBatch,
   createPairingChallenge, consumePairingChallenge,
   createInvite, listInvites, revokeInvite, consumeInvite, changeMembershipRole, assignMembershipContextualRole, revokeMembershipContextualRole,
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment, recordServiceDeliveryAssessment,
-  createServiceBooking, transitionServiceBooking, listServiceBookings,
+  createServiceBooking, transitionServiceBooking, listServiceBookings, getTelegramBuyerServiceBookings,
+  assessTelegramBuyerServiceFeasibility, listServiceProviderBookings,
   listServiceResources, createServiceResource, updateServiceResource,
   getServiceResourceAvailability, setServiceResourceAvailability,
   recordAuditEvent, getAuditRetentionPolicy, setAuditRetentionPolicy,
@@ -417,11 +418,13 @@ async function requireTenantAuth(req, tenant) {
   throw Object.assign(new Error('Invalid or missing session'), { statusCode: 401 });
 }
 
-async function requireAuthorization(session, tenant, resource, action, { location = null, deniedMessage = 'Permission denied' } = {}) {
+async function requireAuthorization(session, tenant, resource, action, { location = null, resourceContext = null, deniedMessage = 'Permission denied' } = {}) {
   assertTenantScope(session, tenant);
   if (location) assertLocationScope(session, tenant, location);
   const organization = tenant?.organizationId || session?.organizationId;
-  const decision = authorize(session, organization, location, resource, action);
+  const decision = resourceContext
+    ? authorize(session, organization, location, resource, action, resourceContext)
+    : authorize(session, organization, location, resource, action);
   if (decision === AUTHZ.ALLOW) return decision;
   // Authorization failures use the existing audit_events table; this does not
   // create a second audit system. Best-effort logging must never turn a 403
@@ -588,6 +591,213 @@ async function handleTelegramStorefrontOrderHistory(req, res, chatId) {
     return sendJSON(res, 200, { buyer: { telegramUserId: verified.telegramUserId }, orders }, req);
   } catch (e) {
     try { await recordAuditEvent({ chatId: String(chatId), organizationId: tenant.organizationId, action: 'telegram.storefront.buyer_order_history_failed', entityType: 'telegram_buyer_orders', entityId: null, metadata: { code: e.code || 'TELEGRAM_BUYER_ORDER_HISTORY_FAILED' } }); } catch {}
+    throw e;
+  }
+}
+
+async function handleTelegramStorefrontServiceFeasibility(req, res, chatId, marketplaceOrderId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const config = getTelegramStorefrontConfig(chatId);
+  if (!config || config.status !== 'PUBLISHED') return sendJSON(res, 404, { error: { message: 'Telegram storefront is not published', status: 404 } }, req);
+  if (!Array.isArray(config.enabledCapabilities) || !config.enabledCapabilities.includes('order_status')) {
+    return sendJSON(res, 403, { error: { message: 'Telegram order status capability is disabled', status: 403, code: 'TELEGRAM_ORDER_STATUS_DISABLED' } }, req);
+  }
+  const initData = String(req.headers['x-telegram-init-data'] || '').trim();
+  if (!initData) throw Object.assign(new Error('Telegram buyer authentication is required'), { statusCode: 401, code: 'TELEGRAM_BUYER_AUTH_REQUIRED' });
+  try {
+    const secret = await resolveTelegramBotCredential(config.credentialRef);
+    const verified = verifyTelegramBuyerInitDataWithSecret(initData, secret, TELEGRAM_AUTH_MAX_AGE_SEC);
+    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const assessment = await assessTelegramBuyerServiceFeasibility(
+      chatId,
+      verified.telegramUserId,
+      decodeURIComponent(marketplaceOrderId),
+      {
+        service_item_id: url.searchParams.get('service_item_id'),
+        start: url.searchParams.get('start'),
+        end: url.searchParams.get('end'),
+      },
+    );
+    return sendJSON(res, 200, {
+      feasibility: {
+        state: assessment.state,
+        reasonCode: assessment.reasonCode,
+        timeZone: assessment.timeZone,
+        confirmsAvailability: false,
+        reservesResource: false,
+      },
+    }, req);
+  } catch (e) {
+    throw e;
+  }
+}
+
+async function handleTelegramStorefrontServiceBookingCancel(req, res, chatId, marketplaceOrderId, bookingId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const config = getTelegramStorefrontConfig(chatId);
+  if (!config || config.status !== 'PUBLISHED') return sendJSON(res, 404, { error: { message: 'Telegram storefront is not published', status: 404 } }, req);
+  if (!Array.isArray(config.enabledCapabilities) || !config.enabledCapabilities.includes('order_status')) {
+    return sendJSON(res, 403, { error: { message: 'Telegram order status capability is disabled', status: 403, code: 'TELEGRAM_ORDER_STATUS_DISABLED' } }, req);
+  }
+  const initData = String(req.headers['x-telegram-init-data'] || '').trim();
+  if (!initData) throw Object.assign(new Error('Telegram buyer authentication is required'), { statusCode: 401, code: 'TELEGRAM_BUYER_AUTH_REQUIRED' });
+  try {
+    const secret = await resolveTelegramBotCredential(config.credentialRef);
+    const verified = verifyTelegramBuyerInitDataWithSecret(initData, secret, TELEGRAM_AUTH_MAX_AGE_SEC);
+    const ownedOrder = await getTelegramBuyerServiceBookings(chatId, verified.telegramUserId, decodeURIComponent(marketplaceOrderId));
+    const booking = ownedOrder.bookings.find(item => String(item.id) === String(bookingId));
+    if (!booking) throw Object.assign(new Error('Appointment not found'), { statusCode: 404, code: 'SERVICE_BOOKING_NOT_FOUND' });
+
+    const body = await readBody(req);
+    const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
+    if (!idempotencyKey) throw Object.assign(new Error('Idempotency-Key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
+    const expectedVersion = Number(body.expected_version ?? body.expectedVersion);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 1) {
+      throw Object.assign(new Error('expected_version must be a positive integer'), { statusCode: 400, code: 'SERVICE_BOOKING_VERSION_REQUIRED' });
+    }
+    const result = await transitionServiceBooking(
+      chatId,
+      ownedOrder.orderId,
+      booking.id,
+      { status: 'CANCELLED', expected_version: expectedVersion, idempotencyKey },
+      {
+        actorType: 'TELEGRAM_BUYER',
+        buyerTelegramUserId: verified.telegramUserId,
+        marketplaceOrderId: ownedOrder.marketplaceOrderId,
+      },
+    );
+    const safeBooking = {
+      id: result.booking.id,
+      service_item_id: result.booking.service_item_id,
+      requested_start: result.booking.requested_start,
+      requested_end: result.booking.requested_end,
+      appointment_mode: result.booking.appointment_mode,
+      customer_note: result.booking.customer_note,
+      status: result.booking.status,
+      version: result.booking.version,
+      service_resource_name: result.booking.service_resource_name,
+      created_at: result.booking.created_at,
+      updated_at: result.booking.updated_at,
+    };
+    return sendJSON(res, 200, {
+      booking: safeBooking,
+      replayed: result.replayed,
+      message: result.replayed ? 'Appointment cancellation already recorded' : 'Appointment cancelled',
+    }, req);
+  } catch (e) {
+    try {
+      await recordAuditEvent({
+        chatId: String(chatId), organizationId: tenant.organizationId,
+        action: 'telegram.storefront.service_booking_cancellation_failed',
+        entityType: 'telegram_buyer_service_booking', entityId: String(bookingId),
+        metadata: { code: e.code || 'TELEGRAM_SERVICE_BOOKING_CANCELLATION_FAILED' },
+      });
+    } catch {}
+    throw e;
+  }
+}
+
+async function handleTelegramStorefrontServiceBookings(req, res, chatId, marketplaceOrderId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const config = getTelegramStorefrontConfig(chatId);
+  if (!config || config.status !== 'PUBLISHED') return sendJSON(res, 404, { error: { message: 'Telegram storefront is not published', status: 404 } }, req);
+  if (!Array.isArray(config.enabledCapabilities) || !config.enabledCapabilities.includes('order_status')) {
+    return sendJSON(res, 403, { error: { message: 'Telegram order status capability is disabled', status: 403, code: 'TELEGRAM_ORDER_STATUS_DISABLED' } }, req);
+  }
+  const initData = String(req.headers['x-telegram-init-data'] || '').trim();
+  if (!initData) throw Object.assign(new Error('Telegram buyer authentication is required'), { statusCode: 401, code: 'TELEGRAM_BUYER_AUTH_REQUIRED' });
+  try {
+    const secret = await resolveTelegramBotCredential(config.credentialRef);
+    const verified = verifyTelegramBuyerInitDataWithSecret(initData, secret, TELEGRAM_AUTH_MAX_AGE_SEC);
+    const ownedOrder = await getTelegramBuyerServiceBookings(chatId, verified.telegramUserId, decodeURIComponent(marketplaceOrderId));
+    const customerBookings = ownedOrder.bookings.map(booking => ({
+      id: booking.id,
+      service_item_id: booking.service_item_id,
+      requested_start: booking.requested_start,
+      requested_end: booking.requested_end,
+      appointment_mode: booking.appointment_mode,
+      customer_note: booking.customer_note,
+      status: booking.status,
+      // Customer-safe affordances only; transitionServiceBooking re-authorizes every cancellation.
+      allowed_actions: ['REQUESTED', 'ACCEPTED'].includes(String(booking.status || '').toUpperCase()) ? ['CANCEL'] : [],
+      version: booking.version,
+      service_resource_name: booking.service_resource_name,
+      created_at: booking.created_at,
+      updated_at: booking.updated_at,
+    }));
+    const customerServiceLines = ownedOrder.serviceLines.map(line => ({
+      item_id: line.item_id ?? line.product_id ?? line.id ?? null,
+      name: line.name ?? line.title ?? line.product_name ?? line.item_name ?? null,
+      item_type: 'service',
+      quantity: line.quantity ?? line.qty ?? null,
+      unit: line.unit ?? null,
+    }));
+    if (req.method === 'GET') {
+      return sendJSON(res, 200, {
+        order: { marketplaceOrderId: ownedOrder.marketplaceOrderId, serviceLines: customerServiceLines },
+        bookings: customerBookings,
+        authority: 'canonical_service_booking',
+      }, req);
+    }
+    if (req.method !== 'POST') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+
+    const body = await readBody(req);
+    const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
+    if (!idempotencyKey) throw Object.assign(new Error('Idempotency-Key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
+    const serviceItemId = String(body.service_item_id || body.serviceItemId || '').trim();
+    if (!ownedOrder.serviceLines.some(line => String(line.item_id ?? line.product_id ?? line.id ?? '') === serviceItemId)) {
+      throw Object.assign(new Error('Booking must reference a service line in this buyer-owned order'), { statusCode: 409, code: 'SERVICE_BOOKING_ORDER_LINE_INVALID' });
+    }
+    const result = await createServiceBooking(chatId, ownedOrder.orderId, {
+      service_item_id: serviceItemId,
+      requested_start: body.requested_start ?? body.requestedStart,
+      requested_end: body.requested_end ?? body.requestedEnd,
+      appointment_mode: body.appointment_mode ?? body.appointmentMode,
+      customer_note: body.customer_note ?? body.customerNote,
+      idempotencyKey,
+    }, {
+      actorType: 'TELEGRAM_BUYER',
+      buyerTelegramUserId: verified.telegramUserId,
+      marketplaceOrderId: ownedOrder.marketplaceOrderId,
+    });
+    const refreshed = await getTelegramBuyerServiceBookings(chatId, verified.telegramUserId, ownedOrder.marketplaceOrderId);
+    return sendJSON(res, result.replayed ? 200 : 201, {
+      booking: {
+        id: result.booking.id,
+        service_item_id: result.booking.service_item_id,
+        requested_start: result.booking.requested_start,
+        requested_end: result.booking.requested_end,
+        appointment_mode: result.booking.appointment_mode,
+        customer_note: result.booking.customer_note,
+        status: result.booking.status,
+        version: result.booking.version,
+        service_resource_name: result.booking.service_resource_name,
+        created_at: result.booking.created_at,
+        updated_at: result.booking.updated_at,
+      },
+      replayed: result.replayed,
+      bookings: refreshed.bookings.map(booking => ({
+        id: booking.id, service_item_id: booking.service_item_id,
+        requested_start: booking.requested_start, requested_end: booking.requested_end,
+        appointment_mode: booking.appointment_mode, customer_note: booking.customer_note,
+        status: booking.status, version: booking.version,
+        service_resource_name: booking.service_resource_name,
+        created_at: booking.created_at, updated_at: booking.updated_at,
+      })),
+      message: result.replayed ? 'Appointment request already received' : 'Appointment request received',
+    }, req);
+  } catch (e) {
+    try {
+      await recordAuditEvent({
+        chatId: String(chatId), organizationId: tenant.organizationId,
+        action: 'telegram.storefront.service_booking_request_failed',
+        entityType: 'telegram_buyer_service_booking', entityId: null,
+        metadata: { code: e.code || 'TELEGRAM_SERVICE_BOOKING_FAILED' },
+      });
+    } catch {}
     throw e;
   }
 }
@@ -983,8 +1193,31 @@ async function handleSyncEvents(req, res, chatId) {
   if (events.length > 100) throw Object.assign(new Error('Too many events in one batch'), { statusCode: 400 });
   const results = [];
   for (const event of events) {
-    results.push(await processEventIsolated(event, (candidate) => {
+    results.push(await processEventIsolated(event, async (candidate) => {
       assertEventTenantScope(candidate, { chatId: tenant.chatId, organizationId: tenant.organizationId });
+      const eventType = String(candidate?.eventType || candidate?.event_type || '').trim();
+      if (eventType === 'inventory.movement.record' || eventType === 'inventory.movement.batch.record') {
+        await requireAuthorization(session, tenant, 'inventory', 'inventory:edit', {
+          deniedMessage: 'Inventory edit permission required',
+        });
+        const payload = candidate?.payload || {};
+        const movements = eventType === 'inventory.movement.batch.record'
+          ? (Array.isArray(payload.movements) ? payload.movements : [])
+          : [payload];
+        for (const movement of movements) {
+          const locationId = movement?.locationId || movement?.location_id || null;
+          if (locationId) {
+            const location = await getOrganizationLocation(chatId, locationId);
+            if (!location) {
+              throw Object.assign(new Error('Location does not belong to this organization'), {
+                statusCode: 403,
+                code: 'LOCATION_SCOPE_DENIED',
+              });
+            }
+            assertLocationScope(session, tenant, location);
+          }
+        }
+      }
       return processSyncEvent(chatId, candidate, session);
     }));
   }
@@ -1690,6 +1923,25 @@ async function handleInventoryMovementCreate(req, res, chatId) {
   }
   const movement = await appendInventoryMovement(chatId, body, session);
   sendJSON(res, 201, { movement }, req);
+}
+
+async function handleInventoryMovementBatchCreate(req, res, chatId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+  await requireAuthorization(session, tenant, 'inventory', 'inventory:edit', { deniedMessage: 'Inventory edit permission required' });
+  const body = await readBody(req);
+  const locationId = body.locationId || body.location_id;
+  if (!locationId) {
+    throw Object.assign(new Error('Location is required for an atomic Inventory command'), {
+      statusCode: 400, code: 'INVALID_INVENTORY_COMMAND_LOCATION',
+    });
+  }
+  const location = await getOrganizationLocation(chatId, locationId);
+  if (!location) throw Object.assign(new Error('Location does not belong to this organization'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
+  assertLocationScope(session, tenant, location);
+  const result = await appendInventoryMovementBatch(chatId, body, session);
+  sendJSON(res, result.duplicate ? 200 : 201, result, req);
 }
 
 async function handleLocationsList(req, res, chatId) {
@@ -3104,6 +3356,36 @@ async function handleServiceResources(req, res, chatId, resourceId = null) {
   if (req.method === 'GET') {
     if (resourceId) return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
     const url = new URL(req.url, 'http://localhost');
+    const providerResourceIds = [...new Set((Array.isArray(session.contextualRoles) ? session.contextualRoles : [])
+      .filter(item => String(item?.role || '').toLowerCase() === 'service_provider'
+        && String(item?.scopeType || '').toUpperCase() === 'RESOURCE' && item?.scopeId)
+      .map(item => String(item.scopeId)))];
+
+    if (providerResourceIds.length) {
+      // Service Providers may read only the active resources explicitly assigned
+      // to them. Never authorize a tenant-wide resource list with a contextual role.
+      const assignedResources = (await listServiceResources(chatId, { includeInactive: false }))
+        .filter(resource => providerResourceIds.includes(String(resource.id)));
+      const scopedResources = [];
+      for (const resource of assignedResources) {
+        if (session.locationId && String(resource.locationId || '') !== String(session.locationId)) continue;
+        const location = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
+        if (resource.locationId && !location) throw Object.assign(new Error('Assigned Service Resource location is not available in tenant scope'), {
+          statusCode: 403, code: 'LOCATION_SCOPE_DENIED',
+        });
+        if (!resource.locationId && session.locationId) continue;
+        await requireAuthorization(session, tenant, 'service_resource', 'service:service_resource:view', {
+          location,
+          resourceContext: { resourceType: 'service_resource', resourceId: resource.id,
+            organizationId: resource.organizationId, locationId: resource.locationId },
+          deniedMessage: 'Assigned Service Provider resource view permission required',
+        });
+        scopedResources.push(resource);
+      }
+      return sendJSON(res, 200, { resources: scopedResources, state: scopedResources.length ? 'READY' : 'EMPTY',
+        authority: 'service_resource_registry', scope: 'ACTIVE_ASSIGNED_RESOURCES' }, req);
+    }
+
     const requestedLocationId = url.searchParams.get('location_id') || session.locationId || null;
     const location = requestedLocationId ? await getOrganizationLocation(chatId, requestedLocationId) : null;
     if (requestedLocationId && !location) throw Object.assign(new Error('Service resource location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
@@ -3180,12 +3462,23 @@ async function handleServiceResourceAvailability(req, res, chatId, resourceId) {
   const resource = (await listServiceResources(chatId, { includeInactive: true }))
     .find(item => String(item.id) === String(resourceId));
   if (!resource) return sendJSON(res, 404, { error: { message: 'Service resource not found', status: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' } }, req);
+  const providerResourceScope = (Array.isArray(session.contextualRoles) ? session.contextualRoles : []).some(item =>
+    String(item?.role || '').toLowerCase() === 'service_provider'
+    && String(item?.scopeType || '').toUpperCase() === 'RESOURCE'
+    && String(item?.scopeId || '') === String(resource.id));
+  if (providerResourceScope && String(resource.status).toUpperCase() !== 'ACTIVE') {
+    return sendJSON(res, 404, { error: { message: 'Assigned Service Resource is not active', status: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' } }, req);
+  }
   const location = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
   if (resource.locationId && !location) throw Object.assign(new Error('Service resource location is not available in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
-  if (!resource.locationId && session.locationId) throw Object.assign(new Error('Organization-wide service resources require organization-level scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
-  const action = req.method === 'GET' ? 'service:service_resource:view' : 'service:service_resource:manage';
+  // Organization-wide access is decided by the central evaluator: an
+  // organization-scoped Owner/Manager can proceed, while a location-scoped
+  // contextual role has no matching location context and fails closed.
+  const action = req.method === 'GET' ? 'service:resource_availability:view' : 'service:resource_availability:manage';
   await requireAuthorization(session, tenant, 'service_resource', action, {
-    location, deniedMessage: req.method === 'GET' ? 'Service availability view permission required' : 'Service availability management permission required',
+    location,
+    resourceContext: { resourceType: 'service_resource', resourceId: resource.id, organizationId: resource.organizationId, locationId: resource.locationId },
+    deniedMessage: req.method === 'GET' ? 'Service availability view permission required' : 'Service availability management permission required',
   });
   if (req.method === 'GET') {
     const availability = await getServiceResourceAvailability(chatId, resourceId);
@@ -3197,6 +3490,72 @@ async function handleServiceResourceAvailability(req, res, chatId, resourceId) {
   const result = await setServiceResourceAvailability(chatId, resourceId, { ...body, idempotencyKey }, session);
   return sendJSON(res, 200, { availability: result.availability, replayed: result.replayed, state: 'DECLARED' }, req);
 }
+
+async function handleServiceProviderResources(req, res, chatId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, chatId);
+  if (req.method !== 'GET') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+  const assignedIds = [...new Set((Array.isArray(session.contextualRoles) ? session.contextualRoles : [])
+    .filter(item => String(item?.role || '').toLowerCase() === 'service_provider'
+      && String(item?.scopeType || '').toUpperCase() === 'RESOURCE' && item?.scopeId)
+    .map(item => String(item.scopeId)))];
+  if (!assignedIds.length) throw Object.assign(new Error('An active resource-scoped Service Provider assignment is required'), {
+    statusCode: 403, code: 'SERVICE_PROVIDER_ASSIGNMENT_REQUIRED',
+  });
+  const assignedResources = (await listServiceResources(chatId, { includeInactive: false }))
+    .filter(resource => assignedIds.includes(String(resource.id)));
+  const resources = [];
+  for (const resource of assignedResources) {
+    const location = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
+    if (resource.locationId && !location) throw Object.assign(new Error('Assigned Service Resource location is unavailable in tenant scope'), {
+      statusCode: 403, code: 'LOCATION_SCOPE_DENIED',
+    });
+    const resourceContext = { resourceType: 'service_resource', resourceId: resource.id,
+      organizationId: resource.organizationId, locationId: resource.locationId };
+    await requireAuthorization(session, tenant, 'service_resource', 'service:service_resource:view', {
+      location, resourceContext, deniedMessage: 'Assigned Service Provider resource view permission required',
+    });
+    const availability = await getServiceResourceAvailability(chatId, resource.id);
+    resources.push({ ...resource, availability });
+  }
+  return sendJSON(res, 200, { resources, state: resources.length ? 'READY' : 'EMPTY',
+    authority: 'service_resource_registry + service_resource_availability',
+    scope: 'ACTIVE_ASSIGNED_RESOURCES' }, req);
+}
+
+async function handleServiceProviderBookings(req, res, chatId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, chatId);
+  if (req.method !== 'GET') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+  const assignedIds = [...new Set((Array.isArray(session.contextualRoles) ? session.contextualRoles : [])
+    .filter(item => String(item?.role || '').toLowerCase() === 'service_provider'
+      && String(item?.scopeType || '').toUpperCase() === 'RESOURCE' && item?.scopeId)
+    .map(item => String(item.scopeId)))];
+  if (!assignedIds.length) throw Object.assign(new Error('An active resource-scoped Service Provider assignment is required'), {
+    statusCode: 403, code: 'SERVICE_PROVIDER_ASSIGNMENT_REQUIRED',
+  });
+  const activeResources = (await listServiceResources(chatId, { includeInactive: false }))
+    .filter(resource => assignedIds.includes(String(resource.id)));
+  for (const resource of activeResources) {
+    const location = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
+    if (resource.locationId && !location) throw Object.assign(new Error('Assigned Service Resource location is unavailable in tenant scope'), {
+      statusCode: 403, code: 'LOCATION_SCOPE_DENIED',
+    });
+    await requireAuthorization(session, tenant, 'service_resource', 'service:service_booking:view', {
+      location,
+      resourceContext: { resourceType: 'service_resource', resourceId: resource.id,
+        organizationId: resource.organizationId, locationId: resource.locationId },
+      deniedMessage: 'Assigned Service Provider booking view permission required',
+    });
+  }
+  const bookings = await listServiceProviderBookings(chatId, activeResources.map(resource => resource.id));
+  return sendJSON(res, 200, { bookings, state: bookings.length ? 'READY' : 'EMPTY',
+    authority: 'service_bookings + service_resource_commitments',
+    scope: 'ACTIVE_ASSIGNED_RESOURCES', resource_count: activeResources.length }, req);
+}
+
 
 async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId = null) {
   const tenant = await getTenant(chatId);
@@ -3349,6 +3708,8 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/events\/([^/]+)$/, handler: (req, res, m) => handleSyncEvents(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/sync\/([^/]+)$/, handler: (req, res, m) => handleSyncPull(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/orders\/([^/]+)$/, handler: (req, res, m) => handleOrdersFeed(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-provider\/resources$/, handler: (req, res, m) => handleServiceProviderResources(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-provider\/bookings$/, handler: (req, res, m) => handleServiceProviderBookings(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/service-resources$/, handler: (req, res, m) => handleServiceResources(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/service-resources$/, handler: (req, res, m) => handleServiceResources(req, res, decodeURIComponent(m[1])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/service-resources\/([^/]+)$/, handler: (req, res, m) => handleServiceResources(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
@@ -3370,6 +3731,10 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/telegram-storefront$/, handler: (req, res, m) => handleTelegramStorefrontGet(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/api\/telegram-storefront\/([^/]+)$/, handler: (req, res, m) => handleTelegramStorefrontPublicGet(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/api\/telegram-storefront\/([^/]+)\/buyer-session$/, handler: (req, res, m) => handleTelegramStorefrontBuyerSession(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/service-bookings$/, handler: (req, res, m) => handleTelegramStorefrontServiceBookings(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/service-bookings$/, handler: (req, res, m) => handleTelegramStorefrontServiceBookings(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'GET', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/service-feasibility$/, handler: (req, res, m) => handleTelegramStorefrontServiceFeasibility(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/service-bookings\/([^/]+)\/cancel$/, handler: (req, res, m) => handleTelegramStorefrontServiceBookingCancel(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
   { method: 'GET', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleTelegramStorefrontFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders\/([^/]+)$/, handler: (req, res, m) => handleTelegramStorefrontOrder(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/api\/telegram-storefront\/([^/]+)\/orders$/, handler: (req, res, m) => handleTelegramStorefrontOrderHistory(req, res, decodeURIComponent(m[1])) },
@@ -3469,6 +3834,7 @@ const ROUTES = [
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/b2b\/credit-terms\/([^/]+)$/, handler: (req, res, m) => handleB2BCreditTerms(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/inventory\/movements$/, handler: (req, res, m) => handleInventoryMovementsList(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/inventory\/balances$/, handler: (req, res, m) => handleInventoryBalances(req, res, decodeURIComponent(m[1])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/inventory\/movements\/batch$/, handler: (req, res, m) => handleInventoryMovementBatchCreate(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/inventory\/movements$/, handler: (req, res, m) => handleInventoryMovementCreate(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/locations$/, handler: (req, res, m) => handleLocationsList(req, res, decodeURIComponent(m[1])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/locations$/, handler: (req, res, m) => handleLocationCreate(req, res, decodeURIComponent(m[1])) },

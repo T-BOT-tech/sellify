@@ -601,6 +601,9 @@
       <label for="organizationLocationName">Name</label><input id="organizationLocationName" maxlength="120" placeholder="e.g. Main Store">
       <label for="organizationLocationType">Type</label><select id="organizationLocationType"><option value="STORE">Store</option><option value="WAREHOUSE">Warehouse</option><option value="COLLECTION_CENTER">Collection center</option><option value="DELIVERY_HUB">Delivery hub</option><option value="OFFICE">Office</option><option value="RESTAURANT">Restaurant</option></select>
       <label for="organizationLocationStatus">Status</label><select id="organizationLocationStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select>
+      <label for="organizationLocationTimezone">Location timezone (optional)</label>
+      <input id="organizationLocationTimezone" type="text" maxlength="80" autocomplete="off" placeholder="Africa/Addis_Ababa" aria-describedby="organizationLocationTimezoneHint">
+      <div id="organizationLocationTimezoneHint" class="hint">Use an IANA timezone identifier. Leave blank to inherit the organization timezone.</div>
       <div id="organizationLocationError" role="alert" style="display:none;color:var(--amber);font-size:12px;margin-top:8px;"></div>
       <div style="display:flex;gap:8px;margin-top:12px;"><button type="button" class="btn-secondary" onclick="closeOrganizationLocationModal()">Cancel</button><button type="button" class="btn-primary" onclick="saveOrganizationLocationModal()">Save location</button></div>
     </div>

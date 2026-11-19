@@ -80,6 +80,16 @@ jobs:
         run: npm run test:phase13.10.24-marketplace-fulfillment
       - name: Service Booking operator workspace regression
         run: npm run test:service-booking-operator-workspace
+      - name: SC-03.4 resource commitment migration regression
+        run: npm run test:sc-03.4-resource-commitment-migration
+      - name: SC-03.5 service provider booking queue regression
+        run: npm run test:sc-03.5-service-provider-queue
+      - name: SC-03.5 Telegram buyer appointment order isolation regression
+        run: npm run test:sc-03.5-buyer-appointments
+      - name: SC-03.5 customer appointment browser regression
+        run: npm run test:sc-03.5-appointments-browser
+      - name: SC-03.5 authenticated Telegram appointment HTTP regression
+        run: npm run test:sc-03.5-appointments-http
       - name: Service Booking operator browser regression
         run: node phase0/service-booking-operator-browser-regression.mjs
 
@@ -136,6 +146,8 @@ jobs:
         run: npm run test:service-booking-contract
       - name: Service booking persistence regression
         run: npm run test:service-booking-persistence
+      - name: Service Resource migration 80/81 compatibility regression
+        run: npm run test:service-resource-migration-compatibility
       - name: Service booking scheduling authority boundary regression
         run: npm run test:service-booking-scheduling-boundary
       - name: Service booking operator workspace regression
@@ -302,6 +314,16 @@ jobs:
         run: npm run test:fux-49
       - name: FUX-50 inventory outbox replay regression
         run: npm run test:fux-50
+      - name: SQLite canonical Inventory movement replay runtime regression
+        run: npm run test:inventory-movement-replay-runtime
+      - name: Inventory sync event authorization HTTP regression
+        run: npm run test:inventory-sync-event-authorization-http
+      - name: SQLite atomic Inventory movement batch regression
+        run: npm run test:inventory-movement-batch-runtime
+      - name: Authenticated HTTP atomic Inventory movement batch regression
+        run: npm run test:inventory-movement-batch-http
+      - name: Phase 10.5 Inventory ledger exact-replay compatibility regression
+        run: node phase0/phase10.5-inventory-ledger-regression.mjs
       - name: FUX-51 legacy inventory authority regression
         run: npm run test:fux-51
       - name: FUX-52 cross-pack inventory authority regression
@@ -332,6 +354,10 @@ jobs:
         run: npm run test:fux-56
       - name: FUX-57 canonical business location management authority regression
         run: npm run test:fux-57
+      - name: SC-03.5 canonical location timezone persistence regression
+        run: npm run test:sc-03.5-location-timezone
+      - name: SC-03.5 location-aware availability timezone regression
+        run: npm run test:sc-03.5-location-aware-availability-timezone
       - name: GAP-1.10 payment concurrency and durable idempotency certification
         run: npm run gap-1.10:payment-concurrency-test
       - name: GAP-1.11 payment provider status lifecycle regression

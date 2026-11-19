@@ -19,6 +19,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import { normalizeWorkingHours, normalizeAvailabilityExceptions, isIanaTimeZone } from './service-availability-contract.js';
+import { assessServiceResourceDeclaredWindow } from '../../app/src/verticals/services/service-window-assessment-contract.js';
 import { resolveOnboardingCountry } from './country-pack-onboarding.js';
 import { assertVerificationFreshness } from './payments/verification-freshness.js';
 import { requirePaymentProvider } from './payments/provider-registry.js';
@@ -3379,6 +3380,177 @@ if (!applied.includes(39)) {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(79, nowIso());
   }
+  // SC-03.4 — atomic service appointment/resource commitment.
+  // Existing confirmed bookings are intentionally not backfilled: legacy rows
+  // do not prove which resource was reserved and must remain UNKNOWN to callers.
+  if (!applied.includes(80)) {
+    const bookingColumns = new Set(
+      db.prepare('PRAGMA table_info(service_bookings)').all().map(column => String(column.name))
+    );
+    if (!bookingColumns.has('service_resource_id')) {
+      db.exec('ALTER TABLE service_bookings ADD COLUMN service_resource_id TEXT');
+    }
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS service_resource_commitments (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        chat_id TEXT NOT NULL REFERENCES tenants(chat_id) ON DELETE CASCADE,
+        resource_id TEXT NOT NULL REFERENCES service_resources(id) ON DELETE CASCADE,
+        booking_id TEXT NOT NULL UNIQUE REFERENCES service_bookings(id) ON DELETE CASCADE,
+        starts_at TEXT NOT NULL,
+        ends_at TEXT NOT NULL CHECK (ends_at > starts_at),
+        state TEXT NOT NULL CHECK (state IN ('COMMITTED','RELEASED')),
+        committed_by TEXT,
+        committed_at TEXT NOT NULL,
+        released_by TEXT,
+        released_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_service_resource_commitments_overlap
+        ON service_resource_commitments(organization_id, chat_id, resource_id, state, starts_at, ends_at);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(80, nowIso());
+  }
+  if (!applied.includes(81)) {
+      const bookingColumns = new Set(
+        db.prepare('PRAGMA table_info(service_bookings)').all().map(column => String(column.name))
+      );
+      if (!bookingColumns.has('service_resource_id')) {
+        db.exec('ALTER TABLE service_bookings ADD COLUMN service_resource_id TEXT');
+      }
+  
+      // The alternative v80 implementation named the binding assigned_resource_id.
+      // Copy it only when the resource resolves in the same organization and tenant.
+      if (bookingColumns.has('assigned_resource_id')) {
+        db.exec(`
+          UPDATE service_bookings AS b
+          SET service_resource_id = b.assigned_resource_id
+          WHERE (b.service_resource_id IS NULL OR trim(b.service_resource_id) = '')
+            AND b.assigned_resource_id IS NOT NULL
+            AND trim(b.assigned_resource_id) <> ''
+            AND EXISTS (
+              SELECT 1 FROM service_resources r
+              WHERE r.id = b.assigned_resource_id
+                AND r.organization_id = b.organization_id
+                AND r.chat_id = b.chat_id
+            )
+        `);
+      }
+  
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS service_resource_commitments (
+          id TEXT PRIMARY KEY,
+          organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+          chat_id TEXT NOT NULL REFERENCES tenants(chat_id) ON DELETE CASCADE,
+          resource_id TEXT NOT NULL REFERENCES service_resources(id) ON DELETE CASCADE,
+          booking_id TEXT NOT NULL UNIQUE REFERENCES service_bookings(id) ON DELETE CASCADE,
+          starts_at TEXT NOT NULL,
+          ends_at TEXT NOT NULL,
+          state TEXT NOT NULL CHECK (state IN ('COMMITTED','RELEASED')),
+          committed_by TEXT,
+          committed_at TEXT NOT NULL,
+          released_by TEXT,
+          released_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_service_resource_commitments_overlap
+          ON service_resource_commitments(organization_id, chat_id, resource_id, state, starts_at, ends_at);
+        CREATE INDEX IF NOT EXISTS idx_service_bookings_resource_window
+          ON service_bookings(organization_id, chat_id, service_resource_id, status, requested_start, requested_end);
+      `);
+  
+      // Bridge the third v80 shape when its legacy ledger exists. The booking's
+      // canonical status controls whether the migrated slot is active; terminal
+      // bookings are released so completed/cancelled appointments cannot block
+      // capacity indefinitely. The resource must still match tenant and org.
+      const legacyCommitmentTable = db.prepare(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='service_booking_resource_commitments'"
+      ).get();
+      if (legacyCommitmentTable) {
+        const legacyColumns = new Set(
+          db.prepare('PRAGMA table_info(service_booking_resource_commitments)').all().map(column => String(column.name))
+        );
+        const requiredLegacyColumns = [
+          'id', 'organization_id', 'chat_id', 'booking_id', 'resource_id',
+          'requested_start', 'requested_end', 'state', 'committed_by', 'committed_at',
+          'released_by', 'released_at',
+        ];
+        if (requiredLegacyColumns.every(name => legacyColumns.has(name))) {
+          db.prepare(`
+            INSERT OR IGNORE INTO service_resource_commitments
+              (id, organization_id, chat_id, resource_id, booking_id, starts_at, ends_at,
+               state, committed_by, committed_at, released_by, released_at)
+            SELECT
+              'migration-81:legacy:' || c.id,
+              c.organization_id, c.chat_id, c.resource_id, c.booking_id,
+              c.requested_start, c.requested_end,
+              CASE WHEN b.status IN ('CONFIRMED','IN_PROGRESS') THEN 'COMMITTED' ELSE 'RELEASED' END,
+              c.committed_by,
+              COALESCE(NULLIF(c.committed_at, ''), NULLIF(b.updated_at, ''), b.created_at, ?),
+              CASE WHEN b.status IN ('CONFIRMED','IN_PROGRESS') THEN NULL ELSE c.released_by END,
+              CASE WHEN b.status IN ('CONFIRMED','IN_PROGRESS') THEN NULL
+                ELSE COALESCE(NULLIF(c.released_at, ''), NULLIF(b.updated_at, ''), b.created_at, ?) END
+            FROM service_booking_resource_commitments c
+            JOIN service_bookings b
+              ON b.id = c.booking_id
+             AND b.organization_id = c.organization_id
+             AND b.chat_id = c.chat_id
+            JOIN service_resources r
+              ON r.id = c.resource_id
+             AND r.organization_id = c.organization_id
+             AND r.chat_id = c.chat_id
+            WHERE c.requested_start IS NOT NULL
+              AND c.requested_end IS NOT NULL
+              AND julianday(c.requested_end) > julianday(c.requested_start)
+          `).run(nowIso(), nowIso());
+        }
+      }
+  
+      // Backfill only explicit active booking assignments that resolve inside the
+      // same tenant/organization. Never invent a resource for unassigned history.
+      // If old rows overlap, retain them as COMMITTED so new confirmations fail closed.
+      db.prepare(`
+        INSERT OR IGNORE INTO service_resource_commitments
+          (id, organization_id, chat_id, resource_id, booking_id, starts_at, ends_at,
+           state, committed_by, committed_at, released_by, released_at)
+        SELECT
+          'migration-81:' || b.id,
+          b.organization_id,
+          b.chat_id,
+          b.service_resource_id,
+          b.id,
+          b.requested_start,
+          b.requested_end,
+          'COMMITTED',
+          b.updated_by,
+          COALESCE(NULLIF(b.updated_at, ''), b.created_at, ?),
+          NULL,
+          NULL
+        FROM service_bookings b
+        JOIN service_resources r
+          ON r.id = b.service_resource_id
+         AND r.organization_id = b.organization_id
+         AND r.chat_id = b.chat_id
+        WHERE b.service_resource_id IS NOT NULL
+          AND trim(b.service_resource_id) <> ''
+          AND b.status IN ('CONFIRMED', 'IN_PROGRESS')
+          AND b.requested_start IS NOT NULL
+          AND b.requested_end IS NOT NULL
+          AND julianday(b.requested_end) > julianday(b.requested_start)
+      `).run(nowIso());
+      db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(81, nowIso());
+    }
+
+    // 82: optional location-local timezone. NULL deliberately inherits the
+    // canonical organization timezone; existing schedules and commitments
+    // are not rewritten by this schema migration.
+    if (!applied.includes(82)) {
+      const locationColumns = new Set(
+        db.prepare('PRAGMA table_info(locations)').all().map(column => String(column.name))
+      );
+      if (!locationColumns.has('timezone')) {
+        db.exec('ALTER TABLE locations ADD COLUMN timezone TEXT');
+      }
+      db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(82, nowIso());
+    }
 }
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({
@@ -5702,28 +5874,47 @@ function normaliseLocationStatus(value) {
   return status;
 }
 
+function normaliseLocationTimeZone(value, existing = null) {
+  if (value === undefined) return existing ?? null;
+  const timeZone = value == null ? '' : String(value).trim();
+  if (!timeZone) return null;
+  if (!isIanaTimeZone(timeZone)) {
+    throw Object.assign(new Error('Timezone must be a valid IANA timezone, such as Africa/Addis_Ababa'), {
+      statusCode: 400, code: 'LOCATION_TIMEZONE_INVALID',
+    });
+  }
+  return timeZone;
+}
+
+function organizationLocationFromRow(row) {
+  return row ? {
+    id: row.id, organizationId: row.organization_id, code: row.code, name: row.name,
+    type: row.type, status: row.status, timeZone: row.timezone || null, createdAt: row.created_at,
+  } : null;
+}
+
 export async function listOrganizationLocations(chatId, { includeInactive = false } = {}) {
   ensureDatabase();
   const organizationId = ensureCanonicalIdentityForTenant(chatId);
   if (!organizationId) return null;
   const rows = db.prepare(`
-    SELECT id, organization_id, code, name, type, status, created_at
+    SELECT id, organization_id, code, name, type, status, timezone, created_at
     FROM locations
     WHERE organization_id = ? ${includeInactive ? '' : "AND status = 'active'"}
     ORDER BY created_at ASC, id ASC
   `).all(organizationId);
-  return rows.map(row => ({ id: row.id, organizationId: row.organization_id, code: row.code, name: row.name, type: row.type, status: row.status, createdAt: row.created_at }));
+  return rows.map(organizationLocationFromRow);
 }
 
 export async function getOrganizationLocation(chatId, locationId) {
   ensureDatabase();
   const organizationId = ensureCanonicalIdentityForTenant(chatId);
   if (!organizationId || !locationId) return null;
-  const row = db.prepare('SELECT id, organization_id, code, name, type, status, created_at FROM locations WHERE id = ? AND organization_id = ?').get(String(locationId), String(organizationId));
-  return row ? { id: row.id, organizationId: row.organization_id, code: row.code, name: row.name, type: row.type, status: row.status, createdAt: row.created_at } : null;
+  const row = db.prepare('SELECT id, organization_id, code, name, type, status, timezone, created_at FROM locations WHERE id = ? AND organization_id = ?').get(String(locationId), String(organizationId));
+  return organizationLocationFromRow(row);
 }
 
-export async function createOrganizationLocation(chatId, { code, name, type = 'STORE', status = 'active' }) {
+export async function createOrganizationLocation(chatId, { code, name, type = 'STORE', status = 'active', timezone, timeZone }) {
   ensureDatabase();
   const organizationId = ensureCanonicalIdentityForTenant(chatId);
   if (!organizationId) throw Object.assign(new Error('Unknown store'), { statusCode: 404 });
@@ -5733,15 +5924,16 @@ export async function createOrganizationLocation(chatId, { code, name, type = 'S
   if (!cleanName || cleanName.length > 120) throw Object.assign(new Error('Location name must be 1–120 characters'), { statusCode: 400 });
   const cleanType = normaliseLocationType(type);
   const cleanStatus = normaliseLocationStatus(status);
+  const cleanTimeZone = normaliseLocationTimeZone(timezone ?? timeZone);
   const id = crypto.randomUUID();
   try {
-    db.prepare(`INSERT INTO locations (id, organization_id, code, name, type, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, organizationId, cleanCode, cleanName, cleanType, cleanStatus, nowIso());
+    db.prepare(`INSERT INTO locations (id, organization_id, code, name, type, status, timezone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(id, organizationId, cleanCode, cleanName, cleanType, cleanStatus, cleanTimeZone, nowIso());
   } catch (error) {
     if (String(error.message).includes('UNIQUE')) throw Object.assign(new Error('Location code already exists in this organization'), { statusCode: 409 });
     throw error;
   }
-  audit(String(chatId), 'location.created', 'location', id, { organizationId, code: cleanCode, type: cleanType });
-  return db.prepare('SELECT id, organization_id, code, name, type, status, created_at FROM locations WHERE id = ?').get(id);
+  audit(String(chatId), 'location.created', 'location', id, { organizationId, code: cleanCode, type: cleanType, timezone: cleanTimeZone });
+  return organizationLocationFromRow(db.prepare('SELECT id, organization_id, code, name, type, status, timezone, created_at FROM locations WHERE id = ?').get(id));
 }
 
 export async function updateOrganizationLocation(chatId, locationId, patch = {}) {
@@ -5756,14 +5948,18 @@ export async function updateOrganizationLocation(chatId, locationId, patch = {})
   const status = patch.status == null ? existing.status : normaliseLocationStatus(patch.status);
   const code = patch.code == null ? existing.code : String(patch.code).trim().toUpperCase();
   if (!/^[A-Z0-9][A-Z0-9_-]{0,39}$/.test(code)) throw Object.assign(new Error('Location code must be 1–40 characters using letters, numbers, _ or -'), { statusCode: 400 });
+  const timeZone = normaliseLocationTimeZone(
+    Object.prototype.hasOwnProperty.call(patch, 'timezone') ? patch.timezone : patch.timeZone,
+    existing.timezone || null,
+  );
   try {
-    db.prepare('UPDATE locations SET code = ?, name = ?, type = ?, status = ? WHERE id = ? AND organization_id = ?').run(code, name, type, status, existing.id, organizationId);
+    db.prepare('UPDATE locations SET code = ?, name = ?, type = ?, status = ?, timezone = ? WHERE id = ? AND organization_id = ?').run(code, name, type, status, timeZone, existing.id, organizationId);
   } catch (error) {
     if (String(error.message).includes('UNIQUE')) throw Object.assign(new Error('Location code already exists in this organization'), { statusCode: 409 });
     throw error;
   }
-  audit(String(chatId), 'location.updated', 'location', existing.id, { organizationId, changes: { code, name, type, status } });
-  return db.prepare('SELECT id, organization_id, code, name, type, status, created_at FROM locations WHERE id = ?').get(existing.id);
+  audit(String(chatId), 'location.updated', 'location', existing.id, { organizationId, changes: { code, name, type, status, timezone: timeZone } });
+  return organizationLocationFromRow(db.prepare('SELECT id, organization_id, code, name, type, status, timezone, created_at FROM locations WHERE id = ?').get(existing.id));
 }
 
 export function getIdentityForTenant(chatId) {
@@ -5795,6 +5991,15 @@ function ensureDatabase() {
   // surfacing SQLITE_BUSY as a false payment failure.
   db.exec('PRAGMA busy_timeout = 5000');
   runMigrations();
+  // A prior branch may have recorded migration 82 for a different schema shape.
+  // Repair the additive location column even when the shared migration ledger
+  // already contains 82; never let a stale version marker hide missing schema.
+  const locationColumns = new Set(
+    db.prepare('PRAGMA table_info(locations)').all().map(column => String(column.name))
+  );
+  if (!locationColumns.has('timezone')) {
+    db.exec('ALTER TABLE locations ADD COLUMN timezone TEXT');
+  }
   importLegacyJSON();
   for (const tenant of db.prepare('SELECT chat_id FROM tenants ORDER BY chat_id').all()) {
     ensureCanonicalIdentityForTenant(tenant.chat_id);
@@ -5810,9 +6015,18 @@ function ensureInventoryOpeningBalances(chatId) {
     "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
   ).get(String(tenant.organization_id));
   if (!location) return;
-  const products = db.prepare(
-    'SELECT product_id, stock, product_json FROM catalog_products WHERE chat_id = ? AND stock IS NOT NULL'
-  ).all(String(chatId)).filter(product => {
+  const products = db.prepare(`
+    SELECT cp.product_id, cp.stock, cp.product_json
+    FROM catalog_products cp
+    WHERE cp.chat_id = ?
+      AND cp.stock IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM inventory_movements im
+        WHERE im.organization_id = ?
+          AND im.product_id = cp.product_id
+      )
+  `).all(String(chatId), String(tenant.organization_id)).filter(product => {
     const payload = parseJSON(product.product_json, {});
     // Legacy catalog payloads used `type`; current catalog identity uses `item_type`.
     // Treat either service marker as non-stock-tracked during opening-balance migration.
@@ -5912,6 +6126,8 @@ function serviceBookingFromRow(row) {
     order_id: String(row.server_order_id), service_item_id: String(row.service_item_id),
     requested_start: String(row.requested_start), requested_end: String(row.requested_end),
     appointment_mode: String(row.appointment_mode), customer_note: row.customer_note ?? null,
+    service_resource_id: row.service_resource_id || null,
+    service_resource_name: row.service_resource_name ?? null,
     status: String(row.status), version: Number(row.version),
     created_by: row.created_by || null, updated_by: row.updated_by || null,
     started_at: row.started_at || null, started_by: row.started_by || null,
@@ -5946,6 +6162,33 @@ const SERVICE_BOOKING_FORBIDDEN_AUTHORITY_FIELDS = new Set([
   'inventoryReservationId', 'courier_id', 'courierId',
   'provider_id', 'providerId', 'organization_id', 'organizationId',
 ]);
+function assertTelegramBuyerOwnsCanonicalServiceOrder(chatId, organizationId, buyerTelegramUserId, marketplaceOrderId, serverOrderId) {
+  const buyer = String(buyerTelegramUserId || '').trim();
+  const marketplaceId = String(marketplaceOrderId || '').trim();
+  if (!buyer || !marketplaceId) {
+    throw Object.assign(new Error('Verified Telegram buyer order context is required'), {
+      statusCode: 401, code: 'TELEGRAM_BUYER_ORDER_CONTEXT_REQUIRED',
+    });
+  }
+  const owned = db.prepare(`
+    SELECT 1
+    FROM marketplace_orders mo
+    JOIN marketplace_seller_orders mso ON mso.marketplace_order_id = mo.id
+    JOIN orders o
+      ON o.chat_id = mso.seller_id
+     AND o.local_id = mso.seller_order_id
+     AND o.is_marketplace = 1
+    WHERE mo.id = ?
+      AND mo.buyer_identity = ?
+      AND mso.seller_id = ?
+      AND mso.organization_id = ?
+      AND o.server_order_id = ?
+    LIMIT 1
+  `).get(marketplaceId, buyer, String(chatId), String(organizationId), String(serverOrderId));
+  if (!owned) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+}
+
+
 function assertServiceBookingAuthorityBoundary(input) {
   for (const field of Object.keys(input || {})) {
     if (SERVICE_BOOKING_FORBIDDEN_AUTHORITY_FIELDS.has(field)) {
@@ -6113,6 +6356,19 @@ export async function updateServiceResource(chatId, resourceId, input = {}, acto
       return { resource: serviceResourceFromRow(row), replayed: true };
     }
     if (Number(row.version) !== expectedVersion) throw Object.assign(new Error('Service resource version conflict'), { statusCode: 409, code: 'SERVICE_RESOURCE_VERSION_CONFLICT' });
+    const activeCommitment = db.prepare(`SELECT booking_id FROM service_resource_commitments
+      WHERE organization_id=? AND chat_id=? AND resource_id=? AND state='COMMITTED'
+      ORDER BY committed_at, booking_id LIMIT 1`)
+      .get(String(organizationId), String(chatId), String(resourceId));
+    const assignmentChanges = values.resourceType !== row.resource_type
+      || String(refs.serviceItemId || '') !== String(row.service_item_id || '')
+      || String(refs.locationId || '') !== String(row.location_id || '');
+    if (activeCommitment && (values.status !== 'ACTIVE' || assignmentChanges)) {
+      throw Object.assign(new Error('A resource with committed appointments cannot be deactivated or reassigned until those appointments are released'), {
+        statusCode: 409, code: 'SERVICE_RESOURCE_HAS_ACTIVE_COMMITMENTS',
+        details: { booking_id: activeCommitment.booking_id },
+      });
+    }
     const now = nowIso(), actorId = actor?.userId || actor?.user_id || null, nextVersion = expectedVersion + 1;
     const changed = db.prepare(`UPDATE service_resources SET
       resource_type=?,name=?,description=?,service_item_id=?,location_id=?,status=?,metadata_json=?,
@@ -6156,18 +6412,33 @@ export async function getServiceResourceAvailability(chatId, resourceId) {
   ensureDatabase();
   const organizationId = ensureCanonicalIdentityForTenant(chatId);
   if (!organizationId) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
-  const resource = db.prepare('SELECT id FROM service_resources WHERE id=? AND organization_id=? AND chat_id=?')
-    .get(String(resourceId), String(organizationId), String(chatId));
+  const resource = db.prepare(`
+    SELECT r.id, r.location_id, l.timezone AS location_timezone, o.timezone AS organization_timezone
+    FROM service_resources r
+    JOIN organizations o ON o.id = r.organization_id
+    LEFT JOIN locations l ON l.id = r.location_id AND l.organization_id = r.organization_id
+    WHERE r.id=? AND r.organization_id=? AND r.chat_id=?
+  `).get(String(resourceId), String(organizationId), String(chatId));
   if (!resource) throw Object.assign(new Error('Service resource not found'), { statusCode: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' });
   const row = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=? AND organization_id=? AND chat_id=?')
     .get(String(resourceId), String(organizationId), String(chatId));
-  const organization = db.prepare('SELECT o.timezone FROM organizations o WHERE o.id=?').get(String(organizationId));
-  const timeZone = String(row?.timezone || organization?.timezone || '');
-  if (!isIanaTimeZone(timeZone)) throw Object.assign(new Error('Organization timezone is invalid; availability configuration is unavailable'), { statusCode: 409, code: 'SERVICE_AVAILABILITY_TIMEZONE_INVALID' });
-  return serviceResourceAvailabilityFromRow(row) || {
+  const effectiveTimeZone = String(resource.location_timezone || resource.organization_timezone || '');
+  const timeZone = String(row?.timezone || effectiveTimeZone);
+  if (!isIanaTimeZone(timeZone) || !isIanaTimeZone(effectiveTimeZone)) {
+    throw Object.assign(new Error('The schedule or effective location timezone is invalid; availability configuration is unavailable'), {
+      statusCode: 409, code: 'SERVICE_AVAILABILITY_TIMEZONE_INVALID',
+    });
+  }
+  const availability = serviceResourceAvailabilityFromRow(row) || {
     resourceId: String(resourceId), organizationId: String(organizationId), timeZone,
     workingHours: [], exceptions: [], version: 0, updatedBy: null, updatedAt: null,
     state: 'EMPTY', confirmsAvailability: false,
+  };
+  return {
+    ...availability,
+    effectiveTimeZone,
+    timeZoneSource: row?.timezone ? 'DECLARED_SCHEDULE' : (resource.location_timezone ? 'LOCATION' : 'ORGANIZATION'),
+    scheduleUsesCurrentLocationTimeZone: timeZone === effectiveTimeZone,
   };
 }
 
@@ -6179,11 +6450,7 @@ export async function setServiceResourceAvailability(chatId, resourceId, input =
   if (!Number.isInteger(expectedVersion) || expectedVersion < 0) throw Object.assign(new Error('expected_version must be a non-negative integer'), { statusCode: 400, code: 'SERVICE_AVAILABILITY_VERSION_REQUIRED' });
   const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
   if (!commandKey) throw Object.assign(new Error('Idempotency-Key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
-  const organization = db.prepare('SELECT timezone FROM organizations WHERE id=?').get(String(organizationId));
-  const timeZone = String(organization?.timezone || '');
-  const working = normalizeWorkingHours(input.workingHours ?? input.working_hours ?? [], timeZone);
   const exceptions = normalizeAvailabilityExceptions(input.exceptions ?? []);
-  const fingerprint = crypto.createHash('sha256').update(JSON.stringify({resourceId:String(resourceId),expectedVersion,workingHours:working.entries,exceptions})).digest('hex');
   db.exec('BEGIN IMMEDIATE');
   try {
     const freshTenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id=?').get(String(chatId));
@@ -6191,6 +6458,22 @@ export async function setServiceResourceAvailability(chatId, resourceId, input =
     const resource = db.prepare('SELECT * FROM service_resources WHERE id=? AND organization_id=? AND chat_id=?')
       .get(String(resourceId),String(organizationId),String(chatId));
     if (!resource) throw Object.assign(new Error('Service resource not found'), { statusCode:404, code:'SERVICE_RESOURCE_NOT_FOUND' });
+    const location = resource.location_id
+      ? db.prepare('SELECT timezone FROM locations WHERE id=? AND organization_id=?').get(String(resource.location_id), String(organizationId))
+      : null;
+    if (resource.location_id && !location) throw Object.assign(new Error('Service resource location is not available in organization scope'), {
+      statusCode: 409, code: 'SERVICE_RESOURCE_LOCATION_NOT_FOUND',
+    });
+    const organization = db.prepare('SELECT timezone FROM organizations WHERE id=?').get(String(organizationId));
+    const timeZone = String(location?.timezone || organization?.timezone || '');
+    if (!isIanaTimeZone(timeZone)) throw Object.assign(new Error('Effective service resource timezone is invalid'), {
+      statusCode: 409, code: 'SERVICE_AVAILABILITY_TIMEZONE_INVALID',
+    });
+    const working = normalizeWorkingHours(input.workingHours ?? input.working_hours ?? [], timeZone);
+    const fingerprint = crypto.createHash('sha256').update(JSON.stringify({
+      resourceId:String(resourceId), expectedVersion, timeZone,
+      workingHours:working.entries, exceptions,
+    })).digest('hex');
     const prior = db.prepare('SELECT * FROM service_resource_availability_commands WHERE organization_id=? AND command_key=?')
       .get(String(organizationId),commandKey);
     if (prior) {
@@ -6206,6 +6489,24 @@ export async function setServiceResourceAvailability(chatId, resourceId, input =
       .get(String(resourceId),String(organizationId),String(chatId));
     const currentVersion = Number(current?.version || 0);
     if (currentVersion !== expectedVersion) throw Object.assign(new Error('Service availability version conflict'), { statusCode:409, code:'SERVICE_AVAILABILITY_VERSION_CONFLICT' });
+    // A schedule edit must not invalidate an appointment already committed
+    // to this resource. Evaluate the proposed declaration within the same
+    // write transaction so concurrent changes cannot bypass this guard.
+    const commitments = db.prepare(`SELECT booking_id,starts_at,ends_at FROM service_resource_commitments
+      WHERE organization_id=? AND chat_id=? AND resource_id=? AND state='COMMITTED'`)
+      .all(String(organizationId),String(chatId),String(resourceId));
+    for (const commitment of commitments) {
+      const assessment = assessServiceResourceDeclaredWindow({
+        timeZone, workingHours: working.entries, exceptions,
+        start: commitment.starts_at, end: commitment.ends_at,
+      });
+      if (assessment.scheduleAssessment !== 'WITHIN_DECLARED_HOURS') {
+        throw Object.assign(new Error('The proposed working hours would invalidate an already committed appointment'), {
+          statusCode: 409, code: 'SERVICE_AVAILABILITY_CONFLICTS_WITH_COMMITMENTS',
+          details: { booking_id: commitment.booking_id, reason: assessment.reason },
+        });
+      }
+    }
     const now = nowIso(), nextVersion = currentVersion + 1, actorId = actor?.userId || actor?.user_id || null;
     db.prepare(`INSERT INTO service_resource_availability
       (resource_id,organization_id,chat_id,timezone,working_hours_json,exceptions_json,version,updated_by,updated_at)
@@ -6215,7 +6516,12 @@ export async function setServiceResourceAvailability(chatId, resourceId, input =
         version=excluded.version,updated_by=excluded.updated_by,updated_at=excluded.updated_at`)
       .run(String(resourceId),String(organizationId),String(chatId),timeZone,json(working.entries),json(exceptions),nextVersion,actorId,now);
     const saved = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=?').get(String(resourceId));
-    const availability = serviceResourceAvailabilityFromRow(saved);
+    const availability = {
+      ...serviceResourceAvailabilityFromRow(saved),
+      effectiveTimeZone: timeZone,
+      timeZoneSource: location?.timezone ? 'LOCATION' : 'ORGANIZATION',
+      scheduleUsesCurrentLocationTimeZone: true,
+    };
     db.prepare(`INSERT INTO service_resource_availability_commands
       (organization_id,command_key,resource_id,command_fingerprint,response_json,created_at) VALUES (?,?,?,?,?,?)`)
       .run(String(organizationId),commandKey,String(resourceId),fingerprint,json({ availability }),now);
@@ -6251,6 +6557,11 @@ export async function createServiceBooking(chatId, serverOrderId, input = {}, ac
     if (String(freshTenant?.organization_id || '') !== organizationId) throw Object.assign(new Error('Tenant organization changed during booking'), { statusCode: 409, code: 'ORDER_ORGANIZATION_MISMATCH' });
     const orderRow = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?').get(String(chatId), orderId);
     if (!orderRow) throw Object.assign(new Error('Canonical order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    if (actor?.actorType === 'TELEGRAM_BUYER') {
+      assertTelegramBuyerOwnsCanonicalServiceOrder(
+        chatId, organizationId, actor.buyerTelegramUserId, actor.marketplaceOrderId, orderId,
+      );
+    }
     const order = orderFromRow(orderRow);
     const lines = Array.isArray(order?.items) ? order.items : [];
     if (!lines.some(item => String(item.item_id ?? item.product_id ?? item.id ?? '') === serviceItemId && String(item.item_type || '').toLowerCase() === 'service')) {
@@ -6279,6 +6590,8 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
   if(!organizationId) throw Object.assign(new Error('Order organization is required'),{statusCode:409,code:'ORDER_ORGANIZATION_REQUIRED'});
   assertServiceBookingAuthorityBoundary(input);
   const target=String(input.status||input.next_status||input.nextStatus||'').trim().toUpperCase();
+  const resourceId=String(input.service_resource_id||input.serviceResourceId||'').trim()||null;
+  if(target!=='CONFIRMED'&&resourceId) throw Object.assign(new Error('A service resource may only be assigned during confirmation'),{statusCode:400,code:'SERVICE_BOOKING_RESOURCE_ASSIGNMENT_INVALID'});
   const commandKey=String(input.idempotencyKey||input.idempotency_key||'').trim();
   if(!commandKey) throw Object.assign(new Error('Idempotency-Key is required'),{statusCode:400,code:'IDEMPOTENCY_KEY_REQUIRED'});
   const expectedVersion=Number(input.expected_version??input.expectedVersion);
@@ -6288,24 +6601,81 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
   const completionNote = input.completion_note == null && input.completionNote == null
     ? null : bookingRequiredText(input.completion_note ?? input.completionNote,'completion_note',500);
   if(target!=='COMPLETED'&&completionNote!==null) throw Object.assign(new Error('completion_note is only valid when completing a service booking'),{statusCode:400,code:'SERVICE_BOOKING_COMPLETION_NOTE_INVALID'});
-  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({booking_id:String(bookingId),order_id:String(serverOrderId),status:target,expected_version:expectedVersion,reason,completion_note:completionNote})).digest('hex');
+  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({booking_id:String(bookingId),order_id:String(serverOrderId),status:target,expected_version:expectedVersion,service_resource_id:resourceId,reason,completion_note:completionNote})).digest('hex');
   db.exec('BEGIN IMMEDIATE');
   try {
     const freshTenant=db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(String(chatId));
     if(String(freshTenant?.organization_id||'')!==organizationId) throw Object.assign(new Error('Tenant organization changed during booking transition'),{statusCode:409,code:'ORDER_ORGANIZATION_MISMATCH'});
     const row=db.prepare('SELECT * FROM service_bookings WHERE id=? AND organization_id=? AND chat_id=? AND server_order_id=?').get(String(bookingId),organizationId,String(chatId),String(serverOrderId));
     if(!row) throw Object.assign(new Error('Service booking not found'),{statusCode:404,code:'SERVICE_BOOKING_NOT_FOUND'});
+    if (actor?.actorType === 'TELEGRAM_BUYER') {
+      assertTelegramBuyerOwnsCanonicalServiceOrder(
+        chatId, organizationId, actor.buyerTelegramUserId, actor.marketplaceOrderId, serverOrderId,
+      );
+    }
     const prior=db.prepare('SELECT * FROM service_booking_commands WHERE organization_id=? AND command_key=?').get(organizationId,commandKey);
     if(prior) {
       if(prior.command_type!=='TRANSITION'||String(prior.booking_id)!==String(bookingId)||prior.command_fingerprint!==fingerprint) throw Object.assign(new Error('Idempotency key was reused for a different booking command'),{statusCode:409,code:'SERVICE_BOOKING_IDEMPOTENCY_CONFLICT'});
-      db.exec('COMMIT'); return {booking:serviceBookingFromRow(row),replayed:true};
+      const replay=db.prepare('SELECT * FROM service_bookings WHERE id=? AND organization_id=?').get(String(bookingId),organizationId);
+      db.exec('COMMIT'); return {booking:serviceBookingFromRow(replay),replayed:true};
+    }
+    if (actor?.actorType === 'TELEGRAM_BUYER'
+      && (target !== 'CANCELLED' || !['REQUESTED', 'ACCEPTED'].includes(String(row.status)))) {
+      throw Object.assign(new Error('Customers may cancel only requested or accepted appointments'), {
+        statusCode: 409, code: 'SERVICE_BOOKING_CUSTOMER_CANCELLATION_NOT_ALLOWED',
+      });
     }
     if(!SERVICE_BOOKING_TRANSITIONS[String(row.status)]?.has(target)) throw Object.assign(new Error(`Service booking transition ${row.status} -> ${target} is not allowed`),{statusCode:409,code:'SERVICE_BOOKING_TRANSITION_INVALID'});
     if(Number(row.version)!==expectedVersion) throw Object.assign(new Error('Service booking version conflict'),{statusCode:409,code:'SERVICE_BOOKING_VERSION_CONFLICT'});
-    const now=nowIso(), nextVersion=expectedVersion+1;
     const actorId=actor?.userId||null;
+    let commitment=null;
+    if(target==='CONFIRMED') {
+      if(!resourceId) throw Object.assign(new Error('Select a service resource before confirming this appointment'),{statusCode:400,code:'SERVICE_BOOKING_RESOURCE_REQUIRED'});
+      const resource=db.prepare('SELECT * FROM service_resources WHERE id=? AND organization_id=? AND chat_id=?').get(resourceId,organizationId,String(chatId));
+      if(!resource) throw Object.assign(new Error('Service resource not found in this organization'),{statusCode:404,code:'SERVICE_RESOURCE_NOT_FOUND'});
+      if(String(resource.status).toUpperCase()!=='ACTIVE') throw Object.assign(new Error('Only an active service resource can be committed'),{statusCode:409,code:'SERVICE_RESOURCE_INACTIVE'});
+      if(resource.service_item_id && String(resource.service_item_id)!==String(row.service_item_id)) throw Object.assign(new Error('Service resource is bound to a different service'),{statusCode:409,code:'SERVICE_RESOURCE_SERVICE_MISMATCH'});
+      // ON_SITE fulfillment is bound to the canonical seller-order location.
+      // A location-bound resource must match it; missing order location fails closed.
+      if (String(row.appointment_mode).toUpperCase() === 'ON_SITE' && resource.location_id) {
+        const canonicalOrderRow = db.prepare('SELECT order_json FROM orders WHERE chat_id=? AND server_order_id=?')
+          .get(String(chatId), String(serverOrderId));
+        const canonicalOrder = orderFromRow(canonicalOrderRow || {});
+        const orderLocationId = String(canonicalOrder?.location_id || canonicalOrder?.locationId || '').trim();
+        if (!orderLocationId) throw Object.assign(new Error('The canonical order has no location, so this location-bound resource cannot be assigned to an on-site appointment'), {
+          statusCode: 409, code: 'SERVICE_BOOKING_ORDER_LOCATION_REQUIRED',
+        });
+        if (orderLocationId !== String(resource.location_id)) throw Object.assign(new Error('This service resource is assigned to a different location than the on-site appointment'), {
+          statusCode: 409, code: 'SERVICE_RESOURCE_LOCATION_MISMATCH',
+          details: { order_location_id: orderLocationId, resource_location_id: String(resource.location_id) },
+        });
+      }
+      const availabilityRow=db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=? AND organization_id=? AND chat_id=?').get(resourceId,organizationId,String(chatId));
+      const timezoneContext=db.prepare(`
+        SELECT l.timezone AS location_timezone, o.timezone AS organization_timezone
+        FROM service_resources r
+        JOIN organizations o ON o.id=r.organization_id
+        LEFT JOIN locations l ON l.id=r.location_id AND l.organization_id=r.organization_id
+        WHERE r.id=? AND r.organization_id=? AND r.chat_id=?
+      `).get(resourceId,organizationId,String(chatId));
+      const timeZone=String(availabilityRow?.timezone||timezoneContext?.location_timezone||timezoneContext?.organization_timezone||'');
+      if(!isIanaTimeZone(timeZone)) throw Object.assign(new Error('Resource timezone is not configured'),{statusCode:409,code:'SERVICE_AVAILABILITY_TIMEZONE_INVALID'});
+      if(!availabilityRow) throw Object.assign(new Error('Resource has no declared working schedule'),{statusCode:409,code:'SERVICE_AVAILABILITY_UNKNOWN'});
+      const assessment=assessServiceResourceDeclaredWindow({
+        timeZone,workingHours:parseJSON(availabilityRow.working_hours_json,[]),
+        exceptions:parseJSON(availabilityRow.exceptions_json,[]),
+        start:row.requested_start,end:row.requested_end,
+      });
+      if(assessment.scheduleAssessment!=='WITHIN_DECLARED_HOURS') throw Object.assign(new Error('Requested appointment is outside declared service hours or schedule is unknown'),{statusCode:409,code:assessment.scheduleAssessment==='OUTSIDE_DECLARED_HOURS'?'SERVICE_BOOKING_OUTSIDE_DECLARED_HOURS':'SERVICE_BOOKING_AVAILABILITY_UNKNOWN',details:{schedule_assessment:assessment.scheduleAssessment,reason:assessment.reason}});
+      const conflict=db.prepare(`SELECT id,booking_id,starts_at,ends_at FROM service_resource_commitments
+        WHERE organization_id=? AND chat_id=? AND resource_id=? AND state='COMMITTED'
+          AND starts_at < ? AND ends_at > ? LIMIT 1`).get(organizationId,String(chatId),resourceId,row.requested_end,row.requested_start);
+      if(conflict) throw Object.assign(new Error('This service resource is already committed during the requested interval'),{statusCode:409,code:'SERVICE_BOOKING_RESOURCE_CONFLICT',details:{conflicting_booking_id:conflict.booking_id}});
+      commitment={id:crypto.randomUUID(),resourceId};
+    }
+    const now=nowIso(), nextVersion=expectedVersion+1;
     const changed=db.prepare(`UPDATE service_bookings SET
-      status=?,version=?,updated_by=?,updated_at=?,
+      status=?,version=?,updated_by=?,updated_at=?,service_resource_id=CASE WHEN ?='CONFIRMED' THEN ? ELSE service_resource_id END,
       started_at=CASE WHEN ?='IN_PROGRESS' THEN ? ELSE started_at END,
       started_by=CASE WHEN ?='IN_PROGRESS' THEN ? ELSE started_by END,
       completed_at=CASE WHEN ?='COMPLETED' THEN ? ELSE completed_at END,
@@ -6313,18 +6683,66 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
       completion_note=CASE WHEN ?='COMPLETED' THEN ? ELSE completion_note END,
       status_reason=CASE WHEN ? IN ('REJECTED','FAILED','CANCELLED') THEN ? ELSE status_reason END
       WHERE id=? AND organization_id=? AND version=?`).run(
-        target,nextVersion,actorId,now,
+        target,nextVersion,actorId,now,target,resourceId,
         target,now,target,actorId,target,now,target,actorId,target,completionNote,
-        target,reason,
-        String(bookingId),organizationId,expectedVersion,
+        target,reason,String(bookingId),organizationId,expectedVersion,
       );
     if(Number(changed.changes)!==1) throw Object.assign(new Error('Service booking version conflict'),{statusCode:409,code:'SERVICE_BOOKING_VERSION_CONFLICT'});
+    if(commitment) {
+      db.prepare(`INSERT INTO service_resource_commitments
+        (id,organization_id,chat_id,resource_id,booking_id,starts_at,ends_at,state,committed_by,committed_at)
+        VALUES (?,?,?,?,?,?,?,'COMMITTED',?,?)`).run(
+          commitment.id,organizationId,String(chatId),commitment.resourceId,String(bookingId),
+          row.requested_start,row.requested_end,actorId,now,
+        );
+    }
+    if(['CANCELLED','FAILED','COMPLETED'].includes(target)) {
+      db.prepare(`UPDATE service_resource_commitments SET state='RELEASED',released_by=?,released_at=?
+        WHERE booking_id=? AND organization_id=? AND state='COMMITTED'`).run(actorId,now,String(bookingId),organizationId);
+    }
     db.prepare(`INSERT INTO service_booking_commands (organization_id,command_key,booking_id,command_type,command_fingerprint,created_at) VALUES (?,?,?,'TRANSITION',?,?)`).run(organizationId,commandKey,String(bookingId),fingerprint,now);
-    audit(String(chatId),`services.booking.${target.toLowerCase()}`,'service_booking',String(bookingId),{order_id:String(serverOrderId),from_status:String(row.status),to_status:target,version:nextVersion,reason,...(target==='COMPLETED'?{completion_note:completionNote,completed_at:now,completed_by:actorId}:{}),...(target==='IN_PROGRESS'?{started_at:now,started_by:actorId}:{})},{organizationId,actorId,deviceId:actor?.deviceId||null,reason:reason||''});
+    audit(String(chatId),`services.booking.${target.toLowerCase()}`,'service_booking',String(bookingId),{
+      order_id:String(serverOrderId),from_status:String(row.status),to_status:target,version:nextVersion,reason,
+      ...(commitment?{service_resource_id:commitment.resourceId,resource_commitment_id:commitment.id,commitment_state:'COMMITTED'}:{}),
+      ...(['CANCELLED','FAILED','COMPLETED'].includes(target)?{resource_commitment_released:true}:{}),
+      ...(target==='COMPLETED'?{completion_note:completionNote,completed_at:now,completed_by:actorId}:{}),
+      ...(target==='IN_PROGRESS'?{started_at:now,started_by:actorId}:{}),
+    },{organizationId,actorId,deviceId:actor?.deviceId||null,reason:reason||''});
     const updated=db.prepare('SELECT * FROM service_bookings WHERE id=?').get(String(bookingId));
     db.exec('COMMIT'); return {booking:serviceBookingFromRow(updated),replayed:false};
   } catch(error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
+
+export async function listServiceProviderBookings(chatId, resourceIds = []) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  const organizationId = String(tenant?.organization_id || tenant?.organizationId || '');
+  if (!organizationId) throw Object.assign(new Error('Service booking organization is required'), { statusCode: 409, code: 'ORDER_ORGANIZATION_REQUIRED' });
+  const ids = [...new Set((Array.isArray(resourceIds) ? resourceIds : []).map(value => String(value || '').trim()).filter(Boolean))];
+  if (!ids.length) return [];
+  const placeholders = ids.map(() => '?').join(',');
+  return db.prepare(`SELECT b.*, r.name AS service_resource_name,
+      c.starts_at AS commitment_starts_at, c.ends_at AS commitment_ends_at
+    FROM service_bookings b
+    JOIN service_resource_commitments c ON c.booking_id = b.id
+      AND c.organization_id = b.organization_id AND c.chat_id = b.chat_id
+      AND c.resource_id = b.service_resource_id
+      AND c.starts_at = b.requested_start AND c.ends_at = b.requested_end
+      AND c.state = 'COMMITTED'
+    JOIN service_resources r ON r.id = c.resource_id
+      AND r.organization_id = c.organization_id AND r.chat_id = c.chat_id
+      AND r.status = 'ACTIVE'
+    WHERE b.organization_id = ? AND b.chat_id = ?
+      AND b.service_resource_id IN (${placeholders})
+      AND b.status IN ('CONFIRMED','IN_PROGRESS')
+    ORDER BY c.starts_at ASC, b.id ASC`)
+    .all(String(organizationId), String(chatId), ...ids)
+    .map(row => ({ ...serviceBookingFromRow(row),
+      commitment_starts_at: String(row.commitment_starts_at),
+      commitment_ends_at: String(row.commitment_ends_at),
+    }));
+}
+
 export async function listServiceBookings(chatId, serverOrderId) {
   ensureDatabase();
   const tenant=await getTenant(chatId), organizationId=String(tenant?.organization_id||tenant?.organizationId||'');
@@ -6942,10 +7360,24 @@ export async function getInventoryBalances(chatId, { locationId = '' } = {}) {
   `).all(...params).map(row => ({ locationId: row.location_id, productId: row.product_id, quantity: Number(row.quantity) }));
 }
 
-export async function appendInventoryMovement(chatId, input = {}, actor = null) {
-  ensureDatabase();
-  const tenant = await getTenant(chatId);
-  if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
+async function waitForInventoryTransactionSlot() {
+  const deadline = Date.now() + 5000;
+  while (db.isTransaction) {
+    if (Date.now() >= deadline) {
+      throw Object.assign(new Error('Inventory write is waiting for another database transaction'), {
+        statusCode: 503, code: 'INVENTORY_TRANSACTION_BUSY',
+      });
+    }
+    await new Promise(resolve => setImmediate(resolve));
+  }
+}
+
+function appendInventoryMovementInTransaction(chatId, organizationId, input = {}, actor = null) {
+  if (!db.isTransaction) {
+    throw Object.assign(new Error('Inventory transaction context is required'), {
+      statusCode: 500, code: 'INVENTORY_TRANSACTION_CONTEXT_REQUIRED',
+    });
+  }
   const productId = String(input.productId ?? input.product_id ?? '').trim();
   const movementType = String(input.movementType ?? input.movement_type ?? '').trim().toUpperCase();
   const quantity = Number(input.quantity);
@@ -6953,47 +7385,262 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null) 
   if (!productId || !Number.isFinite(quantity) || quantity === 0 || !allowedTypes.has(movementType)) {
     throw Object.assign(new Error('Valid productId, non-zero quantity, and movementType are required'), { statusCode: 400 });
   }
+  const eventId = String(input.eventId || input.event_id || crypto.randomUUID()).trim();
+  if (!eventId) throw Object.assign(new Error('eventId must not be empty'), { statusCode: 400, code: 'INVALID_INVENTORY_EVENT_ID' });
+
+  const priorByEventId = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
+  if (priorByEventId && String(priorByEventId.organization_id) !== organizationId) {
+    throw Object.assign(new Error('Inventory event ID is already owned by another organization'), {
+      statusCode: 409, code: 'INVENTORY_EVENT_ID_REUSED',
+    });
+  }
+  const defaultLocation = db.prepare(
+    "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
+  ).get(organizationId);
+  const locationId = String(input.locationId || input.location_id || priorByEventId?.location_id || defaultLocation?.id || '');
+  const referenceType = input.referenceType || input.reference_type || null;
+  const referenceId = input.referenceId || input.reference_id || null;
+  const suppliedOccurredAt = input.occurredAt ?? input.occurred_at;
+  const reason = String(input.reason || '').slice(0, 500);
+  const metadata = input.metadata || {};
+  const canonicalize = value => {
+    if (Array.isArray(value)) return value.map(canonicalize);
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalize(value[key])]));
+    }
+    return value;
+  };
+  const metadataIntent = JSON.stringify(canonicalize(metadata));
+  const replayMatches = row => String(row.organization_id) === organizationId
+    && String(row.location_id) === locationId
+    && String(row.product_id) === productId
+    && Number(row.quantity) === quantity
+    && String(row.movement_type) === movementType
+    && (row.reference_type || null) === referenceType
+    && (row.reference_id || null) === referenceId
+    && row.reason === reason
+    && JSON.stringify(canonicalize(parseJSON(row.metadata_json, {}))) === metadataIntent
+    && (suppliedOccurredAt == null || String(row.occurred_at) === String(suppliedOccurredAt));
+
+  const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
+  if (existing) {
+    if (!replayMatches(existing)) {
+      throw Object.assign(new Error('Inventory event ID was already used with a different movement intent'), {
+        statusCode: 409, code: 'INVENTORY_EVENT_ID_REUSED',
+      });
+    }
+    return inventoryMovementFromRow(existing);
+  }
+
+  const location = db.prepare("SELECT id FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'").get(locationId, organizationId);
+  if (!location) {
+    throw Object.assign(new Error('Inventory location does not belong to this organization'), { statusCode: 400 });
+  }
   const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
   if (!product) throw Object.assign(new Error('Product not found'), { statusCode: 404 });
   const servicePayload = parseJSON(product.product_json, {});
   const isService = String(servicePayload.item_type ?? servicePayload.type ?? '').trim().toLowerCase() === 'service';
-  const defaultLocation = db.prepare(
-    "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
-  ).get(String(tenant.organizationId));
-  const locationId = String(input.locationId || defaultLocation?.id || '');
-  const location = db.prepare("SELECT id FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'").get(locationId, String(tenant.organizationId));
-  if (!location) throw Object.assign(new Error('Inventory location does not belong to this organization'), { statusCode: 400 });
-  const eventId = String(input.eventId || crypto.randomUUID()).trim();
-  const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
-  if (existing) return inventoryMovementFromRow(existing);
   if (isService) {
     throw Object.assign(new Error('Service catalog items do not support physical inventory movements'), {
-      statusCode: 422,
-      code: 'SERVICE_HAS_NO_INVENTORY',
+      statusCode: 422, code: 'SERVICE_HAS_NO_INVENTORY',
     });
   }
+
   const now = nowIso();
   const id = crypto.randomUUID();
-  db.prepare(`
-    INSERT INTO inventory_movements
-      (id, event_id, organization_id, location_id, product_id, quantity, movement_type,
-       reference_type, reference_id, actor_id, device_id, occurred_at, reason, metadata_json, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    id, eventId, String(tenant.organizationId), locationId, productId, quantity, movementType,
-    input.referenceType || input.reference_type || null, input.referenceId || input.reference_id || null,
-    actor?.userId || null, actor?.deviceId || null, input.occurredAt || input.occurred_at || now,
-    String(input.reason || '').slice(0, 500), json(input.metadata || {}), now
-  );
+  try {
+    db.prepare(`
+      INSERT INTO inventory_movements
+        (id, event_id, organization_id, location_id, product_id, quantity, movement_type,
+         reference_type, reference_id, actor_id, device_id, occurred_at, reason, metadata_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, eventId, organizationId, locationId, productId, quantity, movementType,
+      referenceType, referenceId, actor?.userId || null, actor?.deviceId || null,
+      suppliedOccurredAt == null ? now : String(suppliedOccurredAt),
+      reason, json(metadata), now
+    );
+  } catch (error) {
+    if (error?.code === 'SQLITE_CONSTRAINT_UNIQUE' || error?.code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
+      const winner = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
+      if (winner && replayMatches(winner)) return inventoryMovementFromRow(winner);
+      throw Object.assign(new Error('Inventory event ID was already used with a different movement intent'), {
+        statusCode: 409, code: 'INVENTORY_EVENT_ID_REUSED',
+      });
+    }
+    throw error;
+  }
   audit(String(chatId), 'inventory.movement.recorded', 'inventory_movement', id, {
     productId, locationId, movementType, quantity, eventId,
   }, {
-    organizationId: tenant.organizationId,
+    organizationId,
     locationId,
     actorId: actor?.userId || null,
     deviceId: actor?.deviceId || null,
   });
   return inventoryMovementFromRow(db.prepare('SELECT * FROM inventory_movements WHERE id = ?').get(id));
+}
+
+export async function appendInventoryMovement(chatId, input = {}, actor = null, options = {}) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
+  const organizationId = String(tenant.organizationId);
+  const withinTransaction = options?.withinTransaction === true;
+  if (withinTransaction) {
+    if (!db.isTransaction) {
+      throw Object.assign(new Error('Caller-owned Inventory transaction is not active'), {
+        statusCode: 500, code: 'INVENTORY_TRANSACTION_CONTEXT_REQUIRED',
+      });
+    }
+    return appendInventoryMovementInTransaction(chatId, organizationId, input, actor);
+  }
+
+  await waitForInventoryTransactionSlot();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const movement = appendInventoryMovementInTransaction(chatId, organizationId, input, actor);
+    db.exec('COMMIT');
+    return movement;
+  } catch (error) {
+    if (db.isTransaction) db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+function canonicalizeInventoryCommandValue(value) {
+  if (Array.isArray(value)) return value.map(canonicalizeInventoryCommandValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalizeInventoryCommandValue(value[key])]));
+  }
+  return value;
+}
+
+export async function appendInventoryMovementBatch(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
+  const organizationId = String(tenant.organizationId);
+  const commandId = String(input.commandId ?? input.command_id ?? '').trim();
+  const locationId = String(input.locationId ?? input.location_id ?? '').trim();
+  const lines = input.lines;
+  if (!commandId || commandId.length > 128) {
+    throw Object.assign(new Error('commandId must be a non-empty string of at most 128 characters'), {
+      statusCode: 400, code: 'INVALID_INVENTORY_COMMAND_ID',
+    });
+  }
+  if (!locationId) {
+    throw Object.assign(new Error('locationId is required for an atomic Inventory command'), {
+      statusCode: 400, code: 'INVALID_INVENTORY_COMMAND_LOCATION',
+    });
+  }
+  if (!Array.isArray(lines) || lines.length < 1 || lines.length > 100) {
+    throw Object.assign(new Error('Inventory command must contain between 1 and 100 movement lines'), {
+      statusCode: 400, code: 'INVALID_INVENTORY_COMMAND_LINES',
+    });
+  }
+  const seenLineIds = new Set();
+  const normalizedLines = lines.map((line, index) => {
+    const lineId = String(line?.lineId ?? line?.line_id ?? '').trim();
+    const productId = String(line?.productId ?? line?.product_id ?? '').trim();
+    const quantity = Number(line?.quantity);
+    const movementType = String(line?.movementType ?? line?.movement_type ?? '').trim().toUpperCase();
+    if (!lineId || lineId.length > 128 || seenLineIds.has(lineId)) {
+      throw Object.assign(new Error(`Inventory command line ${index + 1} requires a unique lineId`), {
+        statusCode: 400, code: 'INVALID_INVENTORY_COMMAND_LINE_ID',
+      });
+    }
+    seenLineIds.add(lineId);
+    if (!productId || !Number.isFinite(quantity) || quantity === 0 || !movementType) {
+      throw Object.assign(new Error(`Inventory command line ${lineId} has invalid product, quantity, or movement type`), {
+        statusCode: 400, code: 'INVALID_INVENTORY_COMMAND_LINE',
+      });
+    }
+    const metadata = line.metadata ?? {};
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata) || Object.hasOwn(metadata, 'inventoryCommand')) {
+      throw Object.assign(new Error(`Inventory command line ${lineId} has invalid or reserved metadata`), {
+        statusCode: 400, code: 'INVALID_INVENTORY_COMMAND_METADATA',
+      });
+    }
+    return {
+      lineId, productId, quantity, movementType,
+      metadata: canonicalizeInventoryCommandValue(metadata),
+    };
+  });
+  const commandMetadata = input.metadata ?? {};
+  if (!commandMetadata || typeof commandMetadata !== 'object' || Array.isArray(commandMetadata) || Object.hasOwn(commandMetadata, 'inventoryCommand')) {
+    throw Object.assign(new Error('Inventory command metadata is invalid or uses a reserved key'), {
+      statusCode: 400, code: 'INVALID_INVENTORY_COMMAND_METADATA',
+    });
+  }
+  const referenceType = input.referenceType ?? input.reference_type ?? null;
+  const referenceId = input.referenceId ?? input.reference_id ?? null;
+  const reason = String(input.reason || '').slice(0, 500);
+  const occurredAt = input.occurredAt ?? input.occurred_at ?? null;
+  const canonicalLines = [...normalizedLines].sort((a, b) => a.lineId.localeCompare(b.lineId));
+  const fingerprintPayload = canonicalizeInventoryCommandValue({
+    organizationId, locationId, referenceType, referenceId, reason, occurredAt,
+    metadata: commandMetadata, lines: canonicalLines,
+  });
+  const fingerprint = crypto.createHash('sha256').update(JSON.stringify(fingerprintPayload)).digest('hex');
+  const commandPrefix = `inventory-batch:${crypto.createHash('sha256').update(JSON.stringify([organizationId, commandId])).digest('hex')}:`;
+  const eventIds = new Set(normalizedLines.map(line =>
+    commandPrefix + crypto.createHash('sha256').update(line.lineId).digest('hex')));
+  const movementInputs = normalizedLines.map(line => ({
+    eventId: commandPrefix + crypto.createHash('sha256').update(line.lineId).digest('hex'),
+    productId: line.productId,
+    quantity: line.quantity,
+    movementType: line.movementType,
+    locationId,
+    referenceType,
+    referenceId,
+    reason,
+    occurredAt,
+    metadata: {
+      ...commandMetadata,
+      line: line.metadata,
+      inventoryCommand: { commandId, fingerprint, lineCount: normalizedLines.length, lineId: line.lineId },
+    },
+  }));
+
+  await waitForInventoryTransactionSlot();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const priorRows = db.prepare(`
+      SELECT event_id FROM inventory_movements
+      WHERE substr(event_id, 1, ?) = ?
+    `).all(commandPrefix.length, commandPrefix);
+    if (priorRows.length > 0) {
+      const priorIds = new Set(priorRows.map(row => String(row.event_id)));
+      if (priorRows.length !== normalizedLines.length || priorIds.size !== eventIds.size ||
+          [...eventIds].some(eventId => !priorIds.has(eventId))) {
+        throw Object.assign(new Error('Inventory command ID was already used by a different or incomplete command'), {
+          statusCode: 409, code: 'INVENTORY_COMMAND_ID_REUSED',
+        });
+      }
+    }
+    let movements;
+    try {
+      movements = movementInputs.map(movement => appendInventoryMovementInTransaction(
+        chatId, organizationId, movement, actor,
+      ));
+    } catch (error) {
+      if (error?.code === 'INVENTORY_EVENT_ID_REUSED') {
+        throw Object.assign(new Error('Inventory command ID was already used with a different movement intent'), {
+          statusCode: 409, code: 'INVENTORY_COMMAND_ID_REUSED',
+        });
+      }
+      throw error;
+    }
+    db.exec('COMMIT');
+    return {
+      commandId, fingerprint, duplicate: priorRows.length > 0,
+      movements,
+    };
+  } catch (error) {
+    if (db.isTransaction) db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 export async function processSyncEvent(chatId, event = {}, actor = null) {
@@ -7030,9 +7677,32 @@ export async function processSyncEvent(chatId, event = {}, actor = null) {
       return { eventId, status: existing.status, duplicate: true, replay: true };
     }
     if (eventType === 'inventory.movement.record') {
-      await appendInventoryMovement(chatId, event.payload, actor);
+      appendInventoryMovementInTransaction(chatId, String(tenant.organizationId), event.payload, actor);
+    } else if (eventType === 'inventory.movement.batch.record') {
+      const movements = event.payload.movements;
+      if (!Array.isArray(movements) || movements.length < 1 || movements.length > 100) {
+        throw Object.assign(new Error('Batch payload must contain 1-100 movements'), {
+          statusCode: 400, code: 'INVALID_INVENTORY_MOVEMENT_BATCH',
+        });
+      }
+      const movementEventIds = movements.map(movement =>
+        String(movement?.eventId || movement?.event_id || '').trim()
+      );
+      if (movementEventIds.some(id => !id) || new Set(movementEventIds).size !== movementEventIds.length) {
+        throw Object.assign(new Error('Every batch movement requires a unique eventId'), {
+          statusCode: 400, code: 'INVALID_INVENTORY_MOVEMENT_BATCH',
+        });
+      }
+      // The outer BEGIN IMMEDIATE transaction owns the entire command. Apply
+      // each line synchronously through the canonical movement validator; any
+      // invalid line throws and the outer catch rolls back every prior line
+      // and the outer sync receipt. No savepoint/replay pass or async yield is
+      // needed because all canonical writes and audit records are SQLite-local.
+      for (const movement of movements) {
+        appendInventoryMovementInTransaction(chatId, String(tenant.organizationId), movement, actor);
+      }
     } else if (eventType === 'customer.upsert') {
-      await upsertCustomer(chatId, event.payload);
+      upsertCustomerSync(chatId, event.payload);
     } else {
       throw Object.assign(new Error(`Unsupported sync event type: ${eventType}`), { statusCode: 400 });
     }
@@ -11357,7 +12027,7 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
           // inventory_movements is the physical stock authority. catalog_products.stock
           // is retained only as a compatibility projection for older clients.
           const movementEventId = `marketplace-sale:${marketplaceOrderId}:${sellerId}:${itemId}`;
-          await appendInventoryMovement(sellerId, {
+          appendInventoryMovementInTransaction(sellerId, String(tenant.organization_id), {
             productId: itemId,
             locationId: String(defaultLocation.id),
             quantity: -qty,
@@ -11368,7 +12038,7 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
             occurredAt: nowIso(),
             reason: 'Marketplace checkout',
             metadata: { marketplaceOrderId, sellerId, quantity: qty },
-          });
+          }, null);
           product.stock = canonicalBalance - qty;
           product.stock_revision = (Number.isInteger(row.stock_revision) ? row.stock_revision : 0) + 1;
           insertProduct(sellerId, product);
@@ -11565,7 +12235,7 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
         `).get(String(tenant.organization_id), String(defaultLocation.id), String(itemId))?.quantity || 0);
         const restoredStock = Math.min(1000000000, canonicalBalance + qty);
         const movementEventId = `marketplace-cancel:${order.marketplace_order_id}:${key}:${itemId}`;
-        await appendInventoryMovement(key, {
+        appendInventoryMovementInTransaction(key, String(tenant.organization_id), {
           productId: itemId,
           locationId: String(defaultLocation.id),
           quantity: qty,
@@ -11576,7 +12246,7 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
           occurredAt: nowIso(),
           reason: 'Marketplace cancellation stock release',
           metadata: { marketplaceOrderId: order.marketplace_order_id, sellerId: key, quantity: qty },
-        });
+        }, null);
         const product = productFromRow(productRow);
         product.stock = restoredStock;
         product.stock_revision = (Number.isInteger(productRow.stock_revision) ? productRow.stock_revision : 0) + 1;
@@ -11826,6 +12496,206 @@ export async function listTelegramBuyerOrders(chatId, telegramUserId, limit = 20
   return [...grouped.values()].slice(0, safeLimit);
 }
 
+export async function getTelegramBuyerServiceBookings(chatId, telegramUserId, marketplaceOrderId) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  const organizationId = String(tenant?.organization_id || tenant?.organizationId || '');
+  const buyer = String(telegramUserId || '').trim();
+  const marketplaceId = String(marketplaceOrderId || '').trim();
+  if (!organizationId) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'STORE_NOT_FOUND' });
+  if (!buyer) throw Object.assign(new Error('Telegram buyer identity is required'), { statusCode: 400, code: 'TELEGRAM_BUYER_REQUIRED' });
+  if (!marketplaceId) throw Object.assign(new Error('Marketplace order ID is required'), { statusCode: 400, code: 'MARKETPLACE_ORDER_REQUIRED' });
+
+  const row = db.prepare(`
+    SELECT o.*
+    FROM marketplace_orders mo
+    JOIN marketplace_seller_orders mso ON mso.marketplace_order_id = mo.id
+    JOIN orders o
+      ON o.chat_id = mso.seller_id
+     AND o.local_id = mso.seller_order_id
+     AND o.is_marketplace = 1
+    WHERE mo.id = ?
+      AND mo.buyer_identity = ?
+      AND mso.seller_id = ?
+      AND mso.organization_id = ?
+      AND o.server_order_id IS NOT NULL
+    LIMIT 1
+  `).get(marketplaceId, buyer, String(chatId), organizationId);
+  // Deliberately indistinguishable for unknown, foreign-buyer, and foreign-seller orders.
+  if (!row) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+
+  const canonicalOrder = orderFromRow(row);
+  const bookings = db.prepare(`
+    SELECT b.*, r.name AS service_resource_name
+    FROM service_bookings b
+    LEFT JOIN service_resource_commitments commitment
+      ON commitment.booking_id = b.id
+     AND commitment.organization_id = b.organization_id
+     AND commitment.chat_id = b.chat_id
+     AND commitment.resource_id = b.service_resource_id
+     AND commitment.starts_at = b.requested_start
+     AND commitment.ends_at = b.requested_end
+     AND commitment.state = 'COMMITTED'
+    LEFT JOIN service_resources r
+      ON r.id = commitment.resource_id
+     AND r.organization_id = b.organization_id
+     AND r.chat_id = b.chat_id
+    WHERE b.organization_id = ?
+      AND b.chat_id = ?
+      AND b.server_order_id = ?
+    ORDER BY b.created_at DESC, b.id DESC
+  `).all(organizationId, String(chatId), String(row.server_order_id)).map(serviceBookingFromRow);
+
+  return {
+    marketplaceOrderId: marketplaceId,
+    orderId: String(row.server_order_id),
+    locationId: row.location_id ? String(row.location_id) : null,
+    serviceLines: (Array.isArray(canonicalOrder?.items) ? canonicalOrder.items : [])
+      .filter(item => String(item.item_type || '').toLowerCase() === 'service'),
+    bookings,
+  };
+}
+
+// Advisory buyer-facing feasibility only. This reads declared hours and
+// committed intervals; it never creates a hold, booking, commitment, or audit row.
+export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUserId, marketplaceOrderId, input = {}) {
+  ensureDatabase();
+  const ownedOrder = await getTelegramBuyerServiceBookings(chatId, telegramUserId, marketplaceOrderId);
+  const serviceItemId = bookingRequiredText(input.service_item_id ?? input.serviceItemId, 'service_item_id');
+  if (!ownedOrder.serviceLines.some(line =>
+    String(line.item_id ?? line.product_id ?? line.id ?? '') === serviceItemId)) {
+    throw Object.assign(new Error('Feasibility must reference a service line in this buyer-owned order'), {
+      statusCode: 409, code: 'SERVICE_BOOKING_ORDER_LINE_INVALID',
+    });
+  }
+  const start = bookingTimestamp(input.start ?? input.requested_start, 'start');
+  const end = bookingTimestamp(input.end ?? input.requested_end, 'end');
+  if (Date.parse(end) <= Date.parse(start)) {
+    throw Object.assign(new Error('end must be later than start'), { statusCode: 400, code: 'SERVICE_BOOKING_TIME_WINDOW_INVALID' });
+  }
+  const tenant = await getTenant(chatId);
+  const organizationId = String(tenant?.organization_id || tenant?.organizationId || '');
+  const organization = db.prepare('SELECT timezone FROM organizations WHERE id = ?').get(organizationId);
+  const organizationTimeZone = String(organization?.timezone || '');
+  if (!isIanaTimeZone(organizationTimeZone)) {
+    return { state: 'UNKNOWN', reasonCode: 'ORGANIZATION_TIMEZONE_INVALID', timeZone: null, confirmsAvailability: false };
+  }
+
+  const resources = db.prepare(`
+    SELECT r.id, r.location_id, a.timezone, l.timezone AS location_timezone,
+      a.working_hours_json, a.exceptions_json,
+      CASE WHEN UPPER(r.resource_type) <> 'PROVIDER' OR EXISTS (
+        SELECT 1
+        FROM membership_roles mr
+        JOIN memberships m ON m.id = mr.membership_id
+        WHERE mr.role_id = 'service_provider'
+          AND mr.status = 'active'
+          AND mr.scope_type = 'RESOURCE'
+          AND mr.scope_id = r.id
+          AND m.chat_id = r.chat_id
+          AND m.status = 'active'
+      ) THEN 1 ELSE 0 END AS provider_assignment_active
+    FROM service_resources r
+    LEFT JOIN service_resource_availability a
+      ON a.resource_id = r.id
+     AND a.organization_id = r.organization_id
+     AND a.chat_id = r.chat_id
+    LEFT JOIN locations l
+      ON l.id = r.location_id AND l.organization_id = r.organization_id
+    WHERE r.organization_id = ?
+      AND r.chat_id = ?
+      AND r.status = 'ACTIVE'
+      AND (r.service_item_id IS NULL OR r.service_item_id = ?)
+      AND (r.location_id IS NULL OR r.location_id = ?)
+    ORDER BY r.id
+  `).all(organizationId, String(chatId), serviceItemId, ownedOrder.locationId);
+
+  if (!resources.length) {
+    return { state: 'UNKNOWN', reasonCode: 'NO_ACTIVE_MATCHING_RESOURCES', timeZone: organizationTimeZone, confirmsAvailability: false };
+  }
+
+  // A legacy CONFIRMED appointment without a matching committed resource
+  // cannot be safely assigned to a candidate resource. Treat an overlapping
+  // interval as UNKNOWN instead of reporting FEASIBLE from incomplete evidence.
+  const legacyUncommittedBooking = db.prepare(`
+    SELECT 1
+    FROM service_bookings b
+    LEFT JOIN service_resource_commitments c
+      ON c.booking_id = b.id
+     AND c.organization_id = b.organization_id
+     AND c.chat_id = b.chat_id
+     AND c.resource_id = b.service_resource_id
+     AND c.starts_at = b.requested_start
+     AND c.ends_at = b.requested_end
+     AND c.state = 'COMMITTED'
+    WHERE b.organization_id = ?
+      AND b.chat_id = ?
+      AND b.service_item_id = ?
+      AND b.status IN ('CONFIRMED', 'IN_PROGRESS')
+      AND b.requested_start < ?
+      AND b.requested_end > ?
+      AND (b.service_resource_id IS NULL OR c.id IS NULL)
+    LIMIT 1
+  `).get(organizationId, String(chatId), serviceItemId, end, start);
+  if (legacyUncommittedBooking) {
+    return {
+      state: 'UNKNOWN',
+      reasonCode: 'OVERLAPPING_LEGACY_CONFIRMED_BOOKING_WITHOUT_RESOURCE',
+      timeZone: organizationTimeZone,
+      confirmsAvailability: false,
+    };
+  }
+
+  let scheduleUnknown = false;
+  let providerAssignmentUnknown = false;
+  let scheduleMatched = 0;
+  let overlapCount = 0;
+  for (const resource of resources) {
+    const resourceTimeZone = String(resource.timezone || resource.location_timezone || organizationTimeZone);
+    if (!isIanaTimeZone(resourceTimeZone)) { scheduleUnknown = true; continue; }
+    const schedule = assessServiceResourceDeclaredWindow({
+      timeZone: resourceTimeZone,
+      workingHours: parseJSON(resource.working_hours_json, []),
+      exceptions: parseJSON(resource.exceptions_json, []),
+      start, end,
+    });
+    if (schedule.scheduleAssessment === 'UNKNOWN') { scheduleUnknown = true; continue; }
+    if (schedule.scheduleAssessment !== 'WITHIN_DECLARED_HOURS') continue;
+    scheduleMatched += 1;
+    const overlap = db.prepare(`
+      SELECT 1
+      FROM service_resource_commitments
+      WHERE organization_id = ?
+        AND chat_id = ?
+        AND resource_id = ?
+        AND state = 'COMMITTED'
+        AND starts_at < ?
+        AND ends_at > ?
+      LIMIT 1
+    `).get(organizationId, String(chatId), String(resource.id), end, start);
+    // A committed interval remains authoritative conflict evidence even if
+    // the provider assignment is later revoked. But an uncommitted provider
+    // resource is not feasible without a currently active exact assignment.
+    if (overlap) { overlapCount += 1; continue; }
+    if (!Number(resource.provider_assignment_active)) {
+      providerAssignmentUnknown = true;
+      continue;
+    }
+    return { state: 'FEASIBLE', reasonCode: 'DECLARED_HOURS_AND_COMMITMENTS_MATCH', timeZone: resourceTimeZone, confirmsAvailability: false };
+  }
+
+  if (scheduleMatched > 0 && overlapCount === scheduleMatched) {
+    return { state: 'CONFLICT', reasonCode: 'ALL_MATCHING_RESOURCES_COMMITTED', timeZone: organizationTimeZone, confirmsAvailability: false };
+  }
+  if (providerAssignmentUnknown) {
+    return { state: 'UNKNOWN', reasonCode: 'RESOURCE_PROVIDER_ASSIGNMENT_INACTIVE', timeZone: organizationTimeZone, confirmsAvailability: false };
+  }
+  if (scheduleUnknown) {
+    return { state: 'UNKNOWN', reasonCode: 'RESOURCE_SCHEDULE_EVIDENCE_INCOMPLETE', timeZone: organizationTimeZone, confirmsAvailability: false };
+  }
+  return { state: 'CONFLICT', reasonCode: 'OUTSIDE_DECLARED_WORKING_HOURS', timeZone: organizationTimeZone, confirmsAvailability: false };
+}
+
 export async function listAuditEvents(chatId, limit = 100, filters = {}) {
   ensureDatabase();
   const safeLimit = Math.min(500, Math.max(1, Number(limit) || 100));
@@ -12023,6 +12893,7 @@ const CONTEXTUAL_ROLE_IDS = new Set([
   'logistics_dispatcher',
   'logistics_courier',
   'logistics_viewer',
+  'service_provider',
 ]);
 
 function assertContextualRoleAssignable(chatId, role) {
@@ -12035,6 +12906,7 @@ function assertContextualRoleAssignable(chatId, role) {
   const requiredPack = normalizedRole.startsWith('warehouse_') ? 'warehouse'
     : normalizedRole.startsWith('restaurant_') ? 'restaurant'
     : normalizedRole.startsWith('logistics_') ? 'logistics'
+    : normalizedRole === 'service_provider' ? 'service'
     : null;
   // Retail/POS contextual roles are backed by existing Platform/Core retail authorities.
   // Retail/POS and Agriculture contextual roles are backed by existing
@@ -12053,6 +12925,7 @@ function assertContextualRoleAssignable(chatId, role) {
     );
   }
 }
+
 
 export async function assignMembershipContextualRole({
   actorUserId, chatId, membershipId, role, scopeType = 'ORGANIZATION', scopeId = null,
@@ -12223,7 +13096,7 @@ export async function changeMembershipRole({ actorUserId, chatId, membershipId, 
   return { id: target.id, userId: target.user_id, chatId: target.chat_id, from: target.role, to: nextRole, changed: true };
 }
 
-export async function ensureMembership(userId, chatId, role = 'owner') {
+function ensureMembershipSync(userId, chatId, role = 'owner') {
   ensureDatabase();
   const existing = db.prepare('SELECT * FROM memberships WHERE user_id = ? AND chat_id = ?').get(String(userId), String(chatId));
   if (existing) return existing;
@@ -12237,6 +13110,11 @@ export async function ensureMembership(userId, chatId, role = 'owner') {
   `).run(`legacy-role:${id}`, id, String(role).trim().toLowerCase(), createdAt);
   audit(String(chatId), 'membership.created', 'membership', id, { userId: String(userId), role });
   return db.prepare('SELECT * FROM memberships WHERE id = ?').get(id);
+}
+
+// Preserve the public async API; transaction owners use the synchronous core.
+export async function ensureMembership(userId, chatId, role = 'owner') {
+  return ensureMembershipSync(userId, chatId, role);
 }
 
 export async function createTenantForUser({ userId, sellerName, businessType, country, currency, timezone, challengeToken = null }) {
@@ -12289,7 +13167,7 @@ export async function createTenantForUser({ userId, sellerName, businessType, co
 
     db.prepare(`INSERT INTO tenants (chat_id, tenant_id, api_key, created_at, seller_name, branding_json, vendor_code) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(chatId, tenantId, apiKey, now, tenant.sellerName, json({ currency: tenant.currency, country: tenant.country, timezone: tenant.timezone }), null);
     ensureCanonicalIdentityForTenant(chatId);
-    const membership = await ensureMembership(userId, chatId, 'owner');
+    const membership = ensureMembershipSync(userId, chatId, 'owner');
     audit(chatId, 'tenant.created_authenticated', 'tenant', chatId, { userId: String(userId), businessType: tenant.businessType });
     const result = { chatId, tenantId, membership, tenant: { ...tenant, createdAt: now } };
     if (challengeTokenHash) {
@@ -12848,7 +13726,7 @@ export async function consumePairingChallenge(token, deviceName = 'Paired Sellif
   db.exec('BEGIN IMMEDIATE');
   try {
     db.prepare('INSERT INTO users (id, telegram_user_id, display_name, created_at, last_seen_at) VALUES (?, NULL, ?, ?, ?)').run(userId, `Paired device`, now, now);
-    await ensureMembership(userId, row.chat_id, row.role);
+    ensureMembershipSync(userId, row.chat_id, row.role);
     db.prepare('UPDATE pairing_challenges SET used_at = ? WHERE token_hash = ?').run(now, hash);
     audit(row.chat_id, 'device.paired', 'device', null, { userId, role: row.role, deviceName: String(deviceName || 'Paired Sellify device') });
     db.exec('COMMIT');
@@ -12943,7 +13821,7 @@ export async function consumeInvite(token, userId) {
         audit(row.chat_id, 'membership.role_upgraded', 'membership', existing.id, { userId: String(userId), from: existing.role, to: row.role });
       }
     } else {
-      await ensureMembership(userId, row.chat_id, row.role);
+      ensureMembershipSync(userId, row.chat_id, row.role);
     }
     db.prepare('UPDATE invites SET used_at = ?, used_by_user_id = ? WHERE token_hash = ?').run(nowIso(), String(userId), hash);
     audit(row.chat_id, 'invite.accepted', 'invite', null, { userId: String(userId), role: row.role, alreadyMember, roleChanged });

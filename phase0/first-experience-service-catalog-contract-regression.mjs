@@ -219,7 +219,7 @@ try {
 
   const storeSource = await readFile(new URL('../backend/lib/store-sqlite.js', import.meta.url), 'utf8');
   assert.match(storeSource, /if \(isService\) \{\s*throw Object\.assign\(new Error\('Service catalog items do not support physical inventory movements'\)/, 'server-side inventory authority must enforce service stock exclusion');
-  assert(storeSource.includes('SELECT product_id, stock, product_json FROM catalog_products WHERE chat_id = ? AND stock IS NOT NULL') && storeSource.includes('payload.item_type ?? payload.type') && storeSource.includes("return String(payload.item_type ?? payload.type ?? '').trim().toLowerCase() !== 'service';"), 'legacy opening-balance migration must exclude both canonical and legacy service markers');
+  assert(storeSource.includes('SELECT cp.product_id, cp.stock, cp.product_json') && storeSource.includes('NOT EXISTS (') && storeSource.includes('inventory_movements im') && storeSource.includes('payload.item_type ?? payload.type') && storeSource.includes("return String(payload.item_type ?? payload.type ?? '').trim().toLowerCase() !== 'service';"), 'opening-balance seeding must skip ledger-tracked products and exclude canonical and legacy service markers');
   assert(storeSource.includes("payload.item_type ?? payload.type") && storeSource.includes("Service catalog items cannot be received into physical inventory") && storeSource.includes("code: 'SERVICE_HAS_NO_INVENTORY'"), 'procurement receiving must reject canonical and legacy service items before creating receipt records');
   const fulfillmentStart = storeSource.indexOf('function applyCoreFulfillmentInventoryConsequence');
   const fulfillmentEnd = storeSource.indexOf('\nexport async function selectDeliveryCourier', fulfillmentStart);
