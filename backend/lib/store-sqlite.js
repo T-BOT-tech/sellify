@@ -12105,6 +12105,23 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
       AND r.status = 'ACTIVE'
       AND (r.service_item_id IS NULL OR r.service_item_id = ?)
       AND (r.location_id IS NULL OR r.location_id = ?)
+      -- Provider resources are operational candidates only while at least one
+      -- active member holds the exact resource-scoped provider assignment.
+      -- Declared hours alone must not make a revoked/unassigned provider feasible.
+      AND (
+        UPPER(r.resource_type) <> 'PROVIDER'
+        OR EXISTS (
+          SELECT 1
+          FROM membership_roles mr
+          JOIN memberships m ON m.id = mr.membership_id
+          WHERE mr.role_id = 'service_provider'
+            AND mr.status = 'active'
+            AND mr.scope_type = 'RESOURCE'
+            AND mr.scope_id = r.id
+            AND m.chat_id = r.chat_id
+            AND m.status = 'active'
+        )
+      )
     ORDER BY r.id
   `).all(organizationId, String(chatId), serviceItemId, ownedOrder.locationId);
 
