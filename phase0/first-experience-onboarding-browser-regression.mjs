@@ -63,52 +63,54 @@ async function waitForCatalogItem(baseUrl, chatId, token, itemName) {
 }
 
 async function readPersistedBrowserConfig(page) {
-  return page.evaluate(async () => {
-    const fallback = () => {
-      try { return JSON.parse(localStorage.getItem('ledger_config') || '{}'); } catch { return {}; }
+  return page.evaluate(async () => new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (error) reject(error);
+      else resolve(value);
     };
-    return new Promise(resolve => {
-      let settled = false;
-      const finish = value => {
-        if (settled) return;
-        settled = true;
-        resolve(value && typeof value === 'object' ? value : fallback());
+    const timer = setTimeout(() => finish(new Error('Timed out reading the application IndexedDB tenant config')), 5000);
+    try {
+      // Do not create the database/store here and do not fall back to localStorage:
+      // this regression specifically proves the app committed the canonical config
+      // to its IndexedDB primary store before navigating/reloading.
+      const request = indexedDB.open('ledger_db');
+      request.onupgradeneeded = () => {
+        try { request.transaction.abort(); } catch {}
+        finish(new Error('The application did not initialize its IndexedDB database before the persistence assertion'));
       };
-      const timer = setTimeout(() => finish(fallback()), 2000);
-      try {
-        const request = indexedDB.open('ledger_db', 1);
-        request.onerror = () => { clearTimeout(timer); finish(fallback()); };
-        request.onupgradeneeded = () => {
-          const db = request.result;
-          if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
-        };
-        request.onsuccess = () => {
-          const db = request.result;
-          if (!db.objectStoreNames.contains('kv')) {
-            db.close();
-            clearTimeout(timer);
-            finish(fallback());
+      request.onerror = () => finish(request.error || new Error('Could not open the application IndexedDB database'));
+      request.onsuccess = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains('kv')) {
+          db.close();
+          finish(new Error('The application IndexedDB key/value store is missing'));
+          return;
+        }
+        const tx = db.transaction('kv', 'readonly');
+        const get = tx.objectStore('kv').get('ledger_config');
+        get.onsuccess = () => {
+          const value = get.result;
+          db.close();
+          if (!value || typeof value !== 'object') {
+            finish(new Error('The application tenant config is absent from IndexedDB'));
             return;
           }
-          const tx = db.transaction('kv', 'readonly');
-          const get = tx.objectStore('kv').get('ledger_config');
-          get.onsuccess = () => {
-            clearTimeout(timer);
-            db.close();
-            finish(get.result || fallback());
-          };
-          get.onerror = () => {
-            clearTimeout(timer);
-            db.close();
-            finish(fallback());
-          };
+          finish(null, value);
         };
-      } catch {
-        clearTimeout(timer);
-        finish(fallback());
-      }
-    });
-  });
+        get.onerror = () => {
+          const error = get.error || new Error('Could not read tenant config from IndexedDB');
+          db.close();
+          finish(error);
+        };
+      };
+    } catch (error) {
+      finish(error);
+    }
+  }));
 }
 
 try {
