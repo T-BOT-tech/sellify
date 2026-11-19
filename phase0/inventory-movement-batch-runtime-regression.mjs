@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -8,6 +8,17 @@ process.env.SELLIFY_DATA_DIR = dataDir;
 process.env.SELLIFY_DB_PATH = path.join(dataDir, 'sellify.sqlite');
 
 try {
+  const serverSource = await readFile(new URL('../backend/server.js', import.meta.url), 'utf8');
+  assert.match(serverSource, /POST[^\\n]*inventory\\/movements\\/batch/,
+    'atomic Inventory command must be exposed through a dedicated API route');
+  const batchHandlerStart = serverSource.indexOf('async function handleInventoryMovementBatchCreate');
+  const batchHandlerEnd = serverSource.indexOf('async function handleLocationsList', batchHandlerStart);
+  const batchHandler = serverSource.slice(batchHandlerStart, batchHandlerEnd);
+  assert.match(batchHandler, /requireAuthorization\\(session, tenant, 'inventory', 'inventory:edit'/,
+    'atomic Inventory command must reuse server-side Inventory edit authorization');
+  assert.match(batchHandler, /assertLocationScope\\(session, tenant, location\\)/,
+    'atomic Inventory command must enforce canonical location scope');
+
   const store = await import('../backend/lib/store-sqlite.js');
   const suffix = String(Date.now());
   const owner = await store.getOrCreateUserByTelegram('inventory-batch-owner-' + suffix, 'Inventory Batch Owner');
