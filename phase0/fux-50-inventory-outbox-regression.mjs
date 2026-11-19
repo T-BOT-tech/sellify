@@ -34,7 +34,7 @@ check(store.includes("String(priorByEventId.organization_id) !== organizationId"
 check(store.includes("code: 'INVENTORY_EVENT_ID_REUSED'"), 'same-key conflicting movement intent is rejected with a stable conflict code');
 check(store.includes('String(row.location_id) === locationId') && store.includes('String(row.product_id) === productId'), 'replay identity binds organization, location, product and quantity');
 check(store.includes('JSON.stringify(canonicalize(parseJSON(row.metadata_json, {}))) === metadataIntent'), 'replay identity binds canonicalized metadata');
-check(store.includes('const ownsTransaction = !db.isTransaction') && store.includes("db.exec('BEGIN IMMEDIATE')"), 'direct movement writes serialize under an immediate transaction without nesting sync transactions');
+check(store.includes('options?.withinTransaction === true') && store.includes('waitForInventoryTransactionSlot') && store.includes("code: 'INVENTORY_TRANSACTION_BUSY'") && store.includes("db.exec('BEGIN IMMEDIATE')"), 'Inventory joins only explicitly declared caller-owned transactions and queues unrelated writers');
 check(store.includes("code: 'INVENTORY_EVENT_ID_REUSED'"), 'unique-key races fail closed unless the winning movement matches the complete intent');
 
 console.log('FUX-50 inventory outbox/replay regression: PASS');
