@@ -9,7 +9,7 @@ const phases = [
   ['21.0', 'phase0/phase21.0-baseline-relock-regression.mjs', 20],
   ['21.1', 'phase0/phase21.1-commodity-supply-boundary-regression.mjs', 17],
   ['21.2', 'phase0/phase21.2-supply-capability-regression.mjs', 13],
-  ['21.3', 'phase0/phase21.3-capacity-availability-regression.mjs', 15],
+  ['21.3', 'phase0/phase21.3-capacity-availability-regression.mjs', 18],
   ['21.4', 'phase0/phase21.4-demand-requirement-regression.mjs', 18],
   ['21.5', 'phase0/phase21.5-deterministic-commodity-match-regression.mjs', 13],
   ['21.6', 'phase0/phase21.6-sourcing-opportunity-regression.mjs', 17],
@@ -45,6 +45,6 @@ for (const rel of [
 ]) assert.equal(fs.existsSync(path.join(root, rel)), true, `missing 21.12 artifact: ${rel}`);
 
 const total = phases.reduce((sum, [, , count]) => sum + count, 0);
-assert.equal(total, 220);
+assert.equal(total, 223);
 console.log(`PHASE 21.14 CUMULATIVE GATE: ${total} PASS / 0 FAIL`);
 console.log('Node >=24 certification: DEFERRED_TO_PHASE_21.15');
