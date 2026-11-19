@@ -92,3 +92,28 @@ Every implementation task must record:
 **Deferred historical work:** issue #272 remains open for extracting unique deltas from historical SC-03/Telegram branches. Appointment workspace issue #271 is closed because PR #273 integrated that work.
 
 Node >=24 remains mandatory. The successful gates validate the integrated SC-03/Inventory, Appointments, Recipe, and Settings slices; they do not certify unrelated deferred platform work or every open documentation/evaluation PR.
+
+## 6. Branch inventory snapshot (2026-11-19)
+
+A full paginated inventory found **234 branches** and **272 pull requests**:
+- **5 open PRs** remain: #214, #217, #225, #227, and #189.
+- **157 PRs are merged** and **110 are closed without merge**.
+- 213 branches are heads of closed PRs only; 15 branches have no PR as head and are not bases of an open PR.
+- One branch is currently used as the base of an open PR; all other active work is represented by the five open PR heads.
+
+### Untracked branch disposition
+
+Four untracked branches are fully behind current main (zero commits ahead) and are candidates for archival after a final dependent-reference check:
+- `feat/durable-service-booking-commands` — 0 ahead / 457 behind.
+- `feat/sc034-service-resource-commitments-mainline-20261117` — 0 ahead / 242 behind.
+- `fix/payment-ui-stale-state-regression-20261029` — 0 ahead / 407 behind.
+- `test/service-booking-scheduling-boundary-current-main-20261029-v3` — 0 ahead / 413 behind.
+
+The other untracked branches are **not safe for bulk deletion**. They contain divergent or ahead commits and need targeted delta review. Examples include:
+- Historical appointment/service branches: `feat/sc03-5-location-timezone-availability-v2`, `feat/sc03-customer-appointment-journey-20261115`, `feat/sc03-service-booking-atomic-commitment`, and `feat/sc03-service-booking-atomic-commitment-authority`. Track unique behavior through issue #272; do not merge wholesale.
+- Older Logistics model branch: `feat/logistics-service-delivery-model-20261018`.
+- `fix/logistics-delivery-proof-immutability`: its older proof mutation path is superseded by current main's stronger canonical/legacy proof comparison and immutable-proof guard; retain until the exact branch delta is checked against the GAP-2 regression.
+- `fix/service-opening-balance-boundary`: its older opening-balance logic is superseded by current main's canonical-ledger `NOT EXISTS` guard and service-item exclusion; retain until the exact branch delta is checked against the Inventory replay regression.
+- `gap-1/notification-auth-contract`, `test/marketplace-order-payment-settlement-http-journey-20261101`, `test/tenant-creation-response-loss-current-main`, and `ux/home-command-center-attention-01` need focused ownership/delta review before archival.
+
+**Cleanup decision:** do not delete branches in bulk. Archive/delete only the four zero-ahead candidates after confirming no hidden dependency or audit requirement; retain divergent branches until their unique deltas are either ported, explicitly deferred, or rejected with evidence.
