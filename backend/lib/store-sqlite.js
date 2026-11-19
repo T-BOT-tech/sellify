@@ -5815,6 +5815,37 @@ export function getIdentityForTenant(chatId) {
       status: row.status, metadata: parseJSON(row.metadata_json, {}), createdAt: row.created_at,
     })),
   };
+
+  // Restaurant-owned Recipe definitions. Ingredient identities remain canonical
+  // Commerce catalog products; stock and movements remain canonical Inventory.
+  if (!applied.includes(81)) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS restaurant_recipes (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        chat_id TEXT NOT NULL REFERENCES tenants(chat_id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        menu_product_id TEXT,
+        yield_quantity REAL NOT NULL CHECK (yield_quantity > 0),
+        yield_unit TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('ACTIVE','ARCHIVED')) DEFAULT 'ACTIVE',
+        ingredients_json TEXT NOT NULL,
+        fingerprint TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+        created_by TEXT,
+        updated_by TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (organization_id, id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_restaurant_recipes_org_status
+        ON restaurant_recipes(organization_id, status, name);
+      CREATE INDEX IF NOT EXISTS idx_restaurant_recipes_chat_updated
+        ON restaurant_recipes(chat_id, updated_at DESC);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(81, nowIso());
+  }
 }
 
 function ensureDatabase() {
@@ -13879,4 +13910,159 @@ export function getDatabasePath() {
 export function getDatabaseForTests() {
   ensureDatabase();
   return db;
+}
+
+function normalizeRestaurantRecipeInput(chatId, input = {}) {
+  const name = String(input.name || '').trim();
+  const description = String(input.description || '').trim();
+  const yieldQuantity = Number(input.yieldQuantity ?? input.yield_quantity ?? 1);
+  const yieldUnit = String(input.yieldUnit ?? input.yield_unit ?? 'portion').trim();
+  if (!name || name.length > 120) throw Object.assign(new Error('Recipe name is required and must be at most 120 characters'), { statusCode: 400, code: 'INVALID_RESTAURANT_RECIPE' });
+  if (description.length > 1000) throw Object.assign(new Error('Recipe description must be at most 1000 characters'), { statusCode: 400, code: 'INVALID_RESTAURANT_RECIPE' });
+  if (!Number.isFinite(yieldQuantity) || yieldQuantity <= 0 || yieldQuantity > 1000000 || !yieldUnit || yieldUnit.length > 40) {
+    throw Object.assign(new Error('Recipe yield quantity and unit are invalid'), { statusCode: 400, code: 'INVALID_RESTAURANT_RECIPE_YIELD' });
+  }
+  const menuProductId = input.menuProductId ?? input.menu_product_id ?? null;
+  if (menuProductId != null && String(menuProductId).trim()) {
+    const menuProduct = db.prepare('SELECT product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), String(menuProductId));
+    if (!menuProduct) throw Object.assign(new Error('Recipe menu product does not exist in this organization'), { statusCode: 422, code: 'RESTAURANT_RECIPE_MENU_PRODUCT_INVALID' });
+  }
+  if (!Array.isArray(input.ingredients) || input.ingredients.length < 1 || input.ingredients.length > 100) {
+    throw Object.assign(new Error('Recipe must contain between 1 and 100 ingredients'), { statusCode: 400, code: 'INVALID_RESTAURANT_RECIPE_INGREDIENTS' });
+  }
+  const seen = new Set();
+  const ingredients = input.ingredients.map((line, index) => {
+    if (!line || typeof line !== 'object' || Array.isArray(line)) {
+      throw Object.assign(new Error(`Recipe ingredient ${index + 1} is invalid`), { statusCode: 400, code: 'INVALID_RESTAURANT_RECIPE_INGREDIENT' });
+    }
+    const productId = String(line.productId ?? line.product_id ?? '').trim();
+    const quantity = Number(line.quantity ?? line.qty);
+    const unit = String(line.unit || '').trim();
+    if (!productId || seen.has(productId)) throw Object.assign(new Error('Recipe ingredient product IDs must be present and unique'), { statusCode: 400, code: 'INVALID_RESTAURANT_RECIPE_INGREDIENT' });
+    if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 100000000 || !unit || unit.length > 40) {
+      throw Object.assign(new Error(`Recipe ingredient ${productId} quantity and unit are invalid`), { statusCode: 400, code: 'INVALID_RESTAURANT_RECIPE_INGREDIENT' });
+    }
+    const productRow = db.prepare('SELECT product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
+    if (!productRow) throw Object.assign(new Error(`Ingredient product ${productId} does not exist in this organization`), { statusCode: 422, code: 'RESTAURANT_RECIPE_INGREDIENT_PRODUCT_INVALID' });
+    const product = parseJSON(productRow.product_json, {});
+    if (String(product.item_type ?? product.type ?? 'product').toLowerCase() === 'service') {
+      throw Object.assign(new Error(`Service item ${productId} cannot be a physical recipe ingredient`), { statusCode: 422, code: 'RESTAURANT_RECIPE_INGREDIENT_NOT_STOCKED' });
+    }
+    seen.add(productId);
+    return { productId, productName: String(product.name || ''), quantity, unit };
+  });
+  return {
+    name, description,
+    menuProductId: menuProductId == null || !String(menuProductId).trim() ? null : String(menuProductId).trim(),
+    yieldQuantity, yieldUnit, ingredients,
+    fingerprint: crypto.createHash('sha256').update(JSON.stringify({
+      name, description, menuProductId: menuProductId == null || !String(menuProductId).trim() ? null : String(menuProductId).trim(),
+      yieldQuantity, yieldUnit, ingredients,
+    })).digest('hex'),
+  };
+}
+
+function restaurantRecipeFromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id, organizationId: row.organization_id, name: row.name,
+    description: row.description || '', menuProductId: row.menu_product_id || null,
+    yieldQuantity: Number(row.yield_quantity), yieldUnit: row.yield_unit,
+    status: row.status, ingredients: parseJSON(row.ingredients_json, []),
+    version: Number(row.version), createdBy: row.created_by || null,
+    updatedBy: row.updated_by || null, createdAt: row.created_at, updatedAt: row.updated_at,
+  };
+}
+
+export async function listRestaurantRecipes(chatId, { includeArchived = false } = {}) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const rows = includeArchived
+    ? db.prepare('SELECT * FROM restaurant_recipes WHERE organization_id = ? ORDER BY name COLLATE NOCASE, id').all(String(tenant.organizationId))
+    : db.prepare("SELECT * FROM restaurant_recipes WHERE organization_id = ? AND status = 'ACTIVE' ORDER BY name COLLATE NOCASE, id").all(String(tenant.organizationId));
+  return rows.map(restaurantRecipeFromRow);
+}
+
+export async function createRestaurantRecipe(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const id = String(input.id ?? input.recipeId ?? input.recipe_id ?? '').trim();
+  if (!id || id.length > 128) throw Object.assign(new Error('A stable client-generated recipe ID is required'), { statusCode: 400, code: 'RESTAURANT_RECIPE_ID_REQUIRED' });
+  const normalized = normalizeRestaurantRecipeInput(chatId, input);
+  await waitForInventoryTransactionSlot();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const existing = db.prepare('SELECT * FROM restaurant_recipes WHERE id = ?').get(id);
+    if (existing) {
+      if (String(existing.organization_id) !== String(tenant.organizationId) || existing.fingerprint !== normalized.fingerprint) {
+        throw Object.assign(new Error('Recipe ID was already used with different recipe content'), { statusCode: 409, code: 'RESTAURANT_RECIPE_ID_REUSED' });
+      }
+      db.exec('COMMIT');
+      return { recipe: restaurantRecipeFromRow(existing), duplicate: true };
+    }
+    const now = nowIso();
+    db.prepare(`
+      INSERT INTO restaurant_recipes
+        (id, organization_id, chat_id, name, description, menu_product_id, yield_quantity, yield_unit,
+         status, ingredients_json, fingerprint, version, created_by, updated_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, 1, ?, ?, ?, ?)
+    `).run(id, String(tenant.organizationId), String(chatId), normalized.name, normalized.description,
+      normalized.menuProductId, normalized.yieldQuantity, normalized.yieldUnit, json(normalized.ingredients),
+      normalized.fingerprint, actor?.userId || null, actor?.userId || null, now, now);
+    audit(String(chatId), 'restaurant.recipe.created', 'restaurant_recipe', id, {
+      name: normalized.name, ingredientCount: normalized.ingredients.length, version: 1,
+    }, { organizationId: String(tenant.organizationId), actorId: actor?.userId || null });
+    const recipe = restaurantRecipeFromRow(db.prepare('SELECT * FROM restaurant_recipes WHERE id = ?').get(id));
+    db.exec('COMMIT');
+    return { recipe, duplicate: false };
+  } catch (error) {
+    if (db.isTransaction) db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+export async function updateRestaurantRecipe(chatId, recipeId, input = {}, actor = null) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404, code: 'UNKNOWN_STORE' });
+  const id = String(recipeId || '').trim();
+  const expectedVersion = Number(input.expectedVersion ?? input.expected_version);
+  if (!id || !Number.isInteger(expectedVersion) || expectedVersion < 1) throw Object.assign(new Error('Recipe ID and expectedVersion are required'), { statusCode: 400, code: 'RESTAURANT_RECIPE_VERSION_REQUIRED' });
+  await waitForInventoryTransactionSlot();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const existing = db.prepare('SELECT * FROM restaurant_recipes WHERE id = ? AND organization_id = ?').get(id, String(tenant.organizationId));
+    if (!existing) throw Object.assign(new Error('Restaurant recipe not found'), { statusCode: 404, code: 'RESTAURANT_RECIPE_NOT_FOUND' });
+    if (Number(existing.version) !== expectedVersion) throw Object.assign(new Error('Restaurant recipe changed since it was loaded'), { statusCode: 409, code: 'RESTAURANT_RECIPE_VERSION_CONFLICT' });
+    const merged = {
+      name: input.name ?? existing.name,
+      description: input.description ?? existing.description,
+      menuProductId: Object.hasOwn(input, 'menuProductId') ? input.menuProductId : Object.hasOwn(input, 'menu_product_id') ? input.menu_product_id : existing.menu_product_id,
+      yieldQuantity: input.yieldQuantity ?? input.yield_quantity ?? existing.yield_quantity,
+      yieldUnit: input.yieldUnit ?? input.yield_unit ?? existing.yield_unit,
+      ingredients: input.ingredients ?? parseJSON(existing.ingredients_json, []),
+    };
+    const normalized = normalizeRestaurantRecipeInput(chatId, merged);
+    const status = String(input.status ?? existing.status).toUpperCase();
+    if (!['ACTIVE', 'ARCHIVED'].includes(status)) throw Object.assign(new Error('Recipe status must be ACTIVE or ARCHIVED'), { statusCode: 400, code: 'INVALID_RESTAURANT_RECIPE_STATUS' });
+    const now = nowIso(), nextVersion = expectedVersion + 1;
+    db.prepare(`
+      UPDATE restaurant_recipes SET name = ?, description = ?, menu_product_id = ?, yield_quantity = ?,
+        yield_unit = ?, status = ?, ingredients_json = ?, fingerprint = ?, version = ?, updated_by = ?, updated_at = ?
+      WHERE id = ? AND organization_id = ? AND version = ?
+    `).run(normalized.name, normalized.description, normalized.menuProductId, normalized.yieldQuantity,
+      normalized.yieldUnit, status, json(normalized.ingredients), normalized.fingerprint, nextVersion,
+      actor?.userId || null, now, id, String(tenant.organizationId), expectedVersion);
+    audit(String(chatId), status === 'ARCHIVED' ? 'restaurant.recipe.archived' : 'restaurant.recipe.updated',
+      'restaurant_recipe', id, { version: nextVersion, status, ingredientCount: normalized.ingredients.length },
+      { organizationId: String(tenant.organizationId), actorId: actor?.userId || null });
+    const recipe = restaurantRecipeFromRow(db.prepare('SELECT * FROM restaurant_recipes WHERE id = ?').get(id));
+    db.exec('COMMIT');
+    return { recipe, duplicate: false };
+  } catch (error) {
+    if (db.isTransaction) db.exec('ROLLBACK');
+    throw error;
+  }
 }
