@@ -3923,6 +3923,9 @@ const ROUTES = [
   { method: 'POST', pattern: /^\/api\/marketplace\/checkout$/, handler: (req, res) => handleMarketplaceCheckout(req, res) },
   { method: 'GET', pattern: /^\/api\/marketplace\/orders\/([^/]+)$/, handler: (req, res, m) => handleMarketplaceOrderTracking(req, res, m[1]) },
   { method: 'PATCH', pattern: /^\/api\/marketplace\/orders\/status\/([^/]+)$/, handler: (req, res, m) => handleMarketplaceOrderStatus(req, res, m[1]) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/restaurant\/recipes$/, handler: (req, res, m) => handleRestaurantRecipes(req, res, decodeURIComponent(m[1])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/restaurant\/recipes$/, handler: (req, res, m) => handleRestaurantRecipes(req, res, decodeURIComponent(m[1])) },
+  { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/restaurant\/recipes\/([^/]+)$/, handler: (req, res, m) => handleRestaurantRecipes(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
 ];
 
 const START_TIME = Date.now();
@@ -4005,7 +4008,5 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`sellify-backend listening on http://localhost:${PORT} (env=${NODE_ENV}, static=${SERVE_STATIC ? STATIC_DIR : 'disabled'})`);
-});  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/restaurant\/recipes$/, handler: (req, res, m) => handleRestaurantRecipes(req, res, decodeURIComponent(m[1])) },
-  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/restaurant\/recipes$/, handler: (req, res, m) => handleRestaurantRecipes(req, res, decodeURIComponent(m[1])) },
-  { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/restaurant\/recipes\/([^/]+)$/, handler: (req, res, m) => handleRestaurantRecipes(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+});
 
