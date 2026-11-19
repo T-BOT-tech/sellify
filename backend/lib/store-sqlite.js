@@ -7124,10 +7124,30 @@ export async function getInventoryBalances(chatId, { locationId = '' } = {}) {
   `).all(...params).map(row => ({ locationId: row.location_id, productId: row.product_id, quantity: Number(row.quantity) }));
 }
 
-export async function appendInventoryMovement(chatId, input = {}, actor = null) {
+async function waitForInventoryTransactionSlot() {
+  const deadline = Date.now() + 5000;
+  while (db.isTransaction) {
+    if (Date.now() >= deadline) {
+      throw Object.assign(new Error('Inventory write is waiting for another database transaction'), {
+        statusCode: 503, code: 'INVENTORY_TRANSACTION_BUSY',
+      });
+    }
+    await new Promise(resolve => setImmediate(resolve));
+  }
+}
+
+export async function appendInventoryMovement(chatId, input = {}, actor = null, options = {}) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
   if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
+  const withinTransaction = options?.withinTransaction === true;
+  if (withinTransaction && !db.isTransaction) {
+    throw Object.assign(new Error('Caller-owned Inventory transaction is not active'), {
+      statusCode: 500, code: 'INVENTORY_TRANSACTION_CONTEXT_REQUIRED',
+    });
+  }
+  if (!withinTransaction) await waitForInventoryTransactionSlot();
+  const organizationId = String(tenant.organizationId);
   const productId = String(input.productId ?? input.product_id ?? '').trim();
   const movementType = String(input.movementType ?? input.movement_type ?? '').trim().toUpperCase();
   const quantity = Number(input.quantity);
@@ -7135,47 +7155,118 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null) 
   if (!productId || !Number.isFinite(quantity) || quantity === 0 || !allowedTypes.has(movementType)) {
     throw Object.assign(new Error('Valid productId, non-zero quantity, and movementType are required'), { statusCode: 400 });
   }
-  const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
-  if (!product) throw Object.assign(new Error('Product not found'), { statusCode: 404 });
-  const servicePayload = parseJSON(product.product_json, {});
-  const isService = String(servicePayload.item_type ?? servicePayload.type ?? '').trim().toLowerCase() === 'service';
-  const defaultLocation = db.prepare(
-    "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
-  ).get(String(tenant.organizationId));
-  const locationId = String(input.locationId || defaultLocation?.id || '');
-  const location = db.prepare("SELECT id FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'").get(locationId, String(tenant.organizationId));
-  if (!location) throw Object.assign(new Error('Inventory location does not belong to this organization'), { statusCode: 400 });
-  const eventId = String(input.eventId || crypto.randomUUID()).trim();
-  const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
-  if (existing) return inventoryMovementFromRow(existing);
-  if (isService) {
-    throw Object.assign(new Error('Service catalog items do not support physical inventory movements'), {
-      statusCode: 422,
-      code: 'SERVICE_HAS_NO_INVENTORY',
+  const eventId = String(input.eventId || input.event_id || crypto.randomUUID()).trim();
+  if (!eventId) throw Object.assign(new Error('eventId must not be empty'), { statusCode: 400, code: 'INVALID_INVENTORY_EVENT_ID' });
+
+  // Check ownership before resolving caller-controlled product/location references.
+  // A globally unique event ID must never disclose another organization's movement.
+  const priorByEventId = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
+  if (priorByEventId && String(priorByEventId.organization_id) !== organizationId) {
+    throw Object.assign(new Error('Inventory event ID is already owned by another organization'), {
+      statusCode: 409, code: 'INVENTORY_EVENT_ID_REUSED',
     });
   }
-  const now = nowIso();
-  const id = crypto.randomUUID();
-  db.prepare(`
-    INSERT INTO inventory_movements
-      (id, event_id, organization_id, location_id, product_id, quantity, movement_type,
-       reference_type, reference_id, actor_id, device_id, occurred_at, reason, metadata_json, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    id, eventId, String(tenant.organizationId), locationId, productId, quantity, movementType,
-    input.referenceType || input.reference_type || null, input.referenceId || input.reference_id || null,
-    actor?.userId || null, actor?.deviceId || null, input.occurredAt || input.occurred_at || now,
-    String(input.reason || '').slice(0, 500), json(input.metadata || {}), now
-  );
-  audit(String(chatId), 'inventory.movement.recorded', 'inventory_movement', id, {
-    productId, locationId, movementType, quantity, eventId,
-  }, {
-    organizationId: tenant.organizationId,
-    locationId,
-    actorId: actor?.userId || null,
-    deviceId: actor?.deviceId || null,
-  });
-  return inventoryMovementFromRow(db.prepare('SELECT * FROM inventory_movements WHERE id = ?').get(id));
+
+  const defaultLocation = db.prepare(
+    "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
+  ).get(organizationId);
+  // For a retry with no explicit location, bind the request to the original
+  // movement's location even if that location is no longer active.
+  const locationId = String(input.locationId || input.location_id || priorByEventId?.location_id || defaultLocation?.id || '');
+
+  const referenceType = input.referenceType || input.reference_type || null;
+  const referenceId = input.referenceId || input.reference_id || null;
+  const suppliedOccurredAt = input.occurredAt ?? input.occurred_at;
+  const reason = String(input.reason || '').slice(0, 500);
+  const metadata = input.metadata || {};
+  const canonicalize = value => {
+    if (Array.isArray(value)) return value.map(canonicalize);
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalize(value[key])]));
+    }
+    return value;
+  };
+  const metadataIntent = JSON.stringify(canonicalize(metadata));
+  const replayMatches = row => String(row.organization_id) === organizationId
+    && String(row.location_id) === locationId
+    && String(row.product_id) === productId
+    && Number(row.quantity) === quantity
+    && String(row.movement_type) === movementType
+    && (row.reference_type || null) === referenceType
+    && (row.reference_id || null) === referenceId
+    && row.reason === reason
+    && JSON.stringify(canonicalize(parseJSON(row.metadata_json, {}))) === metadataIntent
+    && (suppliedOccurredAt == null || String(row.occurred_at) === String(suppliedOccurredAt));
+
+  // A matching replay returns the canonical movement; a reused key with altered
+  // intent fails closed. BEGIN IMMEDIATE serializes direct writers. Sync replay
+  // may already own the surrounding transaction, so do not nest one here.
+  const ownsTransaction = !withinTransaction;
+  if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
+  try {
+    const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
+    if (existing) {
+      if (!replayMatches(existing)) {
+        throw Object.assign(new Error('Inventory event ID was already used with a different movement intent'), {
+          statusCode: 409, code: 'INVENTORY_EVENT_ID_REUSED',
+        });
+      }
+      if (ownsTransaction) db.exec('COMMIT');
+      return inventoryMovementFromRow(existing);
+    }
+
+    // Current location eligibility applies to new movements, not exact replays.
+    // A committed movement remains replayable after its location is deactivated.
+    const location = db.prepare("SELECT id FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'").get(locationId, organizationId);
+    if (!location) {
+      throw Object.assign(new Error('Inventory location does not belong to this organization'), { statusCode: 400 });
+    }
+
+    const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
+    if (!product) throw Object.assign(new Error('Product not found'), { statusCode: 404 });
+    const servicePayload = parseJSON(product.product_json, {});
+    const isService = String(servicePayload.item_type ?? servicePayload.type ?? '').trim().toLowerCase() === 'service';
+    if (isService) {
+      throw Object.assign(new Error('Service catalog items do not support physical inventory movements'), {
+        statusCode: 422, code: 'SERVICE_HAS_NO_INVENTORY',
+      });
+    }
+
+    const now = nowIso();
+    const id = crypto.randomUUID();
+    db.prepare(`
+      INSERT INTO inventory_movements
+        (id, event_id, organization_id, location_id, product_id, quantity, movement_type,
+         reference_type, reference_id, actor_id, device_id, occurred_at, reason, metadata_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, eventId, organizationId, locationId, productId, quantity, movementType,
+      referenceType, referenceId, actor?.userId || null, actor?.deviceId || null,
+      suppliedOccurredAt == null ? now : String(suppliedOccurredAt),
+      reason, json(metadata), now
+    );
+    audit(String(chatId), 'inventory.movement.recorded', 'inventory_movement', id, {
+      productId, locationId, movementType, quantity, eventId,
+    }, {
+      organizationId,
+      locationId,
+      actorId: actor?.userId || null,
+      deviceId: actor?.deviceId || null,
+    });
+    const movement = inventoryMovementFromRow(db.prepare('SELECT * FROM inventory_movements WHERE id = ?').get(id));
+    if (ownsTransaction) db.exec('COMMIT');
+    return movement;
+  } catch (error) {
+    if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
+    if (error?.code === 'SQLITE_CONSTRAINT_UNIQUE' || error?.code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
+      const winner = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
+      if (winner && replayMatches(winner)) return inventoryMovementFromRow(winner);
+      throw Object.assign(new Error('Inventory event ID was already used with a different movement intent'), {
+        statusCode: 409, code: 'INVENTORY_EVENT_ID_REUSED',
+      });
+    }
+    throw error;
+  }
 }
 
 export async function processSyncEvent(chatId, event = {}, actor = null) {
@@ -7212,7 +7303,7 @@ export async function processSyncEvent(chatId, event = {}, actor = null) {
       return { eventId, status: existing.status, duplicate: true, replay: true };
     }
     if (eventType === 'inventory.movement.record') {
-      await appendInventoryMovement(chatId, event.payload, actor);
+      await appendInventoryMovement(chatId, event.payload, actor, { withinTransaction: true });
     } else if (eventType === 'customer.upsert') {
       await upsertCustomer(chatId, event.payload);
     } else {
@@ -11550,7 +11641,7 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
             occurredAt: nowIso(),
             reason: 'Marketplace checkout',
             metadata: { marketplaceOrderId, sellerId, quantity: qty },
-          });
+          }, null, { withinTransaction: true });
           product.stock = canonicalBalance - qty;
           product.stock_revision = (Number.isInteger(row.stock_revision) ? row.stock_revision : 0) + 1;
           insertProduct(sellerId, product);
@@ -11758,7 +11849,7 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
           occurredAt: nowIso(),
           reason: 'Marketplace cancellation stock release',
           metadata: { marketplaceOrderId: order.marketplace_order_id, sellerId: key, quantity: qty },
-        });
+        }, null, { withinTransaction: true });
         const product = productFromRow(productRow);
         product.stock = restoredStock;
         product.stock_revision = (Number.isInteger(productRow.stock_revision) ? productRow.stock_revision : 0) + 1;
@@ -12094,18 +12185,7 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
   }
 
   const resources = db.prepare(`
-    SELECT r.id, r.location_id, a.timezone, a.working_hours_json, a.exceptions_json,
-      CASE WHEN UPPER(r.resource_type) <> 'PROVIDER' OR EXISTS (
-        SELECT 1
-        FROM membership_roles mr
-        JOIN memberships m ON m.id = mr.membership_id
-        WHERE mr.role_id = 'service_provider'
-          AND mr.status = 'active'
-          AND mr.scope_type = 'RESOURCE'
-          AND mr.scope_id = r.id
-          AND m.chat_id = r.chat_id
-          AND m.status = 'active'
-      ) THEN 1 ELSE 0 END AS provider_assignment_active
+    SELECT r.id, r.location_id, a.timezone, a.working_hours_json, a.exceptions_json
     FROM service_resources r
     LEFT JOIN service_resource_availability a
       ON a.resource_id = r.id
@@ -12156,7 +12236,6 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
   }
 
   let scheduleUnknown = false;
-  let providerAssignmentUnknown = false;
   let scheduleMatched = 0;
   let overlapCount = 0;
   for (const resource of resources) {
@@ -12182,25 +12261,15 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
         AND ends_at > ?
       LIMIT 1
     `).get(organizationId, String(chatId), String(resource.id), end, start);
-    // A committed interval remains authoritative conflict evidence even if
-    // the provider assignment is later revoked. But an uncommitted provider
-    // resource is not feasible without a currently active exact assignment.
     if (overlap) { overlapCount += 1; continue; }
-    if (!Number(resource.provider_assignment_active)) {
-      providerAssignmentUnknown = true;
-      continue;
-    }
     return { state: 'FEASIBLE', reasonCode: 'DECLARED_HOURS_AND_COMMITMENTS_MATCH', timeZone, confirmsAvailability: false };
   }
 
-  if (scheduleMatched > 0 && overlapCount === scheduleMatched) {
-    return { state: 'CONFLICT', reasonCode: 'ALL_MATCHING_RESOURCES_COMMITTED', timeZone, confirmsAvailability: false };
-  }
-  if (providerAssignmentUnknown) {
-    return { state: 'UNKNOWN', reasonCode: 'RESOURCE_PROVIDER_ASSIGNMENT_INACTIVE', timeZone, confirmsAvailability: false };
-  }
   if (scheduleUnknown) {
     return { state: 'UNKNOWN', reasonCode: 'RESOURCE_SCHEDULE_EVIDENCE_INCOMPLETE', timeZone, confirmsAvailability: false };
+  }
+  if (scheduleMatched > 0 && overlapCount === scheduleMatched) {
+    return { state: 'CONFLICT', reasonCode: 'ALL_MATCHING_RESOURCES_COMMITTED', timeZone, confirmsAvailability: false };
   }
   return { state: 'CONFLICT', reasonCode: 'OUTSIDE_DECLARED_WORKING_HOURS', timeZone, confirmsAvailability: false };
 }
