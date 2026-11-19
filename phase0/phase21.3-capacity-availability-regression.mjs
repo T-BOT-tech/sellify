@@ -83,7 +83,31 @@ test('invalid time window fails closed', () => {
   assert.throws(() => projectCapacityAvailabilityEvidence({ ...base, validUntil: '2026-09-10T00:00:00Z' }), /validUntil must not be earlier/);
 });
 
-test('missing observation timestamp fails closed', () => {
+test('legacy records without observation time remain projectable as UNKNOWN', () => {
+  const { observedAt, validUntil, ...legacy } = base;
+  const projected = projectCapacityAvailabilityEvidence({ ...legacy, quality: 'UNKNOWN' });
+  assert.equal(projected.availabilityWindow.observedAt, null);
+  assert.equal(projected.freshness, 'UNKNOWN');
+  assert.equal(projected.provenanceType, 'UNKNOWN');
+});
+
+test('freshness requires explicit validity and a deterministic evaluation time', () => {
+  const current = projectCapacityAvailabilityEvidence({ ...base, source: 'DECLARED' }, { evaluatedAt: '2026-09-18T00:00:00Z' });
+  assert.equal(current.provenanceType, 'SELF_REPORTED');
+  assert.equal(current.freshness, 'CURRENT');
+  const stale = projectCapacityAvailabilityEvidence({ ...base, source: 'DECLARED' }, { evaluatedAt: '2026-09-21T00:00:00Z' });
+  assert.equal(stale.freshness, 'STALE');
+  const noExpiry = projectCapacityAvailabilityEvidence({ ...base, validUntil: null }, { evaluatedAt: '2026-09-18T00:00:00Z' });
+  assert.equal(noExpiry.freshness, 'UNKNOWN');
+});
+
+test('consistency is independent from provenance and freshness', () => {
+  const projected = projectCapacityAvailabilityEvidence({ ...base, consistency: 'CONFLICTING' });
+  assert.equal(projected.consistency, 'CONFLICTING');
+  assert.equal(projected.provenanceType, 'UNKNOWN');
+});
+
+test('invalid observation timestamp fails closed', () => {
   const { observedAt, ...rest } = base;
   assert.throws(() => projectCapacityAvailabilityEvidence(rest), /observedAt must be a non-empty string/);
 });

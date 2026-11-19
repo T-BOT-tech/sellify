@@ -52,6 +52,9 @@ const capacityProjection = supplierNetworkDiscoveryProvider.normalize({
 assert.equal(capacityProjection.availability.capacitySignals[0].subjectType, 'PRODUCT');
 assert.equal(capacityProjection.availability.capacitySignals[0].periodStart, '2026-12-01T00:00:00.000Z');
 assert.equal(capacityProjection.availability.capacitySignals[0].source, 'DECLARED');
+assert.equal(capacityProjection.capacitySignals[0].id, 'capacity-test', 'capacity signal is exposed to the canonical Discovery matcher');
+assert.equal(capacityProjection.capacitySignals[0].quality, 'UNKNOWN', 'missing observation time remains unknown');
+assert.equal(capacityProjection.capacitySignals[0].observedAt, null);
 assert.equal(supplierNetworkDiscoveryProvider.evidence(rows[0])[0].type, 'SUPPLIER_NETWORK_DISCOVERY');
 assert.equal(supplierNetworkDiscoveryProvider.actions(rows[0]).some(a => a.sourceAuthority === 'procurement'), true);
 

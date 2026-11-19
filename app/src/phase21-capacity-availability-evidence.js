@@ -10,6 +10,9 @@
 
 export const PHASE21_CAPACITY_EVIDENCE_CONTRACT_VERSION = '1.0';
 export const PHASE21_CAPACITY_EVIDENCE_AUTHORITY = 'supplier_network';
+export const PHASE21_CAPACITY_EVIDENCE_PROVENANCE = Object.freeze(['SELF_REPORTED', 'OBSERVED', 'VERIFIED', 'UNKNOWN']);
+export const PHASE21_CAPACITY_EVIDENCE_FRESHNESS = Object.freeze(['CURRENT', 'STALE', 'UNKNOWN']);
+export const PHASE21_CAPACITY_EVIDENCE_CONSISTENCY = Object.freeze(['CONSISTENT', 'CONFLICTING', 'UNKNOWN']);
 export const PHASE21_CAPACITY_EVIDENCE_QUALITY = Object.freeze([
   'SELF_REPORTED',
   'OBSERVED',
@@ -58,7 +61,7 @@ function freezeObject(value) {
  * Project an existing Supplier Network capacity declaration/observation into
  * the Phase 21 sourcing vocabulary. No source record is persisted or re-owned.
  */
-export function projectCapacityAvailabilityEvidence(signal = {}) {
+export function projectCapacityAvailabilityEvidence(signal = {}, options = {}) {
   if (!signal || typeof signal !== 'object' || Array.isArray(signal)) {
     invalid('signal must be an object');
   }
@@ -86,11 +89,23 @@ export function projectCapacityAvailabilityEvidence(signal = {}) {
     invalid(`signal.quality must be one of ${PHASE21_CAPACITY_EVIDENCE_QUALITY.join(', ')}`);
   }
 
-  const observedAt = iso(signal.observedAt ?? signal.observed_at, 'signal.observedAt');
+  const observedAtInput = signal.observedAt ?? signal.observed_at;
+  const observedAt = observedAtInput == null ? null : iso(observedAtInput, 'signal.observedAt');
   const validUntil = signal.validUntil ?? signal.valid_until;
   const normalizedValidUntil = validUntil == null ? null : iso(validUntil, 'signal.validUntil');
-  if (normalizedValidUntil && Date.parse(normalizedValidUntil) < Date.parse(observedAt)) {
+  if (normalizedValidUntil && observedAt && Date.parse(normalizedValidUntil) < Date.parse(observedAt)) {
     invalid('signal.validUntil must not be earlier than signal.observedAt');
+  }
+  const evaluatedAtInput = options.evaluatedAt ?? options.evaluated_at;
+  const evaluatedAt = evaluatedAtInput == null ? null : iso(evaluatedAtInput, 'options.evaluatedAt');
+  const freshness = !observedAt || !normalizedValidUntil || !evaluatedAt
+    ? 'UNKNOWN'
+    : Date.parse(normalizedValidUntil) >= Date.parse(evaluatedAt) ? 'CURRENT' : 'STALE';
+  const source = optionalText(signal.source, 'signal.source');
+  const provenanceType = source?.toUpperCase() === 'DECLARED' ? 'SELF_REPORTED' : 'UNKNOWN';
+  const consistencyInput = String(signal.consistency ?? 'UNKNOWN').trim().toUpperCase();
+  if (!PHASE21_CAPACITY_EVIDENCE_CONSISTENCY.includes(consistencyInput)) {
+    invalid(`signal.consistency must be one of ${PHASE21_CAPACITY_EVIDENCE_CONSISTENCY.join(', ')}`);
   }
 
   return Object.freeze({
@@ -111,9 +126,12 @@ export function projectCapacityAvailabilityEvidence(signal = {}) {
     }),
     quantity,
     unit,
-    availabilityWindow: Object.freeze({ observedAt, validUntil: normalizedValidUntil }),
+    availabilityWindow: Object.freeze({ observedAt, validUntil: normalizedValidUntil, evaluatedAt }),
     quality,
-    source: optionalText(signal.source, 'signal.source'),
+    provenanceType,
+    freshness,
+    consistency: consistencyInput,
+    source,
     provenance: freezeObject(signal.provenance),
     metadata: freezeObject(signal.metadata),
     inventoryAuthority: 'existing inventory authority',
@@ -132,6 +150,9 @@ export function phase21CapacityAvailabilityEvidenceContract() {
     identityAuthority: 'organizations',
     capacityResource: 'supplier_network_capacity_signal',
     quality: [...PHASE21_CAPACITY_EVIDENCE_QUALITY],
+    provenance: [...PHASE21_CAPACITY_EVIDENCE_PROVENANCE],
+    freshness: [...PHASE21_CAPACITY_EVIDENCE_FRESHNESS],
+    consistency: [...PHASE21_CAPACITY_EVIDENCE_CONSISTENCY],
     inventoryAuthority: 'existing inventory authority',
     procurementAuthority: 'existing procurement authority',
     persistence: 'none',
