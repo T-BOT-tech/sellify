@@ -1,7 +1,7 @@
 # Sellify Service Capability Composition Map & Gap Register
 
 **Audit date:** 2026-11-19  
-**Repository baseline:** `main` at `ef130935056ed9611fa316f9df3b470f20b08934`  
+**Source-code baseline:** `main` at `ef130935056ed9611fa316f9df3b470f20b08934` (the subsequent mainline commits through `4dc3873899d271b91c91f15cddc63ad63f09805f` changed documentation only).  
 **Status:** Current-main source audit; implementation status reconciled against code, migrations, tests, and exact-head CI evidence. This is not a production or post-merge certification.
 
 ## 1. Decision
