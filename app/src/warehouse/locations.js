@@ -86,11 +86,15 @@ export function openOrganizationLocationModal(locationId = '') {
   const name = document.getElementById('organizationLocationName');
   const type = document.getElementById('organizationLocationType');
   const status = document.getElementById('organizationLocationStatus');
+  const timeZone = document.getElementById('organizationLocationTimezone');
+  const error = document.getElementById('organizationLocationError');
   if (id) id.value = location?.id || '';
   if (code) code.value = location?.code || '';
   if (name) name.value = location?.name || '';
   if (type) type.value = location?.type || 'STORE';
   if (status) status.value = location?.status || 'active';
+  if (timeZone) timeZone.value = location?.timeZone || '';
+  if (error) { error.textContent = ''; error.style.display = 'none'; }
   if (title) title.textContent = location ? 'Edit business location' : 'Add business location';
   if (code) code.disabled = Boolean(location);
   modal.style.display = 'flex';
@@ -107,6 +111,7 @@ export async function saveOrganizationLocationModal() {
   const name = document.getElementById('organizationLocationName')?.value.trim() || '';
   const type = document.getElementById('organizationLocationType')?.value || 'STORE';
   const status = document.getElementById('organizationLocationStatus')?.value || 'active';
+  const timezone = document.getElementById('organizationLocationTimezone')?.value.trim() || null;
   if (!code || !name) return;
   if (!config.chatId || !config.sessionToken) return;
   const url = `${baseUrl()}/tenants/${encodeURIComponent(config.chatId)}/locations${id ? '/' + encodeURIComponent(id) : ''}`;
@@ -117,7 +122,7 @@ export async function saveOrganizationLocationModal() {
         Authorization: `Bearer ${config.sessionToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ code, name, type, status }),
+      body: JSON.stringify({ code, name, type, status, timezone }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error?.message || 'Could not save business location.');
