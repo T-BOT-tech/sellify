@@ -230,6 +230,8 @@ try {
   });
   assert.equal(feasibility.response.status, 200);
   assert.equal(feasibility.json.feasibility.state, 'UNKNOWN');
+  assert.equal(feasibility.json.feasibility.reasonCode, 'NO_ACTIVE_MATCHING_RESOURCES',
+    'declared provider hours cannot make a resource feasible after its exact provider assignment is revoked');
   assert.equal(feasibility.json.feasibility.confirmsAvailability, false);
   assert.equal(feasibility.json.feasibility.reservesResource, false);
 
