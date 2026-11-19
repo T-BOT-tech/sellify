@@ -6403,18 +6403,33 @@ export async function getServiceResourceAvailability(chatId, resourceId) {
   ensureDatabase();
   const organizationId = ensureCanonicalIdentityForTenant(chatId);
   if (!organizationId) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
-  const resource = db.prepare('SELECT id FROM service_resources WHERE id=? AND organization_id=? AND chat_id=?')
-    .get(String(resourceId), String(organizationId), String(chatId));
+  const resource = db.prepare(`
+    SELECT r.id, r.location_id, l.timezone AS location_timezone, o.timezone AS organization_timezone
+    FROM service_resources r
+    JOIN organizations o ON o.id = r.organization_id
+    LEFT JOIN locations l ON l.id = r.location_id AND l.organization_id = r.organization_id
+    WHERE r.id=? AND r.organization_id=? AND r.chat_id=?
+  `).get(String(resourceId), String(organizationId), String(chatId));
   if (!resource) throw Object.assign(new Error('Service resource not found'), { statusCode: 404, code: 'SERVICE_RESOURCE_NOT_FOUND' });
   const row = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=? AND organization_id=? AND chat_id=?')
     .get(String(resourceId), String(organizationId), String(chatId));
-  const organization = db.prepare('SELECT o.timezone FROM organizations o WHERE o.id=?').get(String(organizationId));
-  const timeZone = String(row?.timezone || organization?.timezone || '');
-  if (!isIanaTimeZone(timeZone)) throw Object.assign(new Error('Organization timezone is invalid; availability configuration is unavailable'), { statusCode: 409, code: 'SERVICE_AVAILABILITY_TIMEZONE_INVALID' });
-  return serviceResourceAvailabilityFromRow(row) || {
+  const effectiveTimeZone = String(resource.location_timezone || resource.organization_timezone || '');
+  const timeZone = String(row?.timezone || effectiveTimeZone);
+  if (!isIanaTimeZone(timeZone) || !isIanaTimeZone(effectiveTimeZone)) {
+    throw Object.assign(new Error('The schedule or effective location timezone is invalid; availability configuration is unavailable'), {
+      statusCode: 409, code: 'SERVICE_AVAILABILITY_TIMEZONE_INVALID',
+    });
+  }
+  const availability = serviceResourceAvailabilityFromRow(row) || {
     resourceId: String(resourceId), organizationId: String(organizationId), timeZone,
     workingHours: [], exceptions: [], version: 0, updatedBy: null, updatedAt: null,
     state: 'EMPTY', confirmsAvailability: false,
+  };
+  return {
+    ...availability,
+    effectiveTimeZone,
+    timeZoneSource: row?.timezone ? 'DECLARED_SCHEDULE' : (resource.location_timezone ? 'LOCATION' : 'ORGANIZATION'),
+    scheduleUsesCurrentLocationTimeZone: timeZone === effectiveTimeZone,
   };
 }
 
@@ -6426,11 +6441,7 @@ export async function setServiceResourceAvailability(chatId, resourceId, input =
   if (!Number.isInteger(expectedVersion) || expectedVersion < 0) throw Object.assign(new Error('expected_version must be a non-negative integer'), { statusCode: 400, code: 'SERVICE_AVAILABILITY_VERSION_REQUIRED' });
   const commandKey = String(input.idempotencyKey || input.idempotency_key || '').trim();
   if (!commandKey) throw Object.assign(new Error('Idempotency-Key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
-  const organization = db.prepare('SELECT timezone FROM organizations WHERE id=?').get(String(organizationId));
-  const timeZone = String(organization?.timezone || '');
-  const working = normalizeWorkingHours(input.workingHours ?? input.working_hours ?? [], timeZone);
   const exceptions = normalizeAvailabilityExceptions(input.exceptions ?? []);
-  const fingerprint = crypto.createHash('sha256').update(JSON.stringify({resourceId:String(resourceId),expectedVersion,workingHours:working.entries,exceptions})).digest('hex');
   db.exec('BEGIN IMMEDIATE');
   try {
     const freshTenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id=?').get(String(chatId));
@@ -6438,6 +6449,22 @@ export async function setServiceResourceAvailability(chatId, resourceId, input =
     const resource = db.prepare('SELECT * FROM service_resources WHERE id=? AND organization_id=? AND chat_id=?')
       .get(String(resourceId),String(organizationId),String(chatId));
     if (!resource) throw Object.assign(new Error('Service resource not found'), { statusCode:404, code:'SERVICE_RESOURCE_NOT_FOUND' });
+    const location = resource.location_id
+      ? db.prepare('SELECT timezone FROM locations WHERE id=? AND organization_id=?').get(String(resource.location_id), String(organizationId))
+      : null;
+    if (resource.location_id && !location) throw Object.assign(new Error('Service resource location is not available in organization scope'), {
+      statusCode: 409, code: 'SERVICE_RESOURCE_LOCATION_NOT_FOUND',
+    });
+    const organization = db.prepare('SELECT timezone FROM organizations WHERE id=?').get(String(organizationId));
+    const timeZone = String(location?.timezone || organization?.timezone || '');
+    if (!isIanaTimeZone(timeZone)) throw Object.assign(new Error('Effective service resource timezone is invalid'), {
+      statusCode: 409, code: 'SERVICE_AVAILABILITY_TIMEZONE_INVALID',
+    });
+    const working = normalizeWorkingHours(input.workingHours ?? input.working_hours ?? [], timeZone);
+    const fingerprint = crypto.createHash('sha256').update(JSON.stringify({
+      resourceId:String(resourceId), expectedVersion, timeZone,
+      workingHours:working.entries, exceptions,
+    })).digest('hex');
     const prior = db.prepare('SELECT * FROM service_resource_availability_commands WHERE organization_id=? AND command_key=?')
       .get(String(organizationId),commandKey);
     if (prior) {
@@ -6480,7 +6507,12 @@ export async function setServiceResourceAvailability(chatId, resourceId, input =
         version=excluded.version,updated_by=excluded.updated_by,updated_at=excluded.updated_at`)
       .run(String(resourceId),String(organizationId),String(chatId),timeZone,json(working.entries),json(exceptions),nextVersion,actorId,now);
     const saved = db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=?').get(String(resourceId));
-    const availability = serviceResourceAvailabilityFromRow(saved);
+    const availability = {
+      ...serviceResourceAvailabilityFromRow(saved),
+      effectiveTimeZone: timeZone,
+      timeZoneSource: location?.timezone ? 'LOCATION' : 'ORGANIZATION',
+      scheduleUsesCurrentLocationTimeZone: true,
+    };
     db.prepare(`INSERT INTO service_resource_availability_commands
       (organization_id,command_key,resource_id,command_fingerprint,response_json,created_at) VALUES (?,?,?,?,?,?)`)
       .run(String(organizationId),commandKey,String(resourceId),fingerprint,json({ availability }),now);
@@ -6594,9 +6626,30 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
       if(!resource) throw Object.assign(new Error('Service resource not found in this organization'),{statusCode:404,code:'SERVICE_RESOURCE_NOT_FOUND'});
       if(String(resource.status).toUpperCase()!=='ACTIVE') throw Object.assign(new Error('Only an active service resource can be committed'),{statusCode:409,code:'SERVICE_RESOURCE_INACTIVE'});
       if(resource.service_item_id && String(resource.service_item_id)!==String(row.service_item_id)) throw Object.assign(new Error('Service resource is bound to a different service'),{statusCode:409,code:'SERVICE_RESOURCE_SERVICE_MISMATCH'});
+      // ON_SITE fulfillment is bound to the canonical seller-order location.
+      // A location-bound resource must match it; missing order location fails closed.
+      if (String(row.appointment_mode).toUpperCase() === 'ON_SITE' && resource.location_id) {
+        const canonicalOrderRow = db.prepare('SELECT order_json FROM orders WHERE chat_id=? AND server_order_id=?')
+          .get(String(chatId), String(serverOrderId));
+        const canonicalOrder = orderFromRow(canonicalOrderRow || {});
+        const orderLocationId = String(canonicalOrder?.location_id || canonicalOrder?.locationId || '').trim();
+        if (!orderLocationId) throw Object.assign(new Error('The canonical order has no location, so this location-bound resource cannot be assigned to an on-site appointment'), {
+          statusCode: 409, code: 'SERVICE_BOOKING_ORDER_LOCATION_REQUIRED',
+        });
+        if (orderLocationId !== String(resource.location_id)) throw Object.assign(new Error('This service resource is assigned to a different location than the on-site appointment'), {
+          statusCode: 409, code: 'SERVICE_RESOURCE_LOCATION_MISMATCH',
+          details: { order_location_id: orderLocationId, resource_location_id: String(resource.location_id) },
+        });
+      }
       const availabilityRow=db.prepare('SELECT * FROM service_resource_availability WHERE resource_id=? AND organization_id=? AND chat_id=?').get(resourceId,organizationId,String(chatId));
-      const organization=db.prepare('SELECT timezone FROM organizations WHERE id=?').get(organizationId);
-      const timeZone=String(availabilityRow?.timezone||organization?.timezone||'');
+      const timezoneContext=db.prepare(`
+        SELECT l.timezone AS location_timezone, o.timezone AS organization_timezone
+        FROM service_resources r
+        JOIN organizations o ON o.id=r.organization_id
+        LEFT JOIN locations l ON l.id=r.location_id AND l.organization_id=r.organization_id
+        WHERE r.id=? AND r.organization_id=? AND r.chat_id=?
+      `).get(resourceId,organizationId,String(chatId));
+      const timeZone=String(availabilityRow?.timezone||timezoneContext?.location_timezone||timezoneContext?.organization_timezone||'');
       if(!isIanaTimeZone(timeZone)) throw Object.assign(new Error('Resource timezone is not configured'),{statusCode:409,code:'SERVICE_AVAILABILITY_TIMEZONE_INVALID'});
       if(!availabilityRow) throw Object.assign(new Error('Resource has no declared working schedule'),{statusCode:409,code:'SERVICE_AVAILABILITY_UNKNOWN'});
       const assessment=assessServiceResourceDeclaredWindow({
@@ -12514,13 +12567,14 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
   const tenant = await getTenant(chatId);
   const organizationId = String(tenant?.organization_id || tenant?.organizationId || '');
   const organization = db.prepare('SELECT timezone FROM organizations WHERE id = ?').get(organizationId);
-  const timeZone = String(organization?.timezone || '');
-  if (!isIanaTimeZone(timeZone)) {
+  const organizationTimeZone = String(organization?.timezone || '');
+  if (!isIanaTimeZone(organizationTimeZone)) {
     return { state: 'UNKNOWN', reasonCode: 'ORGANIZATION_TIMEZONE_INVALID', timeZone: null, confirmsAvailability: false };
   }
 
   const resources = db.prepare(`
-    SELECT r.id, r.location_id, a.timezone, a.working_hours_json, a.exceptions_json,
+    SELECT r.id, r.location_id, a.timezone, l.timezone AS location_timezone,
+      a.working_hours_json, a.exceptions_json,
       CASE WHEN UPPER(r.resource_type) <> 'PROVIDER' OR EXISTS (
         SELECT 1
         FROM membership_roles mr
@@ -12537,6 +12591,8 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
       ON a.resource_id = r.id
      AND a.organization_id = r.organization_id
      AND a.chat_id = r.chat_id
+    LEFT JOIN locations l
+      ON l.id = r.location_id AND l.organization_id = r.organization_id
     WHERE r.organization_id = ?
       AND r.chat_id = ?
       AND r.status = 'ACTIVE'
@@ -12546,7 +12602,7 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
   `).all(organizationId, String(chatId), serviceItemId, ownedOrder.locationId);
 
   if (!resources.length) {
-    return { state: 'UNKNOWN', reasonCode: 'NO_ACTIVE_MATCHING_RESOURCES', timeZone, confirmsAvailability: false };
+    return { state: 'UNKNOWN', reasonCode: 'NO_ACTIVE_MATCHING_RESOURCES', timeZone: organizationTimeZone, confirmsAvailability: false };
   }
 
   // A legacy CONFIRMED appointment without a matching committed resource
@@ -12576,7 +12632,7 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
     return {
       state: 'UNKNOWN',
       reasonCode: 'OVERLAPPING_LEGACY_CONFIRMED_BOOKING_WITHOUT_RESOURCE',
-      timeZone,
+      timeZone: organizationTimeZone,
       confirmsAvailability: false,
     };
   }
@@ -12586,7 +12642,7 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
   let scheduleMatched = 0;
   let overlapCount = 0;
   for (const resource of resources) {
-    const resourceTimeZone = String(resource.timezone || timeZone);
+    const resourceTimeZone = String(resource.timezone || resource.location_timezone || organizationTimeZone);
     if (!isIanaTimeZone(resourceTimeZone)) { scheduleUnknown = true; continue; }
     const schedule = assessServiceResourceDeclaredWindow({
       timeZone: resourceTimeZone,
@@ -12616,19 +12672,19 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
       providerAssignmentUnknown = true;
       continue;
     }
-    return { state: 'FEASIBLE', reasonCode: 'DECLARED_HOURS_AND_COMMITMENTS_MATCH', timeZone, confirmsAvailability: false };
+    return { state: 'FEASIBLE', reasonCode: 'DECLARED_HOURS_AND_COMMITMENTS_MATCH', timeZone: organizationTimeZone, confirmsAvailability: false };
   }
 
   if (scheduleMatched > 0 && overlapCount === scheduleMatched) {
-    return { state: 'CONFLICT', reasonCode: 'ALL_MATCHING_RESOURCES_COMMITTED', timeZone, confirmsAvailability: false };
+    return { state: 'CONFLICT', reasonCode: 'ALL_MATCHING_RESOURCES_COMMITTED', timeZone: organizationTimeZone, confirmsAvailability: false };
   }
   if (providerAssignmentUnknown) {
-    return { state: 'UNKNOWN', reasonCode: 'RESOURCE_PROVIDER_ASSIGNMENT_INACTIVE', timeZone, confirmsAvailability: false };
+    return { state: 'UNKNOWN', reasonCode: 'RESOURCE_PROVIDER_ASSIGNMENT_INACTIVE', timeZone: organizationTimeZone, confirmsAvailability: false };
   }
   if (scheduleUnknown) {
-    return { state: 'UNKNOWN', reasonCode: 'RESOURCE_SCHEDULE_EVIDENCE_INCOMPLETE', timeZone, confirmsAvailability: false };
+    return { state: 'UNKNOWN', reasonCode: 'RESOURCE_SCHEDULE_EVIDENCE_INCOMPLETE', timeZone: organizationTimeZone, confirmsAvailability: false };
   }
-  return { state: 'CONFLICT', reasonCode: 'OUTSIDE_DECLARED_WORKING_HOURS', timeZone, confirmsAvailability: false };
+  return { state: 'CONFLICT', reasonCode: 'OUTSIDE_DECLARED_WORKING_HOURS', timeZone: organizationTimeZone, confirmsAvailability: false };
 }
 
 export async function listAuditEvents(chatId, limit = 100, filters = {}) {
