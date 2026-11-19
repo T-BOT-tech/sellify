@@ -7347,7 +7347,7 @@ export async function appendInventoryMovementBatch(chatId, input = {}, actor = n
     metadata: commandMetadata, lines: canonicalLines,
   });
   const fingerprint = crypto.createHash('sha256').update(JSON.stringify(fingerprintPayload)).digest('hex');
-  const commandPrefix = `inventory-batch:${crypto.createHash('sha256').update(`${organizationId}\\0${commandId}`).digest('hex')}:`;
+  const commandPrefix = `inventory-batch:${crypto.createHash('sha256').update(JSON.stringify([organizationId, commandId])).digest('hex')}:`;
   const eventIds = new Set(normalizedLines.map(line =>
     commandPrefix + crypto.createHash('sha256').update(line.lineId).digest('hex')));
   const movementInputs = normalizedLines.map(line => ({
