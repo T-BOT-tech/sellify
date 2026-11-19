@@ -316,6 +316,8 @@ jobs:
         run: npm run test:inventory-movement-replay-runtime
       - name: SQLite atomic Inventory movement batch regression
         run: npm run test:inventory-movement-batch-runtime
+      - name: Authenticated HTTP atomic Inventory movement batch regression
+        run: npm run test:inventory-movement-batch-http
       - name: Phase 10.5 Inventory ledger exact-replay compatibility regression
         run: node phase0/phase10.5-inventory-ledger-regression.mjs
       - name: FUX-51 legacy inventory authority regression
