@@ -14,9 +14,9 @@ try {
   const batchHandlerStart = serverSource.indexOf('async function handleInventoryMovementBatchCreate');
   const batchHandlerEnd = serverSource.indexOf('async function handleLocationsList', batchHandlerStart);
   const batchHandler = serverSource.slice(batchHandlerStart, batchHandlerEnd);
-  assert.match(batchHandler, /requireAuthorization\\(session, tenant, 'inventory', 'inventory:edit'/,
+  assert.ok(batchHandler.includes("requireAuthorization(session, tenant, 'inventory', 'inventory:edit'"),
     'atomic Inventory command must reuse server-side Inventory edit authorization');
-  assert.match(batchHandler, /assertLocationScope\\(session, tenant, location\\)/,
+  assert.ok(batchHandler.includes('assertLocationScope(session, tenant, location)'),
     'atomic Inventory command must enforce canonical location scope');
 
   const store = await import('../backend/lib/store-sqlite.js');
