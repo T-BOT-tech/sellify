@@ -1,3 +1,4 @@
+// Settings UX consolidation rebased onto the validated mainline integration.
 // ui/settings.js
 // Phase 7 extraction (see modularization plan §5): niche selection,
 // business-model switching, and the Settings modal open/save — moved out
