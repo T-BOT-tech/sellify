@@ -314,6 +314,8 @@ jobs:
         run: npm run test:fux-50
       - name: SQLite canonical Inventory movement replay runtime regression
         run: npm run test:inventory-movement-replay-runtime
+      - name: Inventory sync event authorization HTTP regression
+        run: npm run test:inventory-sync-event-authorization-http
       - name: SQLite atomic Inventory movement batch regression
         run: npm run test:inventory-movement-batch-runtime
       - name: Authenticated HTTP atomic Inventory movement batch regression
