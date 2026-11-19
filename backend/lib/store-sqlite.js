@@ -12094,7 +12094,18 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
   }
 
   const resources = db.prepare(`
-    SELECT r.id, r.location_id, a.timezone, a.working_hours_json, a.exceptions_json
+    SELECT r.id, r.location_id, a.timezone, a.working_hours_json, a.exceptions_json,
+      CASE WHEN UPPER(r.resource_type) <> 'PROVIDER' OR EXISTS (
+        SELECT 1
+        FROM membership_roles mr
+        JOIN memberships m ON m.id = mr.membership_id
+        WHERE mr.role_id = 'service_provider'
+          AND mr.status = 'active'
+          AND mr.scope_type = 'RESOURCE'
+          AND mr.scope_id = r.id
+          AND m.chat_id = r.chat_id
+          AND m.status = 'active'
+      ) THEN 1 ELSE 0 END AS provider_assignment_active
     FROM service_resources r
     LEFT JOIN service_resource_availability a
       ON a.resource_id = r.id
@@ -12145,6 +12156,7 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
   }
 
   let scheduleUnknown = false;
+  let providerAssignmentUnknown = false;
   let scheduleMatched = 0;
   let overlapCount = 0;
   for (const resource of resources) {
@@ -12170,15 +12182,25 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
         AND ends_at > ?
       LIMIT 1
     `).get(organizationId, String(chatId), String(resource.id), end, start);
+    // A committed interval remains authoritative conflict evidence even if
+    // the provider assignment is later revoked. But an uncommitted provider
+    // resource is not feasible without a currently active exact assignment.
     if (overlap) { overlapCount += 1; continue; }
+    if (!Number(resource.provider_assignment_active)) {
+      providerAssignmentUnknown = true;
+      continue;
+    }
     return { state: 'FEASIBLE', reasonCode: 'DECLARED_HOURS_AND_COMMITMENTS_MATCH', timeZone, confirmsAvailability: false };
   }
 
-  if (scheduleUnknown) {
-    return { state: 'UNKNOWN', reasonCode: 'RESOURCE_SCHEDULE_EVIDENCE_INCOMPLETE', timeZone, confirmsAvailability: false };
-  }
   if (scheduleMatched > 0 && overlapCount === scheduleMatched) {
     return { state: 'CONFLICT', reasonCode: 'ALL_MATCHING_RESOURCES_COMMITTED', timeZone, confirmsAvailability: false };
+  }
+  if (providerAssignmentUnknown) {
+    return { state: 'UNKNOWN', reasonCode: 'RESOURCE_PROVIDER_ASSIGNMENT_INACTIVE', timeZone, confirmsAvailability: false };
+  }
+  if (scheduleUnknown) {
+    return { state: 'UNKNOWN', reasonCode: 'RESOURCE_SCHEDULE_EVIDENCE_INCOMPLETE', timeZone, confirmsAvailability: false };
   }
   return { state: 'CONFLICT', reasonCode: 'OUTSIDE_DECLARED_WORKING_HOURS', timeZone, confirmsAvailability: false };
 }
