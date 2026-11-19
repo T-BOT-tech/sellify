@@ -9,7 +9,7 @@
 // — see that file for the fuller explanation. See fulfillment.js for the
 // matching note on the circular import in the other direction.
 import { escapeHtml, escapeAttr } from '../utils/index.js';
-import { config, currentStaff, orders, warehouseLocations } from '../state.js';
+import { config, currentStaff, orders, products, warehouseLocations } from '../state.js';
 import {
   deliveryAssignments, isLogisticsEnabled, selectedFulfillmentType, setSelectedFulfillmentType,
   nextFulfillmentStatus, isFulfillmentFinal, fulfillmentStatusLabel, canonicalDeliveryAssignment,
@@ -27,10 +27,38 @@ import { buildLogisticsOperationalWorkspaceProjection } from '../verticals/logis
 import { getLogisticsWorkspaceComposition } from '../verticals/logistics/workspace-contract.js';
 import { serviceBookingsWorkspaceShell, mountServiceBookingsWorkspace } from './service-bookings.js';
 
+function canOpenAppointmentsWorkspace() {
+  const contextualRoles = Array.isArray(config.contextualRoles) ? config.contextualRoles : [];
+  const actorRoles = new Set([
+    String(config.currentStaffRole || config.authRole || config.tenantRole || '').toLowerCase(),
+    ...(Array.isArray(config.authRoles) ? config.authRoles.map(role => String(role).toLowerCase()) : []),
+    ...contextualRoles.map(item => String(item?.role || '').toLowerCase()),
+  ]);
+  const assignedServiceProvider = contextualRoles.some(item =>
+    String(item?.role || '').toLowerCase() === 'service_provider'
+    && String(item?.scopeType || '').toUpperCase() === 'RESOURCE'
+    && !!String(item?.scopeId || '').trim()
+  );
+  const serviceOperator = ['owner', 'manager', 'logistics_manager', 'logistics_dispatcher']
+    .some(role => actorRoles.has(role));
+  const hasServiceOfferings = Array.isArray(products) && products.some(item =>
+    String(item?.item_type || item?.type || '').toLowerCase() === 'service'
+  );
+  return assignedServiceProvider || (serviceOperator && hasServiceOfferings);
+}
+
 export function applyLogisticsUI() {
   const enabled = isLogisticsEnabled();
   const navBtn = document.getElementById('navLogistics');
   if (navBtn) navBtn.style.display = enabled ? '' : 'none';
+
+  const appointmentsEnabled = canOpenAppointmentsWorkspace();
+  const appointmentsNav = document.getElementById('navAppointments');
+  if (appointmentsNav) appointmentsNav.style.display = appointmentsEnabled ? '' : 'none';
+  const activeAppointments = document.getElementById('tab-appointments');
+  if (!appointmentsEnabled && activeAppointments && activeAppointments.style.display === 'block') {
+    switchTab('order');
+  }
 
   const activeLogistics = document.getElementById('tab-logistics');
   if (!enabled && activeLogistics && activeLogistics.style.display === 'block') {
@@ -181,6 +209,13 @@ function renderOperationalWorkspaceSummary(workspace, views) {
       ${proofRows ? `<div class="settings-section-label">Proof</div>${proofRows}` : ''}
       ${exceptionRows ? `<div class="settings-section-label">Exceptions</div>${exceptionRows}` : ''}
     </section>`;
+}
+
+export function renderAppointments() {
+  const workspace = document.getElementById('appointmentsWorkspace');
+  if (!workspace) return;
+  workspace.innerHTML = serviceBookingsWorkspaceShell();
+  mountServiceBookingsWorkspace(workspace);
 }
 
 export function renderLogistics() {
@@ -335,7 +370,6 @@ export function renderLogistics() {
   let html = renderWorkspaceModeHeader(workspaceRole, visibleAssignments)
     + (courierMode ? '' : filterBar)
     + renderDeliveryWorkloadSummary(visibleAssignments);
-  if (!courierMode) html += serviceBookingsWorkspaceShell();
   if (composition.views.some(view => view.id === 'tracking')) {
     html += renderOperationalWorkspaceSummary(workspace, composition.views.map(view => view.id));
   }
@@ -352,7 +386,6 @@ export function renderLogistics() {
     html += `<div class="empty">${t('whNoLogisticsOrders')}</div>`;
   }
   list.innerHTML = html;
-  if (!courierMode) mountServiceBookingsWorkspace(list);
 
   const statusFilter = list.querySelector('#logistics-status-filter');
   const courierFilter = list.querySelector('#logistics-courier-filter');
