@@ -115,7 +115,7 @@ try {
   await page.route(baseUrl + '/', route => route.fulfill({
     status: 200,
     contentType: 'text/html',
-    body: '<!doctype html><html><head><meta charset="utf-8"></head><body><main id="test-root"></main></body></html>',
+    body: '<!doctype html><html><head><meta charset="utf-8"></head><body><button id="navAppointments" style="display:none">Appointments</button><section id="tab-appointments" style="display:none"><div id="appointmentsWorkspace"></div></section><main id="test-root"></main></body></html>',
   }));
   await page.goto(baseUrl);
   await page.evaluate(async () => {
@@ -129,11 +129,32 @@ try {
       contextualRoles: [],
     });
     state.setProducts([{ id: 'service-1', item_type: 'service', name: 'Consultation' }]);
+    const logisticsUI = await import('/src/logistics/ui.js');
+    logisticsUI.applyLogisticsUI();
+    const ownerWithServices = document.getElementById('navAppointments').style.display !== 'none';
+    state.setConfig({ ...state.config, currentStaffRole: 'cashier', contextualRoles: [
+      { role: 'service_provider', scopeType: 'RESOURCE', scopeId: 'resource-room-1' },
+    ] });
+    logisticsUI.applyLogisticsUI();
+    const scopedProvider = document.getElementById('navAppointments').style.display !== 'none';
+    state.setConfig({ ...state.config, currentStaffRole: 'cashier', contextualRoles: [
+      { role: 'service_provider', scopeType: 'ORGANIZATION', scopeId: 'test-tenant' },
+    ] });
+    logisticsUI.applyLogisticsUI();
+    const unscopedProvider = document.getElementById('navAppointments').style.display !== 'none';
+    state.setConfig({ ...state.config, currentStaffRole: 'owner', contextualRoles: [] });
+    state.setProducts([]);
+    logisticsUI.applyLogisticsUI();
+    const ownerWithoutServices = document.getElementById('navAppointments').style.display !== 'none';
+    state.setProducts([{ id: 'service-1', item_type: 'service', name: 'Consultation' }]);
+    state.setConfig({ ...state.config, currentStaffRole: 'owner', contextualRoles: [] });
+    logisticsUI.applyLogisticsUI();
     state.setOrders([{
       id: 'local-order-1',
       server_order_id: 'order-1',
       items: [{ item_id: 'service-1', item_type: 'service' }],
     }]);
+    window.__appointmentsVisibility = { ownerWithServices, scopedProvider, unscopedProvider, ownerWithoutServices };
     const workspace = await import('/src/logistics/service-bookings.js');
     document.querySelector('#test-root').innerHTML = workspace.serviceBookingsWorkspaceShell();
     workspace.mountServiceBookingsWorkspace(document);
@@ -152,12 +173,19 @@ try {
   // Cancel a reason-required inline action form: it must not send a mutation.
   await page.getByRole('button', { name: 'REJECTED' }).click();
   await page.locator('.service-booking-action-form').waitFor();
+  assert.equal(await page.locator('.service-booking-action-form textarea').evaluate(el => el === document.activeElement), true,
+    'opening a reason form moves keyboard focus to its required input');
+  const reasonFormBox = await page.locator('.service-booking-action-form').boundingBox();
+  assert.ok(reasonFormBox && reasonFormBox.width <= 375, 'inline action form fits the mobile viewport');
   await page.locator('.service-booking-action-form .service-booking-action-cancel').click();
   assert.equal(calls.filter(call => call.method === 'PATCH').length, 0, 'cancelled inline reason form does not mutate booking');
 
   // A successful transition sends the current version and idempotency key, then reloads canonical state.
   await page.getByRole('button', { name: 'ACCEPTED' }).click();
-  await page.locator('.service-booking-action-form [type="submit"]').click();
+  assert.equal(await page.locator('.service-booking-action-status').getAttribute('aria-live'), 'polite',
+    'inline transition feedback is announced to assistive technology');
+  await page.locator('.service-booking-action-form [type="submit"]').focus();
+  await page.keyboard.press('Enter');
   await page.locator('.service-booking-card .logistics-status').filter({ hasText: 'ACCEPTED' }).waitFor();
   const patch = calls.find(call => call.method === 'PATCH');
   assert.ok(patch, 'transition sends PATCH');
