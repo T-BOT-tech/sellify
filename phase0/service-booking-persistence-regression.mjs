@@ -89,6 +89,55 @@ try {
     idempotency_key: 'booking-resource-' + suffix,
   }, { userId: owner.id });
   const serviceResourceId = resourceResult.resource.id;
+
+  // ON_SITE appointments must not commit a branch-bound resource against a
+  // different canonical seller-order location.
+  const locationDb = store.getDatabaseForTests();
+  const canonicalOrderRow = locationDb.prepare('SELECT order_json FROM orders WHERE chat_id=? AND server_order_id=?')
+    .get(seller.chatId, order.server_order_id);
+  const canonicalOrder = JSON.parse(canonicalOrderRow.order_json);
+  const sellerOrganizationId = locationDb.prepare('SELECT organization_id FROM tenants WHERE chat_id=?').get(seller.chatId)?.organization_id;
+  assert.ok(sellerOrganizationId, 'seller tenant must resolve its canonical organization');
+  const defaultLocation = locationDb.prepare("SELECT id FROM locations WHERE organization_id=? AND code='DEFAULT'")
+    .get(sellerOrganizationId);
+  assert.ok(defaultLocation?.id, 'seller must have its canonical default location');
+  const alternateLocationId = 'booking-alt-location-' + suffix;
+  locationDb.prepare('INSERT INTO locations (id,organization_id,code,name,type,status,created_at) VALUES (?,?,?,\'Alternate Branch\',\'STORE\',\'active\',?)')
+    .run(alternateLocationId, sellerOrganizationId, 'ALT-' + suffix, new Date().toISOString());
+  canonicalOrder.location_id = defaultLocation.id;
+  locationDb.prepare('UPDATE orders SET order_json=? WHERE chat_id=? AND server_order_id=?')
+    .run(JSON.stringify(canonicalOrder), seller.chatId, order.server_order_id);
+  const branchResource = await store.createServiceResource(seller.chatId, {
+    name: 'Alternate Branch Room', resourceType: 'FACILITY', serviceItemId: 'consultation',
+    location_id: alternateLocationId,
+    idempotency_key: 'booking-branch-resource-' + suffix,
+  }, { userId: owner.id });
+  await store.setServiceResourceAvailability(seller.chatId, branchResource.resource.id, {
+    expected_version: 0, idempotency_key: 'booking-branch-resource-hours-' + suffix,
+    workingHours: [0, 1, 2, 3, 4, 5, 6].map(weekday => ({ weekday, startTime: '08:00', endTime: '18:00' })),
+    exceptions: [],
+  }, { userId: owner.id });
+  const onSiteBooking = await store.createServiceBooking(seller.chatId, order.server_order_id, {
+    ...request, appointment_mode: 'ON_SITE',
+    requested_start: '2026-11-09T09:00:00+03:00',
+    requested_end: '2026-11-09T10:00:00+03:00',
+    idempotency_key: 'booking-onsite-location-create-' + suffix,
+  }, { userId: owner.id });
+  const onSiteAccepted = await store.transitionServiceBooking(seller.chatId, order.server_order_id, onSiteBooking.booking.id, {
+    status: 'ACCEPTED', expected_version: 1, idempotency_key: 'booking-onsite-location-accept-' + suffix,
+  }, { userId: owner.id });
+  await assert.rejects(
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, onSiteBooking.booking.id, {
+      status: 'CONFIRMED', expected_version: onSiteAccepted.booking.version,
+      service_resource_id: branchResource.resource.id,
+      idempotency_key: 'booking-onsite-location-confirm-' + suffix,
+    }, { userId: owner.id }),
+    error => error?.code === 'SERVICE_RESOURCE_LOCATION_MISMATCH',
+    'on-site appointment must not commit a resource assigned to another canonical location',
+  );
+  assert.equal(locationDb.prepare('SELECT COUNT(*) AS count FROM service_resource_commitments WHERE booking_id=?')
+    .get(onSiteBooking.booking.id).count, 0, 'location mismatch must not create a resource commitment');
+
   await store.setServiceResourceAvailability(seller.chatId, serviceResourceId, {
     expected_version: 0, idempotency_key: 'booking-resource-hours-' + suffix,
     workingHours: [0, 1, 2, 3, 4, 5, 6].map(weekday => ({ weekday, startTime: '08:00', endTime: '18:00' })),
@@ -209,7 +258,7 @@ try {
   );
 
   const listed = await store.listServiceBookings(seller.chatId, order.server_order_id);
-  assert.equal(listed.length, 4, 'all requested appointments remain visible, including the uncommitted overlap and concurrent race loser');
+  assert.equal(listed.length, 5, 'all requested appointments remain visible, including the rejected location mismatch, uncommitted overlap, and concurrent race loser');
   for (const expectedId of [created.booking.id, overlappingRequest.booking.id, ...raceBookings.map(entry => entry.booking.id)]) {
     assert.ok(listed.some(item => item.id === expectedId), 'booking list must include ' + expectedId);
   }
