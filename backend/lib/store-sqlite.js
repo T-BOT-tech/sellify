@@ -12681,7 +12681,7 @@ export async function assessTelegramBuyerServiceFeasibility(chatId, telegramUser
       providerAssignmentUnknown = true;
       continue;
     }
-    return { state: 'FEASIBLE', reasonCode: 'DECLARED_HOURS_AND_COMMITMENTS_MATCH', timeZone: organizationTimeZone, confirmsAvailability: false };
+    return { state: 'FEASIBLE', reasonCode: 'DECLARED_HOURS_AND_COMMITMENTS_MATCH', timeZone: resourceTimeZone, confirmsAvailability: false };
   }
 
   if (scheduleMatched > 0 && overlapCount === scheduleMatched) {
