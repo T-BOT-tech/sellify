@@ -40,19 +40,19 @@ Every implementation task must record:
 
 | Workstream | Current candidate | Reconciliation status | Next action |
 |---|---|---|---|
-| SC-03 resource commitment foundation | PR #256, `feat/sc03-mainline-integration` | Integration root; exact code SHA `56bf4e02115e455bed7938679f0183682c476bf0` passed all required CI jobs; branch tip `18424d0` adds only this register document | Ready for mainline merge after final PR metadata review |
+| SC-03 resource commitment foundation | PR #256 merged to `main` at `642f4e8c4da22dfafb12f75a0d099ca50b871c33` | Exact code SHA `56bf4e02115e455bed7938679f0183682c476bf0` passed all required CI jobs; merge-commit CI and release/logistics certifications also passed | Integrated |
 | Inventory atomic command and sync | PR #256 integration root; #263/#267/#268/#270 merged into this branch | FUX-46–FUX-52, replay runtime, sync authorization HTTP, atomic batch runtime/HTTP, Phase 10.5, and ledger opening-balance regression all passed; #264/#265/#266 closed as superseded | Complete in integration branch; merge only through #256 |
 | Migration 81 compatibility | Ported from #257 into #256 branch | Runtime compatibility regression passed; #257 closed as superseded, branch retained | Complete |
-| On-site resource location scope | Backend guard and persistence regression ported from #260 into #256 | Exact root CI passed the service-booking persistence regression; #260 remains open only for UI-dependent browser/navigation test deltas tied to #258/#259 | Keep #260 source branch; do not merge wholesale |
+| On-site resource location scope | Backend guard and persistence regression ported from #260 into #256 | Exact Node 24 mainline CI passed; #260 closed as superseded. UI-dependent browser/navigation deltas are tracked in #271 | Integrated; UI follow-up in #271 |
 | Location timezone persistence | Ported from #261 into #256 branch; migration 82 | Persistence, FUX-57, and migration-order regressions passed; #261 closed as superseded, branch retained | Complete |
 | Location-aware availability | Ported from #262 into #256 branch | Effective timezone, schedule drift, commitment-safe updates, UI notice, and regression wired into CI | Verify exact root run; close #262 as superseded after green |
-| Appointment workspace navigation | PR #258 | Not ported; UI branch differs materially from #256 and needs role/navigation reconciliation | Keep isolated; do not merge wholesale |
-| Inline appointment operator forms | PR #259 | Not ported; depends on #258 UI branch and requires a focused UI patch against current mainline | Keep isolated; do not merge wholesale |
+| Appointment workspace navigation | Historical PR #258 | Closed as deferred; unique behavior retained in source branch | Port through focused issue #271 on current `main` |
+| Inline appointment operator forms | Historical PR #259 | Closed as deferred; unique behavior retained in source branch | Port through focused issue #271 on current `main` |
 | Restaurant Recipe foundation | PR #269 | Separate feature; earlier CI failures were in inherited service/baseline journeys and need fresh exact-base diagnosis | Retarget to the integration root after it stabilizes; rerun exact Node 24 CI |
 | Settings UX | PR #223 | Candidate consolidates #220–#222 features | Validate exact head, then merge once the mainline integration is stable; close #220–#222 as superseded |
 | First Experience | PR #214 | Broad first-experience bundle; CI evidence exists but base is stale | Reconcile changed files and retest against updated main |
 | Service audit documents | PRs #225 and #227 | Historical snapshots; parts are superseded by SC-03 implementation | Update evidence/status before merging; do not merge stale claims |
-| Earlier SC-03/Telegram branches | PRs #237 and #242 | Divergent historical source branches with overlapping and unique deltas | Extract unique requirements into focused tasks; never merge either branch wholesale |
+| Earlier SC-03/Telegram branches | Historical PRs #237 and #242 | Closed as deferred; both branches retained as audit sources | Audit/extract unique deltas through issue #272; never merge either branch wholesale |
 | Stage reconciliation documentation | PR #189 | October snapshot is stale against current implementation | Refresh against the final integrated code before merging |
 
 ## 4. Standard implementation workflow
@@ -80,10 +80,14 @@ Every implementation task must record:
 
 ## 5. Current execution boundary
 
-**Validation evidence:** Sellify CI run `44564861229` and Repository Security Checks run `44564861185` both completed successfully on code SHA `56bf4e02115e455bed7938679f0183682c476bf0`. All four Sellify CI jobs passed: Node 24 baseline, Phase 13.10.24, Logistics L18, and Logistics exit certification. The baseline also passed migration 80/81 compatibility, migration 82 location timezone persistence, location-aware availability timezone, on-site service-resource location scope, Inventory replay/auth/batch, and Phase 10.5 regressions. The current branch tip `18424d0` is a documentation-only descendant that adds this register; no code changed after the validated SHA.
+**Mainline integration completed:** PR #256 was merged into `main` at `642f4e8c4da22dfafb12f75a0d099ca50b871c33`. The exact pre-merge code SHA `56bf4e02115e455bed7938679f0183682c476bf0` passed Sellify CI run `44564861229` and Repository Security Checks `44564861185`. The merge commit then passed:
+- Sellify CI run `44565612432` — all four jobs successful: Node 24 baseline, Phase 13.10.24, Logistics L18, Logistics exit certification.
+- Repository Security Checks `44565612363` — success.
+- Logistics Runtime Certification `44565612614` — success.
+- Sellify Release Certification `44565612378` — success.
 
-The current integration branch is ready for mainline review, subject to confirming the current PR metadata and preserving the deferred #258/#259 UI scope. Node >=24 remains mandatory. No claim is made that deferred appointment UI work or unrelated open PRs are integrated.
+The exact baseline included Inventory FUX-46–FUX-52, replay/auth/batch HTTP and runtime regressions, Phase 10.5, service booking persistence and on-site location scope, migration 80/81 compatibility, migration 82 location timezone persistence, and location-aware availability timezone regressions.
 
+**Deferred work:** #258/#259 were closed and moved to issue #271 for a focused appointment workspace/inline-form port onto current main. #237/#242 were closed and moved to issue #272 for historical branch delta extraction. Their source branches are retained as audit references. The current open implementation PRs are #269 (Restaurant Recipe), #223 (Settings UX), #214 (First Experience), #217 (UI evaluation environment), plus audit/documentation PRs #225, #227, and #189.
 
-
-The current integration branch is a candidate, not a certification. Migration 81/82, on-site location scope, location-aware availability, Inventory replay/auth/batch, and shared SQLite transaction safety must all pass together on the final exact head. Node >=24 remains mandatory. No production certification is implied by a component-level green run.
+Node >=24 remains mandatory. These successful gates validate the integrated SC-03/Inventory mainline slice; they do not certify deferred appointment UI or unrelated platform work.
