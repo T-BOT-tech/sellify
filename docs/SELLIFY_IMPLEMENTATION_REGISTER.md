@@ -1,7 +1,7 @@
 # Sellify Implementation Register and Branch Policy
 
 **Snapshot:** 2026-11-19  
-**Mainline:** `bcf1d28686d91e3ef2539fb9f59e52d88775f857`  
+**Mainline:** current `main` branch (consult GitHub for the live SHA).  
 **Purpose:** prevent duplicate implementation, preserve canonical authority, and make integration decisions evidence-based.
 
 This register is an operational control document, not a replacement for the FUX constitution, GAP exit criteria, source code, or the consolidated source-of-truth package.
@@ -81,7 +81,7 @@ Every implementation task must record:
 
 ## 5. Current execution boundary
 
-**Integrated mainline:** SC-03/Inventory (#256), Appointments workspace (#273), Restaurant Recipe (#275), and Settings UX (#223) are merged to main. The current main head is `bcf1d28686d91e3ef2539fb9f59e52d88775f857`.
+**Integrated mainline:** SC-03/Inventory (#256), Appointments workspace (#273), Restaurant Recipe (#275), and Settings UX (#223) are merged to main. The current integration set includes all four merged workstreams listed above; consult GitHub for the live `main` SHA.
 
 **Mainline verification:** the post-#256 mainline run `44567719268` passed all four required jobs. The post-#275 merge-commit run `44569050739` passed all four required jobs. The post-#223 merge-commit run `44569154864` passed all four required jobs. PR-level exact-head runs for #273 and #275 also passed all four required jobs. The #256 merge-commit security, release, and logistics certifications passed.
 
