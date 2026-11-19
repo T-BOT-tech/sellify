@@ -125,7 +125,7 @@ try {
     SELECT action, entity_type, entity_id FROM audit_events
     WHERE organization_id = ? AND entity_type = 'restaurant_recipe'
     ORDER BY id
-  `).all(tenant.organizationId);
+  `).all(canonicalOrganizationId);
   assert.deepEqual(auditRows.map(row => row.action), [
     'restaurant.recipe.created', 'restaurant.recipe.updated', 'restaurant.recipe.archived',
   ]);
