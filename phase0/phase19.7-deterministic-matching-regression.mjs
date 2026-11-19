@@ -116,6 +116,20 @@ assert.equal(evaluateDiscoveryMatch({
   capabilities: [{ id: 'cap-coffee-id', code: 'COFFEE' }],
   capacitySignals: [{ ...temporalCandidate.capacitySignals[0], subjectType: 'CAPABILITY', subjectId: 'cap-coffee-id' }],
 }, { ...windowContext, productId: null, capabilityCode: 'COFFEE' }).eligible, true, 'canonical capability IDs bind capacity to the matching capability');
+
+const temporalOnlyContext = { ...windowContext, minimumQuantity: null, unit: null };
+const temporalOnlyMatch = evaluateDiscoveryMatch(temporalCandidate, temporalOnlyContext);
+assert.equal(temporalOnlyMatch.eligible, true, 'temporal-only request must enforce matching capacity');
+assert.equal(temporalOnlyMatch.hardConstraints.find(x => x.dimension === 'CAPACITY').requested, true, 'temporal-only request activates CAPACITY hard constraint');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [],
+}, temporalOnlyContext).eligible, false, 'temporal-only request without capacity fails closed');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], periodStart: '2026-12-04T00:00:00.000Z', periodEnd: '2026-12-06T00:00:00.000Z' }],
+}, temporalOnlyContext).eligible, false, 'temporal-only request rejects non-overlapping capacity');
+
 assert.equal(evaluateDiscoveryMatch(temporalCandidate, { productId: 'coffee', minimumQuantity: 50, unit: 'kg' }).eligible, true, 'legacy searches without a requested period retain prior quantity behavior');
 
 console.log('Phase 19.7 Deterministic Matching regression: PASS');
