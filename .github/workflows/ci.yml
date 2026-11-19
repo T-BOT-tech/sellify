@@ -356,6 +356,8 @@ jobs:
         run: npm run test:fux-57
       - name: SC-03.5 canonical location timezone persistence regression
         run: npm run test:sc-03.5-location-timezone
+      - name: SC-03.5 location-aware availability timezone regression
+        run: npm run test:sc-03.5-location-aware-availability-timezone
       - name: GAP-1.10 payment concurrency and durable idempotency certification
         run: npm run gap-1.10:payment-concurrency-test
       - name: GAP-1.11 payment provider status lifecycle regression
