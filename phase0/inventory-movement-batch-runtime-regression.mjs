@@ -9,7 +9,7 @@ process.env.SELLIFY_DB_PATH = path.join(dataDir, 'sellify.sqlite');
 
 try {
   const serverSource = await readFile(new URL('../backend/server.js', import.meta.url), 'utf8');
-  assert.match(serverSource, /POST[^\\n]*inventory\\/movements\\/batch/,
+  assert.ok(serverSource.includes("handleInventoryMovementBatchCreate(req, res, decodeURIComponent(m[1]))"),
     'atomic Inventory command must be exposed through a dedicated API route');
   const batchHandlerStart = serverSource.indexOf('async function handleInventoryMovementBatchCreate');
   const batchHandlerEnd = serverSource.indexOf('async function handleLocationsList', batchHandlerStart);
