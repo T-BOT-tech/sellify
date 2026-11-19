@@ -40,11 +40,11 @@ Every implementation task must record:
 
 | Workstream | Current candidate | Reconciliation status | Next action |
 |---|---|---|---|
-| SC-03 resource commitment foundation | PR #256, `feat/sc03-mainline-integration` | Integration root; includes #263 and #267 | Finish exact-head Node 24 and required regression gates before mainline merge |
-| Inventory atomic command and sync | PR #256 integration root; source PRs #263/#267/#268/#270 merged into this branch | Replay integrity, provider eligibility, atomic command, sync authorization, batch sync, transaction no-yield, and ledger opening-balance correction reconciled | Verify full root CI; do not merge source PRs independently |
-| Migration 81 compatibility | Ported from #257 into #256 branch | Runtime compatibility regression wired into CI | Verify exact root run; close #257 as superseded after green |
-| On-site resource location scope | Ported from #260 into #256 branch | Server-side fail-closed check and persistence regression added | Verify exact root run; close #260 as superseded after green |
-| Location timezone persistence | Ported from #261 into #256 branch; migration 82 | UI/API/store persistence and migration regression wired into CI | Verify exact root run; close #261 as superseded after green |
+| SC-03 resource commitment foundation | PR #256, `feat/sc03-mainline-integration` | Integration root; exact code SHA `56bf4e02115e455bed7938679f0183682c476bf0` passed all required CI jobs; branch tip `18424d0` adds only this register document | Ready for mainline merge after final PR metadata review |
+| Inventory atomic command and sync | PR #256 integration root; #263/#267/#268/#270 merged into this branch | FUX-46–FUX-52, replay runtime, sync authorization HTTP, atomic batch runtime/HTTP, Phase 10.5, and ledger opening-balance regression all passed; #264/#265/#266 closed as superseded | Complete in integration branch; merge only through #256 |
+| Migration 81 compatibility | Ported from #257 into #256 branch | Runtime compatibility regression passed; #257 closed as superseded, branch retained | Complete |
+| On-site resource location scope | Backend guard and persistence regression ported from #260 into #256 | Exact root CI passed the service-booking persistence regression; #260 remains open only for UI-dependent browser/navigation test deltas tied to #258/#259 | Keep #260 source branch; do not merge wholesale |
+| Location timezone persistence | Ported from #261 into #256 branch; migration 82 | Persistence, FUX-57, and migration-order regressions passed; #261 closed as superseded, branch retained | Complete |
 | Location-aware availability | Ported from #262 into #256 branch | Effective timezone, schedule drift, commitment-safe updates, UI notice, and regression wired into CI | Verify exact root run; close #262 as superseded after green |
 | Appointment workspace navigation | PR #258 | Not ported; UI branch differs materially from #256 and needs role/navigation reconciliation | Keep isolated; do not merge wholesale |
 | Inline appointment operator forms | PR #259 | Not ported; depends on #258 UI branch and requires a focused UI patch against current mainline | Keep isolated; do not merge wholesale |
@@ -79,5 +79,11 @@ Every implementation task must record:
 - Delete branches only after dependency and code-presence checks.
 
 ## 5. Current execution boundary
+
+**Validation evidence:** Sellify CI run `44564861229` and Repository Security Checks run `44564861185` both completed successfully on code SHA `56bf4e02115e455bed7938679f0183682c476bf0`. All four Sellify CI jobs passed: Node 24 baseline, Phase 13.10.24, Logistics L18, and Logistics exit certification. The baseline also passed migration 80/81 compatibility, migration 82 location timezone persistence, location-aware availability timezone, on-site service-resource location scope, Inventory replay/auth/batch, and Phase 10.5 regressions. The current branch tip `18424d0` is a documentation-only descendant that adds this register; no code changed after the validated SHA.
+
+The current integration branch is ready for mainline review, subject to confirming the current PR metadata and preserving the deferred #258/#259 UI scope. Node >=24 remains mandatory. No claim is made that deferred appointment UI work or unrelated open PRs are integrated.
+
+
 
 The current integration branch is a candidate, not a certification. Migration 81/82, on-site location scope, location-aware availability, Inventory replay/auth/batch, and shared SQLite transaction safety must all pass together on the final exact head. Node >=24 remains mandatory. No production certification is implied by a component-level green run.
