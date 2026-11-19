@@ -30,7 +30,7 @@ const ROLE_PERMISSIONS = Object.freeze({
     'payments:accept', 'payments:view_proof', 'payments:view', 'payments:manage', 'payments:reconcile', 'payments:settlement:view', 'payments:settlement:allocate', 'payments:route',
     'inventory:add', 'inventory:edit', 'sync:manual',
     'settings:configure', 'paymethods:manage',
-    'tables:manage', 'tables:status', 'kitchen:manage',
+    'tables:manage', 'tables:status', 'kitchen:manage', 'restaurant:recipes:view', 'restaurant:recipes:manage',
     'b2b:manage', 'b2b:invoice:view', 'b2b:invoice:create', 'b2b:invoice:manage', 'b2b:ar:view', 'b2b:ar:create', 'b2b:ar:manage', 'b2b:ar:allocate', 'b2b:pricing:view', 'b2b:pricing:manage', 'b2b:quotes:view', 'b2b:quotes:manage', 'b2b:po:view', 'b2b:po:create', 'b2b:po:approve', 'b2b:credit:view', 'b2b:credit:create', 'b2b:credit:manage', 'b2b:credit:approve', 'devices:manage',
     'locations:view', 'locations:manage', 'audit:view',
     'pack:lifecycle:view', 'pack:lifecycle:install', 'pack:lifecycle:activate', 'pack:lifecycle:deactivate', 'pack:lifecycle:upgrade', 'pack:lifecycle:recover', 'membership:role:manage',
@@ -68,7 +68,7 @@ const ROLE_PERMISSIONS = Object.freeze({
     'orders:create', 'orders:view', 'tables:status', 'customers:view', 'locations:view',
   ]),
   restaurant_kitchen_staff: new Set([
-    'orders:view', 'kitchen:manage', 'inventory:view', 'locations:view',
+    'orders:view', 'kitchen:manage', 'restaurant:recipes:view', 'inventory:view', 'locations:view',
   ]),
   warehouse_receiving: new Set([
     'inventory:view', 'inventory:add', 'locations:view',
