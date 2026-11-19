@@ -50,6 +50,7 @@ const checks = [
   ['Phase 13.8.2 Restaurant Tables Integration', 'phase13.8.2:restaurant-tables-test'],
   ['Phase 13.8.3 Restaurant Kitchen Integration', 'phase13.8.3:restaurant-kitchen-test'],
   ['Phase 13.8.4 Restaurant Recipe / Ingredient Bridge', 'phase13.8.4:restaurant-recipe-test'],
+  ['Restaurant Recipe SQLite Persistence', 'test:restaurant-recipe-persistence'],
   ['Phase 13.8.5 Restaurant Inventory Consumption', 'phase13.8.5:restaurant-inventory-test'],
   ['Phase 13.8.6 Restaurant Order / Payment Compatibility', 'phase13.8.6:restaurant-order-payment-test'],
   ['Phase 12.8 Physical Commerce Regression Gate', 'phase12.8:regression-gate'],
