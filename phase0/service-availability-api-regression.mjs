@@ -22,6 +22,8 @@ assert.match(store, /effectiveTimeZone/, 'availability must expose the effective
 assert.match(store, /location\?\.timezone \|\| organization\?\.timezone/, 'new declarations must inherit location timezone before organization timezone');
 assert.match(store, /scheduleUsesCurrentLocationTimeZone/, 'existing schedule timezone drift must be explicit');
 assert.match(store, /resource\.location_timezone/, 'buyer feasibility must resolve resource location timezone');
+assert.match(ui, /effectiveTimeZone/, 'availability UI must explain the current effective location timezone');
+assert.match(ui, /Existing appointments are checked before the change is accepted/, 'timezone changes must communicate commitment safety');
 assert.doesNotMatch(store, /const replay = db\.prepare\('SELECT \* FROM service_resource_availability WHERE resource_id=\?'\)/, 'replay must not return the resource current state');
 assert.match(store, /services\.resource\.availability\.updated/);
 assert.match(store, /organization\?\.timezone/);
