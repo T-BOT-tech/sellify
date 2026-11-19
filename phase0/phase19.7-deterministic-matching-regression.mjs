@@ -62,6 +62,7 @@ const windowContext = {
   unit: 'kg',
   availabilityFrom: '2026-12-01T00:00:00.000Z',
   availabilityTo: '2026-12-03T23:59:59.999Z',
+  evaluatedAt: '2026-11-20T00:00:00.000Z',
 };
 const temporalCandidate = {
   ...strong,
@@ -70,6 +71,7 @@ const temporalCandidate = {
     quantity: 75, unit: 'kg', periodType: 'RANGE',
     periodStart: '2026-12-01T00:00:00.000Z', periodEnd: '2026-12-05T00:00:00.000Z',
     availability: 'LIMITED', status: 'ACTIVE', source: 'DECLARED',
+    observedAt: '2026-11-19T00:00:00.000Z', validUntil: '2026-12-10T00:00:00.000Z',
   }],
 };
 assert.equal(evaluateDiscoveryMatch(temporalCandidate, windowContext).eligible, true, 'overlapping LIMITED declared capacity qualifies');
@@ -96,6 +98,25 @@ assert.equal(evaluateDiscoveryMatch({
   ...temporalCandidate,
   capacitySignals: [{ ...temporalCandidate.capacitySignals[0], periodStart: null, periodEnd: null }],
 }, windowContext).eligible, false, 'capacity without a declared period is UNKNOWN for a time-bound request');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], observedAt: null }],
+}, windowContext).eligible, false, 'unknown observation time cannot satisfy a time-bound availability request');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], validUntil: null }],
+}, windowContext).eligible, false, 'missing explicit validity cannot satisfy a time-bound availability request');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], validUntil: '2026-11-19T23:59:59.999Z' }],
+}, windowContext).eligible, false, 'expired evidence is excluded');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], observedAt: '2026-11-21T00:00:00.000Z' }],
+}, windowContext).eligible, false, 'future observation timestamps are excluded');
+assert.equal(evaluateDiscoveryMatch(temporalCandidate, {
+  ...windowContext, evaluatedAt: null,
+}).eligible, false, 'time-bound matching without a server evaluation time fails closed');
 assert.equal(evaluateDiscoveryMatch({
   ...temporalCandidate,
   capacitySignals: [{ ...temporalCandidate.capacitySignals[0], quantity: 10 }],

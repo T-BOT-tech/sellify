@@ -93,6 +93,11 @@ function capacityMatches(candidate, context) {
     if (unit && norm(signal.unit) !== unit) return false;
     if (signal.status && upper(signal.status) !== 'ACTIVE') return false;
     if (temporalRequested) {
+      const evaluatedAt = Date.parse(context.evaluatedAt || '');
+      const observedAt = Date.parse(signal.observedAt || '');
+      const validUntil = Date.parse(signal.validUntil || '');
+      if (!Number.isFinite(evaluatedAt) || !Number.isFinite(observedAt) || !Number.isFinite(validUntil)) return false;
+      if (observedAt > evaluatedAt || validUntil < Math.max(evaluatedAt, to)) return false;
       const start = Date.parse(signal.periodStart || '');
       const end = Date.parse(signal.periodEnd || '');
       if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) return false;
@@ -151,7 +156,7 @@ export function evaluateDiscoveryMatch(candidate = {}, context = {}) {
   if (capabilityMatches(candidate, context)) factors.push({ dimension: 'CAPABILITY', points: DISCOVERY_MATCH_WEIGHTS.capability, reason: 'Capability match' });
   if (geography.exact) factors.push({ dimension: 'GEOGRAPHY', points: DISCOVERY_MATCH_WEIGHTS.geographyExact, reason: 'Exact service geography match' });
   else if (geography.country) factors.push({ dimension: 'COUNTRY', points: DISCOVERY_MATCH_WEIGHTS.geographyCountry, reason: 'Country match' });
-  if (capacity.requested) factors.push({ dimension: 'CAPACITY', points: DISCOVERY_MATCH_WEIGHTS.capacityRequested, reason: 'Declared capacity satisfies requested quantity and/or availability window' });
+  if (capacity.requested) factors.push({ dimension: 'CAPACITY', points: DISCOVERY_MATCH_WEIGHTS.capacityRequested, reason: 'Declared capacity satisfies requested quantity and/or fresh availability window' });
   else if (capacity.observed) factors.push({ dimension: 'CAPACITY', points: DISCOVERY_MATCH_WEIGHTS.capacityObserved, reason: 'Capacity signal available' });
   if (commercial.match) factors.push({ dimension: 'COMMERCIAL', points: DISCOVERY_MATCH_WEIGHTS.commercial, reason: 'Commercial capability match' });
   if (qualification.requested) factors.push({ dimension: 'QUALIFICATION', points: DISCOVERY_MATCH_WEIGHTS.qualificationRequested, reason: 'Requested qualification available' });

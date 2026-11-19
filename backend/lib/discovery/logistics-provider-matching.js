@@ -109,6 +109,7 @@ export function matchLogisticsProviders(providers = [], requirements = {}) {
     unit: requirements.unit,
     availabilityFrom: requirements.availabilityFrom ?? requirements.availability_from,
     availabilityTo: requirements.availabilityTo ?? requirements.availability_to,
+    evaluatedAt: new Date().toISOString(),
   };
 
   return Object.freeze({
