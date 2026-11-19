@@ -9,14 +9,14 @@ import { renderKitchen } from '../restaurant/kitchen.js';
 import { renderAccounts } from '../b2b/ui.js';
 import { renderCustomers } from '../customers.js';
 import { switchWarehouseSubtab, warehouseActiveSubtab } from '../warehouse/ui.js';
-import { renderLogistics } from '../logistics/ui.js';
+import { renderLogistics, renderAppointments } from '../logistics/ui.js';
 import { renderSourcing, bindSourcingUI } from '../procurement/ui.js';
 import { renderEcosystemDiscovery } from '../experience/ecosystem-discovery.js';
 
 // ---------- Tabs ----------
 export function switchTab(tab) {
-  const allTabs = ['home', 'order', 'marketplace', 'queue', 'catalog', 'customers', 'tables', 'kitchen', 'accounts', 'warehouse', 'logistics', 'sourcing'];
-  const overflowTabs = ['queue', 'marketplace', 'tables', 'kitchen', 'accounts', 'warehouse', 'logistics', 'sourcing'];
+  const allTabs = ['home', 'order', 'marketplace', 'queue', 'catalog', 'customers', 'tables', 'kitchen', 'accounts', 'warehouse', 'logistics', 'appointments', 'sourcing'];
+  const overflowTabs = ['queue', 'marketplace', 'tables', 'kitchen', 'accounts', 'warehouse', 'logistics', 'appointments', 'sourcing'];
   allTabs.forEach(t => {
     const el = document.getElementById('tab-' + t);
     const nav = document.getElementById('nav' + capitalize(t));
@@ -39,6 +39,7 @@ export function switchTab(tab) {
   if (tab === 'customers') renderCustomers();
   if (tab === 'warehouse') switchWarehouseSubtab(warehouseActiveSubtab);
   if (tab === 'logistics') renderLogistics();
+  if (tab === 'appointments') renderAppointments();
   if (tab === 'sourcing') renderSourcing();
 }
 
@@ -57,7 +58,7 @@ export function closeMoreSheet() {
 // enabled?), and does More need a presence dot (any enabled one currently
 // showing a nonzero badge?).
 (function initMoreNavManager() {
-  const overflowIds = ['navQueue', 'navMarketplace', 'navTables', 'navKitchen', 'navAccounts', 'navWarehouse', 'navLogistics', 'navSourcing'];
+  const overflowIds = ['navQueue', 'navMarketplace', 'navTables', 'navKitchen', 'navAccounts', 'navWarehouse', 'navLogistics', 'navAppointments', 'navSourcing'];
   function recompute() {
     const navMore = document.getElementById('navMore');
     const dot = document.getElementById('navMoreDot');

@@ -84,6 +84,8 @@ jobs:
         run: npm run test:sc-03.4-resource-commitment-migration
       - name: SC-03.5 service provider booking queue regression
         run: npm run test:sc-03.5-service-provider-queue
+      - name: Service booking standalone Appointments navigation regression
+        run: npm run test:service-bookings-appointments-navigation
       - name: SC-03.5 Telegram buyer appointment order isolation regression
         run: npm run test:sc-03.5-buyer-appointments
       - name: SC-03.5 customer appointment browser regression

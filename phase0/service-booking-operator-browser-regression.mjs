@@ -43,7 +43,7 @@ let browser;
 try {
   await waitForServer(baseUrl, child);
   browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext();
+  const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
   const page = await context.newPage();
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(error.message));
@@ -68,6 +68,7 @@ try {
   };
   const calls = [];
   let forceConflict = false;
+  let resourcesAvailable = false;
   await page.route('**/tenants/test-tenant/service-resources**', async route => {
     if (route.request().method() !== 'GET') {
       await route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Method not allowed' } }) });
@@ -76,7 +77,7 @@ try {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ resources: [], state: 'READY', authority: 'service_resource_registry' }),
+      body: JSON.stringify({ resources: resourcesAvailable ? [{ id: 'resource-room-1', name: 'Room 1', resourceType: 'ROOM', status: 'ACTIVE' }] : [], state: 'READY', authority: 'service_resource_registry' }),
     });
   });
 
@@ -114,7 +115,7 @@ try {
   await page.route(baseUrl + '/', route => route.fulfill({
     status: 200,
     contentType: 'text/html',
-    body: '<!doctype html><html><head><meta charset="utf-8"></head><body><main id="test-root"></main></body></html>',
+    body: '<!doctype html><html><head><meta charset="utf-8"></head><body><button id="navAppointments" style="display:none">Appointments</button><section id="tab-appointments" style="display:none"><div id="appointmentsWorkspace"></div></section><main id="test-root"></main></body></html>',
   }));
   await page.goto(baseUrl);
   await page.evaluate(async () => {
@@ -128,15 +129,43 @@ try {
       contextualRoles: [],
     });
     state.setProducts([{ id: 'service-1', item_type: 'service', name: 'Consultation' }]);
+    const logisticsUI = await import('/src/logistics/ui.js');
+    logisticsUI.applyLogisticsUI();
+    const ownerWithServices = document.getElementById('navAppointments').style.display !== 'none';
+    state.setConfig({ ...state.config, currentStaffRole: 'cashier', contextualRoles: [
+      { role: 'service_provider', scopeType: 'RESOURCE', scopeId: 'resource-room-1' },
+    ] });
+    logisticsUI.applyLogisticsUI();
+    const scopedProvider = document.getElementById('navAppointments').style.display !== 'none';
+    state.setConfig({ ...state.config, currentStaffRole: 'cashier', contextualRoles: [
+      { role: 'service_provider', scopeType: 'ORGANIZATION', scopeId: 'test-tenant' },
+    ] });
+    logisticsUI.applyLogisticsUI();
+    const unscopedProvider = document.getElementById('navAppointments').style.display !== 'none';
+    state.setConfig({ ...state.config, currentStaffRole: 'owner', contextualRoles: [] });
+    state.setProducts([]);
+    logisticsUI.applyLogisticsUI();
+    const ownerWithoutServices = document.getElementById('navAppointments').style.display !== 'none';
+    state.setProducts([{ id: 'service-1', item_type: 'service', name: 'Consultation' }]);
+    state.setConfig({ ...state.config, currentStaffRole: 'owner', contextualRoles: [] });
+    logisticsUI.applyLogisticsUI();
     state.setOrders([{
       id: 'local-order-1',
       server_order_id: 'order-1',
       items: [{ item_id: 'service-1', item_type: 'service' }],
     }]);
+    window.__appointmentsVisibility = { ownerWithServices, scopedProvider, unscopedProvider, ownerWithoutServices };
     const workspace = await import('/src/logistics/service-bookings.js');
     document.querySelector('#test-root').innerHTML = workspace.serviceBookingsWorkspaceShell();
     workspace.mountServiceBookingsWorkspace(document);
   });
+  const visibility = await page.evaluate(() => window.__appointmentsVisibility);
+  assert.deepEqual(visibility, {
+    ownerWithServices: true,
+    scopedProvider: true,
+    unscopedProvider: false,
+    ownerWithoutServices: false,
+  }, 'Appointments visibility follows service offerings and resource-scoped provider context');
 
   await page.locator('.service-booking-card').waitFor();
   assert.equal(await page.locator('#serviceBookingsStatus').getAttribute('data-state'), 'READY',
@@ -148,13 +177,22 @@ try {
   assert.equal(await page.locator('.service-booking-card img').count(), 0, 'customer note is escaped rather than parsed as markup');
   assert.match(await page.locator('.service-booking-card').innerText(), /<img src=x onerror=alert\(1\)>customer note/);
 
-  // Cancel a reason-required transition: it must not send a mutation.
-  page.once('dialog', dialog => dialog.dismiss());
+  // Cancel a reason-required inline action form: it must not send a mutation.
   await page.getByRole('button', { name: 'REJECTED' }).click();
-  assert.equal(calls.filter(call => call.method === 'PATCH').length, 0, 'cancelled reason prompt does not mutate booking');
+  await page.locator('.service-booking-action-form').waitFor();
+  assert.equal(await page.locator('.service-booking-action-form textarea').evaluate(el => el === document.activeElement), true,
+    'opening a reason form moves keyboard focus to its required input');
+  const reasonFormBox = await page.locator('.service-booking-action-form').boundingBox();
+  assert.ok(reasonFormBox && reasonFormBox.width <= 375, 'inline action form fits the mobile viewport');
+  await page.locator('.service-booking-action-form .service-booking-action-cancel').click();
+  assert.equal(calls.filter(call => call.method === 'PATCH').length, 0, 'cancelled inline reason form does not mutate booking');
 
   // A successful transition sends the current version and idempotency key, then reloads canonical state.
   await page.getByRole('button', { name: 'ACCEPTED' }).click();
+  assert.equal(await page.locator('.service-booking-action-status').getAttribute('aria-live'), 'polite',
+    'inline transition feedback is announced to assistive technology');
+  await page.locator('.service-booking-action-form [type="submit"]').focus();
+  await page.keyboard.press('Enter');
   await page.locator('.service-booking-card .logistics-status').filter({ hasText: 'ACCEPTED' }).waitFor();
   const patch = calls.find(call => call.method === 'PATCH');
   assert.ok(patch, 'transition sends PATCH');
@@ -179,14 +217,16 @@ try {
     await workspace.refreshServiceBookings(document);
   });
   forceConflict = true;
-  page.once('dialog', dialog => dialog.accept());
+  resourcesAvailable = true;
   await page.getByRole('button', { name: 'CONFIRMED' }).click();
+  await page.locator('.service-booking-action-form select[name="service_resource_id"]').selectOption('resource-room-1');
+  await page.locator('.service-booking-action-form [type="submit"]').click();
   await page.waitForFunction(() => {
-    const button = document.querySelector('.service-booking-action[data-target="CONFIRMED"]');
-    return Boolean(button && !button.disabled);
+    const submit = document.querySelector('.service-booking-action-form [type="submit"]');
+    return Boolean(submit && !submit.disabled);
   }, null, { timeout: 3000 });
-  assert.equal(await page.locator('.service-booking-action[data-target="CONFIRMED"]').isDisabled(), false,
-    'failed version-conflict mutation re-enables the control for refresh/retry');
+  assert.equal(await page.locator('.service-booking-action-form [type="submit"]').isDisabled(), false,
+    'failed version-conflict mutation re-enables the inline form for retry');
   assert.ok(pageErrors.length === 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
 
   console.log('Service booking operator browser regression: PASS');
