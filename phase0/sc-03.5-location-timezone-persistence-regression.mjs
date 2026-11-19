@@ -40,6 +40,25 @@ try {
   const inherited = await store.updateOrganizationLocation(seller.chatId, created.id, { timezone: null });
   assert.equal(inherited.timeZone, null, 'explicit null restores organization-timezone inheritance');
 
+  await assert.rejects(
+    store.createOrganizationLocation(seller.chatId, {
+      code: 'BAD-TZ-' + suffix.slice(-6), name: 'Invalid Timezone',
+      timezone: 'Mars/Olympus_Mons',
+    }),
+    error => error?.code === 'LOCATION_TIMEZONE_INVALID',
+  );
+
+  const otherOwner = await store.getOrCreateUserByTelegram('location-timezone-other-' + suffix, 'Other Owner');
+  const otherSeller = await store.createTenantForUser({
+    userId: otherOwner.id, sellerName: 'Other Seller', businessType: 'services',
+    country: 'ET', currency: 'ETB', timezone: 'Africa/Addis_Ababa',
+  });
+  await assert.rejects(
+    store.updateOrganizationLocation(otherSeller.chatId, created.id, { timezone: 'Europe/Paris' }),
+    error => error?.statusCode === 404,
+    'a location from another organization must not be mutable',
+  );
+
   // Simulate a legacy/diverged database whose migration ledger already records
   // version 82 but whose locations table lacks the timezone column. Reopening
   // the store must repair the schema rather than trusting the version marker.
@@ -60,25 +79,6 @@ try {
   `], { cwd: process.cwd(), env: process.env, encoding: 'utf8' });
   assert.equal(repair.status, 0,
     'stale migration marker must not hide missing timezone column:\\n' + repair.stdout + repair.stderr);
-
-  await assert.rejects(
-    store.createOrganizationLocation(seller.chatId, {
-      code: 'BAD-TZ-' + suffix.slice(-6), name: 'Invalid Timezone',
-      timezone: 'Mars/Olympus_Mons',
-    }),
-    error => error?.code === 'LOCATION_TIMEZONE_INVALID',
-  );
-
-  const otherOwner = await store.getOrCreateUserByTelegram('location-timezone-other-' + suffix, 'Other Owner');
-  const otherSeller = await store.createTenantForUser({
-    userId: otherOwner.id, sellerName: 'Other Seller', businessType: 'services',
-    country: 'ET', currency: 'ETB', timezone: 'Africa/Addis_Ababa',
-  });
-  await assert.rejects(
-    store.updateOrganizationLocation(otherSeller.chatId, created.id, { timezone: 'Europe/Paris' }),
-    error => error?.statusCode === 404,
-    'a location from another organization must not be mutable',
-  );
 
   console.log('SC-03.5 canonical location timezone persistence regression: PASS');
   console.log('Migration, organization fallback, IANA validation, update and tenant isolation: PASS');
