@@ -114,6 +114,7 @@ import {
   listOrganizationLocations, createOrganizationLocation, updateOrganizationLocation,
   listCustomers, getCustomer, upsertCustomer, updateCustomer,
   listInventoryMovements, getInventoryBalances, appendInventoryMovement, appendInventoryMovementBatch,
+  listRestaurantRecipes, createRestaurantRecipe, updateRestaurantRecipe,
   createPairingChallenge, consumePairingChallenge,
   createInvite, listInvites, revokeInvite, consumeInvite, changeMembershipRole, assignMembershipContextualRole, revokeMembershipContextualRole,
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment, recordServiceDeliveryAssessment,
@@ -1900,6 +1901,30 @@ async function handleInventoryMovementCreate(req, res, chatId) {
   }
   const movement = await appendInventoryMovement(chatId, body, session);
   sendJSON(res, 201, { movement }, req);
+}
+
+
+async function handleRestaurantRecipes(req, res, chatId, recipeId = null) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+  if (req.method === 'GET') {
+    if (recipeId) return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+    await requireAuthorization(session, tenant, 'restaurant_recipe', 'restaurant:recipes:view', { deniedMessage: 'Restaurant recipe view permission required' });
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const recipes = await listRestaurantRecipes(chatId, { includeArchived: url.searchParams.get('include_archived') === 'true' });
+    return sendJSON(res, 200, { recipes, authority: 'restaurant_recipe' }, req);
+  }
+  if (req.method !== 'POST' && req.method !== 'PATCH') return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+  if ((req.method === 'POST' && recipeId) || (req.method === 'PATCH' && !recipeId)) return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+  await requireAuthorization(session, tenant, 'restaurant_recipe', 'restaurant:recipes:manage', { deniedMessage: 'Restaurant recipe management permission required' });
+  const body = await readBody(req);
+  if (req.method === 'POST') {
+    const result = await createRestaurantRecipe(chatId, body, session);
+    return sendJSON(res, result.duplicate ? 200 : 201, result, req);
+  }
+  const result = await updateRestaurantRecipe(chatId, recipeId, body, session);
+  return sendJSON(res, 200, result, req);
 }
 
 async function handleInventoryMovementBatchCreate(req, res, chatId) {
@@ -3980,4 +4005,7 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`sellify-backend listening on http://localhost:${PORT} (env=${NODE_ENV}, static=${SERVE_STATIC ? STATIC_DIR : 'disabled'})`);
-});
+});  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/restaurant\/recipes$/, handler: (req, res, m) => handleRestaurantRecipes(req, res, decodeURIComponent(m[1])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/restaurant\/recipes$/, handler: (req, res, m) => handleRestaurantRecipes(req, res, decodeURIComponent(m[1])) },
+  { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/restaurant\/recipes\/([^/]+)$/, handler: (req, res, m) => handleRestaurantRecipes(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+
