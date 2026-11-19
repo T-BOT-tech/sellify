@@ -43,7 +43,7 @@ let browser;
 try {
   await waitForServer(baseUrl, child);
   browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext();
+  const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
   const page = await context.newPage();
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(error.message));
@@ -159,6 +159,13 @@ try {
     document.querySelector('#test-root').innerHTML = workspace.serviceBookingsWorkspaceShell();
     workspace.mountServiceBookingsWorkspace(document);
   });
+  const visibility = await page.evaluate(() => window.__appointmentsVisibility);
+  assert.deepEqual(visibility, {
+    ownerWithServices: true,
+    scopedProvider: true,
+    unscopedProvider: false,
+    ownerWithoutServices: false,
+  }, 'Appointments visibility follows service offerings and resource-scoped provider context');
 
   await page.locator('.service-booking-card').waitFor();
   assert.equal(await page.locator('#serviceBookingsStatus').getAttribute('data-state'), 'READY',
