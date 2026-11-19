@@ -88,6 +88,18 @@ try {
     serviceItemId: 'sc035-http-consultation',
     idempotencyKey: 'sc035-http-provider-resource-' + suffix,
   }, null);
+  // The feasibility assertion below specifically tests provider-assignment
+  // revocation, so give this resource complete declared schedule evidence.
+  // Without this fixture, UNKNOWN correctly reports incomplete schedule data
+  // before it can attribute the result to the revoked provider assignment.
+  await store.setServiceResourceAvailability(tenant.chatId, providerResource.resource.id, {
+    expected_version: 0,
+    idempotency_key: 'sc035-http-provider-availability-' + suffix,
+    working_hours: Array.from({ length: 7 }, (_, weekday) => ({
+      weekday, start_time: '00:00', end_time: '23:59',
+    })),
+    exceptions: [],
+  }, { userId: owner.id });
   const now = new Date().toISOString();
   db.prepare(`INSERT INTO pack_lifecycle (
     id, organization_id, pack_id, pack_version, state, installed_at, activated_at,
