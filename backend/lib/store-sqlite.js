@@ -5969,9 +5969,18 @@ function ensureInventoryOpeningBalances(chatId) {
     "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
   ).get(String(tenant.organization_id));
   if (!location) return;
-  const products = db.prepare(
-    'SELECT product_id, stock, product_json FROM catalog_products WHERE chat_id = ? AND stock IS NOT NULL'
-  ).all(String(chatId)).filter(product => {
+  const products = db.prepare(`
+    SELECT cp.product_id, cp.stock, cp.product_json
+    FROM catalog_products cp
+    WHERE cp.chat_id = ?
+      AND cp.stock IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM inventory_movements im
+        WHERE im.organization_id = ?
+          AND im.product_id = cp.product_id
+      )
+  `).all(String(chatId), String(tenant.organization_id)).filter(product => {
     const payload = parseJSON(product.product_json, {});
     // Legacy catalog payloads used `type`; current catalog identity uses `item_type`.
     // Treat either service marker as non-stock-tracked during opening-balance migration.
@@ -7569,9 +7578,32 @@ export async function processSyncEvent(chatId, event = {}, actor = null) {
       return { eventId, status: existing.status, duplicate: true, replay: true };
     }
     if (eventType === 'inventory.movement.record') {
-      await appendInventoryMovement(chatId, event.payload, actor, { withinTransaction: true });
+      appendInventoryMovementInTransaction(chatId, String(tenant.organizationId), event.payload, actor);
+    } else if (eventType === 'inventory.movement.batch.record') {
+      const movements = event.payload.movements;
+      if (!Array.isArray(movements) || movements.length < 1 || movements.length > 100) {
+        throw Object.assign(new Error('Batch payload must contain 1-100 movements'), {
+          statusCode: 400, code: 'INVALID_INVENTORY_MOVEMENT_BATCH',
+        });
+      }
+      const movementEventIds = movements.map(movement =>
+        String(movement?.eventId || movement?.event_id || '').trim()
+      );
+      if (movementEventIds.some(id => !id) || new Set(movementEventIds).size !== movementEventIds.length) {
+        throw Object.assign(new Error('Every batch movement requires a unique eventId'), {
+          statusCode: 400, code: 'INVALID_INVENTORY_MOVEMENT_BATCH',
+        });
+      }
+      // The outer BEGIN IMMEDIATE transaction owns the entire command. Apply
+      // each line synchronously through the canonical movement validator; any
+      // invalid line throws and the outer catch rolls back every prior line
+      // and the outer sync receipt. No savepoint/replay pass or async yield is
+      // needed because all canonical writes and audit records are SQLite-local.
+      for (const movement of movements) {
+        appendInventoryMovementInTransaction(chatId, String(tenant.organizationId), movement, actor);
+      }
     } else if (eventType === 'customer.upsert') {
-      await upsertCustomer(chatId, event.payload);
+      upsertCustomerSync(chatId, event.payload);
     } else {
       throw Object.assign(new Error(`Unsupported sync event type: ${eventType}`), { statusCode: 400 });
     }
@@ -11896,7 +11928,7 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
           // inventory_movements is the physical stock authority. catalog_products.stock
           // is retained only as a compatibility projection for older clients.
           const movementEventId = `marketplace-sale:${marketplaceOrderId}:${sellerId}:${itemId}`;
-          await appendInventoryMovement(sellerId, {
+          appendInventoryMovementInTransaction(sellerId, String(tenant.organization_id), {
             productId: itemId,
             locationId: String(defaultLocation.id),
             quantity: -qty,
@@ -11907,7 +11939,7 @@ export async function createMarketplaceOrder({ buyer_id, buyer_identity, custome
             occurredAt: nowIso(),
             reason: 'Marketplace checkout',
             metadata: { marketplaceOrderId, sellerId, quantity: qty },
-          }, null, { withinTransaction: true });
+          }, null);
           product.stock = canonicalBalance - qty;
           product.stock_revision = (Number.isInteger(row.stock_revision) ? row.stock_revision : 0) + 1;
           insertProduct(sellerId, product);
@@ -12104,7 +12136,7 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
         `).get(String(tenant.organization_id), String(defaultLocation.id), String(itemId))?.quantity || 0);
         const restoredStock = Math.min(1000000000, canonicalBalance + qty);
         const movementEventId = `marketplace-cancel:${order.marketplace_order_id}:${key}:${itemId}`;
-        await appendInventoryMovement(key, {
+        appendInventoryMovementInTransaction(key, String(tenant.organization_id), {
           productId: itemId,
           locationId: String(defaultLocation.id),
           quantity: qty,
@@ -12115,7 +12147,7 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
           occurredAt: nowIso(),
           reason: 'Marketplace cancellation stock release',
           metadata: { marketplaceOrderId: order.marketplace_order_id, sellerId: key, quantity: qty },
-        }, null, { withinTransaction: true });
+        }, null);
         const product = productFromRow(productRow);
         product.stock = restoredStock;
         product.stock_revision = (Number.isInteger(productRow.stock_revision) ? productRow.stock_revision : 0) + 1;
@@ -12962,7 +12994,7 @@ export async function changeMembershipRole({ actorUserId, chatId, membershipId, 
   return { id: target.id, userId: target.user_id, chatId: target.chat_id, from: target.role, to: nextRole, changed: true };
 }
 
-export async function ensureMembership(userId, chatId, role = 'owner') {
+function ensureMembershipSync(userId, chatId, role = 'owner') {
   ensureDatabase();
   const existing = db.prepare('SELECT * FROM memberships WHERE user_id = ? AND chat_id = ?').get(String(userId), String(chatId));
   if (existing) return existing;
@@ -12976,6 +13008,11 @@ export async function ensureMembership(userId, chatId, role = 'owner') {
   `).run(`legacy-role:${id}`, id, String(role).trim().toLowerCase(), createdAt);
   audit(String(chatId), 'membership.created', 'membership', id, { userId: String(userId), role });
   return db.prepare('SELECT * FROM memberships WHERE id = ?').get(id);
+}
+
+// Preserve the public async API; transaction owners use the synchronous core.
+export async function ensureMembership(userId, chatId, role = 'owner') {
+  return ensureMembershipSync(userId, chatId, role);
 }
 
 export async function createTenantForUser({ userId, sellerName, businessType, country, currency, timezone, challengeToken = null }) {
@@ -13028,7 +13065,7 @@ export async function createTenantForUser({ userId, sellerName, businessType, co
 
     db.prepare(`INSERT INTO tenants (chat_id, tenant_id, api_key, created_at, seller_name, branding_json, vendor_code) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(chatId, tenantId, apiKey, now, tenant.sellerName, json({ currency: tenant.currency, country: tenant.country, timezone: tenant.timezone }), null);
     ensureCanonicalIdentityForTenant(chatId);
-    const membership = await ensureMembership(userId, chatId, 'owner');
+    const membership = ensureMembershipSync(userId, chatId, 'owner');
     audit(chatId, 'tenant.created_authenticated', 'tenant', chatId, { userId: String(userId), businessType: tenant.businessType });
     const result = { chatId, tenantId, membership, tenant: { ...tenant, createdAt: now } };
     if (challengeTokenHash) {
@@ -13587,7 +13624,7 @@ export async function consumePairingChallenge(token, deviceName = 'Paired Sellif
   db.exec('BEGIN IMMEDIATE');
   try {
     db.prepare('INSERT INTO users (id, telegram_user_id, display_name, created_at, last_seen_at) VALUES (?, NULL, ?, ?, ?)').run(userId, `Paired device`, now, now);
-    await ensureMembership(userId, row.chat_id, row.role);
+    ensureMembershipSync(userId, row.chat_id, row.role);
     db.prepare('UPDATE pairing_challenges SET used_at = ? WHERE token_hash = ?').run(now, hash);
     audit(row.chat_id, 'device.paired', 'device', null, { userId, role: row.role, deviceName: String(deviceName || 'Paired Sellify device') });
     db.exec('COMMIT');
@@ -13682,7 +13719,7 @@ export async function consumeInvite(token, userId) {
         audit(row.chat_id, 'membership.role_upgraded', 'membership', existing.id, { userId: String(userId), from: existing.role, to: row.role });
       }
     } else {
-      await ensureMembership(userId, row.chat_id, row.role);
+      ensureMembershipSync(userId, row.chat_id, row.role);
     }
     db.prepare('UPDATE invites SET used_at = ?, used_by_user_id = ? WHERE token_hash = ?').run(nowIso(), String(userId), hash);
     audit(row.chat_id, 'invite.accepted', 'invite', null, { userId: String(userId), role: row.role, alreadyMember, roleChanged });

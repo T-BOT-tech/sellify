@@ -195,7 +195,12 @@ try {
   db.prepare('UPDATE telegram_storefront_configs SET enabled_capabilities_json=? WHERE organization_id=?')
     .run(JSON.stringify(['browse', 'checkout', 'order_status']), organizationId);
 
-  const start = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+  // Pin the future appointment to midday in Africa/Addis_Ababa (09:00 UTC),
+  // so the declared 08:00-18:00 local schedule always matches regardless of
+  // the CI runner's current clock time.
+  const appointmentStart = new Date(Date.now() + 72 * 60 * 60 * 1000);
+  appointmentStart.setUTCHours(9, 0, 0, 0);
+  const start = appointmentStart.toISOString();
   const end = new Date(Date.parse(start) + 60 * 60 * 1000).toISOString();
   const create = await request(base + '/service-bookings', {
     method: 'POST',
