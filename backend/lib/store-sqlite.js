@@ -7383,9 +7383,19 @@ export async function appendInventoryMovementBatch(chatId, input = {}, actor = n
         });
       }
     }
-    const movements = movementInputs.map(movement => appendInventoryMovementInTransaction(
-      chatId, organizationId, movement, actor,
-    ));
+    let movements;
+    try {
+      movements = movementInputs.map(movement => appendInventoryMovementInTransaction(
+        chatId, organizationId, movement, actor,
+      ));
+    } catch (error) {
+      if (error?.code === 'INVENTORY_EVENT_ID_REUSED') {
+        throw Object.assign(new Error('Inventory command ID was already used with a different movement intent'), {
+          statusCode: 409, code: 'INVENTORY_COMMAND_ID_REUSED',
+        });
+      }
+      throw error;
+    }
     db.exec('COMMIT');
     return {
       commandId, fingerprint, duplicate: priorRows.length > 0,
