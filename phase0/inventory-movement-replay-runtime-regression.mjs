@@ -158,9 +158,9 @@ try {
   db.exec('BEGIN IMMEDIATE');
   const nestedMovement = await store.appendInventoryMovement(otherSeller.chatId, {
     ...command, eventId: outerEventId, locationId: undefined,
-  }, { userId: otherOwner.id });
+  }, { userId: otherOwner.id }, { withinTransaction: true });
   assert.equal(db.isTransaction, true,
-    'appendInventoryMovement must leave a caller-owned transaction open');
+    'appendInventoryMovement must leave an explicitly declared caller-owned transaction open');
   db.exec('ROLLBACK');
   assert.equal(db.isTransaction, false);
   assert.equal(db.prepare('SELECT id FROM inventory_movements WHERE event_id = ?').get(outerEventId), undefined,
@@ -201,6 +201,43 @@ try {
     'failed sync command must not leave a partial Inventory movement');
   assert.equal(db.isTransaction, false, 'sync failure must roll back and close its transaction');
 
+  // A direct request must not infer that it owns an unrelated sync transaction
+  // merely because DatabaseSync.isTransaction is true on the shared connection.
+  const raceOwner = await store.getOrCreateUserByTelegram('inventory-race-' + suffix, 'Inventory Race Owner');
+  const raceSeller = await store.createTenantForUser({
+    userId: raceOwner.id, sellerName: 'Inventory Race Seller', businessType: 'retail',
+    country: 'ET', currency: 'ETB', timezone: 'Africa/Addis_Ababa',
+  });
+  await store.saveCatalog(raceSeller.chatId, [
+    { id: 'rice', name: 'Rice', price: 100, item_type: 'product' },
+    { id: 'consultation', name: 'Consultation', price: 250, item_type: 'service' },
+  ]);
+  const raceSyncId = eventId + '-race-sync';
+  const raceSyncMovementId = eventId + '-race-invalid-service';
+  const raceDirectMovementId = eventId + '-race-direct';
+  const raceSync = store.processSyncEvent(raceSeller.chatId, {
+    eventId: raceSyncId,
+    eventType: 'inventory.movement.record',
+    aggregateType: 'inventory_movement',
+    aggregateId: raceSyncMovementId,
+    payload: { eventId: raceSyncMovementId, productId: 'consultation', quantity: 1, movementType: 'ADJUSTMENT' },
+  }, { userId: raceOwner.id });
+  const independentWrite = store.appendInventoryMovement(raceSeller.chatId, {
+    eventId: raceDirectMovementId, productId: 'rice', quantity: 2, movementType: 'PURCHASE',
+  }, { userId: raceOwner.id });
+  const [raceSyncResult, independentWriteResult] = await Promise.allSettled([raceSync, independentWrite]);
+  assert.equal(raceSyncResult.status, 'rejected');
+  assert.equal(raceSyncResult.reason?.code, 'SERVICE_HAS_NO_INVENTORY');
+  assert.equal(independentWriteResult.status, 'fulfilled',
+    'an independent Inventory request waits for the sync transaction instead of joining it');
+  assert.ok(db.prepare('SELECT event_id FROM inventory_movements WHERE event_id = ?').get(raceDirectMovementId),
+    'the independent movement must commit after the failed sync transaction rolls back');
+  assert.equal(db.prepare('SELECT event_id FROM inventory_movements WHERE event_id = ?').get(raceSyncMovementId), undefined,
+    'the rejected service movement must not be persisted');
+  assert.equal(db.prepare('SELECT event_id FROM sync_events WHERE event_id = ?').get(raceSyncId), undefined,
+    'the failed sync receipt must not be persisted');
+  assert.equal(db.isTransaction, false, 'concurrent sync and direct writes must leave no open transaction');
+
   const rows = db.prepare('SELECT id, organization_id, event_id FROM inventory_movements WHERE event_id = ?').all(eventId);
   assert.equal(rows.length, 1, 'exact retries must not create duplicate movements');
   assert.equal(rows[0].id, first.id);
@@ -219,6 +256,7 @@ try {
   console.log('Caller-owned sync transaction rollback: PASS');
   console.log('Successful Inventory sync event atomicity: PASS');
   console.log('Failed Inventory sync event rollback: PASS');
+  console.log('Same-connection transaction isolation: PASS');
   console.log('Single canonical movement persisted: PASS');
 } finally {
   await rm(tempDir, { recursive: true, force: true });
