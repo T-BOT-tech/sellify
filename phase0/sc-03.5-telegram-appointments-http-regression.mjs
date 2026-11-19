@@ -88,18 +88,6 @@ try {
     serviceItemId: 'sc035-http-consultation',
     idempotencyKey: 'sc035-http-provider-resource-' + suffix,
   }, null);
-  // The feasibility assertion below specifically tests provider-assignment
-  // revocation, so give this resource complete declared schedule evidence.
-  // Without this fixture, UNKNOWN correctly reports incomplete schedule data
-  // before it can attribute the result to the revoked provider assignment.
-  await store.setServiceResourceAvailability(tenant.chatId, providerResource.resource.id, {
-    expected_version: 0,
-    idempotency_key: 'sc035-http-provider-availability-' + suffix,
-    working_hours: Array.from({ length: 7 }, (_, weekday) => ({
-      weekday, start_time: '00:00', end_time: '23:59',
-    })),
-    exceptions: [],
-  }, { userId: owner.id });
   const now = new Date().toISOString();
   db.prepare(`INSERT INTO pack_lifecycle (
     id, organization_id, pack_id, pack_version, state, installed_at, activated_at,
@@ -207,7 +195,12 @@ try {
   db.prepare('UPDATE telegram_storefront_configs SET enabled_capabilities_json=? WHERE organization_id=?')
     .run(JSON.stringify(['browse', 'checkout', 'order_status']), organizationId);
 
-  const start = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+  // Pin the future appointment to midday in Africa/Addis_Ababa (09:00 UTC),
+  // so the declared 08:00-18:00 local schedule always matches regardless of
+  // the CI runner's current clock time.
+  const appointmentStart = new Date(Date.now() + 72 * 60 * 60 * 1000);
+  appointmentStart.setUTCHours(9, 0, 0, 0);
+  const start = appointmentStart.toISOString();
   const end = new Date(Date.parse(start) + 60 * 60 * 1000).toISOString();
   const create = await request(base + '/service-bookings', {
     method: 'POST',
