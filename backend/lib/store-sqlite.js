@@ -7136,18 +7136,12 @@ async function waitForInventoryTransactionSlot() {
   }
 }
 
-export async function appendInventoryMovement(chatId, input = {}, actor = null, options = {}) {
-  ensureDatabase();
-  const tenant = await getTenant(chatId);
-  if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
-  const withinTransaction = options?.withinTransaction === true;
-  if (withinTransaction && !db.isTransaction) {
-    throw Object.assign(new Error('Caller-owned Inventory transaction is not active'), {
+function appendInventoryMovementInTransaction(chatId, organizationId, input = {}, actor = null) {
+  if (!db.isTransaction) {
+    throw Object.assign(new Error('Inventory transaction context is required'), {
       statusCode: 500, code: 'INVENTORY_TRANSACTION_CONTEXT_REQUIRED',
     });
   }
-  if (!withinTransaction) await waitForInventoryTransactionSlot();
-  const organizationId = String(tenant.organizationId);
   const productId = String(input.productId ?? input.product_id ?? '').trim();
   const movementType = String(input.movementType ?? input.movement_type ?? '').trim().toUpperCase();
   const quantity = Number(input.quantity);
@@ -7158,22 +7152,16 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null, 
   const eventId = String(input.eventId || input.event_id || crypto.randomUUID()).trim();
   if (!eventId) throw Object.assign(new Error('eventId must not be empty'), { statusCode: 400, code: 'INVALID_INVENTORY_EVENT_ID' });
 
-  // Check ownership before resolving caller-controlled product/location references.
-  // A globally unique event ID must never disclose another organization's movement.
   const priorByEventId = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
   if (priorByEventId && String(priorByEventId.organization_id) !== organizationId) {
     throw Object.assign(new Error('Inventory event ID is already owned by another organization'), {
       statusCode: 409, code: 'INVENTORY_EVENT_ID_REUSED',
     });
   }
-
   const defaultLocation = db.prepare(
     "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
   ).get(organizationId);
-  // For a retry with no explicit location, bind the request to the original
-  // movement's location even if that location is no longer active.
   const locationId = String(input.locationId || input.location_id || priorByEventId?.location_id || defaultLocation?.id || '');
-
   const referenceType = input.referenceType || input.reference_type || null;
   const referenceId = input.referenceId || input.reference_id || null;
   const suppliedOccurredAt = input.occurredAt ?? input.occurred_at;
@@ -7198,42 +7186,33 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null, 
     && JSON.stringify(canonicalize(parseJSON(row.metadata_json, {}))) === metadataIntent
     && (suppliedOccurredAt == null || String(row.occurred_at) === String(suppliedOccurredAt));
 
-  // A matching replay returns the canonical movement; a reused key with altered
-  // intent fails closed. BEGIN IMMEDIATE serializes direct writers. Sync replay
-  // may already own the surrounding transaction, so do not nest one here.
-  const ownsTransaction = !withinTransaction;
-  if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
-  try {
-    const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
-    if (existing) {
-      if (!replayMatches(existing)) {
-        throw Object.assign(new Error('Inventory event ID was already used with a different movement intent'), {
-          statusCode: 409, code: 'INVENTORY_EVENT_ID_REUSED',
-        });
-      }
-      if (ownsTransaction) db.exec('COMMIT');
-      return inventoryMovementFromRow(existing);
-    }
-
-    // Current location eligibility applies to new movements, not exact replays.
-    // A committed movement remains replayable after its location is deactivated.
-    const location = db.prepare("SELECT id FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'").get(locationId, organizationId);
-    if (!location) {
-      throw Object.assign(new Error('Inventory location does not belong to this organization'), { statusCode: 400 });
-    }
-
-    const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
-    if (!product) throw Object.assign(new Error('Product not found'), { statusCode: 404 });
-    const servicePayload = parseJSON(product.product_json, {});
-    const isService = String(servicePayload.item_type ?? servicePayload.type ?? '').trim().toLowerCase() === 'service';
-    if (isService) {
-      throw Object.assign(new Error('Service catalog items do not support physical inventory movements'), {
-        statusCode: 422, code: 'SERVICE_HAS_NO_INVENTORY',
+  const existing = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
+  if (existing) {
+    if (!replayMatches(existing)) {
+      throw Object.assign(new Error('Inventory event ID was already used with a different movement intent'), {
+        statusCode: 409, code: 'INVENTORY_EVENT_ID_REUSED',
       });
     }
+    return inventoryMovementFromRow(existing);
+  }
 
-    const now = nowIso();
-    const id = crypto.randomUUID();
+  const location = db.prepare("SELECT id FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'").get(locationId, organizationId);
+  if (!location) {
+    throw Object.assign(new Error('Inventory location does not belong to this organization'), { statusCode: 400 });
+  }
+  const product = db.prepare('SELECT product_id, product_json FROM catalog_products WHERE chat_id = ? AND product_id = ?').get(String(chatId), productId);
+  if (!product) throw Object.assign(new Error('Product not found'), { statusCode: 404 });
+  const servicePayload = parseJSON(product.product_json, {});
+  const isService = String(servicePayload.item_type ?? servicePayload.type ?? '').trim().toLowerCase() === 'service';
+  if (isService) {
+    throw Object.assign(new Error('Service catalog items do not support physical inventory movements'), {
+      statusCode: 422, code: 'SERVICE_HAS_NO_INVENTORY',
+    });
+  }
+
+  const now = nowIso();
+  const id = crypto.randomUUID();
+  try {
     db.prepare(`
       INSERT INTO inventory_movements
         (id, event_id, organization_id, location_id, product_id, quantity, movement_type,
@@ -7245,19 +7224,7 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null, 
       suppliedOccurredAt == null ? now : String(suppliedOccurredAt),
       reason, json(metadata), now
     );
-    audit(String(chatId), 'inventory.movement.recorded', 'inventory_movement', id, {
-      productId, locationId, movementType, quantity, eventId,
-    }, {
-      organizationId,
-      locationId,
-      actorId: actor?.userId || null,
-      deviceId: actor?.deviceId || null,
-    });
-    const movement = inventoryMovementFromRow(db.prepare('SELECT * FROM inventory_movements WHERE id = ?').get(id));
-    if (ownsTransaction) db.exec('COMMIT');
-    return movement;
   } catch (error) {
-    if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
     if (error?.code === 'SQLITE_CONSTRAINT_UNIQUE' || error?.code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
       const winner = db.prepare('SELECT * FROM inventory_movements WHERE event_id = ?').get(eventId);
       if (winner && replayMatches(winner)) return inventoryMovementFromRow(winner);
@@ -7265,6 +7232,167 @@ export async function appendInventoryMovement(chatId, input = {}, actor = null, 
         statusCode: 409, code: 'INVENTORY_EVENT_ID_REUSED',
       });
     }
+    throw error;
+  }
+  audit(String(chatId), 'inventory.movement.recorded', 'inventory_movement', id, {
+    productId, locationId, movementType, quantity, eventId,
+  }, {
+    organizationId,
+    locationId,
+    actorId: actor?.userId || null,
+    deviceId: actor?.deviceId || null,
+  });
+  return inventoryMovementFromRow(db.prepare('SELECT * FROM inventory_movements WHERE id = ?').get(id));
+}
+
+export async function appendInventoryMovement(chatId, input = {}, actor = null, options = {}) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
+  const organizationId = String(tenant.organizationId);
+  const withinTransaction = options?.withinTransaction === true;
+  if (withinTransaction) {
+    if (!db.isTransaction) {
+      throw Object.assign(new Error('Caller-owned Inventory transaction is not active'), {
+        statusCode: 500, code: 'INVENTORY_TRANSACTION_CONTEXT_REQUIRED',
+      });
+    }
+    return appendInventoryMovementInTransaction(chatId, organizationId, input, actor);
+  }
+
+  await waitForInventoryTransactionSlot();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const movement = appendInventoryMovementInTransaction(chatId, organizationId, input, actor);
+    db.exec('COMMIT');
+    return movement;
+  } catch (error) {
+    if (db.isTransaction) db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+function canonicalizeInventoryCommandValue(value) {
+  if (Array.isArray(value)) return value.map(canonicalizeInventoryCommandValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalizeInventoryCommandValue(value[key])]));
+  }
+  return value;
+}
+
+export async function appendInventoryMovementBatch(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
+  const organizationId = String(tenant.organizationId);
+  const commandId = String(input.commandId ?? input.command_id ?? '').trim();
+  const locationId = String(input.locationId ?? input.location_id ?? '').trim();
+  const lines = input.lines;
+  if (!commandId || commandId.length > 128) {
+    throw Object.assign(new Error('commandId must be a non-empty string of at most 128 characters'), {
+      statusCode: 400, code: 'INVALID_INVENTORY_COMMAND_ID',
+    });
+  }
+  if (!locationId) {
+    throw Object.assign(new Error('locationId is required for an atomic Inventory command'), {
+      statusCode: 400, code: 'INVALID_INVENTORY_COMMAND_LOCATION',
+    });
+  }
+  if (!Array.isArray(lines) || lines.length < 1 || lines.length > 100) {
+    throw Object.assign(new Error('Inventory command must contain between 1 and 100 movement lines'), {
+      statusCode: 400, code: 'INVALID_INVENTORY_COMMAND_LINES',
+    });
+  }
+  const seenLineIds = new Set();
+  const normalizedLines = lines.map((line, index) => {
+    const lineId = String(line?.lineId ?? line?.line_id ?? '').trim();
+    const productId = String(line?.productId ?? line?.product_id ?? '').trim();
+    const quantity = Number(line?.quantity);
+    const movementType = String(line?.movementType ?? line?.movement_type ?? '').trim().toUpperCase();
+    if (!lineId || lineId.length > 128 || seenLineIds.has(lineId)) {
+      throw Object.assign(new Error(`Inventory command line ${index + 1} requires a unique lineId`), {
+        statusCode: 400, code: 'INVALID_INVENTORY_COMMAND_LINE_ID',
+      });
+    }
+    seenLineIds.add(lineId);
+    if (!productId || !Number.isFinite(quantity) || quantity === 0 || !movementType) {
+      throw Object.assign(new Error(`Inventory command line ${lineId} has invalid product, quantity, or movement type`), {
+        statusCode: 400, code: 'INVALID_INVENTORY_COMMAND_LINE',
+      });
+    }
+    const metadata = line.metadata ?? {};
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata) || Object.hasOwn(metadata, 'inventoryCommand')) {
+      throw Object.assign(new Error(`Inventory command line ${lineId} has invalid or reserved metadata`), {
+        statusCode: 400, code: 'INVALID_INVENTORY_COMMAND_METADATA',
+      });
+    }
+    return {
+      lineId, productId, quantity, movementType,
+      metadata: canonicalizeInventoryCommandValue(metadata),
+    };
+  });
+  const commandMetadata = input.metadata ?? {};
+  if (!commandMetadata || typeof commandMetadata !== 'object' || Array.isArray(commandMetadata) || Object.hasOwn(commandMetadata, 'inventoryCommand')) {
+    throw Object.assign(new Error('Inventory command metadata is invalid or uses a reserved key'), {
+      statusCode: 400, code: 'INVALID_INVENTORY_COMMAND_METADATA',
+    });
+  }
+  const referenceType = input.referenceType ?? input.reference_type ?? null;
+  const referenceId = input.referenceId ?? input.reference_id ?? null;
+  const reason = String(input.reason || '').slice(0, 500);
+  const occurredAt = input.occurredAt ?? input.occurred_at ?? null;
+  const canonicalLines = [...normalizedLines].sort((a, b) => a.lineId.localeCompare(b.lineId));
+  const fingerprintPayload = canonicalizeInventoryCommandValue({
+    organizationId, locationId, referenceType, referenceId, reason, occurredAt,
+    metadata: commandMetadata, lines: canonicalLines,
+  });
+  const fingerprint = crypto.createHash('sha256').update(JSON.stringify(fingerprintPayload)).digest('hex');
+  const commandPrefix = `inventory-batch:${crypto.createHash('sha256').update(`${organizationId}\\0${commandId}`).digest('hex')}:`;
+  const eventIds = new Set(normalizedLines.map(line =>
+    commandPrefix + crypto.createHash('sha256').update(line.lineId).digest('hex')));
+  const movementInputs = normalizedLines.map(line => ({
+    eventId: commandPrefix + crypto.createHash('sha256').update(line.lineId).digest('hex'),
+    productId: line.productId,
+    quantity: line.quantity,
+    movementType: line.movementType,
+    locationId,
+    referenceType,
+    referenceId,
+    reason,
+    occurredAt,
+    metadata: {
+      ...commandMetadata,
+      line: line.metadata,
+      inventoryCommand: { commandId, fingerprint, lineCount: normalizedLines.length, lineId: line.lineId },
+    },
+  }));
+
+  await waitForInventoryTransactionSlot();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const priorRows = db.prepare(`
+      SELECT event_id FROM inventory_movements
+      WHERE substr(event_id, 1, ?) = ?
+    `).all(commandPrefix.length, commandPrefix);
+    if (priorRows.length > 0) {
+      const priorIds = new Set(priorRows.map(row => String(row.event_id)));
+      if (priorRows.length !== normalizedLines.length || priorIds.size !== eventIds.size ||
+          [...eventIds].some(eventId => !priorIds.has(eventId))) {
+        throw Object.assign(new Error('Inventory command ID was already used by a different or incomplete command'), {
+          statusCode: 409, code: 'INVENTORY_COMMAND_ID_REUSED',
+        });
+      }
+    }
+    const movements = movementInputs.map(movement => appendInventoryMovementInTransaction(
+      chatId, organizationId, movement, actor,
+    ));
+    db.exec('COMMIT');
+    return {
+      commandId, fingerprint, duplicate: priorRows.length > 0,
+      movements,
+    };
+  } catch (error) {
+    if (db.isTransaction) db.exec('ROLLBACK');
     throw error;
   }
 }
