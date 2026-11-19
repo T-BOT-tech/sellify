@@ -506,3 +506,16 @@ jobs:
         run: npm run test:phase19.12-cumulative
       - name: Phase 20 cumulative Cross-Border Commerce exit certification
         run: npm run test:phase20.12
+
+      - name: Phase 18.5 Supplier Network capacity persistence regression
+        run: node phase0/phase18.5-supplier-network-capacity-regression.mjs
+      - name: Phase 19.5 Supplier Network federation regression
+        run: node phase0/phase19.5-supplier-network-federation-regression.mjs
+      - name: Phase 19.7 deterministic Discovery matching regression
+        run: npm run test:phase19.7
+      - name: Phase 21 cumulative regression gate
+        run: npm run test:phase21.14
+      - name: Phase 21 Node 24 runtime verification
+        run: npm run test:phase21.15
+      - name: Phase 21 implementation hash/documentation regression
+        run: npm run test:phase21.16
