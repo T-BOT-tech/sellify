@@ -248,9 +248,13 @@ try {
 
   // Shared-connection regression: a transactional catalog write queued at the
   // first async boundary must not join or roll back the sync-event transaction.
-  const isolationLocation = (await store.listOrganizationLocations(otherSeller.chatId, { includeInactive: true }))
-    .find(item => item.status === 'active');
+  const organizationLocations = await store.listOrganizationLocations(otherSeller.chatId, { includeInactive: true });
+  const isolationLocation = organizationLocations.find(item => item.status === 'active');
+  const marketplaceDefaultLocation = organizationLocations.find(item =>
+    item.code === 'DEFAULT' && item.status === 'active'
+  );
   assert.ok(isolationLocation, 'concurrency fixture must have an active location');
+  assert.ok(marketplaceDefaultLocation, 'marketplace checkout must use the canonical active DEFAULT location');
   const isolationProduct = 'market-rice-' + suffix;
   await store.saveCatalog(otherSeller.chatId, [
     { id: isolationProduct, name: 'Marketplace Rice', price: 100, item_type: 'product', marketplace_listed: true },
@@ -259,7 +263,7 @@ try {
   await store.appendInventoryMovement(otherSeller.chatId, {
     eventId: eventId + '-marketplace-opening',
     productId: isolationProduct,
-    locationId: isolationLocation.id,
+    locationId: marketplaceDefaultLocation.id,
     quantity: 10,
     movementType: 'PURCHASE',
     referenceType: 'runtime_regression',
@@ -317,8 +321,12 @@ try {
   // movement helper. A second transactional write is deliberately queued at
   // the old async movement boundary.
   const checkoutKey = 'tx-isolation-checkout-' + suffix;
-  const inventoryBeforeCheckout = (await store.getInventoryBalances(otherSeller.chatId))
-    .find(row => row.productId === isolationProduct)?.quantity;
+  // Checkout deducts from the canonical DEFAULT location. Scope both sides
+  // of this assertion to that same location; organization-wide balances are
+  // returned as one row per location and must not be compared by product alone.
+  const inventoryBeforeCheckout = (await store.getInventoryBalances(otherSeller.chatId, {
+    locationId: marketplaceDefaultLocation.id,
+  })).find(row => row.productId === isolationProduct)?.quantity;
   assert.equal(typeof inventoryBeforeCheckout, 'number', 'opening marketplace inventory balance must exist');
   const checkout = store.createMarketplaceOrder({
     buyer_id: 'tx-isolation-buyer-' + suffix,
@@ -337,7 +345,9 @@ try {
   );
   assert.ok(checkoutSellerOrder, 'checkout must persist its seller order');
   assert.equal(
-    (await store.getInventoryBalances(otherSeller.chatId)).find(row => row.productId === isolationProduct)?.quantity,
+    (await store.getInventoryBalances(otherSeller.chatId, {
+      locationId: marketplaceDefaultLocation.id,
+    })).find(row => row.productId === isolationProduct)?.quantity,
     inventoryBeforeCheckout - 1,
     'checkout must deduct exactly one unit from the pre-checkout canonical balance',
   );
@@ -351,7 +361,9 @@ try {
   assert.equal(db.isTransaction, false);
   assert.equal(cancellationResult.value.status, 'cancelled');
   assert.equal(
-    (await store.getInventoryBalances(otherSeller.chatId)).find(row => row.productId === isolationProduct)?.quantity,
+    (await store.getInventoryBalances(otherSeller.chatId, {
+      locationId: marketplaceDefaultLocation.id,
+    })).find(row => row.productId === isolationProduct)?.quantity,
     inventoryBeforeCheckout,
     'cancellation must restore exactly the deducted unit',
   );
