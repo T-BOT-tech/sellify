@@ -18,6 +18,10 @@ assert.ok(availabilityCommandsTable, 'migration 79 must define the availability 
 assert.match(availabilityCommandsTable[1], /(?:^|\n)\s*response_json TEXT NOT NULL,?\s*(?:\n|$)/,
   'availability idempotency table itself must persist its original response');
 assert.match(store, /parseJSON\(prior\.response_json, null\)/, 'idempotency replay must use original response snapshot');
+assert.match(store, /effectiveTimeZone/, 'availability must expose the effective location timezone');
+assert.match(store, /location\?\.timezone \|\| organization\?\.timezone/, 'new declarations must inherit location timezone before organization timezone');
+assert.match(store, /scheduleUsesCurrentLocationTimeZone/, 'existing schedule timezone drift must be explicit');
+assert.match(store, /resource\.location_timezone/, 'buyer feasibility must resolve resource location timezone');
 assert.doesNotMatch(store, /const replay = db\.prepare\('SELECT \* FROM service_resource_availability WHERE resource_id=\?'\)/, 'replay must not return the resource current state');
 assert.match(store, /services\.resource\.availability\.updated/);
 assert.match(store, /organization\?\.timezone/);
