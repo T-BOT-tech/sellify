@@ -1,5 +1,6 @@
 // SC-03.5 — canonical location timezone persistence and validation regression.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -38,6 +39,27 @@ try {
 
   const inherited = await store.updateOrganizationLocation(seller.chatId, created.id, { timezone: null });
   assert.equal(inherited.timeZone, null, 'explicit null restores organization-timezone inheritance');
+
+  // Simulate a legacy/diverged database whose migration ledger already records
+  // version 82 but whose locations table lacks the timezone column. Reopening
+  // the store must repair the schema rather than trusting the version marker.
+  const db = store.getDatabaseForTests();
+  db.exec('ALTER TABLE locations DROP COLUMN timezone');
+  db.close();
+  const repair = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    const store = await import('./backend/lib/store-sqlite.js');
+    const columns = store.getDatabaseForTests().prepare('PRAGMA table_info(locations)').all();
+    if (!columns.some(column => column.name === 'timezone')) {
+      throw new Error('location timezone column was not repaired on reopen');
+    }
+    const migration = store.getDatabaseForTests().prepare(
+      'SELECT version FROM schema_migrations WHERE version = 82'
+    ).get();
+    if (migration?.version !== 82) throw new Error('migration 82 marker unexpectedly missing');
+    store.getDatabaseForTests().close();
+  `], { cwd: process.cwd(), env: process.env, encoding: 'utf8' });
+  assert.equal(repair.status, 0,
+    'stale migration marker must not hide missing timezone column:\\n' + repair.stdout + repair.stderr);
 
   await assert.rejects(
     store.createOrganizationLocation(seller.chatId, {
