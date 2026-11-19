@@ -58,6 +58,10 @@ function normalizeCapacitySignals(value) {
     availability: signal.availability,
     source: signal.source || 'DECLARED',
     status: signal.status || 'ACTIVE',
+    observedAt: signal.observedAt ?? signal.observed_at ?? null,
+    validUntil: signal.validUntil ?? signal.valid_until ?? null,
+    quality: signal.quality || (signal.observedAt || signal.observed_at ? 'SELF_REPORTED' : 'UNKNOWN'),
+    provenance: signal.provenance && typeof signal.provenance === 'object' ? { ...signal.provenance } : null,
   }));
 }
 
