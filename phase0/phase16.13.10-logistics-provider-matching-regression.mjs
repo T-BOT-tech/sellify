@@ -27,6 +27,8 @@ assert.equal(projection.providerId, 'carrier-a');
 assert.deepEqual(projection.capabilities.map((item) => item.code), ['delivery', 'tracking']);
 assert.equal(projection.capacitySignals[0].periodStart, '2026-12-01T00:00:00.000Z');
 assert.equal(projection.capacitySignals[0].availability, 'AVAILABLE');
+assert.equal(projection.capacitySignals[0].observedAt, '2026-11-19T00:00:00.000Z');
+assert.equal(projection.capacitySignals[0].validUntil, '2027-01-01T00:00:00.000Z');
 
 const matched = matchLogisticsProviders(providers, {
   capability: 'delivery',
