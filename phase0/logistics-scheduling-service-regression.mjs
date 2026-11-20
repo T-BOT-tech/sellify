@@ -85,36 +85,28 @@ await assert.rejects(
   error => error?.code === 'IDEMPOTENCY_CONFLICT'
 );
 
-const scheduled = await transitionLogisticsSchedulingActivity(
-  chatId, created.id, 'SCHEDULED', actor,
-  { idempotency_key: 'l11.4-command-1', expectedVersion: 1 }
+await assert.rejects(
+  () => transitionLogisticsSchedulingActivity(
+    chatId, created.id, 'SCHEDULED', actor,
+    { idempotency_key: 'l11.4-command-1', expectedVersion: 1 }
+  ),
+  error => error?.code === 'SCHEDULING_FEASIBILITY_UNKNOWN'
 );
+const stillRequested = await getLogisticsSchedulingActivity(chatId, created.id);
+assert.equal(stillRequested.status, 'REQUESTED');
+assert.equal(stillRequested.version, 1);
+
+// A row already scheduled by a trusted upstream scheduling decision is used
+// to test downstream lifecycle transitions. This fixture does not bypass or
+// simulate the guarded REQUESTED -> SCHEDULED command above.
+db.prepare(`
+  UPDATE logistics_scheduling_activities
+     SET status = 'SCHEDULED', version = 2
+   WHERE id = ? AND organization_id = ?
+`).run(created.id, organizationId);
+const scheduled = await getLogisticsSchedulingActivity(chatId, created.id);
 assert.equal(scheduled.status, 'SCHEDULED');
 assert.equal(scheduled.version, 2);
-
-const scheduledReplay = await transitionLogisticsSchedulingActivity(
-  chatId, created.id, 'SCHEDULED', actor,
-  { idempotency_key: 'l11.4-command-1', expectedVersion: 1 }
-);
-assert.equal(scheduledReplay.idempotent, true);
-
-// A command key is bound to its original transition; it cannot be reused
-// for a different lifecycle action on the same scheduling activity.
-await assert.rejects(
-  () => transitionLogisticsSchedulingActivity(
-    chatId, created.id, 'CANCELLED', actor,
-    { idempotency_key: 'l11.4-command-1', expectedVersion: 2 }
-  ),
-  error => error?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT'
-);
-
-await assert.rejects(
-  () => transitionLogisticsSchedulingActivity(
-    chatId, created.id, 'CONFIRMED', actor,
-    { idempotency_key: 'l11.4-command-2', expectedVersion: 1 }
-  ),
-  error => error?.code === 'SCHEDULING_VERSION_CONFLICT'
-);
 
 const confirmed = await transitionLogisticsSchedulingActivity(
   chatId, created.id, 'CONFIRMED', actor,
@@ -122,6 +114,29 @@ const confirmed = await transitionLogisticsSchedulingActivity(
 );
 assert.equal(confirmed.status, 'CONFIRMED');
 assert.equal(confirmed.confirmedByUserId, userId);
+
+const confirmedReplay = await transitionLogisticsSchedulingActivity(
+  chatId, created.id, 'CONFIRMED', actor,
+  { idempotency_key: 'l11.4-command-2', expectedVersion: 2 }
+);
+assert.equal(confirmedReplay.idempotent, true);
+
+// A command key is bound to its original transition and cannot be reused.
+await assert.rejects(
+  () => transitionLogisticsSchedulingActivity(
+    chatId, created.id, 'CANCELLED', actor,
+    { idempotency_key: 'l11.4-command-2', expectedVersion: 3 }
+  ),
+  error => error?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT'
+);
+
+await assert.rejects(
+  () => transitionLogisticsSchedulingActivity(
+    chatId, created.id, 'IN_PROGRESS', actor,
+    { idempotency_key: 'l11.4-command-3', expectedVersion: 2 }
+  ),
+  error => error?.code === 'SCHEDULING_VERSION_CONFLICT'
+);
 
 const inProgress = await transitionLogisticsSchedulingActivity(
   chatId, created.id, 'IN_PROGRESS', actor,
