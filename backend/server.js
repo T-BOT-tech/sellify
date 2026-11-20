@@ -3351,13 +3351,6 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
       error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' },
     }, req);
     const timezone = await getLogisticsSchedulingTimeZone(chatId, locationId);
-    const hasRequestedWindow = body.requestedStart != null || body.requested_start != null
-      || body.requestedEnd != null || body.requested_end != null
-      || body.scheduledStart != null || body.scheduled_start != null
-      || body.scheduledEnd != null || body.scheduled_end != null;
-    if (hasRequestedWindow && !timezone) return sendJSON(res, 409, {
-      error: { message: 'A canonical location or organization timezone is required for a requested window', status: 409, code: 'SCHEDULING_TIMEZONE_REQUIRED' },
-    }, req);
     const activity = await createLogisticsSchedulingActivity(chatId, {
       ...body, location_id: locationId, timezone: body.timezone || timezone, idempotencyKey,
     }, session);
