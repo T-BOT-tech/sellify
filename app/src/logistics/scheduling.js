@@ -350,7 +350,8 @@ async function refresh(root) {
   try {
     const query = new URLSearchParams();
     const locationId = schedulingLocationId(root);
-    if (locationId) query.set('locationId', locationId);
+    if (root.querySelector('#logisticsSchedulingLocationFilter')) query.set('locationId', locationId || '');
+    else if (locationId) query.set('locationId', locationId);
     const statusFilter = root.querySelector('#logisticsSchedulingStatusFilter')?.value || '';
     const typeFilter = root.querySelector('#logisticsSchedulingTypeFilter')?.value || '';
     if (statusFilter) query.set('status', statusFilter);
@@ -401,7 +402,7 @@ async function submitRequest(root, form) {
   const body = {
     activity_type: String(values.get('activityType') || 'DELIVERY'),
     mode,
-    location_id: schedulingLocationId(root),
+    location_id: schedulingLocationId(root) || '',
     requested_start_local: startValue || null,
     requested_end_local: endValue || null,
     [`related_${referenceType}`]: { id: referenceId },
