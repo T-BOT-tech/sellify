@@ -421,7 +421,7 @@ async function submitRequest(root, form) {
     renderWorkspace(root);
     return;
   }
-  if (mode === 'WINDOWED' && !normalizeCandidateWindow(startValue, endValue, timeZone)) {
+  if ((startValue || endValue) && !normalizeCandidateWindow(startValue, endValue, timeZone)) {
     lastState = 'READY';
     feedback = t('logisticsSchedulingWindowInvalid');
     renderWorkspace(root);
@@ -591,7 +591,10 @@ export function mountLogisticsSchedulingWorkspace(root) {
     });
   }
   const statusNode = root.querySelector('#logisticsSchedulingStatus');
-  if (!statusNode) return;
+  if (!statusNode) {
+    root.dataset.schedulingContextKey = '';
+    return;
+  }
   const contextKey = [config.chatId || '', config.sessionToken || '', schedulingLocationId() || '', roleNames().sort().join(',')].join(':');
   const refreshNeeded = root.dataset.schedulingContextKey !== contextKey;
   root.dataset.schedulingContextKey = contextKey;
