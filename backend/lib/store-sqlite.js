@@ -10831,6 +10831,7 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
           movement: existing.related_movement_id ? { id: existing.related_movement_id } : null,
         },
       };
+      assertLogisticsSchedulingAuthorization(actor, organizationId, existing.location_id, 'logistics:scheduling:request');
       if (schedulingRequestHash(existingRequest) !== schedulingRequestHash(request)) {
         throw Object.assign(new Error('Idempotency key was already used with a different scheduling request'), {
           statusCode: 409, code: 'IDEMPOTENCY_CONFLICT',
