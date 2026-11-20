@@ -10614,7 +10614,7 @@ function schedulingRequestHash(request) {
     requested_end: request.requested_end,
     scheduled_start: request.scheduled_start,
     scheduled_end: request.scheduled_end,
-    timezone: request.timezone,
+    timezone: request.mode === 'RECURRING' ? request.timezone : null,
     recurrence: request.recurrence,
     related_order_id: request.related.order?.id || null,
     related_fulfillment_id: request.related.fulfillment?.id || null,
@@ -10655,6 +10655,17 @@ function assertSchedulingLocation(organizationId, locationId) {
       statusCode: 403, code: 'LOCATION_SCOPE_DENIED',
     });
   }
+}
+
+function getCanonicalSchedulingTimeZone(organizationId, locationId = null) {
+  const locationTimezone = locationId
+    ? db.prepare('SELECT timezone FROM locations WHERE id = ? AND organization_id = ?')
+      .get(String(locationId), String(organizationId))?.timezone
+    : null;
+  const organizationTimezone = db.prepare(
+    'SELECT timezone FROM organizations WHERE id = ?'
+  ).get(String(organizationId))?.timezone;
+  return String(locationTimezone || organizationTimezone || '').trim() || null;
 }
 
 function assertSchedulingOrder(organizationId, orderId) {
@@ -10778,9 +10789,11 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
   }
 
   const organizationId = String(tenant.organizationId);
+  const canonicalTimezone = getCanonicalSchedulingTimeZone(organizationId, input.location_id ?? input.locationId ?? null);
   const request = normalizeLogisticsSchedulingRequest({
     ...input,
     organization_id: organizationId,
+    timezone: canonicalTimezone,
     status: 'REQUESTED',
   });
   const idempotencyKey = String(input.idempotencyKey ?? input.idempotency_key ?? '').trim();
@@ -10837,6 +10850,15 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
       actor, organizationId, request.location_id, 'logistics:scheduling:request',
     );
     assertSchedulingLocation(organizationId, request.location_id);
+    const currentTimezone = getCanonicalSchedulingTimeZone(organizationId, request.location_id);
+    const hasTimeSemantics = Boolean(
+      request.requested_start || request.scheduled_start || request.recurrence
+    );
+    if (hasTimeSemantics && currentTimezone !== request.timezone) {
+      throw Object.assign(new Error('The canonical scheduling timezone changed; refresh and retry'), {
+        statusCode: 409, code: 'SCHEDULING_TIMEZONE_CHANGED',
+      });
+    }
     assertSchedulingReferences(organizationId, request.location_id, request.related);
 
     const now = nowIso();
@@ -10857,7 +10879,7 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
       request.related.movement?.id || null,
       request.requested_start, request.requested_end,
       request.scheduled_start, request.scheduled_end,
-      request.timezone, request.recurrence ? json(request.recurrence) : null,
+      currentTimezone, request.recurrence ? json(request.recurrence) : null,
       actorUserId, actorUserId, idempotencyKey, now, now,
     );
 
