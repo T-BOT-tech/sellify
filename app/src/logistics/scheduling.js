@@ -592,7 +592,7 @@ export function mountLogisticsSchedulingWorkspace(root) {
   }
   const statusNode = root.querySelector('#logisticsSchedulingStatus');
   if (!statusNode) return;
-  const contextKey = [config.chatId || '', config.sessionToken || '', schedulingLocationId() || ''].join(':');
+  const contextKey = [config.chatId || '', config.sessionToken || '', schedulingLocationId() || '', roleNames().sort().join(',')].join(':');
   const refreshNeeded = root.dataset.schedulingContextKey !== contextKey;
   root.dataset.schedulingContextKey = contextKey;
   if (refreshNeeded) {
