@@ -3312,7 +3312,7 @@ async function handlePackLifecycle(req, res, chatId, packId) {
 async function handleLogisticsScheduling(req, res, chatId, activityId = null, action = null) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
-  const session = await requireSession(req, tenant.chatId);
+  const session = await requireSession(req, chatId);
 
   if (!activityId && req.method === 'GET') {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
