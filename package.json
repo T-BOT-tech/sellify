@@ -255,6 +255,7 @@
     "test:phase21.14": "node phase0/phase21.14-cumulative-phase21-gate.mjs",
     "test:phase21.15": "node phase0/phase21.15-node24-verification.mjs",
     "test:phase21.16": "node phase0/phase21.16-hashes-documentation-regression.mjs",
+    "test:phase21.17": "node phase0/phase21.17-capacity-evidence-migration-regression.mjs",
     "test:phase22.2": "node phase0/phase22.2-procurement-intent-regression.mjs",
     "test:phase22.3": "node phase0/phase22.3-procurement-context-regression.mjs",
     "test:phase22.4": "node phase0/phase22.4-evidence-supplier-intelligence-regression.mjs",
