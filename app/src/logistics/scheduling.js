@@ -4,6 +4,7 @@ import { config } from '../state.js';
 import { authHeaders } from '../auth/tenant.js';
 import { escapeHtml } from '../utils/index.js';
 import { t } from '../ui/i18n.js';
+import { logisticsLocalDateTimeToIso } from '../verticals/logistics/scheduling-timezone-contract.js';
 
 let activities = [];
 const lastEvaluations = new Map();
@@ -66,9 +67,10 @@ function stateLabel(state) {
 
 function formatWindow(start, end, timeZone) {
   if (!start && !end) return '—';
-  const formatter = timeZone
-    ? new Intl.DateTimeFormat(undefined, { timeZone, dateStyle: 'medium', timeStyle: 'short' })
-    : null;
+  let formatter = null;
+  try {
+    if (timeZone) formatter = new Intl.DateTimeFormat(undefined, { timeZone, dateStyle: 'medium', timeStyle: 'short' });
+  } catch {}
   const safe = value => {
     if (!value) return '—';
     const date = new Date(value);
@@ -77,37 +79,6 @@ function formatWindow(start, end, timeZone) {
     catch { return date.toISOString(); }
   };
   return `${safe(start)} – ${safe(end)}`;
-}
-
-function localDateTimeToIso(value, timeZone) {
-  const match = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2})$/.exec(String(value || ''));
-  if (!match || !timeZone) throw new TypeError('A valid local date-time and canonical timezone are required');
-  const [, yearText, monthText, dayText, hourText, minuteText] = match;
-  const parts = [yearText, monthText, dayText, hourText, minuteText].map(Number);
-  const [year, month, day, hour, minute] = parts;
-  const target = Date.UTC(year, month - 1, day, hour, minute);
-  const check = new Date(target);
-  if (check.getUTCFullYear() !== year || check.getUTCMonth() + 1 !== month
-      || check.getUTCDate() !== day || check.getUTCHours() !== hour
-      || check.getUTCMinutes() !== minute) {
-    throw new TypeError('Invalid local date-time');
-  }
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-  });
-  const matches = [];
-  for (let offsetMinutes = -14 * 60; offsetMinutes <= 14 * 60; offsetMinutes += 15) {
-    const instant = target + offsetMinutes * 60_000;
-    const values = Object.fromEntries(formatter.formatToParts(new Date(instant))
-      .filter(part => part.type !== 'literal').map(part => [part.type, Number(part.value)]));
-    if (values.year === year && values.month === month && values.day === day
-        && values.hour === hour && values.minute === minute) matches.push(instant);
-  }
-  if (matches.length !== 1) {
-    throw new TypeError(matches.length ? 'Ambiguous local time in canonical timezone' : 'Nonexistent local time in canonical timezone');
-  }
-  return new Date(matches[0]).toISOString();
 }
 
 function transitionTargets(status) {
@@ -390,8 +361,8 @@ async function refresh(root) {
 function normalizeCandidateWindow(startValue, endValue, timeZone) {
   if (!startValue || !endValue || !timeZone) return null;
   try {
-    const start = Date.parse(localDateTimeToIso(startValue, timeZone));
-    const end = Date.parse(localDateTimeToIso(endValue, timeZone));
+    const start = Date.parse(logisticsLocalDateTimeToIso(startValue, timeZone));
+    const end = Date.parse(logisticsLocalDateTimeToIso(endValue, timeZone));
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
     return { scheduledStart: new Date(start).toISOString(), scheduledEnd: new Date(end).toISOString() };
   } catch {
@@ -413,6 +384,12 @@ async function submitRequest(root, form) {
   const endValue = String(values.get('requestedEnd') || '');
   const mode = String(values.get('mode') || 'WINDOWED');
   const timeZone = root.dataset.schedulingTimeZone || workspaceTimeZone || '';
+  if ((startValue && !endValue) || (!startValue && endValue)) {
+    lastState = 'READY';
+    feedback = t('logisticsSchedulingWindowRequired');
+    renderWorkspace(root);
+    return;
+  }
   if ((startValue || endValue) && !timeZone) {
     lastState = 'READY';
     feedback = t('logisticsSchedulingTimezoneUnavailable');
@@ -422,8 +399,8 @@ async function submitRequest(root, form) {
   let requestedStart = null;
   let requestedEnd = null;
   try {
-    requestedStart = startValue ? localDateTimeToIso(startValue, timeZone) : null;
-    requestedEnd = endValue ? localDateTimeToIso(endValue, timeZone) : null;
+    requestedStart = startValue ? logisticsLocalDateTimeToIso(startValue, timeZone) : null;
+    requestedEnd = endValue ? logisticsLocalDateTimeToIso(endValue, timeZone) : null;
   } catch {
     lastState = 'READY';
     feedback = t('logisticsSchedulingWindowInvalid');
@@ -487,6 +464,12 @@ async function evaluateActivity(root, activityId) {
   }
   const activity = activities.find(item => String(item.id) === String(activityId));
   const timeZone = activity?.timezone || root.dataset.schedulingTimeZone || workspaceTimeZone;
+  if (!timeZone) {
+    lastState = 'READY';
+    feedback = t('logisticsSchedulingTimezoneUnavailable');
+    renderWorkspace(root);
+    return;
+  }
   const candidateWindow = normalizeCandidateWindow(startInput.value, endInput.value, timeZone);
   if (!candidateWindow) {
     lastState = 'READY';
@@ -529,6 +512,12 @@ async function transitionActivity(root, activityId, target, button) {
   const body = { status: target, expectedVersion: activity.version };
   if (target === 'SCHEDULED') {
     const timeZone = activity.timezone || root.dataset.schedulingTimeZone || workspaceTimeZone;
+    if (!timeZone) {
+      lastState = 'READY';
+      feedback = t('logisticsSchedulingTimezoneUnavailable');
+      renderWorkspace(root);
+      return;
+    }
     const candidateWindow = normalizeCandidateWindow(startInput?.value, endInput?.value, timeZone);
     if (!candidateWindow) {
       lastState = 'READY';
@@ -606,6 +595,13 @@ export function mountLogisticsSchedulingWorkspace(root) {
   const contextKey = [config.chatId || '', config.sessionToken || '', schedulingLocationId() || ''].join(':');
   const refreshNeeded = root.dataset.schedulingContextKey !== contextKey;
   root.dataset.schedulingContextKey = contextKey;
+  if (refreshNeeded) {
+    workspaceTimeZone = null;
+    root.dataset.schedulingTimeZone = '';
+    activities = [];
+    lastEvaluations.clear();
+    candidateWindowDrafts.clear();
+  }
   renderWorkspace(root);
   if (refreshNeeded) refresh(root);
   else bindSchedulingControls(root);
