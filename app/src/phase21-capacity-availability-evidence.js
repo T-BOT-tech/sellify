@@ -47,8 +47,18 @@ function positiveNumber(value, field) {
 
 function iso(value, field) {
   const result = text(value, field);
+  const match = /^(\\d{4})-(\\d{2})-(\\d{2})T([01]\\d|2[0-3]):([0-5]\\d)(?::([0-5]\\d)(?:\\.(\\d{1,3}))?)?(Z|[+-](?:0\\d|1[0-4]):[0-5]\\d)$/.exec(result);
+  if (!match) invalid(`${field} must be a timezone-qualified ISO-8601 instant`);
+  const [, year, month, day, , , , , zone] = match;
+  const calendar = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (calendar.getUTCFullYear() !== Number(year)
+    || calendar.getUTCMonth() !== Number(month) - 1
+    || calendar.getUTCDate() !== Number(day)
+    || (zone !== 'Z' && Number(zone.slice(1, 3)) === 14 && zone.slice(4) !== '00')) {
+    invalid(`${field} must be a valid timezone-qualified ISO-8601 instant`);
+  }
   const time = Date.parse(result);
-  if (!Number.isFinite(time)) invalid(`${field} must be a valid ISO-8601 date/time`);
+  if (!Number.isFinite(time)) invalid(`${field} must be a valid timezone-qualified ISO-8601 instant`);
   return new Date(time).toISOString();
 }
 
