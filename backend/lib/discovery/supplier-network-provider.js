@@ -27,6 +27,23 @@ export const supplierNetworkDiscoveryProvider = Object.freeze({
     return discoverSupplierNetwork(chatId, input, actor);
   },
   normalize(row) {
+    const capacitySignals = Array.isArray(row.capacitySignals) ? row.capacitySignals.map(signal => ({
+      id: signal.id,
+      subjectType: signal.subjectType,
+      subjectId: signal.subjectId,
+      quantity: signal.quantity,
+      unit: signal.unit,
+      periodType: signal.periodType,
+      periodStart: signal.periodStart,
+      periodEnd: signal.periodEnd,
+      availability: signal.availability,
+      source: 'DECLARED',
+      status: signal.status,
+      observedAt: signal.observedAt || null,
+      validUntil: signal.validUntil || null,
+      quality: signal.observedAt ? 'SELF_REPORTED' : 'UNKNOWN',
+      provenance: { authority: 'supplier_network', method: 'supplier_declaration' },
+    })) : [];
     return {
       source: 'supplier-network',
       sourceAuthority: 'supplier_network',
@@ -42,15 +59,11 @@ export const supplierNetworkDiscoveryProvider = Object.freeze({
       capabilities: Array.isArray(row.capabilities) ? row.capabilities.map(item => ({
         id: item.id, code: item.code, name: item.name, category: item.category,
       })) : [],
+      capacitySignals,
       availability: {
         catalogCount: Array.isArray(row.catalog) ? row.catalog.length : 0,
-        capacitySignalCount: Array.isArray(row.capacitySignals) ? row.capacitySignals.length : 0,
-        capacitySignals: Array.isArray(row.capacitySignals) ? row.capacitySignals.map(signal => ({
-          id: signal.id, subjectType: signal.subjectType, subjectId: signal.subjectId,
-          quantity: signal.quantity, unit: signal.unit, periodType: signal.periodType,
-          periodStart: signal.periodStart, periodEnd: signal.periodEnd,
-          availability: signal.availability, source: 'DECLARED', status: signal.status || 'ACTIVE',
-        })) : [],
+        capacitySignalCount: capacitySignals.length,
+        capacitySignals,
       },
       commercialSignals: {
         commercialTermCount: Array.isArray(row.commercialTerms) ? row.commercialTerms.length : 0,

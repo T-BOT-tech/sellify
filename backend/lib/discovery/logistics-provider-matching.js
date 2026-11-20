@@ -56,8 +56,12 @@ function normalizeCapacitySignals(value) {
     periodStart: signal.periodStart ?? signal.period_start,
     periodEnd: signal.periodEnd ?? signal.period_end,
     availability: signal.availability,
-    source: signal.source || 'DECLARED',
-    status: signal.status || 'ACTIVE',
+    source: signal.source ?? null,
+    status: signal.status,
+    observedAt: signal.observedAt ?? signal.observed_at ?? null,
+    validUntil: signal.validUntil ?? signal.valid_until ?? null,
+    quality: signal.quality ?? 'UNKNOWN',
+    provenance: signal.provenance && typeof signal.provenance === 'object' ? { ...signal.provenance } : null,
   }));
 }
 
@@ -105,6 +109,7 @@ export function matchLogisticsProviders(providers = [], requirements = {}) {
     unit: requirements.unit,
     availabilityFrom: requirements.availabilityFrom ?? requirements.availability_from,
     availabilityTo: requirements.availabilityTo ?? requirements.availability_to,
+    evaluatedAt: new Date().toISOString(),
   };
 
   return Object.freeze({

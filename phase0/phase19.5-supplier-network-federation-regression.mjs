@@ -52,6 +52,23 @@ const capacityProjection = supplierNetworkDiscoveryProvider.normalize({
 assert.equal(capacityProjection.availability.capacitySignals[0].subjectType, 'PRODUCT');
 assert.equal(capacityProjection.availability.capacitySignals[0].periodStart, '2026-12-01T00:00:00.000Z');
 assert.equal(capacityProjection.availability.capacitySignals[0].source, 'DECLARED');
+assert.equal(capacityProjection.capacitySignals[0].id, 'capacity-test', 'capacity signal is exposed to the canonical Discovery matcher');
+assert.equal(capacityProjection.capacitySignals[0].quality, 'UNKNOWN', 'missing observation time remains unknown');
+assert.equal(capacityProjection.capacitySignals[0].observedAt, null);
+const observedProjection = supplierNetworkDiscoveryProvider.normalize({
+  ...rows[0],
+  capacitySignals: [{
+    id: 'capacity-observed', subjectType: 'PRODUCT', subjectId: productId,
+    quantity: 250, unit: 'kg', periodType: 'RANGE',
+    periodStart: '2026-12-01T00:00:00.000Z', periodEnd: '2026-12-31T23:59:59.999Z',
+    availability: 'AVAILABLE', observedAt: '2026-11-19T00:00:00.000Z',
+    validUntil: '2027-01-01T00:00:00.000Z',
+  }],
+});
+assert.equal(observedProjection.capacitySignals[0].observedAt, '2026-11-19T00:00:00.000Z');
+assert.equal(observedProjection.capacitySignals[0].validUntil, '2027-01-01T00:00:00.000Z');
+assert.equal(observedProjection.capacitySignals[0].quality, 'SELF_REPORTED');
+
 assert.equal(supplierNetworkDiscoveryProvider.evidence(rows[0])[0].type, 'SUPPLIER_NETWORK_DISCOVERY');
 assert.equal(supplierNetworkDiscoveryProvider.actions(rows[0]).some(a => a.sourceAuthority === 'procurement'), true);
 

@@ -3581,6 +3581,17 @@ if (!applied.includes(39)) {
     `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(83, nowIso());
   }
+
+  // 84: explicit capacity observation/validity metadata. Existing rows remain
+  // UNKNOWN because no trustworthy historical observation time is inferred.
+  if (!applied.includes(84)) {
+    const capacityColumns = new Set(
+      db.prepare('PRAGMA table_info(supplier_network_capacity_signals)').all().map(column => String(column.name))
+    );
+    if (!capacityColumns.has('observed_at')) db.exec('ALTER TABLE supplier_network_capacity_signals ADD COLUMN observed_at TEXT');
+    if (!capacityColumns.has('valid_until')) db.exec('ALTER TABLE supplier_network_capacity_signals ADD COLUMN valid_until TEXT');
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(84, nowIso());
+  }
 }
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({
@@ -3873,12 +3884,102 @@ const SUPPLIER_NETWORK_CAPACITY_SUBJECT_TYPES = Object.freeze(['PRODUCT','CAPABI
 const SUPPLIER_NETWORK_CAPACITY_AVAILABILITY = Object.freeze(['AVAILABLE','LIMITED','UNAVAILABLE','ON_REQUEST']);
 const SUPPLIER_NETWORK_CAPACITY_VISIBILITIES = Object.freeze(['PUBLIC','NETWORK','RELATIONSHIP','PRIVATE','CONFIDENTIAL']);
 const SUPPLIER_NETWORK_CAPACITY_STATES = Object.freeze({ ACTIVE: new Set(['INACTIVE']), INACTIVE: new Set(['ACTIVE']) });
-function supplierNetworkCapacityFromRow(row){if(!row)return null;return {id:row.id,organizationId:row.organization_id,subjectType:row.subject_type,subjectId:row.subject_id,quantity:Number(row.quantity),unit:row.unit,periodType:row.period_type,periodStart:row.period_start,periodEnd:row.period_end,availability:row.availability,visibility:row.visibility,source:row.source,status:row.status,metadata:parseJSON(row.metadata_json,{}),createdByUserId:row.created_by_user_id,updatedByUserId:row.updated_by_user_id,createdAt:row.created_at,updatedAt:row.updated_at,version:Number(row.version||1)}}
-function normalizeSupplierNetworkCapacityInput(input={}){const clean=(v,max=500)=>String(v??'').trim().slice(0,max);const subjectType=clean(input.subjectType??input.subject_type,30).toUpperCase();if(!SUPPLIER_NETWORK_CAPACITY_SUBJECT_TYPES.includes(subjectType))throw Object.assign(new Error('Invalid capacity subject type'),{statusCode:400,code:'INVALID_CAPACITY_SUBJECT'});const subjectId=clean(input.subjectId??input.subject_id,200);if(!subjectId)throw Object.assign(new Error('subjectId is required'),{statusCode:400,code:'CAPACITY_SUBJECT_REQUIRED'});const quantity=Number(input.quantity);if(!Number.isFinite(quantity)||quantity<=0)throw Object.assign(new Error('quantity must be positive'),{statusCode:400,code:'INVALID_CAPACITY_QUANTITY'});const unit=clean(input.unit,50);if(!unit)throw Object.assign(new Error('unit is required'),{statusCode:400,code:'CAPACITY_UNIT_REQUIRED'});const periodType=clean(input.periodType??input.period_type,'ON_DEMAND'.length>0?30:30).toUpperCase()||'ON_DEMAND';const periodStart=input.periodStart??input.period_start??null;const periodEnd=input.periodEnd??input.period_end??null;if((periodStart&&!periodEnd)||(periodEnd&&!periodStart)|| (periodStart&&periodEnd&&String(periodStart)>String(periodEnd)))throw Object.assign(new Error('periodStart and periodEnd must form a valid period'),{statusCode:400,code:'INVALID_CAPACITY_PERIOD'});const availability=clean(input.availability||'AVAILABLE',30).toUpperCase();if(!SUPPLIER_NETWORK_CAPACITY_AVAILABILITY.includes(availability))throw Object.assign(new Error('Invalid capacity availability'),{statusCode:400,code:'INVALID_CAPACITY_AVAILABILITY'});const visibility=clean(input.visibility||'NETWORK',20).toUpperCase();if(!SUPPLIER_NETWORK_CAPACITY_VISIBILITIES.includes(visibility))throw Object.assign(new Error('Invalid capacity visibility'),{statusCode:400,code:'INVALID_CAPACITY_VISIBILITY'});const metadata=input.metadata??{};if(!metadata||Array.isArray(metadata)||typeof metadata!=='object')throw Object.assign(new Error('metadata must be an object'),{statusCode:400,code:'INVALID_CAPACITY_METADATA'});return {subjectType,subjectId,quantity,unit,periodType,periodStart:periodStart==null?null:clean(periodStart,100),periodEnd:periodEnd==null?null:clean(periodEnd,100),availability,visibility,metadata}}
+function supplierNetworkCapacityFromRow(row){if(!row)return null;return {id:row.id,organizationId:row.organization_id,subjectType:row.subject_type,subjectId:row.subject_id,quantity:Number(row.quantity),unit:row.unit,periodType:row.period_type,periodStart:row.period_start,periodEnd:row.period_end,availability:row.availability,visibility:row.visibility,source:row.source,status:row.status,observedAt:row.observed_at||null,validUntil:row.valid_until||null,metadata:parseJSON(row.metadata_json,{}),createdByUserId:row.created_by_user_id,updatedByUserId:row.updated_by_user_id,createdAt:row.created_at,updatedAt:row.updated_at,version:Number(row.version||1)}}
+function normalizeSupplierNetworkCapacityInput(input={}) {
+  const clean = (value, max = 500) => String(value ?? '').trim().slice(0, max);
+  const subjectType = clean(input.subjectType ?? input.subject_type, 30).toUpperCase();
+  if (!SUPPLIER_NETWORK_CAPACITY_SUBJECT_TYPES.includes(subjectType)) throw Object.assign(new Error('Invalid capacity subject type'), { statusCode: 400, code: 'INVALID_CAPACITY_SUBJECT' });
+  const subjectId = clean(input.subjectId ?? input.subject_id, 200);
+  if (!subjectId) throw Object.assign(new Error('subjectId is required'), { statusCode: 400, code: 'CAPACITY_SUBJECT_REQUIRED' });
+  const quantity = Number(input.quantity);
+  if (!Number.isFinite(quantity) || quantity <= 0) throw Object.assign(new Error('quantity must be positive'), { statusCode: 400, code: 'INVALID_CAPACITY_QUANTITY' });
+  const unit = clean(input.unit, 50);
+  if (!unit) throw Object.assign(new Error('unit is required'), { statusCode: 400, code: 'CAPACITY_UNIT_REQUIRED' });
+  const periodType = clean(input.periodType ?? input.period_type ?? 'ON_DEMAND', 30).toUpperCase() || 'ON_DEMAND';
+  const periodStart = input.periodStart ?? input.period_start ?? null;
+  const periodEnd = input.periodEnd ?? input.period_end ?? null;
+  if ((periodStart && !periodEnd) || (periodEnd && !periodStart) || (periodStart && periodEnd && String(periodStart) > String(periodEnd))) throw Object.assign(new Error('periodStart and periodEnd must form a valid period'), { statusCode: 400, code: 'INVALID_CAPACITY_PERIOD' });
+  const availability = clean(input.availability || 'AVAILABLE', 30).toUpperCase();
+  if (!SUPPLIER_NETWORK_CAPACITY_AVAILABILITY.includes(availability)) throw Object.assign(new Error('Invalid capacity availability'), { statusCode: 400, code: 'INVALID_CAPACITY_AVAILABILITY' });
+  const visibility = clean(input.visibility || 'NETWORK', 20).toUpperCase();
+  if (!SUPPLIER_NETWORK_CAPACITY_VISIBILITIES.includes(visibility)) throw Object.assign(new Error('Invalid capacity visibility'), { statusCode: 400, code: 'INVALID_CAPACITY_VISIBILITY' });
+  const validUntilProvided = Object.hasOwn(input, 'validUntil') || Object.hasOwn(input, 'valid_until');
+  const validUntilInput = Object.hasOwn(input, 'validUntil') ? input.validUntil
+    : Object.hasOwn(input, 'valid_until') ? input.valid_until : undefined;
+  let validUntil;
+  if (validUntilProvided) {
+    if (validUntilInput == null) {
+      validUntil = null;
+    } else {
+      const value = String(validUntilInput).trim();
+      const match = /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d)(?:\.(\d{1,3}))?)?(Z|[+-](?:0\d|1[0-4]):[0-5]\d)$/.exec(value);
+      const timestamp = match ? Date.parse(value) : NaN;
+      const [, year, month, day, , , , , zone] = match || [];
+      const calendar = match ? new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))) : null;
+      if (!Number.isFinite(timestamp) || !calendar
+        || calendar.getUTCFullYear() !== Number(year)
+        || calendar.getUTCMonth() !== Number(month) - 1
+        || calendar.getUTCDate() !== Number(day)
+        || (zone !== 'Z' && Number(zone.slice(1, 3)) === 14 && zone.slice(4) !== '00')) {
+        throw Object.assign(new Error('validUntil must be a timezone-qualified ISO-8601 instant'), { statusCode: 400, code: 'INVALID_CAPACITY_VALIDITY' });
+      }
+      validUntil = new Date(timestamp).toISOString();
+    }
+  }
+  const metadata = input.metadata ?? {};
+  if (!metadata || Array.isArray(metadata) || typeof metadata !== 'object') throw Object.assign(new Error('metadata must be an object'), { statusCode: 400, code: 'INVALID_CAPACITY_METADATA' });
+  return { subjectType, subjectId, quantity, unit, periodType,
+    periodStart: periodStart == null ? null : clean(periodStart, 100),
+    periodEnd: periodEnd == null ? null : clean(periodEnd, 100),
+    availability, visibility, validUntil, validUntilProvided, metadata };
+}
 function supplierNetworkCapacityRow(id,organizationId){return db.prepare('SELECT * FROM supplier_network_capacity_signals WHERE id=? AND organization_id=?').get(String(id),String(organizationId))}
 export async function listSupplierNetworkCapacities(chatId,options={}){ensureDatabase();const org=await tenantOrganizationId(chatId);const w=['organization_id=?'],p=[org];if(options.status&&options.status!=='all'){w.push('status=?');p.push(String(options.status).toUpperCase())}if(options.subjectType||options.subject_type){w.push('subject_type=?');p.push(String(options.subjectType||options.subject_type).toUpperCase())}if(options.subjectId||options.subject_id){w.push('subject_id=?');p.push(String(options.subjectId||options.subject_id))}if(options.availability){w.push('availability=?');p.push(String(options.availability).toUpperCase())}p.push(Math.max(1,Math.min(500,Number(options.limit)||100)));return db.prepare(`SELECT * FROM supplier_network_capacity_signals WHERE ${w.join(' AND ')} ORDER BY updated_at DESC,id ASC LIMIT ?`).all(...p).map(supplierNetworkCapacityFromRow)}
 export async function getSupplierNetworkCapacity(chatId,id){ensureDatabase();const org=await tenantOrganizationId(chatId);return supplierNetworkCapacityFromRow(supplierNetworkCapacityRow(id,org))}
-export async function upsertSupplierNetworkCapacity(chatId,input={},actor=null){ensureDatabase();const org=await tenantOrganizationId(chatId);const actorId=assertProcurementActor(org,actor);assertSupplierNetworkParticipant(org);const n=normalizeSupplierNetworkCapacityInput(input);const existing=input.id?supplierNetworkCapacityRow(input.id,org):db.prepare('SELECT * FROM supplier_network_capacity_signals WHERE organization_id=? AND subject_type=? AND subject_id=? AND period_type=? AND period_start IS ? AND period_end IS ?').get(org,n.subjectType,n.subjectId,n.periodType,n.periodStart,n.periodEnd);const target=input.status==null?(existing?.status||'ACTIVE'):String(input.status).toUpperCase();if(!SUPPLIER_NETWORK_CAPACITY_STATES[target])throw Object.assign(new Error('Invalid capacity status'),{statusCode:400,code:'INVALID_CAPACITY_STATUS'});if(existing&&existing.status!==target&&!SUPPLIER_NETWORK_CAPACITY_STATES[existing.status]?.has(target))throw Object.assign(new Error(`Illegal capacity transition ${existing.status} -> ${target}`),{statusCode:409,code:'INVALID_CAPACITY_TRANSITION'});const now=nowIso();db.exec('BEGIN IMMEDIATE');try{if(existing){db.prepare(`UPDATE supplier_network_capacity_signals SET subject_type=?,subject_id=?,quantity=?,unit=?,period_type=?,period_start=?,period_end=?,availability=?,visibility=?,status=?,metadata_json=?,updated_by_user_id=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=?`).run(n.subjectType,n.subjectId,n.quantity,n.unit,n.periodType,n.periodStart,n.periodEnd,n.availability,n.visibility,target,json(n.metadata),actorId,now,existing.id,org);audit(String(chatId),target!==existing.status?`supplier.network.capacity.${target.toLowerCase()}`:'supplier.network.capacity.updated','supplier_network_capacity_signal',existing.id,{subjectType:n.subjectType,subjectId:n.subjectId,quantity:n.quantity,unit:n.unit,availability:n.availability,status:target,source:'DECLARED'},{organizationId:org,actorId})}else{const id=String(input.id||crypto.randomUUID());db.prepare(`INSERT INTO supplier_network_capacity_signals (id,organization_id,subject_type,subject_id,quantity,unit,period_type,period_start,period_end,availability,visibility,source,status,metadata_json,created_by_user_id,updated_by_user_id,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`).run(id,org,n.subjectType,n.subjectId,n.quantity,n.unit,n.periodType,n.periodStart,n.periodEnd,n.availability,n.visibility,'DECLARED',target,json(n.metadata),actorId,actorId,now,now);audit(String(chatId),'supplier.network.capacity.declared','supplier_network_capacity_signal',id,{subjectType:n.subjectType,subjectId:n.subjectId,quantity:n.quantity,unit:n.unit,availability:n.availability,status:target,source:'DECLARED'},{organizationId:org,actorId})}db.exec('COMMIT')}catch(e){db.exec('ROLLBACK');throw e}return supplierNetworkCapacityFromRow(existing?supplierNetworkCapacityRow(existing.id,org):db.prepare('SELECT * FROM supplier_network_capacity_signals WHERE organization_id=? AND subject_type=? AND subject_id=? AND period_type=? AND period_start IS ? AND period_end IS ?').get(org,n.subjectType,n.subjectId,n.periodType,n.periodStart,n.periodEnd))}
+export async function upsertSupplierNetworkCapacity(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  const org = await tenantOrganizationId(chatId);
+  const actorId = assertProcurementActor(org, actor);
+  assertSupplierNetworkParticipant(org);
+  const n = normalizeSupplierNetworkCapacityInput(input);
+  const existing = input.id ? supplierNetworkCapacityRow(input.id, org)
+    : db.prepare('SELECT * FROM supplier_network_capacity_signals WHERE organization_id=? AND subject_type=? AND subject_id=? AND period_type=? AND period_start IS ? AND period_end IS ?').get(org,n.subjectType,n.subjectId,n.periodType,n.periodStart,n.periodEnd);
+  const target = input.status == null ? (existing?.status || 'ACTIVE') : String(input.status).toUpperCase();
+  if (!SUPPLIER_NETWORK_CAPACITY_STATES[target]) throw Object.assign(new Error('Invalid capacity status'), { statusCode: 400, code: 'INVALID_CAPACITY_STATUS' });
+  if (existing && existing.status !== target && !SUPPLIER_NETWORK_CAPACITY_STATES[existing.status]?.has(target)) throw Object.assign(new Error(`Illegal capacity transition ${existing.status} -> ${target}`), { statusCode: 409, code: 'INVALID_CAPACITY_TRANSITION' });
+  const now = nowIso();
+  // Omitted validity preserves the prior declaration; explicit null clears it.
+  const validUntil = n.validUntilProvided ? n.validUntil : (existing?.valid_until ?? null);
+  if (validUntil && Date.parse(validUntil) < Date.parse(now)) throw Object.assign(new Error('validUntil must not be earlier than observation time'), { statusCode: 400, code: 'INVALID_CAPACITY_VALIDITY' });
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    if (existing) {
+      db.prepare(`UPDATE supplier_network_capacity_signals
+        SET subject_type=?,subject_id=?,quantity=?,unit=?,period_type=?,period_start=?,period_end=?,
+            availability=?,visibility=?,status=?,metadata_json=?,observed_at=?,valid_until=?,
+            updated_by_user_id=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=?`)
+        .run(n.subjectType,n.subjectId,n.quantity,n.unit,n.periodType,n.periodStart,n.periodEnd,n.availability,n.visibility,target,json(n.metadata),now,validUntil,actorId,now,existing.id,org);
+      audit(String(chatId),target!==existing.status?`supplier.network.capacity.${target.toLowerCase()}`:'supplier.network.capacity.updated',
+        'supplier_network_capacity_signal',existing.id,
+        {subjectType:n.subjectType,subjectId:n.subjectId,quantity:n.quantity,unit:n.unit,availability:n.availability,status:target,source:'DECLARED',observedAt:now,validUntil},
+        {organizationId:org,actorId});
+    } else {
+      const id=String(input.id||crypto.randomUUID());
+      db.prepare(`INSERT INTO supplier_network_capacity_signals
+        (id,organization_id,subject_type,subject_id,quantity,unit,period_type,period_start,period_end,
+         availability,visibility,source,status,metadata_json,created_by_user_id,updated_by_user_id,
+         created_at,updated_at,observed_at,valid_until,version)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`)
+        .run(id,org,n.subjectType,n.subjectId,n.quantity,n.unit,n.periodType,n.periodStart,n.periodEnd,n.availability,n.visibility,'DECLARED',target,json(n.metadata),actorId,actorId,now,now,now,validUntil);
+      audit(String(chatId),'supplier.network.capacity.declared','supplier_network_capacity_signal',id,
+        {subjectType:n.subjectType,subjectId:n.subjectId,quantity:n.quantity,unit:n.unit,availability:n.availability,status:target,source:'DECLARED',observedAt:now,validUntil:n.validUntil},
+        {organizationId:org,actorId});
+    }
+    db.exec('COMMIT');
+  } catch(error) { db.exec('ROLLBACK'); throw error; }
+  return supplierNetworkCapacityFromRow(existing ? supplierNetworkCapacityRow(existing.id,org)
+    : db.prepare('SELECT * FROM supplier_network_capacity_signals WHERE organization_id=? AND subject_type=? AND subject_id=? AND period_type=? AND period_start IS ? AND period_end IS ?').get(org,n.subjectType,n.subjectId,n.periodType,n.periodStart,n.periodEnd));
+}
 export async function transitionSupplierNetworkCapacity(chatId,id,targetStatus,actor=null){ensureDatabase();const org=await tenantOrganizationId(chatId);const actorId=assertProcurementActor(org,actor);assertSupplierNetworkParticipant(org);const row=supplierNetworkCapacityRow(id,org);if(!row)throw Object.assign(new Error('Supplier network capacity not found'),{statusCode:404,code:'CAPACITY_NOT_FOUND'});const target=String(targetStatus||'').toUpperCase();if(!SUPPLIER_NETWORK_CAPACITY_STATES[target])throw Object.assign(new Error('Invalid capacity status'),{statusCode:400,code:'INVALID_CAPACITY_STATUS'});if(!SUPPLIER_NETWORK_CAPACITY_STATES[row.status]?.has(target))throw Object.assign(new Error(`Illegal capacity transition ${row.status} -> ${target}`),{statusCode:409,code:'INVALID_CAPACITY_TRANSITION'});const now=nowIso();db.prepare('UPDATE supplier_network_capacity_signals SET status=?,updated_by_user_id=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=?').run(target,actorId,now,row.id,org);audit(String(chatId),`supplier.network.capacity.${target.toLowerCase()}`,'supplier_network_capacity_signal',row.id,{fromStatus:row.status,toStatus:target},{organizationId:org,actorId});return supplierNetworkCapacityFromRow(supplierNetworkCapacityRow(row.id,org))}
 
 export async function listSupplierNetworkServiceAreas(chatId,options={}){ensureDatabase();const org=await tenantOrganizationId(chatId);const w=['organization_id=?'],p=[org];if(options.status&&options.status!=='all'){w.push('status=?');p.push(String(options.status).toUpperCase())}if(options.scopeType||options.scope_type){w.push('scope_type=?');p.push(String(options.scopeType||options.scope_type).toUpperCase())}if(options.countryCode||options.country_code){w.push('country_code=?');p.push(String(options.countryCode||options.country_code).toUpperCase())}if(options.geoCode||options.geo_code){w.push('geo_code=?');p.push(String(options.geoCode||options.geo_code))}p.push(Math.max(1,Math.min(500,Number(options.limit)||100)));return db.prepare(`SELECT * FROM supplier_network_service_areas WHERE ${w.join(' AND ')} ORDER BY updated_at DESC,id ASC LIMIT ?`).all(...p).map(supplierNetworkServiceAreaFromRow)}
@@ -4579,7 +4680,7 @@ export async function discoverSupplierNetwork(chatId, input={}, actor=null){
     if(minQty!=null && !capacityMatches.length) continue;
     if((currency||wholesale||bulk) && !commercialMatches.length) continue;
     if(qualificationType && !qualifications.some(r=>String(r.qualification_type)===qualificationType)) continue;
-    results.push({organizationId:sid,organizationName:supplier.organization_name,profile,relationshipActive:relationship,matchScore:score,matchReasons:matches,catalog:productMatches.slice(0,20).map(r=>({id:r.id,productId:r.product_id,productName:(parseJSON(r.product_json,{})?.name||parseJSON(r.product_json,{})?.title||null),supplierSku:r.supplier_sku,unit:r.unit,indicativePriceMinor:r.indicative_price_minor,currency:r.currency,leadTimeDays:r.lead_time_days,availabilityStatus:r.availability_status})),capabilities:capabilities.filter(r=>!capabilityCode||String(r.code).toUpperCase()===capabilityCode).slice(0,20).map(r=>({id:r.id,code:r.code,name:r.name,category:r.category})),serviceAreas:areaMatches.slice(0,20).map(r=>({id:r.id,scopeType:r.scope_type,countryCode:r.country_code,geoCode:r.geo_code,displayName:r.display_name,radiusKm:r.radius_km})),capacitySignals:capacityMatches.slice(0,20).map(r=>({id:r.id,subjectType:r.subject_type,subjectId:r.subject_id,quantity:Number(r.quantity),unit:r.unit,periodType:r.period_type,periodStart:r.period_start,periodEnd:r.period_end,availability:r.availability})),commercialTerms:commercialMatches.slice(0,20).map(r=>({id:r.id,subjectType:r.subject_type,subjectId:r.subject_id,supportedCurrencies:parseJSON(r.supported_currencies_json,[]),paymentTerms:parseJSON(r.payment_terms_json,[]),leadTimeMinDays:r.lead_time_min_days,leadTimeMaxDays:r.lead_time_max_days,wholesaleCapable:Boolean(r.wholesale_capable),bulkOrderCapable:Boolean(r.bulk_order_capable),deliveryTerms:parseJSON(r.delivery_terms_json,[])})),qualifications:qualifications.slice(0,20).map(r=>({id:r.id,qualificationType:r.qualification_type,title:r.title,issuer:r.issuer,status:r.status,validUntil:r.valid_until,verifiedAt:r.verified_at})),trustEvidence:trust.slice(0,20).map(r=>({evidenceType:r.evidence_type,claim:r.claim,evidenceState:r.evidence_state,observedAt:r.observed_at})),marketplace:marketplacePresenceForOrganization(sid)});
+    results.push({organizationId:sid,organizationName:supplier.organization_name,profile,relationshipActive:relationship,matchScore:score,matchReasons:matches,catalog:productMatches.slice(0,20).map(r=>({id:r.id,productId:r.product_id,productName:(parseJSON(r.product_json,{})?.name||parseJSON(r.product_json,{})?.title||null),supplierSku:r.supplier_sku,unit:r.unit,indicativePriceMinor:r.indicative_price_minor,currency:r.currency,leadTimeDays:r.lead_time_days,availabilityStatus:r.availability_status})),capabilities:capabilities.filter(r=>!capabilityCode||String(r.code).toUpperCase()===capabilityCode).slice(0,20).map(r=>({id:r.id,code:r.code,name:r.name,category:r.category})),serviceAreas:areaMatches.slice(0,20).map(r=>({id:r.id,scopeType:r.scope_type,countryCode:r.country_code,geoCode:r.geo_code,displayName:r.display_name,radiusKm:r.radius_km})),capacitySignals:capacityMatches.slice(0,20).map(r=>({id:r.id,subjectType:r.subject_type,subjectId:r.subject_id,quantity:Number(r.quantity),unit:r.unit,periodType:r.period_type,periodStart:r.period_start,periodEnd:r.period_end,availability:r.availability,observedAt:r.observed_at||null,validUntil:r.valid_until||null})),commercialTerms:commercialMatches.slice(0,20).map(r=>({id:r.id,subjectType:r.subject_type,subjectId:r.subject_id,supportedCurrencies:parseJSON(r.supported_currencies_json,[]),paymentTerms:parseJSON(r.payment_terms_json,[]),leadTimeMinDays:r.lead_time_min_days,leadTimeMaxDays:r.lead_time_max_days,wholesaleCapable:Boolean(r.wholesale_capable),bulkOrderCapable:Boolean(r.bulk_order_capable),deliveryTerms:parseJSON(r.delivery_terms_json,[])})),qualifications:qualifications.slice(0,20).map(r=>({id:r.id,qualificationType:r.qualification_type,title:r.title,issuer:r.issuer,status:r.status,validUntil:r.valid_until,verifiedAt:r.verified_at})),trustEvidence:trust.slice(0,20).map(r=>({evidenceType:r.evidence_type,claim:r.claim,evidenceState:r.evidence_state,observedAt:r.observed_at})),marketplace:marketplacePresenceForOrganization(sid)});
   }
   results.sort((a,b)=>b.matchScore-a.matchScore||a.organizationName.localeCompare(b.organizationName)||a.organizationId.localeCompare(b.organizationId));
   const out=results.slice(0,n);

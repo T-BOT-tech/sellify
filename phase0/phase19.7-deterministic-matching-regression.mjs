@@ -62,6 +62,7 @@ const windowContext = {
   unit: 'kg',
   availabilityFrom: '2026-12-01T00:00:00.000Z',
   availabilityTo: '2026-12-03T23:59:59.999Z',
+  evaluatedAt: '2026-11-20T00:00:00.000Z',
 };
 const temporalCandidate = {
   ...strong,
@@ -70,9 +71,18 @@ const temporalCandidate = {
     quantity: 75, unit: 'kg', periodType: 'RANGE',
     periodStart: '2026-12-01T00:00:00.000Z', periodEnd: '2026-12-05T00:00:00.000Z',
     availability: 'LIMITED', status: 'ACTIVE', source: 'DECLARED',
+    observedAt: '2026-11-19T00:00:00.000Z', validUntil: '2026-12-10T00:00:00.000Z',
   }],
 };
 assert.equal(evaluateDiscoveryMatch(temporalCandidate, windowContext).eligible, true, 'overlapping LIMITED declared capacity qualifies');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], validUntil: windowContext.availabilityTo }],
+}, windowContext).eligible, true, 'validity exactly at requested window end qualifies');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], validUntil: '2026-12-03T23:59:59.998Z' }],
+}, windowContext).eligible, false, 'validity one millisecond before requested window end is rejected');
 assert.equal(evaluateDiscoveryMatch({
   ...temporalCandidate,
   capacitySignals: [{ ...temporalCandidate.capacitySignals[0], availability: 'AVAILABLE' }],
@@ -81,6 +91,38 @@ assert.equal(evaluateDiscoveryMatch({
   ...temporalCandidate,
   capacitySignals: [{ ...temporalCandidate.capacitySignals[0], status: 'INACTIVE' }],
 }, windowContext).eligible, false, 'inactive capacity is excluded');
+
+for (const status of [undefined, null, 'UNKNOWN', 'INACTIVE']) {
+  assert.equal(evaluateDiscoveryMatch({
+    ...temporalCandidate,
+    capacitySignals: [{ ...temporalCandidate.capacitySignals[0], status }],
+  }, windowContext).eligible, false, `capacity status ${String(status)} must fail closed`);
+}
+assert.equal(evaluateDiscoveryMatch(temporalCandidate, {
+  ...windowContext, evaluatedAt: '2026-11-20T00:00:00',
+}).eligible, false, 'timezone-less evaluation instant is rejected');
+assert.equal(evaluateDiscoveryMatch(temporalCandidate, {
+  ...windowContext, evaluatedAt: '2026-11-20',
+}).eligible, false, 'date-only evaluation instant is rejected');
+assert.equal(evaluateDiscoveryMatch(temporalCandidate, {
+  ...windowContext, availabilityFrom: '2026-12-01',
+}).eligible, false, 'date-only requested instant is rejected');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], observedAt: '2026-11-19T00:00:00' }],
+}, windowContext).eligible, false, 'timezone-less observation instant is rejected');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], validUntil: '2026-12-10T00:00:00' }],
+}, windowContext).eligible, false, 'timezone-less validity instant is rejected');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{
+    ...temporalCandidate.capacitySignals[0],
+    observedAt: '2026-11-19T03:00:00+03:00',
+    validUntil: '2026-12-10T03:00:00+03:00',
+  }],
+}, windowContext).eligible, true, 'explicit timezone offsets are accepted');
 for (const availability of ['UNAVAILABLE', 'ON_REQUEST']) {
   const result = evaluateDiscoveryMatch({
     ...temporalCandidate,
@@ -96,6 +138,25 @@ assert.equal(evaluateDiscoveryMatch({
   ...temporalCandidate,
   capacitySignals: [{ ...temporalCandidate.capacitySignals[0], periodStart: null, periodEnd: null }],
 }, windowContext).eligible, false, 'capacity without a declared period is UNKNOWN for a time-bound request');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], observedAt: null }],
+}, windowContext).eligible, false, 'unknown observation time cannot satisfy a time-bound availability request');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], validUntil: null }],
+}, windowContext).eligible, false, 'missing explicit validity cannot satisfy a time-bound availability request');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], validUntil: '2026-11-19T23:59:59.999Z' }],
+}, windowContext).eligible, false, 'expired evidence is excluded');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], observedAt: '2026-11-21T00:00:00.000Z' }],
+}, windowContext).eligible, false, 'future observation timestamps are excluded');
+assert.equal(evaluateDiscoveryMatch(temporalCandidate, {
+  ...windowContext, evaluatedAt: null,
+}).eligible, false, 'time-bound matching without a server evaluation time fails closed');
 assert.equal(evaluateDiscoveryMatch({
   ...temporalCandidate,
   capacitySignals: [{ ...temporalCandidate.capacitySignals[0], quantity: 10 }],
@@ -116,6 +177,20 @@ assert.equal(evaluateDiscoveryMatch({
   capabilities: [{ id: 'cap-coffee-id', code: 'COFFEE' }],
   capacitySignals: [{ ...temporalCandidate.capacitySignals[0], subjectType: 'CAPABILITY', subjectId: 'cap-coffee-id' }],
 }, { ...windowContext, productId: null, capabilityCode: 'COFFEE' }).eligible, true, 'canonical capability IDs bind capacity to the matching capability');
+
+const temporalOnlyContext = { ...windowContext, minimumQuantity: null, unit: null };
+const temporalOnlyMatch = evaluateDiscoveryMatch(temporalCandidate, temporalOnlyContext);
+assert.equal(temporalOnlyMatch.eligible, true, 'temporal-only request must enforce matching capacity');
+assert.equal(temporalOnlyMatch.hardConstraints.find(x => x.dimension === 'CAPACITY').requested, true, 'temporal-only request activates CAPACITY hard constraint');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [],
+}, temporalOnlyContext).eligible, false, 'temporal-only request without capacity fails closed');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], periodStart: '2026-12-04T00:00:00.000Z', periodEnd: '2026-12-06T00:00:00.000Z' }],
+}, temporalOnlyContext).eligible, false, 'temporal-only request rejects non-overlapping capacity');
+
 assert.equal(evaluateDiscoveryMatch(temporalCandidate, { productId: 'coffee', minimumQuantity: 50, unit: 'kg' }).eligible, true, 'legacy searches without a requested period retain prior quantity behavior');
 
 console.log('Phase 19.7 Deterministic Matching regression: PASS');

@@ -29,7 +29,7 @@ function candidateFromProvider(provider, row) {
 }
 
 export async function discoverUnified({ intent = {}, providerIds = DEFAULT_DISCOVERY_PROVIDERS } = {}) {
-  const context = normalizeDiscoveryMarketContext(intent);
+  const context = { ...normalizeDiscoveryMarketContext(intent), evaluatedAt: new Date().toISOString() };
   const providerContext = { ...context };
   if (intent.chatId) providerContext.chatId = String(intent.chatId);
   if (intent.actor) providerContext.actor = intent.actor;
