@@ -10911,6 +10911,13 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
   }
 }
 
+export async function getLogisticsSchedulingTimeZone(chatId, locationId = null) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organizationId) return null;
+  return getCanonicalSchedulingTimeZone(String(tenant.organizationId), locationId);
+}
+
 export async function getLogisticsSchedulingActivity(chatId, activityId) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
