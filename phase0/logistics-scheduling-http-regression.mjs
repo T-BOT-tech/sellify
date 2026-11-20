@@ -302,6 +302,7 @@ try {
     });
     assert.equal(inScopeCreate.response.status, 201, `${role} may create activity at its assigned location`);
     assert.equal(inScopeCreate.json.activity.locationId, scopedLocation.id);
+    assert.equal(inScopeCreate.json.activity.timezone, 'Africa/Nairobi', 'create stores the canonical location timezone');
     const inScopeCancel = await request(`${base}/${encodeURIComponent(inScopeCreate.json.activity.id)}/transition`, {
       method: 'PATCH',
       headers: { ...roleContext.headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-location-${role}-cancel-${suffix}` },
