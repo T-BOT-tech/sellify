@@ -57,7 +57,7 @@ const base = {
   timezone: 'Africa/Addis_Ababa',
   scheduled_start: '2026-10-10T09:00:00Z',
   scheduled_end: '2026-10-10T10:00:00Z',
-  related_movement: { id: 'movement-l11-4-1', authority: 'logistics' },
+  related_movement: { id: 'movement-l11-4-1', authority: 'inventory' },
   idempotency_key: 'l11.4-create-1',
 };
 
