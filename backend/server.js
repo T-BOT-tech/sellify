@@ -3317,7 +3317,9 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
 
   if (!activityId && req.method === 'GET') {
     const url = new URL(req.url, `http://${req.headers.host}`);
-    const locationId = String(url.searchParams.get('locationId') || session.locationId || '').trim() || null;
+    const locationId = url.searchParams.has('locationId')
+      ? String(url.searchParams.get('locationId') || '').trim() || null
+      : String(session.locationId || '').trim() || null;
     const location = locationId ? await getOrganizationLocation(chatId, locationId) : null;
     if (locationId && !location) {
       return sendJSON(res, 403, { error: { message: 'Scheduling location is outside this tenant scope', status: 403, code: 'LOCATION_SCOPE_DENIED' } }, req);
@@ -3345,7 +3347,9 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
 
   if (!activityId && req.method === 'POST' && !action) {
     const body = await readBody(req);
-    const locationId = String(body.locationId ?? body.location_id ?? session.locationId ?? '').trim() || null;
+    const hasLocationInput = Object.hasOwn(body, 'locationId') || Object.hasOwn(body, 'location_id');
+    const rawLocationId = hasLocationInput ? (body.locationId ?? body.location_id) : session.locationId;
+    const locationId = String(rawLocationId || '').trim() || null;
     const location = locationId ? await getOrganizationLocation(chatId, locationId) : null;
     if (locationId && !location) {
       return sendJSON(res, 403, { error: { message: 'Scheduling location is outside this tenant scope', status: 403, code: 'LOCATION_SCOPE_DENIED' } }, req);
