@@ -28,7 +28,7 @@ function asArray(value) { return Array.isArray(value) ? value : []; }
 
 // Instant-valued evidence must carry an explicit UTC marker or numeric offset.
 // Calendar period boundaries are handled separately because they may be date-only.
-const ISO_INSTANT = /^(\\d{4})-(\\d{2})-(\\d{2})T([01]\\d|2[0-3]):([0-5]\\d)(?::([0-5]\\d)(?:\\.(\\d{1,3}))?)?(Z|[+-](?:0\\d|1[0-4]):[0-5]\\d)$/;
+const ISO_INSTANT = /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d)(?:\\.(\d{1,3}))?)?(Z|[+-](?:0\d|1[0-4]):[0-5]\d)$/;
 function parseInstant(value) {
   if (typeof value !== 'string') return NaN;
   const match = ISO_INSTANT.exec(value.trim());
