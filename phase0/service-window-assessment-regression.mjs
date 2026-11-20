@@ -91,7 +91,7 @@ const keys = [
 for (const locale of localeNames) {
   const source = await readFile(new URL('../app/src/i18n/locales/' + locale + '.js', import.meta.url), 'utf8');
   for (const key of keys) {
-    const occurrences = source.match(new RegExp('\\\\b' + key + '\\\\s*:', 'g')) || [];
+    const occurrences = source.match(new RegExp('\\b' + key + '\\s*:', 'g')) || [];
     assert.equal(occurrences.length, 1, locale + ' must define ' + key + ' exactly once');
   }
 }
