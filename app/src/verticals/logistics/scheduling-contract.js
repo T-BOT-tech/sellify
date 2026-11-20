@@ -215,10 +215,16 @@ export function normalizeLogisticsSchedulingRequest(input = {}) {
     invalid('recurrence is only valid for RECURRING scheduling');
   }
 
+  // Accept both external request fields and this contract's own normalized
+  // representation. The feasibility evaluator re-validates normalized requests;
+  // dropping the nested canonical references here would turn valid requests
+  // into invalid reference-less requests on that second pass.
+  const normalizedRelated = input.related && typeof input.related === 'object'
+    && !Array.isArray(input.related) ? input.related : {};
   const related = Object.freeze({
-    order: normalizeReference(input.related_order, 'related_order'),
-    fulfillment: normalizeReference(input.related_fulfillment, 'related_fulfillment'),
-    movement: normalizeReference(input.related_movement, 'related_movement'),
+    order: normalizeReference(input.related_order ?? normalizedRelated.order, 'related_order'),
+    fulfillment: normalizeReference(input.related_fulfillment ?? normalizedRelated.fulfillment, 'related_fulfillment'),
+    movement: normalizeReference(input.related_movement ?? normalizedRelated.movement, 'related_movement'),
   });
 
   if (!related.order && !related.fulfillment && !related.movement) {
