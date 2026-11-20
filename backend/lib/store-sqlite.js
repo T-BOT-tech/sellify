@@ -10974,6 +10974,20 @@ export async function evaluateLogisticsSchedulingActivity(chatId, activityId, ac
   // server-side capacity adapter is explicitly wired here, callers cannot assert FEASIBLE.
   const externalEvaluation = null;
 
+  const localStart = options.scheduledStartLocal ?? options.scheduled_start_local;
+  const localEnd = options.scheduledEndLocal ?? options.scheduled_end_local;
+  if ((localStart == null || localStart === '') !== (localEnd == null || localEnd === '')) {
+    throw Object.assign(new Error('scheduledStartLocal and scheduledEndLocal must be supplied together'), {
+      statusCode: 400, code: 'SCHEDULING_WINDOW_REQUIRED',
+    });
+  }
+  const scheduledStart = localStart != null && localStart !== ''
+    ? logisticsLocalDateTimeToIso(String(localStart), String(row.timezone || 'UTC'))
+    : options.scheduledStart ?? options.scheduled_start ?? row.scheduled_start;
+  const scheduledEnd = localEnd != null && localEnd !== ''
+    ? logisticsLocalDateTimeToIso(String(localEnd), String(row.timezone || 'UTC'))
+    : options.scheduledEnd ?? options.scheduled_end ?? row.scheduled_end;
+
   return evaluateLogisticsSchedulingFeasibility({
     request: {
       organization_id: row.organization_id,
@@ -10982,8 +10996,8 @@ export async function evaluateLogisticsSchedulingActivity(chatId, activityId, ac
       mode: row.mode,
       requested_start: row.requested_start,
       requested_end: row.requested_end,
-      scheduled_start: row.scheduled_start,
-      scheduled_end: row.scheduled_end,
+      scheduled_start: scheduledStart,
+      scheduled_end: scheduledEnd,
       timezone: row.timezone,
       recurrence: parseJSON(row.recurrence_json, null),
       related_order: row.related_order_id ? { id: row.related_order_id } : null,
@@ -11075,9 +11089,24 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
       });
     }
 
+    let scheduledStartForWrite = null;
+    let scheduledEndForWrite = null;
     if (target === 'SCHEDULED') {
-      const scheduledStart = input.scheduledStart ?? input.scheduled_start ?? row.scheduled_start;
-      const scheduledEnd = input.scheduledEnd ?? input.scheduled_end ?? row.scheduled_end;
+      const localStart = input.scheduledStartLocal ?? input.scheduled_start_local;
+      const localEnd = input.scheduledEndLocal ?? input.scheduled_end_local;
+      if ((localStart == null || localStart === '') !== (localEnd == null || localEnd === '')) {
+        throw Object.assign(new Error('scheduledStartLocal and scheduledEndLocal must be supplied together'), {
+          statusCode: 400, code: 'SCHEDULING_WINDOW_REQUIRED',
+        });
+      }
+      const scheduledStart = localStart != null && localStart !== ''
+        ? logisticsLocalDateTimeToIso(String(localStart), String(row.timezone || 'UTC'))
+        : input.scheduledStart ?? input.scheduled_start ?? row.scheduled_start;
+      const scheduledEnd = localEnd != null && localEnd !== ''
+        ? logisticsLocalDateTimeToIso(String(localEnd), String(row.timezone || 'UTC'))
+        : input.scheduledEnd ?? input.scheduled_end ?? row.scheduled_end;
+      scheduledStartForWrite = scheduledStart;
+      scheduledEndForWrite = scheduledEnd;
       if (!scheduledStart || !scheduledEnd) {
         throw Object.assign(new Error('Scheduled lifecycle requires a scheduled time window'), {
           statusCode: 400, code: 'SCHEDULED_WINDOW_REQUIRED',
@@ -11218,10 +11247,8 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
     const params = [target, commandKey, actor?.userId || null, now];
 
     if (target === 'SCHEDULED') {
-      const scheduledStart = input.scheduledStart ?? input.scheduled_start ?? row.scheduled_start;
-      const scheduledEnd = input.scheduledEnd ?? input.scheduled_end ?? row.scheduled_end;
       sets.push('scheduled_start = ?', 'scheduled_end = ?');
-      params.push(String(scheduledStart), String(scheduledEnd));
+      params.push(String(scheduledStartForWrite), String(scheduledEndForWrite));
     }
 
     if (target === 'CONFIRMED') {
