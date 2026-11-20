@@ -3310,6 +3310,20 @@ async function handlePackLifecycle(req, res, chatId, packId) {
 }
 
 
+function assertLogisticsSchedulingPackActive(tenant) {
+  const lifecycle = getPackLifecycle(tenant.organizationId, 'logistics');
+  const readiness = derivePackLifecycleReadiness('logistics', lifecycle, {
+    organizationId: tenant.organizationId,
+  });
+  if (!readiness.active) {
+    throw Object.assign(new Error('Logistics Pack must be activated before scheduling is available'), {
+      statusCode: 409,
+      code: 'PACK_NOT_ACTIVE',
+      readiness,
+    });
+  }
+}
+
 async function handleLogisticsScheduling(req, res, chatId, activityId = null, action = null) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -3329,6 +3343,7 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
       location,
       deniedMessage: 'Logistics scheduling view permission required',
     });
+    assertLogisticsSchedulingPackActive(tenant);
     const activities = await listLogisticsSchedulingActivities(chatId, {
       locationId,
       status: url.searchParams.get('status'),
@@ -3354,6 +3369,7 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
       location,
       deniedMessage: 'Logistics scheduling request permission required',
     });
+    assertLogisticsSchedulingPackActive(tenant);
     const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
     if (!idempotencyKey) {
       return sendJSON(res, 400, { error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' } }, req);
@@ -3397,6 +3413,7 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
     location: activityLocation,
     deniedMessage: 'Logistics scheduling view permission required',
   });
+  assertLogisticsSchedulingPackActive(tenant);
 
   if (req.method === 'GET' && !action) {
     return sendJSON(res, 200, { activity }, req);
