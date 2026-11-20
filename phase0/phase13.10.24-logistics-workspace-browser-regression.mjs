@@ -282,9 +282,11 @@ try {
   await page.locator('[data-scheduling-transition="CANCELLED"]').click();
   assert.equal(schedulingTransitions.length, 0, 'cancellation without a reason must not reach the API');
   await page.locator('[data-scheduling-reason="scheduling-browser-1"]').fill('Buyer cancelled request');
+  const cancellationResponse = page.waitForResponse(response =>
+    response.request().method() === 'PATCH' && response.url().endsWith('/transition'));
   await page.locator('[data-scheduling-transition="CANCELLED"]').click();
-  await page.waitForFunction(() =>
-    document.querySelector('[data-scheduling-card="scheduling-browser-1"]')?.textContent.includes('CANCELLED'));
+  await cancellationResponse;
+  assert.equal(schedulingActivities[0].status, 'CANCELLED');
   assert.equal(schedulingTransitions.length, 1);
   assert.equal(schedulingTransitions[0].status, 'CANCELLED');
   assert.equal(schedulingTransitions[0].reason, 'Buyer cancelled request');
