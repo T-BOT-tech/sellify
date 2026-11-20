@@ -105,9 +105,9 @@ try {
   assert.equal(empty.json.timezone, 'Africa/Addis_Ababa', 'organization timezone is the default when no location is selected');
 
   const primaryLocation = await store.createOrganizationLocation(tenant.chatId, {
-    code: `L11P${suffix.slice(-8)}`, name: 'L11 Paris Timezone Location', type: 'WAREHOUSE',
+    code: `L11P${suffix.slice(-8)}`, name: 'L11 Paris Timezone Location',
+    type: 'WAREHOUSE', timezone: 'Europe/Paris',
   });
-  db.prepare('UPDATE locations SET timezone = ? WHERE id = ?').run('Europe/Paris', primaryLocation.id);
   const localStart = '2026-11-21T09:00';
   const localEnd = '2026-11-21T10:00';
   const requestKey = `l11-scheduling-create-${suffix}`;
