@@ -13,9 +13,10 @@ const base = {
   location_id: 'l11.6-location',
   activity_type: 'PICKUP',
   mode: 'SCHEDULED',
+  timezone: 'Africa/Addis_Ababa',
   scheduled_start: '2026-10-10T09:00:00Z',
   scheduled_end: '2026-10-10T10:00:00Z',
-  related_movement: { id: 'movement-1', authority: 'logistics' },
+  related_movement: { id: 'movement-1', authority: 'inventory' },
 };
 
 const noAuthoritativeCapacity = evaluateLogisticsSchedulingFeasibility({
@@ -26,6 +27,16 @@ assert.equal(noAuthoritativeCapacity.reason, 'NO_AUTHORITATIVE_CAPACITY_DECISION
 assert.equal(noAuthoritativeCapacity.feasible, false);
 assert.equal(noAuthoritativeCapacity.authorized, false);
 assert.equal(noAuthoritativeCapacity.execution, false);
+
+// Store-level evaluation revalidates an already normalized request. The
+// canonical Order/Fulfillment/Movement reference must survive that round-trip.
+const normalizedRequest = (await import('../app/src/verticals/logistics/scheduling-contract.js'))
+  .normalizeLogisticsSchedulingRequest(base);
+const normalizedRequestEvaluation = evaluateLogisticsSchedulingFeasibility({
+  request: normalizedRequest,
+});
+assert.equal(normalizedRequestEvaluation.evaluation, 'UNKNOWN');
+assert.equal(normalizedRequestEvaluation.reason, 'NO_AUTHORITATIVE_CAPACITY_DECISION');
 
 const overlapping = evaluateLogisticsSchedulingFeasibility({
   request: base,
@@ -116,7 +127,7 @@ const noWindow = evaluateLogisticsSchedulingFeasibility({
     organization_id: 'l11.6-org',
     activity_type: 'PICKUP',
     mode: 'ON_DEMAND',
-    related_movement: { id: 'movement-2', authority: 'logistics' },
+    related_movement: { id: 'movement-2', authority: 'inventory' },
   },
 });
 assert.equal(noWindow.evaluation, 'UNKNOWN');

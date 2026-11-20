@@ -399,6 +399,8 @@
     "test:logistics-l11.6": "node phase0/logistics-scheduling-feasibility-regression.mjs",
     "test:logistics-l11.7": "node phase0/logistics-scheduling-feasibility-service-regression.mjs",
     "test:logistics-l11.8": "node phase0/logistics-scheduling-decision-regression.mjs",
+    "test:logistics-scheduling-http": "node phase0/logistics-scheduling-http-regression.mjs",
+    "test:logistics-scheduling-ui": "node phase0/logistics-scheduling-ui-regression.mjs",
     "test:logistics-l11.8-l11.9": "node phase0/logistics-scheduling-decision-regression.mjs",
     "test:logistics-l11.10": "node phase0/logistics-scheduling-decision-regression.mjs",
     "test:logistics-l11.11": "node phase0/logistics-scheduling-decision-regression.mjs",

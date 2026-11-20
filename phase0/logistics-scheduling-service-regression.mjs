@@ -40,14 +40,24 @@ db.prepare(
   'INSERT INTO users (id,display_name,created_at,last_seen_at) VALUES (?,?,?,?)'
 ).run(userId, 'L11.4 Actor', new Date().toISOString(), new Date().toISOString());
 
+const movementNow = new Date().toISOString();
+db.prepare(`
+  INSERT INTO inventory_movements
+    (id,event_id,organization_id,location_id,product_id,quantity,movement_type,
+     reference_type,reference_id,actor_id,device_id,occurred_at,reason,metadata_json,created_at)
+  VALUES (?,?,?,?,?,1,'ADJUSTMENT',NULL,NULL,?,NULL,?,'L11.4 fixture','{}',?)
+`).run('movement-l11-4-1', 'event-l11-4-1', organizationId, locationId,
+  'fixture-product-l11-4', userId, movementNow, movementNow);
+
 const actor = { userId, deviceId: null, role: 'logistics_manager', roles: ['logistics_manager'], organizationId };
 const base = {
   location_id: locationId,
   activity_type: 'PICKUP',
   mode: 'SCHEDULED',
+  timezone: 'Africa/Addis_Ababa',
   scheduled_start: '2026-10-10T09:00:00Z',
   scheduled_end: '2026-10-10T10:00:00Z',
-  related_movement: { id: 'movement-l11-4-1', authority: 'logistics' },
+  related_movement: { id: 'movement-l11-4-1', authority: 'inventory' },
   idempotency_key: 'l11.4-create-1',
 };
 
@@ -70,40 +80,33 @@ await assert.rejects(
   () => createLogisticsSchedulingActivity(chatId, {
     ...base,
     scheduled_start: '2026-10-10T11:00:00Z',
+    scheduled_end: '2026-10-10T12:00:00Z',
   }, actor),
   error => error?.code === 'IDEMPOTENCY_CONFLICT'
 );
 
-const scheduled = await transitionLogisticsSchedulingActivity(
-  chatId, created.id, 'SCHEDULED', actor,
-  { idempotency_key: 'l11.4-command-1', expectedVersion: 1 }
+await assert.rejects(
+  () => transitionLogisticsSchedulingActivity(
+    chatId, created.id, 'SCHEDULED', actor,
+    { idempotency_key: 'l11.4-command-1', expectedVersion: 1 }
+  ),
+  error => error?.code === 'SCHEDULING_FEASIBILITY_UNKNOWN'
 );
+const stillRequested = await getLogisticsSchedulingActivity(chatId, created.id);
+assert.equal(stillRequested.status, 'REQUESTED');
+assert.equal(stillRequested.version, 1);
+
+// A pre-existing scheduled row is seeded only to exercise downstream
+// confirmation/completion transitions. This fixture is not evidence that the
+// guarded REQUESTED -> SCHEDULED command can succeed without trusted capacity.
+db.prepare(`
+  UPDATE logistics_scheduling_activities
+     SET status = 'SCHEDULED', version = 2
+   WHERE id = ? AND organization_id = ?
+`).run(created.id, organizationId);
+const scheduled = await getLogisticsSchedulingActivity(chatId, created.id);
 assert.equal(scheduled.status, 'SCHEDULED');
 assert.equal(scheduled.version, 2);
-
-const scheduledReplay = await transitionLogisticsSchedulingActivity(
-  chatId, created.id, 'SCHEDULED', actor,
-  { idempotency_key: 'l11.4-command-1', expectedVersion: 1 }
-);
-assert.equal(scheduledReplay.idempotent, true);
-
-// A command key is bound to its original transition; it cannot be reused
-// for a different lifecycle action on the same scheduling activity.
-await assert.rejects(
-  () => transitionLogisticsSchedulingActivity(
-    chatId, created.id, 'CANCELLED', actor,
-    { idempotency_key: 'l11.4-command-1', expectedVersion: 2 }
-  ),
-  error => error?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT'
-);
-
-await assert.rejects(
-  () => transitionLogisticsSchedulingActivity(
-    chatId, created.id, 'CONFIRMED', actor,
-    { idempotency_key: 'l11.4-command-2', expectedVersion: 1 }
-  ),
-  error => error?.code === 'SCHEDULING_VERSION_CONFLICT'
-);
 
 const confirmed = await transitionLogisticsSchedulingActivity(
   chatId, created.id, 'CONFIRMED', actor,
@@ -111,6 +114,29 @@ const confirmed = await transitionLogisticsSchedulingActivity(
 );
 assert.equal(confirmed.status, 'CONFIRMED');
 assert.equal(confirmed.confirmedByUserId, userId);
+
+const confirmedReplay = await transitionLogisticsSchedulingActivity(
+  chatId, created.id, 'CONFIRMED', actor,
+  { idempotency_key: 'l11.4-command-2', expectedVersion: 2 }
+);
+assert.equal(confirmedReplay.idempotent, true);
+
+// A command key is bound to its original transition and cannot be reused.
+await assert.rejects(
+  () => transitionLogisticsSchedulingActivity(
+    chatId, created.id, 'CANCELLED', actor,
+    { idempotency_key: 'l11.4-command-2', expectedVersion: 3 }
+  ),
+  error => error?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT'
+);
+
+await assert.rejects(
+  () => transitionLogisticsSchedulingActivity(
+    chatId, created.id, 'IN_PROGRESS', actor,
+    { idempotency_key: 'l11.4-command-3', expectedVersion: 2 }
+  ),
+  error => error?.code === 'SCHEDULING_VERSION_CONFLICT'
+);
 
 const inProgress = await transitionLogisticsSchedulingActivity(
   chatId, created.id, 'IN_PROGRESS', actor,

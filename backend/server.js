@@ -130,6 +130,7 @@ import {
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, createPurchaseOrderFromProcurementAward, transitionPurchaseOrder,
   getProcurementReceipt, listProcurementReceipts, createProcurementReceipt,
   assignDeliveryCourier, getDeliveryAssignment, listDeliveryAssignments, assertCourierOwnsDelivery, transitionDeliveryAssignment,
+  createLogisticsSchedulingActivity, getLogisticsSchedulingActivity, getLogisticsSchedulingTimeZone, listLogisticsSchedulingActivities, evaluateLogisticsSchedulingActivity, transitionLogisticsSchedulingActivity,
   listCreditTerms, getCreditTerms, createCreditTerms, updateCreditTerms, transitionCreditTerms,
   listReceivables, getReceivable, createReceivable, transitionReceivable, allocatePaymentToReceivable, listReceivableLedger,
   listInvoices, getInvoice, createInvoice, transitionInvoice,
@@ -3308,6 +3309,111 @@ async function handlePackLifecycle(req, res, chatId, packId) {
 }
 
 
+async function handleLogisticsScheduling(req, res, chatId, activityId = null, action = null) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, chatId);
+
+  if (!activityId && req.method === 'GET') {
+    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const locationId = String(url.searchParams.get('locationId') || session.locationId || '').trim() || null;
+    const location = locationId ? await getOrganizationLocation(chatId, locationId) : null;
+    if (locationId && !location) return sendJSON(res, 403, {
+      error: { message: 'Scheduling location is outside this tenant scope', status: 403, code: 'LOCATION_SCOPE_DENIED' },
+    }, req);
+    await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:view', {
+      location, deniedMessage: 'Logistics scheduling view permission required',
+    });
+    const activities = await listLogisticsSchedulingActivities(chatId, {
+      locationId, status: url.searchParams.get('status'), activityType: url.searchParams.get('activityType'),
+    });
+    const timezone = await getLogisticsSchedulingTimeZone(chatId, locationId);
+    return sendJSON(res, 200, {
+      activities, timezone,
+      location: location ? { id: location.id, name: location.name, timeZone: location.timeZone || null } : null,
+      state: activities.length ? 'READY' : 'EMPTY',
+      authority: 'logistics_scheduling_activities', uiIsNotAuthorization: true,
+    }, req);
+  }
+
+  if (!activityId && req.method === 'POST' && !action) {
+    const body = await readBody(req);
+    const locationId = String(body.locationId ?? body.location_id ?? session.locationId ?? '').trim() || null;
+    const location = locationId ? await getOrganizationLocation(chatId, locationId) : null;
+    if (locationId && !location) return sendJSON(res, 403, {
+      error: { message: 'Scheduling location is outside this tenant scope', status: 403, code: 'LOCATION_SCOPE_DENIED' },
+    }, req);
+    await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:request', {
+      location, deniedMessage: 'Logistics scheduling request permission required',
+    });
+    const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
+    if (!idempotencyKey) return sendJSON(res, 400, {
+      error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' },
+    }, req);
+    const timezone = await getLogisticsSchedulingTimeZone(chatId, locationId);
+    const activity = await createLogisticsSchedulingActivity(chatId, {
+      ...body, location_id: locationId, timezone: body.timezone || timezone, idempotencyKey,
+    }, session);
+    return sendJSON(res, activity.idempotent ? 200 : 201, { activity }, req);
+  }
+
+  if (!activityId) return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+
+  const activity = await getLogisticsSchedulingActivity(chatId, activityId);
+  if (!activity) return sendJSON(res, 404, {
+    error: { message: 'Scheduling activity not found', status: 404, code: 'SCHEDULING_ACTIVITY_NOT_FOUND' },
+  }, req);
+  const activityLocationId = activity.locationId ?? activity.location_id ?? null;
+  const activityLocation = activityLocationId ? await getOrganizationLocation(chatId, activityLocationId) : null;
+  if (activityLocationId && !activityLocation) return sendJSON(res, 403, {
+    error: { message: 'Scheduling location is outside this tenant scope', status: 403, code: 'LOCATION_SCOPE_DENIED' },
+  }, req);
+  await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:view', {
+    location: activityLocation, deniedMessage: 'Logistics scheduling view permission required',
+  });
+
+  if (req.method === 'GET' && !action) return sendJSON(res, 200, { activity }, req);
+
+  if (req.method === 'POST' && action === 'evaluate') {
+    const body = await readBody(req);
+    const evaluation = await evaluateLogisticsSchedulingActivity(chatId, activityId, session, {
+      scheduledStart: body.scheduledStart ?? body.scheduled_start,
+      scheduledEnd: body.scheduledEnd ?? body.scheduled_end,
+      timezone: body.timezone,
+    });
+    return sendJSON(res, 200, {
+      evaluation, state: evaluation.evaluation === 'UNKNOWN' ? 'UNKNOWN' : 'READY',
+      authority: 'logistics_scheduling_activities',
+    }, req);
+  }
+
+  if (req.method === 'PATCH' && action === 'transition') {
+    const body = await readBody(req);
+    const target = String(body.status || body.targetStatus || body.target_status || '').trim().toUpperCase();
+    if (!target) return sendJSON(res, 400, {
+      error: { message: 'status is required', status: 400, code: 'SCHEDULING_STATUS_REQUIRED' },
+    }, req);
+    const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
+    if (!idempotencyKey) return sendJSON(res, 400, {
+      error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' },
+    }, req);
+    const expectedVersion = Number(body.expectedVersion ?? body.expected_version);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 1) return sendJSON(res, 400, {
+      error: { message: 'expectedVersion must be a positive integer', status: 400, code: 'SCHEDULING_VERSION_REQUIRED' },
+    }, req);
+    const result = await transitionLogisticsSchedulingActivity(chatId, activityId, target, session, {
+      idempotencyKey, expectedVersion,
+      scheduledStart: body.scheduledStart ?? body.scheduled_start,
+      scheduledEnd: body.scheduledEnd ?? body.scheduled_end,
+      timezone: body.timezone,
+      reason: body.reason,
+    });
+    return sendJSON(res, 200, { activity: result }, req);
+  }
+
+  return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+}
+
 async function handleDeliveryAssignmentsList(req, res, chatId) {
   const tenant = await getTenant(chatId);
   if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
@@ -3746,6 +3852,11 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleOrderFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling\/([^/]+)$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling\/([^/]+)\/evaluate$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), 'evaluate') },
+  { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/logistics\/scheduling\/([^/]+)\/transition$/, handler: (req, res, m) => handleLogisticsScheduling(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), 'transition') },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/delivery-assignments$/, handler: (req, res, m) => handleDeliveryAssignmentsList(req, res, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleOrderFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },

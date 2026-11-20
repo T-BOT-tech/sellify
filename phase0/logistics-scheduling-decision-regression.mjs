@@ -429,15 +429,26 @@ for (const outcome of ['CONFLICT', 'UNKNOWN']) {
   assert.equal(decision.execution, false);
 }
 
-const create = async (key, start, end, movementId) => createLogisticsSchedulingActivity(chatId, {
-  location_id: locationId,
-  activity_type: 'PICKUP',
-  mode: 'SCHEDULED',
-  scheduled_start: start,
-  scheduled_end: end,
-  related_movement: { id: movementId, authority: 'logistics' },
-  idempotency_key: key,
-}, actor);
+const create = async (key, start, end, movementId) => {
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT OR IGNORE INTO inventory_movements
+      (id,event_id,organization_id,location_id,product_id,quantity,movement_type,
+       reference_type,reference_id,actor_id,device_id,occurred_at,reason,metadata_json,created_at)
+    VALUES (?,?,?,?,?,1,'ADJUSTMENT',NULL,NULL,?,NULL,?,'L11.8 fixture','{}',?)
+  `).run(movementId, `event-${movementId}`, organizationId, locationId,
+    `fixture-product-${movementId}`, userId, now, now);
+  return createLogisticsSchedulingActivity(chatId, {
+    location_id: locationId,
+    activity_type: 'PICKUP',
+    mode: 'SCHEDULED',
+    timezone: 'Africa/Addis_Ababa',
+    scheduled_start: start,
+    scheduled_end: end,
+    related_movement: { id: movementId, authority: 'inventory' },
+    idempotency_key: key,
+  }, actor);
+};
 
 const first = await create(
   'l11.8-create-1',

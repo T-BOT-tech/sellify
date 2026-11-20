@@ -73,9 +73,9 @@ function overlaps(left, right) {
 function canonicalReferenceIds(candidate) {
   const related = candidate.related || {};
   return new Set([
-    related.order?.id || candidate.relatedOrderId,
-    related.fulfillment?.id || candidate.relatedFulfillmentId,
-    related.movement?.id || candidate.relatedMovementId,
+    related.order?.id || candidate.relatedOrderId || candidate.related_order_id,
+    related.fulfillment?.id || candidate.relatedFulfillmentId || candidate.related_fulfillment_id,
+    related.movement?.id || candidate.relatedMovementId || candidate.related_movement_id,
   ].filter(Boolean).map(String));
 }
 

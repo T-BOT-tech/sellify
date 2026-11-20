@@ -1857,3 +1857,103 @@
     overflow-wrap:anywhere;
   }
 }
+
+/* Logistics Scheduling — responsive operator workspace */
+.logistics-scheduling-workspace {
+  margin: 16px 0; padding: clamp(14px, 2vw, 22px);
+  border: 1px solid var(--line); border-radius: 16px;
+  background: var(--surface); color: var(--ink);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .06);
+}
+.logistics-scheduling-workspace .logistics-workspace-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 14px; margin-bottom: 16px;
+}
+.logistics-scheduling-workspace .logistics-workspace-head h3 {
+  font-size: clamp(17px, 2vw, 21px); letter-spacing: -.02em;
+}
+.logistics-scheduling-workspace #logisticsSchedulingStatus {
+  margin: 12px 0; padding: 10px 12px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--paper-dim); color: var(--ink-soft);
+  font-size: 12px; line-height: 1.5;
+}
+.logistics-scheduling-form {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  align-items: end; gap: 12px; margin: 14px 0 18px; padding: 14px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--paper-dim);
+}
+.logistics-scheduling-form .settings-section-label {
+  grid-column: 1 / -1; margin: 0; font-weight: 750; color: var(--ink);
+}
+.logistics-scheduling-form label, .logistics-scheduling-window label {
+  display: grid; gap: 6px; min-width: 0; color: var(--ink-soft);
+  font-size: 12px; font-weight: 650;
+}
+.logistics-scheduling-form input, .logistics-scheduling-form select,
+.logistics-scheduling-window input {
+  width: 100%; min-width: 0; min-height: 40px; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 9px;
+  background: var(--surface); color: var(--ink); font: inherit;
+}
+.logistics-scheduling-form input:focus-visible, .logistics-scheduling-form select:focus-visible,
+.logistics-scheduling-window input:focus-visible, .logistics-scheduling-workspace button:focus-visible {
+  outline: 3px solid var(--teal); outline-offset: 2px;
+}
+.logistics-scheduling-form .logistics-meta { grid-column: 1 / -1; }
+.logistics-scheduling-form button { min-height: 40px; }
+#logisticsSchedulingList {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr));
+  gap: 12px; align-items: stretch;
+}
+#logisticsSchedulingList .empty { grid-column: 1 / -1; }
+.logistics-scheduling-card {
+  display: flex; flex-direction: column; gap: 9px; min-width: 0;
+  margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 13px;
+  background: var(--surface); box-shadow: 0 3px 12px rgba(15, 23, 42, .035);
+  font-size: 12px; line-height: 1.5; overflow-wrap: anywhere;
+}
+.logistics-scheduling-card > div:first-child {
+  color: var(--ink); font-size: 14px; font-weight: 750;
+}
+.logistics-scheduling-card > div:not(:first-child) { color: var(--ink-soft); }
+.logistics-scheduling-card .scheduling-feasibility-result {
+  padding: 7px 9px; border-radius: 8px; background: var(--paper-dim);
+  color: var(--ink); font-weight: 700;
+}
+.logistics-scheduling-actions {
+  display: flex; flex-wrap: wrap; gap: 7px; margin-top: auto; padding-top: 4px;
+}
+.logistics-scheduling-actions button {
+  min-height: 36px; padding: 7px 10px; border-radius: 9px; font-size: 11px;
+}
+.logistics-scheduling-actions button:disabled { cursor: not-allowed; opacity: .48; }
+.logistics-scheduling-window {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 10px; padding-top: 8px; border-top: 1px solid var(--line);
+}
+@media (max-width: 560px) {
+  .logistics-scheduling-workspace .logistics-workspace-head { align-items: stretch; flex-direction: column; }
+  .logistics-scheduling-workspace .logistics-workspace-head button { width: 100%; }
+  .logistics-scheduling-form, #logisticsSchedulingList { grid-template-columns: 1fr; }
+}
+
+.logistics-scheduling-filters {
+  display: flex; flex-wrap: wrap; align-items: end; gap: 10px;
+  margin: 12px 0 16px;
+}
+.logistics-scheduling-filters label {
+  display: grid; gap: 5px; min-width: min(100%, 190px);
+  color: var(--ink-soft); font-size: 11px; font-weight: 700;
+}
+.logistics-scheduling-filters select {
+  min-height: 38px; padding: 7px 10px; border: 1px solid var(--line);
+  border-radius: 9px; background: var(--surface); color: var(--ink);
+  font: inherit;
+}
+.logistics-scheduling-filters select:focus-visible {
+  outline: 3px solid var(--teal); outline-offset: 2px;
+}
+@media (max-width: 560px) {
+  .logistics-scheduling-filters { display: grid; grid-template-columns: 1fr 1fr; }
+  .logistics-scheduling-filters label { min-width: 0; }
+}

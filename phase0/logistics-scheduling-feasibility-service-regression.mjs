@@ -43,6 +43,17 @@ db.prepare(
   'INSERT INTO users (id,display_name,created_at,last_seen_at) VALUES (?,?,?,?)'
 ).run(userId, 'L11.7 Actor', new Date().toISOString(), new Date().toISOString());
 
+const movementNow = new Date().toISOString();
+for (const movementId of ['movement-l11-7-1', 'movement-l11-7-3']) {
+  db.prepare(`
+    INSERT INTO inventory_movements
+      (id,event_id,organization_id,location_id,product_id,quantity,movement_type,
+       reference_type,reference_id,actor_id,device_id,occurred_at,reason,metadata_json,created_at)
+    VALUES (?,?,?,?,?,1,'ADJUSTMENT',NULL,NULL,?,NULL,?,'L11.7 fixture','{}',?)
+  `).run(movementId, `event-${movementId}`, organizationId, locationId,
+    `fixture-product-${movementId}`, userId, movementNow, movementNow);
+}
+
 const actor = {
   userId,
   deviceId: null,
@@ -55,9 +66,10 @@ const first = await createLogisticsSchedulingActivity(chatId, {
   location_id: locationId,
   activity_type: 'PICKUP',
   mode: 'SCHEDULED',
+  timezone: 'Africa/Addis_Ababa',
   scheduled_start: '2026-10-10T09:00:00Z',
   scheduled_end: '2026-10-10T10:00:00Z',
-  related_movement: { id: 'movement-l11-7-1', authority: 'logistics' },
+  related_movement: { id: 'movement-l11-7-1', authority: 'inventory' },
   idempotency_key: 'l11.7-create-1',
 }, actor);
 
@@ -72,9 +84,10 @@ const second = await createLogisticsSchedulingActivity(chatId, {
   location_id: locationId,
   activity_type: 'PICKUP',
   mode: 'SCHEDULED',
+  timezone: 'Africa/Addis_Ababa',
   scheduled_start: '2026-10-10T09:30:00Z',
   scheduled_end: '2026-10-10T10:30:00Z',
-  related_movement: { id: 'movement-l11-7-1', authority: 'logistics' },
+  related_movement: { id: 'movement-l11-7-1', authority: 'inventory' },
   idempotency_key: 'l11.7-create-2',
 }, actor);
 
@@ -93,9 +106,10 @@ const third = await createLogisticsSchedulingActivity(chatId, {
   location_id: locationId,
   activity_type: 'PICKUP',
   mode: 'SCHEDULED',
+  timezone: 'Africa/Addis_Ababa',
   scheduled_start: '2026-10-10T12:00:00Z',
   scheduled_end: '2026-10-10T13:00:00Z',
-  related_movement: { id: 'movement-l11-7-3', authority: 'logistics' },
+  related_movement: { id: 'movement-l11-7-3', authority: 'inventory' },
   idempotency_key: 'l11.7-create-3',
 }, actor);
 
@@ -249,11 +263,12 @@ const contractRequest = {
   organization_id: organizationId,
   activity_type: 'PICKUP',
   mode: 'SCHEDULED',
+  timezone: 'Africa/Addis_Ababa',
   requested_start: '2026-10-10T14:00:00Z',
   requested_end: '2026-10-10T15:00:00Z',
   scheduled_start: '2026-10-10T14:00:00Z',
   scheduled_end: '2026-10-10T15:00:00Z',
-  related_movement: { id: 'movement-l11-7-provenance', authority: 'logistics' },
+  related_movement: { id: 'movement-l11-7-provenance', authority: 'inventory' },
 };
 for (const externalEvaluation of [
   { outcome: 'FEASIBLE' },
