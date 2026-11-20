@@ -10648,9 +10648,9 @@ function assertLogisticsSchedulingAuthorization(actor, organizationId, locationI
 function assertSchedulingLocation(organizationId, locationId) {
   if (!locationId) return;
   const location = db.prepare(
-    'SELECT id, organization_id FROM locations WHERE id = ? AND organization_id = ?'
+    'SELECT id, organization_id, status FROM locations WHERE id = ? AND organization_id = ?'
   ).get(String(locationId), String(organizationId));
-  if (!location) {
+  if (!location || String(location.status || '').toLowerCase() !== 'active') {
     throw Object.assign(new Error('Location does not belong to this organization'), {
       statusCode: 403, code: 'LOCATION_SCOPE_DENIED',
     });
