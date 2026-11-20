@@ -10971,6 +10971,7 @@ export async function evaluateLogisticsSchedulingActivity(chatId, activityId, ac
     location_id: row.location_id,
     activity_type: row.activity_type,
     mode: row.mode,
+    status: row.status,
     requested_start: row.requested_start,
     requested_end: row.requested_end,
     scheduled_start: options.scheduledStart ?? options.scheduled_start ?? row.scheduled_start,
