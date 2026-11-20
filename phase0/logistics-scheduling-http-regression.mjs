@@ -177,7 +177,7 @@ try {
     body: JSON.stringify({
       activity_type: 'PICKUP',
       mode: 'ON_DEMAND',
-      related_movement: { id: `movement:${orderId}` },
+      related_movement: { id: movementId },
     }),
   });
   assert.equal(movementOnly.response.status, 201, JSON.stringify(movementOnly.json));
@@ -212,8 +212,7 @@ try {
 
   // Exercise the real HTTP authorization boundary with persisted Logistics
   // contextual roles, not only the standalone policy matrix.
-  const organizationId = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
-    .get(tenant.chatId).organization_id;
+  // organizationId was resolved from the canonical tenant before fixture insertion.
   const packNow = new Date().toISOString();
   db.prepare(`INSERT INTO pack_lifecycle (
     id, organization_id, pack_id, pack_version, state, installed_at, activated_at,
