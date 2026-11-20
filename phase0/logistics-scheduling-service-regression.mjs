@@ -40,11 +40,21 @@ db.prepare(
   'INSERT INTO users (id,display_name,created_at,last_seen_at) VALUES (?,?,?,?)'
 ).run(userId, 'L11.4 Actor', new Date().toISOString(), new Date().toISOString());
 
+const movementNow = new Date().toISOString();
+db.prepare(`
+  INSERT INTO inventory_movements
+    (id,event_id,organization_id,location_id,product_id,quantity,movement_type,
+     reference_type,reference_id,actor_id,device_id,occurred_at,reason,metadata_json,created_at)
+  VALUES (?,?,?,?,?,1,'ADJUSTMENT',NULL,NULL,?,NULL,?,'L11.4 fixture','{}',?)
+`).run('movement-l11-4-1', 'event-l11-4-1', organizationId, locationId,
+  'fixture-product-l11-4', userId, movementNow, movementNow);
+
 const actor = { userId, deviceId: null, role: 'logistics_manager', roles: ['logistics_manager'], organizationId };
 const base = {
   location_id: locationId,
   activity_type: 'PICKUP',
   mode: 'SCHEDULED',
+  timezone: 'Africa/Addis_Ababa',
   scheduled_start: '2026-10-10T09:00:00Z',
   scheduled_end: '2026-10-10T10:00:00Z',
   related_movement: { id: 'movement-l11-4-1', authority: 'logistics' },
