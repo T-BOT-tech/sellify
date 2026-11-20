@@ -28,6 +28,16 @@ assert.equal(noAuthoritativeCapacity.feasible, false);
 assert.equal(noAuthoritativeCapacity.authorized, false);
 assert.equal(noAuthoritativeCapacity.execution, false);
 
+// Store-level evaluation revalidates an already normalized request. The
+// canonical Order/Fulfillment/Movement reference must survive that round-trip.
+const normalizedRequest = (await import('../app/src/verticals/logistics/scheduling-contract.js'))
+  .normalizeLogisticsSchedulingRequest(base);
+const normalizedRequestEvaluation = evaluateLogisticsSchedulingFeasibility({
+  request: normalizedRequest,
+});
+assert.equal(normalizedRequestEvaluation.evaluation, 'UNKNOWN');
+assert.equal(normalizedRequestEvaluation.reason, 'NO_AUTHORITATIVE_CAPACITY_DECISION');
+
 const overlapping = evaluateLogisticsSchedulingFeasibility({
   request: base,
   existingActivities: [{
