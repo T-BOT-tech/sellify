@@ -134,6 +134,22 @@ try {
   const start = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   const end = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
   const requestKey = `l11-scheduling-create-${suffix}`;
+  const forgedTimezone = await request(base, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json', 'Idempotency-Key': requestKey },
+    body: JSON.stringify({
+      activity_type: 'DELIVERY',
+      mode: 'WINDOWED',
+      requested_start: start,
+      requested_end: end,
+      timezone: 'Asia/Tokyo',
+      related_order: { id: orderId },
+      related_movement: { id: movementId },
+    }),
+  });
+  assert.equal(forgedTimezone.response.status, 409);
+  assert.equal(forgedTimezone.json.error?.code, 'SCHEDULING_TIMEZONE_CHANGED');
+
   const created = await request(base, {
     method: 'POST',
     headers: { ...headers, 'Content-Type': 'application/json', 'Idempotency-Key': requestKey },
@@ -143,7 +159,7 @@ try {
       mode: 'WINDOWED',
       requested_start: start,
       requested_end: end,
-      timezone: 'Asia/Tokyo', // untrusted client timezone must be ignored
+      timezone: 'Africa/Addis_Ababa', // matches canonical tenant timezone
       related_order: { id: orderId },
       related_movement: { id: movementId },
     }),
@@ -151,7 +167,7 @@ try {
   assert.equal(created.response.status, 201, JSON.stringify(created.json));
   assert.equal(created.json.activity.status, 'REQUESTED');
   assert.notEqual(created.json.activity.organizationId, 'forged-organization');
-  assert.equal(created.json.activity.timezone, 'Africa/Addis_Ababa', 'server overrides client timezone with canonical tenant timezone');
+  assert.equal(created.json.activity.timezone, 'Africa/Addis_Ababa', 'server persists canonical tenant timezone');
 
   const replayCreate = await request(base, {
     method: 'POST',
