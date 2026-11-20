@@ -299,6 +299,7 @@ assert.equal(evidenced.persistence, 'none');
 assert.equal(evidenced.mutation, false);
 
 for (const regression of [
+  'logistics-scheduling-contract-regression.mjs',
   'logistics-scheduling-service-regression.mjs',
   'logistics-scheduling-http-regression.mjs',
 ]) {
