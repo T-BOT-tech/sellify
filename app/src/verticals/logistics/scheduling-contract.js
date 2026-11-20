@@ -198,6 +198,7 @@ export function normalizeLogisticsSchedulingRequest(input = {}) {
   if (!MODES.has(mode)) invalid(`unsupported scheduling mode: ${mode}`);
 
   const window = normalizeWindow(input.requested_start, input.requested_end);
+  const scheduled = normalizeWindow(input.scheduled_start, input.scheduled_end);
   const recurrence = normalizeRecurrence(input.recurrence);
   const timezone = normalizeTimeZone(input.timezone);
 
@@ -224,7 +225,6 @@ export function normalizeLogisticsSchedulingRequest(input = {}) {
     invalid('at least one existing canonical reference is required');
   }
 
-  const scheduled = normalizeWindow(input.scheduled_start, input.scheduled_end);
   if (scheduled.requested_start && scheduled.requested_end &&
       Date.parse(scheduled.requested_end) < Date.parse(scheduled.requested_start)) {
     invalid('scheduled_end must not precede scheduled_start');
