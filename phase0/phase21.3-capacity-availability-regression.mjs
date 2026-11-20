@@ -89,6 +89,11 @@ test('legacy records without observation time remain projectable as UNKNOWN', ()
   assert.equal(projected.availabilityWindow.observedAt, null);
   assert.equal(projected.freshness, 'UNKNOWN');
   assert.equal(projected.provenanceType, 'UNKNOWN');
+  const declaredWithVerifiedQuality = projectCapacityAvailabilityEvidence({
+    ...base, source: 'DECLARED', quality: 'VERIFIED',
+  });
+  assert.equal(declaredWithVerifiedQuality.quality, 'VERIFIED');
+  assert.equal(declaredWithVerifiedQuality.provenanceType, 'SELF_REPORTED');
 });
 
 test('freshness requires explicit validity and a deterministic evaluation time', () => {
@@ -105,14 +110,6 @@ test('consistency is independent from provenance and freshness', () => {
   const projected = projectCapacityAvailabilityEvidence({ ...base, consistency: 'CONFLICTING' });
   assert.equal(projected.consistency, 'CONFLICTING');
   assert.equal(projected.provenanceType, 'UNKNOWN');
-});
-
-test('quality does not upgrade supplier-declared provenance', () => {
-  const projected = projectCapacityAvailabilityEvidence({
-    ...base, source: 'DECLARED', quality: 'VERIFIED',
-  });
-  assert.equal(projected.quality, 'VERIFIED');
-  assert.equal(projected.provenanceType, 'SELF_REPORTED');
 });
 
 test('invalid observation timestamp fails closed', () => {
