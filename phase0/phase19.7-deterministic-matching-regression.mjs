@@ -83,6 +83,38 @@ assert.equal(evaluateDiscoveryMatch({
   ...temporalCandidate,
   capacitySignals: [{ ...temporalCandidate.capacitySignals[0], status: 'INACTIVE' }],
 }, windowContext).eligible, false, 'inactive capacity is excluded');
+
+for (const status of [undefined, null, 'UNKNOWN', 'INACTIVE']) {
+  assert.equal(evaluateDiscoveryMatch({
+    ...temporalCandidate,
+    capacitySignals: [{ ...temporalCandidate.capacitySignals[0], status }],
+  }, windowContext).eligible, false, `capacity status ${String(status)} must fail closed`);
+}
+assert.equal(evaluateDiscoveryMatch(temporalCandidate, {
+  ...windowContext, evaluatedAt: '2026-11-20T00:00:00',
+}).eligible, false, 'timezone-less evaluation instant is rejected');
+assert.equal(evaluateDiscoveryMatch(temporalCandidate, {
+  ...windowContext, evaluatedAt: '2026-11-20',
+}).eligible, false, 'date-only evaluation instant is rejected');
+assert.equal(evaluateDiscoveryMatch(temporalCandidate, {
+  ...windowContext, availabilityFrom: '2026-12-01',
+}).eligible, false, 'date-only requested instant is rejected');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], observedAt: '2026-11-19T00:00:00' }],
+}, windowContext).eligible, false, 'timezone-less observation instant is rejected');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], validUntil: '2026-12-10T00:00:00' }],
+}, windowContext).eligible, false, 'timezone-less validity instant is rejected');
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{
+    ...temporalCandidate.capacitySignals[0],
+    observedAt: '2026-11-19T03:00:00+03:00',
+    validUntil: '2026-12-10T03:00:00+03:00',
+  }],
+}, windowContext).eligible, true, 'explicit timezone offsets are accepted');
 for (const availability of ['UNAVAILABLE', 'ON_REQUEST']) {
   const result = evaluateDiscoveryMatch({
     ...temporalCandidate,
