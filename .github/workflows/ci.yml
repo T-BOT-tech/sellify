@@ -70,6 +70,8 @@ jobs:
         run: npm run test:phase13.10.24-workspace-projection
       - name: Phase 13.10.24 Logistics workspace browser regression
         run: npm run test:phase13.10.24-workspace-browser
+      - name: L11 Logistics Scheduling workspace browser regression
+        run: npm run test:logistics-scheduling-browser
       - name: Phase 13.10.24 Marketplace fulfillment boundary regression
         run: npm run test:phase13.10.24-marketplace-boundary
       - name: Service delivery readiness and assignment compatibility regression
