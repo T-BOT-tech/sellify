@@ -243,6 +243,8 @@ try {
   });
   forceConflict = true;
   resourcesAvailable = true;
+  await page.locator('#serviceBookingsRefresh').click();
+  await page.locator('.service-resource-card').waitFor();
 
   // Declared-hours assessment uses the resource timezone and does not create a booking or mutate schedule state.
   await page.locator('.service-resource-availability').click();
