@@ -127,8 +127,29 @@ function normalizeReference(value, field) {
 function normalizeTime(value, field) {
   if (value === undefined || value === null || value === '') return null;
   const result = text(value, field);
-  if (Number.isNaN(Date.parse(result))) invalid(`${field} must be an ISO-8601 timestamp`);
-  return result;
+  const match = /^(\\d{4})-(\\d{2})-(\\d{2})T([01]\\d|2[0-3]):([0-5]\\d)(?::([0-5]\\d)(?:\\.(\\d{1,3}))?)?(Z|[+-](?:0\\d|1[0-4]):[0-5]\\d)$/.exec(result);
+  const timestamp = match ? Date.parse(result) : NaN;
+  const [, year, month, day, , , , , zone] = match || [];
+  const calendar = match ? new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))) : null;
+  if (!Number.isFinite(timestamp) || !calendar
+    || calendar.getUTCFullYear() !== Number(year)
+    || calendar.getUTCMonth() !== Number(month) - 1
+    || calendar.getUTCDate() !== Number(day)
+    || (zone !== 'Z' && Number(zone.slice(1, 3)) === 14 && zone.slice(4) !== '00')) {
+    invalid(`${field} must be a valid timezone-qualified ISO-8601 instant`, 'SCHEDULING_TIMESTAMP_INVALID');
+  }
+  return new Date(timestamp).toISOString();
+}
+
+function normalizeTimeZone(value) {
+  const timeZone = optionalText(value, 'timezone');
+  if (!timeZone) return null;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date(0));
+  } catch {
+    invalid('timezone must be a valid IANA timezone', 'SCHEDULING_TIMEZONE_INVALID');
+  }
+  return timeZone;
 }
 
 function normalizeWindow(start, end) {
@@ -178,7 +199,11 @@ export function normalizeLogisticsSchedulingRequest(input = {}) {
 
   const window = normalizeWindow(input.requested_start, input.requested_end);
   const recurrence = normalizeRecurrence(input.recurrence);
+  const timezone = normalizeTimeZone(input.timezone);
 
+  if ((window.requested_start || scheduled.requested_start || recurrence) && !timezone) {
+    invalid('timezone is required for scheduling windows and recurrence', 'SCHEDULING_TIMEZONE_REQUIRED');
+  }
   if (mode === 'WINDOWED' && !window.requested_start) {
     invalid('WINDOWED scheduling requires a requested time window');
   }
@@ -215,7 +240,7 @@ export function normalizeLogisticsSchedulingRequest(input = {}) {
     requested_end: window.requested_end,
     scheduled_start: scheduled.requested_start,
     scheduled_end: scheduled.requested_end,
-    timezone: optionalText(input.timezone, 'timezone'),
+    timezone,
     recurrence,
     related,
     status: normalized(input.status ?? 'REQUESTED', 'status'),
