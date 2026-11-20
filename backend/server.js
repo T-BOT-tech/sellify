@@ -130,7 +130,7 @@ import {
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, createPurchaseOrderFromProcurementAward, transitionPurchaseOrder,
   getProcurementReceipt, listProcurementReceipts, createProcurementReceipt,
   assignDeliveryCourier, getDeliveryAssignment, listDeliveryAssignments, assertCourierOwnsDelivery, transitionDeliveryAssignment,
-  createLogisticsSchedulingActivity, getLogisticsSchedulingActivity, listLogisticsSchedulingActivities, evaluateLogisticsSchedulingActivity, transitionLogisticsSchedulingActivity,
+  createLogisticsSchedulingActivity, getLogisticsSchedulingActivity, getLogisticsSchedulingTimeZone, listLogisticsSchedulingActivities, evaluateLogisticsSchedulingActivity, transitionLogisticsSchedulingActivity,
   listCreditTerms, getCreditTerms, createCreditTerms, updateCreditTerms, transitionCreditTerms,
   listReceivables, getReceivable, createReceivable, transitionReceivable, allocatePaymentToReceivable, listReceivableLedger,
   listInvoices, getInvoice, createInvoice, transitionInvoice,
@@ -3327,7 +3327,7 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
     const activities = await listLogisticsSchedulingActivities(chatId, {
       locationId, status: url.searchParams.get('status'), activityType: url.searchParams.get('activityType'),
     });
-    const timezone = location?.timeZone || tenant.timezone || null;
+    const timezone = await getLogisticsSchedulingTimeZone(chatId, locationId);
     return sendJSON(res, 200, {
       activities, timezone,
       location: location ? { id: location.id, name: location.name, timeZone: location.timeZone || null } : null,
@@ -3350,7 +3350,7 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
     if (!idempotencyKey) return sendJSON(res, 400, {
       error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' },
     }, req);
-    const timezone = location?.timeZone || tenant.timezone || null;
+    const timezone = await getLogisticsSchedulingTimeZone(chatId, locationId);
     const hasRequestedWindow = body.requestedStart != null || body.requested_start != null
       || body.requestedEnd != null || body.requested_end != null
       || body.scheduledStart != null || body.scheduled_start != null
