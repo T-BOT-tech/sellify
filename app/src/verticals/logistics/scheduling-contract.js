@@ -124,7 +124,7 @@ function normalizeReference(value, field) {
   return Object.freeze({ id, authority });
 }
 
-const LOCAL_DATE_TIME = /^(\\d{4})-(\\d{2})-(\\d{2})T([01]\\d|2[0-3]):([0-5]\\d)(?::([0-5]\\d))?$/;
+const LOCAL_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
 
 export function logisticsLocalDateTimeToIso(value, timeZone) {
   if (typeof value !== 'string') invalid('local datetime must be YYYY-MM-DDTHH:mm');
