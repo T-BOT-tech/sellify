@@ -57,7 +57,7 @@ function normalizeCapacitySignals(value) {
     periodEnd: signal.periodEnd ?? signal.period_end,
     availability: signal.availability,
     source: signal.source || 'DECLARED',
-    status: signal.status || 'ACTIVE',
+    status: signal.status,
     observedAt: signal.observedAt ?? signal.observed_at ?? null,
     validUntil: signal.validUntil ?? signal.valid_until ?? null,
     quality: signal.quality || (signal.observedAt || signal.observed_at ? 'SELF_REPORTED' : 'UNKNOWN'),
