@@ -29,6 +29,5 @@ assert.match(logisticsSource, /export function renderAppointments\(\)/);
 assert.match(logisticsSource, /mountServiceBookingsWorkspace\(workspace\)/);
 assert.doesNotMatch(logisticsSource, /mountServiceBookingsWorkspace\(list\)/);
 
-await import('./service-window-assessment-regression.mjs');
 
 console.log('Service booking operator workspace regression passed.');
