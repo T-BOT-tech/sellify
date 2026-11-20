@@ -10666,7 +10666,8 @@ function resolveLogisticsSchedulingTimeZone(organizationId, locationId = null) {
       statusCode: 409, code: 'SCHEDULING_TIMEZONE_INVALID',
     });
   }
-  let timezone = String(organization.timezone || 'UTC').trim() || 'UTC';
+  const organizationTimeZone = String(organization.timezone || '').trim();
+  let timezone = organizationTimeZone;
   if (locationId) {
     const location = db.prepare(
       "SELECT id, timezone FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'"
@@ -10676,7 +10677,12 @@ function resolveLogisticsSchedulingTimeZone(organizationId, locationId = null) {
         statusCode: 403, code: 'LOCATION_SCOPE_DENIED',
       });
     }
-    timezone = String(location.timezone || timezone).trim() || timezone;
+    timezone = String(location.timezone || organizationTimeZone).trim();
+  }
+  if (!timezone) {
+    throw Object.assign(new Error('Organization or location timezone is not configured'), {
+      statusCode: 409, code: 'LOGISTICS_SCHEDULING_TIMEZONE_REQUIRED',
+    });
   }
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date());
