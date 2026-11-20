@@ -164,7 +164,7 @@ try {
     method: 'POST',
     headers: { ...headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-movement-only-${suffix}` },
     body: JSON.stringify({
-      activity_type: 'PICKUP',
+      activity_type: 'DELIVERY',
       mode: 'ON_DEMAND',
       related_movement: { id: `movement:${orderId}` },
     }),
