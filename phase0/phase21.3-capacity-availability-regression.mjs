@@ -108,8 +108,14 @@ test('consistency is independent from provenance and freshness', () => {
 });
 
 test('invalid observation timestamp fails closed', () => {
-  assert.throws(() => projectCapacityAvailabilityEvidence({ ...base, observedAt: 'not-a-date' }), /observedAt must be a valid ISO-8601 date\/time/);
+  assert.throws(() => projectCapacityAvailabilityEvidence({ ...base, observedAt: 'not-a-date' }), /timezone-qualified ISO-8601 instant/);
+  assert.throws(() => projectCapacityAvailabilityEvidence({ ...base, observedAt: '2026-09-15T10:00:00' }), /timezone-qualified ISO-8601 instant/);
+  assert.throws(() => projectCapacityAvailabilityEvidence({ ...base, observedAt: '2026-09-15' }), /timezone-qualified ISO-8601 instant/);
   assert.throws(() => projectCapacityAvailabilityEvidence(base, { evaluatedAt: '2026-09-14T00:00:00Z' }), /must not be earlier than signal.observedAt/);
+  assert.throws(() => projectCapacityAvailabilityEvidence(base, { evaluatedAt: '2026-09-18T00:00:00' }), /timezone-qualified ISO-8601 instant/);
+  assert.equal(projectCapacityAvailabilityEvidence({
+    ...base, observedAt: '2026-09-15T13:00:00+03:00',
+  }).availabilityWindow.observedAt, '2026-09-15T10:00:00.000Z');
 });
 
 test('projection is immutable', () => {
