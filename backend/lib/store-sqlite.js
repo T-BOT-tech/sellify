@@ -11014,7 +11014,7 @@ export async function evaluateLogisticsSchedulingActivity(chatId, activityId, ac
     requested_end: row.requested_end,
     scheduled_start: scheduledStart,
     scheduled_end: scheduledEnd,
-    timezone: row.timezone,
+    timezone: schedulingTimezone,
     recurrence: parseJSON(row.recurrence_json, null),
     related_order: row.related_order_id ? { id: row.related_order_id } : null,
     related_fulfillment: row.related_fulfillment_id ? { id: row.related_fulfillment_id } : null,
