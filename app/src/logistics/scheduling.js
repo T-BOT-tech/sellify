@@ -85,7 +85,7 @@ function formatWindow(start, end, timeZone = workspaceTimezone) {
 
 export function localDateTimeToIso(value, timeZone) {
   const input = String(value || '').trim();
-  const match = /^(\\d{4})-(\\d{2})-(\\d{2})T([01]\\d|2[0-3]):([0-5]\\d)$/.exec(input);
+  const match = /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d)$/.exec(input);
   if (!match || !timeZone) {
     throw Object.assign(new Error('A local date/time and canonical IANA timezone are required'), {
       code: 'SCHEDULING_LOCAL_TIME_REQUIRED',
