@@ -287,13 +287,13 @@ export function logisticsSchedulingWorkspaceShell() {
     </form>` : '';
   const scopedLocations = scopedSchedulingLocationIds();
   const selectedLocationId = String(config.locationId || scopedLocations[0] || '');
-  const locationOptions = (scopedLocations.length ? '' : '<option value="">' + escapeHtml(t('logisticsSchedulingOrganization')) + '</option>')
+  const locationOptions = (scopedLocations.length ? '' : '<option value="">' + escapeHtml(t('serviceResourceOrganizationWide')) + '</option>')
     + schedulingLocations().map(location => '<option value="' + escapeHtml(location.id) + '"'
       + (String(location.id) === selectedLocationId ? ' selected' : '') + '>'
       + escapeHtml(location.name || location.id) + '</option>').join('');
   const filterMarkup = `
     <div class="logistics-scheduling-filters" aria-label="${t('logisticsSchedulingFilters')}">
-      <label>${t('logisticsSchedulingLocationFilter')}
+      <label>${t('whLocation')}
         <select id="logisticsSchedulingLocationFilter" data-scheduling-filter>${locationOptions}</select>
       </label>
       <label>${t('logisticsSchedulingStatusFilter')}
@@ -365,7 +365,7 @@ async function refresh(root) {
     }
     if (!response.ok) throw new Error(data?.error?.message || `Scheduling request failed (${response.status})`);
     const timezoneLabel = root.querySelector('#logisticsSchedulingTimezone');
-    if (timezoneLabel) timezoneLabel.textContent = `${t('logisticsSchedulingTimezone')}: ${data.timezone || 'UTC'}`;
+    if (timezoneLabel) timezoneLabel.textContent = `${t('serviceAvailabilityTimezone')}: ${data.timezone || 'UTC'}`;
     activities = (Array.isArray(data.activities) ? data.activities : []).map(activity => ({
       ...activity,
       lastEvaluation: lastEvaluations.get(String(activity.id)) || activity.lastEvaluation || null,
