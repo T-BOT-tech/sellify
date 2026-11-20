@@ -131,10 +131,10 @@ function renderActivity(activity) {
   return `
     <article class="logistics-meta logistics-scheduling-card" data-scheduling-card="${escapeHtml(activity.id)}">
       <div><strong>${escapeHtml(activity.activityType || 'Activity')}</strong> · ${escapeHtml(activity.status || 'UNKNOWN')}</div>
-      <div>Requested: ${escapeHtml(formatWindow(activity.requestedStart, activity.requestedEnd, activity.timezone))}</div>
-      <div>Scheduled: ${escapeHtml(formatWindow(activity.scheduledStart, activity.scheduledEnd, activity.timezone))}</div>
+      <div>${escapeHtml(t('logisticsSchedulingRequested'))}: ${escapeHtml(formatWindow(activity.requestedStart, activity.requestedEnd, activity.timezone))}</div>
+      <div>${escapeHtml(t('logisticsSchedulingScheduled'))}: ${escapeHtml(formatWindow(activity.scheduledStart, activity.scheduledEnd, activity.timezone))}</div>
       <div>${escapeHtml(t('serviceAvailabilityTimezone'))}: ${escapeHtml(activity.timezone || 'UTC')}</div>
-      <div>Reference: ${escapeHtml(activity.relatedFulfillmentId || activity.relatedOrderId || activity.relatedMovementId || '—')}</div>
+      <div>${escapeHtml(t('logisticsSchedulingReference'))}: ${escapeHtml(activity.relatedFulfillmentId || activity.relatedOrderId || activity.relatedMovementId || '—')}</div>
       ${activity.lastEvaluation ? `<div class="scheduling-feasibility-result" role="status">Feasibility: ${escapeHtml(activity.lastEvaluation)}</div>` : ''}
       <div class="logistics-scheduling-actions">
         <button type="button" class="btn-secondary" data-scheduling-evaluate="${escapeHtml(activity.id)}">${t('logisticsSchedulingEvaluate')}</button>
