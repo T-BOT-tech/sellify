@@ -3931,7 +3931,7 @@ function normalizeSupplierNetworkCapacityInput(input={}) {
   return { subjectType, subjectId, quantity, unit, periodType,
     periodStart: periodStart == null ? null : clean(periodStart, 100),
     periodEnd: periodEnd == null ? null : clean(periodEnd, 100),
-    availability, visibility, validUntil, metadata };
+    availability, visibility, validUntil, validUntilProvided, metadata };
 }
 function supplierNetworkCapacityRow(id,organizationId){return db.prepare('SELECT * FROM supplier_network_capacity_signals WHERE id=? AND organization_id=?').get(String(id),String(organizationId))}
 export async function listSupplierNetworkCapacities(chatId,options={}){ensureDatabase();const org=await tenantOrganizationId(chatId);const w=['organization_id=?'],p=[org];if(options.status&&options.status!=='all'){w.push('status=?');p.push(String(options.status).toUpperCase())}if(options.subjectType||options.subject_type){w.push('subject_type=?');p.push(String(options.subjectType||options.subject_type).toUpperCase())}if(options.subjectId||options.subject_id){w.push('subject_id=?');p.push(String(options.subjectId||options.subject_id))}if(options.availability){w.push('availability=?');p.push(String(options.availability).toUpperCase())}p.push(Math.max(1,Math.min(500,Number(options.limit)||100)));return db.prepare(`SELECT * FROM supplier_network_capacity_signals WHERE ${w.join(' AND ')} ORDER BY updated_at DESC,id ASC LIMIT ?`).all(...p).map(supplierNetworkCapacityFromRow)}
