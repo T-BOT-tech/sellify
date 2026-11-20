@@ -1,3 +1,4 @@
+// Import the pure timezone contract, not the browser-dependent workspace module.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
