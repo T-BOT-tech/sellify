@@ -28,7 +28,7 @@ import { decideEventReplay } from './event-replay.js';
 import { assertPackLifecyclePrecondition, getPackLifecycleManifest } from './pack-lifecycle-readiness.js';
 import { assertUntrustedPaymentEvidenceShape, normalizePaymentEvidenceSource } from './payments/payment-evidence-authority.js';
 import { assertAuthenticatedNotificationContext, assertProviderNotificationEvidenceShape } from './payments/provider-notification-authority.js';
-import { normalizeLogisticsSchedulingRequest } from '../../app/src/verticals/logistics/scheduling-contract.js';
+import { normalizeLogisticsSchedulingRequest, logisticsLocalDateTimeToIso } from '../../app/src/verticals/logistics/scheduling-contract.js';
 import { normalizeLogisticsServiceDelivery } from '../../app/src/verticals/logistics/service-delivery-model-contract.js';
 import { evaluateLogisticsSchedulingFeasibility } from '../../app/src/verticals/logistics/scheduling-feasibility-contract.js';
 import { decideLogisticsScheduling } from '../../app/src/verticals/logistics/scheduling-decision-contract.js';
@@ -10648,25 +10648,143 @@ function assertLogisticsSchedulingAuthorization(actor, organizationId, locationI
 function assertSchedulingLocation(organizationId, locationId) {
   if (!locationId) return;
   const location = db.prepare(
-    'SELECT id, organization_id FROM locations WHERE id = ? AND organization_id = ?'
+    "SELECT id, organization_id FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'"
   ).get(String(locationId), String(organizationId));
   if (!location) {
-    throw Object.assign(new Error('Location does not belong to this organization'), {
+    throw Object.assign(new Error('Location does not belong to this organization or is inactive'), {
       statusCode: 403, code: 'LOCATION_SCOPE_DENIED',
     });
   }
 }
 
-function assertSchedulingFulfillment(organizationId, fulfillmentId) {
-  if (!fulfillmentId) return;
-  const fulfillment = db.prepare(
-    'SELECT id, organization_id FROM fulfillments WHERE id = ? AND organization_id = ?'
-  ).get(String(fulfillmentId), String(organizationId));
-  if (!fulfillment) {
-    throw Object.assign(new Error('Referenced fulfillment does not belong to this organization'), {
-      statusCode: 409, code: 'FULFILLMENT_REFERENCE_INVALID',
+function resolveLogisticsSchedulingTimeZone(organizationId, locationId = null) {
+  const organization = db.prepare(
+    'SELECT timezone FROM organizations WHERE id = ?'
+  ).get(String(organizationId));
+  if (!organization) {
+    throw Object.assign(new Error('Scheduling organization timezone is unavailable'), {
+      statusCode: 409, code: 'SCHEDULING_TIMEZONE_INVALID',
     });
   }
+  let timezone = String(organization.timezone || 'UTC').trim() || 'UTC';
+  if (locationId) {
+    const location = db.prepare(
+      "SELECT id, timezone FROM locations WHERE id = ? AND organization_id = ? AND status = 'active'"
+    ).get(String(locationId), String(organizationId));
+    if (!location) {
+      throw Object.assign(new Error('Scheduling location is outside this organization or inactive'), {
+        statusCode: 403, code: 'LOCATION_SCOPE_DENIED',
+      });
+    }
+    timezone = String(location.timezone || timezone).trim() || timezone;
+  }
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date());
+  } catch {
+    throw Object.assign(new Error('Scheduling timezone is not a valid IANA timezone'), {
+      statusCode: 409, code: 'SCHEDULING_TIMEZONE_INVALID',
+    });
+  }
+  return timezone;
+}
+
+function buildLogisticsSchedulingRequest(input, organizationId, locationId, timezone) {
+  const localPair = (startLocalKey, endLocalKey, startKey, endKey) => {
+    const localStart = input[startLocalKey];
+    const localEnd = input[endLocalKey];
+    if ((localStart == null || localStart === '') !== (localEnd == null || localEnd === '')) {
+      throw Object.assign(new Error(`${startLocalKey} and ${endLocalKey} must be supplied together`), {
+        statusCode: 400, code: 'SCHEDULING_WINDOW_REQUIRED',
+      });
+    }
+    if (localStart != null && localStart !== '') {
+      return {
+        [startKey]: logisticsLocalDateTimeToIso(String(localStart), timezone),
+        [endKey]: logisticsLocalDateTimeToIso(String(localEnd), timezone),
+      };
+    }
+    return {
+      [startKey]: input[startKey] ?? null,
+      [endKey]: input[endKey] ?? null,
+    };
+  };
+  const requested = localPair('requested_start_local', 'requested_end_local', 'requested_start', 'requested_end');
+  const scheduled = localPair('scheduled_start_local', 'scheduled_end_local', 'scheduled_start', 'scheduled_end');
+  return normalizeLogisticsSchedulingRequest({
+    ...input,
+    ...requested,
+    ...scheduled,
+    organization_id: String(organizationId),
+    location_id: locationId,
+    timezone,
+    status: 'REQUESTED',
+  });
+}
+
+function assertSchedulingOrder(organizationId, orderId) {
+  const order = db.prepare(`
+    SELECT o.server_order_id
+    FROM orders o
+    JOIN tenants t ON t.chat_id = o.chat_id
+    WHERE o.server_order_id = ? AND t.organization_id = ?
+  `).get(String(orderId), String(organizationId));
+  if (!order) {
+    throw Object.assign(new Error('Referenced order does not belong to this organization'), {
+      statusCode: 409, code: 'ORDER_REFERENCE_INVALID',
+    });
+  }
+  return String(order.server_order_id);
+}
+
+function assertSchedulingReferences(organizationId, related = {}) {
+  let orderId = related.order?.id ? String(related.order.id) : null;
+  const movementId = related.movement?.id ? String(related.movement.id) : null;
+
+  // The existing Logistics movement projection is deterministic and resolves
+  // to its canonical Core Order. It is not a second persisted movement ledger.
+  if (movementId) {
+    const prefix = 'movement:';
+    const projectedOrderId = movementId.startsWith(prefix) ? movementId.slice(prefix.length) : '';
+    if (!projectedOrderId || (orderId && orderId !== projectedOrderId)) {
+      throw Object.assign(new Error('Movement reference must resolve to the same canonical Core Order'), {
+        statusCode: 409, code: 'MOVEMENT_REFERENCE_INVALID',
+      });
+    }
+    orderId = projectedOrderId;
+  }
+
+  if (related.fulfillment?.id) {
+    const fulfillment = db.prepare(
+      'SELECT id, server_order_id FROM fulfillments WHERE id = ? AND organization_id = ?'
+    ).get(String(related.fulfillment.id), String(organizationId));
+    if (!fulfillment) {
+      throw Object.assign(new Error('Referenced fulfillment does not belong to this organization'), {
+        statusCode: 409, code: 'FULFILLMENT_REFERENCE_INVALID',
+      });
+    }
+    const fulfillmentOrderId = String(fulfillment.server_order_id || '');
+    if (!fulfillmentOrderId || (orderId && orderId !== fulfillmentOrderId)) {
+      throw Object.assign(new Error('Order, movement, and fulfillment references must identify the same Core Order'), {
+        statusCode: 409, code: 'SCHEDULING_REFERENCE_MISMATCH',
+      });
+    }
+    orderId = fulfillmentOrderId;
+  }
+
+  if (orderId) assertSchedulingOrder(organizationId, orderId);
+}
+
+export async function getLogisticsSchedulingTimeZone(chatId, locationId = null) {
+  ensureDatabase();
+  const tenant = await getTenant(chatId);
+  if (!tenant?.organizationId) {
+    throw Object.assign(new Error('Scheduling organization is required'), {
+      statusCode: 409, code: 'ORGANIZATION_REQUIRED',
+    });
+  }
+  const resolvedLocationId = String(locationId || '').trim() || null;
+  const timezone = resolveLogisticsSchedulingTimeZone(String(tenant.organizationId), resolvedLocationId);
+  return { locationId: resolvedLocationId, timezone };
 }
 
 export async function createLogisticsSchedulingActivity(chatId, input = {}, actor = null) {
@@ -10679,28 +10797,15 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
   }
 
   const organizationId = String(tenant.organizationId);
-  const request = normalizeLogisticsSchedulingRequest({
-    ...input,
-    organization_id: organizationId,
-    status: 'REQUESTED',
-  });
+  const locationId = String(input.locationId ?? input.location_id ?? actor?.locationId ?? '').trim() || null;
   const idempotencyKey = String(input.idempotencyKey ?? input.idempotency_key ?? '').trim();
   if (!idempotencyKey) {
     throw Object.assign(new Error('Idempotency key is required'), {
       statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED',
     });
   }
-  if (request.organization_id !== organizationId) {
-    throw Object.assign(new Error('Scheduling organization mismatch'), {
-      statusCode: 403, code: 'ORGANIZATION_MISMATCH',
-    });
-  }
 
   const actorUserId = actor?.userId ? String(actor.userId) : null;
-  const requestHash = schedulingRequestHash(request);
-  assertSchedulingLocation(organizationId, request.location_id);
-  assertSchedulingFulfillment(organizationId, request.related.fulfillment?.id);
-
   db.exec('BEGIN IMMEDIATE');
   try {
     const existing = db.prepare(
@@ -10708,6 +10813,7 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
     ).get(organizationId, idempotencyKey);
 
     if (existing) {
+      const request = buildLogisticsSchedulingRequest(input, organizationId, locationId, String(existing.timezone || 'UTC'));
       const existingRequest = {
         organization_id: existing.organization_id,
         location_id: existing.location_id,
@@ -10725,7 +10831,7 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
           movement: existing.related_movement_id ? { id: existing.related_movement_id } : null,
         },
       };
-      if (schedulingRequestHash(existingRequest) !== requestHash) {
+      if (schedulingRequestHash(existingRequest) !== schedulingRequestHash(request)) {
         throw Object.assign(new Error('Idempotency key was already used with a different scheduling request'), {
           statusCode: 409, code: 'IDEMPOTENCY_CONFLICT',
         });
@@ -10734,8 +10840,14 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
       return { ...logisticsSchedulingRow(existing), idempotent: true };
     }
 
+    const timezone = resolveLogisticsSchedulingTimeZone(organizationId, locationId);
+    const request = buildLogisticsSchedulingRequest(input, organizationId, locationId, timezone);
+    assertSchedulingLocation(organizationId, request.location_id);
+    assertSchedulingReferences(organizationId, request.related);
+    assertLogisticsSchedulingAuthorization(actor, organizationId, request.location_id, 'logistics:scheduling:request');
+
     const now = nowIso();
-    const id = String(input.id || crypto.randomUUID());
+    const id = crypto.randomUUID();
     db.prepare(`
       INSERT INTO logistics_scheduling_activities
         (id, organization_id, location_id, activity_type, mode, status,
@@ -10781,7 +10893,6 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
     throw error;
   }
 }
-
 export async function getLogisticsSchedulingActivity(chatId, activityId) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
