@@ -69,7 +69,7 @@ const first = await createLogisticsSchedulingActivity(chatId, {
   timezone: 'Africa/Addis_Ababa',
   scheduled_start: '2026-10-10T09:00:00Z',
   scheduled_end: '2026-10-10T10:00:00Z',
-  related_movement: { id: 'movement-l11-7-1', authority: 'logistics' },
+  related_movement: { id: 'movement-l11-7-1', authority: 'inventory' },
   idempotency_key: 'l11.7-create-1',
 }, actor);
 
@@ -87,7 +87,7 @@ const second = await createLogisticsSchedulingActivity(chatId, {
   timezone: 'Africa/Addis_Ababa',
   scheduled_start: '2026-10-10T09:30:00Z',
   scheduled_end: '2026-10-10T10:30:00Z',
-  related_movement: { id: 'movement-l11-7-1', authority: 'logistics' },
+  related_movement: { id: 'movement-l11-7-1', authority: 'inventory' },
   idempotency_key: 'l11.7-create-2',
 }, actor);
 
@@ -109,7 +109,7 @@ const third = await createLogisticsSchedulingActivity(chatId, {
   timezone: 'Africa/Addis_Ababa',
   scheduled_start: '2026-10-10T12:00:00Z',
   scheduled_end: '2026-10-10T13:00:00Z',
-  related_movement: { id: 'movement-l11-7-3', authority: 'logistics' },
+  related_movement: { id: 'movement-l11-7-3', authority: 'inventory' },
   idempotency_key: 'l11.7-create-3',
 }, actor);
 
@@ -268,7 +268,7 @@ const contractRequest = {
   requested_end: '2026-10-10T15:00:00Z',
   scheduled_start: '2026-10-10T14:00:00Z',
   scheduled_end: '2026-10-10T15:00:00Z',
-  related_movement: { id: 'movement-l11-7-provenance', authority: 'logistics' },
+  related_movement: { id: 'movement-l11-7-provenance', authority: 'inventory' },
 };
 for (const externalEvaluation of [
   { outcome: 'FEASIBLE' },
