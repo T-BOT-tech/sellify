@@ -111,7 +111,7 @@ import {
   getOrCreateUserByTelegram, listUserMemberships, listTenantMemberships, ensureMembership, createTenantForUser,
   getTelegramStorefrontConfig, upsertTelegramStorefrontConfig, verifyTelegramStorefront,
   createSession, authenticateSessionToken, revokeSession, createAuthChallenge, consumeAuthChallenge, getAuthChallengeForTenantCreation,
-  listOrganizationLocations, getOrganizationLocation, createOrganizationLocation, updateOrganizationLocation,
+  listOrganizationLocations, createOrganizationLocation, updateOrganizationLocation,
   listCustomers, getCustomer, upsertCustomer, updateCustomer,
   listInventoryMovements, getInventoryBalances, appendInventoryMovement, appendInventoryMovementBatch,
   listRestaurantRecipes, createRestaurantRecipe, updateRestaurantRecipe,
