@@ -133,6 +133,10 @@ function renderActivity(activity) {
          <label>${t('logisticsSchedulingScheduledEnd')} <input type="datetime-local" data-scheduled-end="${escapeHtml(activity.id)}"></label>
        </div>`
     : '';
+  const needsReason = targets.some(target => ['CANCELLED', 'MISSED', 'EXPIRED', 'FAILED'].includes(target));
+  const reasonInput = needsReason
+    ? `<label>${t('logisticsSchedulingReason')} <input type="text" maxlength="500" data-scheduling-reason="${escapeHtml(activity.id)}"></label>`
+    : '';
   return `
     <article class="logistics-meta logistics-scheduling-card" data-scheduling-card="${escapeHtml(activity.id)}">
       <div><strong>${escapeHtml(activity.activityType || 'Activity')}</strong> · ${escapeHtml(activity.status || 'UNKNOWN')}</div>
@@ -146,6 +150,7 @@ function renderActivity(activity) {
         ${transitionButtons}
       </div>
       ${scheduleWindow}
+      ${reasonInput}
     </article>`;
 }
 
@@ -513,6 +518,17 @@ async function transitionActivity(root, activityId, target, button) {
       return;
     }
     Object.assign(body, candidateWindow);
+  }
+  if (['CANCELLED', 'MISSED', 'EXPIRED', 'FAILED'].includes(target)) {
+    const reason = root.querySelector(`[data-scheduling-reason="${CSS.escape(String(activityId))}"]`)?.value?.trim() || '';
+    if (!reason) {
+      lastState = 'READY';
+      feedback = t('logisticsSchedulingReasonRequired');
+      renderWorkspace(root);
+      return;
+    }
+    if (target === 'FAILED') body.failureReason = reason;
+    else body.reason = reason;
   }
   const transitionKey = `${activityId}:${target}:${activity.version}`;
   const key = pendingTransitionKeys.get(transitionKey) || commandKey();

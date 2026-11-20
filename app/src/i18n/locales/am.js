@@ -189,6 +189,8 @@ export default {
     logisticsSchedulingScheduledWindow: "የተመደበው የጊዜ ክልል",
     logisticsSchedulingReference: "ማጣቀሻ",
     logisticsSchedulingTimeZoneMissing: "ለዚህ ድርጅት ወይም ቦታ የሰዓት ሰቅ አልተዋቀረም።",
+    logisticsSchedulingReason: "ምክንያት",
+    logisticsSchedulingReasonRequired: "ይህን የሕይወት ዑደት ሽግግር ከማድረግዎ በፊት ምክንያት ያስገቡ።",
     serviceAvailabilityEmpty: "የሥራ ሰዓት አልተዋቀረም።",
     serviceAvailabilityDeclared: "የሥራ ሰዓት ብቻ ተገልጿል",
     serviceAvailabilitySave: "የሥራ ሰዓት አስቀምጥ",

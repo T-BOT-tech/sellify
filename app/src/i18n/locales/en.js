@@ -310,6 +310,8 @@ export default {
     logisticsSchedulingScheduledWindow: "Scheduled window",
     logisticsSchedulingReference: "Reference",
     logisticsSchedulingTimeZoneMissing: "A timezone is not configured for this organization or location.",
+    logisticsSchedulingReason: "Reason",
+    logisticsSchedulingReasonRequired: "Enter a reason before this lifecycle transition.",
     serviceAvailabilityEmpty: "No schedule configured.",
     serviceAvailabilityDeclared: "Schedule declared only",
     serviceAvailabilitySave: "Save schedule",

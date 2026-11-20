@@ -62,6 +62,7 @@ try {
   let schedulingActivities = [];
   const schedulingReads = [];
   const schedulingCreates = [];
+  const schedulingTransitions = [];
   await page.route('**/tenants/test-tenant/logistics/scheduling**', async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -78,7 +79,29 @@ try {
       });
       return;
     }
-    if (request.method() === 'POST') {
+    if (request.method() === 'POST' && url.pathname.endsWith('/evaluate')) {
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          evaluation: { evaluation: 'UNKNOWN', reason: 'NO_AUTHORITATIVE_CAPACITY_DECISION' },
+          state: 'UNKNOWN',
+        }),
+      });
+      return;
+    }
+    if (request.method() === 'PATCH' && url.pathname.endsWith('/transition')) {
+      const body = request.postDataJSON();
+      schedulingTransitions.push(body);
+      schedulingActivities = schedulingActivities.map(activity => ({
+        ...activity, status: body.status, version: activity.version + 1,
+      }));
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ activity: schedulingActivities[0] }),
+      });
+      return;
+    }
+    if (request.method() === 'POST' && url.pathname.endsWith('/logistics/scheduling')) {
       const body = request.postDataJSON();
       schedulingCreates.push(body);
       const activity = {
@@ -243,6 +266,29 @@ try {
   assert.equal(schedulingCreates[0].requested_start, '2026-11-16T06:00:00.000Z');
   assert.equal(schedulingCreates[0].requested_end, '2026-11-16T07:00:00.000Z');
   assert.equal(schedulingCreates[0].location_id, 'loc-browser-1');
+
+  // Feasibility evaluation is read-only and UNKNOWN must not enable scheduling.
+  await page.locator('[data-scheduled-start="scheduling-browser-1"]').fill('2026-11-16T09:30');
+  await page.locator('[data-scheduled-end="scheduling-browser-1"]').fill('2026-11-16T10:30');
+  const evaluationResponse = page.waitForResponse(response =>
+    response.request().method() === 'POST' && response.url().endsWith('/evaluate'));
+  await page.locator('[data-scheduling-evaluate="scheduling-browser-1"]').click();
+  await evaluationResponse;
+  assert.equal(await page.locator('[data-scheduling-transition="SCHEDULED"]').isDisabled(), true,
+    'UNKNOWN feasibility must keep the SCHEDULED transition disabled');
+  assert.equal(schedulingTransitions.length, 0, 'evaluation must not mutate the scheduling lifecycle');
+
+  // Terminal transitions require an operator reason before the command is sent.
+  await page.locator('[data-scheduling-transition="CANCELLED"]').click();
+  assert.equal(schedulingTransitions.length, 0, 'cancellation without a reason must not reach the API');
+  await page.locator('[data-scheduling-reason="scheduling-browser-1"]').fill('Buyer cancelled request');
+  await page.locator('[data-scheduling-transition="CANCELLED"]').click();
+  await page.waitForFunction(() =>
+    document.querySelector('[data-scheduling-card="scheduling-browser-1"]')?.textContent.includes('CANCELLED'));
+  assert.equal(schedulingTransitions.length, 1);
+  assert.equal(schedulingTransitions[0].status, 'CANCELLED');
+  assert.equal(schedulingTransitions[0].reason, 'Buyer cancelled request');
+
   assert.equal(pageErrors.length, 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
 
   console.log('Phase 13.10.24 Logistics workspace browser regression: PASS');

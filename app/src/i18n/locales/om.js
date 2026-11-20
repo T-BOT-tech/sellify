@@ -188,6 +188,8 @@ export default {
     logisticsSchedulingScheduledWindow: "Yeroo saganteeffame",
     logisticsSchedulingReference: "Wabii",
     logisticsSchedulingTimeZoneMissing: "Naannoon sa'aatii dhaabbata ykn bakka kanaaf hin qindaa'in.",
+    logisticsSchedulingReason: "Sababa",
+    logisticsSchedulingReasonRequired: "Ce’umsa haala kanaa dura sababa galchi.",
     serviceAvailabilityEmpty: "Sagantaan hin qindaa'in.",
     serviceAvailabilityDeclared: "Sa'aatiin hojii ibsame qofa",
     serviceAvailabilitySave: "Sagantaa olkaa'i",
