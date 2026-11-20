@@ -86,6 +86,9 @@ assert.throws(() => normalizeLogisticsSchedulingRequest({
 assert.throws(() => normalizeLogisticsSchedulingRequest({
   ...base, requested_start: '2026-10-04',
 }), /timezone-qualified ISO-8601 instant/);
+assert.throws(() => normalizeLogisticsSchedulingRequest({
+  ...base, requested_start: '2026-10-04T08:00:00-00:00',
+}), /timezone-qualified ISO-8601 instant/);
 assert.equal(normalizeLogisticsSchedulingRequest({
   ...base, requested_start: '2026-10-04T11:00:00+03:00',
 }).requested_start, '2026-10-04T11:00:00+03:00');
