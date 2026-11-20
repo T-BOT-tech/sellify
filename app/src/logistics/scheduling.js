@@ -133,6 +133,7 @@ function renderActivity(activity) {
       <div><strong>${escapeHtml(activity.activityType || 'Activity')}</strong> · ${escapeHtml(activity.status || 'UNKNOWN')}</div>
       <div>Requested: ${escapeHtml(formatWindow(activity.requestedStart, activity.requestedEnd, activity.timezone))}</div>
       <div>Scheduled: ${escapeHtml(formatWindow(activity.scheduledStart, activity.scheduledEnd, activity.timezone))}</div>
+      <div>${escapeHtml(t('serviceAvailabilityTimezone'))}: ${escapeHtml(activity.timezone || 'UTC')}</div>
       <div>Reference: ${escapeHtml(activity.relatedFulfillmentId || activity.relatedOrderId || activity.relatedMovementId || '—')}</div>
       ${activity.lastEvaluation ? `<div class="scheduling-feasibility-result" role="status">Feasibility: ${escapeHtml(activity.lastEvaluation)}</div>` : ''}
       <div class="logistics-scheduling-actions">
