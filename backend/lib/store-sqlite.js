@@ -10740,8 +10740,8 @@ function assertSchedulingReferences(organizationId, related = {}) {
   let orderId = related.order?.id ? String(related.order.id) : null;
   const movementId = related.movement?.id ? String(related.movement.id) : null;
 
-  // The existing Logistics movement projection is deterministic and resolves
-  // to its canonical Core Order. It is not a second persisted movement ledger.
+  // The Logistics movement reference is a deterministic projection to its
+  // canonical Core Order. It is not a second persisted movement ledger.
   if (movementId) {
     const prefix = 'movement:';
     const projectedOrderId = movementId.startsWith(prefix) ? movementId.slice(prefix.length) : '';
