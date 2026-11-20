@@ -143,6 +143,7 @@ try {
       sessionToken: 'test-session',
       syncUrl: window.location.origin,
       logisticsEnabled: true,
+      locationId: null,
       currentStaffRole: 'logistics_courier',
       authUser: { id: 'courier-browser-1' },
       userId: 'courier-browser-1',
@@ -205,6 +206,7 @@ try {
     state.setConfig({
       ...state.config,
       currentStaffRole: 'logistics_viewer',
+      locationId: null,
       contextualRoles: [{ role: 'logistics_viewer', scopeType: 'LOCATION', scopeId: 'loc-browser-1' }],
       authRoles: [],
     });
@@ -222,6 +224,7 @@ try {
     state.setConfig({
       ...state.config,
       currentStaffRole: 'logistics_manager',
+      locationId: null,
       contextualRoles: [{ role: 'logistics_manager', scopeType: 'LOCATION', scopeId: 'loc-browser-1' }],
       authRoles: [],
     });
