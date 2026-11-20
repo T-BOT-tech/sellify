@@ -516,6 +516,7 @@ try {
 
   const schedulingUi = await readFile(path.join(root, 'app/src/logistics/scheduling.js'), 'utf8');
   const logisticsUi = await readFile(path.join(root, 'app/src/logistics/ui.js'), 'utf8');
+  const styles = await readFile(path.join(root, 'app/styles.css'), 'utf8');
   const storeSource = await readFile(path.join(root, 'backend/lib/store-sqlite.js'), 'utf8');
   const schedulingContract = await readFile(path.join(root, 'app/src/verticals/logistics/scheduling-contract.js'), 'utf8');
   const i18nSource = await readFile(path.join(root, 'app/src/ui/i18n.js'), 'utf8');
@@ -526,6 +527,7 @@ try {
   assert.doesNotMatch(schedulingUi, /Intl\.DateTimeFormat\(\)\.resolvedOptions\(\)\.timeZone/);
   assert.doesNotMatch(schedulingUi, /new Date\(startValue\)\.toISOString\(\)/);
   assert.match(logisticsUi, /mountLogisticsSchedulingWorkspace/);
+  assert.match(styles, /\\.logistics-scheduling-workspace/);
   assert.match(storeSource, /resolveLogisticsSchedulingTimeZone/);
   assert.match(storeSource, /assertSchedulingReferences/);
   assert.match(schedulingContract, /logisticsLocalDateTimeToIso/);
