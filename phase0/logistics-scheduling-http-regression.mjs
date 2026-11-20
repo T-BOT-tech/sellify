@@ -224,6 +224,18 @@ try {
   assert.equal(mismatchedReferences.response.status, 409);
   assert.equal(mismatchedReferences.json.error?.code, 'SCHEDULING_REFERENCE_MISMATCH');
 
+  const invalidFulfillment = await request(base, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-invalid-fulfillment-${suffix}` },
+    body: JSON.stringify({
+      activity_type: 'DELIVERY',
+      mode: 'ON_DEMAND',
+      related_fulfillment: { id: 'fulfillment-does-not-exist' },
+    }),
+  });
+  assert.equal(invalidFulfillment.response.status, 409);
+  assert.equal(invalidFulfillment.json.error?.code, 'FULFILLMENT_REFERENCE_INVALID');
+
   const activityId = created.json.activity.id;
 
   // Exercise the real HTTP authorization boundary with persisted Logistics
