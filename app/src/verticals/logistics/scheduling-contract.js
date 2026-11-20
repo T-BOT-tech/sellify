@@ -171,7 +171,7 @@ export function logisticsLocalDateTimeToIso(value, timeZone) {
   return new Date(matches[0]).toISOString();
 }
 
-const ISO_INSTANT = /^(\\d{4})-(\\d{2})-(\\d{2})T([01]\\d|2[0-3]):([0-5]\\d)(?::([0-5]\\d)(?:\\.(\\d{1,3}))?)?(Z|[+-](?:0\\d|1[0-4]):[0-5]\\d)$/;
+const ISO_INSTANT = /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d)(?:\.(\d{1,3}))?)?(Z|[+-](?:0\d|1[0-4]):[0-5]\d)$/;
 
 function normalizeTime(value, field) {
   if (value === undefined || value === null || value === '') return null;
