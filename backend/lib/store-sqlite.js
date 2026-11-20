@@ -10590,7 +10590,7 @@ function logisticsSchedulingRow(row) {
     requestedEnd: row.requested_end,
     scheduledStart: row.scheduled_start,
     scheduledEnd: row.scheduled_end,
-    timezone: row.timezone,
+    timezone: row.timezone || getCanonicalSchedulingTimeZone(organizationId, row.location_id),
     recurrence: parseJSON(row.recurrence_json, null),
     confirmedByUserId: row.confirmed_by_user_id,
     confirmedAt: row.confirmed_at,
@@ -11059,6 +11059,7 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
     }
 
     assertLogisticsSchedulingAuthorization(actor, organizationId, row.location_id, schedulingAction);
+    const scheduledTimezone = row.timezone || getCanonicalSchedulingTimeZone(organizationId, row.location_id);
 
     // Scheduling transitions have their own lifecycle and idempotency boundary.
     // Do not consult fulfillment_commands here: those rows identify fulfillment
@@ -11127,7 +11128,7 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
           requested_end: row.requested_end,
           scheduled_start: scheduledStart,
           scheduled_end: scheduledEnd,
-          timezone: row.timezone,
+          timezone: scheduledTimezone,
           recurrence: parseJSON(row.recurrence_json, null),
           related_order: row.related_order_id ? { id: row.related_order_id } : null,
           related_fulfillment: row.related_fulfillment_id ? { id: row.related_fulfillment_id } : null,
@@ -11244,8 +11245,8 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
     if (target === 'SCHEDULED') {
       const scheduledStart = input.scheduledStart ?? input.scheduled_start ?? row.scheduled_start;
       const scheduledEnd = input.scheduledEnd ?? input.scheduled_end ?? row.scheduled_end;
-      sets.push('scheduled_start = ?', 'scheduled_end = ?');
-      params.push(String(scheduledStart), String(scheduledEnd));
+      sets.push('scheduled_start = ?', 'scheduled_end = ?', 'timezone = ?');
+      params.push(String(scheduledStart), String(scheduledEnd), scheduledTimezone);
     }
 
     if (target === 'CONFIRMED') {
