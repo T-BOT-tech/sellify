@@ -534,3 +534,5 @@ jobs:
         run: npm run test:phase21.15
       - name: Phase 21 implementation hash/documentation regression
         run: npm run test:phase21.16
+      - name: Phase 21.17 capacity evidence migration regression
+        run: npm run test:phase21.17
