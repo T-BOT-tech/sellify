@@ -33,7 +33,7 @@ function roleNames() {
 function canViewScheduling() {
   return roleNames().some(role => [
     'owner', 'manager', 'logistics_manager', 'logistics_dispatcher',
-    'logistics_courier', 'logistics_viewer',
+    'logistics_viewer',
   ].includes(role));
 }
 
