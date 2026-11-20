@@ -171,10 +171,22 @@ export function logisticsLocalDateTimeToIso(value, timeZone) {
   return new Date(matches[0]).toISOString();
 }
 
+const ISO_INSTANT = /^(\\d{4})-(\\d{2})-(\\d{2})T([01]\\d|2[0-3]):([0-5]\\d)(?::([0-5]\\d)(?:\\.(\\d{1,3}))?)?(Z|[+-](?:0\\d|1[0-4]):[0-5]\\d)$/;
+
 function normalizeTime(value, field) {
   if (value === undefined || value === null || value === '') return null;
   const result = text(value, field);
-  if (Number.isNaN(Date.parse(result))) invalid(`${field} must be an ISO-8601 timestamp`);
+  const match = ISO_INSTANT.exec(result);
+  const timestamp = match ? Date.parse(result) : NaN;
+  const [, year, month, day, , , , , zone] = match || [];
+  const calendar = match ? new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))) : null;
+  if (!Number.isFinite(timestamp) || !calendar
+    || calendar.getUTCFullYear() !== Number(year)
+    || calendar.getUTCMonth() !== Number(month) - 1
+    || calendar.getUTCDate() !== Number(day)
+    || (zone !== 'Z' && Number(zone.slice(1, 3)) === 14 && zone.slice(4) !== '00')) {
+    invalid(`${field} must be a valid timezone-qualified ISO-8601 instant`);
+  }
   return result;
 }
 
