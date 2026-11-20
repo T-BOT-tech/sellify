@@ -3352,12 +3352,14 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
     }, req);
     const timezone = location?.timeZone || tenant.timezone || null;
     const hasRequestedWindow = body.requestedStart != null || body.requested_start != null
-      || body.requestedEnd != null || body.requested_end != null;
+      || body.requestedEnd != null || body.requested_end != null
+      || body.scheduledStart != null || body.scheduled_start != null
+      || body.scheduledEnd != null || body.scheduled_end != null;
     if (hasRequestedWindow && !timezone) return sendJSON(res, 409, {
       error: { message: 'A canonical location or organization timezone is required for a requested window', status: 409, code: 'SCHEDULING_TIMEZONE_REQUIRED' },
     }, req);
     const activity = await createLogisticsSchedulingActivity(chatId, {
-      ...body, location_id: locationId, timezone, idempotencyKey,
+      ...body, location_id: locationId, idempotencyKey,
     }, session);
     return sendJSON(res, activity.idempotent ? 200 : 201, { activity }, req);
   }
@@ -3384,6 +3386,7 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
     const evaluation = await evaluateLogisticsSchedulingActivity(chatId, activityId, session, {
       scheduledStart: body.scheduledStart ?? body.scheduled_start,
       scheduledEnd: body.scheduledEnd ?? body.scheduled_end,
+      timezone: body.timezone,
     });
     return sendJSON(res, 200, {
       evaluation, state: evaluation.evaluation === 'UNKNOWN' ? 'UNKNOWN' : 'READY',
@@ -3409,6 +3412,7 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
       idempotencyKey, expectedVersion,
       scheduledStart: body.scheduledStart ?? body.scheduled_start,
       scheduledEnd: body.scheduledEnd ?? body.scheduled_end,
+      timezone: body.timezone,
       reason: body.reason,
     });
     return sendJSON(res, 200, { activity: result }, req);
