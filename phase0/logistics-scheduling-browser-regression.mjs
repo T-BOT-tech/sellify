@@ -48,7 +48,7 @@ try {
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ assignments: [] }) }));
   await page.route('**/tenants/test-tenant/memberships', route =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ memberships: [] }) }));
-  await page.route('**/tenants/test-tenant/logistics/scheduling*', async route => {
+  await page.route('**/tenants/test-tenant/logistics/scheduling**', async route => {
     const request = route.request();
     const url = new URL(request.url());
     const method = request.method();
