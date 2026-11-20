@@ -10797,7 +10797,9 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
   }
 
   const organizationId = String(tenant.organizationId);
-  const locationId = String(input.locationId ?? input.location_id ?? actor?.locationId ?? '').trim() || null;
+  const hasLocationInput = Object.hasOwn(input, 'locationId') || Object.hasOwn(input, 'location_id');
+  const rawLocationId = hasLocationInput ? (input.locationId ?? input.location_id) : actor?.locationId;
+  const locationId = String(rawLocationId || '').trim() || null;
   const idempotencyKey = String(input.idempotencyKey ?? input.idempotency_key ?? '').trim();
   if (!idempotencyKey) {
     throw Object.assign(new Error('Idempotency key is required'), {
