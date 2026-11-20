@@ -53,5 +53,18 @@ const idOnlyProjection = projectLogisticsProviderForDiscovery({
   provider_id: 'x', capabilities: ['delivery'], serviceAreas: [{ countryCode: 'ET' }],
 });
 assert.equal(idOnlyProjection.title, 'x', 'provider ID is the documented fallback display title when a name is absent');
+const unknownStatusProvider = {
+  ...providers[0],
+  capacitySignals: [{ ...providers[0].capacitySignals[0], status: undefined }],
+};
+const unknownStatusProjection = projectLogisticsProviderForDiscovery(unknownStatusProvider);
+assert.equal(unknownStatusProjection.capacitySignals[0].status, undefined, 'normalization must preserve unknown status');
+const unknownStatusMatch = matchLogisticsProviders([unknownStatusProvider], {
+  capability: 'delivery', countryCode: 'ET', geoCode: 'ADDIS_ABABA',
+  minimumQuantity: 20, unit: 'parcel',
+  availabilityFrom: '2026-12-10T00:00:00.000Z',
+  availabilityTo: '2026-12-12T23:59:59.999Z',
+});
+assert.equal(unknownStatusMatch.candidates.length, 0, 'missing status cannot satisfy time-bound capacity matching');
 
 console.log('Phase 16.13.10 Logistics Provider Matching Regression: PASS');
