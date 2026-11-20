@@ -149,6 +149,12 @@ function handleSchedulingError(root, error) {
   } else if (error?.code === 'SCHEDULING_FEASIBILITY_CONFLICT') {
     lastState = 'READY';
     feedback = t('logisticsSchedulingBlockedConflict');
+  } else if (String(error?.code || '').startsWith('LOGISTICS_SCHEDULING_LOCAL_TIME_')) {
+    lastState = 'ERROR';
+    feedback = t('logisticsSchedulingWindowInvalid');
+  } else if (error?.code === 'LOGISTICS_SCHEDULING_TIMEZONE_INVALID') {
+    lastState = 'ERROR';
+    feedback = t('serviceAvailabilityTimezone');
   } else {
     lastState = error?.status === 401 || error?.status === 403
       ? 'DENIED' : error?.status && error.status < 500 ? 'ERROR' : 'UNKNOWN_STALE';
@@ -436,7 +442,7 @@ async function submitRequest(root, form) {
     body: JSON.stringify({ ...body, idempotencyKey: key }),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw Object.assign(new Error(data?.error?.message || `Scheduling request failed (${response.status})`), { status: response.status });
+  if (!response.ok) throw Object.assign(new Error(data?.error?.message || `Scheduling request failed (${response.status})`), { status: response.status, code: data?.error?.code });
   pendingRequestKey = null;
   pendingRequestFingerprint = '';
   form.reset();
@@ -467,7 +473,7 @@ async function evaluateActivity(root, activityId) {
     body: JSON.stringify(candidateWindow),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw Object.assign(new Error(data?.error?.message || `Evaluation failed (${response.status})`), { status: response.status });
+  if (!response.ok) throw Object.assign(new Error(data?.error?.message || `Evaluation failed (${response.status})`), { status: response.status, code: data?.error?.code });
   const evaluation = data?.evaluation?.evaluation || 'UNKNOWN';
   const item = activities.find(activity => String(activity.id) === String(activityId));
   if (item) item.lastEvaluation = evaluation;
