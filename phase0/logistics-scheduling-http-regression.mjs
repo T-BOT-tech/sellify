@@ -545,6 +545,7 @@ try {
     'logisticsSchedulingWindowRequired', 'logisticsSchedulingWindowInvalid',
     'logisticsSchedulingWindowChanged', 'logisticsSchedulingScheduledStart',
     'logisticsSchedulingScheduledEnd',
+    'logisticsSchedulingRequested', 'logisticsSchedulingScheduled', 'logisticsSchedulingReference',
   ];
   const englishLocale = await readFile(path.join(root, 'app/src/i18n/locales/en.js'), 'utf8');
   for (const key of requiredEnglishKeys) {
