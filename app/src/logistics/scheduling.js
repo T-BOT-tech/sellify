@@ -176,6 +176,17 @@ function bindSchedulingControls(root) {
     if (filter.dataset.schedulingBound === '1') return;
     filter.dataset.schedulingBound = '1';
     filter.addEventListener('change', async () => {
+      if (filter.id === 'logisticsSchedulingLocationFilter') {
+        const requestForm = root.querySelector('#logisticsSchedulingRequestForm');
+        if (requestForm) {
+          const start = requestForm.querySelector('[name="requestedStart"]');
+          const end = requestForm.querySelector('[name="requestedEnd"]');
+          if (start) start.value = '';
+          if (end) end.value = '';
+        }
+        pendingRequestKey = null;
+        pendingRequestFingerprint = '';
+      }
       try { await refresh(root); } catch (error) { handleSchedulingError(root, error); }
     });
   });
