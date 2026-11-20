@@ -190,7 +190,7 @@ export default {
     logisticsSchedulingEvaluation: "Feasibility",
     logisticsSchedulingBlockedUnknown: "Scheduling was not confirmed: trusted capacity evidence is not connected, so feasibility remains UNKNOWN.",
     logisticsSchedulingBlockedConflict: "Scheduling was blocked because an existing canonical activity conflicts with this time window.",
-    logisticsSchedulingReferenceHint: "Movement references use the existing projection format: movement:<Core Order ID>.",
+    logisticsSchedulingReferenceHint: "Movement references use the deterministic format movement:<Core Order ID>; they resolve to the canonical order and do not create a separate movement ledger.",
     logisticsSchedulingScheduleBlocked: "Scheduling is disabled until a fresh evaluation returns FEASIBLE from trusted capacity evidence.",
     logisticsSchedulingWindowRequired: "Enter a proposed scheduled start and end before evaluating feasibility.",
     logisticsSchedulingWindowInvalid: "The end time must be later than the start time. Review the proposed window.",
