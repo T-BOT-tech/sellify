@@ -38,7 +38,7 @@ export const supplierNetworkDiscoveryProvider = Object.freeze({
       periodEnd: signal.periodEnd,
       availability: signal.availability,
       source: 'DECLARED',
-      status: signal.status || 'ACTIVE',
+      status: signal.status,
       observedAt: signal.observedAt || null,
       validUntil: signal.validUntil || null,
       quality: signal.observedAt ? 'SELF_REPORTED' : 'UNKNOWN',
