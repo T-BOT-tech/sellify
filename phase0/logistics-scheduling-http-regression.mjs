@@ -527,7 +527,7 @@ try {
   assert.doesNotMatch(schedulingUi, /Intl\.DateTimeFormat\(\)\.resolvedOptions\(\)\.timeZone/);
   assert.doesNotMatch(schedulingUi, /new Date\(startValue\)\.toISOString\(\)/);
   assert.match(logisticsUi, /mountLogisticsSchedulingWorkspace/);
-  assert.match(styles, /\\.logistics-scheduling-workspace/);
+  assert.match(styles, /\.logistics-scheduling-workspace/);
   assert.match(storeSource, /resolveLogisticsSchedulingTimeZone/);
   assert.match(storeSource, /assertSchedulingReferences/);
   assert.match(schedulingContract, /logisticsLocalDateTimeToIso/);
