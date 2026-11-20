@@ -59,6 +59,8 @@ const unknownStatusProvider = {
 };
 const unknownStatusProjection = projectLogisticsProviderForDiscovery(unknownStatusProvider);
 assert.equal(unknownStatusProjection.capacitySignals[0].status, undefined, 'normalization must preserve unknown status');
+assert.equal(unknownStatusProjection.capacitySignals[0].source, null, 'normalization must not invent declaration provenance');
+assert.equal(unknownStatusProjection.capacitySignals[0].quality, 'UNKNOWN', 'observation timestamps alone do not establish evidence quality');
 const unknownStatusMatch = matchLogisticsProviders([unknownStatusProvider], {
   capability: 'delivery', countryCode: 'ET', geoCode: 'ADDIS_ABABA',
   minimumQuantity: 20, unit: 'parcel',
