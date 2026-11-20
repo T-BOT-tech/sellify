@@ -3359,7 +3359,7 @@ async function handleLogisticsScheduling(req, res, chatId, activityId = null, ac
       error: { message: 'A canonical location or organization timezone is required for a requested window', status: 409, code: 'SCHEDULING_TIMEZONE_REQUIRED' },
     }, req);
     const activity = await createLogisticsSchedulingActivity(chatId, {
-      ...body, location_id: locationId, idempotencyKey,
+      ...body, location_id: locationId, timezone: body.timezone || timezone, idempotencyKey,
     }, session);
     return sendJSON(res, activity.idempotent ? 200 : 201, { activity }, req);
   }
