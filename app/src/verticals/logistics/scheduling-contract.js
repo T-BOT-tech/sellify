@@ -87,6 +87,7 @@ const FORBIDDEN_FIELDS = Object.freeze([
 
 function invalid(message, code = 'LOGISTICS_SCHEDULING_INVALID') {
   const error = new TypeError(`Invalid logistics scheduling contract: ${message}`);
+  error.statusCode = 400;
   error.code = code;
   throw error;
 }
