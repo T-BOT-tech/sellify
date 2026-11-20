@@ -3903,12 +3903,28 @@ function normalizeSupplierNetworkCapacityInput(input={}) {
   if (!SUPPLIER_NETWORK_CAPACITY_AVAILABILITY.includes(availability)) throw Object.assign(new Error('Invalid capacity availability'), { statusCode: 400, code: 'INVALID_CAPACITY_AVAILABILITY' });
   const visibility = clean(input.visibility || 'NETWORK', 20).toUpperCase();
   if (!SUPPLIER_NETWORK_CAPACITY_VISIBILITIES.includes(visibility)) throw Object.assign(new Error('Invalid capacity visibility'), { statusCode: 400, code: 'INVALID_CAPACITY_VISIBILITY' });
-  const validUntilInput = input.validUntil ?? input.valid_until ?? null;
-  let validUntil = null;
-  if (validUntilInput != null) {
-    const timestamp = Date.parse(String(validUntilInput));
-    if (!Number.isFinite(timestamp)) throw Object.assign(new Error('validUntil must be a valid ISO-8601 date/time'), { statusCode: 400, code: 'INVALID_CAPACITY_VALIDITY' });
-    validUntil = new Date(timestamp).toISOString();
+  const validUntilProvided = Object.hasOwn(input, 'validUntil') || Object.hasOwn(input, 'valid_until');
+  const validUntilInput = Object.hasOwn(input, 'validUntil') ? input.validUntil
+    : Object.hasOwn(input, 'valid_until') ? input.valid_until : undefined;
+  let validUntil;
+  if (validUntilProvided) {
+    if (validUntilInput == null) {
+      validUntil = null;
+    } else {
+      const value = String(validUntilInput).trim();
+      const match = /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d)(?:\.(\d{1,3}))?)?(Z|[+-](?:0\d|1[0-4]):[0-5]\d)$/.exec(value);
+      const timestamp = match ? Date.parse(value) : NaN;
+      const [, year, month, day, , , , , zone] = match || [];
+      const calendar = match ? new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))) : null;
+      if (!Number.isFinite(timestamp) || !calendar
+        || calendar.getUTCFullYear() !== Number(year)
+        || calendar.getUTCMonth() !== Number(month) - 1
+        || calendar.getUTCDate() !== Number(day)
+        || (zone !== 'Z' && Number(zone.slice(1, 3)) === 14 && zone.slice(4) !== '00')) {
+        throw Object.assign(new Error('validUntil must be a timezone-qualified ISO-8601 instant'), { statusCode: 400, code: 'INVALID_CAPACITY_VALIDITY' });
+      }
+      validUntil = new Date(timestamp).toISOString();
+    }
   }
   const metadata = input.metadata ?? {};
   if (!metadata || Array.isArray(metadata) || typeof metadata !== 'object') throw Object.assign(new Error('metadata must be an object'), { statusCode: 400, code: 'INVALID_CAPACITY_METADATA' });
@@ -3932,7 +3948,9 @@ export async function upsertSupplierNetworkCapacity(chatId, input = {}, actor = 
   if (!SUPPLIER_NETWORK_CAPACITY_STATES[target]) throw Object.assign(new Error('Invalid capacity status'), { statusCode: 400, code: 'INVALID_CAPACITY_STATUS' });
   if (existing && existing.status !== target && !SUPPLIER_NETWORK_CAPACITY_STATES[existing.status]?.has(target)) throw Object.assign(new Error(`Illegal capacity transition ${existing.status} -> ${target}`), { statusCode: 409, code: 'INVALID_CAPACITY_TRANSITION' });
   const now = nowIso();
-  if (n.validUntil && Date.parse(n.validUntil) < Date.parse(now)) throw Object.assign(new Error('validUntil must not be earlier than observation time'), { statusCode: 400, code: 'INVALID_CAPACITY_VALIDITY' });
+  // Omitted validity preserves the prior declaration; explicit null clears it.
+  const validUntil = n.validUntilProvided ? n.validUntil : (existing?.valid_until ?? null);
+  if (validUntil && Date.parse(validUntil) < Date.parse(now)) throw Object.assign(new Error('validUntil must not be earlier than observation time'), { statusCode: 400, code: 'INVALID_CAPACITY_VALIDITY' });
   db.exec('BEGIN IMMEDIATE');
   try {
     if (existing) {
@@ -3940,10 +3958,10 @@ export async function upsertSupplierNetworkCapacity(chatId, input = {}, actor = 
         SET subject_type=?,subject_id=?,quantity=?,unit=?,period_type=?,period_start=?,period_end=?,
             availability=?,visibility=?,status=?,metadata_json=?,observed_at=?,valid_until=?,
             updated_by_user_id=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=?`)
-        .run(n.subjectType,n.subjectId,n.quantity,n.unit,n.periodType,n.periodStart,n.periodEnd,n.availability,n.visibility,target,json(n.metadata),now,n.validUntil,actorId,now,existing.id,org);
+        .run(n.subjectType,n.subjectId,n.quantity,n.unit,n.periodType,n.periodStart,n.periodEnd,n.availability,n.visibility,target,json(n.metadata),now,validUntil,actorId,now,existing.id,org);
       audit(String(chatId),target!==existing.status?`supplier.network.capacity.${target.toLowerCase()}`:'supplier.network.capacity.updated',
         'supplier_network_capacity_signal',existing.id,
-        {subjectType:n.subjectType,subjectId:n.subjectId,quantity:n.quantity,unit:n.unit,availability:n.availability,status:target,source:'DECLARED',observedAt:now,validUntil:n.validUntil},
+        {subjectType:n.subjectType,subjectId:n.subjectId,quantity:n.quantity,unit:n.unit,availability:n.availability,status:target,source:'DECLARED',observedAt:now,validUntil},
         {organizationId:org,actorId});
     } else {
       const id=String(input.id||crypto.randomUUID());
@@ -3952,7 +3970,7 @@ export async function upsertSupplierNetworkCapacity(chatId, input = {}, actor = 
          availability,visibility,source,status,metadata_json,created_by_user_id,updated_by_user_id,
          created_at,updated_at,observed_at,valid_until,version)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`)
-        .run(id,org,n.subjectType,n.subjectId,n.quantity,n.unit,n.periodType,n.periodStart,n.periodEnd,n.availability,n.visibility,'DECLARED',target,json(n.metadata),actorId,actorId,now,now,now,n.validUntil);
+        .run(id,org,n.subjectType,n.subjectId,n.quantity,n.unit,n.periodType,n.periodStart,n.periodEnd,n.availability,n.visibility,'DECLARED',target,json(n.metadata),actorId,actorId,now,now,now,validUntil);
       audit(String(chatId),'supplier.network.capacity.declared','supplier_network_capacity_signal',id,
         {subjectType:n.subjectType,subjectId:n.subjectId,quantity:n.quantity,unit:n.unit,availability:n.availability,status:target,source:'DECLARED',observedAt:now,validUntil:n.validUntil},
         {organizationId:org,actorId});
