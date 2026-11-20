@@ -24,9 +24,11 @@ const env = {
   NODE_ENV: 'test',
   CORS_ALLOWED_ORIGINS: 'http://localhost:3000',
   SELLIFY_DATA_DIR: dataDir,
+  SELLIFY_DB_PATH: path.join(dataDir, 'sellify.sqlite'),
   SELLIFY_BACKUP_DIR: path.join(dataDir, 'backups'),
 };
 process.env.SELLIFY_DATA_DIR = dataDir;
+process.env.SELLIFY_DB_PATH = path.join(dataDir, 'sellify.sqlite');
 process.env.SELLIFY_BACKUP_DIR = path.join(dataDir, 'backups');
 
 async function request(url, options = {}) {
