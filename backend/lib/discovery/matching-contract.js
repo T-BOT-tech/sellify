@@ -26,6 +26,23 @@ function bool(value) {
 
 function asArray(value) { return Array.isArray(value) ? value : []; }
 
+// Instant-valued evidence must carry an explicit UTC marker or numeric offset.
+// Calendar period boundaries are handled separately because they may be date-only.
+const ISO_INSTANT = /^(\\d{4})-(\\d{2})-(\\d{2})T([01]\\d|2[0-3]):([0-5]\\d)(?::([0-5]\\d)(?:\\.(\\d{1,3}))?)?(Z|[+-](?:0\\d|1[0-4]):[0-5]\\d)$/;
+function parseInstant(value) {
+  if (typeof value !== 'string') return NaN;
+  const match = ISO_INSTANT.exec(value.trim());
+  if (!match) return NaN;
+  const [, year, month, day, , , , , zone] = match;
+  const calendar = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (calendar.getUTCFullYear() !== Number(year)
+    || calendar.getUTCMonth() !== Number(month) - 1
+    || calendar.getUTCDate() !== Number(day)) return NaN;
+  if (zone !== 'Z' && Number(zone.slice(1, 3)) === 14 && zone.slice(4) !== '00') return NaN;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : NaN;
+}
+
 function productMatches(candidate, context) {
   if (!context.productId) return false;
   const refs = [];
@@ -68,8 +85,8 @@ function capacityMatches(candidate, context) {
   let from = null;
   let to = null;
   if (temporalRequested) {
-    from = Date.parse(context.availabilityFrom || '');
-    to = Date.parse(context.availabilityTo || '');
+    from = parseInstant(context.availabilityFrom);
+    to = parseInstant(context.availabilityTo);
     if (!Number.isFinite(from) || !Number.isFinite(to) || from > to || (!context.productId && !context.capabilityCode)) {
       return { requested: true, observed: signals.length > 0, eligible: false };
     }
@@ -91,11 +108,12 @@ function capacityMatches(candidate, context) {
       return false;
     }
     if (unit && norm(signal.unit) !== unit) return false;
-    if (signal.status && upper(signal.status) !== 'ACTIVE') return false;
     if (temporalRequested) {
-      const evaluatedAt = Date.parse(context.evaluatedAt || '');
-      const observedAt = Date.parse(signal.observedAt || '');
-      const validUntil = Date.parse(signal.validUntil || '');
+      // Missing or unknown status is not evidence of an active declaration.
+      if (upper(signal.status) !== 'ACTIVE') return false;
+      const evaluatedAt = parseInstant(context.evaluatedAt);
+      const observedAt = parseInstant(signal.observedAt);
+      const validUntil = parseInstant(signal.validUntil);
       if (!Number.isFinite(evaluatedAt) || !Number.isFinite(observedAt) || !Number.isFinite(validUntil)) return false;
       if (observedAt > evaluatedAt || validUntil < Math.max(evaluatedAt, to)) return false;
       const start = Date.parse(signal.periodStart || '');
