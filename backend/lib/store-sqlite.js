@@ -10989,6 +10989,7 @@ export async function evaluateLogisticsSchedulingActivity(chatId, activityId, ac
     row.location_id,
     'logistics:scheduling:view',
   );
+  assertSchedulingLocation(organizationId, row.location_id);
 
   const rows = db.prepare(
     "SELECT * FROM logistics_scheduling_activities WHERE organization_id = ? AND id <> ? AND status IN ('SCHEDULED', 'CONFIRMED', 'IN_PROGRESS')"
@@ -11076,6 +11077,7 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
     }
 
     assertLogisticsSchedulingAuthorization(actor, organizationId, row.location_id, schedulingAction);
+    assertSchedulingLocation(organizationId, row.location_id);
     const scheduledTimezone = row.timezone || getCanonicalSchedulingTimeZone(organizationId, row.location_id);
 
     // Scheduling transitions have their own lifecycle and idempotency boundary.
