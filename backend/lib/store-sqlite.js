@@ -13533,10 +13533,14 @@ export async function createSession({ userId, chatId, deviceName = 'Sellify devi
   `).get(String(chatId));
   const contextualRoles = db.prepare(`
     SELECT role_id, scope_type, scope_id
-      FROM membership_roles
+      FROM membership_roles mr
      WHERE membership_id = ? AND status = 'active'
+       AND (mr.role_id <> 'service_provider' OR EXISTS (
+         SELECT 1 FROM pack_lifecycle pl JOIN tenants t ON t.organization_id = pl.organization_id
+          WHERE t.chat_id = ? AND pl.pack_id = 'service' AND pl.state = 'ACTIVE'
+       ))
      ORDER BY created_at
-  `).all(String(membership.id)).map(row => ({
+  `).all(String(membership.id), String(chatId)).map(row => ({
     role: row.role_id, scopeType: row.scope_type, scopeId: row.scope_id || null,
   }));
   return {
@@ -13562,12 +13566,12 @@ export async function authenticateSessionToken(token) {
               FROM membership_roles mr
              WHERE mr.membership_id = m.id AND mr.status = 'active'
                AND (
-                 mr.scope_type = 'ORGANIZATION'
+                 mr.scope_type = 'ORGANIZATION' AND mr.role_id <> 'service_provider'
                  OR (
                    mr.role_id NOT IN (
                      'restaurant_waiter', 'restaurant_kitchen_staff',
                      'warehouse_receiving', 'warehouse_picker_packer', 'warehouse_inventory_staff',
-                     'logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer'
+                     'logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer', 'service_provider'
                    )
                  )
                  OR (
@@ -13589,11 +13593,20 @@ export async function authenticateSessionToken(token) {
                    )
                  )
                  OR (
-                   mr.role_id IN ('logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer')
+                   mr.role_id IN ('logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer', 'service_provider')
                    AND EXISTS (
                      SELECT 1 FROM pack_lifecycle pl
                       WHERE pl.organization_id = t.organization_id
                         AND pl.pack_id = 'logistics'
+                        AND pl.state = 'ACTIVE'
+                   )
+                 )
+                 OR (
+                   mr.role_id = 'service_provider'
+                   AND EXISTS (
+                     SELECT 1 FROM pack_lifecycle pl
+                      WHERE pl.organization_id = t.organization_id
+                        AND pl.pack_id = 'service'
                         AND pl.state = 'ACTIVE'
                    )
                  )
@@ -13606,7 +13619,7 @@ export async function authenticateSessionToken(token) {
                    mr.role_id NOT IN (
                      'restaurant_waiter', 'restaurant_kitchen_staff',
                      'warehouse_receiving', 'warehouse_picker_packer', 'warehouse_inventory_staff',
-                     'logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer'
+                     'logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer', 'service_provider'
                    )
                  )
                  OR (
@@ -13628,11 +13641,20 @@ export async function authenticateSessionToken(token) {
                    )
                  )
                  OR (
-                   mr.role_id IN ('logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer')
+                   mr.role_id IN ('logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer', 'service_provider')
                    AND EXISTS (
                      SELECT 1 FROM pack_lifecycle pl
                       WHERE pl.organization_id = t.organization_id
                         AND pl.pack_id = 'logistics'
+                        AND pl.state = 'ACTIVE'
+                   )
+                 )
+                 OR (
+                   mr.role_id = 'service_provider'
+                   AND EXISTS (
+                     SELECT 1 FROM pack_lifecycle pl
+                      WHERE pl.organization_id = t.organization_id
+                        AND pl.pack_id = 'service'
                         AND pl.state = 'ACTIVE'
                    )
                  )
