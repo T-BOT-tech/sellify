@@ -136,6 +136,9 @@ try {
   const locationRead = await request(`${base}?locationId=${encodeURIComponent(primaryLocation.id)}`, { headers });
   assert.equal(locationRead.response.status, 200);
   assert.equal(locationRead.json.timezone, 'Europe/Paris');
+  const organizationRead = await request(`${base}?locationId=`, { headers });
+  assert.equal(organizationRead.response.status, 200);
+  assert.equal(organizationRead.json.timezone, 'Africa/Addis_Ababa');
 
   const replayCreate = await request(base, {
     method: 'POST',
@@ -179,6 +182,19 @@ try {
   });
   assert.equal(invalidMovement.response.status, 409);
   assert.equal(invalidMovement.json.error?.code, 'MOVEMENT_REFERENCE_INVALID');
+
+  const mismatchedMovement = await request(base, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-mismatched-movement-${suffix}` },
+    body: JSON.stringify({
+      activity_type: 'PICKUP',
+      mode: 'ON_DEMAND',
+      related_order: { id: orderId },
+      related_movement: { id: 'movement:another-order' },
+    }),
+  });
+  assert.equal(mismatchedMovement.response.status, 409);
+  assert.equal(mismatchedMovement.json.error?.code, 'MOVEMENT_REFERENCE_INVALID');
 
   const organizationTimeActivity = await request(base, {
     method: 'POST',
