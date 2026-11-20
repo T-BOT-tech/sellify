@@ -10590,7 +10590,7 @@ function logisticsSchedulingRow(row) {
     requestedEnd: row.requested_end,
     scheduledStart: row.scheduled_start,
     scheduledEnd: row.scheduled_end,
-    timezone: schedulingTimezone,
+    timezone: row.timezone,
     recurrence: parseJSON(row.recurrence_json, null),
     confirmedByUserId: row.confirmed_by_user_id,
     confirmedAt: row.confirmed_at,
