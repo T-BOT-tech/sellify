@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -47,6 +48,14 @@ async function childMain(mode) {
     return;
   }
 
+  if (mode === 'verify-fresh') {
+    const columns = new Set(db.prepare('PRAGMA table_info(supplier_network_capacity_signals)').all().map(row => row.name));
+    assert.equal(columns.has('observed_at'), true);
+    assert.equal(columns.has('valid_until'), true);
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = 84').get().count, 1);
+    return;
+  }
+
   if (mode === 'verify') {
     const columns = new Set(db.prepare('PRAGMA table_info(supplier_network_capacity_signals)').all().map(row => row.name));
     assert.equal(columns.has('observed_at'), true, 'migration restores observed_at');
@@ -69,6 +78,7 @@ if (process.argv[2]) {
 } else {
   const temp = mkdtempSync(path.join(tmpdir(), 'sellify-capacity-migration-'));
   try {
+    runChild('verify-fresh', path.join(temp, 'fresh.sqlite'));
     for (const scenario of ['full', 'partial']) {
       const databasePath = path.join(temp, `${scenario}.sqlite`);
       runChild(`prepare-${scenario}`, databasePath);
