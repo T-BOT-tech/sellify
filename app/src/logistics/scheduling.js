@@ -130,6 +130,20 @@ export function localDateTimeToIso(value, timeZone) {
   return matches[0].toISOString();
 }
 
+function candidateWindowForActivity(activity, startValue, endValue) {
+  if (startValue || endValue) {
+    return normalizeCandidateWindow(startValue, endValue, activity?.timezone || workspaceTimezone);
+  }
+  if (activity?.mode === 'WINDOWED' && activity.requestedStart && activity.requestedEnd) {
+    return {
+      scheduledStart: activity.requestedStart,
+      scheduledEnd: activity.requestedEnd,
+      timezone: activity.timezone || workspaceTimezone,
+    };
+  }
+  return null;
+}
+
 function updateTimezoneLabel(root) {
   const label = root.querySelector('#logisticsSchedulingTimezone');
   if (!label) return;
@@ -504,7 +518,7 @@ async function evaluateActivity(root, activityId) {
     return;
   }
   const activity = activities.find(item => String(item.id) === String(activityId));
-  const candidateWindow = normalizeCandidateWindow(startInput.value, endInput.value, activity?.timezone || workspaceTimezone);
+  const candidateWindow = candidateWindowForActivity(activity, startInput.value, endInput.value);
   if (!candidateWindow) {
     lastState = 'READY';
     feedback = t('logisticsSchedulingWindowInvalid');
@@ -545,7 +559,7 @@ async function transitionActivity(root, activityId, target, button) {
   const endInput = root.querySelector(`[data-scheduled-end="${CSS.escape(String(activityId))}"]`);
   const body = { status: target, expectedVersion: activity.version };
   if (target === 'SCHEDULED') {
-    const candidateWindow = normalizeCandidateWindow(startInput?.value, endInput?.value, activity.timezone || workspaceTimezone);
+    const candidateWindow = candidateWindowForActivity(activity, startInput?.value, endInput?.value);
     if (!candidateWindow) {
       lastState = 'READY';
       feedback = startInput?.value && endInput?.value
