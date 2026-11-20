@@ -301,10 +301,10 @@ try {
   // Location-scoped contextual roles must be constrained at the real HTTP
   // boundary: a valid role at one location must not grant tenant-wide access.
   const scopedLocation = await store.createOrganizationLocation(tenant.chatId, {
-    code: `L11A${suffix.slice(-8)}`, name: 'L11 Scoped Location A', type: 'WAREHOUSE',
+    code: `L11A${suffix.slice(-8)}`, name: 'L11 Scoped Location A', type: 'WAREHOUSE', timeZone: 'Asia/Dubai',
   });
   const otherLocation = await store.createOrganizationLocation(tenant.chatId, {
-    code: `L11B${suffix.slice(-8)}`, name: 'L11 Scoped Location B', type: 'WAREHOUSE',
+    code: `L11B${suffix.slice(-8)}`, name: 'L11 Scoped Location B', type: 'WAREHOUSE', timeZone: 'Europe/Paris',
   });
   const locationRoleSessions = new Map();
   for (const role of ['logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer']) {
@@ -334,6 +334,8 @@ try {
       headers: roleContext.headers,
     });
     assert.equal(inScopeRead.response.status, 200, `${role} may read its assigned location`);
+    assert.equal(inScopeRead.json.timezone, 'Asia/Dubai',
+      'location timezone overrides the organization timezone for scheduling');
     const outOfScopeRead = await request(`${base}?locationId=${encodeURIComponent(otherLocation.id)}`, {
       headers: roleContext.headers,
     });
@@ -356,6 +358,7 @@ try {
     });
     assert.equal(inScopeCreate.response.status, 201, `${role} may create activity at its assigned location`);
     assert.equal(inScopeCreate.json.activity.locationId, scopedLocation.id);
+    assert.equal(inScopeCreate.json.activity.timezone, 'Asia/Dubai');
     const inScopeCancel = await request(`${base}/${encodeURIComponent(inScopeCreate.json.activity.id)}/transition`, {
       method: 'PATCH',
       headers: { ...roleContext.headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-location-${role}-cancel-${suffix}` },
