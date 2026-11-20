@@ -111,7 +111,7 @@ await assert.rejects(
 const afterBlockedSchedule = await getLogisticsSchedulingActivity(chatId, created.id);
 assert.equal(afterBlockedSchedule.status, 'REQUESTED');
 assert.equal(afterBlockedSchedule.version, 1);
-assert.equal(afterBlockedSchedule.scheduledStart, '2026-10-10T09:00:00.000Z');
+assert.equal(afterBlockedSchedule.scheduledStart, '2026-10-10T09:00:00Z');
 
 // A request may be cancelled with a reason, and the lifecycle command is
 // idempotent without inventing a feasibility or execution decision.
