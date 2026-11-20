@@ -243,8 +243,14 @@ try {
   });
   forceConflict = true;
   resourcesAvailable = true;
+  const restoredRole = await page.evaluate(async () => {
+    const state = await import('/src/state.js');
+    state.setConfig({ ...state.config, currentStaffRole: 'owner', contextualRoles: [] });
+    return state.config.currentStaffRole;
+  });
+  assert.equal(restoredRole, 'owner', 'resource availability controls require the restored owner role');
   await page.locator('#serviceBookingsRefresh').click();
-  await page.locator('.service-resource-card').waitFor();
+  await page.locator('[data-resource-id="resource-room-1"] .service-resource-availability').waitFor();
 
   // Declared-hours assessment uses the resource timezone and does not create a booking or mutate schedule state.
   await page.locator('.service-resource-availability').click();
