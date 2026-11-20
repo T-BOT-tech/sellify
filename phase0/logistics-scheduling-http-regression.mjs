@@ -1,7 +1,7 @@
 // L11 — real HTTP coverage for the existing canonical Logistics Scheduling service.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -496,6 +496,41 @@ try {
     headers: { Authorization: `Bearer ${otherSession.token}` },
   });
   assert.equal(crossTenant.response.status, 404, 'cross-tenant activity identifiers are not disclosed');
+
+  const schedulingUi = await readFile(path.join(root, 'app/src/logistics/scheduling.js'), 'utf8');
+  const logisticsUi = await readFile(path.join(root, 'app/src/logistics/ui.js'), 'utf8');
+  const storeSource = await readFile(path.join(root, 'backend/lib/store-sqlite.js'), 'utf8');
+  const schedulingContract = await readFile(path.join(root, 'app/src/verticals/logistics/scheduling-contract.js'), 'utf8');
+  const i18nSource = await readFile(path.join(root, 'app/src/ui/i18n.js'), 'utf8');
+  assert.match(schedulingUi, /requested_start_local/);
+  assert.match(schedulingUi, /scheduledStartLocal/);
+  assert.match(schedulingUi, /timeZone: timezone/);
+  assert.match(schedulingUi, /activity\.timezone/);
+  assert.doesNotMatch(schedulingUi, /Intl\.DateTimeFormat\(\)\.resolvedOptions\(\)\.timeZone/);
+  assert.doesNotMatch(schedulingUi, /new Date\(startValue\)\.toISOString\(\)/);
+  assert.match(logisticsUi, /mountLogisticsSchedulingWorkspace/);
+  assert.match(storeSource, /resolveLogisticsSchedulingTimeZone/);
+  assert.match(storeSource, /assertSchedulingReferences/);
+  assert.match(schedulingContract, /logisticsLocalDateTimeToIso/);
+  assert.match(i18nSource, /english\[key\]/, 'non-English locale files fall back to the canonical English dictionary');
+
+  const requiredEnglishKeys = [
+    'logisticsSchedulingTitle', 'logisticsSchedulingHint', 'logisticsSchedulingRefresh',
+    'logisticsSchedulingRequestTitle', 'logisticsSchedulingActivityType',
+    'logisticsSchedulingMode', 'logisticsSchedulingReferenceType',
+    'logisticsSchedulingReferenceId', 'logisticsSchedulingRequestedStart',
+    'logisticsSchedulingRequestedEnd', 'logisticsSchedulingSubmit',
+    'logisticsSchedulingEvaluate', 'logisticsSchedulingEvaluation',
+    'logisticsSchedulingBlockedUnknown', 'logisticsSchedulingBlockedConflict',
+    'logisticsSchedulingReferenceHint', 'logisticsSchedulingScheduleBlocked',
+    'logisticsSchedulingWindowRequired', 'logisticsSchedulingWindowInvalid',
+    'logisticsSchedulingWindowChanged', 'logisticsSchedulingScheduledStart',
+    'logisticsSchedulingScheduledEnd',
+  ];
+  const englishLocale = await readFile(path.join(root, 'app/src/i18n/locales/en.js'), 'utf8');
+  for (const key of requiredEnglishKeys) {
+    assert.match(englishLocale, new RegExp('\\\\b' + key + '\\\\s*:'));
+  }
 
   console.log('L11 Logistics Scheduling authenticated HTTP regression: PASS');
 } catch (error) {
