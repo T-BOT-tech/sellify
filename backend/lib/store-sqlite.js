@@ -29,6 +29,7 @@ import { assertPackLifecyclePrecondition, getPackLifecycleManifest } from './pac
 import { assertUntrustedPaymentEvidenceShape, normalizePaymentEvidenceSource } from './payments/payment-evidence-authority.js';
 import { assertAuthenticatedNotificationContext, assertProviderNotificationEvidenceShape } from './payments/provider-notification-authority.js';
 import { normalizeLogisticsSchedulingRequest } from '../../app/src/verticals/logistics/scheduling-contract.js';
+import { buildLogisticsMovementProjection } from '../../app/src/verticals/logistics/movement-shipment-contract.js';
 import { normalizeLogisticsServiceDelivery } from '../../app/src/verticals/logistics/service-delivery-model-contract.js';
 import { evaluateLogisticsSchedulingFeasibility } from '../../app/src/verticals/logistics/scheduling-feasibility-contract.js';
 import { decideLogisticsScheduling } from '../../app/src/verticals/logistics/scheduling-decision-contract.js';
@@ -10657,15 +10658,119 @@ function assertSchedulingLocation(organizationId, locationId) {
   }
 }
 
-function assertSchedulingFulfillment(organizationId, fulfillmentId) {
-  if (!fulfillmentId) return;
-  const fulfillment = db.prepare(
-    'SELECT id, organization_id FROM fulfillments WHERE id = ? AND organization_id = ?'
-  ).get(String(fulfillmentId), String(organizationId));
-  if (!fulfillment) {
-    throw Object.assign(new Error('Referenced fulfillment does not belong to this organization'), {
-      statusCode: 409, code: 'FULFILLMENT_REFERENCE_INVALID',
-    });
+function schedulingReferenceError(message, code) {
+  return Object.assign(new Error(message), { statusCode: 409, code });
+}
+
+function getSchedulingCanonicalOrder(chatId, organizationId, orderId) {
+  const row = db.prepare(`
+    SELECT o.server_order_id, o.order_json
+    FROM orders o
+    JOIN tenants t ON t.chat_id = o.chat_id
+    WHERE o.chat_id = ? AND o.server_order_id = ? AND t.organization_id = ?
+  `).get(String(chatId), String(orderId), String(organizationId));
+  if (!row) throw schedulingReferenceError(
+    'Referenced Core Order is not available in this tenant scope',
+    'ORDER_REFERENCE_INVALID',
+  );
+  return { ...orderFromRow({ order_json: row.order_json }), id: String(row.server_order_id) };
+}
+
+function getSchedulingCanonicalFulfillment(chatId, organizationId, fulfillmentId) {
+  const row = db.prepare(`
+    SELECT f.id, f.server_order_id, f.organization_id, f.fulfillment_type,
+           f.status, f.tracking_reference, o.order_json
+    FROM fulfillments f
+    JOIN orders o ON o.server_order_id = f.server_order_id
+    JOIN tenants t ON t.chat_id = o.chat_id
+    WHERE f.id = ? AND f.organization_id = ? AND o.chat_id = ?
+      AND t.organization_id = ?
+  `).get(String(fulfillmentId), String(organizationId), String(chatId), String(organizationId));
+  if (!row) throw schedulingReferenceError(
+    'Referenced fulfillment is not available in this tenant scope',
+    'FULFILLMENT_REFERENCE_INVALID',
+  );
+  const order = { ...orderFromRow({ order_json: row.order_json }), id: String(row.server_order_id) };
+  return {
+    order,
+    fulfillment: {
+      id: String(row.id),
+      order_id: String(row.server_order_id),
+      fulfillment_type: row.fulfillment_type,
+      fulfillment_status: row.status,
+      shipment_id: order.shipment_id || null,
+      tracking_reference: row.tracking_reference || order.tracking_reference || null,
+    },
+  };
+}
+
+function assertSchedulingReferences(chatId, organizationId, related = {}) {
+  let order = related.order
+    ? getSchedulingCanonicalOrder(chatId, organizationId, related.order.id)
+    : null;
+  let fulfillment = null;
+
+  if (related.fulfillment) {
+    const resolved = getSchedulingCanonicalFulfillment(chatId, organizationId, related.fulfillment.id);
+    if (order && order.id !== resolved.order.id) {
+      throw schedulingReferenceError(
+        'Scheduling order and fulfillment references must resolve to the same Core Order',
+        'SCHEDULING_REFERENCE_MISMATCH',
+      );
+    }
+    order = resolved.order;
+    fulfillment = resolved.fulfillment;
+  }
+
+  if (related.movement) {
+    const movementId = String(related.movement.id || '').trim();
+    if (!movementId.startsWith('movement:') || movementId.length <= 'movement:'.length) {
+      throw schedulingReferenceError(
+        'Movement reference must use the canonical movement:<Core Order ID> projection',
+        'MOVEMENT_REFERENCE_INVALID',
+      );
+    }
+    const movementOrderId = movementId.slice('movement:'.length);
+    if (order && order.id !== movementOrderId) {
+      throw schedulingReferenceError(
+        'Scheduling order and movement references must resolve to the same Core Order',
+        'SCHEDULING_REFERENCE_MISMATCH',
+      );
+    }
+    if (!order) order = getSchedulingCanonicalOrder(chatId, organizationId, movementOrderId);
+    if (order.id !== movementOrderId) {
+      throw schedulingReferenceError('Movement reference does not match its Core Order', 'MOVEMENT_REFERENCE_INVALID');
+    }
+
+    if (!fulfillment) {
+      const row = db.prepare(`
+        SELECT id, server_order_id, fulfillment_type, status, tracking_reference
+        FROM fulfillments
+        WHERE server_order_id = ? AND organization_id = ?
+      `).get(String(order.id), String(organizationId));
+      if (row) {
+        fulfillment = {
+          id: String(row.id),
+          order_id: String(row.server_order_id),
+          fulfillment_type: row.fulfillment_type,
+          fulfillment_status: row.status,
+          shipment_id: order.shipment_id || null,
+          tracking_reference: row.tracking_reference || order.tracking_reference || null,
+        };
+      }
+    }
+
+    try {
+      const projection = buildLogisticsMovementProjection({ order, fulfillment });
+      if (projection.movement_id !== movementId) {
+        throw new Error('Movement projection does not match the referenced Core Order');
+      }
+    } catch {
+      throw schedulingReferenceError(
+        'Movement reference does not resolve to a valid canonical Logistics movement projection',
+        'MOVEMENT_REFERENCE_INVALID',
+      );
+    }
   }
 }
 
@@ -10696,10 +10801,11 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
     });
   }
 
+  assertLogisticsSchedulingAuthorization(actor, organizationId, request.location_id, 'logistics:scheduling:request');
   const actorUserId = actor?.userId ? String(actor.userId) : null;
   const requestHash = schedulingRequestHash(request);
   assertSchedulingLocation(organizationId, request.location_id);
-  assertSchedulingFulfillment(organizationId, request.related.fulfillment?.id);
+  assertSchedulingReferences(chatId, organizationId, request.related);
 
   db.exec('BEGIN IMMEDIATE');
   try {
