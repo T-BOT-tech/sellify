@@ -10794,7 +10794,7 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
   const request = normalizeLogisticsSchedulingRequest({
     ...input,
     organization_id: organizationId,
-    timezone: canonicalTimezone,
+    timezone: requestedTimezone || canonicalTimezone,
     status: 'REQUESTED',
   });
   const idempotencyKey = String(input.idempotencyKey ?? input.idempotency_key ?? '').trim();
