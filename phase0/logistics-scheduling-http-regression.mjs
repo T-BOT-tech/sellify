@@ -76,7 +76,12 @@ try {
     JSON.stringify({ id: orderId, fulfillment_type: 'delivery', fulfillment_status: 'pending' }),
     Date.now(),
   );
-  const organizationId = String(tenant.organizationId);
+  // Tenant creation returns the tenant identity, not the canonical
+  // organization ID. Resolve that ID from the authoritative tenant row.
+  const organizationId = String(db.prepare(
+    'SELECT organization_id FROM tenants WHERE chat_id = ?'
+  ).get(tenant.chatId)?.organization_id || '');
+  assert.ok(organizationId, 'tenant must be linked to a canonical organization');
   const defaultLocationId = db.prepare(
     "SELECT id FROM locations WHERE organization_id = ? AND code = 'DEFAULT' LIMIT 1"
   ).get(organizationId)?.id;
