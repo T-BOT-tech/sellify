@@ -61,6 +61,32 @@ assert.throws(() => normalizeLogisticsSchedulingRequest({
   requested_end: '2026-10-04T09:00:00Z',
 }), /requested_end must not precede/);
 
+// Every scheduling time is an instant, not a server-local or browser-local
+// datetime. Date-only and timezone-less values must fail closed.
+for (const invalidInstant of [
+  '2026-10-04',
+  '2026-10-04T08:00',
+  '2026-02-30T08:00:00Z',
+  '2026-10-04T08:00:00+14:01',
+]) {
+  assert.throws(() => normalizeLogisticsSchedulingRequest({
+    ...base, requested_start: invalidInstant, requested_end: '2026-10-04T09:00:00Z',
+  }), error => error?.code === 'SCHEDULING_TIMESTAMP_INVALID');
+}
+assert.throws(() => normalizeLogisticsSchedulingRequest({
+  ...base, timezone: 'Not/A_Timezone',
+}), error => error?.code === 'SCHEDULING_TIMEZONE_INVALID');
+assert.throws(() => normalizeLogisticsSchedulingRequest({
+  ...base, timezone: null,
+}), error => error?.code === 'SCHEDULING_TIMEZONE_REQUIRED');
+const offsetRequest = normalizeLogisticsSchedulingRequest({
+  ...base,
+  requested_start: '2026-10-04T11:00:00+03:00',
+  requested_end: '2026-10-04T12:00:00+03:00',
+});
+assert.equal(offsetRequest.requested_start, '2026-10-04T08:00:00.000Z');
+assert.equal(offsetRequest.requested_end, '2026-10-04T09:00:00.000Z');
+
 // Forbidden parallel authorities must be rejected at the contract boundary.
 for (const field of [
   'calendar',
