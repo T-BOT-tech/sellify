@@ -411,7 +411,7 @@ export function normalizeCandidateWindow(startValue, endValue, timeZone = worksp
     const scheduledStart = localDateTimeToIso(startValue, timeZone);
     const scheduledEnd = localDateTimeToIso(endValue, timeZone);
     if (Date.parse(scheduledEnd) <= Date.parse(scheduledStart)) return null;
-    return { scheduledStart, scheduledEnd };
+    return { scheduledStart, scheduledEnd, timezone: timeZone };
   } catch {
     return null;
   }
