@@ -10964,26 +10964,30 @@ export async function evaluateLogisticsSchedulingActivity(chatId, activityId, ac
     "SELECT * FROM logistics_scheduling_activities WHERE organization_id = ? AND id <> ? AND status IN ('SCHEDULED', 'CONFIRMED', 'IN_PROGRESS')"
   ).all(organizationId, String(activityId));
 
+  // Candidate windows are advisory input. Normalize them against the persisted
+  // activity and never accept caller-supplied capacity/feasibility evidence.
+  const request = normalizeLogisticsSchedulingRequest({
+    organization_id: row.organization_id,
+    location_id: row.location_id,
+    activity_type: row.activity_type,
+    mode: row.mode,
+    requested_start: row.requested_start,
+    requested_end: row.requested_end,
+    scheduled_start: options.scheduledStart ?? options.scheduled_start ?? row.scheduled_start,
+    scheduled_end: options.scheduledEnd ?? options.scheduled_end ?? row.scheduled_end,
+    timezone: row.timezone,
+    recurrence: parseJSON(row.recurrence_json, null),
+    related_order: row.related_order_id ? { id: row.related_order_id } : null,
+    related_fulfillment: row.related_fulfillment_id ? { id: row.related_fulfillment_id } : null,
+    related_movement: row.related_movement_id ? { id: row.related_movement_id } : null,
+  });
+
   // Feasibility options cross a caller-controlled request boundary. Until a trusted
   // server-side capacity adapter is explicitly wired here, callers cannot assert FEASIBLE.
   const externalEvaluation = null;
 
   return evaluateLogisticsSchedulingFeasibility({
-    request: {
-      organization_id: row.organization_id,
-      location_id: row.location_id,
-      activity_type: row.activity_type,
-      mode: row.mode,
-      requested_start: row.requested_start,
-      requested_end: row.requested_end,
-      scheduled_start: row.scheduled_start,
-      scheduled_end: row.scheduled_end,
-      timezone: row.timezone,
-      recurrence: parseJSON(row.recurrence_json, null),
-      related_order: row.related_order_id ? { id: row.related_order_id } : null,
-      related_fulfillment: row.related_fulfillment_id ? { id: row.related_fulfillment_id } : null,
-      related_movement: row.related_movement_id ? { id: row.related_movement_id } : null,
-    },
+    request,
     existingActivities: rows.map(logisticsSchedulingRow),
     externalEvaluation,
   });
