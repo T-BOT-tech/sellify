@@ -1957,3 +1957,8 @@
   .logistics-scheduling-filters { display: grid; grid-template-columns: 1fr 1fr; }
   .logistics-scheduling-filters label { min-width: 0; }
 }
+.logistics-scheduling-workspace > #logisticsSchedulingTimezone {
+  margin: 8px 0 14px;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
