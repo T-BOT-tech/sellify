@@ -29,7 +29,7 @@ export default {
     logisticsSchedulingEvaluation: "የአዋጭነት ግምገማ",
     logisticsSchedulingBlockedUnknown: "መርሐግብሩ አልተረጋገጠም፤ የታመነ የአቅም ማስረጃ ስላልተገናኘ አዋጭነቱ UNKNOWN ነው።",
     logisticsSchedulingBlockedConflict: "ነባር ቀኖናዊ እንቅስቃሴ ከዚህ የጊዜ ክልል ጋር ስለሚጋጭ መርሐግብሩ ታግዷል።",
-    logisticsSchedulingReferenceHint: "የMovement ማጣቀሻ የነባሩን ፕሮጀክሽን ቅርጸት ይጠቀማል፦ movement:<Core Order ID>።",
+    logisticsSchedulingReferenceHint: "የMovement ማጣቀሻ ቋሚውን ቅርጸት movement:<Core Order ID> ይጠቀማል፤ ወደ ዋናው ትዕዛዝ ይመራል እና የተለየ የMovement መዝገብ አይፈጥርም።",
     logisticsSchedulingScheduleBlocked: "ከታመነ የአቅም ማስረጃ የተገኘ አዲስ ግምገማ FEASIBLE እስኪመልስ ድረስ መርሐግብር ማስያዝ ተሰናክሏል።",
     logisticsSchedulingWindowRequired: "አዋጭነትን ከመገምገምዎ በፊት የታቀደውን የመጀመሪያና የመጨረሻ ጊዜ ያስገቡ።",
     logisticsSchedulingWindowInvalid: "የመጨረሻው ጊዜ ከመጀመሪያው ጊዜ በኋላ መሆን አለበት። የተመረጠውን ጊዜ ያስተካክሉ።",
