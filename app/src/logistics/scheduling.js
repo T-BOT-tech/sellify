@@ -380,7 +380,7 @@ async function refresh(root) {
 
 function normalizeCandidateWindow(startValue, endValue) {
   if (!startValue || !endValue) return null;
-  const pattern = /^\d{4}-\d{2}-\d{2}T[0-2]\d:[0-5]\d$/;
+  const pattern = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d$/;
   if (!pattern.test(startValue) || !pattern.test(endValue) || endValue <= startValue) return null;
   return { scheduledStartLocal: startValue, scheduledEndLocal: endValue };
 }
