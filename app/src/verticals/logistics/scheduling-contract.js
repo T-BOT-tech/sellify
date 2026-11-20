@@ -1,7 +1,7 @@
 // L11 — Logistics Scheduling Contract.
 //
 // Temporal coordination boundary only. This contract normalizes scheduling
-// requests and outcomes over existing Commerce, Fulfillment, Movement, and
+// requests and outcomes over existing Commerce, Fulfillment, Inventory movement, and
 // Location authorities. It creates no calendar, capacity ledger, route
 // engine, dispatch authority, provider registry, payment authority,
 // inventory reservation, or duplicate fulfillment lifecycle.
@@ -308,7 +308,7 @@ export function logisticsSchedulingContract() {
     scheduling_authority: 'logistics-pack-temporal-coordination',
     order_authority: 'commerce',
     fulfillment_authority: 'existing core fulfillment authority',
-    movement_authority: 'existing logistics movement projection',
+    movement_authority: 'existing canonical Inventory movement ledger',
     location_authority: 'locations',
     capacity_authority: 'existing capacity evidence / source authority',
     discovery_authority: 'existing discovery and matching authority',
