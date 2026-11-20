@@ -180,8 +180,8 @@ function renderActivity(activity) {
   return `
     <article class="logistics-meta logistics-scheduling-card" data-scheduling-card="${escapeHtml(activity.id)}">
       <div><strong>${escapeHtml(activity.activityType || 'Activity')}</strong> · ${escapeHtml(activity.status || 'UNKNOWN')}</div>
-      <div>Requested: ${escapeHtml(formatWindow(activity.requestedStart, activity.requestedEnd, activity.timezone || workspaceTimezone))}</div>
-      <div>Scheduled: ${escapeHtml(formatWindow(activity.scheduledStart, activity.scheduledEnd, activity.timezone || workspaceTimezone))}</div>
+      <div>${escapeHtml(t('logisticsSchedulingRequestedWindow'))}: ${escapeHtml(formatWindow(activity.requestedStart, activity.requestedEnd, activity.timezone || workspaceTimezone))}</div>
+      <div>${escapeHtml(t('logisticsSchedulingScheduledWindow'))}: ${escapeHtml(formatWindow(activity.scheduledStart, activity.scheduledEnd, activity.timezone || workspaceTimezone))}</div>
       <div>${escapeHtml(t('logisticsSchedulingTimeZone'))}: ${escapeHtml(activity.timezone || workspaceTimezone || t('logisticsSchedulingTimeZoneMissing'))}</div>
       <div>Reference: ${escapeHtml(activity.relatedFulfillmentId || activity.relatedOrderId || activity.relatedMovementId || '—')}</div>
       ${activity.lastEvaluation ? `<div class="scheduling-feasibility-result" role="status">Feasibility: ${escapeHtml(activity.lastEvaluation)}</div>` : ''}
