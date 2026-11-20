@@ -138,37 +138,51 @@ await assert.rejects(
   error => error?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT'
 );
 
+// Seed a previously-authorized scheduled record to exercise downstream
+// lifecycle persistence without pretending this store has a trusted capacity adapter.
+const lifecycleCreated = await createLogisticsSchedulingActivity(chatId, {
+  ...base, idempotency_key: 'l11.4-lifecycle-create',
+}, actor);
+db.prepare(`
+  UPDATE logistics_scheduling_activities
+  SET status = 'SCHEDULED', version = 2
+  WHERE id = ?
+`).run(lifecycleCreated.id);
+const seededScheduled = await getLogisticsSchedulingActivity(chatId, lifecycleCreated.id);
+assert.equal(seededScheduled.status, 'SCHEDULED');
+assert.equal(seededScheduled.version, 2);
+
 await assert.rejects(
   () => transitionLogisticsSchedulingActivity(
-    chatId, created.id, 'CONFIRMED', actor,
+    chatId, lifecycleCreated.id, 'CONFIRMED', actor,
     { idempotency_key: 'l11.4-command-2', expectedVersion: 1 }
   ),
   error => error?.code === 'SCHEDULING_VERSION_CONFLICT'
 );
 
 const confirmed = await transitionLogisticsSchedulingActivity(
-  chatId, created.id, 'CONFIRMED', actor,
+  chatId, lifecycleCreated.id, 'CONFIRMED', actor,
   { idempotency_key: 'l11.4-command-2', expectedVersion: 2 }
 );
 assert.equal(confirmed.status, 'CONFIRMED');
 assert.equal(confirmed.confirmedByUserId, userId);
 
 const inProgress = await transitionLogisticsSchedulingActivity(
-  chatId, created.id, 'IN_PROGRESS', actor,
+  chatId, lifecycleCreated.id, 'IN_PROGRESS', actor,
   { idempotency_key: 'l11.4-command-3', expectedVersion: 3 }
 );
 assert.equal(inProgress.status, 'IN_PROGRESS');
 
 const completed = await transitionLogisticsSchedulingActivity(
-  chatId, created.id, 'COMPLETED', actor,
+  chatId, lifecycleCreated.id, 'COMPLETED', actor,
   { idempotency_key: 'l11.4-command-4', expectedVersion: 4 }
 );
 assert.equal(completed.status, 'COMPLETED');
 
 await assert.rejects(
   () => transitionLogisticsSchedulingActivity(
-    chatId, created.id, 'CANCELLED', actor,
-    { idempotency_key: 'l11.4-command-5', expectedVersion: 5 }
+    chatId, lifecycleCreated.id, 'CANCELLED', actor,
+    { idempotency_key: 'l11.4-command-5', expectedVersion: 5, reason: 'cannot cancel completed activity' }
   ),
   error => error?.code === 'INVALID_SCHEDULING_TRANSITION'
 );
