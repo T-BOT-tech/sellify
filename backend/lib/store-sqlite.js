@@ -10590,7 +10590,7 @@ function logisticsSchedulingRow(row) {
     requestedEnd: row.requested_end,
     scheduledStart: row.scheduled_start,
     scheduledEnd: row.scheduled_end,
-    timezone: row.timezone || getCanonicalSchedulingTimeZone(organizationId, row.location_id),
+    timezone: schedulingTimezone,
     recurrence: parseJSON(row.recurrence_json, null),
     confirmedByUserId: row.confirmed_by_user_id,
     confirmedAt: row.confirmed_at,
@@ -10789,6 +10789,7 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
   }
 
   const organizationId = String(tenant.organizationId);
+  const requestedTimezone = String(input.timezone ?? '').trim() || null;
   const canonicalTimezone = getCanonicalSchedulingTimeZone(organizationId, input.location_id ?? input.locationId ?? null);
   const request = normalizeLogisticsSchedulingRequest({
     ...input,
@@ -10854,7 +10855,8 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
     const hasTimeSemantics = Boolean(
       request.requested_start || request.scheduled_start || request.recurrence
     );
-    if (hasTimeSemantics && currentTimezone !== request.timezone) {
+    if (hasTimeSemantics && (currentTimezone !== request.timezone
+      || (requestedTimezone && requestedTimezone !== currentTimezone))) {
       throw Object.assign(new Error('The canonical scheduling timezone changed; refresh and retry'), {
         statusCode: 409, code: 'SCHEDULING_TIMEZONE_CHANGED',
       });
@@ -10990,6 +10992,14 @@ export async function evaluateLogisticsSchedulingActivity(chatId, activityId, ac
   const externalEvaluation = null;
   const scheduledStart = options.scheduledStart ?? options.scheduled_start ?? row.scheduled_start;
   const scheduledEnd = options.scheduledEnd ?? options.scheduled_end ?? row.scheduled_end;
+  const schedulingTimezone = row.timezone || getCanonicalSchedulingTimeZone(organizationId, row.location_id);
+  const requestedTimezone = String(options.timezone ?? '').trim() || null;
+  if ((scheduledStart != null || scheduledEnd != null)
+    && requestedTimezone && requestedTimezone !== schedulingTimezone) {
+    throw Object.assign(new Error('The activity timezone changed; refresh before evaluating'), {
+      statusCode: 409, code: 'SCHEDULING_TIMEZONE_CHANGED',
+    });
+  }
   if ((scheduledStart == null) !== (scheduledEnd == null)) {
     throw Object.assign(new Error('Candidate scheduled start and end must be supplied together'), {
       statusCode: 400, code: 'SCHEDULING_WINDOW_INVALID',
@@ -11074,6 +11084,15 @@ export async function transitionLogisticsSchedulingActivity(chatId, activityId, 
       }
       db.exec('COMMIT');
       return { ...logisticsSchedulingRow(row), idempotent: true };
+    }
+
+    if (target === 'SCHEDULED') {
+      const expectedTimezone = String(input.timezone ?? '').trim() || null;
+      if (expectedTimezone && expectedTimezone !== scheduledTimezone) {
+        throw Object.assign(new Error('The activity timezone changed; refresh before scheduling'), {
+          statusCode: 409, code: 'SCHEDULING_TIMEZONE_CHANGED',
+        });
+      }
     }
 
     const expectedVersion = input.expectedVersion == null ? null : Number(input.expectedVersion);
