@@ -10657,16 +10657,115 @@ function assertSchedulingLocation(organizationId, locationId) {
   }
 }
 
+function assertSchedulingOrder(organizationId, orderId) {
+  const order = db.prepare(`
+    SELECT o.server_order_id
+    FROM orders o
+    JOIN tenants t ON t.chat_id = o.chat_id
+    WHERE o.server_order_id = ? AND t.organization_id = ?
+  `).get(String(orderId), String(organizationId));
+  if (!order) {
+    throw Object.assign(new Error('Referenced order does not belong to this organization'), {
+      statusCode: 409, code: 'ORDER_REFERENCE_INVALID',
+    });
+  }
+  return String(order.server_order_id);
+}
+
 function assertSchedulingFulfillment(organizationId, fulfillmentId) {
-  if (!fulfillmentId) return;
-  const fulfillment = db.prepare(
-    'SELECT id, organization_id FROM fulfillments WHERE id = ? AND organization_id = ?'
-  ).get(String(fulfillmentId), String(organizationId));
+  const fulfillment = db.prepare(`
+    SELECT f.id, f.server_order_id, f.location_id
+    FROM fulfillments f
+    JOIN orders o ON o.server_order_id = f.server_order_id
+    JOIN tenants t ON t.chat_id = o.chat_id
+    WHERE f.id = ? AND f.organization_id = ? AND t.organization_id = ?
+  `).get(String(fulfillmentId), String(organizationId), String(organizationId));
   if (!fulfillment) {
     throw Object.assign(new Error('Referenced fulfillment does not belong to this organization'), {
       statusCode: 409, code: 'FULFILLMENT_REFERENCE_INVALID',
     });
   }
+  return fulfillment;
+}
+
+function assertSchedulingMovement(organizationId, movementId) {
+  const movement = db.prepare(`
+    SELECT id, location_id, reference_type, reference_id, metadata_json
+    FROM inventory_movements
+    WHERE id = ? AND organization_id = ?
+  `).get(String(movementId), String(organizationId));
+  if (!movement) {
+    throw Object.assign(new Error('Referenced inventory movement does not belong to this organization'), {
+      statusCode: 409, code: 'MOVEMENT_REFERENCE_INVALID',
+    });
+  }
+  return movement;
+}
+
+function assertSchedulingReferences(organizationId, locationId, related = {}) {
+  let orderId = related.order?.id ? String(related.order.id) : null;
+  let fulfillment = related.fulfillment?.id
+    ? assertSchedulingFulfillment(organizationId, related.fulfillment.id)
+    : null;
+
+  if (fulfillment) {
+    const fulfillmentOrderId = String(fulfillment.server_order_id);
+    if (orderId && orderId !== fulfillmentOrderId) {
+      throw Object.assign(new Error('Order and fulfillment references must identify the same Core Order'), {
+        statusCode: 409, code: 'SCHEDULING_REFERENCE_MISMATCH',
+      });
+    }
+    orderId = fulfillmentOrderId;
+    if (locationId && fulfillment.location_id && String(locationId) !== String(fulfillment.location_id)) {
+      throw Object.assign(new Error('Scheduling location must match the referenced fulfillment location'), {
+        statusCode: 409, code: 'SCHEDULING_REFERENCE_MISMATCH',
+      });
+    }
+  }
+
+  if (orderId) assertSchedulingOrder(organizationId, orderId);
+
+  if (related.movement?.id) {
+    const movement = assertSchedulingMovement(organizationId, related.movement.id);
+    if (locationId && String(locationId) !== String(movement.location_id)) {
+      throw Object.assign(new Error('Scheduling location must match the referenced inventory movement location'), {
+        statusCode: 409, code: 'SCHEDULING_REFERENCE_MISMATCH',
+      });
+    }
+
+    const metadata = parseJSON(movement.metadata_json, {});
+    const metadataOrderId = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+      ? String(metadata.orderId ?? metadata.order_id ?? '').trim() || null
+      : null;
+    let movementOrderId = null;
+    if (String(movement.reference_type || '').toLowerCase() === 'order') {
+      movementOrderId = String(movement.reference_id || '').trim() || null;
+    } else if (String(movement.reference_type || '').toLowerCase() === 'fulfillment') {
+      const movementFulfillment = assertSchedulingFulfillment(organizationId, movement.reference_id);
+      movementOrderId = String(movementFulfillment.server_order_id);
+      if (fulfillment && String(fulfillment.id) !== String(movement.reference_id)) {
+        throw Object.assign(new Error('Movement and fulfillment references identify different fulfillments'), {
+          statusCode: 409, code: 'SCHEDULING_REFERENCE_MISMATCH',
+        });
+      }
+    }
+    if (movementOrderId && metadataOrderId && movementOrderId !== metadataOrderId) {
+      throw Object.assign(new Error('Inventory movement order metadata conflicts with its canonical reference'), {
+        statusCode: 409, code: 'SCHEDULING_REFERENCE_MISMATCH',
+      });
+    }
+    movementOrderId ||= metadataOrderId;
+
+    if (orderId && (!movementOrderId || movementOrderId !== orderId)) {
+      throw Object.assign(new Error('Order, fulfillment, and movement references must identify the same Core Order'), {
+        statusCode: 409, code: 'SCHEDULING_REFERENCE_MISMATCH',
+      });
+    }
+    if (!orderId && movementOrderId) {
+      orderId = assertSchedulingOrder(organizationId, movementOrderId);
+    }
+  }
+  return { orderId, fulfillment };
 }
 
 export async function createLogisticsSchedulingActivity(chatId, input = {}, actor = null) {
@@ -10698,8 +10797,6 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
 
   const actorUserId = actor?.userId ? String(actor.userId) : null;
   const requestHash = schedulingRequestHash(request);
-  assertSchedulingLocation(organizationId, request.location_id);
-  assertSchedulingFulfillment(organizationId, request.related.fulfillment?.id);
 
   db.exec('BEGIN IMMEDIATE');
   try {
@@ -10733,6 +10830,14 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
       db.exec('COMMIT');
       return { ...logisticsSchedulingRow(existing), idempotent: true };
     }
+
+    // New scheduling requests use the canonical server authorization policy.
+    // Durable idempotent replays are resolved before mutable reference checks.
+    assertLogisticsSchedulingAuthorization(
+      actor, organizationId, request.location_id, 'logistics:scheduling:request',
+    );
+    assertSchedulingLocation(organizationId, request.location_id);
+    assertSchedulingReferences(organizationId, request.location_id, request.related);
 
     const now = nowIso();
     const id = String(input.id || crypto.randomUUID());
@@ -10858,26 +10963,35 @@ export async function evaluateLogisticsSchedulingActivity(chatId, activityId, ac
     "SELECT * FROM logistics_scheduling_activities WHERE organization_id = ? AND id <> ? AND status IN ('SCHEDULED', 'CONFIRMED', 'IN_PROGRESS')"
   ).all(organizationId, String(activityId));
 
-  // Feasibility options cross a caller-controlled request boundary. Until a trusted
-  // server-side capacity adapter is explicitly wired here, callers cannot assert FEASIBLE.
+  // Candidate window values are advisory input only. They are evaluated without
+  // persistence; caller-supplied capacity/feasibility assertions are never trusted.
   const externalEvaluation = null;
+  const scheduledStart = options.scheduledStart ?? options.scheduled_start ?? row.scheduled_start;
+  const scheduledEnd = options.scheduledEnd ?? options.scheduled_end ?? row.scheduled_end;
+  if ((scheduledStart == null) !== (scheduledEnd == null)) {
+    throw Object.assign(new Error('Candidate scheduled start and end must be supplied together'), {
+      statusCode: 400, code: 'SCHEDULING_WINDOW_INVALID',
+    });
+  }
+  const request = normalizeLogisticsSchedulingRequest({
+    organization_id: row.organization_id,
+    location_id: row.location_id,
+    activity_type: row.activity_type,
+    mode: row.mode,
+    requested_start: row.requested_start,
+    requested_end: row.requested_end,
+    scheduled_start: scheduledStart,
+    scheduled_end: scheduledEnd,
+    timezone: row.timezone,
+    recurrence: parseJSON(row.recurrence_json, null),
+    related_order: row.related_order_id ? { id: row.related_order_id } : null,
+    related_fulfillment: row.related_fulfillment_id ? { id: row.related_fulfillment_id } : null,
+    related_movement: row.related_movement_id ? { id: row.related_movement_id } : null,
+    status: row.status,
+  });
 
   return evaluateLogisticsSchedulingFeasibility({
-    request: {
-      organization_id: row.organization_id,
-      location_id: row.location_id,
-      activity_type: row.activity_type,
-      mode: row.mode,
-      requested_start: row.requested_start,
-      requested_end: row.requested_end,
-      scheduled_start: row.scheduled_start,
-      scheduled_end: row.scheduled_end,
-      timezone: row.timezone,
-      recurrence: parseJSON(row.recurrence_json, null),
-      related_order: row.related_order_id ? { id: row.related_order_id } : null,
-      related_fulfillment: row.related_fulfillment_id ? { id: row.related_fulfillment_id } : null,
-      related_movement: row.related_movement_id ? { id: row.related_movement_id } : null,
-    },
+    request,
     existingActivities: rows.map(logisticsSchedulingRow),
     externalEvaluation,
   });
