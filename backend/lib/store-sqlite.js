@@ -10813,6 +10813,7 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
     ).get(organizationId, idempotencyKey);
 
     if (existing) {
+      assertLogisticsSchedulingAuthorization(actor, organizationId, existing.location_id, 'logistics:scheduling:request');
       const request = buildLogisticsSchedulingRequest(input, organizationId, locationId, String(existing.timezone || 'UTC'));
       const existingRequest = {
         organization_id: existing.organization_id,
@@ -10831,7 +10832,6 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
           movement: existing.related_movement_id ? { id: existing.related_movement_id } : null,
         },
       };
-      assertLogisticsSchedulingAuthorization(actor, organizationId, existing.location_id, 'logistics:scheduling:request');
       if (schedulingRequestHash(existingRequest) !== schedulingRequestHash(request)) {
         throw Object.assign(new Error('Idempotency key was already used with a different scheduling request'), {
           statusCode: 409, code: 'IDEMPOTENCY_CONFLICT',
@@ -10844,8 +10844,8 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
     const timezone = resolveLogisticsSchedulingTimeZone(organizationId, locationId);
     const request = buildLogisticsSchedulingRequest(input, organizationId, locationId, timezone);
     assertSchedulingLocation(organizationId, request.location_id);
-    assertSchedulingReferences(organizationId, request.related);
     assertLogisticsSchedulingAuthorization(actor, organizationId, request.location_id, 'logistics:scheduling:request');
+    assertSchedulingReferences(organizationId, request.related);
 
     const now = nowIso();
     const id = crypto.randomUUID();
