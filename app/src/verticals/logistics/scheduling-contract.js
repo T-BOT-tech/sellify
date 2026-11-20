@@ -124,6 +124,53 @@ function normalizeReference(value, field) {
   return Object.freeze({ id, authority });
 }
 
+const LOCAL_DATE_TIME = /^(\\d{4})-(\\d{2})-(\\d{2})T([01]\\d|2[0-3]):([0-5]\\d)(?::([0-5]\\d))?$/;
+
+export function logisticsLocalDateTimeToIso(value, timeZone) {
+  if (typeof value !== 'string') invalid('local datetime must be YYYY-MM-DDTHH:mm');
+  const match = LOCAL_DATE_TIME.exec(value.trim());
+  if (!match) invalid('local datetime must be YYYY-MM-DDTHH:mm', 'LOGISTICS_SCHEDULING_LOCAL_TIME_INVALID');
+  const [, year, month, day, hour, minute, second = '00'] = match;
+  const calendar = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (calendar.getUTCFullYear() !== Number(year)
+    || calendar.getUTCMonth() !== Number(month) - 1
+    || calendar.getUTCDate() !== Number(day)) {
+    invalid('local datetime contains an invalid calendar date', 'LOGISTICS_SCHEDULING_LOCAL_TIME_INVALID');
+  }
+
+  let formatter;
+  try {
+    formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: text(timeZone, 'timezone'),
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hourCycle: 'h23',
+    });
+  } catch {
+    invalid('timezone must be a valid IANA timezone', 'LOGISTICS_SCHEDULING_TIMEZONE_INVALID');
+  }
+
+  const target = [Number(year), Number(month), Number(day), Number(hour), Number(minute), Number(second)];
+  const matches = [];
+  const wallClock = Date.UTC(target[0], target[1] - 1, target[2], target[3], target[4], target[5]);
+  for (let offsetMinutes = -14 * 60; offsetMinutes <= 14 * 60; offsetMinutes += 15) {
+    const candidate = wallClock - offsetMinutes * 60_000;
+    const parts = Object.fromEntries(formatter.formatToParts(candidate).map(part => [part.type, part.value]));
+    const actual = [
+      Number(parts.year), Number(parts.month), Number(parts.day),
+      Number(parts.hour), Number(parts.minute), Number(parts.second),
+    ];
+    if (actual.every((part, index) => part === target[index])) matches.push(candidate);
+  }
+  if (matches.length === 0) {
+    invalid('local datetime does not exist in the selected timezone', 'LOGISTICS_SCHEDULING_LOCAL_TIME_INVALID');
+  }
+  if (matches.length > 1) {
+    invalid('local datetime is ambiguous in the selected timezone', 'LOGISTICS_SCHEDULING_LOCAL_TIME_AMBIGUOUS');
+  }
+  return new Date(matches[0]).toISOString();
+}
+
 function normalizeTime(value, field) {
   if (value === undefined || value === null || value === '') return null;
   const result = text(value, field);
