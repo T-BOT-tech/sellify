@@ -80,6 +80,7 @@ await assert.rejects(
   () => createLogisticsSchedulingActivity(chatId, {
     ...base,
     scheduled_start: '2026-10-10T11:00:00Z',
+    scheduled_end: '2026-10-10T12:00:00Z',
   }, actor),
   error => error?.code === 'IDEMPOTENCY_CONFLICT'
 );
