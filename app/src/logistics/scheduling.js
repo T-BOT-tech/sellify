@@ -61,7 +61,8 @@ function schedulingLocations() {
   for (const id of scoped) {
     if (!visible.some(location => String(location.id) === id)) visible.push({ id, name: id, status: 'ACTIVE' });
   }
-  if (config.locationId && !visible.some(location => String(location.id) === String(config.locationId))) {
+  if (config.locationId && (!scoped.length || scoped.includes(String(config.locationId)))
+    && !visible.some(location => String(location.id) === String(config.locationId))) {
     visible.push({ id: String(config.locationId), name: String(config.locationId), status: 'ACTIVE' });
   }
   return visible;
