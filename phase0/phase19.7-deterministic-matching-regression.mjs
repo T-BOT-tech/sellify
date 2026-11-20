@@ -81,7 +81,7 @@ assert.equal(evaluateDiscoveryMatch({
 }, windowContext).eligible, true, 'validity exactly at requested window end qualifies');
 assert.equal(evaluateDiscoveryMatch({
   ...temporalCandidate,
-  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], validUntil: '2026-12-12T23:59:59.998Z' }],
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], validUntil: '2026-12-03T23:59:59.998Z' }],
 }, windowContext).eligible, false, 'validity one millisecond before requested window end is rejected');
 assert.equal(evaluateDiscoveryMatch({
   ...temporalCandidate,
