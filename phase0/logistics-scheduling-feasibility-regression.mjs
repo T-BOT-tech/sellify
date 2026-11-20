@@ -16,7 +16,7 @@ const base = {
   timezone: 'Africa/Addis_Ababa',
   scheduled_start: '2026-10-10T09:00:00Z',
   scheduled_end: '2026-10-10T10:00:00Z',
-  related_movement: { id: 'movement-1', authority: 'logistics' },
+  related_movement: { id: 'movement-1', authority: 'inventory' },
 };
 
 const noAuthoritativeCapacity = evaluateLogisticsSchedulingFeasibility({
@@ -117,7 +117,7 @@ const noWindow = evaluateLogisticsSchedulingFeasibility({
     organization_id: 'l11.6-org',
     activity_type: 'PICKUP',
     mode: 'ON_DEMAND',
-    related_movement: { id: 'movement-2', authority: 'logistics' },
+    related_movement: { id: 'movement-2', authority: 'inventory' },
   },
 });
 assert.equal(noWindow.evaluation, 'UNKNOWN');
