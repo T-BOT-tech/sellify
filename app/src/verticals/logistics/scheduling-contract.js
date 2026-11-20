@@ -184,6 +184,7 @@ function normalizeTime(value, field) {
     || calendar.getUTCFullYear() !== Number(year)
     || calendar.getUTCMonth() !== Number(month) - 1
     || calendar.getUTCDate() !== Number(day)
+    || zone === '-00:00'
     || (zone !== 'Z' && Number(zone.slice(1, 3)) === 14 && zone.slice(4) !== '00')) {
     invalid(`${field} must be a valid timezone-qualified ISO-8601 instant`);
   }
