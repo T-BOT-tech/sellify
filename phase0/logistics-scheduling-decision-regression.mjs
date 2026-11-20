@@ -429,15 +429,33 @@ for (const outcome of ['CONFLICT', 'UNKNOWN']) {
   assert.equal(decision.execution, false);
 }
 
-const create = async (key, start, end, movementId) => createLogisticsSchedulingActivity(chatId, {
-  location_id: locationId,
-  activity_type: 'PICKUP',
-  mode: 'SCHEDULED',
-  scheduled_start: start,
-  scheduled_end: end,
-  related_movement: { id: movementId, authority: 'logistics' },
-  idempotency_key: key,
-}, actor);
+const orderIdsByMovement = new Map();
+const create = async (key, start, end, movementId) => {
+  let orderId = orderIdsByMovement.get(movementId);
+  if (!orderId) {
+    orderId = `l11.8-core-order-${orderIdsByMovement.size + 1}`;
+    db.prepare(`
+      INSERT INTO orders (
+        chat_id, local_id, server_order_id, order_json, total_minor,
+        created_at, status, delivered_to_device, marketplace_order_id, is_marketplace
+      ) VALUES (?, ?, ?, ?, 0, ?, 'pending', 1, NULL, 0)
+    `).run(
+      chatId, `local-${orderId}`, orderId,
+      JSON.stringify({ id: orderId, fulfillment_type: 'delivery', fulfillment_status: 'pending' }),
+      Date.now(),
+    );
+    orderIdsByMovement.set(movementId, orderId);
+  }
+  return createLogisticsSchedulingActivity(chatId, {
+    location_id: locationId,
+    activity_type: 'PICKUP',
+    mode: 'SCHEDULED',
+    scheduled_start: start,
+    scheduled_end: end,
+    related_movement: { id: `movement:${orderId}`, authority: 'logistics' },
+    idempotency_key: key,
+  }, actor);
+};
 
 const first = await create(
   'l11.8-create-1',
