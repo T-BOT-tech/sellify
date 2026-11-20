@@ -595,7 +595,7 @@ export function mountLogisticsSchedulingWorkspace(root) {
     root.dataset.schedulingContextKey = '';
     return;
   }
-  const contextKey = [config.chatId || '', config.sessionToken || '', schedulingLocationId() || '', roleNames().sort().join(',')].join(':');
+  const contextKey = [config.chatId || '', schedulingLocationId() || '', roleNames().sort().join(',')].join(':');
   const refreshNeeded = root.dataset.schedulingContextKey !== contextKey;
   root.dataset.schedulingContextKey = contextKey;
   if (refreshNeeded) {
