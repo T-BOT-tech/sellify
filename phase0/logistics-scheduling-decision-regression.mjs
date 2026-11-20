@@ -441,7 +441,7 @@ const create = async (key, start, end, movementId) => {
       ) VALUES (?, ?, ?, ?, 0, ?, 'pending', 1, NULL, 0)
     `).run(
       chatId, `local-${orderId}`, orderId,
-      JSON.stringify({ id: orderId, fulfillment_type: 'delivery', fulfillment_status: 'pending' }),
+      JSON.stringify({ id: orderId, fulfillment_type: 'pickup', fulfillment_status: 'pending' }),
       Date.now(),
     );
     orderIdsByMovement.set(movementId, orderId);
