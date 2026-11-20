@@ -529,7 +529,7 @@ try {
   ];
   const englishLocale = await readFile(path.join(root, 'app/src/i18n/locales/en.js'), 'utf8');
   for (const key of requiredEnglishKeys) {
-    assert.match(englishLocale, new RegExp('\\\\b' + key + '\\\\s*:'));
+    assert.match(englishLocale, new RegExp('\\b' + key + '\\s*:'));
   }
 
   console.log('L11 Logistics Scheduling authenticated HTTP regression: PASS');
