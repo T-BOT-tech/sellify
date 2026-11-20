@@ -13593,7 +13593,7 @@ export async function authenticateSessionToken(token) {
                    )
                  )
                  OR (
-                   mr.role_id IN ('logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer', 'service_provider')
+                   mr.role_id IN ('logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer')
                    AND EXISTS (
                      SELECT 1 FROM pack_lifecycle pl
                       WHERE pl.organization_id = t.organization_id
@@ -13641,7 +13641,7 @@ export async function authenticateSessionToken(token) {
                    )
                  )
                  OR (
-                   mr.role_id IN ('logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer', 'service_provider')
+                   mr.role_id IN ('logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer')
                    AND EXISTS (
                      SELECT 1 FROM pack_lifecycle pl
                       WHERE pl.organization_id = t.organization_id
