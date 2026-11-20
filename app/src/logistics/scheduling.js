@@ -154,7 +154,7 @@ function handleSchedulingError(root, error) {
   } else if (String(error?.code || '').startsWith('LOGISTICS_SCHEDULING_LOCAL_TIME_')) {
     lastState = 'ERROR';
     feedback = t('logisticsSchedulingWindowInvalid');
-  } else if (error?.code === 'LOGISTICS_SCHEDULING_TIMEZONE_INVALID') {
+  } else if (['LOGISTICS_SCHEDULING_TIMEZONE_INVALID', 'SCHEDULING_TIMEZONE_INVALID', 'LOGISTICS_SCHEDULING_TIMEZONE_REQUIRED'].includes(error?.code)) {
     lastState = 'ERROR';
     feedback = t('serviceAvailabilityTimezone');
   } else {
