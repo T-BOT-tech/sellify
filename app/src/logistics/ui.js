@@ -26,6 +26,7 @@ import { switchTab } from '../ui/tabs.js';
 import { buildLogisticsOperationalWorkspaceProjection } from '../verticals/logistics/workspace-projection.js';
 import { getLogisticsWorkspaceComposition } from '../verticals/logistics/workspace-contract.js';
 import { serviceBookingsWorkspaceShell, mountServiceBookingsWorkspace } from './service-bookings.js';
+import { logisticsSchedulingWorkspaceShell, mountLogisticsSchedulingWorkspace } from './scheduling.js';
 
 function canOpenAppointmentsWorkspace() {
   const contextualRoles = Array.isArray(config.contextualRoles) ? config.contextualRoles : [];
@@ -385,6 +386,7 @@ export function renderLogistics() {
   if (pending.length === 0 && done.length === 0 && assignmentOnly.length === 0 && !workspace.tracking.length) {
     html += `<div class="empty">${t('whNoLogisticsOrders')}</div>`;
   }
+  html += logisticsSchedulingWorkspaceShell();
   list.innerHTML = html;
 
   const statusFilter = list.querySelector('#logistics-status-filter');
@@ -478,4 +480,6 @@ export function renderLogistics() {
       });
     });
   }).catch(() => {});
+
+  mountLogisticsSchedulingWorkspace(list);
 }
