@@ -96,9 +96,9 @@ const stillRequested = await getLogisticsSchedulingActivity(chatId, created.id);
 assert.equal(stillRequested.status, 'REQUESTED');
 assert.equal(stillRequested.version, 1);
 
-// A row already scheduled by a trusted upstream scheduling decision is used
-// to test downstream lifecycle transitions. This fixture does not bypass or
-// simulate the guarded REQUESTED -> SCHEDULED command above.
+// A pre-existing scheduled row is seeded only to exercise downstream
+// confirmation/completion transitions. This fixture is not evidence that the
+// guarded REQUESTED -> SCHEDULED command can succeed without trusted capacity.
 db.prepare(`
   UPDATE logistics_scheduling_activities
      SET status = 'SCHEDULED', version = 2
