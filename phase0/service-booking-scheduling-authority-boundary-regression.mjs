@@ -29,6 +29,7 @@ const schedulingRequest = {
   organization_id: 'org-boundary-test',
   activity_type: 'DELIVERY',
   mode: 'SCHEDULED',
+  timezone: 'Africa/Addis_Ababa',
   requested_start: booking.requested_start,
   requested_end: booking.requested_end,
   scheduled_start: booking.requested_start,
