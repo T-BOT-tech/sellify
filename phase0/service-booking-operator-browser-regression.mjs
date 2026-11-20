@@ -69,8 +69,33 @@ try {
   const calls = [];
   let forceConflict = false;
   let resourcesAvailable = false;
+  const resourceAvailabilityCalls = [];
   await page.route('**/tenants/test-tenant/service-resources**', async route => {
-    if (route.request().method() !== 'GET') {
+    const request = route.request();
+    const url = new URL(request.url());
+    resourceAvailabilityCalls.push({ method: request.method(), path: url.pathname });
+    if (url.pathname.endsWith('/availability')) {
+      if (request.method() !== 'GET') {
+        await route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Method not allowed' } }) });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          availability: {
+            state: 'DECLARED',
+            version: 1,
+            timeZone: 'Africa/Addis_Ababa',
+            effectiveTimeZone: 'Africa/Addis_Ababa',
+            workingHours: [{ weekday: 1, startTime: '09:00', endTime: '17:00' }],
+            exceptions: [],
+          },
+        }),
+      });
+      return;
+    }
+    if (request.method() !== 'GET') {
       await route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Method not allowed' } }) });
       return;
     }
@@ -218,6 +243,30 @@ try {
   });
   forceConflict = true;
   resourcesAvailable = true;
+  const restoredRole = await page.evaluate(async () => {
+    const state = await import('/src/state.js');
+    state.setConfig({ ...state.config, currentStaffRole: 'owner', contextualRoles: [] });
+    return state.config.currentStaffRole;
+  });
+  assert.equal(restoredRole, 'owner', 'resource availability controls require the restored owner role');
+  await page.locator('#serviceBookingsRefresh').click();
+  await page.locator('[data-resource-id="resource-room-1"] .service-resource-availability').waitFor();
+
+  // Declared-hours assessment uses the resource timezone and does not create a booking or mutate schedule state.
+  await page.locator('.service-resource-availability').click();
+  await page.locator('.service-window-start').fill('2026-11-16T09:00');
+  await page.locator('.service-window-end').fill('2026-11-16T10:00');
+  await page.locator('.service-window-assess').click();
+  const assessmentResult = page.locator('.service-window-assessment-result');
+  await assessmentResult.filter({ hasText: 'Within declared working hours' }).waitFor();
+  assert.match(await assessmentResult.innerText(), /Existing appointments and resource commitments were not checked; availability is unconfirmed/);
+  await page.locator('.service-window-start').fill('2026-11-16T06:00');
+  await page.locator('.service-window-end').fill('2026-11-16T07:00');
+  await page.locator('.service-window-assess').click();
+  await assessmentResult.filter({ hasText: 'Outside declared working hours' }).waitFor();
+  assert.equal(resourceAvailabilityCalls.filter(call => call.path.endsWith('/availability') && call.method !== 'GET').length, 0,
+    'assessment is a read-only projection and does not persist schedule or booking changes');
+
   await page.getByRole('button', { name: 'CONFIRMED' }).click();
   await page.locator('.service-booking-action-form select[name="service_resource_id"]').selectOption('resource-room-1');
   await page.locator('.service-booking-action-form [type="submit"]').click();

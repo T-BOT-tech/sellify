@@ -197,4 +197,12 @@ export default {
     serviceAvailabilitySaving: "Olkaa'aa jira…",
     serviceAvailabilitySavedDeclaration: "Sagantaan akka ibsaatti olkaa'ame; argamuun hin mirkanoofne.",
     serviceAvailabilitySaveFailed: "Sagantaa olkaa'uun hin danda'amne.",
+    serviceAvailabilityAssessWindow: "Yeroo gaafatame madaali",
+    serviceAvailabilityStart: "Jalqaba",
+    serviceAvailabilityEnd: "Xumura",
+    serviceAvailabilityAssess: "Yeroo madaali",
+    serviceAvailabilityWithinDeclaredHours: "Sa'aatii hojii ibsame keessa jira.",
+    serviceAvailabilityOutsideDeclaredHours: "Sa'aatii hojii ibsame ala jira.",
+    serviceAvailabilityAssessmentUnknown: "Madaalliin hin beekamu.",
+    serviceAvailabilityCommitmentsNotChecked: "Beellamoonni fi qabeenyi duraan qabaman hin ilaalamne; argamuun hin mirkanoofne.",
 };

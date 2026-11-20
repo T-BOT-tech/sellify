@@ -198,4 +198,12 @@ export default {
     serviceAvailabilitySaving: "በማስቀመጥ ላይ…",
     serviceAvailabilitySavedDeclaration: "የሥራ ሰዓት ተቀምጧል፤ ተገኝነት ግን አልተረጋገጠም።",
     serviceAvailabilitySaveFailed: "የሥራ ሰዓትን ማስቀመጥ አልተቻለም።",
+    serviceAvailabilityAssessWindow: "የተጠየቀውን ጊዜ ገምግም",
+    serviceAvailabilityStart: "መጀመሪያ",
+    serviceAvailabilityEnd: "መጨረሻ",
+    serviceAvailabilityAssess: "ጊዜውን ገምግም",
+    serviceAvailabilityWithinDeclaredHours: "በተገለጹት የሥራ ሰዓታት ውስጥ ነው።",
+    serviceAvailabilityOutsideDeclaredHours: "ከተገለጹት የሥራ ሰዓታት ውጭ ነው።",
+    serviceAvailabilityAssessmentUnknown: "ግምገማው አይታወቅም።",
+    serviceAvailabilityCommitmentsNotChecked: "ነባር ቀጠሮዎችና የሀብት ቁርጠኝነቶች አልተመረመሩም፤ ተገኝነት አልተረጋገጠም።",
 };

@@ -319,4 +319,12 @@ export default {
     serviceAvailabilitySaving: "Saving schedule…",
     serviceAvailabilitySavedDeclaration: "Schedule saved as a declaration; availability remains unconfirmed.",
     serviceAvailabilitySaveFailed: "Could not save schedule.",
+    serviceAvailabilityAssessWindow: "Assess a requested window",
+    serviceAvailabilityStart: "Start",
+    serviceAvailabilityEnd: "End",
+    serviceAvailabilityAssess: "Assess window",
+    serviceAvailabilityWithinDeclaredHours: "Within declared working hours.",
+    serviceAvailabilityOutsideDeclaredHours: "Outside declared working hours.",
+    serviceAvailabilityAssessmentUnknown: "Assessment unknown.",
+    serviceAvailabilityCommitmentsNotChecked: "Existing appointments and resource commitments were not checked; availability is unconfirmed.",
 };
