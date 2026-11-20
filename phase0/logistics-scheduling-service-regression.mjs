@@ -101,25 +101,39 @@ await assert.rejects(
   error => error?.code === 'IDEMPOTENCY_CONFLICT'
 );
 
-const scheduled = await transitionLogisticsSchedulingActivity(
-  chatId, created.id, 'SCHEDULED', actor,
-  { idempotency_key: 'l11.4-command-1', expectedVersion: 1 }
+await assert.rejects(
+  () => transitionLogisticsSchedulingActivity(
+    chatId, created.id, 'SCHEDULED', actor,
+    { idempotency_key: 'l11.4-schedule-command', expectedVersion: 1 }
+  ),
+  error => error?.code === 'SCHEDULING_FEASIBILITY_UNKNOWN'
 );
-assert.equal(scheduled.status, 'SCHEDULED');
-assert.equal(scheduled.version, 2);
+const afterBlockedSchedule = await getLogisticsSchedulingActivity(chatId, created.id);
+assert.equal(afterBlockedSchedule.status, 'REQUESTED');
+assert.equal(afterBlockedSchedule.version, 1);
+assert.equal(afterBlockedSchedule.scheduledStart, '2026-10-10T09:00:00.000Z');
 
-const scheduledReplay = await transitionLogisticsSchedulingActivity(
-  chatId, created.id, 'SCHEDULED', actor,
-  { idempotency_key: 'l11.4-command-1', expectedVersion: 1 }
+// A request may be cancelled with a reason, and the lifecycle command is
+// idempotent without inventing a feasibility or execution decision.
+const cancelled = await transitionLogisticsSchedulingActivity(
+  chatId, created.id, 'CANCELLED', actor,
+  { idempotency_key: 'l11.4-command-1', expectedVersion: 1, reason: 'buyer cancelled request' }
 );
-assert.equal(scheduledReplay.idempotent, true);
+assert.equal(cancelled.status, 'CANCELLED');
+assert.equal(cancelled.version, 2);
+
+const cancelledReplay = await transitionLogisticsSchedulingActivity(
+  chatId, created.id, 'CANCELLED', actor,
+  { idempotency_key: 'l11.4-command-1', expectedVersion: 1, reason: 'buyer cancelled request' }
+);
+assert.equal(cancelledReplay.idempotent, true);
 
 // A command key is bound to its original transition; it cannot be reused
 // for a different lifecycle action on the same scheduling activity.
 await assert.rejects(
   () => transitionLogisticsSchedulingActivity(
-    chatId, created.id, 'CANCELLED', actor,
-    { idempotency_key: 'l11.4-command-1', expectedVersion: 2 }
+    chatId, created.id, 'EXPIRED', actor,
+    { idempotency_key: 'l11.4-command-1', expectedVersion: 2, reason: 'request expired' }
   ),
   error => error?.code === 'IDEMPOTENCY_KEY_REUSE_CONFLICT'
 );
