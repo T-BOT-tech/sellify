@@ -13,6 +13,7 @@ const base = {
   location_id: 'l11.6-location',
   activity_type: 'PICKUP',
   mode: 'SCHEDULED',
+  timezone: 'Africa/Addis_Ababa',
   scheduled_start: '2026-10-10T09:00:00Z',
   scheduled_end: '2026-10-10T10:00:00Z',
   related_movement: { id: 'movement-1', authority: 'logistics' },
