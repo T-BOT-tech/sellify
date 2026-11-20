@@ -29,7 +29,7 @@ export default {
     logisticsSchedulingEvaluation: "Madaallii danda'amummaa",
     logisticsSchedulingBlockedUnknown: "Sagantaan hin mirkanoofne: ragaan dandeettii amanamaan hin walqabanne; kanaaf madaalliin UNKNOWN dha.",
     logisticsSchedulingBlockedConflict: "Sochiin kaanonikaa duraan jiru yeroo kanaan waan walitti bu'uuf sagantaan dhaabbateera.",
-    logisticsSchedulingReferenceHint: "Wabiin Movement bifa projection jiru fayyadama: movement:<Core Order ID>.",
+    logisticsSchedulingReferenceHint: "Wabiin Movement bifa addaa movement:<Core Order ID> fayyadama; gara ajaja ijoootti hiikama, galmee Movement biraa hin uumu.",
     logisticsSchedulingScheduleBlocked: "Madaalliin haaraan ragaa dandeettii amanamaa irraa FEASIBLE hanga deebisutti sagantaa murteessuun hin danda'amu.",
     logisticsSchedulingWindowRequired: "Madaallii danda'amummaa dura yeroo jalqabaa fi xumuraa sagantaa yaadame galchi.",
     logisticsSchedulingWindowInvalid: "Yeroon xumuraa yeroo jalqabaa booda ta'uu qaba. Daangaa yeroo filatame sirreessi.",
