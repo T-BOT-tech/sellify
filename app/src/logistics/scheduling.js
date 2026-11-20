@@ -61,6 +61,9 @@ function schedulingLocations() {
   for (const id of scoped) {
     if (!visible.some(location => String(location.id) === id)) visible.push({ id, name: id, status: 'ACTIVE' });
   }
+  if (config.locationId && !visible.some(location => String(location.id) === String(config.locationId))) {
+    visible.push({ id: String(config.locationId), name: String(config.locationId), status: 'ACTIVE' });
+  }
   return visible;
 }
 
@@ -403,7 +406,7 @@ async function submitRequest(root, form) {
     requested_end_local: endValue || null,
     [`related_${referenceType}`]: { id: referenceId },
   };
-  if (mode === 'WINDOWED' && (!body.requested_start || !body.requested_end)) {
+  if (mode === 'WINDOWED' && (!body.requested_start_local || !body.requested_end_local)) {
     lastState = 'READY';
     feedback = t('logisticsSchedulingWindowRequired');
     renderWorkspace(root);
