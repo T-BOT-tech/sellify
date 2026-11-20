@@ -59,6 +59,52 @@ try {
     },
   };
   let assignmentReads = 0;
+  let schedulingActivities = [];
+  const schedulingReads = [];
+  const schedulingCreates = [];
+  await page.route('**/tenants/test-tenant/logistics/scheduling**', async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === 'GET') {
+      schedulingReads.push(url.searchParams.get('locationId'));
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          activities: schedulingActivities,
+          timezone: 'Africa/Addis_Ababa',
+          state: schedulingActivities.length ? 'READY' : 'EMPTY',
+          authority: 'logistics_scheduling_activities',
+        }),
+      });
+      return;
+    }
+    if (request.method() === 'POST') {
+      const body = request.postDataJSON();
+      schedulingCreates.push(body);
+      const activity = {
+        id: 'scheduling-browser-1',
+        activityType: body.activity_type,
+        mode: body.mode,
+        status: 'REQUESTED',
+        requestedStart: body.requested_start,
+        requestedEnd: body.requested_end,
+        scheduledStart: null,
+        scheduledEnd: null,
+        timezone: 'Africa/Addis_Ababa',
+        relatedFulfillmentId: body.related_fulfillment?.id || null,
+        relatedOrderId: body.related_order?.id || null,
+        relatedMovementId: body.related_movement?.id || null,
+        version: 1,
+      };
+      schedulingActivities = [activity];
+      await route.fulfill({
+        status: 201, contentType: 'application/json',
+        body: JSON.stringify({ activity }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 405, body: 'Method not allowed' });
+  });
   await page.route('**/tenants/test-tenant/delivery-assignments*', async route => {
     assignmentReads++;
     await route.fulfill({
@@ -100,7 +146,7 @@ try {
       currentStaffRole: 'logistics_courier',
       authUser: { id: 'courier-browser-1' },
       userId: 'courier-browser-1',
-      contextualRoles: [{ role: 'logistics_courier' }],
+      contextualRoles: [{ role: 'logistics_courier', scopeType: 'LOCATION', scopeId: 'loc-browser-1' }],
       authRoles: [],
     });
     state.setOrders([]);
@@ -109,6 +155,11 @@ try {
   });
 
   await page.locator('[data-assignment-only="1"]').waitFor();
+  await page.locator('#logisticsSchedulingTimezone').filter({ hasText: 'Africa/Addis_Ababa' }).waitFor();
+  assert.ok(schedulingReads.includes('loc-browser-1'),
+    'location-scoped courier scheduling list must request only its canonical location');
+  assert.equal(await page.locator('#logisticsSchedulingRequestForm').count(), 0,
+    'courier may view scheduling but cannot create scheduling requests');
   assert.equal(await page.locator('[data-assignment-only="1"]').count(), 1,
     'courier must see an assignment even when its local Order projection is absent');
   assert.match(await page.locator('[data-assignment-only="1"]').innerText(), /server-order-browser-1/);
@@ -154,7 +205,7 @@ try {
     state.setConfig({
       ...state.config,
       currentStaffRole: 'logistics_viewer',
-      contextualRoles: [{ role: 'logistics_viewer' }],
+      contextualRoles: [{ role: 'logistics_viewer', scopeType: 'LOCATION', scopeId: 'loc-browser-1' }],
       authRoles: [],
     });
     const logistics = await import('/src/logistics/ui.js');
@@ -162,6 +213,33 @@ try {
   });
   assert.equal(await page.locator('.delivery-action-btn').count(), 0, 'viewer cannot see courier mutation controls');
   assert.equal(await page.locator('[data-assignment-only="1"]').count(), 1, 'viewer retains assignment visibility');
+  await page.locator('#logisticsSchedulingTimezone').filter({ hasText: 'Africa/Addis_Ababa' }).waitFor();
+  assert.equal(await page.locator('#logisticsSchedulingRequestForm').count(), 0,
+    'viewer may view scheduling but cannot create scheduling requests');
+
+  await page.evaluate(async () => {
+    const state = await import('/src/state.js');
+    state.setConfig({
+      ...state.config,
+      currentStaffRole: 'logistics_manager',
+      contextualRoles: [{ role: 'logistics_manager', scopeType: 'LOCATION', scopeId: 'loc-browser-1' }],
+      authRoles: [],
+    });
+    const logistics = await import('/src/logistics/ui.js');
+    logistics.renderLogistics();
+  });
+  const schedulingForm = page.locator('#logisticsSchedulingRequestForm');
+  await schedulingForm.waitFor();
+  await schedulingForm.locator('[name="referenceId"]').fill('fulfillment-browser-1');
+  await schedulingForm.locator('[name="requestedStart"]').fill('2026-11-16T09:00');
+  await schedulingForm.locator('[name="requestedEnd"]').fill('2026-11-16T10:00');
+  await schedulingForm.getByRole('button', { name: 'Submit request' }).click();
+  await page.waitForFunction(() => document.querySelector('[data-scheduling-card="scheduling-browser-1"]'));
+  assert.equal(schedulingCreates.length, 1);
+  assert.equal(schedulingCreates[0].timezone, 'Africa/Addis_Ababa');
+  assert.equal(schedulingCreates[0].requested_start, '2026-11-16T06:00:00.000Z');
+  assert.equal(schedulingCreates[0].requested_end, '2026-11-16T07:00:00.000Z');
+  assert.equal(schedulingCreates[0].location_id, 'loc-browser-1');
   assert.equal(pageErrors.length, 0, `browser runtime errors: ${pageErrors.join(' | ')}`);
 
   console.log('Phase 13.10.24 Logistics workspace browser regression: PASS');
