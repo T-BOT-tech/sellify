@@ -10816,7 +10816,8 @@ export async function createLogisticsSchedulingActivity(chatId, input = {}, acto
 
     if (existing) {
       assertLogisticsSchedulingAuthorization(actor, organizationId, existing.location_id, 'logistics:scheduling:request');
-      const request = buildLogisticsSchedulingRequest(input, organizationId, locationId || existing.location_id || null, String(existing.timezone || 'UTC'));
+      const replayLocationId = hasLocationInput ? locationId : (locationId || existing.location_id || null);
+      const request = buildLogisticsSchedulingRequest(input, organizationId, replayLocationId, String(existing.timezone || 'UTC'));
       const existingRequest = {
         organization_id: existing.organization_id,
         location_id: existing.location_id,
