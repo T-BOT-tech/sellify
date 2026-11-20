@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sellify-l11-7-'));
 process.env.SELLIFY_DATA_DIR = tempDir;
@@ -296,5 +297,17 @@ assert.equal(evidenced.authorized, false);
 assert.equal(evidenced.execution, false);
 assert.equal(evidenced.persistence, 'none');
 assert.equal(evidenced.mutation, false);
+
+for (const regression of [
+  'logistics-scheduling-service-regression.mjs',
+  'logistics-scheduling-http-regression.mjs',
+]) {
+  const child = spawnSync(process.execPath, [
+    path.join(path.dirname(new URL(import.meta.url).pathname), regression),
+  ], { cwd: process.cwd(), env: process.env, encoding: 'utf8' });
+  if (child.stdout) process.stdout.write(child.stdout);
+  if (child.stderr) process.stderr.write(child.stderr);
+  assert.equal(child.status, 0, regression + ' failed: ' + (child.error?.message || child.stderr || child.stdout));
+}
 
 console.log('L11.7 Logistics Scheduling Feasibility Integration Regression: PASS');
