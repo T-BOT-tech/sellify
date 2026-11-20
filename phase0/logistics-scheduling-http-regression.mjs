@@ -98,6 +98,22 @@ try {
   const unauthenticated = await request(base);
   assert.equal(unauthenticated.response.status, 401);
 
+  const organizationId = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
+    .get(tenant.chatId).organization_id;
+  const inactivePackRead = await request(base, { headers });
+  assert.equal(inactivePackRead.response.status, 409);
+  assert.equal(inactivePackRead.json.error?.code, 'PACK_NOT_ACTIVE',
+    'scheduling API must remain unavailable until the Logistics Pack is activated');
+
+  const packNow = new Date().toISOString();
+  db.prepare(`INSERT INTO pack_lifecycle (
+    id, organization_id, pack_id, pack_version, state, installed_at, activated_at,
+    created_by_user_id, updated_by_user_id, created_at, updated_at, version
+  ) VALUES (?, ?, 'logistics', '1.0.0', 'ACTIVE', ?, ?, ?, ?, ?, ?, 1)`).run(
+    `l11-http-logistics-pack-${suffix}`, organizationId, packNow, packNow,
+    owner.id, owner.id, packNow, packNow,
+  );
+
   const empty = await request(base, { headers });
   assert.equal(empty.response.status, 200);
   assert.equal(empty.json.state, 'EMPTY');
@@ -172,17 +188,6 @@ try {
 
   // Exercise the real HTTP authorization boundary with persisted Logistics
   // contextual roles, not only the standalone policy matrix.
-  const organizationId = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?')
-    .get(tenant.chatId).organization_id;
-  const packNow = new Date().toISOString();
-  db.prepare(`INSERT INTO pack_lifecycle (
-    id, organization_id, pack_id, pack_version, state, installed_at, activated_at,
-    created_by_user_id, updated_by_user_id, created_at, updated_at, version
-  ) VALUES (?, ?, 'logistics', '1.0.0', 'ACTIVE', ?, ?, ?, ?, ?, ?, 1)`).run(
-    `l11-http-logistics-pack-${suffix}`, organizationId, packNow, packNow,
-    owner.id, owner.id, packNow, packNow,
-  );
-
   const logisticsRoleSessions = new Map();
   for (const role of ['logistics_manager', 'logistics_dispatcher', 'logistics_courier', 'logistics_viewer']) {
     const roleUser = await store.getOrCreateUserByTelegram(`l11-${role}-${suffix}`, `L11 ${role}`);
