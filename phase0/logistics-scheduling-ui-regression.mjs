@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import {
   localDateTimeToIso,
   normalizeCandidateWindow,
-} from '../app/src/logistics/scheduling.js';
+} from '../app/src/verticals/logistics/scheduling-timezone-contract.js';
 
 assert.equal(
   localDateTimeToIso('2026-11-16T09:00', 'Africa/Addis_Ababa'),
@@ -58,6 +58,7 @@ assert.match(source, /activity\.timezone \|\| workspaceTimezone/);
 assert.match(source, /timeZone, dateStyle: 'medium', timeStyle: 'short'/);
 assert.doesNotMatch(source, /Intl\.DateTimeFormat\(\)\.resolvedOptions\(\)\.timeZone/);
 assert.match(source, /logisticsSchedulingTimeZoneMissing/);
-assert.match(source, /SCHEDULING_LOCAL_TIME_AMBIGUOUS/);
+const timezoneContract = await readFile(new URL('../app/src/verticals/logistics/scheduling-timezone-contract.js', import.meta.url), 'utf8');
+assert.match(timezoneContract, /SCHEDULING_LOCAL_TIME_AMBIGUOUS/);
 
 console.log('L11 Logistics Scheduling UI and IANA Timezone Regression: PASS');
