@@ -460,6 +460,8 @@ jobs:
         run: npm run test:logistics-l11.4
       - name: L11 authenticated scheduling HTTP regression
         run: npm run test:logistics-l11-http
+      - name: L11 canonical scheduling timezone regression
+        run: npm run test:logistics-l11-timezone
       - name: L11.7 logistics scheduling feasibility and evidence provenance regression
         run: npm run test:logistics-l11.7
       - name: L11.8 logistics scheduling decision boundary regression
