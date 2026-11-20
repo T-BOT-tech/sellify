@@ -152,7 +152,10 @@ try {
 
   await page.locator('[data-scheduled-start="scheduling-browser-1"]').fill('2026-11-16T09:30');
   await page.locator('[data-scheduled-end="scheduling-browser-1"]').fill('2026-11-16T10:30');
+  const evaluationRequest = page.waitForRequest(request =>
+    request.method() === 'POST' && request.url().endsWith('/evaluate'));
   await page.locator('[data-scheduling-evaluate="scheduling-browser-1"]').click();
+  await evaluationRequest;
   const evaluationCall = calls.find(call => call.method === 'POST' && call.path.endsWith('/evaluate'));
   assert.ok(evaluationCall, 'candidate window must be evaluated through the API');
   assert.equal(evaluationCall.body.scheduledStart, '2026-11-16T06:30:00.000Z');
