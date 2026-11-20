@@ -107,6 +107,14 @@ test('consistency is independent from provenance and freshness', () => {
   assert.equal(projected.provenanceType, 'UNKNOWN');
 });
 
+test('quality does not upgrade supplier-declared provenance', () => {
+  const projected = projectCapacityAvailabilityEvidence({
+    ...base, source: 'DECLARED', quality: 'VERIFIED',
+  });
+  assert.equal(projected.quality, 'VERIFIED');
+  assert.equal(projected.provenanceType, 'SELF_REPORTED');
+});
+
 test('invalid observation timestamp fails closed', () => {
   assert.throws(() => projectCapacityAvailabilityEvidence({ ...base, observedAt: 'not-a-date' }), /timezone-qualified ISO-8601 instant/);
   assert.throws(() => projectCapacityAvailabilityEvidence({ ...base, observedAt: '2026-09-15T10:00:00' }), /timezone-qualified ISO-8601 instant/);
