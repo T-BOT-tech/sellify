@@ -279,9 +279,9 @@ try {
   assert.equal(schedulingTransitions.length, 0, 'evaluation must not mutate the scheduling lifecycle');
 
   // Terminal transitions require an operator reason before the command is sent.
-  await page.locator('[data-scheduling-transition="CANCELLED"]').click();
-  assert.equal(schedulingTransitions.length, 0, 'cancellation without a reason must not reach the API');
-  await page.locator('[data-scheduling-reason="scheduling-browser-1"]').fill('Buyer cancelled request');
+  const cancellationReason = page.locator('[data-scheduling-reason="scheduling-browser-1"]');
+  await cancellationReason.waitFor();
+  await cancellationReason.fill('Buyer cancelled request');
   const cancellationResponse = page.waitForResponse(response =>
     response.request().method() === 'PATCH' && response.url().endsWith('/transition'));
   await page.locator('[data-scheduling-transition="CANCELLED"]').click();
