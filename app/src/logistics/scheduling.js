@@ -443,24 +443,27 @@ async function submitRequest(root, form) {
     renderWorkspace(root);
     return;
   }
+  const requestedWindow = hasWindow
+    ? normalizeCandidateWindow(startValue, endValue, workspaceTimezone)
+    : null;
+  if (hasWindow && !requestedWindow) {
+    lastState = 'READY';
+    feedback = t('logisticsSchedulingWindowInvalid');
+    renderWorkspace(root);
+    return;
+  }
   const body = {
     activity_type: String(values.get('activityType') || 'DELIVERY'),
     mode,
     location_id: schedulingLocationId(),
     timezone: workspaceTimezone,
-    requested_start: startValue ? localDateTimeToIso(startValue, workspaceTimezone) : null,
-    requested_end: endValue ? localDateTimeToIso(endValue, workspaceTimezone) : null,
+    requested_start: requestedWindow?.scheduledStart || null,
+    requested_end: requestedWindow?.scheduledEnd || null,
     [`related_${referenceType}`]: { id: referenceId },
   };
   if (mode === 'WINDOWED' && (!body.requested_start || !body.requested_end)) {
     lastState = 'READY';
     feedback = t('logisticsSchedulingWindowRequired');
-    renderWorkspace(root);
-    return;
-  }
-  if (mode === 'WINDOWED' && !normalizeCandidateWindow(startValue, endValue, workspaceTimezone)) {
-    lastState = 'READY';
-    feedback = t('logisticsSchedulingWindowInvalid');
     renderWorkspace(root);
     return;
   }
