@@ -102,9 +102,14 @@ try {
   assert.equal(empty.response.status, 200);
   assert.equal(empty.json.state, 'EMPTY');
   assert.deepEqual(empty.json.activities, []);
+  assert.equal(empty.json.timezone, 'Africa/Addis_Ababa', 'organization timezone is the default when no location is selected');
 
-  const start = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-  const end = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+  const primaryLocation = await store.createOrganizationLocation(tenant.chatId, {
+    code: `L11P${suffix.slice(-8)}`, name: 'L11 Paris Timezone Location', type: 'WAREHOUSE',
+  });
+  db.prepare('UPDATE locations SET timezone = ? WHERE id = ?').run('Europe/Paris', primaryLocation.id);
+  const localStart = '2026-11-21T09:00';
+  const localEnd = '2026-11-21T10:00';
   const requestKey = `l11-scheduling-create-${suffix}`;
   const created = await request(base, {
     method: 'POST',
@@ -113,9 +118,10 @@ try {
       organization_id: 'forged-organization',
       activity_type: 'DELIVERY',
       mode: 'WINDOWED',
-      requested_start: start,
-      requested_end: end,
-      timezone: 'Africa/Addis_Ababa',
+      location_id: primaryLocation.id,
+      requested_start_local: localStart,
+      requested_end_local: localEnd,
+      timezone: 'Pacific/Honolulu',
       related_order: { id: orderId },
       related_movement: { id: `movement:${orderId}` },
     }),
@@ -123,6 +129,13 @@ try {
   assert.equal(created.response.status, 201, JSON.stringify(created.json));
   assert.equal(created.json.activity.status, 'REQUESTED');
   assert.notEqual(created.json.activity.organizationId, 'forged-organization');
+  assert.equal(created.json.activity.locationId, primaryLocation.id);
+  assert.equal(created.json.activity.timezone, 'Europe/Paris', 'canonical location timezone overrides a client-supplied timezone');
+  assert.equal(created.json.activity.requestedStart, '2026-11-21T08:00:00.000Z');
+  assert.equal(created.json.activity.requestedEnd, '2026-11-21T09:00:00.000Z');
+  const locationRead = await request(`${base}?locationId=${encodeURIComponent(primaryLocation.id)}`, { headers });
+  assert.equal(locationRead.response.status, 200);
+  assert.equal(locationRead.json.timezone, 'Europe/Paris');
 
   const replayCreate = await request(base, {
     method: 'POST',
@@ -165,6 +178,60 @@ try {
   });
   assert.equal(invalidMovement.response.status, 409);
   assert.equal(invalidMovement.json.error?.code, 'MOVEMENT_REFERENCE_INVALID');
+
+  const organizationTimeActivity = await request(base, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-org-timezone-${suffix}` },
+    body: JSON.stringify({
+      activity_type: 'PICKUP', mode: 'WINDOWED', location_id: '',
+      requested_start_local: '2026-11-21T09:00',
+      requested_end_local: '2026-11-21T10:00',
+      timezone: 'Pacific/Honolulu',
+      related_order: { id: orderId },
+    }),
+  });
+  assert.equal(organizationTimeActivity.response.status, 201, JSON.stringify(organizationTimeActivity.json));
+  assert.equal(organizationTimeActivity.json.activity.locationId, null);
+  assert.equal(organizationTimeActivity.json.activity.timezone, 'Africa/Addis_Ababa');
+  assert.equal(organizationTimeActivity.json.activity.requestedStart, '2026-11-21T06:00:00.000Z');
+
+  const invalidLocalTime = await request(base, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-dst-gap-${suffix}` },
+    body: JSON.stringify({
+      activity_type: 'PICKUP', mode: 'WINDOWED', location_id: primaryLocation.id,
+      requested_start_local: '2026-03-29T02:30',
+      requested_end_local: '2026-03-29T03:30',
+      related_order: { id: orderId },
+    }),
+  });
+  assert.equal(invalidLocalTime.response.status, 400);
+  assert.equal(invalidLocalTime.json.error?.code, 'LOGISTICS_SCHEDULING_LOCAL_TIME_INVALID');
+
+  const ambiguousLocalTime = await request(base, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-dst-repeat-${suffix}` },
+    body: JSON.stringify({
+      activity_type: 'PICKUP', mode: 'WINDOWED', location_id: primaryLocation.id,
+      requested_start_local: '2026-10-25T02:30',
+      requested_end_local: '2026-10-25T03:30',
+      related_order: { id: orderId },
+    }),
+  });
+  assert.equal(ambiguousLocalTime.response.status, 400);
+  assert.equal(ambiguousLocalTime.json.error?.code, 'LOGISTICS_SCHEDULING_LOCAL_TIME_AMBIGUOUS');
+
+  const timezoneLessInstant = await request(base, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json', 'Idempotency-Key': `l11-no-zone-${suffix}` },
+    body: JSON.stringify({
+      activity_type: 'PICKUP', mode: 'WINDOWED',
+      requested_start: '2026-11-21T09:00:00',
+      requested_end: '2026-11-21T10:00:00',
+      related_order: { id: orderId },
+    }),
+  });
+  assert.equal(timezoneLessInstant.response.status, 400);
 
   const activityId = created.json.activity.id;
 
@@ -338,8 +405,8 @@ try {
     method: 'POST',
     headers: { ...headers, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      scheduledStart: start,
-      scheduledEnd: end,
+      scheduledStartLocal: '2026-11-21T11:00',
+      scheduledEndLocal: '2026-11-21T12:00',
       externalEvaluation: { outcome: 'FEASIBLE', authority: 'caller-claim', referenceId: 'fake-evidence' },
     }),
   });
@@ -355,8 +422,8 @@ try {
     body: JSON.stringify({
       status: 'SCHEDULED',
       expectedVersion: 1,
-      scheduledStart: start,
-      scheduledEnd: end,
+      scheduledStartLocal: '2026-11-21T11:00',
+      scheduledEndLocal: '2026-11-21T12:00',
       externalEvaluation: { outcome: 'FEASIBLE', authority: 'caller-claim', referenceId: 'fake-evidence' },
     }),
   });
@@ -427,7 +494,7 @@ try {
   const crossTenant = await request(`${base}/${encodeURIComponent(activityId)}`, {
     headers: { Authorization: `Bearer ${otherSession.token}` },
   });
-  assert.equal(crossTenant.response.status, 403);
+  assert.equal(crossTenant.response.status, 404, 'cross-tenant activity identifiers are not disclosed');
 
   console.log('L11 Logistics Scheduling authenticated HTTP regression: PASS');
 } catch (error) {
