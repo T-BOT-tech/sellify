@@ -13243,6 +13243,24 @@ export async function assignMembershipContextualRole({
     const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(normalizedScopeId, String(tenant?.organization_id || ''));
     if (!location) throw Object.assign(new Error('Role scope location is outside the organization'), { statusCode: 403 });
   }
+  if (normalizedRole === 'service_provider' && normalizedScopeType !== 'RESOURCE') {
+    throw Object.assign(new Error('Service Provider roles must be scoped to one Service Resource'), {
+      statusCode: 400, code: 'SERVICE_PROVIDER_RESOURCE_SCOPE_REQUIRED',
+    });
+  }
+  if (normalizedScopeType === 'RESOURCE' && normalizedRole !== 'service_provider') {
+    throw Object.assign(new Error('Resource scope is currently supported only for Service Provider roles'), {
+      statusCode: 400, code: 'RESOURCE_ROLE_SCOPE_UNSUPPORTED',
+    });
+  }
+  if (normalizedScopeType === 'RESOURCE') {
+    const tenant = db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(String(chatId));
+    const resource = db.prepare("SELECT id FROM service_resources WHERE id = ? AND organization_id = ? AND chat_id = ? AND status = 'ACTIVE'")
+      .get(normalizedScopeId, String(tenant?.organization_id || ''), String(chatId));
+    if (!resource) throw Object.assign(new Error('Service resource is outside the tenant organization'), {
+      statusCode: 403, code: 'SERVICE_PROVIDER_RESOURCE_SCOPE_DENIED',
+    });
+  }
 
   const actor = db.prepare(`SELECT * FROM memberships WHERE user_id = ? AND chat_id = ? AND status = 'active'`)
     .get(String(actorUserId), String(chatId));
@@ -13252,6 +13270,11 @@ export async function assignMembershipContextualRole({
   const target = db.prepare(`SELECT * FROM memberships WHERE id = ? AND chat_id = ? AND status = 'active'`)
     .get(String(membershipId), String(chatId));
   if (!target) throw Object.assign(new Error('Membership not found'), { statusCode: 404 });
+  if (normalizedRole === 'service_provider' && target.role !== 'staff') {
+    throw Object.assign(new Error('Service Providers must use a staff membership'), {
+      statusCode: 409, code: 'SERVICE_PROVIDER_MEMBERSHIP_ROLE_INVALID',
+    });
+  }
 
   const existing = db.prepare(`
     SELECT *
