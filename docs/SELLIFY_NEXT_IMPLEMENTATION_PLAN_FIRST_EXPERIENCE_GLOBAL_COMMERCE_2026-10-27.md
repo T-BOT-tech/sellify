@@ -1,3 +1,7 @@
+> **HISTORICAL PLANNING SNAPSHOT — reviewed 2026-11-21.** Its October 27–29 PR/branch snapshot is obsolete. The document is retained for product context and historical reasoning, not as a current task list. Verify all claimed gaps against current `main` and the [Implementation Register](SELLIFY_IMPLEMENTATION_REGISTER.md) before reviving any work.
+
+---
+
 # Sellify — Next Implementation Plan: First Experience and Global Commerce
 
 **Revised:** 29 October 2026 (UTC+03:00)  
