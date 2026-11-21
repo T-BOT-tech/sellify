@@ -1,3 +1,7 @@
+> **HISTORICAL R1 PRODUCTIZATION EVIDENCE — dated 2026-09-17; reviewed 2026-11-21.** The PASS counts and source/runtime statements below apply only to the recorded September 17 snapshot. They do not certify current `main`, Node 24 execution, production capacity, or a current AI-provider integration. Preserve as historical evidence and verify any revived task against current Procurement authority and source.
+
+---
+
 # SELLIFY R1 — AI Procurement Productization
 Date: 2026-09-17
 Status: IMPLEMENTED / VERIFIED UNDER AVAILABLE RUNTIME
