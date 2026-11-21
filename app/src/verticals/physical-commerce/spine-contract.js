@@ -69,7 +69,9 @@ export function buildPhysicalCommerceSpine(order, { organizationId } = {}) {
       type: physicalFlow.type,
       status: physicalFlow.status,
       authority: 'app/src/logistics/fulfillment.js',
-      mutation_authority: 'app/src/logistics/fulfillment.js',
+      frontend_fulfillment_api_binding: 'app/src/logistics/fulfillment.js',
+      mutation_authority: 'backend/lib/store-sqlite.js',
+      server_fulfillment_mutation_authority: 'backend/lib/store-sqlite.js',
     }),
     warehouse: Object.freeze({
       role: 'consume_and_integrate',
