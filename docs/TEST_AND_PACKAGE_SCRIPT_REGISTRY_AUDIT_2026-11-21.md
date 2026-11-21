@@ -674,3 +674,14 @@ Traced the Logistics workflow jobs against the actual cumulative scripts and pac
 - GAP-2 tests in baseline map to separate authorization, lifecycle, dispatch, read-scope, frontend, certification, route-scope, cross-feature, adversarial, and readiness regression files. The L18 job's GAP-2 assignment-authority check is a different file and remains in that focused job. No exact duplicate GAP-2 target was found across these workflow jobs.
 
 Workflow commit: `d1d78b2b83179929f3a4638dc2afd4abd0e62609`. The only test invocation removed was baseline L11.8; all other test commands, package aliases, source files, and assertions remain unchanged. Source-level verification completed; CI remains unverified until an actual GitHub Actions run is reported.
+
+
+### Logistics test-boundary distinction (additional source review)
+
+Reviewed the Phase 13.10.12-.14 tests alongside GAP-2 assignment/dispatch/cross-feature tests to avoid confusing thematic overlap with duplicate coverage:
+
+- Phase 13.10.12 is a provider-neutral courier assignment contract/projection (`persistence: none`, idempotent contract replay); GAP-2 assignment authority verifies the actual server-side `delivery_assignments` persistence, authorization, courier ownership, location scope, idempotency, and API boundary. These are complementary contract-versus-runtime checks.
+- Phase 13.10.13 verifies the explicit non-build/no-route-authority boundary (no Logistics route source/persistence/migration); GAP-2.8 verifies the existing delivery assignment read projection and organization/location scoping. These are not the same route implementation.
+- Phase 13.10.14 adversarially checks cross-feature contract consistency across order, fulfillment, shipment, proof/return, and courier projections; GAP-2.9 checks the actual transactional delivery-to-fulfillment-to-inventory consequence and payment/settlement separation, while GAP-2.10 checks runtime lifecycle/assignment idempotency and serialization. They cover different layers and must remain.
+
+No additional Logistics test removal is justified by this semantic comparison.
