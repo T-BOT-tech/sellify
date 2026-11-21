@@ -33,6 +33,7 @@ assert.equal(spine.warehouse.stock_deducted, true);
 assert.equal(spine.warehouse.stock_mutation_authority, 'app/src/warehouse/inventory.js#applyStockChange');
 assert.equal(spine.warehouse.dispatch_boundary, 'semantic_only');
 assert.equal(spine.logistics.role, 'coordinate_and_project');
+assert.equal(spine.logistics.lifecycle_mutation_authority, 'backend/lib/store-sqlite.js');
 assert.equal(spine.logistics.shipment_id, 'SHIP-13.11.3');
 assert.equal(spine.logistics.tracking_reference, 'TRK-13.11.3');
 assert.equal(spine.final, true);
