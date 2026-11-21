@@ -690,3 +690,28 @@ No additional Logistics test removal is justified by this semantic comparison.
 ## Workflow-wide direct invocation scan (2026-11-21)
 
 After the Logistics cleanup, scanned every `run:` command in `.github/workflows/ci.yml`, resolving direct `npm run <script>` commands through the root `package.json` to their Node regression targets and including direct `node phase0/...` commands. Across the seven workflow job/trigger sections, the scan found no identical regression target invoked directly by more than one job. This scan intentionally covers direct workflow invocations only; nested cumulative-gate execution is audited separately above and retains documented independent certification overlaps (for example L18 and Phase 19.5/19.7). The scan does not claim that different test files have no semantic overlap.
+
+
+## Baseline non-Logistics cumulative-gate and Payment coverage audit (2026-11-21)
+
+Reviewed the remaining baseline workflow commands against the Phase 14, 15, 16, 19, and 20 gate implementations and the GAP-1 / PF-1 Payment regression files.
+
+### Baseline direct invocation inventory
+
+Resolved every baseline `run:` command through the root `package.json` and expanded chained Node commands. The baseline contains 157 resolved `phase0` Node regression targets and no exact duplicate target among its direct invocations. This includes the three targets chained under `test:service-catalog-frontend-sync`; they are separate regression files. The scan is exact-file based and does not imply that distinct files never inspect related source invariants.
+
+### Country and platform gates
+
+- Phase 14.13 directly executes Phase 14.0–14.12, including the currency/money regression. The removed standalone Phase 14.3 workflow step therefore remains covered by Phase 14.13. Phase 14.15 is a final artifact/engine snapshot check; it verifies files and Node engine metadata rather than rerunning the Phase 14 suite.
+- Phase 15.21 invokes Phase 15.20 as its compatibility preflight. Phase 15.20 is a contract/matrix assertion gate, not a second workflow step or a separate set of child regression processes. Keep the Node 24 final gate as the independent runtime certification boundary.
+- Phase 16.12 executes the 12 Phase 16 controls plus Golden Regression. Phase 16.13 reruns Phase 16.12 before checking Node >=24, and Phase 16.14 invokes Phase 16.13 as its final snapshot certification. The Phase 16.12 repetitions are intentional self-contained preflight; do not make the final gate rely on an earlier workflow step.
+- Phase 19.12 cumulative executes Phase 19.2–19.12, Phase 18.12, Phase 16.12, SC-02, and Golden. Phase 20.12 executes Phase 20.1–20.11 and independently preflights Phase 19.12 full exit, Phase 18.12, Phase 16.12, and Golden. This means some prerequisite files (notably Phase 19.12 full exit, Phase 16.12, and Golden) are repeated across cumulative gates. Retain these repetitions: each exit gate must be independently runnable and preserve its own prerequisite validation. Phase 20.12 does not call the entire Phase 19.12 cumulative gate.
+
+### Payment coverage
+
+- GAP-1.19 production gate, Payment E2E, and adversarial certification files each run their own assertions; they do not spawn or invoke the earlier GAP-1 regression scripts.
+- GAP-1.18AD checks that required prior provider-security/recovery/invariant package scripts and CI wiring exist; it does not re-execute those test files.
+- PF-1J is a static authority/lineage/idempotency/tenant-isolation certification; PF-1K checks frontend order-sync/payment lifecycle ordering; PF-1 contract/integration/projection and PF-2 adversarial tests cover separate frontend boundaries. These files do not invoke one another as nested test runners.
+- GAP-1.18I migration independence, GAP-1.23 notification identity/migration retry, and GAP-1.18Q/U idempotency checks remain separate runtime/migration invariants. No safe Payment test deletion or consolidation was established by this review.
+
+Decision: no additional workflow or test-source change. Preserve the remaining baseline tests and the cumulative prerequisite repetitions described above. Existing workflow consolidation CI status remains unverified; this audit is source-level only.
