@@ -81,6 +81,43 @@ The direct command inventory is strongly Node-centric: 473 Node-file commands an
 
 The next safe step is to build a transitive consumer map for package-script-to-package-script calls and the source-level acceptance checks that inspect script names. Any cleanup decision must use that map plus workflow and documentation references; absence from CI alone is not evidence of obsolescence.
 
+## Transitive-consumer spot audit and CI closure (2026-11-21)
+
+### Current-main verification
+
+The target-inventory commit `c88a5e55f8e18717aa08ed8fdbbbb2d769535f95` is now the current `main` head. All four required GitHub workflows completed successfully for that exact SHA:
+
+- Sellify CI: success — [run 44931058681](https://github.com/T-BOT-tech/sellify/actions/runs/44931058681)
+- Repository Security Checks: success — [run 44931058362](https://github.com/T-BOT-tech/sellify/actions/runs/44931058362)
+- Sellify Release Certification: success — [run 44931058401](https://github.com/T-BOT-tech/sellify/actions/runs/44931058401)
+- Logistics Runtime Certification: success — [run 44931058467](https://github.com/T-BOT-tech/sellify/actions/runs/44931058467)
+
+The preceding Sellify CI run for `65d4bdd` also completed successfully after the earlier in-progress baseline job finished.
+
+### Confirmed script-name consumers
+
+A source-level spot audit confirms that several aliases are consumed by executable acceptance controls, not merely developer convenience:
+
+| Script name(s) | Confirmed consumer | Disposition |
+|---|---|---|
+| `test:gap-2-delivery-lifecycle`, `test:gap-2-delivery-exception` | `phase0/gap-2-production-readiness-regression.mjs` requires both package aliases and verifies CI invokes one of them; GAP-2 source-of-truth doc also lists both | Preserve both |
+| `test:logistics-l20.10`, `test:logistics-l21.11` | `phase0/logistics-master-specification-exit-audit.mjs` and `phase0/logistics-l8-l21-final-certification.mjs` | Preserve |
+| `test:logistics-l8-l21` | `phase0/logistics-l8-l21-final-certification.mjs` invokes it as the actual cumulative run | Preserve |
+| `phase11.4:marketplace-test` | Current AI handoff history and CI workflow use the canonical Phase 11.4 alias; the Phase 13.10.24 compatibility name maps to the same regression | Preserve compatibility name until all consumers are reconciled |
+| `dev:backend` | Root README and UI evaluation environment documentation use it as the backend developer entry point | Preserve |
+| `dev` | Same command as `dev:backend`, but no distinct operational behavior established in this spot audit | Candidate compatibility alias only; not approved for removal |
+
+The Logistics certification files intentionally assert the presence of phase-labeled script names even when multiple labels resolve to a shared regression target. These names represent evidence/acceptance identifiers, not necessarily distinct test programs. Removing them because they share a target would break the source-level acceptance contract.
+
+The marketplace, procurement, Phase 16.13, Logistics L11/L20/L21, and developer aliases still require complete consumer reconciliation before any deletion. Search-index results are useful for discovery but are not treated as exhaustive proof of absence. Historical documentation and source-level controls remain relevant consumers.
+
+### Decision
+
+- **No package aliases deleted in this batch.**
+- **No regression files or CI invocations removed.**
+- The one obvious exact alias pair `dev` / `dev:backend` is a cleanup candidate, not yet a deletion: `dev:backend` is documented and should remain the canonical developer command; before removing `dev`, check all repository-local references and any external developer scripts.
+- Next scope: complete the remaining alias-by-alias consumer map, then separately map all 481 scripts to their phase acceptance records and classify genuinely redundant labels. Do not conflate alias cleanup with test coverage reduction.
+
 ## Recommended next action
 
 Perform a consumer/reference audit of the 11 duplicate groups, then make a small alias cleanup batch only for names proven unused. Separately map every package script to its target file and classify each target as focused regression, cumulative gate, diagnostic, operational command, or obsolete/unreferenced. Do not delete tests or weaken CI as part of this naming cleanup.
