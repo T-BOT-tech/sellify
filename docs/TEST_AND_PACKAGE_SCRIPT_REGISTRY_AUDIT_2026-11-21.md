@@ -772,3 +772,35 @@ Phase 16.12 executes all twelve controls and Golden Regression. It also verifies
 - Payment: canonical backend authority, frontend client/projection, and robust local HTTP/SQLite recovery coverage exist; live external provider certification remains a separate unresolved operational requirement.
 - No duplicate Platform or Payment authority was identified in the inspected implementation modules. No code, test assertion, package script or workflow change is justified by this audit.
 - Next useful audit: trace each concrete Payment provider adapter from registration through configuration/authentication, outbound request, callback ingress, evidence verification and canonical financial commit. Mark each stage as simulated, configured, exercised against sandbox, or proven in production. Do not label the provider layer production-ready without that evidence.
+
+
+## Payment provider adapter production-readiness trace (2026-11-21)
+
+Follow-up inspection traced `backend/lib/payments/provider-registry.js`, `provider-adapters.js`, `provider-adapter-config.js`, `provider-probe-transport.js`, `provider-verification-parsers.js`, provider adapter regressions, and the provider notification HTTP route in `backend/server.js`.
+
+### What exists
+
+- Provider IDs are registered for manual/cash, Telebirr, CBE, M-Pesa and Bank of Abyssinia. The external providers start as explicitly unconfigured registry entries; `backend/server.js` replaces them with the generic adapters from `PROVIDER_ADAPTERS`.
+- External adapter configuration reads process environment variables for a base URL and API key. The config projection returns only base URL and a boolean `hasCredential`, not the credential value.
+- Telebirr, CBE, M-Pesa and BOA adapters currently share a temporary Bearer-token header convention. The transport is provider-neutral, uses `fetch`, has a timeout and bounded retries for selected HTTP/network failures.
+- Generic `verify` and `getStatus` methods exist, but require caller-supplied path/method context. The adapter's declared capabilities currently advertise `getMetadata` and `probeCapability`; `authenticateNotification` is explicitly false, and `verify`/`getStatus` are not declared as executable capabilities.
+- Provider-specific verification parsers exist for the four named providers. Adapter regression coverage exercises configuration, probe behavior, bearer header placement and generic transport behavior.
+
+### Confirmed production gaps
+
+1. **Inbound notification authentication is not implemented for these four adapters.** Each adapter's `authenticateNotification` throws `PAYMENT_NOTIFICATION_AUTH_NOT_CONFIGURED` (HTTP 501). The actual route `POST /integrations/payments/:providerId/notifications` checks the capability first and returns `PAYMENT_NOTIFICATION_NOT_CONFIGURED` (HTTP 503) before reading/processing the notification. Consequently these four adapters cannot currently complete provider webhook/callback ingestion through this route.
+2. **Provider auth is a temporary shared Bearer convention, not verified provider-specific auth.** No provider-specific OAuth/HMAC/signature/certificate implementation is present in the inspected adapters. The source comment explicitly labels the convention temporary.
+3. **No initiation, refund or reconciliation transport is implemented in these four generic adapters.** The registry exposes those operations as part of the normalized provider interface, but the generic adapters do not implement them; unsupported-operation wrappers therefore remain in effect.
+4. **Verification/status endpoints are not provider-complete by configuration alone.** Their paths and methods are supplied through operation context, rather than a provider-specific endpoint contract. A base URL and API key alone do not establish a working verification/status integration.
+5. **Current tests are synthetic/local.** Adapter and transport tests use injected `fetch` functions and example URLs; they prove mechanics, not successful sandbox or production communication with Telebirr, CBE, M-Pesa or BOA.
+
+### Status decision
+
+- Payment Core and canonical persistence remain the financial authority; no second authority is needed.
+- Provider adapter framework/configuration/transport/parser foundations: **implemented**.
+- External verification/status adapter execution: **partial and not provider-certified**.
+- Inbound notifications for the four generic adapters: **missing / explicitly disabled**.
+- Initiation, refund and reconciliation for the four generic adapters: **missing / unsupported**.
+- Sandbox or production evidence for any named provider: **not established by repository tests**.
+
+Do not claim the four external providers are production-integrated based on registry presence, environment configuration shape, generic HTTP transport or local tests. The next implementation decision should select one provider and obtain its official API/authentication specification, sandbox credentials and callback requirements. Only then should the existing adapter be completed provider-specifically, with tests for outbound verification/status and authenticated inbound notification, while leaving Payment Core and canonical financial commit unchanged. No provider adapter or new credential authority should be invented in advance.
