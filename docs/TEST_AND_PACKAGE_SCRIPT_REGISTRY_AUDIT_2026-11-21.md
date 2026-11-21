@@ -715,3 +715,60 @@ Resolved every baseline `run:` command through the root `package.json` and expan
 - GAP-1.18I migration independence, GAP-1.23 notification identity/migration retry, and GAP-1.18Q/U idempotency checks remain separate runtime/migration invariants. No safe Payment test deletion or consolidation was established by this review.
 
 Decision: no additional workflow or test-source change. Preserve the remaining baseline tests and the cumulative prerequisite repetitions described above. Existing workflow consolidation CI status remains unverified; this audit is source-level only.
+
+
+## Platform and Payment source-to-test coverage audit (2026-11-21)
+
+Scope: inspected the Phase 16.0–16.11 implementation modules, their individual regressions, the Phase 16.12 cumulative gate, Payment Core and frontend modules, selected GAP-1/PF-1 regressions, and the actual backend server composition. This is a source-level coverage audit; no runtime test or CI execution is claimed here.
+
+### Platform coverage map
+
+| Boundary | Implementation | Regression evidence | Classification |
+|---|---|---|---|
+| Capability contracts | `app/src/platform/capability-contract.js` | Phase 16.1 validates capability definitions, action resolution and invalid inputs | Implemented; contract-level tests |
+| Canonical authority registry | `app/src/platform/authority-registry.js` | Phase 16.2 checks canonical authority mapping and capability resolution | Implemented; mapping tests, not domain execution tests |
+| Adapter framework | `app/src/platform/adapter-framework.js` | Phase 16.3 covers registration, replacement, boundary resolution and forbidden persistence claims | Implemented; process-local registry/execution boundary |
+| Integration contracts | `app/src/platform/integration-contract.js` | Phase 16.4 validates integration definition and rejects ownership/persistence claims | Implemented; contract tests |
+| Capability discovery | `app/src/platform/capability-discovery.js` | Phase 16.5 validates metadata discovery and boundary behavior | Implemented; read-only discovery tests |
+| Contract versioning | `app/src/platform/contract-versioning.js` | Phase 16.6 covers parsing/compatibility contract | Implemented; pure contract tests |
+| Event/outbox composition | `app/src/platform/event-outbox-platform.js` | Phase 16.7 validates versioned envelopes, existing outbox delegation and supported event types | Implemented; injected enqueue and boundary tests |
+| Integration gateway | `app/src/platform/integration-gateway.js` | Phase 16.8 tests tenant scope, unknown integration, undeclared action, mandatory/denied authorization and injected handler delegation | Implemented; gateway execution is tested with injected handler/authorization, not a live provider transport |
+| Tenant/country/vertical composition | `app/src/platform/tenant-country-vertical.js` | Phase 16.9 tests active, candidate, regional-only and unknown country paths, duplicate/unknown verticals | Implemented; composition/fail-closed tests |
+| AI capability boundary | `app/src/platform/ai-capability-boundary.js` | Phase 16.10 tests structured intent, read/mutation risk and no direct execution/persistence | Implemented; intent-boundary tests |
+| Platform security | `app/src/platform/platform-security.js` | Phase 16.11 tests valid manager access, viewer denial, cross-organization denial, candidate/regional country denial, missing tenant context and forbidden authority fields | Implemented; delegates to existing authorization and composition authorities |
+
+Phase 16.12 executes all twelve controls and Golden Regression. It also verifies the expected source artifacts and key authority boundaries. Several controls are contract/unit-level checks; the suite should not be interpreted as proof that every platform integration is deployed or connected to a live provider.
+
+### Platform integration evidence still unverified
+
+- The adapter framework explicitly uses a process-local metadata registry and dependency-injected executor. That is appropriate as a neutral framework boundary, but does not itself establish durable provider registration or production provider connectivity.
+- The Phase 16.8 regression proves authorized delegation to an injected capability handler. Inspection of `backend/server.js` did not find a call to `executeIntegrationGatewayRequest` or an import of the generic Platform integration gateway. Therefore a production HTTP route using this generic gateway is not evidenced by this inspection. This is an integration/deployment question, not proof that the generic contract is defective.
+- Phase 16.7 deliberately delegates to the existing client outbox and backend sync consumer. Its regression tests the envelope and injected enqueue behavior; it does not establish that every domain event is accepted by the backend consumer. The backend consumer remains explicitly limited to its supported event types.
+- No new gateway route, provider registry, persistence store, or event infrastructure is recommended until a concrete integration use case and owning API boundary are selected.
+
+### Payment coverage map
+
+| Boundary | Implementation | Regression evidence | Classification |
+|---|---|---|---|
+| Canonical financial lifecycle | `backend/lib/payments/payment-core.js` | GAP-1.18AA/AB/AC and related GAP-1 tests exercise recovery, authorization, evidence trust, tenant-bound decisions, transaction and retention invariants | Implemented; substantial unit/runtime coverage |
+| Durable persistence and financial commit | `backend/lib/store-sqlite.js` | GAP-1.18AC and GAP-1.23 SQLite regressions exercise deletion protection, evidence identity and migration retry scenarios | Implemented; targeted real-SQLite coverage |
+| Provider notification identity | Payment Core plus provider-notification authority and SQLite store | GAP-1 provider notification and GAP-1.23 identity regressions cover authentication context, identity conflict and stopping before confirmation/finalization | Implemented; targeted runtime coverage |
+| Frontend API client | `app/src/payments/client.js` and `contract.js` | PF-1 integration tests exercise request paths, auth/idempotency contracts and response normalization | Implemented; client contract/runtime tests |
+| Frontend projection/state | `app/src/payments/projection.js` and `state.js` | PF-1K and projection/stale-state tests check canonical refresh ordering and unavailable/stale status handling | Implemented; mixed static and runtime coverage |
+| Checkout evidence UX boundary | `app/src/orders/payment-proof.js` and order queue | Checkout clarity and PF-1 tests verify evidence is not treated as verification or financial confirmation | Implemented; targeted source and client tests |
+| End-to-end HTTP/SQLite recovery | `backend/server.js`, Payment Core, SQLite store and frontend client | PF-1L starts the actual backend in a child process, uses temporary SQLite and a local test provider server, and exercises lost-response replay, retry, tenant rejection and crash/restart boundaries | Implemented; strong integration regression with a simulated provider, not a live third-party provider |
+| Production readiness declaration | GAP-1.18AD and GAP-1.19 tests | 1.18AD checks script/CI wiring and selected source invariants; 1.19 exercises blocked readiness and fixture-based E2E/adversarial paths | Partial evidence; not proof of a live production provider |
+
+### Payment limitations to preserve in status reporting
+
+- PF-1L is meaningful end-to-end evidence, but its provider is a local test server. It does not certify external provider credentials, production network behavior, provider webhook configuration, or live settlement operations.
+- GAP-1.18AD is a wiring/source readiness regression, not an independent production certification. GAP-1.19 explicitly verifies a blocked result when provider configuration, adapter certification or live external capability evidence is missing.
+- The targeted checkout clarity and stale-state regressions are primarily source assertions. They do not, by themselves, prove all payment screens through rendered browser interaction/accessibility workflows. Do not infer the absence of all browser coverage elsewhere in the repository from these two tests.
+- Frontend payment state remains an in-memory projection; the canonical financial record remains in backend Payment Core/SQLite. No second frontend ledger was found in the inspected modules.
+
+### Audit conclusion and next priority
+
+- Platform: implemented at contract/composition level with focused security and injected-execution tests; production deployment/use of the generic integration gateway is unverified.
+- Payment: canonical backend authority, frontend client/projection, and robust local HTTP/SQLite recovery coverage exist; live external provider certification remains a separate unresolved operational requirement.
+- No duplicate Platform or Payment authority was identified in the inspected implementation modules. No code, test assertion, package script or workflow change is justified by this audit.
+- Next useful audit: trace each concrete Payment provider adapter from registration through configuration/authentication, outbound request, callback ingress, evidence verification and canonical financial commit. Mark each stage as simulated, configured, exercised against sandbox, or proven in production. Do not label the provider layer production-ready without that evidence.
