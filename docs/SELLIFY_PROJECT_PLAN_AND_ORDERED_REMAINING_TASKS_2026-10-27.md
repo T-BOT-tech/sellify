@@ -1,3 +1,7 @@
+> **HISTORICAL PLANNING SNAPSHOT — reviewed 2026-11-21.** Its October 27–29 PR/branch and task-status snapshot is obsolete. Preserve useful context, but do not use it as the current execution order. Reconcile proposed work against current `main`, tests, and the [Implementation Register](SELLIFY_IMPLEMENTATION_REGISTER.md) before acting.
+
+---
+
 # Sellify — Project Plan and Ordered Remaining Tasks
 
 **Revised:** 29 October 2026 (UTC+03:00)  
