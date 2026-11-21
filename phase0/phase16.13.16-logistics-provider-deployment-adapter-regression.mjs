@@ -36,7 +36,7 @@ assert.equal(result.provider_id, 'deployment-provider');
 assert.equal(result.operation, 'delivery');
 assert.equal(result.adapter_id, 'deployment-logistics-adapter');
 
-await assert.rejects(
+assert.throws(
   () => defineLogisticsProviderDeploymentAdapter({
     id: 'inactive-deployment-adapter',
     provider: 'inactive-provider',
@@ -47,7 +47,7 @@ await assert.rejects(
   /must be active/,
 );
 
-await assert.rejects(
+assert.throws(
   () => defineLogisticsProviderDeploymentAdapter({
     id: 'credential-bearing-deployment-adapter',
     provider: 'credential-provider',
