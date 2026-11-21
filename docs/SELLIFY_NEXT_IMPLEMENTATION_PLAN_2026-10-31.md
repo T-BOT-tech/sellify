@@ -1,3 +1,7 @@
+> **HISTORICAL PLANNING SNAPSHOT — reviewed 2026-11-21.** This plan may retain useful product and architecture direction, but its task ordering and implementation status are not the live execution queue. Refresh every proposed task against current `main`, the [Implementation Register](SELLIFY_IMPLEMENTATION_REGISTER.md), and current source/tests before acting. Do not create parallel work from this document alone.
+
+---
+
 # Sellify — Next Implementation Plan and Architecture Direction
 
 **Document date:** 2026-10-31  
