@@ -127,3 +127,10 @@ The production deployment remains unaffected: the backend serves the app statica
 - Root package has no npm workspaces. Do not add workspaces just to solve the optional frontend dev-server install without first deciding the intended package ownership model.
 
 Static target validation is not the same as executing the app-local scripts. The root CI workflow currently does not install app-local dependencies or run the app package's test aliases. These changes therefore remain pending runtime verification by an app-package install/test run.
+
+
+### GAP-2 CI deduplication follow-up — 2026-11-21
+
+The first CI run after removing duplicate execution of the shared GAP-2 lifecycle/exception regression failed at the GAP-2.12 production-readiness source check. The regression explicitly requires the CI workflow to contain the canonical command name `test:gap-2-delivery-lifecycle`. The deduplicated workflow had retained the equivalent `test:gap-2-delivery-exception` alias instead. Both aliases still point to the same regression file; the issue was the exact workflow alias contract, not a failing delivery behavior test.
+
+Corrected `.github/workflows/ci.yml` to invoke `test:gap-2-delivery-lifecycle` once. The readiness assertion and both package aliases remain unchanged. This preserves single execution while satisfying the existing source-level CI contract. The correction is committed as `d646a6a9724889ab0d60dbe2125e3501564008c5`; CI and certification runs for that commit were still in progress at the time of this note. Do not mark this batch fully verified until those runs complete successfully.
