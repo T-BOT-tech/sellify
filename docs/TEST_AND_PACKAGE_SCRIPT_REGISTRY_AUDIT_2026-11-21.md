@@ -617,3 +617,17 @@ This is source-level integrity hardening only. It does not alter application beh
 - Re-fetched workflow verification confirms exactly the two intended Playwright setup commands remain in `baseline`; no browser test or assertion was removed.
 - CI status and PR workflow-run query returned no checks/runs for this commit. Runtime/CI validation is therefore pending; do not treat the optimization as CI-certified.
 - No job restructuring was made. The baseline is broad, but splitting it now would add runner/dependency setup and risks overlapping existing cumulative gates. First map each test's standalone versus nested-gate role and identify natural parallel groups without repeating execution.
+
+
+## CI baseline nested-gate duplicate execution cleanup (2026-11-21)
+
+A source-level execution trace identified 18 baseline steps that repeated regressions already executed by retained cumulative gates:
+
+- 17 direct Phase 17.1–17.9 steps repeated files enumerated by `phase0/phase17.10-cumulative-exit-gate.mjs`. That gate verifies an exact 19-file Phase 17.1–17.9 regression inventory, executes all 19 files in separate Node processes, then executes Phase 16.12 and Golden Regression. The workflow retains `npm run test:phase17.10` as the single Phase 17 execution entry point.
+- The standalone Phase 14.3 country currency/money regression repeated a member of the ordered Phase 14.0–14.12 suite executed by `phase0/phase14.13-cross-country-regression.mjs`. The workflow retains `npm run test:phase14.13`.
+
+Removed those 18 standalone workflow steps from `baseline`; no regression file, package script, test assertion, or cumulative gate was deleted or modified. The cumulative gates continue to execute the underlying regressions, and their failure output identifies the failing file/check. This trades separate per-test GitHub Actions step labels for one cumulative step per gate while avoiding a second execution of the same tests.
+
+Workflow change: `460b93abcb994d11dae059d32b686c4fe07baeb6`. Re-fetched workflow verification confirms no standalone Phase 17.1–17.9 steps remain, the Phase 17.10 gate remains, the standalone Phase 14.3 step is absent, and the Phase 14.13 gate remains. Runtime/CI status has not yet been established for this change; do not claim the revised workflow has passed.
+
+Other intentional overlaps remain unchanged: Golden Regression is also run as an independent baseline check, and Logistics L1–L7 cumulative certification remains separately visible in its dedicated Logistics job even though Phase 13.11.19 invokes the same cumulative Logistics gate. These are retained for independent failure/certification visibility, not treated as accidental duplication.
