@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
+const crypto = await import('node:crypto');
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 const exists = (rel) => fs.existsSync(path.join(root, rel));
 
@@ -29,6 +30,20 @@ const requiredControlArtifacts = [
   'phase0/PHASE13.11.18-INTEGRATION-MATRIX.md',
 ];
 for (const rel of requiredControlArtifacts) assert.ok(exists(rel), `Missing cumulative control artifact: ${rel}`);
+
+const integrityManifest = 'phase0/PHASE13.11.19-SOURCE-HASHES.sha256';
+assert.ok(exists(integrityManifest), 'Phase 13.11.19 source-hash manifest missing');
+const integrityLines = read(integrityManifest).split(/\\r?\\n/).filter(Boolean);
+assert.ok(integrityLines.length >= 3, 'Phase 13.11.19 source-hash manifest is incomplete');
+for (const line of integrityLines) {
+  const match = line.match(/^([0-9a-f]{64})  (.+)$/);
+  assert.ok(match, `Invalid Phase 13.11.19 hash entry: ${line}`);
+  const [, expected, relative] = match;
+  assert.ok(exists(relative), `Phase 13.11.19 hashed file missing: ${relative}`);
+  const actual = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, relative))).digest('hex');
+  assert.equal(actual, expected, `Phase 13.11.19 hash mismatch: ${relative}`);
+}
+console.log(`Phase 13.11.19 source-hash entries verified: ${integrityLines.length}`);
 
 const requiredAuthorityAnchors = [
   'app/src/logistics/fulfillment.js',
