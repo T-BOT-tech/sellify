@@ -494,8 +494,6 @@ jobs:
         run: node phase0/phase19.5-supplier-network-federation-regression.mjs
       - name: Phase 19.7 deterministic Discovery matching regression
         run: npm run test:phase19.7
-      - name: Phase 21.3 capacity evidence projection regression
-        run: npm run test:phase21.3
       - name: Phase 21 cumulative regression gate
         run: npm run test:phase21.14
       - name: Phase 21 Node 24 runtime verification
