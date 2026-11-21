@@ -631,3 +631,19 @@ Removed those 18 standalone workflow steps from `baseline`; no regression file, 
 Workflow change: `460b93abcb994d11dae059d32b686c4fe07baeb6`. Re-fetched workflow verification confirms no standalone Phase 17.1–17.9 steps remain, the Phase 17.10 gate remains, the standalone Phase 14.3 step is absent, and the Phase 14.13 gate remains. Runtime/CI status has not yet been established for this change; do not claim the revised workflow has passed.
 
 Other intentional overlaps remain unchanged: Golden Regression is also run as an independent baseline check, and Logistics L1–L7 cumulative certification remains separately visible in its dedicated Logistics job even though Phase 13.11.19 invokes the same cumulative Logistics gate. These are retained for independent failure/certification visibility, not treated as accidental duplication.
+
+
+## Phase 16 / 19 / 20 cumulative-gate overlap audit (2026-11-21)
+
+Reviewed the baseline job's retained `test:phase16.14`, `test:phase19.12-cumulative`, and `test:phase20.12` commands and traced their nested execution paths:
+
+- Phase 16.14 invokes Phase 16.13; Phase 16.13 invokes the full Phase 16.12 platform regression; Phase 16.12 invokes all 12 Phase 16 controls and Golden Regression. This is required preflight for the final platform snapshot and Node >=24 certification. Do not remove it from Phase 16.14.
+- Phase 17.10 independently runs the 19-file Phase 17 suite, Phase 16.12, and Golden Regression.
+- Phase 19.12 cumulative independently runs Phase 19.2–19.12, Phase 18.12 structural exit, Phase 16.12, and Golden Regression. Its explicit output/report records those prerequisite checks.
+- Phase 20.12 independently runs Phase 20.1–20.11, the Phase 19.12 full ecosystem discovery exit regression, Phase 16.12, and Golden Regression. Its Phase 19 prerequisite is the final discovery exit regression, not the Phase 19.12 cumulative gate.
+
+Therefore the Phase 16.12 and Golden checks repeat across the Phase 16.14, Phase 17.10, Phase 19.12, and Phase 20.12 high-level gates (plus Golden's standalone baseline step). These are deliberate self-contained cumulative certification gates: each phase exit can be invoked independently and validates its own prerequisite boundary. Removing nested checks or making gates depend on prior workflow steps would weaken standalone reproducibility and make phase certification dependent on workflow ordering. No source/workflow change is recommended for these overlaps.
+
+Phase 19.12 and Phase 20.12 are separate cumulative gates with distinct phase coverage. Phase 20.12 does not invoke the Phase 19.12 cumulative gate; it runs the Phase 19.12 full ecosystem exit regression as a prerequisite. Do not label this as a duplicate cumulative-gate invocation.
+
+Decision: retain the repeated prerequisite executions. The earlier 18-step Phase 17 / Phase 14.3 cleanup remains safe because those were direct workflow invocations duplicating tests already run by a retained gate in the same baseline job, without an independent top-level certification purpose. Current CI status for the workflow consolidation commits remains unverified.
