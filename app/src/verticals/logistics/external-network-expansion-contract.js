@@ -3,9 +3,15 @@
  *
  * Canonical boundary for external logistics networks.
  *
- * This contract deliberately does not implement a provider adapter. The live
- * repository currently has no concrete logistics provider/adapter authority
- * to extend. It defines the stable boundary that a future adapter must obey.
+ * The repository already provides the generic Platform Integration contract,
+ * Logistics Provider Adapter contract, and deployment-supplied process-local
+ * executor binding (Phases 16.4 and 16.13.3/16.13.15/16.13.16). This module
+ * composes the L21 external-network boundary with those existing authorities;
+ * it does not implement a production provider-specific adapter, credentials,
+ * transport client, callback ingress, retry engine, or provider registry.
+ *
+ * Provider execution and canonical mutation remain delegated to the existing
+ * adapter and domain authorities. Do not create a second Logistics authority.
  */
 
 const SERVICE_PROFILES = Object.freeze([
