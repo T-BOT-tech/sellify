@@ -105,9 +105,9 @@ The root, backend, and app package manifests, root lockfile, Node version files,
 
 ### Broken app test-script paths fixed
 
-The app package had 17 test scripts. Eight were already correctly written as `../phase0/...`; the other eight used `phase0/...` even though there is no `app/phase0/` directory. Those eight scripts could not resolve their target files when run from the app package.
+The app package had 17 test scripts. Nine were already correctly written as `../phase0/...`; the other eight used `phase0/...` even though there is no `app/phase0/` directory. Those eight scripts could not resolve their target files when run from the app package.
 
-Updated `app/package.json` so all 16 phase-test scripts resolve to the shared root `phase0/` regression files. Static validation against the current recursive Git tree confirms all 16 test targets exist. The two remaining scripts are `dev` and `start`, which invoke the declared `serve` binary.
+Updated `app/package.json` so all 17 phase-test scripts resolve to the shared root `phase0/` regression files. Static validation against the current recursive Git tree confirms all 17 test targets exist. The two remaining scripts are `dev` and `start`, which invoke the declared `serve` binary.
 
 ### Frontend-only development install instruction fixed
 
