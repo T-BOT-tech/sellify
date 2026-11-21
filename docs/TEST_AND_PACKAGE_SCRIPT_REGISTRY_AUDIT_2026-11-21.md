@@ -203,6 +203,18 @@ The current canonical application is intentionally narrow: `fulfillment_delivere
 
 **Correct L21 status:** generic integration/adapter/execution composition is implemented; deployment-supplied executor binding is implemented; a production provider-specific transport/configuration and full callback ingress remain unverified/not implemented. Preserve the existing stack and extend it only for a concrete, authorized provider use case. Do not build another provider registry, credential store, callback store, routing engine, retry engine, or Logistics authority.
 
+### Phase 16.13 provider regression CI gap — correction applied
+
+A current-main workflow audit confirmed that none of the five GitHub workflow files executed the Phase 16.13 provider-stack regressions. The existing `test:phase16.13` command is a Node >=24 gate plus Phase 16.12 platform regression; it does not execute Phase 16.13 provider tests. The repository contains 18 distinct Phase 16.13 provider regression files (.1–.16, .18, .19), while package scripts exposed only .10–.19; the .17 alias duplicates .13.
+
+**Correction applied:**
+- Added `phase0/phase16.13-logistics-provider-cumulative-regression.mjs`, which executes all 18 distinct provider regression files sequentially in separate Node processes and enforces Node >=24.
+- Added root script `test:phase16.13-logistics-provider`.
+- Added that single cumulative command to `.github/workflows/logistics-runtime-certification.yml`.
+- The .17 alias remains for compatibility but is deliberately not executed as a separate test because it resolves to the .13 file.
+
+This is test/certification wiring only. It does not add provider transport, credentials, a provider registry, retry/callback persistence, or new domain authority. CI must pass on the new commit before the provider stack can be called CI-verified.
+
 ### Corrected overall conclusion
 
 | Layer | Master-spec requirements | Current evidence | Status |
