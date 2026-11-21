@@ -685,3 +685,8 @@ Reviewed the Phase 13.10.12-.14 tests alongside GAP-2 assignment/dispatch/cross-
 - Phase 13.10.14 adversarially checks cross-feature contract consistency across order, fulfillment, shipment, proof/return, and courier projections; GAP-2.9 checks the actual transactional delivery-to-fulfillment-to-inventory consequence and payment/settlement separation, while GAP-2.10 checks runtime lifecycle/assignment idempotency and serialization. They cover different layers and must remain.
 
 No additional Logistics test removal is justified by this semantic comparison.
+
+
+## Workflow-wide direct invocation scan (2026-11-21)
+
+After the Logistics cleanup, scanned every `run:` command in `.github/workflows/ci.yml`, resolving direct `npm run <script>` commands through the root `package.json` to their Node regression targets and including direct `node phase0/...` commands. Across the seven workflow job/trigger sections, the scan found no identical regression target invoked directly by more than one job. This scan intentionally covers direct workflow invocations only; nested cumulative-gate execution is audited separately above and retains documented independent certification overlaps (for example L18 and Phase 19.5/19.7). The scan does not claim that different test files have no semantic overlap.
