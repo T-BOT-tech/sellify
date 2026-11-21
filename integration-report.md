@@ -1,3 +1,7 @@
+> **HISTORICAL INTEGRATION CANDIDATE REPORT — reviewed 2026-11-21.** This report describes a disposable worktree and PRs #84–#90 from an earlier integration cycle. Its branch, commit, PR status, acceptance results, and uncovered gaps are not current repository status. Preserve it as historical decision evidence only; do not use it to recreate work or infer current gaps. Verify any proposed work against current `main`, current tests, and [the implementation register](docs/SELLIFY_IMPLEMENTATION_REGISTER.md).
+
+---
+
 # Sellify first-experience disposable integration candidate
 
 - Worktree: `/home/ubuntu/parallel-next/first-experience-integration`
