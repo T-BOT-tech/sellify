@@ -428,3 +428,14 @@ The repository already has canonical operational data suitable for a future read
 The next bounded implementation task is a source-mapping/design pass over the canonical records above, then a read-only, organization-scoped observation builder only after metric definitions are made explicit (time window, units, deduplication, cancellation/exception handling, status inclusion, corridor/location mapping, and freshness). It must not persist a second operational ledger, mutate orders/fulfillment/inventory, infer provider capacity without provider evidence, or introduce a new event store. Prefer direct read projections over adding a new event type unless an existing canonical event contract is shown to be the right extension point.
 
 No production code was changed in this L20 source-trace batch. The change is an evidence update only.
+
+
+### Capacity and corridor evidence precision check
+
+A follow-up schema inspection narrows the capacity conclusion:
+
+- The only matching durable capacity-signal table found in `backend/lib/store-sqlite.js` is `supplier_network_capacity_signals`. Its schema restricts `source` to `DECLARED`; it is Supplier Network product/capability availability, not observed logistics-carrier capacity for a corridor.
+- Logistics scheduling records carry organization/location and related order/fulfillment/movement references, but the inspected scheduling schema has no corridor identifier. A corridor mapping cannot be assumed from a location ID.
+- The Logistics capacity-profile, provider-capability, discovery and verification modules are contracts/projections; this audit did not find a corresponding durable Logistics provider-capacity observation table or a live provider telemetry feed.
+
+Therefore, provider-capacity visibility for L20 remains **unavailable from verified live source data**. Supplier Network declared capacity must not be silently repurposed as verified carrier capacity. A corridor/location mapping and an evidence freshness/source contract are prerequisites for any future read-only observation builder.
