@@ -16,6 +16,12 @@ import {
 
 const TYPES = new Set(['carrier', 'courier', '3pl', '4pl', 'fleet', 'other']);
 const DIRECTIONS = new Set(['inbound', 'outbound', 'bidirectional']);
+const FORBIDDEN_INPUT_FIELDS = Object.freeze([
+  'credentials', 'credential', 'secret', 'token', 'apiKey', 'password',
+  'credentialStore', 'tokenStore', 'ownsDatabase', 'ownsPersistence',
+  'ownsProviderRegistry', 'ownsRouting', 'ownsShipmentLedger',
+  'ownsAuthorization', 'ownsTransactionEngine', 'ownsEventStore',
+]);
 
 function invalid(message, code = 'LOGISTICS_NETWORK_INTEGRATION_INVALID') {
   const error = new Error(`Invalid logistics network integration: ${message}`);
@@ -41,6 +47,11 @@ function list(value, field) {
 
 export function defineLogisticsNetworkIntegration(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) invalid('integration must be an object');
+  for (const field of FORBIDDEN_INPUT_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(input, field)) {
+      invalid(`integration cannot contain ${field}`, 'LOGISTICS_NETWORK_INTEGRATION_FORBIDDEN_FIELD');
+    }
+  }
 
   const providerId = normalized(input.provider_id ?? input.providerId, 'provider_id');
   const providerType = normalized(input.provider_type ?? input.providerType ?? 'other', 'provider_type');
