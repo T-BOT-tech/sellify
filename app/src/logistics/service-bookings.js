@@ -46,10 +46,7 @@ async function requestBookings(order, context) {
 }
 
 function canOperate() {
-  const roles = Array.isArray(config.contextualRoles) ? config.contextualRoles : [];
-  const roleNames = roles.map(r => String(r?.role || '').toLowerCase());
-  return ['owner', 'manager'].includes(String(config.currentStaffRole || config.authRole || config.tenantRole || '').toLowerCase())
-    || roleNames.some(r => ['logistics_manager', 'logistics_dispatcher'].includes(r));
+  return ['owner', 'manager'].includes(String(config.currentStaffRole || config.authRole || config.tenantRole || '').toLowerCase());
 }
 
 function renderBookingCard(order, booking) {
@@ -91,12 +88,13 @@ function hasServiceProviderResourceScope(resourceId = null) {
     && (!resourceId || String(item?.scopeId || '') === String(resourceId)));
 }
 
-function canAccessServiceResources() {
+function hasLogisticsServiceResourceAccess() {
   const roles = Array.isArray(config.contextualRoles) ? config.contextualRoles : [];
-  const roleNames = roles.map(item => String(item?.role || '').toLowerCase());
-  return canManageServiceResources()
-    || roleNames.some(role => ['logistics_manager', 'logistics_dispatcher'].includes(role))
-    || hasServiceProviderResourceScope();
+  return roles.some(item => ['logistics_manager', 'logistics_dispatcher'].includes(String(item?.role || '').toLowerCase()));
+}
+
+function canAccessServiceResources() {
+  return canManageServiceResources() || hasLogisticsServiceResourceAccess() || hasServiceProviderResourceScope();
 }
 
 function serviceResourceEndpoint() {
@@ -440,8 +438,11 @@ async function saveServiceResourceAvailability(button, root) {
 
 export function serviceBookingsWorkspaceShell() {
   const providerOnly = hasServiceProviderResourceScope() && !canManageServiceResources();
-  return '<section id="serviceBookingsWorkspace" class="settings-section" aria-label="' + escapeAttr(t(providerOnly ? 'serviceResourceTitle' : 'serviceBookingsTitle')) + '">'
-    + (providerOnly
+  const logisticsResourceOnly = hasLogisticsServiceResourceAccess() && !canManageServiceResources() && !providerOnly;
+  return '<section id="serviceBookingsWorkspace" class="settings-section" aria-label="' + escapeAttr(t(providerOnly || logisticsResourceOnly ? 'serviceResourceTitle' : 'serviceBookingsTitle')) + '">'
+    + (logisticsResourceOnly
+      ? ''
+      : providerOnly
       ? '<h3 style="margin:0;">' + escapeHtml(t('serviceResourceTitle')) + '</h3>'
         + '<p class="logistics-meta">' + escapeHtml(t('serviceResourceProviderDescription')) + '</p>'
         + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h4>' + escapeHtml(t('serviceProviderAppointmentsTitle')) + '</h4>'
