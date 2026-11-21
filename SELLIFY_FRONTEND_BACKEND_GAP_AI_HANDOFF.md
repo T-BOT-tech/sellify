@@ -1,3 +1,7 @@
+> **HISTORICAL HANDOFF — dated 2026-10-02; reviewed 2026-11-21.** The PF-1 “immediate target” and task sequence below predate the current `app/src/payments/` client/contract/projection/state/UI modules and registered frontend regressions. Do not recreate those modules or treat this as the current payment gap. Re-audit the exact remaining behavior against current source and the [Implementation Register](docs/SELLIFY_IMPLEMENTATION_REGISTER.md).
+
+---
+
 # Sellify Frontend ↔ Backend Gap AI Handoff
 
 Status: CURRENT HANDOFF
