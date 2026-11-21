@@ -88,7 +88,7 @@ export function buildPhysicalCommerceSpine(order, { organizationId } = {}) {
       proof: logistics.proof,
       fulfillment_status: logistics.fulfillment_status,
       authority: 'logistics-pack',
-      lifecycle_mutation_authority: 'app/src/logistics/fulfillment.js',
+      lifecycle_mutation_authority: 'backend/lib/store-sqlite.js',
     }),
     physical_flow: physicalFlow,
     final: FINAL_STATUSES.has(physicalFlow.status),
