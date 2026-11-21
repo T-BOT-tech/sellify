@@ -54,7 +54,7 @@ pass('failed is terminal', () => {
 });
 
 pass('returned is terminal', () => {
-  const r = normalizeLogisticsProviderExecutionResult({ provider_id: 'p1', operation: 'returns', result_status: 'returned', callback_id: 'cb:10' });
+  const r = normalizeLogisticsProviderExecutionResult({ provider_id: 'p1', operation: 'returns', result_status: 'returned', callback_id: 'cb:10', proof: { type: 'photo', ref: 'return-proof-10' } });
   assert.equal(r.terminal, true);
 });
 
@@ -89,7 +89,7 @@ pass('projected result maps failure', () => {
 });
 
 pass('projected result maps return', () => {
-  const r = projectProviderExecutionResult({ provider_id: 'p1', operation: 'returns', result_status: 'returned', callback_id: 'cb:17' });
+  const r = projectProviderExecutionResult({ provider_id: 'p1', operation: 'returns', result_status: 'returned', callback_id: 'cb:17', proof: { type: 'photo', ref: 'return-proof-17' } });
   assert.equal(r.canonical_result, 'return_completed');
 });
 
