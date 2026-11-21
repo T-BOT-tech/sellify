@@ -1,3 +1,7 @@
+> **HISTORICAL IMPLEMENTATION ROADMAP — dated 2026-10-02; reviewed 2026-11-21.** PF-1/PF-2 statuses and proposed target files below are stale as a task list: the payment frontend client, contract, projection, state, and UI modules now exist, with registered PF-1/PF-2 regressions. Preserve the architecture and acceptance criteria as historical context, but re-audit current source and evidence before reopening any item.
+
+---
+
 # Sellify Frontend ↔ Backend Gap Implementation Roadmap
 
 Status: CURRENT
