@@ -52,7 +52,11 @@ Open `http://localhost:8787` — this is the full app, same-origin sync
 included, auto-restarting on backend changes.
 
 **Working on the frontend only, don't need sync:**
-```
+
+Install the app's local-only static-server dependency once, then start it:
+
+```bash
+npm --prefix app install
 npm run dev:app       # static file server, no backend, port 3000
 ```
 The app works fully offline without a backend (that's the point — see
