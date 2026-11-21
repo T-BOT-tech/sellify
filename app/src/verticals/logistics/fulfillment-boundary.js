@@ -33,8 +33,10 @@ export function getLogisticsFulfillmentContext(order) {
     final: FINAL.has(status),
     order_authority: 'commerce',
     fulfillment_authority: 'app/src/logistics/fulfillment.js',
+    frontend_fulfillment_api_binding: 'app/src/logistics/fulfillment.js',
     logistics_role: 'coordinate_and_project',
-    mutation_authority: 'app/src/logistics/fulfillment.js',
+    mutation_authority: 'backend/lib/store-sqlite.js',
+    server_fulfillment_mutation_authority: 'backend/lib/store-sqlite.js',
   });
 }
 
