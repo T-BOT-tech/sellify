@@ -520,3 +520,22 @@ The regression uses synthetic integration and message references. It demonstrate
 Do not create another provider framework, Logistics registry, credential store, callback store, retry engine, shipment ledger, or fulfillment authority. The existing Phase 16.13 stack is the intended execution composition. A concrete integration should proceed only after a provider is selected and its API/authentication contract, operation mapping, callback behavior, sandbox, deployment/secret boundary, retry semantics, and canonical result mapping are evidenced. Before enabling it for organizations, run a provider-specific adapter contract suite and an end-to-end sandbox test through the existing server execution service and canonical transaction.
 
 This is a source-backed readiness assessment, not a claim that L21 production connectivity or live provider operations are certified.
+
+## L21 cross-layer fulfillment-authority naming reconciliation (2026-11-21)
+
+A follow-up trace compared the older app-side Logistics fulfillment contracts with the newer Phase 16.13 server execution and callback composition.
+
+### What the source actually does
+
+- `app/src/logistics/fulfillment.js` is a frontend/API binding. Its own header says the UI expresses intent and the backend Core Fulfillment API owns status transitions and terminal inventory consequences. It sends authenticated requests to the backend and projects canonical responses; it is not itself the durable server mutation authority.
+- `backend/lib/logistics/provider-execution-application.js` calls the existing `transitionOrderFulfillment` transaction from `backend/lib/store-sqlite.js`. Its contract correctly names `backend/lib/store-sqlite.js` as the fulfillment authority and supports only the delivered transition through this provider bridge.
+- The newer Phase 16.13 server service, runtime, deployment adapter, and callback application consistently identify the backend store as the server-side mutation authority.
+- However, older cross-pack and provider-side projection contracts (including `provider-execution-result-contract.js` and `provider-execution-bridge-contract.js`) label `app/src/logistics/fulfillment.js` as `fulfillment_authority` or `mutation_authority`. Their regressions assert that literal path. That label is ambiguous: it describes the frontend integration binding, not the backend transaction that actually commits fulfillment state.
+
+### Classification
+
+This is a **cross-layer authority metadata / naming inconsistency**, not evidence of a second fulfillment implementation. The frontend module explicitly delegates mutation to the backend, and the Phase 16.13 server path explicitly delegates canonical mutation to the existing SQLite-backed Core Fulfillment transaction.
+
+Do not mechanically replace every `app/src/logistics/fulfillment.js` reference. Some are accurate descriptions of the UI/API boundary, and changing all of them would blur rather than clarify ownership. The next safe correction is a scoped contract vocabulary review: distinguish `fulfillment_api_client` or `frontend_fulfillment_binding` from `server_fulfillment_mutation_authority`, update only contracts whose field currently claims server mutation ownership, and revise their source-level regressions together. Preserve the existing API flow and canonical transaction.
+
+No production code or tests were changed in this follow-up. This is a source-backed audit finding.
