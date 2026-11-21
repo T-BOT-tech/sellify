@@ -606,3 +606,14 @@ During this review, the newly added .19 manifest parser was found to have an ove
 
 This is source-level integrity hardening only. It does not alter application behavior, canonical domain ownership, or the Node `>=24` requirement. The changed manifest entries and linkage were checked against fetched source contents; the complete .20/.21 manifest verification and cumulative regression execution still need to run in CI under Node 24. Do not treat the phase as newly runtime-certified until those checks complete.
 
+
+
+## CI baseline job audit and redundant browser setup removal (2026-11-21)
+
+- Reviewed `.github/workflows/ci.yml` baseline job before considering any job split.
+- The baseline job contains 182 named steps and 180 `run` commands, spanning core/offline/database, onboarding, Service Booking, Payment, Procurement, Inventory/Fulfillment, Marketplace/Telegram, Logistics, FUX/IAM/UI, and country/discovery/cross-border checks. Category counts overlap because some checks span multiple domains.
+- The job installs Chromium system dependencies and the Chromium browser before the outbox browser regression. A later full-app browser smoke step repeated `npx playwright install --with-deps chromium` in the same job. Removed only that redundant later installation; the existing `install-deps` and browser installation steps remain, and both browser regressions remain.
+- Workflow change: `0d70bb7c143fdc290a888caaec30dde0fbd7e9a3`.
+- Re-fetched workflow verification confirms exactly the two intended Playwright setup commands remain in `baseline`; no browser test or assertion was removed.
+- CI status and PR workflow-run query returned no checks/runs for this commit. Runtime/CI validation is therefore pending; do not treat the optimization as CI-certified.
+- No job restructuring was made. The baseline is broad, but splitting it now would add runner/dependency setup and risks overlapping existing cumulative gates. First map each test's standalone versus nested-gate role and identify natural parallel groups without repeating execution.
