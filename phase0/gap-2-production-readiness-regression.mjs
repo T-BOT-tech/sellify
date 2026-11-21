@@ -16,7 +16,12 @@ const requiredScripts = [
 ];
 for (const script of requiredScripts) assert.equal(typeof pkg.scripts?.[script], 'string', 'missing ' + script);
 assert.match(ci, /node-version: \[24\]/);
-for (const script of requiredScripts) assert.ok(ci.includes('npm run ' + script), 'CI missing ' + script);
+const deliveryLifecycleCiAliases = ['test:gap-2-delivery-lifecycle', 'test:gap-2-delivery-exception'];
+for (const script of requiredScripts.filter(script => !deliveryLifecycleCiAliases.includes(script))) {
+  assert.ok(ci.includes('npm run ' + script), 'CI missing ' + script);
+}
+assert.ok(deliveryLifecycleCiAliases.some(script => ci.includes('npm run ' + script)),
+  'CI must execute the shared delivery lifecycle/exception regression through one supported alias');
 
 const migrations = [...store.matchAll(/if \(!applied\.includes\((\d+)\)\)/g)].map(m => Number(m[1]));
 assert.equal(Math.max(...migrations), 84, 'latest migration must remain explicit');
