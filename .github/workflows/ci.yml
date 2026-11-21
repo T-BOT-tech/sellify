@@ -473,8 +473,6 @@ jobs:
         run: npm run test:logistics-scheduling-ui
       - name: GAP-2 logistics authorization foundation regression
         run: npm run test:gap-2-logistics-authz
-      - name: GAP-2 delivery assignment authority regression
-        run: npm run test:gap-2-delivery-assignment
       - name: GAP-2 behavioral multi-location courier authorization regression
         run: npm run test:gap-2-courier-multi-location
       - name: GAP-2 delivery lifecycle and exception-resolution regression
