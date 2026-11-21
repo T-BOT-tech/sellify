@@ -1,3 +1,7 @@
+> **HISTORICAL HANDOFF — NOT THE CURRENT SOURCE OF TRUTH (reviewed 2026-11-21).** This file contains superseded source-ZIP instructions, historical architecture framing, and runtime/status snapshots. Do not follow its instruction to read an old ZIP first or treat the ZIP as the live source. Use current repository `main`, [the documentation index](docs/README.md), and [the implementation register](docs/SELLIFY_IMPLEMENTATION_REGISTER.md). Preserve this file as historical context until its unique useful content is reconciled; do not treat its status claims as current.
+
+---
+
 ## Phase 14.12 — Ethiopia Integration
 
 Status: COMPLETE / verified under Node 22.16.0.
