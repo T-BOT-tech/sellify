@@ -89,3 +89,41 @@ No test file, package script, canonical authority, or phase acceptance contract 
 
 GitHub's code-search excerpts returned an older indexed package/CI revision (`c4c7227...`) rather than the current `main` commit during this audit. Therefore search-index result counts were not treated as authoritative. The consumer statements above are based on files fetched directly from current `main`. The full repository-wide documentation and external automation reference audit remains open.
 
+
+## Nested package and runtime manifest audit (follow-up, 2026-11-21)
+
+The root, backend, and app package manifests, root lockfile, Node version files, root README, and devcontainer setup were compared.
+
+| Area | Current evidence | Result |
+|---|---|---|
+| Root package | `sellify@0.2.0`, private, ESM, Node `>=24`; 481 scripts; Playwright is its only dev dependency. | Consistent with the root lockfile and Node floor. |
+| Backend package | `sellify-backend@0.2.0`, private, ESM, Node `>=24`; three operational scripts; no package dependencies. | Consistent with the root deployment model; backend uses Node built-ins. |
+| App package | `stall-ledger@0.1.0`, private, Node `>=24`; 19 scripts; `serve` is a dev dependency. | Internal name/version differ from root/backend; no evidence this private name is published. Do not rename it without checking package references and release conventions. |
+| Node pinning | Both `.nvmrc` and `.node-version` contain `24`; root/backend/app engines all require `>=24`. | Consistent runtime floor. |
+| Lockfiles | Only root `package-lock.json` exists. It contains root Playwright dependencies but not app's `serve` dependency. | App-only dev setup needs its own install; no reproducible app lockfile is committed. |
+| Devcontainer | `postCreateCommand` runs root `npm install --ignore-scripts`; backend development uses the root/backend script. | Does not install app's optional static-server dependency. |
+
+### Broken app test-script paths fixed
+
+The app package had 17 test scripts. Eight were already correctly written as `../phase0/...`; the other eight used `phase0/...` even though there is no `app/phase0/` directory. Those eight scripts could not resolve their target files when run from the app package.
+
+Updated `app/package.json` so all 16 phase-test scripts resolve to the shared root `phase0/` regression files. Static validation against the current recursive Git tree confirms all 16 test targets exist. The two remaining scripts are `dev` and `start`, which invoke the declared `serve` binary.
+
+### Frontend-only development install instruction fixed
+
+The root README previously told developers to run `npm run dev:app` without explaining that `serve` is not installed by the root package install. The root lockfile confirms `serve` is not a root dependency. Updated the README to instruct developers to run:
+
+```bash
+npm --prefix app install
+npm run dev:app
+```
+
+The production deployment remains unaffected: the backend serves the app statically, and `serve` is only needed for the optional frontend-only local development server.
+
+### Remaining manifest decisions — not changed
+
+- App package name `stall-ledger` and version `0.1.0` differ from root/backend `sellify` / `sellify-backend` version `0.2.0`. This is a naming/version hygiene issue, not proven runtime breakage. Leave unchanged pending an explicit package/release identity decision.
+- No app-local `package-lock.json` is committed. A lockfile should be generated with npm against the exact manifest and registry resolution, then committed and verified; do not hand-author it.
+- Root package has no npm workspaces. Do not add workspaces just to solve the optional frontend dev-server install without first deciding the intended package ownership model.
+
+Static target validation is not the same as executing the app-local scripts. The root CI workflow currently does not install app-local dependencies or run the app package's test aliases. These changes therefore remain pending runtime verification by an app-package install/test run.
