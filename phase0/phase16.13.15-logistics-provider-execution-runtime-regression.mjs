@@ -37,7 +37,7 @@ const execution = await executePlatformAdapter('runtime-logistics-adapter', {
 assert.equal(execution.provider_id, 'runtime-provider');
 assert.equal(execution.runtime_adapter_id, 'runtime-logistics-adapter');
 
-await assert.rejects(
+assert.throws(
   () => bindLogisticsProviderExecutionAdapter('missing-runtime-adapter', async () => ({})),
   /unknown platform adapter/,
 );
@@ -50,7 +50,7 @@ registerPlatformAdapter({
   status: 'deferred',
 }, { replace: true });
 
-await assert.rejects(
+assert.throws(
   () => bindLogisticsProviderExecutionAdapter('runtime-deferred-adapter', async () => ({})),
   /not active/,
 );
@@ -63,7 +63,7 @@ registerPlatformAdapter({
   status: 'active',
 }, { replace: true });
 
-await assert.rejects(
+assert.throws(
   () => bindLogisticsProviderExecutionAdapter('runtime-non-logistics-adapter', async () => ({})),
   /not a Logistics adapter/,
 );
