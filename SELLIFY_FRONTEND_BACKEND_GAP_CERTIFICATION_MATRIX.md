@@ -1,3 +1,7 @@
+> **HISTORICAL CERTIFICATION MATRIX — dated 2026-10-02; reviewed 2026-11-21.** This matrix is not a current certification statement. Its PF-1 “open” row predates the payment frontend modules and regressions now present in `app/src/payments/` and `phase0/`. Reassess each dimension separately using exact current-main source, test, CI, and runtime evidence; do not infer full production readiness from module presence.
+
+---
+
 # Sellify Frontend ↔ Backend Gap Certification Matrix
 
 Status: CURRENT CERTIFICATION BASELINE
