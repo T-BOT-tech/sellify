@@ -551,9 +551,9 @@ A narrower correction was applied only where the field explicitly claimed `mutat
 - `app/src/verticals/agriculture/warehouse-logistics-contract.js`
 - `app/src/verticals/physical-commerce/spine-contract.js`
 
-Those projections now retain the frontend binding as `frontend_fulfillment_api_binding: app/src/logistics/fulfillment.js` and identify `backend/lib/store-sqlite.js` as `mutation_authority` / `server_fulfillment_mutation_authority`. Existing logical `fulfillment_authority` fields were preserved where they describe the established frontend integration binding. No route, lifecycle, transaction, inventory, provider, or persistence behavior changed.
+Those projections now retain the frontend binding as `frontend_fulfillment_api_binding: app/src/logistics/fulfillment.js` and identify `backend/lib/store-sqlite.js` as `mutation_authority` / `server_fulfillment_mutation_authority`. The Physical Commerce spine's nested `logistics.lifecycle_mutation_authority` is also explicitly mapped to the backend store; its frontend binding remains separately recorded under `fulfillment.frontend_fulfillment_api_binding`. Existing logical `fulfillment_authority` fields were preserved where they describe the established frontend integration binding. No route, lifecycle, transaction, inventory, provider, or persistence behavior changed.
 
-The four corresponding focused regressions were updated:
+The four corresponding focused regressions were updated, including an explicit assertion for the nested Physical Commerce lifecycle mutation field:
 
 - `phase0/phase13.10.3-logistics-fulfillment-boundary-regression.mjs`
 - `phase0/phase13.11.9-unified-fulfillment-regression.mjs`
