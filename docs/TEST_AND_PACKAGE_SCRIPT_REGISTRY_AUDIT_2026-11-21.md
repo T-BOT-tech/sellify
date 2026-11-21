@@ -580,7 +580,7 @@ This is manifest maintenance, not runtime evidence. The Phase 13.11.19 cumulativ
 
 The current `.github/workflows/ci.yml` baseline job did not directly invoke the Phase 13.11.19 cumulative gate or the Phase 13.11.20 / 13.11.21 integrity and snapshot regressions. Later Phase 16 and Phase 13.12 checks do not transitively execute these three controls: Phase 16.12 executes Phase 16.0–16.11 and Golden Regression; Phase 16.13 wraps Phase 16.12; Phase 13.12.15 references the Phase 13.11.21 snapshot as a historical artifact but is not itself part of the current CI workflow.
 
-Added the following ordered steps to the existing baseline job in `.github/workflows/ci.yml`:
+Added the following ordered steps to the existing `phase13_10_24` job in `.github/workflows/ci.yml` (which runs on the Node 24 matrix):
 
 - `npm run test:phase13.11.19` — cross-pack cumulative regression gate (includes the Phase 13.11.3, .7 and .9 regressions and the other listed Phase 13.11 controls).
 - `npm run test:phase13.11.20` — documentation and source-hash integrity regression.
