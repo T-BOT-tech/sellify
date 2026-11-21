@@ -55,6 +55,32 @@ The current `.github/workflows/ci.yml` calls named Logistics L11 scripts through
 4. Split tests only when a phase has independently specified acceptance criteria and a distinct regression adds real coverage.
 5. Any package-script edit must be followed by JSON validation, static target validation, CI-reference validation, and the affected regression runs.
 
+## Full root-script target and CI-reference inventory (follow-up, 2026-11-21)
+
+The root script manifest was re-read from the current source commit and compared with the recursive Git tree and current `.github/workflows/ci.yml`.
+
+| Static inventory | Count | Interpretation |
+|---|---:|---|
+| Root scripts | 481 | Complete manifest enumeration |
+| Direct Node file commands | 473 | Targets resolve to tracked files in the current tree |
+| Direct shell file commands | 2 | Targets resolve to tracked shell files |
+| Nested-package commands | 6 | Commands target the existing `backend/` or `app/` package directories |
+| Unresolved command targets | 0 | Directory targets were checked as directories, not incorrectly treated as missing files |
+| Script names directly referenced in CI | 197 | Literal script-name references found in the current CI workflow |
+
+The 197 CI references are not a count of distinct test files or complete dependency coverage. Scripts absent from direct CI text may be invoked by another npm script, a regression/gate script, developer workflow, or external automation. Therefore the remaining 284 names are **not** classified as unused.
+
+The direct command inventory is strongly Node-centric: 473 Node-file commands and two shell-file commands, with six commands delegating to nested package scripts. The previous static target check reported five false missing targets because it treated `npm --prefix backend` and `npm --prefix app` directory arguments as file paths; this follow-up corrected that interpretation and confirms all six nested-package directories exist.
+
+### Classification status
+
+- **Complete:** all 481 manifest entries enumerated; direct Node/shell targets and nested package directories resolve against the current tree.
+- **Partial:** direct CI reference mapping (197 script names) and exact duplicate-command groups (11 groups / 46 names).
+- **Not yet established:** full transitive npm-script call graph; references from all documentation and scripts; local developer and external automation consumers; obsolete/unreferenced classification.
+- **No deletions:** no script or test was removed based on this static inventory.
+
+The next safe step is to build a transitive consumer map for package-script-to-package-script calls and the source-level acceptance checks that inspect script names. Any cleanup decision must use that map plus workflow and documentation references; absence from CI alone is not evidence of obsolescence.
+
 ## Recommended next action
 
 Perform a consumer/reference audit of the 11 duplicate groups, then make a small alias cleanup batch only for names proven unused. Separately map every package script to its target file and classify each target as focused regression, cumulative gate, diagnostic, operational command, or obsolete/unreferenced. Do not delete tests or weaken CI as part of this naming cleanup.
