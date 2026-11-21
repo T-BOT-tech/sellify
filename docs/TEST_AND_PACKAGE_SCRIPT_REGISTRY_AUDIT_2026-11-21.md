@@ -58,3 +58,34 @@ The current `.github/workflows/ci.yml` calls named Logistics L11 scripts through
 ## Recommended next action
 
 Perform a consumer/reference audit of the 11 duplicate groups, then make a small alias cleanup batch only for names proven unused. Separately map every package script to its target file and classify each target as focused regression, cumulative gate, diagnostic, operational command, or obsolete/unreferenced. Do not delete tests or weaken CI as part of this naming cleanup.
+
+## Reference and CI-consumer audit (follow-up, 2026-11-21)
+
+The current `main` versions of `.github/workflows/ci.yml`, the Logistics exit-audit scripts, the GAP-2 production-readiness regression, the GAP-2 source-of-truth record, the relevant test files, and package scripts were inspected. This section supersedes any implication that every duplicate alias is safe to remove.
+
+### Confirmed consumers and dispositions
+
+| Alias family | Current consumers / evidence | Disposition |
+|---|---|---|
+| Logistics L11.8 / L11.9–L11.16 | CI runs the distinct L11.1, L11.3–L11.8 regressions. The Logistics master-specification exit audit uses `test:logistics-l11.16`, and the cumulative L8–L21 final certification invokes it. All those L11.8–L11.16 names point to the same 889-line L11.8-headed regression file, which imports and checks multiple scheduling decision/lifecycle contracts. | Preserve the phase alias required by the exit gate. Do not describe each alias as a separate test file or independent execution. A future phase-evidence review should reconcile the L11.16 acceptance label with the actual shared test content. |
+| Logistics L20.1–L20.10 | The master-specification exit audit and final certification use `test:logistics-l20.10`. All ten names point to the same 552-line network/corridor intelligence regression. | Preserve the L20.10 gate alias; document that it executes one cumulative regression. |
+| Logistics L21.1–L21.11 | The master-specification exit audit and final certification use `test:logistics-l21.11`. All eleven names point to the same 920-line external-network expansion regression. | Preserve the L21.11 gate alias; document that it executes one cumulative regression. |
+| GAP-2 lifecycle / exception | `gap-2-production-readiness-regression.mjs` asserts that both script names exist; the GAP-2 source-of-truth record lists both. The shared 506-line test checks assignment lifecycle, proof immutability, exception reason, exception resolution, and reassignment authorization. | Keep both package aliases for compatibility and readiness assertions, but execute the shared regression once in CI. |
+| Marketplace Phase 11.4 / Phase 13.10.24 fulfillment | Both aliases map to the same 404-line marketplace integrity regression. The separate `test:phase13.10.24-marketplace-boundary` is a different regression and remains in the Phase 13.10.24 job. | Keep both package aliases for compatibility; run the shared marketplace integrity test once in CI under its canonical Phase 11.4 name. |
+| Phase 16.13.13 / 16.13.17 | Both names map to the Phase 16.13.13 canonical-provider-application contract regression. No separate Phase 16.13.17 test file is implied by the alias. | Preserve for now; audit the phase 16.13.17 acceptance record before deciding whether it is a deliberate cumulative alias or a stale name. |
+| Phase 17.3 and 17.4 procurement aliases | CI uses the longer `procurement-` names for RFQ response and comparison integration tests; shorter aliases point to the exact same files. | Preserve the CI-facing canonical names. Short aliases are cleanup candidates only after all repository and external references are checked. |
+| `dev` / `dev:backend` | README and UI evaluation environment documentation explicitly instruct developers to use `dev:backend`. Both commands invoke the same backend development script. | Preserve `dev:backend` as documented developer entry point. Treat `dev` as a compatibility alias until consumer references are fully reconciled. |
+
+### CI deduplication applied
+
+Two duplicate test executions were removed from `.github/workflows/ci.yml` without deleting package scripts or regression files:
+
+1. The Phase 13.10.24 job no longer repeats the marketplace integrity regression under `test:phase13.10.24-marketplace-fulfillment`. The baseline CI job still runs the same test once using `phase11.4:marketplace-test`, now with an accurate description covering checkout, fulfillment, payment, and refund integrity. The distinct Phase 13.10.24 marketplace boundary regression remains in its dedicated job.
+2. GAP-2 lifecycle and exception aliases remain registered, but CI now runs their shared regression once using `test:gap-2-delivery-exception`, with a step name that explicitly says it covers both lifecycle and exception resolution. The redundant second invocations were removed. The GAP-2 production-readiness regression still verifies that both public script aliases exist.
+
+No test file, package script, canonical authority, or phase acceptance contract was deleted or weakened. The CI workflow change is a configuration-only reduction in duplicate executions; the pushed commit's workflow runs must pass before this cleanup is considered validated.
+
+### Search-index caveat
+
+GitHub's code-search excerpts returned an older indexed package/CI revision (`c4c7227...`) rather than the current `main` commit during this audit. Therefore search-index result counts were not treated as authoritative. The consumer statements above are based on files fetched directly from current `main`. The full repository-wide documentation and external automation reference audit remains open.
+
