@@ -74,8 +74,6 @@ jobs:
         run: npm run test:phase13.10.24-marketplace-boundary
       - name: Service delivery readiness and assignment compatibility regression
         run: npm run test:service-catalog-http
-      - name: GAP-2 delivery assignment lifecycle compatibility regression
-        run: npm run test:gap-2-delivery-lifecycle
       - name: Phase 13.10.24 Marketplace HTTP and SQLite fulfillment journey
         run: npm run test:phase13.10.24-marketplace-fulfillment
       - name: Service Booking operator workspace regression
@@ -482,11 +480,9 @@ jobs:
         run: npm run test:gap-2-logistics-authz
       - name: GAP-2 delivery assignment authority regression
         run: npm run test:gap-2-delivery-assignment
-      - name: GAP-2 delivery assignment lifecycle regression
-        run: npm run test:gap-2-delivery-lifecycle
       - name: GAP-2 behavioral multi-location courier authorization regression
         run: npm run test:gap-2-courier-multi-location
-      - name: GAP-2 delivery exception resolution regression
+      - name: GAP-2 delivery lifecycle and exception-resolution regression
         run: npm run test:gap-2-delivery-exception
       - name: GAP-2 dispatch workload regression
         run: npm run test:gap-2-dispatch-workload
