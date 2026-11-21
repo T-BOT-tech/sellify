@@ -28,6 +28,19 @@ This index separates current operating references from historical evidence. It d
 - [Contributing](../CONTRIBUTING.md) — contribution guidance.
 - [Security](../SECURITY.md) — security reporting guidance.
 
+## Payment architecture and gap records
+
+The following payment documents preserve useful architecture, contracts, and prior audit reasoning, but their dates/statuses predate the current payment frontend implementation. They are **design/history references, not current gap trackers**:
+
+- `../PAYMENT_AUTHORITY_MAP.md` — September 28 authority inspection snapshot.
+- `../AI_HANDOFF_GAP-1-PAYMENT.md` — historical implementation handoff; its claim that no dedicated frontend payment module exists is superseded.
+- `../SELLIFY_FRONTEND_BACKEND_GAP_AI_HANDOFF.md` — October 2 handoff; its PF-1 task list is superseded.
+- `../SELLIFY_FRONTEND_BACKEND_GAP_ANALYSIS_LATEST.md` — October 12 gap snapshot; “Latest” is historical.
+- `../SELLIFY_FRONTEND_BACKEND_GAP_CERTIFICATION_MATRIX.md` and `../SELLIFY_FRONTEND_BACKEND_GAP_IMPLEMENTATION_ROADMAP.md` — October 2 matrix/roadmap; their statuses require re-audit.
+- `GAP-1-PAYMENT-CONTRACTS.md`, `GAP-1-PAYMENT-IMPLEMENTATION.md`, `GAP-1-PAYMENT-PRODUCTIZATION-ARCHITECTURE.md`, and `GAP-1-PAYMENT-CERTIFICATION-CHECKLIST.md` — design contracts, architecture, and acceptance criteria. Reconcile with live Payment Core source before implementing or claiming completion.
+
+**Current source evidence:** `app/src/payments/client.js`, `contract.js`, `projection.js`, `state.js`, and `ui.js` exist on main. PF-1/PF-2 regression scripts are registered in the root package manifest. Their presence establishes implementation artifacts, not by itself a production-readiness or full certification claim.
+
 ## Historical and phase evidence
 
 The repository root and `phase0/` contain a large collection of phase handoffs, implementation records, source snapshots, hash manifests, and certification evidence. These documents should be treated as **historical evidence unless explicitly promoted into the current operating references above**.
