@@ -33,7 +33,7 @@ for (const rel of requiredControlArtifacts) assert.ok(exists(rel), `Missing cumu
 
 const integrityManifest = 'phase0/PHASE13.11.19-SOURCE-HASHES.sha256';
 assert.ok(exists(integrityManifest), 'Phase 13.11.19 source-hash manifest missing');
-const integrityLines = read(integrityManifest).split(/\\r?\\n/).filter(Boolean);
+const integrityLines = read(integrityManifest).split(/\r?\n/).filter(Boolean);
 assert.ok(integrityLines.length >= 3, 'Phase 13.11.19 source-hash manifest is incomplete');
 for (const line of integrityLines) {
   const match = line.match(/^([0-9a-f]{64})  (.+)$/);
