@@ -104,6 +104,62 @@ The 10 Node target groups are the Marketplace pair; four Procurement pairs; the 
 
 This establishes **script-name-to-file multiplicity**, not independent assertion coverage. In particular, the L11.8 regression file's own header identifies it as L11.8, while L20 and L21 each have one shared regression file for their respective alias families. Their broader acceptance semantics must be judged from the assertions and source-of-truth records, not the number of package aliases.
 
+## Phase acceptance depth review: Logistics L11/L20/L21 and Procurement 17.3/17.4
+
+This review inspected the actual regression source files, the Logistics master-specification exit audit, the L20/L21 contract modules, and the Phase 17.3/17.4 handoff documents.
+
+### Logistics L11 — Scheduling
+
+**Observed source coverage:** distinct tests exist for L11.1 contract normalization, L11.3 persistence/migration/schema, L11.4 transactional service, L11.5 central authorization, L11.6 pure feasibility, L11.7 feasibility integration, and L11.8 transactional decision/lifecycle boundaries. The L11.8 test is 889 lines and covers scheduling decision, confirmation, start, completion, failure, terminal states, organization scope, authorization, idempotency, optimistic versioning, audit requirements, adversarial cases, and closure invariants.
+
+**Alias finding:** `test:logistics-l11.8`, `test:logistics-l11.8-l11.9`, and L11.10–L11.16 all invoke that same L11.8 regression. Their names do not prove separate L11.9–L11.16 assertions. The master-specification exit audit requires only `test:logistics-l11.16` as the L11 Scheduling evidence identifier. The L8-L21 cumulative gate directly executes the single L11 scheduling decision regression once.
+
+**Gap / unknown:** no L11.2 script or corresponding L11.2 regression was identified in the current package manifest/tree search. No separate L11.9–L11.16 regression files were identified. This is a documentation/acceptance traceability gap unless the approved master specification explicitly defines independent subphase requirements. Do not create tests solely to fill numeric numbering gaps.
+
+**Disposition:** preserve all aliases for now because the final alias is required by the master exit audit; do not count each alias as independent coverage. Reconcile L11 subphase names against the approved Logistics master specification before claiming L11.9–L11.16 individually complete.
+
+### Logistics L20 — Network / Corridor Intelligence
+
+The single L20 regression file is headed L20.1 and is 552 lines. It exercises seven derived metrics: corridor demand, backhaul opportunity, depot throughput, capacity shortage, service-area gap, recurring demand, and provider-capacity visibility. It checks organization/corridor/service-profile observations, arithmetic, invalid inputs, and explicit non-authority boundaries (no persistence, routing, provider selection, assignment, transaction, stock, fulfillment, or capacity-ledger authority). The contract module is a derived-intelligence boundary.
+
+All ten package names L20.1–L20.10 invoke this same file. The master exit audit requires only `test:logistics-l20.10`; the cumulative gate executes the L20 regression once.
+
+**Gap / unknown:** no individual L20.2–L20.10 regression files or per-subphase acceptance mapping were identified. The existing L20.1 regression has broad metric coverage, but it does not by itself prove nine separately specified subphases.
+
+**Disposition:** preserve the final alias required by the master exit audit and retain compatibility names until references are reconciled. Treat L20.2–L20.10 independent acceptance as unverified, not as ten tests passed.
+
+### Logistics L21 — External Network Expansion
+
+The single L21 regression is 920 lines. Its contract module is 1,177 lines and explicitly states that it defines a provider-neutral boundary, not a concrete provider adapter. Regression assertions cover external inbound observations, duplicate/idempotency handling, integration lifecycle, adapter trust and capability declarations, canonical handoff/reconciliation, and restrictions against direct canonical-domain mutation or creating provider-selection, routing, assignment, fulfillment, inventory, payment, settlement, identity, or event-store authorities.
+
+All eleven package names L21.1–L21.11 invoke this same regression. The master exit audit requires only `test:logistics-l21.11`; the cumulative gate executes the L21 regression once.
+
+**Gap / unknown:** no separate L21.2–L21.11 test files or subphase-specific acceptance map were identified. The contract explicitly says no concrete logistics provider adapter exists. Therefore L21 boundary-contract coverage must not be described as a completed live provider integration.
+
+**Disposition:** preserve the final required alias. Treat per-subphase acceptance and concrete provider integration as unverified/deferred unless separate evidence exists.
+
+### Procurement Phase 17.3 / 17.4
+
+These are different from the Logistics alias families:
+
+- Phase 17.3 has two genuinely distinct targets: RFQ/supplier-response integration and RFQ contract/state-transition regression. The implementation handoff defines RFQ as Procurement-owned and explicitly excludes Inventory, Payment, B2B Quote/PO, Commerce Order, settlement, and award mutation.
+- Phase 17.4 has two genuinely distinct targets: deterministic supplier/line comparison integration and comparison contract/policy regression. Its handoff documents snapshotting, deterministic ranking, comparable-cost calculations, partial line coverage, authorization, and the explicit absence of award, PO, inventory, payment, settlement, landed-cost, and AI ranking behavior.
+- The longer `procurement-rfq-test` / `procurement-rfq-contract-test` and `procurement-comparison-test` / `procurement-comparison-contract-test` names are the CI-facing names. The shorter names are compatibility aliases to the same respective files.
+
+**Disposition:** retain both targets per phase; no evidence supports deleting either behavioral regression. Short aliases are compatibility candidates only after complete consumer reconciliation.
+
+### Consolidated disposition
+
+| Area | Real regression targets | Alias family | Evidence judgment |
+|---|---:|---:|---|
+| Logistics L11 | 7 identified phase tests (.1, .3–.8) | L11.8 + L11.9–.16 share one target | Earlier subphase acceptance mapping incomplete |
+| Logistics L20 | 1 | 10 names share one target | Seven metric families tested; individual .2–.10 unverified |
+| Logistics L21 | 1 | 11 names share one target | Broad boundary test; no live provider adapter |
+| Procurement 17.3 | 2 | 2 names per target | Two distinct regressions exist |
+| Procurement 17.4 | 2 | 2 names per target | Two distinct regressions exist |
+
+No tests or aliases were deleted. The next evidence task is to retrieve and map the approved Logistics master specification's actual L11.2/L11.9–L11.16/L20.2–L20.10/L21.2–L21.11 requirements. If that specification has no such subphase definitions, the correct remediation is to correct phase evidence labeling—not invent additional implementation or tests.
+
 ## Phase 16.13.17 alias anomaly (source inspection)
 
 The recursive current-main tree contains `phase0/phase16.13.13-logistics-provider-canonical-application-regression.mjs`, followed by distinct `.14`, `.15`, `.16`, `.18`, and `.19` regression files. There is no tracked `phase16.13.17` regression file.
