@@ -1,3 +1,7 @@
+> **HISTORICAL R2 RELIABILITY EVIDENCE — dated 2026-09-19; reviewed 2026-11-21.** The local concurrency observation, PASS counts, and Node 22.16.0 runtime failure below apply only to the September 19 source package. They are not current-main or production certification results. Preserve as historical evidence; re-run the appropriate current Node 24 gates and production acceptance checks before relying on readiness claims.
+
+---
+
 # SELLIFY R2 — Final Reliability Evidence Addendum
 
 Date: 2026-09-19
