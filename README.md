@@ -1,5 +1,10 @@
 # Sellify
 
+## Documentation
+
+Start with the [documentation index](docs/README.md) for current operating references, architecture/authority boundaries, implementation status, and historical phase evidence. The [implementation register](docs/SELLIFY_IMPLEMENTATION_REGISTER.md) is the operational status reference; dated handoffs and phase snapshots are historical unless explicitly reconciled there.
+
+
 Two parts, one deployment:
 
 ```
