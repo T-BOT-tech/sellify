@@ -1,3 +1,7 @@
+> **HISTORICAL AUTHORITY AUDIT — dated 2026-09-28; reviewed 2026-11-21.** This was an early inspection snapshot. Its “no implementation changes yet” status and listed missing capabilities are not current status. The repository now contains a dedicated frontend payment module at `app/src/payments/` and a broader provider-verification implementation under `backend/lib/payments/`. Reconcile every capability against current routes, source, migrations, and regressions before relying on the table. Preserve the one-Payment-Core/one-ledger authority boundary.
+
+---
+
 # Sellify GAP-1 — Payment Authority Map
 
 Status: INSPECTION COMPLETE — NO PAYMENT IMPLEMENTATION CHANGES YET
