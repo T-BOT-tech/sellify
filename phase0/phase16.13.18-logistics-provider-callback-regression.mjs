@@ -14,7 +14,7 @@ const callback = normalizeLogisticsProviderCallback({
   proof: { type: 'photo', reference: 'proof-123' },
 });
 
-assert.equal(callback.contract_version, '1.0');
+assert.equal(callback.contract_version, '1.1');
 assert.equal(callback.provider_id, 'carrier-a');
 assert.equal(callback.callback_id, 'cb-123');
 assert.equal(callback.result_status, 'delivered');
