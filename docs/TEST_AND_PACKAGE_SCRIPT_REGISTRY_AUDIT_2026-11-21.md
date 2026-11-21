@@ -439,3 +439,6 @@ A follow-up schema inspection narrows the capacity conclusion:
 - The Logistics capacity-profile, provider-capability, discovery and verification modules are contracts/projections; this audit did not find a corresponding durable Logistics provider-capacity observation table or a live provider telemetry feed.
 
 Therefore, provider-capacity visibility for L20 remains **unavailable from verified live source data**. Supplier Network declared capacity must not be silently repurposed as verified carrier capacity. A corridor/location mapping and an evidence freshness/source contract are prerequisites for any future read-only observation builder.
+
+
+A final persistence search also found no `corridor` or `corridor_ref` column/table in the backend SQLite schema. Core `locations` are organization-scoped and have a code/name/type/status, but no corridor geometry in the inspected schema. Supplier Network service-area records do support geo codes and optional radius coordinates, but they belong to Supplier Network and are not automatically Logistics corridor definitions. Do not borrow that authority or infer a corridor from a location without an explicit canonical mapping.
