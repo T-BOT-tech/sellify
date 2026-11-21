@@ -42,7 +42,8 @@ await test('execution delegate remains runtime-only and adapter-scoped', async (
 });
 
 await test('missing adapter executor fails closed', async () => {
-  await assert.rejects(() => executePlatformAdapter('registered-logistics-adapter', { operation:'delivery' }), (e) => e.code === 'PLATFORM_ADAPTER_EXECUTOR_UNAVAILABLE');
+  registerPlatformAdapter({ id:'no-executor-logistics-adapter', capability:'logistics.operations', provider:'network-y', operations:['delivery'], status:'active' }, { replace: true });
+  await assert.rejects(() => executePlatformAdapter('no-executor-logistics-adapter', { operation:'delivery' }), (e) => e.code === 'PLATFORM_ADAPTER_EXECUTOR_UNAVAILABLE');
 });
 
 await test('generic adapter resolves logistics authority', () => {
