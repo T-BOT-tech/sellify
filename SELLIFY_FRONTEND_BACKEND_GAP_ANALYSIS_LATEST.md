@@ -1,3 +1,7 @@
+> **HISTORICAL GAP ANALYSIS SNAPSHOT — dated 2026-10-12; reviewed 2026-11-21.** “Latest” in the filename is historical, not a current-main claim. The recorded baseline, migration ceiling, PR status, and GAP-1.24 release-gate state must be refreshed against current `main`, workflows, and operational evidence. Current payment frontend modules and PF-1/PF-2 regressions exist; do not treat the old gap matrix as proof they are absent or fully certified.
+
+---
+
 # Sellify Frontend ↔ Backend Gap Analysis — Latest
 
 Status: MAINLINE RECONCILIATION — PAYMENT CORE/PF-1 CI-CERTIFIED; OPERATIONAL GAP-1.24 GATE PENDING
