@@ -2,7 +2,7 @@
 
 **Audit date:** 2026-11-19  
 **Source-code baseline:** `main` at `ef130935056ed9611fa316f9df3b470f20b08934` (the subsequent mainline commits through `4dc3873899d271b91c91f15cddc63ad63f09805f` changed documentation only).  
-**Status:** Core SC-03 resource/appointment slice implemented with automated regression evidence. Manual full-stack visual evaluation and broader product-policy follow-ups remain open.
+**Status:** Core SC-03 resource/appointment slice implemented with automated regression evidence. Updated 21 November 2026 for the Service Booking/Logistics authorization boundary correction. Manual full-stack visual evaluation and broader product-policy follow-ups remain open.
 
 ## 1. Decision
 
@@ -72,7 +72,7 @@ The current backend registers:
 
 The server enforces existing resource/action authorization and location/resource scope. Owner/Manager UI gates are only presentation. Resource-scoped `service_provider` contextual assignments are checked server-side for the exact active resource. Assignment revocation removes the scope from an already-issued session's effective authorization.
 
-Booking lifecycle routes continue to use the existing scheduling permission boundary (`logistics:scheduling:view/request/confirm/cancel/manage`). Do not infer that visibility of Appointments or a resource queue grants lifecycle transition rights. Any change to service-provider confirmation authority must be an explicit Identity/Authorization decision with HTTP denial and allow-path tests.
+Booking lifecycle routes use Service-specific permissions (`service:service_booking:view/request/manage/confirm/cancel`) and remain within the canonical Service Booking authority. Logistics Manager/Dispatcher retain their Logistics Scheduling permissions and may read Service Resources where separately authorized, but they do not inherit Service Booking lifecycle access. Service Provider remains resource-scoped and view-only; it cannot confirm, cancel, or manage bookings. Do not infer that visibility of Appointments or a resource queue grants lifecycle transition rights. Any future change to provider lifecycle authority requires an explicit Identity/Authorization decision with HTTP denial and allow-path tests.
 
 ### Telegram buyer APIs
 
@@ -82,6 +82,8 @@ The existing Telegram storefront exposes buyer-owned order appointment history, 
 - the corresponding booking cancellation route.
 
 The backend verifies Telegram buyer identity and the buyer-to-marketplace-order-to-seller-order binding. Unknown, foreign-buyer, and foreign-seller orders do not leak order/appointment existence.
+
+The current Telegram storefront capability contract gates buyer order appointment endpoints through `order_status`; it does not define a separate `service_appointments` capability. A separate appointment toggle was explored in a historical branch but is not part of current mainline. Treat independent seller activation as an open product-policy decision rather than an implemented capability.
 
 ## 5. Frontend and operator UI evidence
 
@@ -115,6 +117,8 @@ The customer cancellation interaction still uses a browser confirmation dialog i
 | Concurrent same-resource confirmations | `service-booking-persistence-regression.mjs` runs two confirmations concurrently and asserts exactly one succeeds while the loser receives `SERVICE_BOOKING_RESOURCE_CONFLICT`. |
 | Buyer ownership, advisory feasibility, legacy UNKNOWN, provider queue isolation, commitment release | `phase0/sc-03.5-buyer-appointment-order-regression.mjs` |
 | Real backend HTTP, Telegram auth, buyer order ownership, request/cancel, capability gating, resource-scoped provider access and assignment revocation | `phase0/sc-03.5-telegram-appointments-http-regression.mjs` |
+| Service Booking vs Logistics Scheduling authorization, provider view-only scope, manager lifecycle actions and preserved Logistics authority | `phase0/service-booking-scheduling-authority-boundary-regression.mjs`; `phase0/gap-2-logistics-authorization-foundation-regression.mjs` |
+| Service Provider exact resource scope, active staff membership, same-tenant resource checks and Service Pack session gating | `phase0/service-provider-resource-scope-regression.mjs` |
 | Customer form, responsive layout, keyboard navigation, feasibility states, stale check, request and cancellation UX | `phase0/sc-03.5-customer-appointments-browser-regression.mjs` |
 | Operator inline forms and browser interactions | `phase0/service-booking-operator-browser-regression.mjs` |
 | Standalone Appointments navigation and role visibility | `phase0/service-bookings-appointments-navigation-regression.mjs` |
@@ -145,6 +149,7 @@ The customer/operator browser tests use browser-side API fixtures for UI isolati
 6. **Cross-channel parity.** The buyer-facing journey is demonstrated for the Telegram storefront; parity for other channels is not certified.
 7. **Manual UI evaluation.** The private Node 24 Codespaces environment is prepared and merged, but actual Codespace creation, forwarded-port runtime, Android browser review, and visual sign-off remain pending.
 8. **Evidence freshness.** Service appointment feasibility currently uses service-owned declared schedule and commitments. Cross-domain Supplier Network/Logistics observed-at/valid-until evidence is a separate Phase 21.4 gap; do not fold it into the service booking authority.
+9. **Telegram capability granularity.** Current appointment endpoints are gated by `order_status`; a separate `service_appointments` seller toggle remains an explicit product-policy decision.
 
 ## 8. Current verification status
 
