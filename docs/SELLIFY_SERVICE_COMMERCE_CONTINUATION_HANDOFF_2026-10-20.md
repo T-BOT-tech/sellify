@@ -1,3 +1,7 @@
+> **HISTORICAL CONTINUATION HANDOFF — reviewed 2026-11-21.** Its October 20 source SHA and task list predate substantial Service Booking, Appointments, and audit-evidence integration. Retain it for design context only. Current behavior and remaining work must be checked against `main`, the [Implementation Register](SELLIFY_IMPLEMENTATION_REGISTER.md), and the current service audit documents.
+
+---
+
 # Sellify Service Commerce — Implementation Continuation Handoff
 
 **Prepared:** 20 October 2026  
