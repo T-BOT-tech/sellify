@@ -42,6 +42,8 @@ const ROLE_PERMISSIONS = Object.freeze({
     'service:service_resource:view', 'service:service_resource:manage',
     'service:resource_availability:view', 'service:resource_availability:manage',
     'service:service_booking:view',
+    'service:service_booking:request', 'service:service_booking:manage',
+    'service:service_booking:confirm', 'service:service_booking:cancel',
     'logistics:scheduling:view', 'logistics:scheduling:request',
     'logistics:scheduling:manage', 'logistics:scheduling:confirm', 'logistics:scheduling:cancel',
   ]),

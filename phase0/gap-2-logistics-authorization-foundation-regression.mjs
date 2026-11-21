@@ -38,15 +38,21 @@ const checks = [
     assert.ok(!permissions.includes('logistics:deliveries:assign'));
     assert.ok(!permissions.includes('logistics:deliveries:update_assigned'));
   }],
-  ['service booking authorization follows the operation being performed', () => {
-    const manager = actor(roles.manager);
-    const viewer = actor(roles.viewer);
-    assert.equal(authorize(manager, organization, null, 'scheduling', 'logistics:scheduling:view'), AUTHZ.ALLOW);
-    assert.equal(authorize(manager, organization, null, 'scheduling', 'logistics:scheduling:request'), AUTHZ.ALLOW);
-    assert.equal(authorize(manager, organization, null, 'scheduling', 'logistics:scheduling:confirm'), AUTHZ.ALLOW);
-    assert.equal(authorize(viewer, organization, null, 'scheduling', 'logistics:scheduling:view'), AUTHZ.ALLOW);
-    assert.equal(authorize(viewer, organization, null, 'scheduling', 'logistics:scheduling:request'), AUTHZ.DENY);
-    assert.equal(authorize(viewer, organization, null, 'scheduling', 'logistics:scheduling:confirm'), AUTHZ.DENY);
+  ['Service Booking lifecycle remains outside Logistics Scheduling authorization', () => {
+    const businessManager = actor('manager');
+    const logisticsManager = actor(roles.manager);
+    const logisticsViewer = actor(roles.viewer);
+    for (const action of [
+      'service:service_booking:view', 'service:service_booking:request',
+      'service:service_booking:manage', 'service:service_booking:confirm',
+      'service:service_booking:cancel',
+    ]) {
+      assert.equal(authorize(businessManager, organization, null, 'service_booking', action), AUTHZ.ALLOW);
+      assert.equal(authorize(logisticsManager, organization, null, 'service_booking', action), AUTHZ.DENY);
+      assert.equal(authorize(logisticsViewer, organization, null, 'service_booking', action), AUTHZ.DENY);
+    }
+    assert.equal(authorize(logisticsManager, organization, null, 'scheduling', 'logistics:scheduling:manage'), AUTHZ.ALLOW);
+    assert.equal(authorize(logisticsViewer, organization, null, 'scheduling', 'logistics:scheduling:view'), AUTHZ.ALLOW);
   }],
   ['organization isolation remains enforced', () => {
     assert.equal(authorize(actor(roles.courier), { id: 'foreign-org' }, null, 'logistics', 'logistics:deliveries:update_assigned'), AUTHZ.DENY);
@@ -66,11 +72,12 @@ const serviceBookingHandler = server.slice(
   server.indexOf('async function handleServiceBookings('),
   server.indexOf('async function handleServiceDeliveryAssessment')
 );
-assert.match(serviceBookingHandler, /req\.method === 'GET'[\s\S]*?logistics:scheduling:view/);
-assert.match(serviceBookingHandler, /let authorizationAction = 'logistics:scheduling:request'/);
-assert.match(serviceBookingHandler, /target === 'CONFIRMED'[\s\S]*?logistics:scheduling:confirm/);
-assert.match(serviceBookingHandler, /target === 'CANCELLED'[\s\S]*?logistics:scheduling:cancel/);
-assert.match(serviceBookingHandler, /'logistics:scheduling:manage'/);
+assert.match(serviceBookingHandler, /req\.method === 'GET'[\s\S]*?service:service_booking:view/);
+assert.match(serviceBookingHandler, /let authorizationAction = 'service:service_booking:request'/);
+assert.match(serviceBookingHandler, /target === 'CONFIRMED'[\s\S]*?service:service_booking:confirm/);
+assert.match(serviceBookingHandler, /target === 'CANCELLED'[\s\S]*?service:service_booking:cancel/);
+assert.match(serviceBookingHandler, /'service:service_booking:manage'/);
+assert.doesNotMatch(serviceBookingHandler, /logistics:scheduling:/);
 
 const failures = [];
 for (const [name, fn] of checks) {
@@ -86,5 +93,6 @@ if (failures.length) {
 console.log('\nGAP-2 Logistics Authorization Foundation Regression: PASS');
 console.log('Role policy: manager / dispatcher / courier / viewer');
 console.log('Courier generic fulfillment mutation: DENY');
-console.log('Courier assigned-delivery capability: policy-only until assignment enforcement lands');
+console.log('Service Booking lifecycle authorization: separate from Logistics Scheduling');
+console.log('Logistics Scheduling authority: retained for Logistics roles');
 console.log('Active logistics pack gating: PASS');

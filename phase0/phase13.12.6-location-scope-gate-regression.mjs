@@ -37,9 +37,9 @@ function ok(condition, message) { checks += 1; assert.equal(Boolean(condition), 
 function eq(actual, expected, message) { checks += 1; assert.equal(actual, expected, message); }
 
 // 1. Registry coverage: every Phase 13 capability is evaluated through the
-// same canonical organization/location boundary, without new permissions.
-eq(RESOURCE_ACTION_REGISTRY.length, 53, 'Phase 13 registry contains the 53 canonical entries including Service');
-eq(CROSS_PACK_ROLE_MATRIX.length, 318, 'Phase 13 role matrix covers 53 entries across 6 roles');
+// same canonical organization/location boundary, including the new Service Booking actions.
+eq(RESOURCE_ACTION_REGISTRY.length, 58, 'Phase 13 registry contains the 58 canonical entries including Service Booking');
+eq(CROSS_PACK_ROLE_MATRIX.length, 348, 'Phase 13 role matrix covers 58 entries across 6 roles');
 for (const role of ROLES) {
   for (const entry of RESOURCE_ACTION_REGISTRY) {
     const actor = { ...session, role };

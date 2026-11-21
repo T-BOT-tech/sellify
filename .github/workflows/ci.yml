@@ -162,6 +162,8 @@ jobs:
         run: npm run test:service-resource-foundation
       - name: SC-03.1 service resource SQLite persistence regression
         run: npm run test:service-resource-persistence
+      - name: SC-03.3 service provider resource-scoped authorization regression
+        run: npm run test:service-provider-resource-scope
       - name: First-experience service catalog HTTP journey regression
         run: npm run test:service-catalog-http
       - name: First merchant-to-first-checkout HTTP journey regression

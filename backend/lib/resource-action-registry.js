@@ -75,6 +75,11 @@ const DEFINITIONS = [
   // remain vocabulary-only until their own policy and evidence contracts exist.
   ['service', 'service_resource', 'view', 'service:service_resource:view'],
   ['service', 'service_resource', 'manage', 'service:service_resource:manage'],
+  ['service', 'service_booking', 'view', 'service:service_booking:view'],
+  ['service', 'service_booking', 'request', 'service:service_booking:request'],
+  ['service', 'service_booking', 'manage', 'service:service_booking:manage'],
+  ['service', 'service_booking', 'confirm', 'service:service_booking:confirm'],
+  ['service', 'service_booking', 'cancel', 'service:service_booking:cancel'],
   ['service', 'resource_availability', 'view', null],
   ['service', 'resource_availability', 'manage', null],
   ['service', 'appointment_feasibility', 'view', null],

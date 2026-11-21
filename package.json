@@ -109,6 +109,7 @@
     "test:service-booking-scheduling-boundary": "node phase0/service-booking-scheduling-authority-boundary-regression.mjs",
     "test:service-resource-foundation": "node phase0/service-resource-foundation-regression.mjs",
     "test:service-resource-persistence": "node phase0/service-resource-persistence-regression.mjs",
+    "test:service-provider-resource-scope": "node phase0/service-provider-resource-scope-regression.mjs",
     "test:sc-03.4-resource-commitment-migration": "node phase0/sc-03.4-resource-commitment-migration-regression.mjs",
     "test:sc-03.5-service-provider-queue": "node phase0/sc-03.5-service-provider-booking-queue-regression.mjs",
     "test:service-bookings-appointments-navigation": "node phase0/service-bookings-appointments-navigation-regression.mjs",

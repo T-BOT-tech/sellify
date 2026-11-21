@@ -3700,7 +3700,7 @@ async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId 
   }
 
   if (req.method === 'GET') {
-    await requireAuthorization(session, tenant, 'scheduling', 'logistics:scheduling:view', {
+    await requireAuthorization(session, tenant, 'service_booking', 'service:service_booking:view', {
       location: authorizationLocation, deniedMessage: 'Service booking view permission required',
     });
     return sendJSON(res, 200, { order_id: String(serverOrderId), bookings: await listServiceBookings(chatId, serverOrderId) }, req);
@@ -3714,18 +3714,18 @@ async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId 
   const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').trim();
   if (!idempotencyKey) return sendJSON(res, 400, { error: { message: 'Idempotency-Key is required', status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' } }, req);
 
-  let authorizationAction = 'logistics:scheduling:request';
+  let authorizationAction = 'service:service_booking:request';
   if (req.method === 'PATCH') {
     const target = String(body.status || body.next_status || body.nextStatus || '').trim().toUpperCase();
     authorizationAction = target === 'CONFIRMED'
-      ? 'logistics:scheduling:confirm'
+      ? 'service:service_booking:confirm'
       : target === 'CANCELLED'
-        ? 'logistics:scheduling:cancel'
-        : 'logistics:scheduling:manage';
+        ? 'service:service_booking:cancel'
+        : 'service:service_booking:manage';
   }
-  await requireAuthorization(session, tenant, 'scheduling', authorizationAction, {
+  await requireAuthorization(session, tenant, 'service_booking', authorizationAction, {
     location: authorizationLocation,
-    deniedMessage: authorizationAction === 'logistics:scheduling:request'
+    deniedMessage: authorizationAction === 'service:service_booking:request'
       ? 'Service booking request permission required'
       : 'Service booking lifecycle permission required',
   });
