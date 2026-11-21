@@ -18,6 +18,7 @@ for (const rel of required) assert(fs.existsSync(path.join(root, rel)), `Snapsho
 const manifest = path.join(root, 'phase0/PHASE13.11.21-SOURCE-HASHES.sha256');
 const lines = fs.readFileSync(manifest, 'utf8').split(/\r?\n/).filter(Boolean);
 assert(lines.length >= 80, `Expected final snapshot hash coverage, found ${lines.length}`);
+assert(lines.some((line) => line.endsWith('  phase0/PHASE13.11.20-SOURCE-HASHES.sha256')), 'Final snapshot does not hash the Phase 13.11.20 manifest');
 for (const line of lines) {
   const m = line.match(/^([0-9a-f]{64})  (.+)$/);
   assert(m, `Invalid final snapshot hash line: ${line}`);
