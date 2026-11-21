@@ -442,3 +442,43 @@ Therefore, provider-capacity visibility for L20 remains **unavailable from verif
 
 
 A final persistence search also found no `corridor` or `corridor_ref` column/table in the backend SQLite schema. Core `locations` are organization-scoped and have a code/name/type/status, but no corridor geometry in the inspected schema. Supplier Network service-area records do support geo codes and optional radius coordinates, but they belong to Supplier Network and are not automatically Logistics corridor definitions. Do not borrow that authority or infer a corridor from a location without an explicit canonical mapping.
+
+
+## L20 metric-semantic and regression-coverage audit (2026-11-21)
+
+The L20.1 contract and its regression were inspected function-by-function. The seven metric names are present and calculation functions exist, but the current observation shape is a collection of caller-supplied integer counters. It does not yet define enough provenance, units, time boundaries, or entity relationships to support operational decisions.
+
+### Implemented calculation behavior
+
+| Metric | Current implementation | What it does not establish |
+|---|---|---|
+| Corridor demand | Sums `demand_count`; also sums `fulfilled_count` and derives unmet demand / fulfillment rate | Demand unit (orders, loads, parcels, weight), time window, cancellation treatment, or whether observations overlap |
+| Backhaul opportunity | Sums `backhaul_count`; reports AVAILABLE if the sum is positive | Directional origin/destination, return-leg timing, compatible cargo/vehicle, provider availability, or an actual matchable empty leg |
+| Depot throughput | Sums `throughput_count`; compares it with summed demand | Depot identity, throughput unit, handling milestone, time window, or whether one item represents a parcel, load, scan, or inventory movement |
+| Capacity shortage | Sums `shortage_count`; also flags shortage when demand exceeds fulfilled demand | Whether shortage means unavailable eligible capacity versus unfulfilled demand; capacity unit, vehicle compatibility, time window, or independent shortage evidence |
+| Service-area gap | Sums `service_area_gap_count`; reports a gap if positive | Geographic cell/service-area identity, coverage denominator, attempted/eligible demand, location mapping, or distance/coverage policy |
+| Recurring demand | Sums `recurring_demand_count` | Recurrence identity, interval/frequency, number of periods observed, missed/fulfilled recurrence, or duplicate scheduled instances |
+| Provider-capacity visibility | Sums `capacity_count`; reports CAPACITY_VISIBLE when positive | Provider identity, capacity unit, source, observation time/freshness, corridor assignment, availability window, verification, or whether the capacity is provider-declared versus live-observed |
+
+### Cross-cutting contract gaps
+
+1. **No observation time/window.** The normalized observation has no `observed_at`, `period_start`, or `period_end`. Therefore metrics cannot distinguish current capacity from stale capacity or compare demand over equivalent periods.
+2. **No source provenance.** The observation does not carry a source record/type, source authority reference, evidence reference, or source quality/freshness. The constant `source_authority: existing_operational_domain_data` is a declaration, not evidence that a given counter came from a canonical record.
+3. **No units.** All seven measures are unqualified integers. Adding orders, parcels, vehicle slots, tonnes, and depot scans would produce meaningless totals if they were supplied under the same count fields.
+4. **No deduplication.** `observation_ref` is required but repeated references are accepted and summed. The same canonical order, assignment, schedule occurrence, provider capacity record, or depot event can therefore be counted more than once.
+5. **No corridor identity proof.** `corridor_ref` is any non-empty string. The repository schema inspected in this audit has no canonical Logistics corridor registry or mapping that validates it.
+6. **No metric-specific entity keys.** There is no depot ID, provider ID, service-area ID, route direction, vehicle/capacity class, or recurrence key. Aggregation can therefore combine unrelated entities under the same organization/corridor/service profile.
+7. **No cross-signal provenance/version validation.** Snapshot composition checks organization, corridor and service profile, but does not validate that all signals share the same contract version or observation period.
+8. **Zero-demand rate semantics.** Both single-observation and aggregated demand functions return a fulfillment rate of `1` when demand is zero. This represents a 100% rate despite there being no demand denominator; a future product contract should represent this as not-applicable/undefined rather than imply measured perfect fulfillment.
+
+### Regression coverage assessment
+
+The L20.1 regression verifies arithmetic, organization/corridor/service-profile scope conflicts, authority-boundary flags, and selected invalid numeric values. It uses hand-authored observations such as `ADDIS-DEPOT-01`; it does not test canonical source extraction, source freshness, period alignment, duplicate observation references, unit compatibility, entity-level aggregation, or corridor-reference validation.
+
+### Status decision
+
+**L20 metric calculations: implemented as a preliminary pure contract. L20 operational metric semantics: partial. L20 live-data integration: missing/unverified. L20 production decision-readiness: not established.**
+
+Do not add a source adapter or builder against the current counter-only shape. First agree a metric dictionary with unit, grain/entity key, event/status inclusion, period/window, deduplication key, provenance/freshness, and missing-data semantics for each metric. Then validate that existing canonical records can actually supply those fields. If a required source field or corridor mapping does not exist, expose the metric as unavailable rather than fabricate a value or create a competing domain authority.
+
+No production code or regression behavior was changed in this audit. This is a source-backed readiness finding, not a certification of operational accuracy.
