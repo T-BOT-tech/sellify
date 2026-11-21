@@ -54,6 +54,9 @@ assert.equal(isAgricultureLogisticsFulfillmentHandoff(logisticsHandoff), true);
 assert.equal(logisticsHandoff.fulfillment.order_id, order.id);
 assert.equal(logisticsHandoff.fulfillment.order_authority, 'commerce');
 assert.equal(logisticsHandoff.fulfillment.fulfillment_authority, 'app/src/logistics/fulfillment.js');
+assert.equal(logisticsHandoff.frontend_fulfillment_api_binding, 'app/src/logistics/fulfillment.js');
+assert.equal(logisticsHandoff.mutation_authority, 'backend/lib/store-sqlite.js');
+assert.equal(logisticsHandoff.server_fulfillment_mutation_authority, 'backend/lib/store-sqlite.js');
 assert.equal(logisticsHandoff.route_implementation, false);
 assert.equal(logisticsHandoff.agriculture.commodity_id, offer.commodity_id);
 
