@@ -182,9 +182,26 @@ The current 552-line L20.1 regression and 737-line contract define and test thos
 
 The master specification says to extend the existing Canonical Contract → Integration → Adapter → Provider path for external carriers, courier networks, 3PLs, fleet operators, transport associations and regional networks. It explicitly prohibits provider-specific architecture in Logistics core.
 
-The current L21 contract and 920-line regression define external integration profiles, trust, capability declaration, inbound evidence, canonical handoff/reconciliation and non-authority constraints. The contract header explicitly states that it does not implement a concrete provider adapter because no concrete Logistics provider/adapter authority is present to extend. The eleven package names L21.1–L21.11 are aliases for this one L21 regression, not eleven spec requirements.
+The current L21 contract and 920-line regression define external integration profiles, trust, capability declaration, inbound evidence, canonical handoff/reconciliation and non-authority constraints. Further inspection of the current-main tree found existing generic provider/integration components: Phase 16.4 Platform Integration, Phase 16.13.3 Logistics Provider Adapter contract, Phase 16.13.11 Logistics Network Integration composition, Phase 16.13.14 server execution composition, Phase 16.13.15 process-local executor binding, and Phase 16.13.16 deployment adapter binding. These are real reusable boundaries, not merely future plans. However, execution is supplied through an injected/deployment executor; the inspected modules do not provide a production provider-specific network transport, credential store, callback HTTP ingress, retry engine, or live provider configuration. The L21 contract's former header incorrectly said no Logistics provider/adapter authority existed; that comment was corrected in commit `d84e398a9f39e615b047a9423c5f004770ae1360`. The eleven package names L21.1–L21.11 are aliases for this one L21 regression, not eleven spec requirements.
 
 **Assessment:** provider-neutral external-network boundary and its regression are implemented. A concrete external provider adapter, credentials/transport integration and live provider execution are not established by this evidence. Classify L21 as partially implemented at the boundary level, with concrete provider integration deferred/unverified. This is consistent with the master specification's prohibition on provider-specific logic in Logistics core.
+
+### Additional L21 dependency audit — existing provider execution path
+
+The provider stack is not absent. It is deliberately split across existing generic boundaries:
+
+| Phase | Existing component | Verified responsibility | Not provided by that component |
+|---|---|---|---|
+| 16.3 / 16.4 | Platform Adapter + Integration framework | Canonical capability/integration/adapter registry and boundary validation | Provider credentials, provider transport, persistent provider registry |
+| 16.13.3 | Logistics Provider Adapter contract | Declares provider type/operations and delegates to `logistics.operations` | Provider selection, credentials, transport, persistence |
+| 16.13.11 | Logistics Network Integration contract | Composes provider/integration/adapter references, direction and operations | Live provider connection or provider-owned state |
+| 16.13.12–.14 | Execution bridge + server execution service | Injected provider invocation, result normalization/reliability, existing canonical application path | Provider transport client, credential storage, retry engine |
+| 16.13.15–.16 | Runtime + deployment adapter binding | Binds deployment-supplied executor to active Platform Adapter in process memory | Production transport or durable provider configuration |
+| 16.13.18–.19 | Callback normalization/application | Normalizes authenticated callback data and applies only supported canonical result | HTTP ingress/authentication, callback store |
+
+The current canonical application is intentionally narrow: `fulfillment_delivered` can transition through the existing `transitionOrderFulfillment` authority. Other result types remain evidence-only or require existing tracking/proof/exception/return mutation authorities that are not invented by this adapter stack. This means provider execution is a reusable composition path with limited canonical mutation coverage—not a complete carrier integration.
+
+**Correct L21 status:** generic integration/adapter/execution composition is implemented; deployment-supplied executor binding is implemented; a production provider-specific transport/configuration and full callback ingress remain unverified/not implemented. Preserve the existing stack and extend it only for a concrete, authorized provider use case. Do not build another provider registry, credential store, callback store, routing engine, retry engine, or Logistics authority.
 
 ### Corrected overall conclusion
 
