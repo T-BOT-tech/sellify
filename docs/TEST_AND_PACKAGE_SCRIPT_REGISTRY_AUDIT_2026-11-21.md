@@ -561,3 +561,17 @@ The four corresponding focused regressions were updated, including an explicit a
 - `phase0/phase13.11.3-physical-commerce-spine-regression.mjs`
 
 All eight updated files were fetched again from the default branch and checked for the new backend mutation authority and explicit frontend binding fields. This is source-level verification only; runtime regression execution and CI status must be checked separately. The GitHub contents API produced one commit per file; all eight resulting blobs were verified present on the default branch after the final commit.
+
+## L21 Phase 13.11 integrity-manifest maintenance (2026-11-21)
+
+The fulfillment metadata correction changed files covered by the existing Phase 13.11 SHA-256 controls. The affected manifests were refreshed rather than leaving known-stale expected hashes:
+
+- `phase0/PHASE13.11.3-SOURCE-HASHES.sha256`
+- `phase0/PHASE13.11.7-SOURCE-HASHES.sha256`
+- `phase0/PHASE13.11.9-SOURCE-HASHES.sha256`
+- `phase0/PHASE13.11.20-SOURCE-HASHES.sha256`
+- `phase0/PHASE13.11.21-SOURCE-HASHES.sha256`
+
+The refreshed entries cover the modified Phase 13.11.3, 13.11.7, and 13.11.9 source/regression files, their nested manifests, and the current root `package.json` hash where included. The Phase 13.11.20 and 13.11.21 manifest entries were checked against the fetched source contents for the affected files. No acceptance condition, expected test result, Node requirement, or hash-verification logic was weakened.
+
+This is manifest maintenance, not runtime evidence. The Phase 13.11.19 cumulative gate, Phase 13.11.20 documentation-hash regression, Phase 13.11.21 snapshot-exit regression, and the four focused fulfillment regressions still require execution under Node >=24. GitHub status queries for the latest commit returned no status checks, and the available repository connection does not expose a workflow-dispatch or push-run listing action. Do not mark the gates PASS until actual execution results are available.
