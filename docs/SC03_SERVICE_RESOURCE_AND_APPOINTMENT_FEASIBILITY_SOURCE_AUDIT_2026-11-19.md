@@ -83,6 +83,8 @@ The existing Telegram storefront exposes buyer-owned order appointment history, 
 
 The backend verifies Telegram buyer identity and the buyer-to-marketplace-order-to-seller-order binding. Unknown, foreign-buyer, and foreign-seller orders do not leak order/appointment existence.
 
+The current Telegram storefront capability contract gates buyer order appointment endpoints through `order_status`; it does not define a separate `service_appointments` capability. A separate appointment toggle was explored in a historical branch but is not part of current mainline. Treat independent seller activation as an open product-policy decision rather than an implemented capability.
+
 ## 5. Frontend and operator UI evidence
 
 ### Customer
@@ -147,6 +149,7 @@ The customer/operator browser tests use browser-side API fixtures for UI isolati
 6. **Cross-channel parity.** The buyer-facing journey is demonstrated for the Telegram storefront; parity for other channels is not certified.
 7. **Manual UI evaluation.** The private Node 24 Codespaces environment is prepared and merged, but actual Codespace creation, forwarded-port runtime, Android browser review, and visual sign-off remain pending.
 8. **Evidence freshness.** Service appointment feasibility currently uses service-owned declared schedule and commitments. Cross-domain Supplier Network/Logistics observed-at/valid-until evidence is a separate Phase 21.4 gap; do not fold it into the service booking authority.
+9. **Telegram capability granularity.** Current appointment endpoints are gated by `order_status`; a separate `service_appointments` seller toggle remains an explicit product-policy decision.
 
 ## 8. Current verification status
 
