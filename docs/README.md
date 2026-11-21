@@ -52,6 +52,22 @@ Examples that must not be mistaken for current architecture or current source in
 - [AI Handoff](../SELLIFY_AI_HANDOFF.md) — contains legacy source-ZIP and project-direction instructions; do not follow those historical instructions over current `main`, the current product constitution, and the implementation register.
 - Dated phase handoffs and cumulative exit records — preserve as audit trail; check their recorded commit, runtime, and scope before relying on a status claim.
 
+## Phase evidence navigation
+
+The phase sequence is intentionally retained as an audit trail rather than flattened into a single “latest” plan:
+
+| Location / filename family | Evidence scope | Interpretation |
+|---|---|---|
+| Repository-root `P0-` / `P1-` and `FUX-` handoffs | Product experience, Pack, IAM, and early platform work | Dated implementation handoffs; verify current source and do not treat each as a separate live workstream. |
+| Repository-root `PHASE17`–`PHASE22` records | Procurement, Supplier Network, capacity, and AI Procurement | Historical execution/cumulative-gate records; source SHA and runtime determine what they prove. |
+| `phase0/PHASE10`–`PHASE12` | Platform foundations, money/payment, B2B, marketplace, physical commerce | Historical phase contracts and regression evidence. |
+| `phase0/PHASE13` | Vertical packs, Logistics, Warehouse, cross-pack integration, authorization/security | Preserve authority maps, contracts, and cumulative gates; do not infer current status from file order. |
+| `phase0/PHASE14`–`PHASE16` | Country packs, platform capability, adapters, integration gateway | Historical architecture/productization evidence; compare with current source before reuse. |
+| `phase0/PHASE17`–`PHASE22` | Procurement, Supplier Network, capacity evidence, AI Procurement | Detailed phase evidence; use current implementation register for present status. |
+| Root `R1` / `R2` packages and `SHA256SUMS` | September 2026 productization and reliability snapshots | Preserve exact historical evidence; checksums do not certify current main. |
+
+For the executable regression entry point and baseline caveats, see [Phase 0 README](../phase0/README.md). That file now distinguishes the original Node 22 baseline result from current Node 24 release evidence.
+
 ## Reconciliation policy
 
 1. Current source code on `main` is the implementation baseline.
