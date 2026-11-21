@@ -57,7 +57,7 @@ assert.throws(
 
 registerPlatformAdapter({
   id: 'runtime-non-logistics-adapter',
-  capability: 'payment',
+  capability: 'payments.core',
   provider: 'runtime-payment-provider',
   operations: ['charge'],
   status: 'active',
