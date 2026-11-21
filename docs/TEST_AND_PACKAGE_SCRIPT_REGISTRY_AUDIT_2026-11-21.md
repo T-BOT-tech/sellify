@@ -590,3 +590,19 @@ This is a CI coverage correction only. It does not change application behavior, 
 
 Runtime execution and resulting GitHub Actions status are still pending verification. Do not report these checks as passing until the updated workflow has run successfully under Node 24.
 
+## Phase 13.11 linked-manifest verification hardening (2026-11-21)
+
+A follow-up inspection found that the Phase 13.11.19 source-hash manifest had no verifier in its own cumulative gate. The later .20 and .21 manifests already carried a hash entry for the .19 manifest, but the three entries inside the .19 manifest were not checked by an executable control.
+
+Corrected this without changing the controlled file set or any Phase 13.11 acceptance result:
+
+- `phase0/phase13.11.19-cumulative-gate.mjs` now reads `PHASE13.11.19-SOURCE-HASHES.sha256`, validates each entry's format and file existence, and verifies each SHA-256 value before executing the cumulative regressions.
+- The .19 manifest retains three controlled entries: its cumulative-gate script, its phase document, and root `package.json`.
+- `PHASE13.11.20-SOURCE-HASHES.sha256` continues to include the .19 manifest and the updated .19 gate.
+- `PHASE13.11.21-SOURCE-HASHES.sha256` now also includes the .20 manifest itself. The .21 regression explicitly requires that link before validating the final snapshot manifest.
+- Refreshed the .19, .20 and .21 linked hashes after each source/manifest change. The .20 and .21 manifests contain 81 and 86 entries respectively.
+
+During this review, the newly added .19 manifest parser was found to have an over-escaped newline regular expression. It was corrected to split actual LF/CRLF lines before the hash-entry checks. The affected source hash and downstream manifest links were refreshed again after that correction.
+
+This is source-level integrity hardening only. It does not alter application behavior, canonical domain ownership, or the Node `>=24` requirement. The changed manifest entries and linkage were checked against fetched source contents; the complete .20/.21 manifest verification and cumulative regression execution still need to run in CI under Node 24. Do not treat the phase as newly runtime-certified until those checks complete.
+
