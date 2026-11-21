@@ -1,3 +1,7 @@
+> **HISTORICAL IMPLEMENTATION HANDOFF — reviewed 2026-11-21.** Several statements below are superseded by current source: a dedicated frontend payment module now exists under `app/src/payments/`, with client, contract, projection, state, and presentation modules. The handoff's old implementation sequence and status claims are not the current task list. Use live source, registered PF-1/PF-2 regressions, and [the current implementation register](docs/SELLIFY_IMPLEMENTATION_REGISTER.md) before proposing changes. Keep its architecture invariants as design context; do not rebuild Payment Core or create a parallel ledger.
+
+---
+
 # AI HANDOFF — Sellify GAP-1 Payment Core
 
 ## Mission
