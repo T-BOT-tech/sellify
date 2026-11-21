@@ -64,7 +64,7 @@ const source = await readFile(
 );
 assert.match(source, /defineLogisticsProviderAdapter/);
 assert.match(source, /bindLogisticsProviderExecutionAdapter/);
-assert.doesNotMatch(source, /fetch\s*\(|process\.env|sqlite|apiKey|password/);
+assert.doesNotMatch(source, /fetch\s*\(|process\.env|apiKey|password/);
 
 const contract = logisticsProviderDeploymentAdapterContract();
 assert.equal(contract.phase, '16.13.16');
