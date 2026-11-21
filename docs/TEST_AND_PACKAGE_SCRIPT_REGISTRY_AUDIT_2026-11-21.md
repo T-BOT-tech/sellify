@@ -213,7 +213,18 @@ A current-main workflow audit confirmed that none of the five GitHub workflow fi
 - Added that single cumulative command to `.github/workflows/logistics-runtime-certification.yml`.
 - The .17 alias remains for compatibility but is deliberately not executed as a separate test because it resolves to the .13 file.
 
-This is test/certification wiring only. It does not add provider transport, credentials, a provider registry, retry/callback persistence, or new domain authority. CI must pass on the new commit before the provider stack can be called CI-verified.
+**Verification:** Logistics Runtime Certification run [44933362910](https://github.com/T-BOT-tech/sellify/actions/runs/44933362910) passed on commit `c17256573cc75dd3af624c7c173d74678bc61488`, under Node v24.22.3. All 18 distinct provider regressions passed in sequence:
+- .1–.7: network contract, capability, adapter, discovery, verification, selection and handoff.
+- .8–.12: result normalization, reliability, matching, network integration and execution bridge.
+- .13–.16: canonical application, server execution service, runtime binding and deployment adapter.
+- .18–.19: callback normalization and callback application.
+The .17 alias was deliberately excluded as a duplicate of .13.
+
+Enabling the suite exposed stale regression assertions and one genuine boundary omission. The tests were corrected to match actual contract semantics (evidence required for delivered/returned results, synchronous throw assertions, current callback version 1.1, canonical result property, and correct provider fixture/error expectations). The L7 network integration contract was hardened to reject credentials and ownership claims rather than silently ignoring those supplied fields. No Logistics authority or external transport implementation was added.
+
+The root package manifest changed to register the cumulative gate. The Phase 21.16 source-hash manifest's `package.json` digest was refreshed to the exact SHA-256 reported by the Node 24 Phase 21.16 regression; the Phase 21 capacity evidence job passed on the same commit. This preserves the hash check rather than bypassing it.
+
+This is test/certification wiring plus a narrow integration-input hardening correction. It does not add provider transport, credential storage, a provider registry, retry/callback persistence, or new domain authority.
 
 ### Corrected overall conclusion
 
@@ -221,7 +232,7 @@ This is test/certification wiring only. It does not add provider transport, cred
 |---|---|---|---|
 | L11 Scheduling | Four modes; initial Regional Freight/B2B applicability; coordination only | Contract, persistence, service, auth, feasibility, lifecycle, HTTP and UI tests | Shared capability implemented; dedicated service-profile journey coverage not separately verified |
 | L20 Intelligence | Seven derived metrics; after real operational data; no transaction authority | Contract + regression cover all seven metrics and non-authority | Contract implemented; live operational-data integration not verified |
-| L21 External network | Reuse Canonical Contract → Integration → Adapter → Provider; no provider-specific Logistics core | Boundary contract + regression; explicitly no concrete adapter | Partially implemented; concrete provider integration not verified |
+| L21 External network | Reuse Canonical Contract → Integration → Adapter → Provider; no provider-specific Logistics core | Generic integration/adapter/execution composition + 18 Phase 16.13 regressions; no production provider transport/configuration | Partially implemented; production provider integration not verified |
 
 No test aliases or source code were deleted. The next correct step is not to invent L11/L20/L21 subphase tests. It is to validate the real-data dependency for L20 and determine which existing Integration/Adapter/provider can be extended for L21, while preserving the Logistics core's provider-neutral boundary.
 
