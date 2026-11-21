@@ -148,7 +148,55 @@ These are different from the Logistics alias families:
 
 **Disposition:** retain both targets per phase; no evidence supports deleting either behavioral regression. Short aliases are compatibility candidates only after complete consumer reconciliation.
 
-### Consolidated disposition
+### Reconciliation against the approved Logistics master specification
+
+The earlier source search was incomplete: the governing document was present in the user's Library, not tracked in the repository tree. I retrieved and reviewed the full **SELLIFY LOGISTICS — MASTER SPECIFICATION & IMPLEMENTATION PLAN** (1,038 lines). Its status is **Proposed master product specification**. It defines L8–L21 as capability layers, but does not define numbered subphases such as L11.2, L11.9–L11.16, L20.2–L20.10, or L21.2–L21.11.
+
+This changes the earlier interpretation: the missing numbered subphase tests are not, by themselves, evidence of missing requirements. Those subphase labels are not in the governing specification.
+
+### L11 — Scheduling: specification-to-source mapping
+
+The master specification's L11 requirement is four scheduling modes: on-demand, scheduled, time-windowed, and recurring, initially for Regional Freight and B2B. It explicitly states that scheduling is coordination, not a second fulfillment authority.
+
+Current source evidence:
+- `logistics-scheduling-contract-regression.mjs` checks the normalized scheduling contract, existing canonical references, on-demand/scheduled/windowed/recurring mode constraints, timezone and validity rules, and the absence of persistence/mutation authority at the pure contract boundary.
+- `logistics-scheduling-persistence-regression.mjs` verifies the scheduling migration/schema, canonical foreign keys, indexes, and persistence shape.
+- `logistics-scheduling-service-regression.mjs` checks transactional create/read/transition behavior.
+- `logistics-scheduling-authorization-regression.mjs` checks the existing central authorization authority and role/scope decisions.
+- `logistics-scheduling-feasibility-regression.mjs` and `logistics-scheduling-feasibility-service-regression.mjs` test feasibility and the UNKNOWN/no-authority boundary.
+- `logistics-scheduling-decision-regression.mjs` tests lifecycle decisions and transactional invariants.
+- The separately registered HTTP and UI regressions exercise the actual backend HTTP boundary and timezone/UI contract. CI runs these alongside L11.1 and L11.3–L11.8.
+- The master spec does not require a separate L11.2 test or separately numbered L11.9–L11.16 tests.
+
+**Assessment:** the four scheduling modes and the shared scheduling coordination boundary have meaningful contract, persistence, service, authorization, feasibility, lifecycle, HTTP and UI evidence. The repository's tests do not, from the inspected evidence alone, prove dedicated end-to-end Regional Freight and B2B user journeys for every mode. Classify the shared scheduling capability as implemented with service-profile journey coverage not separately verified; do not mark fictitious numeric subphases missing.
+
+### L20 — Network / Corridor Intelligence: specification-to-source mapping
+
+The master specification defines exactly seven derived intelligence outputs: corridor demand, backhaul opportunities, depot throughput, capacity shortages, service-area gaps, recurring demand, and provider-capacity visibility. It says this work should follow real operational data and must not create a transaction authority.
+
+The current 552-line L20.1 regression and 737-line contract define and test those seven metrics, normalization/validation, calculations, and the derived/non-authoritative boundary. The ten package names L20.1–L20.10 are not ten requirements in the master spec; only one L20 capability layer is specified. The cumulative gate executes the L20 regression once.
+
+**Assessment:** the seven-metric derived-intelligence contract is implemented and regression-tested. Live intelligence driven by a demonstrated production/operational event stream is not established by the synthetic contract regression. Classify the contract layer as implemented; classify production-data integration/operational intelligence as not verified, not as nine missing subphases.
+
+### L21 — External Network Expansion: specification-to-source mapping
+
+The master specification says to extend the existing Canonical Contract → Integration → Adapter → Provider path for external carriers, courier networks, 3PLs, fleet operators, transport associations and regional networks. It explicitly prohibits provider-specific architecture in Logistics core.
+
+The current L21 contract and 920-line regression define external integration profiles, trust, capability declaration, inbound evidence, canonical handoff/reconciliation and non-authority constraints. The contract header explicitly states that it does not implement a concrete provider adapter because no concrete Logistics provider/adapter authority is present to extend. The eleven package names L21.1–L21.11 are aliases for this one L21 regression, not eleven spec requirements.
+
+**Assessment:** provider-neutral external-network boundary and its regression are implemented. A concrete external provider adapter, credentials/transport integration and live provider execution are not established by this evidence. Classify L21 as partially implemented at the boundary level, with concrete provider integration deferred/unverified. This is consistent with the master specification's prohibition on provider-specific logic in Logistics core.
+
+### Corrected overall conclusion
+
+| Layer | Master-spec requirements | Current evidence | Status |
+|---|---|---|---|
+| L11 Scheduling | Four modes; initial Regional Freight/B2B applicability; coordination only | Contract, persistence, service, auth, feasibility, lifecycle, HTTP and UI tests | Shared capability implemented; dedicated service-profile journey coverage not separately verified |
+| L20 Intelligence | Seven derived metrics; after real operational data; no transaction authority | Contract + regression cover all seven metrics and non-authority | Contract implemented; live operational-data integration not verified |
+| L21 External network | Reuse Canonical Contract → Integration → Adapter → Provider; no provider-specific Logistics core | Boundary contract + regression; explicitly no concrete adapter | Partially implemented; concrete provider integration not verified |
+
+No test aliases or source code were deleted. The next correct step is not to invent L11/L20/L21 subphase tests. It is to validate the real-data dependency for L20 and determine which existing Integration/Adapter/provider can be extended for L21, while preserving the Logistics core's provider-neutral boundary.
+
+## Consolidated disposition
 
 | Area | Real regression targets | Alias family | Evidence judgment |
 |---|---:|---:|---|
