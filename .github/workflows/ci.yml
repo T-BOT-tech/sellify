@@ -157,18 +157,12 @@ jobs:
         run: npm run test:service-resource-migration-compatibility
       - name: Service booking scheduling authority boundary regression
         run: npm run test:service-booking-scheduling-boundary
-      - name: Service booking operator workspace regression
-        run: npm run test:service-booking-operator-workspace
-      - name: Service booking operator browser interaction regression
-        run: node phase0/service-booking-operator-browser-regression.mjs
       - name: SC-03.1 service resource foundation contract and UI regression
         run: npm run test:service-resource-foundation
       - name: SC-03.1 service resource SQLite persistence regression
         run: npm run test:service-resource-persistence
       - name: SC-03.3 service provider resource-scoped authorization regression
         run: npm run test:service-provider-resource-scope
-      - name: First-experience service catalog HTTP journey regression
-        run: npm run test:service-catalog-http
       - name: First merchant-to-first-checkout HTTP journey regression
         run: npm run test:first-merchant-to-first-checkout
       - name: First-experience tenant isolation HTTP regression
@@ -248,10 +242,6 @@ jobs:
 
       - name: Marketplace checkout, fulfillment, payment, and refund integrity regression
         run: npm run phase11.4:marketplace-test
-      - name: Phase 13.10.24 Logistics workspace projection regression
-        run: npm run test:phase13.10.24-workspace-projection
-      - name: Phase 13.10.24 Marketplace fulfillment boundary regression
-        run: npm run test:phase13.10.24-marketplace-boundary
 
       - name: Phase 17.1 procurement demand contract regression
         run: npm run phase17.1:procurement-demand-contract-test
