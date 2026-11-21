@@ -1,7 +1,7 @@
 # Sellify Implementation Register and Branch Policy
 
 **Snapshot:** 2026-11-21  
-**Mainline:** `main` at `190f9e1bb15a04bae5e58ed0d981e5d9cd0271f3`.  
+**Source-code baseline:** `190f9e1bb15a04bae5e58ed0d981e5d9cd0271f3` (PR #291 merge); subsequent commits in this documentation reconciliation are documentation-only.  
 **Purpose:** prevent duplicate implementation, preserve canonical authority, and make integration decisions evidence-based.
 
 This register is an operational control document, not a replacement for the FUX constitution, GAP exit criteria, source code, or the consolidated source-of-truth package.
