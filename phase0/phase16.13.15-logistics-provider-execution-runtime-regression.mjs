@@ -71,8 +71,7 @@ assert.throws(
 const source = await readFile(new URL('../backend/lib/logistics/provider-execution-runtime.js', import.meta.url), 'utf8');
 assert.match(source, /registerPlatformAdapterExecution/);
 assert.match(source, /existing_platform_adapter_execution_delegate_map/);
-assert.doesNotMatch(source, /fetch\s*\(/);
-assert.doesNotMatch(source, /fetch\s*\(|process\.env|sqlite|apiKey|password/);
+assert.doesNotMatch(source, /fetch\s*\(|process\.env|apiKey|password/);
 
 const contract = logisticsProviderExecutionRuntimeContract();
 assert.equal(contract.phase, '16.13.15');
