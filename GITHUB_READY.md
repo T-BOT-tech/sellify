@@ -1,3 +1,7 @@
+> **HISTORICAL REPOSITORY-READINESS SNAPSHOT — reviewed 2026-11-21.** This records the state at its original publication-preparation point. Its listed release gates and CI configuration are not a live status report. Recheck current `.github/workflows/`, package engines, workflow runs, and deployment evidence before making readiness or certification claims. Current operational status is tracked in [the implementation register](docs/SELLIFY_IMPLEMENTATION_REGISTER.md).
+
+---
+
 # GitHub-Ready Snapshot
 
 This file records repository hygiene work applied to the existing Sellify snapshot before publication.
