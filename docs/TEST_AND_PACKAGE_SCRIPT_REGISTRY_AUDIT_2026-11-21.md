@@ -104,6 +104,19 @@ The 10 Node target groups are the Marketplace pair; four Procurement pairs; the 
 
 This establishes **script-name-to-file multiplicity**, not independent assertion coverage. In particular, the L11.8 regression file's own header identifies it as L11.8, while L20 and L21 each have one shared regression file for their respective alias families. Their broader acceptance semantics must be judged from the assertions and source-of-truth records, not the number of package aliases.
 
+## Logistics L8-L21 cumulative execution: actual gate semantics
+
+The current `phase0/logistics-l8-l21-cumulative-exit-gate.mjs` was read in full. It directly executes **14 distinct regression files** in order: L8, L9, L8-L10, L11, then L12 through L21. It invokes each file with the current Node executable using `execFileSync`; it does not rely on repeatedly invoking the alias families in `package.json`.
+
+Consequences for the alias inventory:
+
+- The L11 alias family has one independently executed L11 scheduling regression in the cumulative gate. Its header identifies it as L11.8; the extra L11.9–L11.16 script names are not independent test executions.
+- L20's cumulative gate entry runs the single L20 network/corridor intelligence regression once. The L20.1–L20.10 package aliases are not ten independent tests.
+- L21's cumulative gate entry runs the single L21 external-network expansion regression once. The L21.1–L21.11 package aliases are not eleven independent tests.
+- The source-level master-specification exit audit separately requires the package aliases `test:logistics-l20.10` and `test:logistics-l21.11`, and the runtime final-certification gate checks those names exist before invoking the cumulative gate. These names are therefore acceptance identifiers, not evidence of separate test files.
+
+The cumulative gate is a valid execution orchestrator for the 14 files it declares. This audit does **not** establish that every named subphase from L11.9–L11.16, L20.2–L20.10, or L21.2–L21.11 has separately scoped acceptance assertions. Do not represent the aliases as separate coverage. If the master specification requires per-subphase acceptance, the gap is in explicit acceptance mapping/assertions—not in the number of package script names.
+
 ## Transitive-consumer spot audit and CI closure (2026-11-21)
 
 ### Current-main verification
