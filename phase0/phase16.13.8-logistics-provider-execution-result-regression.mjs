@@ -40,7 +40,7 @@ pass('proof is accepted with data', () => {
 });
 
 pass('delivered is terminal', () => {
-  const r = normalizeLogisticsProviderExecutionResult({ provider_id: 'p1', operation: 'delivery', result_status: 'delivered', callback_id: 'cb:7' });
+  const r = normalizeLogisticsProviderExecutionResult({ provider_id: 'p1', operation: 'delivery', result_status: 'delivered', callback_id: 'cb:7', proof: { type: 'photo', ref: 'proof-7' } });
   assert.equal(r.terminal, true);
 });
 
@@ -67,7 +67,7 @@ pass('unsupported result rejected', () => {
 });
 
 pass('projected result maps delivered to fulfillment boundary', () => {
-  const r = projectProviderExecutionResult({ provider_id: 'p1', operation: 'delivery', result_status: 'delivered', callback_id: 'cb:13' });
+  const r = projectProviderExecutionResult({ provider_id: 'p1', operation: 'delivery', result_status: 'delivered', callback_id: 'cb:13', proof: { type: 'photo', ref: 'proof-13' } });
   assert.equal(r.canonical_result, 'fulfillment_delivered');
   assert.equal(r.fulfillment_authority, 'app/src/logistics/fulfillment.js');
   assert.equal(r.external_provider_authority, false);
