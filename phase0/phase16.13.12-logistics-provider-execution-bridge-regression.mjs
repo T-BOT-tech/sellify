@@ -114,7 +114,7 @@ assert.rejects(() => executeLogisticsProviderExecutionBridge({
 const platformExecutionResult = await executeLogisticsProviderExecutionBridge({
   handoff,
   applyCanonicalResult(canonical) {
-    return { applied: canonical.event_type };
+    return { applied: canonical.canonical_result };
   },
 });
 if (platformExecutionResult.canonical_application?.applied !== 'fulfillment_delivered') {
