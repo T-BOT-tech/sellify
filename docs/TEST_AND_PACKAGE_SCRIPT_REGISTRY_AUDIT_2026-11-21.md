@@ -575,3 +575,18 @@ The fulfillment metadata correction changed files covered by the existing Phase 
 The refreshed entries cover the modified Phase 13.11.3, 13.11.7, and 13.11.9 source/regression files, their nested manifests, and the current root `package.json` hash where included. The Phase 13.11.20 and 13.11.21 manifest entries were checked against the fetched source contents for the affected files. No acceptance condition, expected test result, Node requirement, or hash-verification logic was weakened.
 
 This is manifest maintenance, not runtime evidence. The Phase 13.11.19 cumulative gate, Phase 13.11.20 documentation-hash regression, Phase 13.11.21 snapshot-exit regression, and the four focused fulfillment regressions still require execution under Node >=24. GitHub status queries for the latest commit returned no status checks, and the available repository connection does not expose a workflow-dispatch or push-run listing action. Do not mark the gates PASS until actual execution results are available.
+
+## Phase 13.11 CI coverage reconciliation (2026-11-21)
+
+The current `.github/workflows/ci.yml` baseline job did not directly invoke the Phase 13.11.19 cumulative gate or the Phase 13.11.20 / 13.11.21 integrity and snapshot regressions. Later Phase 16 and Phase 13.12 checks do not transitively execute these three controls: Phase 16.12 executes Phase 16.0–16.11 and Golden Regression; Phase 16.13 wraps Phase 16.12; Phase 13.12.15 references the Phase 13.11.21 snapshot as a historical artifact but is not itself part of the current CI workflow.
+
+Added the following ordered steps to the existing baseline job in `.github/workflows/ci.yml`:
+
+- `npm run test:phase13.11.19` — cross-pack cumulative regression gate (includes the Phase 13.11.3, .7 and .9 regressions and the other listed Phase 13.11 controls).
+- `npm run test:phase13.11.20` — documentation and source-hash integrity regression.
+- `npm run test:phase13.11.21` — final snapshot and exit regression.
+
+This is a CI coverage correction only. It does not change application behavior, canonical authority, package scripts, hash manifests, or Phase 13.11 acceptance conditions. The workflow edit is committed as `769c756b2886fb899363e055fbc6ef7fb82da95b`.
+
+Runtime execution and resulting GitHub Actions status are still pending verification. Do not report these checks as passing until the updated workflow has run successfully under Node 24.
+
