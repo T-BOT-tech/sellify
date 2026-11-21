@@ -86,13 +86,13 @@ assert.equal(duplicate.reliability.apply, false);
 assert.equal(duplicate.canonical_result, null);
 assert.equal(duplicate.canonical_application, null);
 
-await assert.rejects(() => executeLogisticsProviderExecutionBridge({
+await await assert.rejects(() => executeLogisticsProviderExecutionBridge({
   handoff: { ...handoff, selected_provider_id: 'other-provider' },
   invokeProvider() {
     return { provider_id: 'provider-bridge', operation: 'delivery', result_status: 'delivered', callback_id: 'cb-mismatch' };
   },
   applyCanonicalResult() {},
-}), /adapter provider must match/);
+}), /resolved adapter provider does not match selected provider/);
 
 await assert.rejects(() => executeLogisticsProviderExecutionBridge({
   handoff,
