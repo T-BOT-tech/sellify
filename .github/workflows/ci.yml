@@ -481,7 +481,7 @@ jobs:
       - name: GAP-2 behavioral multi-location courier authorization regression
         run: npm run test:gap-2-courier-multi-location
       - name: GAP-2 delivery lifecycle and exception-resolution regression
-        run: npm run test:gap-2-delivery-exception
+        run: npm run test:gap-2-delivery-lifecycle
       - name: GAP-2 dispatch workload regression
         run: npm run test:gap-2-dispatch-workload
       - name: GAP-2 delivery single-read ownership and location scope regression
