@@ -660,3 +660,17 @@ Inspected the dedicated `phase21_capacity_evidence` job against the Phase 19 and
 - The dedicated job retains direct Phase 18.5 and Phase 19.5/19.7 checks plus Phase 21.14, Phase 21.15 Node runtime verification, Phase 21.16 hash/documentation check, and Phase 21.17 migration regression. Phase 19.5/19.7 are also included in the broader Phase 19.12 cumulative gate in the baseline job; this cross-job repeat is retained to preserve the focused capacity-evidence job's independent coverage and diagnostics.
 
 No regression file, package script, assertion, or cumulative gate was changed. Workflow change: remove only the redundant direct Phase 21.3 invocation. Commit: `ab371a510f52b5f8bf43dec57f4e3df21713cd75`. Source-level verification is complete; CI execution remains unverified until GitHub reports a run.
+
+
+## Logistics CI overlap audit (2026-11-21)
+
+Traced the Logistics workflow jobs against the actual cumulative scripts and package aliases:
+
+- Baseline L11.1, L11.3, L11.4, L11.5, L11.6, and L11.7 each map to distinct regression files (contract, persistence, service, authorization, feasibility contract, feasibility service/evidence). The authenticated HTTP and timezone-aware UI checks are also separate targets. They are not executed by the L8-L21 cumulative gate and remain in baseline.
+- Baseline L11.8 mapped to `phase0/logistics-scheduling-decision-regression.mjs`, which is already executed as the L11 layer by `phase0/logistics-l8-l21-cumulative-exit-gate.mjs` under the dedicated Logistics exit-certification job. Removed only the duplicate direct L11.8 invocation from baseline. Its package alias and its execution inside the cumulative gate remain intact.
+- The Phase 13.10.15 gate is a separate Phase 13.10 logistics regression chain: it runs the Phase 13.10.7 gate (covering Phase 13.10.1-.6 plus Phase 12.2/.3) and Phase 13.10.9-.14 checks. It does not replace the standalone L11.1-.7 tests or the L8-L21 cumulative gate. Renamed the workflow step from the ambiguous `L1-L7` label to `Phase 13.10.15 cumulative Logistics regression gate`; no command changed.
+- The L8-L21 gate executes each layer L8, L9, L8-L10, and L11-L21 once. The final-certification wrapper verifies required package aliases/artifacts and invokes that cumulative gate once; its required-source list is not a second execution of those regressions.
+- `test:logistics-l18` is also run in the dedicated `logistics_l18` job and inside the L8-L21 cumulative gate. Retained both: the focused L18 job supplies isolated P2P-delivery diagnostics alongside its related assignment/queued-fulfillment checks, while the L8-L21 gate remains independently runnable as the full Logistics exit boundary.
+- GAP-2 tests in baseline map to separate authorization, lifecycle, dispatch, read-scope, frontend, certification, route-scope, cross-feature, adversarial, and readiness regression files. The L18 job's GAP-2 assignment-authority check is a different file and remains in that focused job. No exact duplicate GAP-2 target was found across these workflow jobs.
+
+Workflow commit: `d1d78b2b83179929f3a4638dc2afd4abd0e62609`. The only test invocation removed was baseline L11.8; all other test commands, package aliases, source files, and assertions remain unchanged. Source-level verification completed; CI remains unverified until an actual GitHub Actions run is reported.
