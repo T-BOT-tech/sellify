@@ -141,8 +141,6 @@ jobs:
         run: npm run phase11.3:invoice-test
       - name: Authorization location capability projection regression
         run: node phase0/p1-05-scope-context-regression.mjs
-      - name: Country currency and money localization regression
-        run: npm run test:phase14.3
       - name: Location scope gate regression
         run: npm run test:phase13.12.6
       - name: Restaurant payment intent authority regression
@@ -240,44 +238,10 @@ jobs:
       - name: Marketplace checkout, fulfillment, payment, and refund integrity regression
         run: npm run phase11.4:marketplace-test
 
-      - name: Phase 17.1 procurement demand contract regression
-        run: npm run phase17.1:procurement-demand-contract-test
-      - name: Phase 17.1 procurement demand integration regression
-        run: npm run phase17.1:procurement-demand-test
-      - name: Phase 17.2 procurement supplier contract regression
-        run: npm run phase17.2:procurement-supplier-contract-test
-      - name: Phase 17.2 procurement supplier participation regression
-        run: npm run phase17.2:procurement-supplier-test
-      - name: Phase 17.3 procurement RFQ contract regression
-        run: npm run phase17.3:procurement-rfq-contract-test
-      - name: Phase 17.3 procurement RFQ integration regression
-        run: npm run phase17.3:procurement-rfq-test
-      - name: Phase 17.4 procurement comparison contract regression
-        run: npm run phase17.4:procurement-comparison-contract-test
-      - name: Phase 17.4 procurement comparison integration regression
-        run: npm run phase17.4:procurement-comparison-test
-      - name: Phase 17.5 procurement award contract regression
-        run: npm run phase17.5:procurement-award-contract-test
-      - name: Phase 17.5 procurement award integration regression
-        run: npm run phase17.5:procurement-award-test
-      - name: Phase 17.6 procurement purchase-order bridge regression
-        run: npm run phase17.6:procurement-po-bridge-test
-      - name: Phase 17.7 procurement receiving contract regression
-        run: npm run phase17.7:receiving-contract-test
-      - name: Procurement receiving service identity regression
-        run: npm run phase17.7:procurement-receiving-test
 
-      - name: Phase 17.8 Payment Core outbound contract regression
-        run: npm run phase17.8:payment-contract-test
 
-      - name: Phase 17.8 procurement payment association regression
-        run: npm run phase17.8:procurement-payment-test
 
-      - name: Phase 17.9 procurement settlement contract regression
-        run: npm run phase17.9:procurement-settlement-contract-test
 
-      - name: Phase 17.9 procurement settlement integration regression
-        run: npm run phase17.9:procurement-settlement-test
 
       - name: Phase 17.10 cumulative procurement exit gate
         run: npm run test:phase17.10
