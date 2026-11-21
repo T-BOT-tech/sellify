@@ -1,3 +1,7 @@
+> **HISTORICAL CHAT HANDOFF — dated 2026-10-10; reviewed 2026-11-21.** Its active branch, PR #40, candidate SHA, and task instructions are obsolete. PR #40 is not the current active work baseline. Do not follow the instruction to preserve or operate on that old PR. This document is retained for historical product and architecture context; use current `main`, [the documentation index](docs/README.md), and [the implementation register](docs/SELLIFY_IMPLEMENTATION_REGISTER.md) for current work.
+
+---
+
 # Sellify New Chat Handoff — 2026-10-10
 
 ## Purpose
