@@ -647,3 +647,16 @@ Therefore the Phase 16.12 and Golden checks repeat across the Phase 16.14, Phase
 Phase 19.12 and Phase 20.12 are separate cumulative gates with distinct phase coverage. Phase 20.12 does not invoke the Phase 19.12 cumulative gate; it runs the Phase 19.12 full ecosystem exit regression as a prerequisite. Do not label this as a duplicate cumulative-gate invocation.
 
 Decision: retain the repeated prerequisite executions. The earlier 18-step Phase 17 / Phase 14.3 cleanup remains safe because those were direct workflow invocations duplicating tests already run by a retained gate in the same baseline job, without an independent top-level certification purpose. Current CI status for the workflow consolidation commits remains unverified.
+
+
+## Cross-job capacity-evidence execution audit (2026-11-21)
+
+Inspected the dedicated `phase21_capacity_evidence` job against the Phase 19 and Phase 21 cumulative gates:
+
+- `test:phase21.14` executes the Phase 21.3 capacity/availability evidence regression as one of its 14 constituent checks (and asserts its expected 18 PASS count).
+- The workflow also invoked `test:phase21.3` directly immediately before `test:phase21.14` in the same job. This was an exact duplicate execution with no separate certification boundary. Removed only that direct workflow step; Phase 21.3 remains executed and counted by the Phase 21.14 cumulative gate.
+- `phase18.5-supplier-network-capacity-regression.mjs` remains a distinct backend persistence/authority test; it is not the Phase 21.3 projection test.
+- `phase21.17-capacity-evidence-migration-regression.mjs` remains a distinct migration test exercising fresh, full-legacy, and partial-legacy database scenarios, including repeat migration and preservation of legacy values without fabricating observation timestamps.
+- The dedicated job retains direct Phase 18.5 and Phase 19.5/19.7 checks plus Phase 21.14, Phase 21.15 Node runtime verification, Phase 21.16 hash/documentation check, and Phase 21.17 migration regression. Phase 19.5/19.7 are also included in the broader Phase 19.12 cumulative gate in the baseline job; this cross-job repeat is retained to preserve the focused capacity-evidence job's independent coverage and diagnostics.
+
+No regression file, package script, assertion, or cumulative gate was changed. Workflow change: remove only the redundant direct Phase 21.3 invocation. Commit: `ab371a510f52b5f8bf43dec57f4e3df21713cd75`. Source-level verification is complete; CI execution remains unverified until GitHub reports a run.
