@@ -104,6 +104,14 @@ The 10 Node target groups are the Marketplace pair; four Procurement pairs; the 
 
 This establishes **script-name-to-file multiplicity**, not independent assertion coverage. In particular, the L11.8 regression file's own header identifies it as L11.8, while L20 and L21 each have one shared regression file for their respective alias families. Their broader acceptance semantics must be judged from the assertions and source-of-truth records, not the number of package aliases.
 
+## Phase 16.13.17 alias anomaly (source inspection)
+
+The recursive current-main tree contains `phase0/phase16.13.13-logistics-provider-canonical-application-regression.mjs`, followed by distinct `.14`, `.15`, `.16`, `.18`, and `.19` regression files. There is no tracked `phase16.13.17` regression file.
+
+Both `test:phase16.13.13` and `test:phase16.13.17` currently invoke the `.13` canonical-application regression. The inspected `phase0/phase16.13-node24-certification.mjs` checks the Phase 16.12/16.13 certification artifacts and runtime, but does not require either alias. The `.17` name therefore appears to be a mislabelled compatibility alias or stale script entry—not evidence of a separate Phase 16.13.17 test.
+
+**Disposition:** keep both names for now. The complete repository documentation/local/external consumer check has not yet established that the `.17` alias can be safely removed. Do not invent a `.17` regression file merely to make the naming sequence continuous; first verify whether Phase 16.13.17 has a separate acceptance requirement and, if so, map it to the correct existing behavior or add a genuinely distinct test.
+
 ## Logistics L8-L21 cumulative execution: actual gate semantics
 
 The current `phase0/logistics-l8-l21-cumulative-exit-gate.mjs` was read in full. It directly executes **14 distinct regression files** in order: L8, L9, L8-L10, L11, then L12 through L21. It invokes each file with the current Node executable using `execFileSync`; it does not rely on repeatedly invoking the alias families in `package.json`.
