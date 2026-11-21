@@ -62,8 +62,8 @@ The root script manifest was re-read from the current source commit and compared
 | Static inventory | Count | Interpretation |
 |---|---:|---|
 | Root scripts | 481 | Complete manifest enumeration |
-| Direct Node file commands | 473 | Targets resolve to tracked files in the current tree |
-| Direct shell file commands | 2 | Targets resolve to tracked shell files |
+| Direct Node file commands | 474 | Targets resolve to tracked files in the current tree |
+| Direct shell file commands | 1 | Target resolves to a tracked shell file |
 | Nested-package commands | 6 | Commands target the existing `backend/` or `app/` package directories |
 | Unresolved command targets | 0 | Directory targets were checked as directories, not incorrectly treated as missing files |
 | Script names directly referenced in CI | 197 | Literal script-name references found in the current CI workflow |
@@ -482,3 +482,41 @@ The L20.1 regression verifies arithmetic, organization/corridor/service-profile 
 Do not add a source adapter or builder against the current counter-only shape. First agree a metric dictionary with unit, grain/entity key, event/status inclusion, period/window, deduplication key, provenance/freshness, and missing-data semantics for each metric. Then validate that existing canonical records can actually supply those fields. If a required source field or corridor mapping does not exist, expose the metric as unavailable rather than fabricate a value or create a competing domain authority.
 
 No production code or regression behavior was changed in this audit. This is a source-backed readiness finding, not a certification of operational accuracy.
+
+
+## L21 external-network production-readiness audit (2026-11-21)
+
+The L21 contract, regression, shared Platform Integration/Adapter framework, Logistics provider execution bridge, deployment binding, callback normalization, and canonical application boundary were inspected. This confirms substantial **contract and composition scaffolding**, but not a deployable external logistics integration.
+
+### What exists
+
+| Layer | Verified implementation | Boundary / limitation |
+|---|---|---|
+| L21 network contract | `app/src/verticals/logistics/external-network-expansion-contract.js` normalizes integration identity, organization scope, service profile, direction, declared capabilities, requests/responses, inbound messages, evidence reconciliation, retry classification and canonical handoff dispositions | Pure contract logic; it does not connect to a real carrier or persist operational observations |
+| Generic integration | `app/src/verticals/logistics/network-integration-contract.js` composes the existing Platform Integration contract using `logistics.operations` | No Logistics-owned provider registry, credential store, persistence, routing, or shipment ledger |
+| Adapter boundary | `app/src/platform/adapter-framework.js` resolves a capability to its existing authority and holds process-local adapter metadata / executor delegates | No production transport client or durable provider registration |
+| Deployment binding | `backend/lib/logistics/provider-deployment-adapter.js` and `provider-execution-runtime.js` bind a deployment-supplied executor to an active existing adapter | Executor is injected and process-local; no provider-specific implementation, secret resolution, or deployment configuration is supplied here |
+| Server execution | `backend/lib/logistics/provider-execution-service.js` composes authorized handoff, adapter execution, result normalization/reliability, and canonical application | External provider invocation remains injected; timeout is present, but no durable retry/queue or transport lifecycle is implemented |
+| Callback boundary | `app/src/verticals/logistics/provider-callback-contract.js` normalizes an already-authenticated callback | HTTP ingress, signature/authentication verification, durable callback receipt, and replay persistence are deployment responsibilities and are not implemented by this contract |
+| Canonical application | `backend/lib/logistics/provider-execution-application.js` delegates to existing `transitionOrderFulfillment` in `backend/lib/store-sqlite.js` | Only `fulfillment_delivered` for the `delivery` operation is executable; accepted/in-progress/tracking/proof/failed/returned outcomes do not have an implemented canonical application path in this bridge |
+
+### Regression coverage and its limits
+
+The L21 regression `phase0/logistics-external-network-expansion-regression.mjs` exercises contract normalization and boundary rules for integration scope, lifecycle transitions, adapter trust/capabilities, request/response envelopes, inbound messages, evidence reconciliation, canonical handoff, and retry disposition. The eleven `test:logistics-l21.*` package names all resolve to this same regression file; they are not eleven independently executed provider integrations.
+
+The regression uses synthetic integration and message references. It demonstrates that the contracts reject selected invalid inputs and preserve declared authority boundaries. It does **not** demonstrate:
+- a real carrier/3PL API request or authenticated connection;
+- secure credential retrieval/rotation or provider-specific request signing;
+- deployed callback/webhook ingress, authentication, replay protection, or durable deduplication;
+- provider-specific request/response mapping against a sandbox or production API;
+- durable retries, backoff, dead-letter handling, or recovery after process restart;
+- live tracking, proof, capacity, or status synchronization;
+- canonical application of provider outcomes other than the supported delivered transition.
+
+### Status decision
+
+**L21 contract and boundary logic: implemented. Shared adapter/execution composition: implemented as injected, process-local deployment wiring. Production provider transport/configuration: missing or unverified. Callback ingress and durable replay handling: missing or deployment-external. Canonical result application: partial, with delivered-only execution. End-to-end production integration: not established.**
+
+Do not create another provider framework, Logistics registry, credential store, callback store, retry engine, shipment ledger, or fulfillment authority. The existing Phase 16.13 stack is the intended execution composition. A concrete integration should proceed only after a provider is selected and its API/authentication contract, operation mapping, callback behavior, sandbox, deployment/secret boundary, retry semantics, and canonical result mapping are evidenced. Before enabling it for organizations, run a provider-specific adapter contract suite and an end-to-end sandbox test through the existing server execution service and canonical transaction.
+
+This is a source-backed readiness assessment, not a claim that L21 production connectivity or live provider operations are certified.
