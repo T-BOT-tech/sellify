@@ -9,7 +9,7 @@
 
 The root `package.json` contains **481 scripts**. Of these, 475 names match test/regression/check/verification/certification/gate/baseline naming; 69 names begin with `phase`. Static inspection found:
 
-- **0 missing local script targets** among parsed `node` and `bash` commands.
+- **0 missing local script targets** among all parsed direct Node and shell commands and nested-package directory targets.
 - **11 exact duplicate-command groups** (46 script names map into those groups).
 - **3 large Logistics alias families** map many separately named phase scripts to one physical regression file each.
 - **1 duplicate development alias** (`dev` and `dev:backend`).
@@ -70,7 +70,7 @@ The root script manifest was re-read from the current source commit and compared
 
 The 197 CI references are not a count of distinct test files or complete dependency coverage. Scripts absent from direct CI text may be invoked by another npm script, a regression/gate script, developer workflow, or external automation. Therefore the remaining 284 names are **not** classified as unused.
 
-The direct command inventory is strongly Node-centric: 473 Node-file commands and two shell-file commands, with six commands delegating to nested package scripts. The previous static target check reported five false missing targets because it treated `npm --prefix backend` and `npm --prefix app` directory arguments as file paths; this follow-up corrected that interpretation and confirms all six nested-package directories exist.
+The direct command inventory contains 474 direct Node-file commands, one shell-file command, and six nested-package commands (481 total). All 474 Node targets resolve to tracked files, the shell target resolves to a tracked file, and all six `npm --prefix` package-directory targets resolve to existing directories. The earlier inventory's 473 Node / two shell breakdown was a counting error; this follow-up corrects it. The earlier five apparent missing targets were false positives caused by treating `npm --prefix backend` and `npm --prefix app` directory arguments as file paths.
 
 ### Classification status
 
@@ -80,6 +80,29 @@ The direct command inventory is strongly Node-centric: 473 Node-file commands an
 - **No deletions:** no script or test was removed based on this static inventory.
 
 The next safe step is to build a transitive consumer map for package-script-to-package-script calls and the source-level acceptance checks that inspect script names. Any cleanup decision must use that map plus workflow and documentation references; absence from CI alone is not evidence of obsolescence.
+
+## Root script target multiplicity and script identity (follow-up)
+
+A full current-main enumeration of the 481 root scripts yields:
+
+| Command type | Entries | Validation |
+|---|---:|---|
+| Direct `node <file>` | 474 | All target files exist in the tracked tree |
+| Direct `bash <file>` | 1 | Target file exists in the tracked tree |
+| `npm --prefix backend/app` | 6 | All package directories exist |
+| **Total** | **481** | **No unresolved direct target** |
+
+The 474 Node command entries resolve to **440 distinct tracked files**:
+
+- 430 files have exactly one root script name.
+- 7 files have exactly two root script names.
+- 3 files have larger alias families of 9, 10, and 11 names respectively.
+- Therefore, 44 script names point to the 10 multi-name Node target files. These names are not 44 distinct test programs.
+- Including the `dev` / `dev:backend` duplicate package command, the manifest has 11 duplicate-command groups involving 46 names, consistent with the earlier duplicate inventory.
+
+The 10 Node target groups are the Marketplace pair; four Procurement pairs; the GAP-2 lifecycle/exception pair; the Phase 16.13.13/16.13.17 pair; and the Logistics L11, L20, and L21 alias families.
+
+This establishes **script-name-to-file multiplicity**, not independent assertion coverage. In particular, the L11.8 regression file's own header identifies it as L11.8, while L20 and L21 each have one shared regression file for their respective alias families. Their broader acceptance semantics must be judged from the assertions and source-of-truth records, not the number of package aliases.
 
 ## Transitive-consumer spot audit and CI closure (2026-11-21)
 
