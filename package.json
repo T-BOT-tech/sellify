@@ -184,6 +184,7 @@
     "test:phase16.11": "node phase0/phase16.11-platform-security-regression.mjs",
     "test:phase16.12": "node phase0/phase16.12-platform-regression.mjs",
     "test:phase16.13": "node phase0/phase16.13-node24-certification.mjs",
+    "test:phase16.13-logistics-provider": "node phase0/phase16.13-logistics-provider-cumulative-regression.mjs",
     "test:phase16.14": "node phase0/phase16.14-final-platform-snapshot.mjs",
     "phase17.3:rfq-contract-test": "node phase0/phase17.3-rfq-contract-regression.mjs",
     "phase17.3:rfq-response-test": "node phase0/phase17.3-rfq-response-regression.mjs",
