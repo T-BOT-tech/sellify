@@ -20,6 +20,10 @@ This index separates current operating references from historical evidence. It d
 | [Deployment Certification](DEPLOYMENT-CERTIFICATION.md) | Deployment and release acceptance | Operational gate reference; do not equate CI success with production readiness. |
 | [UI Evaluation Environment](SELLIFY_UI_EVALUATION_ENVIRONMENT.md) | Private UI evaluation environment | Prepared-environment instructions; manual runtime and visual sign-off remain distinct evidence. |
 
+## Test and package-script registry
+
+- [Test and Package-Script Registry Audit](TEST_AND_PACKAGE_SCRIPT_REGISTRY_AUDIT_2026-11-21.md) — static audit of the 481 root package scripts, exact duplicate command groups, Logistics alias families, and missing local targets. This is an audit snapshot, not a reason to delete aliases without checking consumers.
+
 ## Product and engineering entry points
 
 - [Repository README](../README.md) — project overview, runtime requirements, local development, and deployment.
