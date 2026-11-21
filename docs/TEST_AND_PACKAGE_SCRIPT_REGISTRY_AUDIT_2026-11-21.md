@@ -539,3 +539,25 @@ This is a **cross-layer authority metadata / naming inconsistency**, not evidenc
 Do not mechanically replace every `app/src/logistics/fulfillment.js` reference. Some are accurate descriptions of the UI/API boundary, and changing all of them would blur rather than clarify ownership. The next safe correction is a scoped contract vocabulary review: distinguish `fulfillment_api_client` or `frontend_fulfillment_binding` from `server_fulfillment_mutation_authority`, update only contracts whose field currently claims server mutation ownership, and revise their source-level regressions together. Preserve the existing API flow and canonical transaction.
 
 No production code or tests were changed in this follow-up. This is a source-backed audit finding.
+
+## L21 fulfillment mutation metadata correction (2026-11-21)
+
+The source-consumer audit established that not every `fulfillment_authority: app/src/logistics/fulfillment.js` field is wrong. In the older cross-pack contracts it can denote the established frontend/API lifecycle binding. Replacing all such references would erase a useful boundary distinction and could break unrelated compatibility contracts.
+
+A narrower correction was applied only where the field explicitly claimed `mutation_authority`:
+
+- `app/src/verticals/logistics/fulfillment-boundary.js`
+- `app/src/logistics/unified-fulfillment-contract.js`
+- `app/src/verticals/agriculture/warehouse-logistics-contract.js`
+- `app/src/verticals/physical-commerce/spine-contract.js`
+
+Those projections now retain the frontend binding as `frontend_fulfillment_api_binding: app/src/logistics/fulfillment.js` and identify `backend/lib/store-sqlite.js` as `mutation_authority` / `server_fulfillment_mutation_authority`. Existing logical `fulfillment_authority` fields were preserved where they describe the established frontend integration binding. No route, lifecycle, transaction, inventory, provider, or persistence behavior changed.
+
+The four corresponding focused regressions were updated:
+
+- `phase0/phase13.10.3-logistics-fulfillment-boundary-regression.mjs`
+- `phase0/phase13.11.9-unified-fulfillment-regression.mjs`
+- `phase0/phase13.11.7-agriculture-warehouse-logistics-regression.mjs`
+- `phase0/phase13.11.3-physical-commerce-spine-regression.mjs`
+
+All eight updated files were fetched again from the default branch and checked for the new backend mutation authority and explicit frontend binding fields. This is source-level verification only; runtime regression execution and CI status must be checked separately. The GitHub contents API produced one commit per file; all eight resulting blobs were verified present on the default branch after the final commit.
