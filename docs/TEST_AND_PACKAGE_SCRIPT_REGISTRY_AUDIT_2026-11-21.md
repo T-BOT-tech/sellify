@@ -385,3 +385,46 @@ Static target validation is not the same as executing the app-local scripts. The
 The first CI run after deduplicating the shared GAP-2 lifecycle/exception regression failed at GAP-2.12 because its source-level check required the literal workflow command `test:gap-2-delivery-lifecycle`. Switching to that alias exposed the same overly strict assumption in reverse: the check then required `test:gap-2-delivery-exception`. Both package aliases intentionally point to the same regression file, so CI should execute one alias once rather than duplicate the test to satisfy a string-presence assertion.
 
 The workflow invokes `test:gap-2-delivery-lifecycle` once. The GAP-2.12 readiness regression was corrected to require both aliases in `package.json` while accepting either one as the single CI invocation. No delivery behavior assertion, package alias, or Logistics authority was removed. The final correction is commit `f2b40422850993162b02273f748c61df31490c4f`; the complete Sellify CI run `44930608852` passed all five jobs, including baseline (Node 24), Logistics L18, Logistics exit certification, Phase 13.10.24, and Phase 21 capacity evidence. This verifies the CI deduplication and readiness-check correction on that commit.
+
+
+## L20 operational-source trace and CI closure (2026-11-21)
+
+### CI closure on current audited main
+
+Sellify CI run [44933449936](https://github.com/T-BOT-tech/sellify/actions/runs/44933449936) completed successfully on the current audited main revision. All five jobs passed:
+
+- `baseline (24)`
+- `logistics_l18 (24)`
+- `phase13_10_24 (24)`
+- `phase21_capacity_evidence`
+- `logistics_exit_certification`
+
+The separate Repository Security Checks run `44933449941`, Logistics Runtime Certification run `44933449932`, and Sellify Release Certification run `44933449929` also passed for the audited revision. This closes the previously pending baseline job; it does not imply production-provider integration or live L20 data coverage.
+
+### Existing operational source records found
+
+The repository already has canonical operational data suitable for a future read-only L20 source adapter. These are not new proposed authorities:
+
+| L20 signal input | Existing canonical source | Evidence and limitation |
+|---|---|---|
+| Demand / fulfilled demand | Core `orders` and `fulfillments` | Core Fulfillment reads canonical orders and stores fulfillment type/status, location, scheduled time, tracking reference, proof and version in the existing `fulfillments` table. Order/fulfillment records can support observed demand and completed quantity only after their counting semantics and time window are specified. |
+| Delivery completion / exception evidence | `delivery_assignments`, `fulfillments`, `audit_events` | Assignment lifecycle writes canonical assignment state and audit actions such as `delivery.assignment.created`, `delivery.assignment.delivered`, `delivery.assignment.reassigned`, and exception resolution. Core fulfillment transitions also write `fulfillment.transitioned`. Audit events are audit evidence, not a replacement event store or a ready-made analytics feed. |
+| Depot throughput / inventory consequence | Existing `inventory_movements` and warehouse/inventory authorities | Terminal Core Fulfillment can atomically write existing SALE inventory movements, linked to fulfillment/order metadata. This measures an inventory consequence, not by itself depot handling throughput; counting rules must avoid treating one sale movement as one physical parcel or depot operation. |
+| Recurring / scheduled demand | Existing `logistics_scheduling_activities` linked to order, fulfillment and movement IDs | Scheduling persists requested/scheduled windows, recurrence, status, and canonical related references. It is coordination data; it must not be counted as confirmed demand or completed delivery without explicit lifecycle semantics. |
+| Provider capacity visibility | Existing capacity/provider capability and verification records | Provider capability/discovery/verification and capacity-profile contracts exist. Their presence does not establish fresh, time-stamped, provider-reported capacity observations for a corridor. |
+
+### Existing event boundaries are not yet an L20 feed
+
+- `app/src/events/event-boundary.js` creates versioned event envelopes and adapts them to the existing outbox.
+- `app/src/sync/outbox.js#enqueueEvent` remains the client outbox authority.
+- The current backend sync-event consumer in `backend/lib/store-sqlite.js#processSyncEvent` accepts `inventory.movement.record` and `customer.upsert`; unsupported event types fail closed. The Phase 13.12.14 regression explicitly asserts this supported list.
+- Core fulfillment and delivery-assignment mutations write canonical tables and audit events transactionally. The inspected code does not route those lifecycle actions through a Logistics operational-event consumer feeding L20.
+- `app/src/verticals/logistics/network-corridor-intelligence-contract.js` accepts already-formed observation objects and derives seven metrics. It does not query Orders, Fulfillment, Delivery Assignments, audit events, inventory movements, scheduling records, or provider capacity sources. Its regression constructs observations directly in the test.
+
+### Correct status and next implementation boundary
+
+**L20 status: metric contract implemented; canonical operational source records exist; source-to-observation integration is missing/unverified.** Do not mark L20 as live-data integrated.
+
+The next bounded implementation task is a source-mapping/design pass over the canonical records above, then a read-only, organization-scoped observation builder only after metric definitions are made explicit (time window, units, deduplication, cancellation/exception handling, status inclusion, corridor/location mapping, and freshness). It must not persist a second operational ledger, mutate orders/fulfillment/inventory, infer provider capacity without provider evidence, or introduce a new event store. Prefer direct read projections over adding a new event type unless an existing canonical event contract is shown to be the right extension point.
+
+No production code was changed in this L20 source-trace batch. The change is an evidence update only.
