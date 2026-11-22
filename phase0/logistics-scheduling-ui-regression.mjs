@@ -59,10 +59,10 @@ assert.match(source, /activity\.timezone \|\| workspaceTimezone/);
 assert.match(source, /timeZone, dateStyle: 'medium', timeStyle: 'short'/);
 assert.doesNotMatch(source, /Intl\.DateTimeFormat\(\)\.resolvedOptions\(\)\.timeZone/);
 assert.match(source, /logisticsSchedulingTimeZoneMissing/);
-assert.match(source, /transitionTargets\(activity\.status\)\.filter\(target => !\['SCHEDULED', 'CONFIRMED'\]\.includes\(target\) \|\| activity\.lastEvaluation === 'FEASIBLE'\)/,
-  'Schedule and Confirm controls are absent unless trusted feasibility is FEASIBLE');
-assert.doesNotMatch(source, /feasibilityBlocked|disabled aria-disabled/,
-  'the request-only queue must not render dead-end Schedule/Confirm controls');
+assert.match(source, /const feasibilityBlocked = \['SCHEDULED', 'CONFIRMED'\]\.includes\(target\) && activity\.lastEvaluation !== 'FEASIBLE'/,
+  'Schedule and Confirm controls must remain blocked unless trusted feasibility is FEASIBLE');
+assert.match(source, /disabled aria-disabled/);
+assert.match(source, /logisticsSchedulingScheduleBlocked/);
 assert.match(source, /SCHEDULING_FEASIBILITY_UNKNOWN/);
 assert.match(source, /SCHEDULING_FEASIBILITY_CONFLICT/);
 
