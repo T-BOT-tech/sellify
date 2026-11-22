@@ -1,6 +1,6 @@
 # Phase 13.11.22 — Current Verification Successor
 
-Status: source-level successor added; execution and CI certification pending.
+Status: current successor verification passed in GitHub Actions on 2026-11-22.
 
 ## Purpose
 The Phase 13.11.19 cumulative gate and its historical hash snapshots remain immutable. Its Phase 13.11.12 test invocation checks a synchronous handler pattern that no longer matches the current server.
@@ -11,7 +11,15 @@ This successor preserves the historical gate's controls and cumulative test sequ
 - The Phase 13.11.19 historical manifest, gate, package.json, and Phase 13.11.20/.21 snapshots remain unchanged.
 - CI invokes this successor directly; no package script or package hash changes.
 - The successor verifies the historical Phase 13.11.19 manifest, preserves the Phase 13.11.20/21 manifests as immutable historical snapshots, and verifies their key pinned identities through current documentation/exit successor checks. It does not falsely require evolved production sources to match historical hashes.
-- GAP-2 delivery assignment remains executed once in the dedicated `logistics_l18` job. Its readiness regression now recognizes that direct invocation without reintroducing duplicate CI execution.
+- GAP-2 delivery assignment remains executed once in the dedicated `logistics_l18` job. Its readiness regression recognizes that direct invocation without reintroducing duplicate CI execution.
 
-## Verification status
-This is a source-change record only. It does not claim Node 24 execution, successful GitHub Actions, or release certification. Those remain pending until the new workflow completes on a clean checkout.
+## Verification evidence
+- Workflow: Sellify CI, run #3721 (`45044253048`), pull-request event for PR #293.
+- Verified head: `ab4a9d9688631db41527aed85bd206f455a240dd`.
+- Result: all five jobs completed successfully.
+- Node runtime: Node 24 baseline job passed.
+- The 165-step baseline completed successfully, including First Experience, onboarding, offline recovery, Procurement, FUX/Inventory, Payment Core, Logistics scheduling/GAP-2, Country Expansion, Phase 16, Discovery Fabric, and Cross-Border Commerce checks.
+- The Phase 13.10.24 job passed the Phase 13.11.22 current cross-pack gate, Phase 13.11.20 documentation continuity, Phase 13.11.21 snapshot/exit continuity, and Service Booking regressions.
+- Logistics L18, Logistics L8-L21 exit certification, and Phase 21 capacity-evidence jobs passed.
+
+This records CI regression evidence for the stated pull-request head only. It does not constitute release certification, merge approval, or a claim that the main branch has changed. The successor branch remains separate from main.
