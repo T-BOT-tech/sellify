@@ -73,6 +73,46 @@ assert.match(frontend, /Contextual role grant confirmed by the server/);
 assert.match(frontend, /Contextual role revocation confirmed by the server/);
 
 
+// Render the actual administration module against a minimal authenticated
+// tenant response so the UI contract is tested, not only source-string matched.
+const { config } = await import('../app/src/state.js');
+config.chatId = 'gap5-ui-tenant';
+config.sessionToken = 'gap5-ui-session';
+config.syncUrl = 'https://sellify.test';
+config.tenantRole = 'owner';
+const panel = { innerHTML: '', querySelectorAll: () => [] };
+globalThis.document = { getElementById: id => id === 'membershipAdministrationPanel' ? panel : null };
+globalThis.fetch = async url => ({
+  ok: true,
+  async json() {
+    if (String(url).includes('/memberships')) return {
+      memberships: [{
+        id: 'membership-ui-1',
+        userId: 'user-ui-1',
+        role: 'staff',
+        displayName: 'Warehouse Operator',
+        contextualRoles: [
+          { role: 'restaurant_waiter', scopeType: 'LOCATION', scopeId: 'location-ui-1', status: 'active', source: 'ADMIN_UI', grantedAt: '2026-11-22T10:00:00.000Z', revokedAt: null },
+          { role: 'warehouse_receiving', scopeType: 'ORGANIZATION', scopeId: null, status: 'revoked', source: 'LEGACY_BRIDGE', grantedAt: '2026-11-20T10:00:00.000Z', revokedAt: '2026-11-21T10:00:00.000Z' },
+        ],
+      }],
+    };
+    return { locations: [{ id: 'location-ui-1', name: 'Main Store', type: 'STORE', status: 'active' }] };
+  },
+});
+const { renderMembershipAdministration } = await import('../app/src/authorization/membership-admin.js');
+await renderMembershipAdministration();
+assert.match(panel.innerHTML, /Restaurant · Waiter/);
+assert.match(panel.innerHTML, /Location · Main Store/);
+assert.match(panel.innerHTML, /warehouse_receiving/);
+assert.match(panel.innerHTML, /revoked/);
+assert.match(panel.innerHTML, /ADMIN_UI/);
+assert.match(panel.innerHTML, /2026-11-22T10:00:00.000Z/);
+assert.match(panel.innerHTML, /2026-11-21T10:00:00.000Z/);
+assert.match(panel.innerHTML, /data-grant-contextual/);
+assert.match(panel.innerHTML, /data-revoke-contextual/);
+delete globalThis.document;
+
 console.log('GAP-5 IAM Membership/Contextual Role Regression: PASS');
 console.log('Generic role mutation protections: PASS');
 console.log('Contextual role assign/revoke lifecycle: PASS');
