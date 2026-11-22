@@ -18,15 +18,15 @@ const source = Object.fromEntries(Object.entries(canonicalSources).map(([key, re
   return [key, fs.readFileSync(full, 'utf8')];
 }));
 const currentAuthorityAnchors = [
-  [source.inventory, /export function applyStockChange\(/, 'Inventory mutation interface missing'],
-  [source.inventory, /export function projectedStock\(/, 'Inventory projection interface missing'],
-  [source.ledger, /export function recordCanonicalInventoryMovement\(/, 'Canonical inventory movement interface missing'],
-  [source.ledger, /export function getInventoryBalance\(/, 'Inventory balance projection interface missing'],
-  [source.locations, /export function loadOrganizationLocations\(/, 'Organization location loading interface missing'],
-  [source.locations, /export function selectOrganizationLocation\(/, 'Organization location selection interface missing'],
-  [source.ui, /export function applyWarehouseUI\(/, 'Warehouse UI boundary missing'],
-  [source.ui, /export function renderWarehouseInventory\(/, 'Warehouse inventory projection missing'],
-  [source.fulfillment, /export function transitionDeliveryAssignmentForOrder\(/, 'Canonical fulfillment transition interface missing'],
+  [source.inventory, /export\\s+(?:async\\s+)?function applyStockChange\\(/, 'Inventory mutation interface missing'],
+  [source.inventory, /export\\s+(?:async\\s+)?function projectedStock\\(/, 'Inventory projection interface missing'],
+  [source.ledger, /export\\s+(?:async\\s+)?function recordCanonicalInventoryMovement\\(/, 'Canonical inventory movement interface missing'],
+  [source.ledger, /export\\s+(?:async\\s+)?function getInventoryBalance\\(/, 'Inventory balance projection interface missing'],
+  [source.locations, /export\\s+(?:async\\s+)?function loadOrganizationLocations\\(/, 'Organization location loading interface missing'],
+  [source.locations, /export\\s+(?:async\\s+)?function selectOrganizationLocation\\(/, 'Organization location selection interface missing'],
+  [source.ui, /export\\s+(?:async\\s+)?function applyWarehouseUI\\(/, 'Warehouse UI boundary missing'],
+  [source.ui, /export\\s+(?:async\\s+)?function renderWarehouseInventory\\(/, 'Warehouse inventory projection missing'],
+  [source.fulfillment, /export\\s+(?:async\\s+)?function transitionDeliveryAssignmentForOrder\\(/, 'Canonical fulfillment transition interface missing'],
 ];
 for (const [content, pattern, message] of currentAuthorityAnchors) assert.match(content, pattern, message);
 
