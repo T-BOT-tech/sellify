@@ -89,7 +89,7 @@ assert.throws(
   }),
   /finite non-zero/,
 );
-assert.throws(
+await assert.rejects(
   () => executeWarehouseInventoryBridge(receiving, {}),
   /Canonical Inventory movement authority/,
 );
