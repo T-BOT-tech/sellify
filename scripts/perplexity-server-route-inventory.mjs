@@ -68,9 +68,9 @@ const inventory = {
   routeCount: routes.length,
   routeTableCount: routes.filter(route => route.sourceKind === 'ROUTES table').length,
   handlerFunctionCount: new Set(routes.map(route => route.handlerFunction).filter(Boolean)).size,
+  namedHandlerRouteCount: routes.filter(route => route.handlerFunction).length,
+  unresolvedHandlerRouteCount: routes.filter(route => route.sourceKind === 'ROUTES table' && !route.handlerFunction).length,
   inlineHandlerCount: routes.filter(route => route.sourceKind === 'inline handler').length,
-  namedHandlerCount: routes.filter(route => route.handlerName).length,
-  unresolvedHandlerCount: routes.filter(route => !route.handlerName).length,
   routes,
   notes: [
     'Static, best-effort inventory of the explicit ROUTES table and selected inline handlers.',
@@ -96,8 +96,8 @@ const markdown = [
   '',
   '| Method | Display path | Handler | Handler form | Source line | Original route pattern |',
   '|---|---|---|---:|---|',
-  ...routes.map(route => `| ${route.method} | \`${route.path}\` | ${route.handlerName ? `\`${route.handlerName}\`` : 'unresolved'} | ${route.handlerKind} | ${route.line} | ${route.routePattern ? `\`${route.routePattern}\`` : ''} |`),
+  ...routes.map(route => `| ${route.method} | \`${route.path}\` | ${route.handlerFunction ? `\`${route.handlerFunction}\`` : 'unresolved'} | ${route.handlerExpression ? (route.handlerExpression.startsWith('(') ? 'inline delegate' : 'direct') : 'static/inline'} | ${route.line} | ${route.routePattern ? `\`${route.routePattern}\`` : ''} |`),
   ''
 ].join('\n');
 await writeFile(path.join(outputDir, 'server-route-inventory.md'), markdown);
-console.log(`Wrote ${routes.length} detected routes (${inventory.routeTableCount} ROUTES-table entries, ${inventory.handlerFunctionCount} distinct named handler functions, ${inventory.inlineHandlerCount} inline handlers).`);
+console.log(`Wrote ${routes.length} detected routes (${inventory.routeTableCount} ROUTES-table entries, ${inventory.handlerFunctionCount} distinct named handler functions across ${inventory.namedHandlerRouteCount} routes; ${inventory.unresolvedHandlerRouteCount} unresolved).`);
