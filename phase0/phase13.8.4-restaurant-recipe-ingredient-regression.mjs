@@ -25,5 +25,7 @@ assert.throws(() => normalizeRecipe({ id: 'r3', name: 'Bad', ingredients: [{ pro
 assert.throws(() => normalizeRecipe({ id: 'r4', name: 'Bad', ingredients: [{ product_id: 'p1', quantity: 1, unit: 'kg' }, { product_id: 'p1', quantity: 2, unit: 'kg' }] }, { organizationId: 'org-1', coreProducts: products }), /duplicate/);
 assert.throws(() => normalizeRecipe({ id: 'r5', name: 'Bad', ingredients: [{ product_id: 'p1', quantity: 0, unit: 'kg' }] }, { organizationId: 'org-1', coreProducts: products }), /positive/);
 assert.equal(recipeIngredientContract().stock_consumption_phase, '13.8.5');
+assert.equal(recipeIngredientContract().inventory_mutation, 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovementBatch');
+assert.equal(recipeIngredientContract().movement_ledger, 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovementBatch');
 
 console.log('Phase 13.8.4 Restaurant Recipe / Ingredient Regression: PASS');
