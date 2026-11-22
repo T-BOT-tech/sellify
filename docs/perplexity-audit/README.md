@@ -4,7 +4,7 @@
 
 This directory contains an independent architecture and remediation assessment for Sellify.
 
-It is intentionally additive: it does not modify application source, tests, migrations, or existing phase documentation.
+The documents in this directory are additive and do not modify application source, tests, migrations, or existing phase documentation. The associated pull request also adds separate static inventory scripts, regression gates, and workflow/configuration changes outside this directory; the overall pull request is therefore not documentation-only.
 
 ## Deliverables
 
