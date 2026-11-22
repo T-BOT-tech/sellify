@@ -35,13 +35,14 @@ for (const relative of requiredProduction) {
 const checks = [
   ['13.9.10 Current Targeted Regression', 'node:phase13.9.10-current'],
   ['13.9.11 Adversarial / Idempotency / Isolation', 'test:phase13.9.11'],
-  ['13.9.12 Legacy Bin Compatibility', 'test:phase13.9.12'],
+  ['13.9.12 Current Legacy Bin Compatibility', 'node:phase13.9.12-current'],
 ];
 
 for (const [label, script] of checks) {
-  const directNodePath = script === 'node:phase13.9.10-current'
-    ? 'phase0/phase13.9.10-current-warehouse-targeted-regression.mjs'
-    : null;
+  const directNodePath = {
+    'node:phase13.9.10-current': 'phase0/phase13.9.10-current-warehouse-targeted-regression.mjs',
+    'node:phase13.9.12-current': 'phase0/phase13.9.12-current-warehouse-legacy-bin-compatibility-regression.mjs',
+  }[script] || null;
   const result = spawnSync(
     directNodePath ? process.execPath : (process.platform === 'win32' ? 'npm.cmd' : 'npm'),
     directNodePath ? [directNodePath] : ['run', script],
