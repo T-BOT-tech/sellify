@@ -63,7 +63,7 @@ No route count, proposed module, store group, or extraction priority should be t
 
 ## Separate CI status
 
-The inventory workflow run above passed on the verified inventory commit. The full Sellify CI run for that same commit is still in progress; Phase 21 capacity evidence, Logistics L18, and Logistics exit certification have passed; Phase 13.10 and baseline jobs are still running:
+The inventory workflow run above passed on the verified inventory commit. The full Sellify CI run for that same commit is still in progress. Phase 21 capacity evidence, Phase 13.10.24, Logistics L18, and Logistics exit certification have passed. The baseline job is still running; the new GAP-1.19 production-certification HTTP regression and shared HTTP response/CORS/error-redaction regression have both passed within that job:
 https://github.com/T-BOT-tech/sellify/actions/runs/45070416119
 
 A passing inventory workflow does not imply that the full CI, certification, or release gates passed.
