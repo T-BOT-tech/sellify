@@ -9,10 +9,10 @@ This slice does not change API contracts, database schemas, business rules, or a
 ## Verified source baseline
 
 - The explicit `ROUTES` table contains 247 method/pattern entries.
-- Those entries resolve to 138 distinct named handler functions.
+- Those entries resolve to 137 distinct named handler functions.
 - Six additional inline HTTP handlers are inventoried outside the route table.
 - The path classifier still leaves 35 route entries unclassified; these require manual ownership review.
-- The route inventory does not yet map authorization requirements, middleware, tenant/location scope, handler side effects, or error contracts.
+- The static route inventory now resolves all named handler references to local declarations or named imports, but does not map authorization requirements, middleware, tenant/location scope, handler side effects, or error contracts.
 
 ## Scope
 
