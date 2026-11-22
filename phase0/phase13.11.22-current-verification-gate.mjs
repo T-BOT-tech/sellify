@@ -101,7 +101,7 @@ const checks = [
   ['13.11.9 Unified Fulfillment', 'test:phase13.11.9'],
   ['13.11.10 Event Boundary', 'test:phase13.11.10'],
   ['13.11.11 Idempotency / Replay', 'test:phase13.11.11'],
-  ['13.11.12 Current Failure Isolation', 'node:phase13.11.12-current-regression.mjs'],
+  ['13.11.12 Current Failure Isolation', 'node:phase0/phase13.11.12-current-regression.mjs'],
   ['13.11.13 Cancellation / Returns', 'test:phase13.11.13'],
   ['13.11.14 Authorization / Tenant Isolation', 'test:phase13.11.14'],
   ['13.11.15 Audit / Observability', 'test:phase13.11.15'],
