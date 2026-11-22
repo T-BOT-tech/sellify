@@ -92,8 +92,12 @@ test('legacy records without observation time remain projectable as UNKNOWN', ()
   const declaredWithVerifiedQuality = projectCapacityAvailabilityEvidence({
     ...base, source: 'DECLARED', quality: 'VERIFIED',
   });
-  assert.equal(declaredWithVerifiedQuality.quality, 'VERIFIED');
+  assert.equal(declaredWithVerifiedQuality.quality, 'SELF_REPORTED', 'supplier-declared capacity cannot self-assert VERIFIED quality');
   assert.equal(declaredWithVerifiedQuality.provenanceType, 'SELF_REPORTED');
+  const declaredWithObservedQuality = projectCapacityAvailabilityEvidence({
+    ...base, source: 'DECLARED', quality: 'OBSERVED',
+  });
+  assert.equal(declaredWithObservedQuality.quality, 'SELF_REPORTED', 'supplier-declared capacity cannot self-assert OBSERVED quality');
 });
 
 test('freshness requires explicit validity and a deterministic evaluation time', () => {
