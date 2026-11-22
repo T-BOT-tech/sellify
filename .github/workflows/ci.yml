@@ -396,6 +396,8 @@ jobs:
         run: npm run gap-1.18:payment-production-readiness-test
       - name: GAP-1.19 production certification gate regression
         run: npm run gap-1.19:payment-production-certification-test
+      - name: GAP-1.19 production certification HTTP authorization and tenant-isolation regression
+        run: npm run gap-1.19:payment-production-certification-http-test
       - name: GAP-1.19 Payment Core E2E certification regression
         run: npm run gap-1.19:payment-e2e-certification-test
       - name: GAP-1.19 adversarial Payment Core certification regression
