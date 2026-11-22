@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * Perplexity audit tooling.
+ * Best-effort route inventory for Sellify's explicit ROUTES table and
+ * separately handled HTTP endpoints in backend/server.js.
  *
- * Read-only inventory of HTTP route declarations in backend/server.js.
- * This script does not modify application source or runtime behavior.
+ * This is static analysis only. It does not establish authorization,
+ * middleware, handler side effects, or complete runtime route behavior.
  */
-
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,40 +14,46 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 const serverPath = path.join(repoRoot, 'backend', 'server.js');
 const outputDir = path.join(repoRoot, 'docs', 'perplexity-audit', 'generated');
-
 const source = await readFile(serverPath, 'utf8');
-
-const patterns = [
-  /\b(?:app|server|router)\.(?:get|post|put|patch|delete|options|head)\s*\(\s*(['"`])([^'"`]+)\1/g,
-  /\b(?:if|else\s+if)\s*\([^\n]*req\.method\s*===\s*(['"`])(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\1[^\n]*&&[^\n]*(?:req\.url|pathname)[^\n]*\.startsWith\(\s*(['"`])([^'"`]+)\3/g,
-  /\b(?:if|else\s+if)\s*\([^\n]*(?:req\.url|pathname)[^\n]*\.startsWith\(\s*(['"`])([^'"`]+)\1[^\n]*&&[^\n]*req\.method\s*===\s*(['"`])(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\1/g
-];
 
 const routes = [];
 const seen = new Set();
 
-function addRoute(method, routePath, line) {
+function addRoute(method, routePath, line, sourceKind, routePattern = null) {
   const key = `${method} ${routePath}`;
   if (seen.has(key)) return;
   seen.add(key);
-  routes.push({ method, path: routePath, line });
+  routes.push({ method, path: routePath, line, sourceKind, routePattern });
 }
 
-for (const match of source.matchAll(patterns[0])) {
-  const method = match[0].match(/\.(get|post|put|patch|delete|options|head)\s*\(/i)?.[1];
-  if (!method) continue;
+// The backend's API routes are declared in a central ROUTES array as
+// { method, pattern: /^...$/, handler }. Parse those declarations directly.
+const routeEntryPattern = /\{\s*method:\s*['"](GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)['"]\s*,\s*pattern:\s*\/([\s\S]*?)\/\s*,\s*handler\s*:/g;
+for (const match of source.matchAll(routeEntryPattern)) {
+  const method = match[1].toUpperCase();
+  const routePattern = match[2];
+  const routePath = routePattern
+    .replace(/\\\//g, '/')
+    .replace(/^\^/, '')
+    .replace(/\$$/, '')
+    .replace(/\(\[\^\/\]\+\)/g, ':param');
   const line = source.slice(0, match.index).split('\n').length;
-  addRoute(method.toUpperCase(), match[2], line);
+  addRoute(method, routePath, line, 'ROUTES table', routePattern);
 }
 
-for (let i = 1; i < patterns.length; i += 1) {
-  for (const match of source.matchAll(patterns[i])) {
-    const groups = match.slice(1);
-    const method = groups.find(value => /^(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)$/i.test(value));
-    const routePath = groups.find(value => typeof value === 'string' && value.startsWith('/'));
-    if (!method || !routePath) continue;
+// A small number of endpoints are handled before the ROUTES table.
+const inlineRoutes = [
+  { method: 'ANY', path: '/health', pattern: /if\s*\(\s*url\.pathname\s*===\s*(['"])\/health\1\s*\)/g },
+  { method: 'GET', path: '/config.js', pattern: /if\s*\(\s*url\.pathname\s*===\s*(['"])\/config\.js\1\s*&&\s*req\.method\s*===\s*(['"])GET\2\s*\)/g },
+  { method: 'GET', path: '/backend/lib/*', pattern: /if\s*\(\s*req\.method\s*===\s*(['"])GET\1\s*&&\s*url\.pathname\.startsWith\(\s*(['"])\/backend\/lib\/\2\s*\)\s*\)/g },
+  { method: 'GET', path: '/shared/*', pattern: /if\s*\(\s*req\.method\s*===\s*(['"])GET\1\s*&&\s*url\.pathname\.startsWith\(\s*(['"])\/shared\/\2\s*\)\s*\)/g },
+  { method: 'GET', path: '/store/:param', pattern: /if\s*\(\s*req\.method\s*===\s*(['"])GET\1\s*&&\s*\/\^\\\/store\\\/\[\^\/\]\+\$\/\.test\(url\.pathname\)\s*\)/g },
+  { method: 'GET', path: '/track', pattern: /if\s*\(\s*req\.method\s*===\s*(['"])GET\1\s*&&\s*url\.pathname\s*===\s*(['"])\/track\2\s*\)/g },
+];
+for (const item of inlineRoutes) {
+  for (const match of source.matchAll(item.pattern)) {
     const line = source.slice(0, match.index).split('\n').length;
-    addRoute(method.toUpperCase(), routePath, line);
+    addRoute(item.method, item.path, line, 'inline handler');
   }
 }
 
@@ -56,12 +62,16 @@ routes.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.m
 const inventory = {
   generatedAt: new Date().toISOString(),
   source: 'backend/server.js',
+  routeSource: 'ROUTES array plus explicit inline handlers',
   routeCount: routes.length,
+  routeTableCount: routes.filter(route => route.sourceKind === 'ROUTES table').length,
+  inlineHandlerCount: routes.filter(route => route.sourceKind === 'inline handler').length,
   routes,
   notes: [
-    'This is a static, best-effort inventory generated from source patterns.',
-    'It is intended to guide a behavior-preserving backend refactor.',
-    'Every extracted route must be validated against existing HTTP, authorization, tenant-isolation, and adversarial regression gates.'
+    'Static, best-effort inventory of the explicit ROUTES table and selected inline handlers.',
+    'Regex route patterns are preserved alongside display paths; display paths are not executable route contracts.',
+    'This inventory does not capture authorization, middleware, handler side effects, or dynamic runtime behavior.',
+    'Review every route and handler before defining extraction boundaries.'
   ]
 };
 
@@ -75,16 +85,14 @@ const markdown = [
   '',
   `Source: \`${inventory.source}\``,
   '',
-  `Detected routes: ${inventory.routeCount}`,
+  `Detected routes: ${inventory.routeCount} (${inventory.routeTableCount} ROUTES-table entries; ${inventory.inlineHandlerCount} inline handlers)`,
   '',
-  '> This is a static, best-effort inventory. Validate every extraction against existing HTTP, authorization, tenant-isolation, and adversarial regression gates.',
+  '> Static, best-effort inventory. Review original regex patterns, authorization, middleware, side effects, and runtime behavior before extraction.',
   '',
-  '| Method | Path | Source line |',
-  '|---|---|---:|',
-  ...routes.map(route => `| ${route.method} | \`${route.path}\` | ${route.line} |`),
+  '| Method | Display path | Source kind | Source line | Original route pattern |',
+  '|---|---|---|---:|---|',
+  ...routes.map(route => `| ${route.method} | \`${route.path}\` | ${route.sourceKind} | ${route.line} | ${route.routePattern ? `\`${route.routePattern}\`` : ''} |`),
   ''
 ].join('\n');
-
 await writeFile(path.join(outputDir, 'server-route-inventory.md'), markdown);
-
-console.log(`Wrote ${routes.length} detected routes to ${path.relative(repoRoot, outputDir)}`);
+console.log(`Wrote ${routes.length} detected routes (${inventory.routeTableCount} ROUTES-table entries, ${inventory.inlineHandlerCount} inline handlers).`);
