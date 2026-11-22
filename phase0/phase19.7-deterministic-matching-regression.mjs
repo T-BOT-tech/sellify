@@ -72,9 +72,22 @@ const temporalCandidate = {
     periodStart: '2026-12-01T00:00:00.000Z', periodEnd: '2026-12-05T00:00:00.000Z',
     availability: 'LIMITED', status: 'ACTIVE', source: 'DECLARED',
     observedAt: '2026-11-19T00:00:00.000Z', validUntil: '2026-12-10T00:00:00.000Z',
+    quality: 'SELF_REPORTED',
   }],
 };
 assert.equal(evaluateDiscoveryMatch(temporalCandidate, windowContext).eligible, true, 'overlapping LIMITED declared capacity qualifies');
+for (const quality of ['UNKNOWN', 'STALE', 'CONFLICTING', undefined, null]) {
+  assert.equal(evaluateDiscoveryMatch({
+    ...temporalCandidate,
+    capacitySignals: [{ ...temporalCandidate.capacitySignals[0], quality }],
+  }, windowContext).eligible, false, `time-bound capacity quality ${String(quality)} must fail closed`);
+}
+for (const quality of ['SELF_REPORTED', 'OBSERVED', 'VERIFIED']) {
+  assert.equal(evaluateDiscoveryMatch({
+    ...temporalCandidate,
+    capacitySignals: [{ ...temporalCandidate.capacitySignals[0], quality }],
+  }, windowContext).eligible, true, `explicit ${quality} capacity evidence may qualify when fresh and active`);
+}
 assert.equal(evaluateDiscoveryMatch({
   ...temporalCandidate,
   capacitySignals: [{ ...temporalCandidate.capacitySignals[0], validUntil: windowContext.availabilityTo }],
