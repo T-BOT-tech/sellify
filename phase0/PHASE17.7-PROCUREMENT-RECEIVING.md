@@ -10,8 +10,9 @@ Receiving supports partial quantities and creates immutable receipt records.
 - Procurement owns `procurement_receipts` and `procurement_receipt_lines`.
 - Existing B2B Purchase Order remains the PO authority.
 - Existing Inventory movement ledger remains the physical stock authority.
-- Posted receipt lines delegate to `appendInventoryMovement()` with movement type `PURCHASE`.
-- Event IDs are deterministic per receipt line for retry idempotency.
+- Posted receipt lines delegate to the existing `appendInventoryMovement()` canonical authority with movement type `PURCHASE`, inside one caller-owned SQLite transaction.
+- All receipt-line movements and the receipt `POSTED` transition commit together or roll back together; a failed multi-line receipt cannot partially change stock.
+- Event IDs are deterministic per receipt line. A same-key retry resumes the existing PENDING receipt identity and reuses its event IDs and original received timestamp.
 
 ## Rules
 
@@ -24,6 +25,8 @@ Receiving supports partial quantities and creates immutable receipt records.
 7. No payment, AR, invoice, settlement, or Commerce Order is created.
 8. Partial receipts remain first-class; later receipts can complete the remaining quantity.
 9. Inventory is mutated only through the existing inventory movement authority.
+10. A multi-line receipt is atomic across every Inventory movement and the Procurement receipt status transition.
+11. Same-key retries with an unchanged payload resume a PENDING receipt; changed payloads using the same key are rejected.
 
 ## Offline boundary
 
