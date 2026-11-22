@@ -2,8 +2,8 @@
 /**
  * Perplexity audit regression gate.
  *
- * Validates that the server route inventory and classification tooling
- * produce a complete, non-conflicting route map before backend extraction.
+ * Validates basic coverage and internal consistency of the static ROUTES-table
+ * inventory. It does not prove runtime route completeness or classification correctness.
  *
  * This gate does not modify application source or runtime behavior.
  */
@@ -49,6 +49,20 @@ if (!Array.isArray(inventory.routes) || inventory.routes.length === 0) {
   throw new Error('Route inventory did not detect any routes.');
 }
 
+// backend/server.js currently declares its API surface in a central ROUTES
+// array. A tiny count means the parser missed that source of truth (as the
+// previous two-route scanner did). Revisit this floor only after reviewing
+// an intentional router architecture change.
+if (!Number.isInteger(inventory.routeTableCount) || inventory.routeTableCount < 200) {
+  throw new Error(`Expected at least 200 explicit ROUTES-table entries; detected ${inventory.routeTableCount}.`);
+}
+if (inventory.routes.some(route => !route.method || !route.path || !route.sourceKind)) {
+  throw new Error('Route inventory contains an incomplete route record.');
+}
+if (inventory.routes.some(route => route.sourceKind === 'ROUTES table' && !route.routePattern)) {
+  throw new Error('ROUTES-table entry is missing its original regex pattern.');
+}
+
 if (inventory.routeCount !== inventory.routes.length) {
   throw new Error('Route inventory count does not match detected routes.');
 }
@@ -88,7 +102,7 @@ const moduleSummary = classification.modules
   .map(module => `${module.module}: ${module.routeCount}`)
   .join(', ');
 
-console.log(`Route inventory gate passed: ${inventory.routeCount} routes.`);
+console.log(`Route inventory gate passed: ${inventory.routeCount} routes (${inventory.routeTableCount} ROUTES-table entries).`);
 console.log(`Proposed modules: ${moduleSummary}.`);
 console.log(`Unclassified routes: ${unknownRoutes.length}.`);
 console.log(`Duplicate route keys: ${classification.duplicateCount}.`);
