@@ -61,7 +61,7 @@ export function buildConsumptionPlan(preparation, { organizationId, locationId, 
     location_id,
     lines: Object.freeze(lines),
     movement_type: 'sold',
-    mutation_authority: 'app/src/warehouse/inventory.js',
+    mutation_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovementBatch',
     ledger_authority: 'app/src/warehouse/ledger.js',
     idempotency: 'event_id',
   });
