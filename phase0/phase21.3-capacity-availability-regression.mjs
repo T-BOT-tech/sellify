@@ -117,7 +117,7 @@ test('freshness requires explicit validity and a deterministic evaluation time',
 test('consistency is independent from provenance and freshness', () => {
   const projected = projectCapacityAvailabilityEvidence({ ...base, consistency: 'CONFLICTING' });
   assert.equal(projected.consistency, 'CONFLICTING');
-  assert.equal(projected.provenanceType, 'UNKNOWN');
+  assert.equal(projected.provenanceType, 'SELF_REPORTED');
 });
 
 test('invalid observation timestamp fails closed', () => {
