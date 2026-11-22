@@ -6,7 +6,7 @@
 
 Supplier Network capacity is a declaration. The current source authority does not independently observe or verify supplier performance. A declared signal must therefore remain **SELF_REPORTED**, regardless of a caller-supplied `OBSERVED`, `VERIFIED`, `STALE`, `UNKNOWN`, or `CONFLICTING` label.
 
-For time-bound hard availability matching, Discovery now accepts only explicit `SELF_REPORTED`, `OBSERVED`, or `VERIFIED` evidence quality when all other existing temporal, status, subject, quantity, unit, and period constraints pass. `UNKNOWN`, `STALE`, `CONFLICTING`, and missing quality fail closed.
+For time-bound hard availability matching, Discovery currently accepts only explicit `SELF_REPORTED` quality for time-bound matching, subject to the existing temporal, status, subject, quantity, unit, and period constraints. `OBSERVED` and `VERIFIED` require an independent trusted observer binding, which this provider contract does not yet define; they therefore fail closed along with `UNKNOWN`, `STALE`, `CONFLICTING`, and missing quality.
 
 ## Authority boundary
 
