@@ -141,3 +141,135 @@ jobs:
           node-version: 24
       - run: npm ci --ignore-scripts
       - run: node phase0/capacity-diagnostic-probe.mjs lifecycle
+
+  probe-error-0-is-not-a-function:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs error-0
+
+  probe-error-1-no-such-table:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs error-1
+
+  probe-error-2-no-such-column:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs error-2
+
+  probe-error-3-subject-type:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs error-3
+
+  probe-error-4-period:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs error-4
+
+  probe-error-5-positive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs error-5
+
+  probe-error-6-availability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs error-6
+
+  probe-error-7-validuntil:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs error-7
+
+  probe-error-8-participation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs error-8
+
+  probe-error-9-authorization:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs error-9
+
+  probe-error-10-capacity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs error-10
+
+  probe-error-11-cannot-read-properties:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs error-11

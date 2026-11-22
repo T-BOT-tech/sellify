@@ -74,6 +74,21 @@ async function createValidCapacity() {
   }, actor);
 }
 
+const errorSignatures = [
+  'is not a function',
+  'no such table',
+  'no such column',
+  'subject type',
+  'period',
+  'positive',
+  'availability',
+  'validUntil',
+  'participation',
+  'authorization',
+  'capacity',
+  'Cannot read properties',
+];
+
 switch (probe) {
   case 'contract': {
     const contract = supplierNetworkCapacityContract();
@@ -192,9 +207,31 @@ switch (probe) {
     assert.equal(active.observedAt, created.observedAt);
     break;
   }
-  default:
-    console.error(`Unknown probe: ${probe}`);
-    process.exit(2);
+  default: {
+    const match = probe.match(/^error-(\d+)$/);
+    if (!match) {
+      console.error(`Unknown probe: ${probe}`);
+      process.exit(2);
+    }
+    const signature = errorSignatures[Number(match[1])];
+    if (signature === undefined) {
+      console.error(`Unknown error signature index: ${match[1]}`);
+      process.exit(2);
+    }
+    let thrown;
+    try {
+      await createValidCapacity();
+    } catch (error) {
+      thrown = error;
+    }
+    assert.ok(thrown, 'capacity upsert did not throw an error');
+    const message = String(thrown?.message ?? thrown);
+    assert.ok(
+      message.toLowerCase().includes(signature.toLowerCase()),
+      `error message does not contain signature "${signature}": ${message}`
+    );
+    break;
+  }
 }
 
 console.log(`Capacity probe passed: ${probe}`);
