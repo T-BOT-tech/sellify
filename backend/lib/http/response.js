@@ -1,6 +1,6 @@
 // Shared HTTP response serialization. Keep this module transport-agnostic:
 // callers supply the configured CORS allowlist and the request/response objects.
-function corsOriginFor(req, allowedOrigins = []) {
+export function corsOriginFor(req, allowedOrigins = []) {
   const origin = req.headers['origin'];
   if (allowedOrigins.length === 0) return '*';
   if (origin && allowedOrigins.includes(origin)) return origin;
