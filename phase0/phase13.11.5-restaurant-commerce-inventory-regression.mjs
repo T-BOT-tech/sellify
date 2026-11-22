@@ -64,18 +64,23 @@ const tamperedContext = { ...context, inventory: { ...context.inventory, locatio
 assert.equal(isRestaurantCommerceInventoryContext(tamperedContext), false);
 
 const calls = [];
-const applyStockChange = (...args) => { calls.push(args); return { ok: true, eventId: args[3]?.eventId }; };
-const result = executeRestaurantInventoryHandoff(inventory, {
+const result = await executeRestaurantInventoryHandoff(inventory, {
   products,
   inventoryMovements: [],
-  applyStockChange,
+  async recordCanonicalInventoryMovementBatch(command) {
+    calls.push(command);
+    return { queued: false, movements: command.lines };
+  },
 });
 assert.equal(result.applied_count, 1);
-assert.equal(calls[0][0], 'p-rice');
-assert.equal(calls[0][1], -2);
-assert.equal(calls[0][2], 'sold');
-assert.equal(calls[0][3].eventId, 'restaurant:preparation:prep-1:ingredient:p-rice');
-assert.equal(calls[0][3].locationId, locationA);
+assert.equal(calls.length, 1, 'Restaurant Commerce handoff must execute one canonical Inventory batch');
+assert.equal(calls[0].commandId, 'restaurant:preparation:prep-1:inventory-batch');
+assert.equal(calls[0].locationId, locationA);
+assert.equal(calls[0].referenceType, 'restaurant_preparation');
+assert.equal(calls[0].lines[0].productId, 'p-rice');
+assert.equal(calls[0].lines[0].quantity, -2);
+assert.equal(calls[0].lines[0].movementType, 'SALE');
+assert.equal(calls[0].lines[0].eventId, 'restaurant:preparation:prep-1:ingredient:p-rice');
 
 const contract = restaurantCommerceInventoryContract();
 assert.equal(contract.order_authority, 'commerce');
