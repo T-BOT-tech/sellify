@@ -19,8 +19,8 @@ assert.equal(bridge.reference_type, 'agriculture_harvest');
 assert.equal(bridge.reference_id, 'harvest-1');
 assert.equal(bridge.event_id, 'agriculture:harvest:harvest-1:received');
 assert.equal(AGRICULTURE_INVENTORY_CONTRACT.authority, 'core_inventory');
-assert.equal(AGRICULTURE_INVENTORY_CONTRACT.stock_mutation, 'applyStockChange');
-assert.equal(AGRICULTURE_INVENTORY_CONTRACT.ledger, 'recordInventoryMovement');
+assert.equal(AGRICULTURE_INVENTORY_CONTRACT.stock_mutation, 'recordCanonicalInventoryMovement');
+assert.equal(AGRICULTURE_INVENTORY_CONTRACT.ledger, 'recordCanonicalInventoryMovement');
 
 assert.throws(
   () => bridgeHarvestToInventory({ harvest, product, collectionCenterLocation: { ...location, organization_id: 'other-org' } }),
