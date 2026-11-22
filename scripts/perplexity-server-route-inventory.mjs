@@ -19,26 +19,28 @@ const source = await readFile(serverPath, 'utf8');
 const routes = [];
 const seen = new Set();
 
-function addRoute(method, routePath, line, sourceKind, routePattern = null) {
+function addRoute(method, routePath, line, sourceKind, routePattern = null, handlerExpression = null, handlerFunction = null) {
   const key = `${method} ${routePath}`;
   if (seen.has(key)) return;
   seen.add(key);
-  routes.push({ method, path: routePath, line, sourceKind, routePattern });
+  routes.push({ method, path: routePath, line, sourceKind, routePattern, handlerExpression, handlerFunction });
 }
 
 // The backend's API routes are declared in a central ROUTES array as
 // { method, pattern: /^...$/, handler }. Parse those declarations directly.
-const routeEntryPattern = /\{\s*method:\s*['"](GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)['"]\s*,\s*pattern:\s*\/([\s\S]*?)\/\s*,\s*handler\s*:/g;
+const routeEntryPattern = /\{\s*method:\s*['"](GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)['"]\s*,\s*pattern:\s*\/([\s\S]*?)\/\s*,\s*handler:\s*([^}\n]+)\s*\}/g;
 for (const match of source.matchAll(routeEntryPattern)) {
   const method = match[1].toUpperCase();
   const routePattern = match[2];
+  const handlerExpression = match[3].trim();
+  const handlerFunction = handlerExpression.match(/\b(handle[A-Z]\w*)\b/)?.[1] ?? null;
   const routePath = routePattern
     .replace(/\\\//g, '/')
     .replace(/^\^/, '')
     .replace(/\$$/, '')
     .replace(/\(\[\^\/\]\+\)/g, ':param');
   const line = source.slice(0, match.index).split('\n').length;
-  addRoute(method, routePath, line, 'ROUTES table', routePattern);
+  addRoute(method, routePath, line, 'ROUTES table', routePattern, handlerExpression, handlerFunction);
 }
 
 // A small number of endpoints are handled before the ROUTES table.
@@ -65,6 +67,7 @@ const inventory = {
   routeSource: 'ROUTES array plus explicit inline handlers',
   routeCount: routes.length,
   routeTableCount: routes.filter(route => route.sourceKind === 'ROUTES table').length,
+  handlerFunctionCount: new Set(routes.map(route => route.handlerFunction).filter(Boolean)).size,
   inlineHandlerCount: routes.filter(route => route.sourceKind === 'inline handler').length,
   routes,
   notes: [
@@ -95,4 +98,4 @@ const markdown = [
   ''
 ].join('\n');
 await writeFile(path.join(outputDir, 'server-route-inventory.md'), markdown);
-console.log(`Wrote ${routes.length} detected routes (${inventory.routeTableCount} ROUTES-table entries, ${inventory.inlineHandlerCount} inline handlers).`);
+console.log(`Wrote ${routes.length} detected routes (${inventory.routeTableCount} ROUTES-table entries, ${inventory.handlerFunctionCount} distinct named handler functions, ${inventory.inlineHandlerCount} inline handlers).`);
