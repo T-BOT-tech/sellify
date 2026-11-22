@@ -5,7 +5,7 @@
 // the existing Warehouse bridges into one canonical, persistence-neutral
 // handoff without introducing a second inventory service, ledger, or store.
 
-const MUTATION_AUTHORITY = 'app/src/warehouse/inventory.js#applyStockChange';
+const MUTATION_AUTHORITY = 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement';
 const LEDGER_AUTHORITY = 'app/src/warehouse/ledger.js#recordInventoryMovement';
 
 function text(value, field) {
@@ -151,16 +151,31 @@ export function isWarehouseInventoryHandoff(value) {
     value.idempotency === 'event_id');
 }
 
-export function executeWarehouseInventoryHandoff(handoff, { applyStockChange } = {}) {
+export async function executeWarehouseInventoryHandoff(handoff, { recordCanonicalInventoryMovement } = {}) {
   if (!isWarehouseInventoryHandoff(handoff)) throw new TypeError('Valid Warehouse Inventory handoff is required');
-  if (typeof applyStockChange !== 'function') throw new TypeError('Core inventory applyStockChange authority is required');
+  if (typeof recordCanonicalInventoryMovement !== 'function') {
+    throw new TypeError('Canonical Inventory movement authority is required');
+  }
 
-  return applyStockChange(handoff.product_id, handoff.quantity, handoff.movement_type, {
+  const result = await recordCanonicalInventoryMovement({
+    productId: handoff.product_id,
+    quantity: handoff.quantity,
+    movementType: handoff.movement_type === 'received' ? 'PURCHASE' : 'ADJUSTMENT',
     referenceType: handoff.reference_type,
     referenceId: handoff.reference_id,
     eventId: handoff.event_id,
     locationId: handoff.location_id,
+    reason: handoff.metadata?.notes || `Warehouse ${handoff.operation} ${handoff.operation_id}`,
     metadata: handoff.metadata,
+  });
+  if (!result || typeof result !== 'object') {
+    throw new Error('Canonical Inventory did not return an execution result');
+  }
+  return Object.freeze({
+    status: result.queued ? 'pending' : 'confirmed',
+    queued: Boolean(result.queued),
+    movement: result.movement || null,
+    event_id: handoff.event_id,
   });
 }
 
