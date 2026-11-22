@@ -20,7 +20,7 @@ const routes = [];
 const seen = new Set();
 
 function addRoute(method, routePath, line, sourceKind, routePattern = null, handlerExpression = null, handlerFunction = null) {
-  const key = `${method} ${routePath}`;
+  const key = `${method} ${routePattern || routePath}`;
   if (seen.has(key)) return;
   seen.add(key);
   routes.push({ method, path: routePath, line, sourceKind, routePattern, handlerExpression, handlerFunction });
