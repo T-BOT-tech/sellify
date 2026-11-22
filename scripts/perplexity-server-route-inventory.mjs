@@ -55,7 +55,7 @@ const inlineRoutes = [
 for (const item of inlineRoutes) {
   for (const match of source.matchAll(item.pattern)) {
     const line = source.slice(0, match.index).split('\n').length;
-    addRoute(item.method, item.path, line, 'inline handler', null, null, 'static/inline');
+    addRoute(item.method, item.path, line, 'inline handler', null, 'static/inline', null);
   }
 }
 
