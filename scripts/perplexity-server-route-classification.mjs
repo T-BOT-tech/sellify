@@ -58,7 +58,7 @@ for (const route of classified) {
 const duplicates = [];
 const routeKeys = new Map();
 for (const route of classified) {
-  const key = `${route.method} ${route.path}`;
+  const key = `${route.method} ${route.routePattern || route.path}`;
   if (routeKeys.has(key)) duplicates.push({ key, firstLine: routeKeys.get(key), duplicateLine: route.line });
   else routeKeys.set(key, route.line);
 }
