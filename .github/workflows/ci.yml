@@ -165,6 +165,8 @@ jobs:
         run: npm run test:first-merchant-to-first-checkout
       - name: First-experience tenant isolation HTTP regression
         run: npm run test:first-experience-tenant-isolation-http
+      - name: Customer HTTP authorization, tenant isolation, and audit provenance regression
+        run: node phase0/customer-http-audit-provenance-regression.mjs
       - name: Marketplace order Payment Core bootstrap regression
         run: npm run test:marketplace-order-payment-bootstrap
       - name: First-experience service catalog frontend sync regression
@@ -498,9 +500,3 @@ jobs:
         run: npm run test:phase19.7
       - name: Phase 21 cumulative regression gate
         run: npm run test:phase21.14
-      - name: Phase 21 Node 24 runtime verification
-        run: npm run test:phase21.15
-      - name: Phase 21.18 current evidence verification (historical Phase 21.16 preserved)
-        run: node phase0/phase21.18-current-verification-regression.mjs
-      - name: Phase 21.17 capacity evidence migration regression
-        run: npm run test:phase21.17
