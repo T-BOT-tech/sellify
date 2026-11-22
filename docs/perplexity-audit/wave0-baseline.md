@@ -2,7 +2,7 @@
 
 ## Status
 
-**Inventory gates pass on the current audit branch head.** The first scanner version was materially incomplete and reported only two routes and zero migration markers. The scanner and gates have since been corrected to inspect the central ROUTES array and explicit migration version guards. The results below are static inventory evidence, not proof of runtime completeness or canonical ownership.
+**Inventory gates passed on the verified audit commit recorded below.** The first scanner version was materially incomplete and reported only two routes and zero migration markers. The scanner and gates have since been corrected to inspect the central ROUTES array and explicit migration version guards. The results below are static inventory evidence, not proof of runtime completeness or canonical ownership.
 
 ## Verified repository baseline
 
