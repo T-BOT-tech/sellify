@@ -32,19 +32,18 @@ for (const file of packFiles) {
   const entityBlock = source.match(/domain_entities\s*:\s*\[([\s\S]*?)\]/) || source.match(/AGRICULTURE_ENTITY_ORDER\s*=\s*Object\.freeze\(\[([\s\S]*?)\]/);
   if (entityBlock) {
     assert(!forbiddenEntityPattern.test(entityBlock[1]), `duplicate Core authority declaration in ${file}`);
-  } else if (file === 'app/src/verticals/logistics/pack.js') {
-    // Logistics Pack expresses its forbidden parallel authorities explicitly;
-    // these are guard names, not declarations of owned domain entities.
-    const forbiddenBlock = source.match(/forbidden_parallel_authorities\s*:\s*Object\.freeze\(\[([\s\S]*?)\]\)/);
-    const ownsBlock = source.match(/owns\s*:\s*Object\.freeze\(\[([\s\S]*?)\]\)/);
-    assert(forbiddenBlock, 'Logistics Pack must declare its forbidden parallel authorities');
-    assert(ownsBlock, 'Logistics Pack must declare its owned Logistics domain entities');
-    assert.match(forbiddenBlock[1], /LogisticsOrder/);
-    assert.match(forbiddenBlock[1], /LogisticsInventory/);
-    assert.match(forbiddenBlock[1], /LogisticsFulfillment/);
-    assert(!forbiddenEntityPattern.test(ownsBlock[1]), 'Logistics Pack owns a duplicate Core authority');
   } else {
-    assert.fail(`domain entity declaration missing in ${file}`);
+    // Some vertical packs publish explicit forbidden parallel-authority
+    // declarations instead of a domain_entities list. Treat those as guard
+    // metadata and separately validate the pack's owned entities.
+    const forbiddenBlock = source.match(/forbidden_parallel_authorities\\s*:\\s*Object\\.freeze\\(\\[([\\s\\S]*?)\\]\\)/);
+    const ownsBlock = source.match(/owns\\s*:\\s*Object\\.freeze\\(\\[([\\s\\S]*?)\\]\\)/);
+    assert(forbiddenBlock, `domain entity or forbidden-authority declaration missing in ${file}`);
+    assert(ownsBlock, `owned domain entity declaration missing in ${file}`);
+    const verticalName = path.basename(path.dirname(file));
+    const prefix = verticalName.charAt(0).toUpperCase() + verticalName.slice(1);
+    assert.match(forbiddenBlock[1], new RegExp(prefix + '(?:Order|Inventory|Product|Payment|Customer|Location|Fulfillment|Ledger)'));
+    assert(!forbiddenEntityPattern.test(ownsBlock[1]), `duplicate Core authority in owned entities for ${file}`);
   }
   assert(!/CREATE TABLE|INSERT INTO|UPDATE\s+|DELETE FROM/i.test(source), `persistence in pack manifest ${file}`);
 }
