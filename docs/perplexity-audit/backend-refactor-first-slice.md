@@ -2,9 +2,17 @@
 
 ## Objective
 
-Establish a low-risk, behavior-preserving first extraction candidate from `backend/server.js`. This document is a gated proposal, not authorization to move route handlers before their contracts are characterized.
+Complete a low-risk, behavior-preserving first extraction from `backend/server.js` while keeping the server's existing call signatures and runtime configuration. Route-handler extraction remains separately gated on handler characterization.
 
-This slice does not change API contracts, database schemas, business rules, or authorization behavior.
+## Implementation status
+
+- Extracted CORS-aware JSON response serialization and structured error redaction into `backend/lib/http/response.js`.
+- Kept `sendJSON` and `sendError` wrappers in `backend/server.js`; the server still supplies its configured CORS allowlist, so call sites and configuration ownership remain unchanged.
+- Added a focused response-contract regression for allowed/disallowed origins, wildcard development behavior, request IDs, content length, 4xx codes, and 5xx message/code redaction.
+- Added the missing Payment production-certification route handler and a real HTTP regression for authentication, tenant isolation, read/manage permissions, and fail-closed certification.
+- CI verification is pending for the exact current branch head. Do not mark this slice certified until the new tests and existing CI gates pass.
+
+This slice does not change API contracts, database schemas, business rules, or authorization policy.
 
 ## Verified source baseline
 
@@ -16,19 +24,20 @@ This slice does not change API contracts, database schemas, business rules, or a
 
 ## Scope
 
-Do not begin with a bulk route move. First complete a handler-level characterization map. Only after that review may a narrowly bounded HTTP helper be extracted. Route modules are a later stage, not part of the initial extraction.
+Do not begin with a bulk route move. The response-helper extraction is the first bounded slice. Next complete a handler-level characterization map before considering any route-module extraction.
 
-### In scope — preparation only
+### Implemented in this slice
 
-- Complete a route-to-handler map for all 247 explicit route entries and six inline handlers.
+- Extract CORS-aware JSON and structured-error serialization into `backend/lib/http/response.js`.
+- Preserve server-owned CORS configuration and existing `sendJSON`/`sendError` call signatures through thin wrappers.
+- Pin headers, content length, CORS allow/deny behavior, request-ID propagation, 4xx code handling, and 5xx message redaction in a standalone regression.
+
+### Next bounded task
+
+- Complete the route-to-handler characterization map for all 247 explicit route entries and six inline handlers.
 - Record each handler's authentication/session requirements, authorization resource/action, tenant and location scope, validation, idempotency, side effects, response/error contract, and targeted regression tests.
 - Review all 35 currently unclassified route entries and confirm proposed ownership with the canonical domain owners.
-- Identify whether a pure response helper (for example, JSON/error serialization) can be extracted without changing CORS, request-ID, status, header, or error-code behavior.
-- Add or identify characterization tests before selecting an extraction candidate.
-
-### First extraction candidate — not yet approved
-
-A pure HTTP response helper is a candidate only if existing tests can pin its exact headers, CORS behavior, request-ID propagation, 4xx code handling, and 5xx message redaction. Do not move the request dispatcher, rate limiter, static-file allowlists, authentication, or route handlers as part of this first slice.
+- Do not move the request dispatcher, rate limiter, static-file allowlists, authentication, or route handlers until their behavior and boundaries are characterized.
 
 ### Out of scope
 
@@ -57,11 +66,10 @@ The exact grouping must be validated against the actual route declarations in `b
 ## Implementation sequence
 
 1. Complete and manually review the route-to-handler, authorization, scope, side-effect, and response map.
-2. Add characterization coverage for the chosen pure HTTP helper.
-3. Extract only that helper, preserving its public behavior and call sites.
-4. Run focused HTTP response, CORS, request-ID, API-boundary, and adversarial tests.
-5. Only in a separate follow-up, consider moving one route group after its handler dependencies and authorization boundaries are mapped.
-6. Keep route extraction separate from persistence extraction; do not split both large files in the same change.
+2. Extract only the pure HTTP response helper, preserving public behavior and call sites. (Implemented; CI verification pending.)
+3. Run focused HTTP response, CORS, request-ID, API-boundary, and adversarial tests.
+4. Complete the handler-level authorization/scope/side-effect map before selecting a route group.
+5. Keep route extraction separate from persistence extraction; do not split both large files in the same change.
 
 ## Acceptance criteria
 
