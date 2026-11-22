@@ -32,3 +32,12 @@ jobs:
 
       - name: SQLite store inventory regression
         run: node phase0/perplexity-store-inventory-regression.mjs
+
+      - name: Upload generated inventory artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sellify-static-inventory-${{ github.sha }}
+          path: docs/perplexity-audit/generated/
+          if-no-files-found: warn
+          retention-days: 14
