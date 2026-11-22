@@ -163,6 +163,7 @@ import { listPaymentChannels } from './lib/payments/channel-registry.js';
 import { processEventIsolated } from './lib/event-failure-isolation.js';
 import { assertEventTenantScope } from './lib/event-replay.js';
 import { listOnboardingCountryOptions } from './lib/country-pack-onboarding.js';
+import { sendJSON as writeJSON, sendError as writeError } from './lib/http/response.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -303,45 +304,13 @@ function clientIp(req) {
   return req.socket.remoteAddress || 'unknown';
 }
 
-function corsOriginFor(req) {
-  const origin = req.headers['origin'];
-  if (CORS_ALLOWED_ORIGINS.length === 0) return '*'; // dev fallback, warned about at startup
-  if (origin && CORS_ALLOWED_ORIGINS.includes(origin)) return origin;
-  return null; // not allowed — omit the header, browser blocks the cross-origin read
-}
-
 function sendJSON(res, status, body, req) {
-  const payload = JSON.stringify(body);
-  const headers = {
-    'Content-Type': 'application/json',
-    'Content-Length': Buffer.byteLength(payload),
-    ...(req?._requestId ? { 'X-Request-Id': req._requestId } : {}),
-  };
-  const allowOrigin = req ? corsOriginFor(req) : '*';
-  if (allowOrigin) {
-    headers['Access-Control-Allow-Origin'] = allowOrigin;
-    headers['Vary'] = 'Origin';
-  }
-  res.writeHead(status, headers);
-  res.end(payload);
+  return writeJSON(res, status, body, req, CORS_ALLOWED_ORIGINS);
 }
 
-// Structured error body. For 5xx we deliberately don't echo e.message —
-// that's a Node/store internal error, not something written for a
-// client to read, and could leak implementation details. For 4xx, the
-// message IS the intended validation text (e.g. "Invalid or missing API
-// key"), so it's shown as-is.
 function sendError(res, status, err, req) {
-  const message = status >= 500 ? 'Internal error' : (err.message || 'Request error');
-  if (status >= 500) console.error('[error]', err);
-  // Keep stable, machine-readable domain codes on expected client errors.
-  // Never expose internal error codes for 5xx responses.
-  const code = status < 500 && typeof err?.code === 'string' && /^[A-Z][A-Z0-9_]{1,79}$/.test(err.code)
-    ? err.code
-    : undefined;
-  sendJSON(res, status, { error: { message, status, ...(code ? { code } : {}) } }, req);
+  return writeError(res, status, err, req, CORS_ALLOWED_ORIGINS);
 }
-
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
