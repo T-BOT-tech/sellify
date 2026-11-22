@@ -111,6 +111,10 @@ function capacityMatches(candidate, context) {
     if (temporalRequested) {
       // Missing or unknown status is not evidence of an active declaration.
       if (upper(signal.status) !== 'ACTIVE') return false;
+      // Time-bound eligibility requires evidence with an explicit quality.
+      // Unknown, stale, or conflicting declarations remain visible but cannot
+      // satisfy a hard availability constraint.
+      if (!['SELF_REPORTED', 'OBSERVED', 'VERIFIED'].includes(upper(signal.quality))) return false;
       const evaluatedAt = parseInstant(context.evaluatedAt);
       const observedAt = parseInstant(signal.observedAt);
       const validUntil = parseInstant(signal.validUntil);
