@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import assert from 'node:assert/strict';
 import { defineHarvest, bridgeHarvestToInventory, AGRICULTURE_INVENTORY_CONTRACT } from '../app/src/verticals/agriculture/inventory-contract.js';
 
@@ -34,5 +36,11 @@ assert.throws(
   () => bridgeHarvestToInventory({ harvest, product: { id: 'other-product' }, collectionCenterLocation: location }),
   /supplied Product/,
 );
+
+const runtimeBridge = fs.readFileSync(path.join(process.cwd(), 'app/src/verticals/agriculture/inventory-bridge.js'), 'utf8');
+assert.match(runtimeBridge, /recordCanonicalInventoryMovement/);
+assert.doesNotMatch(runtimeBridge, /applyStockChange/);
+assert.match(runtimeBridge, /syncStatus === 'synced'/);
+assert.match(runtimeBridge, /status: transaction\.queued \? 'pending' : 'confirmed'/);
 
 console.log('Phase 13.5 Agriculture Inventory Bridge Regression: PASS');
