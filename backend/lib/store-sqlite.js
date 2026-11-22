@@ -7486,6 +7486,14 @@ function upsertCustomerSync(chatId, input = {}, actor = null) {
     });
     return customerFromRow(db.prepare('SELECT * FROM customers WHERE id = ?').get(existing.id));
   }
+  if (input.id) {
+    const conflictingId = db.prepare('SELECT 1 FROM customers WHERE id = ?').get(String(input.id));
+    if (conflictingId) {
+      throw Object.assign(new Error('Customer ID is already in use'), {
+        statusCode: 409, code: 'CUSTOMER_ID_CONFLICT',
+      });
+    }
+  }
   const id = String(input.id || crypto.randomUUID());
   db.prepare(`INSERT INTO customers (id, organization_id, default_location_id, customer_type, name, phone, email, address, tax_id, notes, status, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, tenant.organizationId, value.defaultLocationId || null, value.customerType, value.name, value.phone, value.email, value.address, value.taxId, value.notes, value.status, value.source, now, now);
