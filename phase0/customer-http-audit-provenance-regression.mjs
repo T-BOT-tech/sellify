@@ -136,6 +136,33 @@ try {
     assert.equal(String(event.chat_id), String(tenant.chatId));
   }
 
+  const syncCustomerId = `sync-customer-${suffix}`;
+  const syncEvent = await store.processSyncEvent(tenant.chatId, {
+    eventId: `customer-sync-event-${suffix}`,
+    eventType: 'customer.upsert',
+    aggregateType: 'customer',
+    aggregateId: syncCustomerId,
+    occurredAt: new Date().toISOString(),
+    payload: { id: syncCustomerId, name: 'Customer Sync Audit', source: 'http-regression' },
+  }, ownerSession);
+  assert.equal(syncEvent.status, 'processed');
+  const syncAudit = db.prepare(`
+    SELECT actor_id, device_id, organization_id
+    FROM audit_events WHERE entity_type = 'customer' AND entity_id = ?
+      AND action = 'customer.created'
+  `).get(syncCustomerId);
+  assert.equal(String(syncAudit.actor_id), String(owner.id),
+    'customer.upsert sync must preserve the authenticated event actor in audit_events.actor_id');
+  assert.equal(String(syncAudit.device_id), String(ownerSession.deviceId),
+    'customer.upsert sync must preserve the authenticated event device in audit_events.device_id');
+  assert.equal(String(syncAudit.organization_id), organizationId);
+
+  const syncReceipt = db.prepare(
+    'SELECT actor_id, device_id FROM sync_events WHERE event_id = ?'
+  ).get(`customer-sync-event-${suffix}`);
+  assert.equal(String(syncReceipt.actor_id), String(owner.id));
+  assert.equal(String(syncReceipt.device_id), String(ownerSession.deviceId));
+
   console.log('Customer HTTP authorization, tenant isolation, and audit actor provenance regression: PASS');
 } finally {
   child.kill('SIGTERM');
