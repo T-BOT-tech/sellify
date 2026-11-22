@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for bounded time-bound Discovery matching. Operational Logistics Scheduling remains request-only pending a trusted feasibility authority.
+Evidence-backed current-state proposal; not approval for operational Logistics Scheduling. Scheduling remains request-only pending a trusted feasibility authority.
 
 ## Context
 
