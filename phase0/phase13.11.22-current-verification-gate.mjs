@@ -118,6 +118,7 @@ for (const [label, script] of checks) {
     'node:phase13.11.16-current': 'phase0/phase13.11.16-current-adversarial-regression.mjs',
     'node:phase13.11.17-current': 'phase0/phase13.11.17-current-architecture-lint.mjs',
     'node:phase13.9.13-current': 'phase0/phase13.9.13-current-warehouse-cumulative-gate.mjs',
+    'node:phase13.9.1-current': 'phase0/phase13.9.1-current-warehouse-pack-boundary-regression.mjs',
   }[script];
   const result = spawnSync(
     directNodePath ? process.execPath : (process.platform === 'win32' ? 'npm.cmd' : 'npm'),
