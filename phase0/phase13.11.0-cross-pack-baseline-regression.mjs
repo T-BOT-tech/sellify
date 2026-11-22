@@ -55,8 +55,8 @@ assert.match(restaurantInventory, /idempotency:\s*'event_id'/);
 
 const agricultureInventory = source('app/src/verticals/agriculture/inventory-bridge.js');
 assert.match(agricultureInventory, /authority:\s*'core_inventory'/);
-assert.match(agricultureInventory, /stock_mutation:\s*'recordCanonicalInventoryMovement'/);
-assert.match(agricultureInventory, /ledger:\s*'recordCanonicalInventoryMovement'/);
+assert.match(agricultureInventory, /stock_mutation:\s*'app\/src\/warehouse\/ledger\.js#recordCanonicalInventoryMovement'/);
+assert.match(agricultureInventory, /ledger:\s*'app\/src\/warehouse\/ledger\.js#recordCanonicalInventoryMovement'/);
 
 const agricultureCommerce = source('app/src/verticals/agriculture/commerce-contract.js');
 assert.match(agricultureCommerce, /idempotency_key:/);
