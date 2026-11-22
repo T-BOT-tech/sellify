@@ -63,7 +63,9 @@ No route count, proposed module, store group, or extraction priority should be t
 
 ## Separate CI status
 
-The inventory workflow run above passed on the verified inventory commit. The full Sellify CI run for this exact source commit is still in progress. The preceding full CI run #3893 passed all five jobs at commit `6d0f191d97c2d0466f5ba07256d3551c616e2a13`; the current run additionally verifies the CORS preflight allow/deny regression added after that run:
+The inventory workflow run above passed on the verified inventory commit. The full Sellify CI run #3900 passed all five jobs at the verified source commit, including the new payment-certification HTTP, shared-response, and CORS preflight regressions:
 https://github.com/T-BOT-tech/sellify/actions/runs/45070742870
+
+Repository Security Checks #3364 also passed at this commit, and the inventory workflow #72 passed.
 
 A passing inventory workflow does not imply that the full CI, certification, or release gates passed.
