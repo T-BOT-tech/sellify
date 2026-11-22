@@ -55,7 +55,7 @@ const inlineRoutes = [
 for (const item of inlineRoutes) {
   for (const match of source.matchAll(item.pattern)) {
     const line = source.slice(0, match.index).split('\n').length;
-    addRoute(item.method, item.path, line, 'inline handler');
+    addRoute(item.method, item.path, line, 'inline handler', null, null, 'static/inline');
   }
 }
 
@@ -69,6 +69,8 @@ const inventory = {
   routeTableCount: routes.filter(route => route.sourceKind === 'ROUTES table').length,
   handlerFunctionCount: new Set(routes.map(route => route.handlerFunction).filter(Boolean)).size,
   inlineHandlerCount: routes.filter(route => route.sourceKind === 'inline handler').length,
+  namedHandlerCount: routes.filter(route => route.handlerName).length,
+  unresolvedHandlerCount: routes.filter(route => !route.handlerName).length,
   routes,
   notes: [
     'Static, best-effort inventory of the explicit ROUTES table and selected inline handlers.',
@@ -92,9 +94,9 @@ const markdown = [
   '',
   '> Static, best-effort inventory. Review original regex patterns, authorization, middleware, side effects, and runtime behavior before extraction.',
   '',
-  '| Method | Display path | Source kind | Source line | Original route pattern |',
+  '| Method | Display path | Handler | Handler form | Source line | Original route pattern |',
   '|---|---|---|---:|---|',
-  ...routes.map(route => `| ${route.method} | \`${route.path}\` | ${route.sourceKind} | ${route.line} | ${route.routePattern ? `\`${route.routePattern}\`` : ''} |`),
+  ...routes.map(route => `| ${route.method} | \`${route.path}\` | ${route.handlerName ? `\`${route.handlerName}\`` : 'unresolved'} | ${route.handlerKind} | ${route.line} | ${route.routePattern ? `\`${route.routePattern}\`` : ''} |`),
   ''
 ].join('\n');
 await writeFile(path.join(outputDir, 'server-route-inventory.md'), markdown);
