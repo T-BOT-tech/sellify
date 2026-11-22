@@ -10,10 +10,10 @@
 |---|---|
 | Repository | T-BOT-tech/sellify |
 | Audit branch | audit/perplexity-codebase-modularity-20261122 |
-| Verified head | 88fd5d296fa57ca6ee61c4d4869c0b18783cd488 |
+| Verified head | 6d0f191d97c2d0466f5ba07256d3551c616e2a13 |
 | Audit workflow | .github/workflows/perplexity-audit.yml |
 | Inventory regression check | Passed |
-| CI run | https://github.com/T-BOT-tech/sellify/actions/runs/45069784564 |
+| CI run | https://github.com/T-BOT-tech/sellify/actions/runs/45070416195 |
 | Verification date | 2026-11-22 |
 
 ## Verified static inventory
@@ -64,6 +64,6 @@ No route count, proposed module, store group, or extraction priority should be t
 ## Separate CI status
 
 The inventory workflow run above passed on the verified inventory commit. The full Sellify CI run for that same commit is still in progress; Phase 21 capacity evidence, Logistics L18, and Logistics exit certification have passed; Phase 13.10 and baseline jobs are still running:
-https://github.com/T-BOT-tech/sellify/actions/runs/45069784572
+https://github.com/T-BOT-tech/sellify/actions/runs/45070416119
 
 A passing inventory workflow does not imply that the full CI, certification, or release gates passed.
