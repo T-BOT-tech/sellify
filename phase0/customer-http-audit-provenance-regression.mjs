@@ -1,0 +1,143 @@
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { createServer as createNetServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
+
+const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const dataDir = await mkdtemp(path.join(tmpdir(), 'sellify-customer-http-'));
+const port = await new Promise((resolve, reject) => {
+  const probe = createNetServer();
+  probe.once('error', reject);
+  probe.listen(0, '127.0.0.1', () => {
+    const value = probe.address().port;
+    probe.close(error => error ? reject(error) : resolve(value));
+  });
+});
+const env = {
+  ...process.env,
+  PORT: String(port),
+  NODE_ENV: 'test',
+  SELLIFY_DATA_DIR: dataDir,
+  SELLIFY_BACKUP_DIR: path.join(dataDir, 'backups'),
+};
+process.env.SELLIFY_DATA_DIR = dataDir;
+process.env.SELLIFY_BACKUP_DIR = path.join(dataDir, 'backups');
+
+const child = spawn(process.execPath, [path.join(root, 'backend/server.js')], {
+  cwd: root, env, stdio: ['ignore', 'ignore', 'pipe'],
+});
+let stderr = '';
+child.stderr.setEncoding('utf8');
+child.stderr.on('data', chunk => { stderr += chunk; });
+
+async function request(url, options = {}) {
+  const response = await fetch(`http://127.0.0.1:${port}${url}`, options);
+  const json = await response.json().catch(() => ({}));
+  return { response, json };
+}
+
+try {
+  let ready = false;
+  for (let i = 0; i < 120; i += 1) {
+    try {
+      if ((await fetch(`http://127.0.0.1:${port}/health`)).ok) { ready = true; break; }
+    } catch {}
+    if (child.exitCode !== null) throw new Error(`backend exited: ${child.exitCode} ${stderr}`);
+    await sleep(50);
+  }
+  assert.equal(ready, true, `backend did not become ready: ${stderr}`);
+
+  const store = await import('../backend/lib/store-sqlite.js');
+  const suffix = String(Date.now());
+  const owner = await store.getOrCreateUserByTelegram(`customer-http-owner-${suffix}`, 'Customer HTTP Owner');
+  const tenant = await store.createTenantForUser({
+    userId: owner.id, sellerName: `Customer HTTP Tenant ${suffix}`,
+    businessType: 'retail', country: 'ET', currency: 'ETB', timezone: 'Africa/Addis_Ababa',
+  });
+  const staff = await store.getOrCreateUserByTelegram(`customer-http-staff-${suffix}`, 'Customer HTTP Staff');
+  await store.ensureMembership(staff.id, tenant.chatId, 'staff');
+  const otherOwner = await store.getOrCreateUserByTelegram(`customer-http-other-${suffix}`, 'Customer HTTP Other Owner');
+  const otherTenant = await store.createTenantForUser({
+    userId: otherOwner.id, sellerName: `Customer HTTP Other Tenant ${suffix}`,
+    businessType: 'retail', country: 'ET', currency: 'ETB', timezone: 'Africa/Addis_Ababa',
+  });
+
+  const ownerSession = await store.createSession({
+    userId: owner.id, chatId: tenant.chatId, deviceName: 'Customer HTTP owner',
+  });
+  const staffSession = await store.createSession({
+    userId: staff.id, chatId: tenant.chatId, deviceName: 'Customer HTTP staff',
+  });
+  const otherSession = await store.createSession({
+    userId: otherOwner.id, chatId: otherTenant.chatId, deviceName: 'Customer HTTP other tenant',
+  });
+
+  const base = `/tenants/${encodeURIComponent(tenant.chatId)}/customers`;
+  const auth = token => ({ Authorization: `Bearer ${token}` });
+  const jsonAuth = token => ({ ...auth(token), 'Content-Type': 'application/json' });
+
+  const unauthenticated = await request(base);
+  assert.equal(unauthenticated.response.status, 401, 'customer reads must require a session');
+
+  const crossTenantRead = await request(base, { headers: auth(otherSession.token) });
+  assert.equal(crossTenantRead.response.status, 403, 'another tenant session cannot read this tenant customer list');
+
+  const staffRead = await request(base, { headers: auth(staffSession.token) });
+  assert.equal(staffRead.response.status, 200, 'staff may read customers');
+
+  const deniedStaffCreate = await request(base, {
+    method: 'POST',
+    headers: jsonAuth(staffSession.token),
+    body: JSON.stringify({ name: 'Staff Must Not Create' }),
+  });
+  assert.equal(deniedStaffCreate.response.status, 403, 'staff view permission does not permit customer management');
+
+  const created = await request(base, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ name: 'HTTP Audit Customer', phone: '+251911000001' }),
+  });
+  assert.equal(created.response.status, 201, JSON.stringify(created.json));
+  const customerId = created.json.customer?.id;
+  assert.ok(customerId, 'customer creation returns the canonical customer');
+
+  const updated = await request(`${base}/${encodeURIComponent(customerId)}`, {
+    method: 'PATCH',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ notes: 'Updated through authenticated HTTP boundary' }),
+  });
+  assert.equal(updated.response.status, 200, JSON.stringify(updated.json));
+  assert.equal(updated.json.customer.notes, 'Updated through authenticated HTTP boundary');
+
+  const missing = await request(`${base}/missing-customer-${suffix}`, { headers: auth(ownerSession.token) });
+  assert.equal(missing.response.status, 404, 'customer lookup is tenant-scoped and returns not found');
+
+  const db = store.getDatabaseForTests();
+  const organizationId = String(db.prepare(
+    'SELECT organization_id FROM tenants WHERE chat_id = ?'
+  ).get(tenant.chatId).organization_id);
+  const auditRows = db.prepare(`
+    SELECT action, entity_id, actor_id, device_id, organization_id, chat_id
+    FROM audit_events
+    WHERE entity_type = 'customer' AND entity_id = ?
+    ORDER BY id ASC
+  `).all(customerId);
+  assert.deepEqual(auditRows.map(row => row.action), ['customer.created', 'customer.updated']);
+  for (const event of auditRows) {
+    assert.equal(String(event.actor_id), String(owner.id),
+      `${event.action} must persist the authenticated user in canonical audit_events.actor_id`);
+    assert.equal(String(event.device_id), String(ownerSession.deviceId),
+      `${event.action} must persist the authenticated device in canonical audit_events.device_id`);
+    assert.equal(String(event.organization_id), organizationId,
+      'customer audit event must retain canonical organization scope');
+    assert.equal(String(event.chat_id), String(tenant.chatId));
+  }
+
+  console.log('Customer HTTP authorization, tenant isolation, and audit actor provenance regression: PASS');
+} finally {
+  child.kill('SIGTERM');
+  await rm(dataDir, { recursive: true, force: true });
+}
