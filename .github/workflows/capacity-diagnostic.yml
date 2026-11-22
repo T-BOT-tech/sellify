@@ -1,0 +1,47 @@
+name: Capacity evidence diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capacity-diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify runtime
+        run: node --version
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Phase 18.5 supplier network capacity regression
+        run: node phase0/phase18.5-supplier-network-capacity-regression.mjs
+
+      - name: Phase 19.5 supplier network federation regression
+        run: node phase0/phase19.5-supplier-network-federation-regression.mjs
+
+      - name: Phase 19.7 deterministic matching regression
+        run: npm run test:phase19.7
+
+      - name: Phase 21 cumulative regression gate
+        run: npm run test:phase21.14
+
+      - name: Phase 21 Node 24 runtime verification
+        run: npm run test:phase21.15
+
+      - name: Phase 21.18 current evidence verification
+        run: node phase0/phase21.18-current-verification-regression.mjs
+
+      - name: Phase 21.17 capacity evidence migration regression
+        run: npm run test:phase21.17
