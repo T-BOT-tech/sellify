@@ -2,7 +2,7 @@
 
 ## Status
 
-COMPLETE — narrow contract integration only.
+PARTIAL — contract composition exists; Inventory authority reference corrected; operational caller remains unverified.
 
 ## Purpose
 
@@ -17,8 +17,8 @@ second inventory authority, second fulfillment authority, or route engine.
 | Agriculture vocabulary | Agriculture pack |
 | Product | Core Commerce |
 | Order | Core Commerce |
-| Stock mutation | `app/src/warehouse/inventory.js#applyStockChange` |
-| Inventory movement ledger | `app/src/warehouse/ledger.js#recordInventoryMovement` |
+| Stock mutation | `app/src/warehouse/ledger.js#recordCanonicalInventoryMovement` |
+| Inventory movement ledger | Core Inventory backend via canonical movement API |
 | Organization / Location | Core Locations |
 | Warehouse receiving semantics | Warehouse pack |
 | Fulfillment lifecycle | `app/src/logistics/fulfillment.js` |
@@ -132,3 +132,4 @@ to remain green:
 The project still declares Node `>=24`. The current execution environment is
 Node `v22.16.0`, so this phase is source/regression verified but is **not** a
 Node >=24 release certification.
+\n## Current audit correction\n\nThe previous document described `applyStockChange()` as the mutation path. In authenticated sessions that compatibility function intentionally rejects direct legacy mutation and requires the canonical movement API. The Agriculture and Warehouse handoff contracts have now been aligned to `recordCanonicalInventoryMovement()`. This corrects the authority declaration, but does not establish an end-to-end persisted harvest → warehouse receiving → logistics workflow.\n
