@@ -6,7 +6,7 @@
 // handoff without introducing a second inventory service, ledger, or store.
 
 const MUTATION_AUTHORITY = 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement';
-const LEDGER_AUTHORITY = 'app/src/warehouse/ledger.js#recordInventoryMovement';
+const LEDGER_AUTHORITY = 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement';
 
 function text(value, field) {
   const result = String(value ?? '').trim();
