@@ -6,7 +6,8 @@ const ui = fs.readFileSync(new URL('../app/src/procurement/ui.js', import.meta.u
 assert.match(ui, /projectCapacityEvidenceDisplay/);
 assert.match(ui, /Quality \${esc\(display\.quality\)}/);
 assert.match(ui, /Freshness \${esc\(display\.freshness\)}/);
-assert.match(ui, /Declaration recorded/);
+const displayModule = fs.readFileSync(new URL('../app/src/procurement/capacity-evidence-display.js', import.meta.url), 'utf8');
+assert.match(displayModule, /Declaration recorded/);
 assert.doesNotMatch(ui, /\$\{esc\(validity\)\} · SELF-REPORTED/);
 
 const now = Date.parse('2026-11-22T12:00:00.000Z');
