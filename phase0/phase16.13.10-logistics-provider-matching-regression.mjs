@@ -11,7 +11,7 @@ const providers = [
     name: 'Carrier A',
     capabilities: ['delivery', 'tracking'],
     serviceAreas: [{ countryCode: 'ET', geoCode: 'ADDIS_ABABA' }],
-    capacitySignals: [{ subjectType: 'CAPABILITY', subjectId: 'delivery', quantity: 100, unit: 'parcel', periodStart: '2026-12-01T00:00:00.000Z', periodEnd: '2026-12-31T23:59:59.999Z', availability: 'AVAILABLE', status: 'ACTIVE', observedAt: '2026-11-19T00:00:00.000Z', validUntil: '2027-01-01T00:00:00.000Z' }],
+    capacitySignals: [{ subjectType: 'CAPABILITY', subjectId: 'delivery', quantity: 100, unit: 'parcel', periodStart: '2026-12-01T00:00:00.000Z', periodEnd: '2026-12-31T23:59:59.999Z', availability: 'AVAILABLE', status: 'ACTIVE', observedAt: '2026-11-19T00:00:00.000Z', validUntil: '2027-01-01T00:00:00.000Z', quality: 'SELF_REPORTED' }],
   },
   {
     provider_id: 'carrier-b',
