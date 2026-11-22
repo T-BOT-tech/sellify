@@ -17,11 +17,23 @@ const requiredScripts = [
 for (const script of requiredScripts) assert.equal(typeof pkg.scripts?.[script], 'string', 'missing ' + script);
 assert.match(ci, /node-version: \[24\]/);
 const deliveryLifecycleCiAliases = ['test:gap-2-delivery-lifecycle', 'test:gap-2-delivery-exception'];
-for (const script of requiredScripts.filter(script => !deliveryLifecycleCiAliases.includes(script))) {
+for (const script of requiredScripts.filter(script =>
+  !deliveryLifecycleCiAliases.includes(script) && script !== 'test:gap-2-delivery-assignment')) {
   assert.ok(ci.includes('npm run ' + script), 'CI missing ' + script);
 }
 assert.ok(deliveryLifecycleCiAliases.some(script => ci.includes('npm run ' + script)),
   'CI must execute the shared delivery lifecycle/exception regression through one supported alias');
+
+const logisticsJobStart = ci.search(/^  logistics_l18:\s*$/m);
+assert.ok(logisticsJobStart >= 0, 'Dedicated logistics_l18 CI job missing');
+const afterLogisticsJob = ci.slice(logisticsJobStart);
+const nextJob = afterLogisticsJob.slice(1).search(/^  [A-Za-z0-9_]+:\s*$/m);
+const logisticsJob = afterLogisticsJob.slice(0, nextJob >= 0 ? nextJob + 1 : undefined);
+const directAssignmentCommand = 'node phase0/gap-2-delivery-assignment-authority-regression.mjs';
+assert.ok(logisticsJob.includes(directAssignmentCommand),
+  'Canonical delivery-assignment regression must run in logistics_l18');
+assert.equal((logisticsJob.match(/node phase0\/gap-2-delivery-assignment-authority-regression\.mjs/g) || []).length, 1,
+  'Canonical delivery-assignment regression must run exactly once in logistics_l18');
 
 const migrations = [...store.matchAll(/if \(!applied\.includes\((\d+)\)\)/g)].map(m => Number(m[1]));
 assert.equal(Math.max(...migrations), 84, 'latest migration must remain explicit');
