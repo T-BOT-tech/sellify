@@ -29,6 +29,10 @@ The root package currently defines 482 npm scripts. It does not yet define the p
 5. Make `npm test:release` deterministic, comprehensive, and suitable for CI.
 6. Publish expected duration and required environment variables for each suite.
 
+## Certification-manifest constraint
+
+`package.json` is covered by multiple source-integrity manifests, including current and historical certification snapshots. Adding a convenience npm script changes the package hash and can invalidate unrelated cumulative gates. Before changing `package.json`, enumerate every manifest that pins it. For a narrowly scoped audit regression, a direct `node phase0/<regression>.mjs` CI step can avoid changing the package manifest. Never rewrite historical snapshot hashes to accommodate unrelated work; update only the relevant current-source manifests after reviewing their purpose.
+
 ## Suite mapping
 
 | Suite | Includes | When to run |
