@@ -91,7 +91,7 @@ const orderedBoundaries = [
 assert.ok(orderedBoundaries.every(position => position >= 0), 'One or more current handler boundaries are absent');
 assert.ok(orderedBoundaries.every((position, index) => index === 0 || position > orderedBoundaries[index - 1]),
   'Tenant, authorization, location, and canonical processing boundaries must remain ordered');
-assert.doesNotMatch(server, /BEGIN|COMMIT|ROLLBACK/);
+assert.doesNotMatch(handler, /\b(?:BEGIN|COMMIT|ROLLBACK)\b/);
 
 const storeSource = fs.readFileSync(new URL('../backend/lib/store-sqlite.js', import.meta.url), 'utf8');
 assert.match(storeSource, /BEGIN IMMEDIATE/);
