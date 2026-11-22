@@ -10,6 +10,7 @@ const checks = [
   ['Deterministic time-window capacity eligibility', 'phase19.7-deterministic-matching-regression.mjs'],
   ['Logistics provider temporal capacity projection', 'phase16.13.10-logistics-provider-matching-regression.mjs'],
   ['Procurement sourcing UI and backend traceability', 'r1-golden-e2e-traceability-gate.mjs'],
+  ['Procurement capacity evidence display semantics', 'phase21.19-capacity-evidence-display-regression.mjs'],
 ];
 
 for (const [label, file] of checks) {

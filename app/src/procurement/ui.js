@@ -4,6 +4,7 @@
 import { config, currentStaff } from '../state.js';
 import { hasPermission } from '../auth/permissions.js';
 import { escapeHtml } from '../utils/index.js';
+import { projectCapacityEvidenceDisplay } from './capacity-evidence-display.js';
 
 let lastSourcingCandidates = [];
 let lastSourcingOpportunities = [];
@@ -216,11 +217,8 @@ export async function searchSupplierNetwork() {
       const capacityRows = Array.isArray(r.availability?.capacitySignals) ? r.availability.capacitySignals : [];
       const capacityHtml = capacityRows.length ? `<div class="account-notes"><strong>Declared capacity signals</strong>${capacityRows.map(signal => {
         const window = signal.periodStart && signal.periodEnd ? `${signal.periodStart} → ${signal.periodEnd}` : 'No defined period';
-        const observation = signal.observedAt ? `Observed ${signal.observedAt}` : 'Observation time unknown';
-        const validity = signal.validUntil
-          ? (Date.parse(signal.validUntil) >= Date.now() ? `Declared valid until ${signal.validUntil}` : `Declared validity expired ${signal.validUntil}`)
-          : 'Freshness unknown · no validity declared';
-        return `<div>${esc(signal.subjectType)} · ${esc(signal.subjectId)} · ${esc(signal.quantity)} ${esc(signal.unit)} · ${esc(signal.availability)} · ${esc(window)} · ${esc(signal.source || 'DECLARED')}<br><span class="muted">${esc(observation)} · ${esc(validity)} · SELF-REPORTED</span></div>`;
+        const display = projectCapacityEvidenceDisplay(signal);
+        return `<div>${esc(signal.subjectType)} · ${esc(signal.subjectId)} · ${esc(signal.quantity)} ${esc(signal.unit)} · ${esc(signal.availability)} · ${esc(window)} · ${esc(signal.source || 'DECLARED')}<br><span class="muted">${esc(display.recordedLabel)} · ${esc(display.validityLabel)} · Quality ${esc(display.quality)} · Freshness ${esc(display.freshness)}</span></div>`;
       }).join('')}</div>` : '';
       return `<div class="table-card account-card"><div class="account-name">${esc(r.organization?.name || r.organizationName || r.displayName)} · match ${esc(r.score ?? '')}</div><div class="account-contact">${esc(r.profile?.serviceSummary || '')}</div><div class="account-notes">${esc(r.profile?.description || r.description || r.explanation || '')}</div>${capacityHtml}<div class="muted">Capacity is supplier-declared; a match is not a reservation, verification, supplier selection or authorization.</div>${supplierActions}</div>`;
     }).join('');
