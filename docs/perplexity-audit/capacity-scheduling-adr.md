@@ -16,13 +16,19 @@ Separately, supplier capacity matching currently evaluates declared quantity, un
 
 1. Treat Logistics Scheduling as **request-only** until a trusted capacity and feasibility authority exists.
 2. Do not expose operational `SCHEDULED`, `CONFIRMED`, or execution actions unless the trusted evaluator authorizes them.
-3. Treat supplier-entered capacity as `SELF_REPORTED` by default.
+3. Treat supplier-entered capacity as `SELF_REPORTED` only when the Supplier Network source has a server-authored `observedAt`; legacy declarations without that timestamp remain `UNKNOWN`.
 4. Do not allow suppliers to self-assert `OBSERVED` or `VERIFIED` evidence quality.
 5. Store server-authored `observedAt`; do not trust supplier-provided future timestamps.
 6. Treat `validUntil` as explicit and nullable; do not infer it from `periodEnd`.
 7. Expired, stale, unknown, conflicting, or future-observed evidence must not satisfy a time-sensitive hard availability constraint.
 8. Preserve candidates with an `UNKNOWN` or `STALE` explanation rather than presenting them as confirmed availability.
 9. Keep capacity evidence separate from provider selection, RFQ award, reservation, dispatch, fulfillment, inventory movement, payment, and settlement.
+
+## Current implementation evidence
+
+The current implementation already enforces the bounded decision above for time-bound Discovery matching: Supplier Network authors `observedAt` and `validUntil` in its capacity write path; the Discovery provider maps declarations to `SELF_REPORTED` only when an observation timestamp exists; and the canonical matcher rejects missing or invalid timestamps, future observations, expired validity, non-active status, unknown/stale/conflicting quality, non-overlapping periods, and insufficient quantity. `OBSERVED` and `VERIFIED` remain rejected without an independent observer binding. The Phase 19.7 and Phase 16.13.10 regressions exercise these boundaries. Phase 21.20 also verifies immutable, buyer-visible capacity evidence snapshots at RFQ creation.
+
+This does not establish independent verification or operational Logistics Scheduling feasibility. It also does not imply every non-time-bound quantity search applies the same freshness requirements.
 
 ## Consequences
 
