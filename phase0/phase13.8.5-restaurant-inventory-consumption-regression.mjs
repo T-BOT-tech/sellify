@@ -45,7 +45,7 @@ const plan = buildConsumptionPlan(preparation, { organizationId: 'org-1', locati
 assert.equal(isConsumptionPlan(plan), true);
 assert.equal(plan.lines[0].quantity, 6);
 assert.equal(plan.lines[1].quantity, 2);
-assert.equal(plan.lines[0].event_id, 'restaurant:preparation:prep-42:ingredient:tomato');
+assert.equal(plan.lines[0].event_id, 'restaurant:organization:org-1:preparation:prep-42:ingredient:tomato');
 
 const calls = [];
 const result = await consumeThroughCoreInventory(plan, {
@@ -66,15 +66,15 @@ assert.equal(calls[0].locationId, 'loc-1');
 assert.deepEqual(calls[0].lines.map(line => line.quantity), [-6, -2]);
 assert.deepEqual(calls[0].lines.map(line => line.movementType), ['SALE', 'SALE']);
 assert.deepEqual(calls[0].lines.map(line => line.eventId), [
-  'restaurant:preparation:prep-42:ingredient:tomato',
-  'restaurant:preparation:prep-42:ingredient:oil',
+  'restaurant:organization:org-1:preparation:prep-42:ingredient:tomato',
+  'restaurant:organization:org-1:preparation:prep-42:ingredient:oil',
 ]);
 
 const idempotent = await consumeThroughCoreInventory(plan, {
   products,
   inventoryMovements: [
-    { eventId: 'restaurant:preparation:prep-42:ingredient:tomato' },
-    { eventId: 'restaurant:preparation:prep-42:ingredient:oil' },
+    { eventId: 'restaurant:organization:org-1:preparation:prep-42:ingredient:tomato' },
+    { eventId: 'restaurant:organization:org-1:preparation:prep-42:ingredient:oil' },
   ],
   recordCanonicalInventoryMovementBatch() { throw new Error('must not execute a fully replayed preparation'); },
 });
