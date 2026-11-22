@@ -42,7 +42,7 @@ Its scope spans buyer and seller commerce, procurement, supplier networks, inven
 2. `backend/lib/store-sqlite.js` concentrates too much persistence and domain logic.
 3. The npm script surface is too large and difficult to navigate.
 4. Root-level phase documentation obscures the current product state.
-5. Capacity evidence freshness and Logistics Scheduling feasibility authority remain unresolved.
+5. Time-bound capacity matching now has fail-closed freshness and quality checks; independent evidence verification and operational scheduling feasibility remain unresolved.
 6. The platform may be accumulating overlapping authorities unless domain ownership is made explicit.
 
 ## Domain ownership baseline
