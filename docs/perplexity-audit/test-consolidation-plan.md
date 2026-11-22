@@ -9,12 +9,16 @@ This makes it difficult for a contributor to understand what must run before a c
 ## Target command surface
 
 ```text
-npm test                  # fast unit, contract, and focused regression tests
-npm test:integration      # API, persistence, event, and cross-domain tests
-npm test:security         # authorization, tenant isolation, adversarial, and API boundary tests
-npm test:e2e              # browser and critical user journeys
-npm test:release          # full Node 24 and release certification gate
+npm run test              # proposed fast unit, contract, and focused regression suite
+npm run test:integration  # API, persistence, event, and cross-domain tests
+npm run test:security     # authorization, tenant isolation, adversarial, and API boundary tests
+npm run test:e2e          # browser and critical user journeys
+npm run test:release      # full Node 24 and release certification gate
 ```
+
+## Current repository state
+
+The root package currently defines 482 npm scripts. It does not yet define the proposed `test`, `test:integration`, `test:security`, `test:e2e`, or `test:release` scripts. These are proposed entry points, not currently runnable commands. Invoke colon-named scripts through `npm run <script-name>`; do not use `npm test:integration` syntax.
 
 ## Implementation approach
 
