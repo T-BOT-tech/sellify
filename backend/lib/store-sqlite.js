@@ -7891,7 +7891,7 @@ export async function processSyncEvent(chatId, event = {}, actor = null) {
         appendInventoryMovementInTransaction(chatId, String(tenant.organizationId), movement, actor);
       }
     } else if (eventType === 'customer.upsert') {
-      upsertCustomerSync(chatId, event.payload);
+      upsertCustomerSync(chatId, event.payload, actor);
     } else {
       throw Object.assign(new Error(`Unsupported sync event type: ${eventType}`), { statusCode: 400 });
     }
