@@ -61,7 +61,7 @@ assert.ok(migrationPosition(82) > migrationPosition(81), 'location timezone migr
 assert.ok(migrationPosition(83) > migrationPosition(82), 'Restaurant Recipe persistence migration must follow location timezone migration');
 assert.ok(migrationPosition(84) > migrationPosition(83), 'capacity observation metadata migration must follow Restaurant Recipe persistence migration');
 assert.ok(migrationPosition(85) > migrationPosition(84), 'Procurement RFQ capacity evidence snapshot migration must follow capacity observation metadata migration');
-assert.match(store, /if \\(!applied\\.includes\\(85\\)\\)[\\s\\S]*?ALTER TABLE procurement_rfq_suppliers ADD COLUMN capacity_evidence_snapshot_json[\\s\\S]*?ALTER TABLE procurement_rfq_suppliers ADD COLUMN capacity_evidence_captured_at/,
+assert.match(store, /if \(!applied\.includes\(85\)\)[\s\S]*?ALTER TABLE procurement_rfq_suppliers ADD COLUMN capacity_evidence_snapshot_json[\s\S]*?ALTER TABLE procurement_rfq_suppliers ADD COLUMN capacity_evidence_captured_at/,
   'migration 85 must remain scoped to Procurement RFQ supplier evidence, not Logistics authority');
 assert.match(store, /if \(!applied\.includes\(77\)\)[\s\S]*?CREATE TABLE IF NOT EXISTS tenant_creation_requests[\s\S]*?challenge_token_hash TEXT PRIMARY KEY REFERENCES auth_challenges\(token_hash\)[\s\S]*?request_fingerprint TEXT NOT NULL[\s\S]*?result_json TEXT NOT NULL/,
   'tenant creation idempotency must durably bind a one-time challenge to its original request and result');
