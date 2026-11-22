@@ -1,6 +1,6 @@
 b8cdfa19f444f52d2d596520404d32eb6a50cdc87888d5d87cb5fe7ebb00adf2  .github/workflows/ci.yml
 1fac9f8439981d2cca6dccf97cbd9f82a826d93bf2c0bcab3a553a33d667c44b  phase0/gap-2-production-readiness-regression.mjs
 9ca3f2faa392bb5a931b99a7a1365d75ff72b8ee28e344528de404a1f5e3b1fc  phase0/phase13.11.12-current-regression.mjs
-e2d442e3c074d63407ea6d6280bbf40a201a802c4e29cb652e0c9f30d4e7a88b  phase0/phase13.11.16-current-adversarial-regression.mjs
+1c65815e7db79dfec3403020056c2a5f91dcd02e206c51c53eeab448a105e512  phase0/phase13.11.16-current-adversarial-regression.mjs
 6b5be9bd87e1bc50b12cdc6a80df415a9fc05cfc4ca1dcc2812ed7bea3356d66  phase0/phase13.11.22-current-verification-gate.mjs
-41390b1dcc85e74c70bbe8257c4157f437c340b395ed45e7e28cff086e9c57ad  phase0/PHASE13.11.22-CURRENT-VERIFICATION.md
+51b1d79998325baad29dc8b4828adb7394b2324f1323f4db88c10370e50fcb1a  phase0/PHASE13.11.22-CURRENT-VERIFICATION.md
