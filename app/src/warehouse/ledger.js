@@ -133,7 +133,11 @@ function canonicalizeInventoryBatchValue(value) {
 
 export async function recordCanonicalInventoryMovementBatch(input = {}) {
   const commandId = String(input.commandId || '').trim();
+  const organizationId = String(input.organizationId || config.organizationId || '').trim();
   const locationId = String(input.locationId || config.locationId || '').trim();
+  if (!organizationId || (config.organizationId && organizationId !== String(config.organizationId))) {
+    throw new TypeError('Inventory batch organization must match the active authenticated organization.');
+  }
   const referenceType = input.referenceType || null;
   const referenceId = input.referenceId || null;
   const reason = String(input.reason || '').slice(0, 500);
@@ -162,7 +166,7 @@ export async function recordCanonicalInventoryMovementBatch(input = {}) {
     return {
       eventId: String(line.eventId || `${commandId}:${lineId}`),
       tenantChatId: String(config.chatId || ''),
-      organizationId: String(config.organizationId || ''),
+      organizationId,
       productId,
       quantity,
       movementType: type,
@@ -176,7 +180,7 @@ export async function recordCanonicalInventoryMovementBatch(input = {}) {
   });
 
   const batchEvent = {
-    eventId: `inventory.movement.batch.record:${String(config.organizationId || config.chatId || 'unscoped')}:${commandId}`,
+    eventId: `inventory.movement.batch.record:${organizationId}:${commandId}`,
     tenantChatId: String(config.chatId || ''),
     eventType: 'inventory.movement.batch.record',
     aggregateType: 'inventory_movement_batch',
@@ -218,10 +222,11 @@ export async function recordCanonicalInventoryMovementBatch(input = {}) {
       throw error;
     }
     const result = (data.results || []).find(item => String(item.eventId) === batchEvent.eventId);
-    if (result?.status !== 'processed') {
-      const error = new Error(result?.error || 'Inventory batch was not confirmed by the canonical authority.');
-      error.status = result?.status === 'rejected' ? 422 : 502;
-      error.code = result?.code || 'INVENTORY_BATCH_NOT_CONFIRMED';
+    if (!result) return queue();
+    if (result.status !== 'processed') {
+      const error = new Error(result.error || 'Inventory batch was rejected by the canonical authority.');
+      error.status = 422;
+      error.code = result.code || 'INVENTORY_BATCH_REJECTED';
       throw error;
     }
     const confirmed = movements.map(item => ({ ...item, syncStatus: 'synced' }));
@@ -240,7 +245,7 @@ export async function recordCanonicalInventoryMovementBatch(input = {}) {
     // A transport failure is UNKNOWN. Queue the exact same event identity and
     // payload so a server-side success can be safely replayed without a second
     // stock mutation. Explicit authorization/validation rejections are returned.
-    if (!error?.status && !error?.code) return queue();
+    if ((!error?.status && !error?.code) || Number(error?.status) >= 500) return queue();
     throw error;
   }
 }
