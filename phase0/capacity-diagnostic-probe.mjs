@@ -55,6 +55,16 @@ const actor = {
   chatId: tenantRow.chat_id,
 };
 
+// Each workflow job receives a fresh SQLite database. Establish the supplier
+// participation prerequisite in every capacity probe rather than relying on
+// the separate participation job to have initialized shared state.
+if (probe !== 'participation') {
+  await setProcurementSupplierParticipation(tenantRow.chat_id, {
+    status: 'ACTIVE',
+    discoverable: true,
+  }, actor);
+}
+
 const periodStart = new Date(Date.now() - 86400000).toISOString();
 const periodEnd = new Date(Date.now() + 7 * 86400000).toISOString();
 const validUntil = new Date(Date.now() + 86400000).toISOString();
@@ -73,53 +83,6 @@ async function createValidCapacity() {
     validUntil,
   }, actor);
 }
-
-const errorSignatures = [
-  'is not a function',
-  'no such table',
-  'no such column',
-  'subject type',
-  'period',
-  'positive',
-  'availability',
-  'validUntil',
-  'participation',
-  'authorization',
-  'capacity',
-  'Cannot read properties',
-  'sqlite',
-  'constraint',
-  'unique',
-  'not null',
-  'foreign',
-  'undefined',
-  'invalid',
-  'required',
-  'missing',
-  'permission',
-  'supplier',
-  'network',
-  'must',
-  'expected',
-  'type',
-  'value',
-  'date',
-  'time',
-  'actor',
-  'organization',
-  'supplier organization',
-  'organization not found',
-  'supplier not found',
-  'not found',
-  'does not',
-  'must have',
-  'active',
-  'supplier profile',
-  'organization id',
-  'supplier participation',
-  'not active',
-  'missing supplier',
-];
 
 switch (probe) {
   case 'contract': {
@@ -245,29 +208,8 @@ switch (probe) {
     break;
   }
   default: {
-    const match = probe.match(/^error-(\d+)$/);
-    if (!match) {
-      console.error(`Unknown probe: ${probe}`);
-      process.exit(2);
-    }
-    const signature = errorSignatures[Number(match[1])];
-    if (signature === undefined) {
-      console.error(`Unknown error signature index: ${match[1]}`);
-      process.exit(2);
-    }
-    let thrown;
-    try {
-      await createValidCapacity();
-    } catch (error) {
-      thrown = error;
-    }
-    assert.ok(thrown, 'capacity upsert did not throw an error');
-    const message = String(thrown?.message ?? thrown);
-    assert.ok(
-      message.toLowerCase().includes(signature.toLowerCase()),
-      `error message does not contain signature "${signature}": ${message}`
-    );
-    break;
+    console.error(`Unknown probe: ${probe}`);
+    process.exit(2);
   }
 }
 
