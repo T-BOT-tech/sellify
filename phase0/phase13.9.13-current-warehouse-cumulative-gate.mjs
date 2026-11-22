@@ -71,7 +71,7 @@ const checks = [
   ['13.9.9 Configuration', 'test:phase13.9.9'],
   ['13.9.10 Current Targeted Regression', 'node:phase0/phase13.9.10-current-warehouse-targeted-regression.mjs'],
   ['13.9.11 Adversarial / Idempotency / Isolation', 'test:phase13.9.11'],
-  ['13.9.12 Legacy Bin Compatibility', 'test:phase13.9.12'],
+  ['13.9.12 Current Legacy Bin Compatibility', 'node:phase0/phase13.9.12-current-warehouse-legacy-bin-compatibility-regression.mjs'],
 ];
 
 for (const [label, script] of checks) {
