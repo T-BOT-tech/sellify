@@ -118,7 +118,7 @@ export function restaurantCommerceInventoryContract() {
     payment_authority: 'payments',
     stock_authority: 'inventory',
     mutation_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovementBatch',
-    ledger_authority: 'app/src/warehouse/ledger.js#recordInventoryMovement',
+    ledger_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovementBatch',
     fulfillment_authority: 'fulfillment',
     order_persistence: 'existing Core Commerce order',
     inventory_persistence: 'existing Core inventory movement',
