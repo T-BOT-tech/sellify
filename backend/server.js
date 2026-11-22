@@ -163,7 +163,7 @@ import { listPaymentChannels } from './lib/payments/channel-registry.js';
 import { processEventIsolated } from './lib/event-failure-isolation.js';
 import { assertEventTenantScope } from './lib/event-replay.js';
 import { listOnboardingCountryOptions } from './lib/country-pack-onboarding.js';
-import { sendJSON as writeJSON, sendError as writeError } from './lib/http/response.js';
+import { corsOriginFor as resolveCorsOrigin, sendJSON as writeJSON, sendError as writeError } from './lib/http/response.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -302,6 +302,10 @@ function clientIp(req) {
     }
   }
   return req.socket.remoteAddress || 'unknown';
+}
+
+function corsOriginFor(req) {
+  return resolveCorsOrigin(req, CORS_ALLOWED_ORIGINS);
 }
 
 function sendJSON(res, status, body, req) {
