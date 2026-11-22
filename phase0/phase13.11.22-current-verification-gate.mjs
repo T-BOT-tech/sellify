@@ -51,13 +51,13 @@ const currentManifestLines = read(currentManifest).split(/\r?\n/).filter(Boolean
 assert.ok(currentManifestLines.length >= 5, 'Phase 13.11.22 current-verification manifest is incomplete');
 for (const line of currentManifestLines) {
   const match = line.match(/^([0-9a-f]{64})  (.+)$/);
-  assert.ok(match, \`Invalid Phase 13.11.22 hash entry: \${line}\`);
+  assert.ok(match, `Invalid Phase 13.11.22 hash entry: ${line}`);
   const [, expected, relative] = match;
-  assert.ok(exists(relative), \`Phase 13.11.22 hashed file missing: \${relative}\`);
+  assert.ok(exists(relative), `Phase 13.11.22 hashed file missing: ${relative}`);
   const actual = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, relative))).digest('hex');
-  assert.equal(actual, expected, \`Phase 13.11.22 hash mismatch: \${relative}\`);
+  assert.equal(actual, expected, `Phase 13.11.22 hash mismatch: ${relative}`);
 }
-console.log(\`Phase 13.11.22 current-verification hash entries verified: \${currentManifestLines.length}\`);
+console.log(`Phase 13.11.22 current-verification hash entries verified: ${currentManifestLines.length}`);
 
 const requiredAuthorityAnchors = [
   'app/src/logistics/fulfillment.js',
