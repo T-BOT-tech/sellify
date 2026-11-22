@@ -153,3 +153,13 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: node phase0/capacity-diagnostic-probe.mjs lifecycle
 
+  probe-phase18-5-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/phase18.5-supplier-network-capacity-regression.mjs

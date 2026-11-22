@@ -194,7 +194,7 @@ switch (probe) {
       validUntil: null,
     }, actor);
     assert.equal(cleared.validUntil, null);
-    assert.equal(cleared.version, 3);
+    assert.equal(cleared.version, 2);
     break;
   }
   case 'lifecycle': {
