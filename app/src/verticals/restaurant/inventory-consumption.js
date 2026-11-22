@@ -78,19 +78,24 @@ export function isConsumptionPlan(value) {
     value.idempotency === 'event_id');
 }
 
-// Execute only after the complete plan has been validated. The caller injects
-// the existing Core applyStockChange authority and current movement ledger;
-// no Restaurant inventory implementation is introduced here.
-export function consumeThroughCoreInventory(plan, { products = [], inventoryMovements = [], applyStockChange } = {}) {
+// Execute the complete preparation as one canonical Inventory batch event.
+// Inventory owns the transaction, persistence, audit evidence and replay.
+export async function consumeThroughCoreInventory(plan, {
+  products = [],
+  inventoryMovements = [],
+  recordCanonicalInventoryMovementBatch,
+} = {}) {
   if (!isConsumptionPlan(plan)) throw new TypeError('Valid Restaurant inventory consumption plan is required');
-  if (typeof applyStockChange !== 'function') throw new TypeError('Core inventory applyStockChange authority is required');
+  if (typeof recordCanonicalInventoryMovementBatch !== 'function') {
+    throw new TypeError('Canonical Inventory batch mutation authority is required');
+  }
 
-  const byId = new Map(products.map(p => [String(p.id), p]));
-  const existing = new Set(inventoryMovements.map(m => String(m.eventId || '')));
+  const byId = new Map(products.map(product => [String(product.id), product]));
+  const existing = new Set(inventoryMovements.map(movement => String(movement.eventId || '')));
   const pending = plan.lines.filter(line => !existing.has(line.event_id));
 
-  // Preflight all stock before mutating anything. This avoids partial recipe
-  // consumption when a single ingredient is unavailable.
+  // Local preflight provides immediate feedback. The canonical batch command
+  // remains the sole mutation boundary and commits all lines or none.
   for (const line of pending) {
     const product = byId.get(line.product_id);
     if (!product) throw new TypeError(`Core Commerce product ${line.product_id} does not exist`);
@@ -100,24 +105,41 @@ export function consumeThroughCoreInventory(plan, { products = [], inventoryMove
     }
   }
 
-  const applied = [];
-  for (const line of pending) {
-    const tx = applyStockChange(line.product_id, -line.quantity, 'sold', {
-      referenceType: 'restaurant_preparation',
-      referenceId: plan.preparation_id,
-      eventId: line.event_id,
-      locationId: plan.location_id,
-      reason: `Restaurant preparation ${plan.preparation_id} / recipe ${plan.recipe_id}`,
-      notes: 'Restaurant recipe ingredient consumption',
+  if (pending.length === 0) {
+    return Object.freeze({
+      preparation_id: plan.preparation_id,
+      applied_count: 0,
+      skipped_idempotent_count: plan.lines.length,
+      queued: false,
+      sync_status: 'confirmed',
+      transactions: Object.freeze([]),
     });
-    if (!tx) throw new Error(`Core inventory rejected consumption for product ${line.product_id}`);
-    applied.push(tx);
   }
+
+  const result = await recordCanonicalInventoryMovementBatch({
+    commandId: `restaurant:preparation:${plan.preparation_id}:inventory-batch`,
+    locationId: plan.location_id,
+    referenceType: 'restaurant_preparation',
+    referenceId: plan.preparation_id,
+    reason: `Restaurant preparation ${plan.preparation_id} / recipe ${plan.recipe_id}`,
+    lines: pending.map(line => ({
+      lineId: line.product_id,
+      eventId: line.event_id,
+      productId: line.product_id,
+      quantity: -line.quantity,
+      movementType: 'SALE',
+      metadata: { unit: line.unit, recipeId: plan.recipe_id },
+    })),
+  });
+
   return Object.freeze({
     preparation_id: plan.preparation_id,
-    applied_count: applied.length,
+    applied_count: result?.queued ? 0 : pending.length,
+    queued_count: result?.queued ? pending.length : 0,
     skipped_idempotent_count: plan.lines.length - pending.length,
-    transactions: Object.freeze(applied),
+    queued: Boolean(result?.queued),
+    sync_status: result?.queued ? 'pending' : 'confirmed',
+    transactions: Object.freeze(result?.movements || []),
   });
 }
 
@@ -127,11 +149,14 @@ export function inventoryConsumptionContract() {
     preparation_authority: 'restaurant',
     product_authority: 'commerce',
     stock_authority: 'inventory',
-    mutation_authority: 'app/src/warehouse/inventory.js',
-    movement_ledger: 'app/src/warehouse/ledger.js',
-    movement_type: 'sold',
+    mutation_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovementBatch',
+    ledger_authority: 'app/src/warehouse/ledger.js',
+    movement_type: 'SALE',
     duplicate_authority: false,
     idempotency_key: 'restaurant:preparation:<preparationId>:ingredient:<productId>',
+    batch_command_id: 'restaurant:preparation:<preparationId>:inventory-batch',
+    atomic_multi_ingredient_execution: true,
     partial_consumption_preflight: true,
+    offline_semantics: 'one durable atomic batch event; pending until canonical acknowledgement',
   });
 }
