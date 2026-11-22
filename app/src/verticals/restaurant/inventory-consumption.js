@@ -97,13 +97,10 @@ export async function consumeThroughCoreInventory(plan, {
       .filter(movement => movement?.syncStatus === 'synced')
       .map(movement => [String(movement.eventId || ''), movement]),
   );
-  const pending = [];
+  let confirmedCount = 0;
   for (const line of plan.lines) {
     const existing = confirmedByEventId.get(line.event_id);
-    if (!existing) {
-      pending.push(line);
-      continue;
-    }
+    if (!existing) continue;
     // A confirmed local projection may suppress a repeat only when it proves
     // the exact same movement. Reusing an event identity for changed intent is
     // a conflict, never a successful replay.
@@ -118,7 +115,15 @@ export async function consumeThroughCoreInventory(plan, {
         code: 'INVENTORY_MOVEMENT_IDEMPOTENCY_CONFLICT',
       });
     }
+    confirmedCount += 1;
   }
+
+  // A multi-ingredient preparation is one atomic batch. Never send only the
+  // locally "missing" lines: a partial local projection may simply be stale,
+  // and a subset would reuse the batch command ID with a different payload.
+  // Short-circuit only when every line is confirmed; otherwise replay the
+  // complete deterministic batch and let Inventory resolve event idempotency.
+  const pending = confirmedCount === plan.lines.length ? [] : [...plan.lines];
 
   // Local preflight provides immediate feedback. The canonical batch command
   // remains the sole mutation boundary and commits all lines or none.
