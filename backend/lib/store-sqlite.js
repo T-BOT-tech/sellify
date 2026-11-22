@@ -4401,7 +4401,7 @@ function procurementCapacityEvidenceSnapshotForSupplier(buyerOrg, supplierOrg, d
   const rows = db.prepare(`SELECT * FROM supplier_network_capacity_signals
     WHERE organization_id=? AND status='ACTIVE' AND subject_type='PRODUCT'
       AND subject_id IN (${placeholders})
-    ORDER BY subject_id ASC, period_type ASC, period_start ASC, period_end ASC, id ASC`)
+    ORDER BY subject_id ASC, period_type ASC, period_start ASC, period_end ASC, id ASC LIMIT 100`)
     .all(String(supplierOrg), ...productIds)
     .filter(row => supplierNetworkDiscoveryVisible(buyerOrg, supplierOrg, row.visibility));
   const capturedAtMs = Date.parse(capturedAt);
