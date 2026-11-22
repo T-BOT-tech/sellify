@@ -123,6 +123,14 @@ assert.throws(() => consumeThroughCoreInventory(plan, {
   recordCanonicalInventoryMovementBatch() { throw new Error('must reject conflicting confirmed movement'); },
 }), /already confirmed with different intent/);
 
+assert.throws(() => consumeThroughCoreInventory(plan, {
+  products,
+  inventoryMovements: [
+    { eventId: 'restaurant:organization:org-1:preparation:prep-42:ingredient:tomato', productId: 'tomato', quantity: -6, movementType: 'SALE', locationId: 'loc-1', organizationId: 'org-1', metadata: { recipeId: 'recipe-old', unit: 'kg' }, reason: 'Restaurant preparation prep-42 / recipe recipe-old', syncStatus: 'synced' },
+  ],
+  recordCanonicalInventoryMovementBatch() { throw new Error('must reject changed recipe metadata'); },
+}), /already confirmed with different metadata/);
+
 const replayedAtServer = await consumeThroughCoreInventory(plan, {
   products,
   inventoryMovements: [],
