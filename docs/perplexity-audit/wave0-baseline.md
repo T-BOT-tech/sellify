@@ -10,10 +10,10 @@
 |---|---|
 | Repository | T-BOT-tech/sellify |
 | Audit branch | audit/perplexity-codebase-modularity-20261122 |
-| Verified head | 48383b7720f1425879cf12d12919f4a496fedb17 |
+| Verified head | 88fd5d296fa57ca6ee61c4d4869c0b18783cd488 |
 | Audit workflow | .github/workflows/perplexity-audit.yml |
 | Inventory regression check | Passed |
-| CI run | https://github.com/T-BOT-tech/sellify/actions/runs/45069337598 |
+| CI run | https://github.com/T-BOT-tech/sellify/actions/runs/45069784564 |
 | Verification date | 2026-11-22 |
 
 ## Verified static inventory
@@ -43,7 +43,7 @@ The 14 function groups are based on function-name substrings. They must not be u
 
 ## Gate limitations
 
-The inventory workflow checks parser coverage floors, record shape, duplicate route keys, unique table names, and migration guard presence/order. It does **not** prove that every runtime route is captured, every route is correctly classified, or each function/table belongs to its proposed group.
+The inventory workflow checks parser coverage floors, record shape, duplicate route keys, named-handler declaration/import resolution, unique table names, and migration guard presence/order. It does **not** prove that every runtime route is captured, every route is correctly classified, or each function/table belongs to its proposed group.
 
 Generated timestamped artifacts remain ignored by Git and are not committed. The audit workflow uploads them as a run artifact with 14-day retention so reviewers can inspect the exact generated output from the evaluated commit.
 
@@ -61,7 +61,7 @@ No route count, proposed module, store group, or extraction priority should be t
 
 ## Separate CI status
 
-The inventory workflow run above passed on the verified inventory commit. The full Sellify CI run for that same commit is still in progress; Phase 21 capacity evidence and Logistics exit certification have passed; Logistics L18, Phase 13.10, and baseline jobs are still running:
-https://github.com/T-BOT-tech/sellify/actions/runs/45069337782
+The inventory workflow run above passed on the verified inventory commit. The full Sellify CI run for that same commit is still in progress; Phase 21 capacity evidence, Logistics L18, and Logistics exit certification have passed; Phase 13.10 and baseline jobs are still running:
+https://github.com/T-BOT-tech/sellify/actions/runs/45069784572
 
 A passing inventory workflow does not imply that the full CI, certification, or release gates passed.
