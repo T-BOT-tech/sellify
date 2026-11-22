@@ -1361,7 +1361,7 @@ async function handleCustomerCreate(req, res, chatId) {
   const session = await requireSession(req, tenant.chatId);
   await requireAuthorization(session, tenant, 'customers', 'customers:manage', { deniedMessage: 'Customer management permission required' });
   const body = await readBody(req);
-  const customer = await upsertCustomer(chatId, body);
+  const customer = await upsertCustomer(chatId, body, session);
   sendJSON(res, 201, { customer }, req);
 }
 
@@ -1371,7 +1371,7 @@ async function handleCustomerPatch(req, res, chatId, customerId) {
   const session = await requireSession(req, tenant.chatId);
   await requireAuthorization(session, tenant, 'customers', 'customers:manage', { deniedMessage: 'Customer management permission required' });
   const body = await readBody(req);
-  const customer = await updateCustomer(chatId, customerId, body);
+  const customer = await updateCustomer(chatId, customerId, body, session);
   sendJSON(res, 200, { customer }, req);
 }
 
