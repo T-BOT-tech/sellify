@@ -13205,10 +13205,16 @@ export async function listTenantMemberships(chatId) {
     id: row.id, userId: row.user_id, chatId: row.chat_id, role: row.role, status: row.status,
     displayName: row.display_name,
     contextualRoles: db.prepare(`
-      SELECT role_id AS role, scope_type AS scopeType, scope_id AS scopeId
+      SELECT role_id AS role,
+             scope_type AS scopeType,
+             scope_id AS scopeId,
+             status,
+             source,
+             created_at AS grantedAt,
+             revoked_at AS revokedAt
         FROM membership_roles
-       WHERE membership_id = ? AND status = 'active'
-       ORDER BY created_at
+       WHERE membership_id = ?
+       ORDER BY created_at, role_id, scope_type, scope_id
     `).all(String(row.id)),
   }));
 }
