@@ -10,7 +10,7 @@ This successor preserves the historical gate's controls and cumulative test sequ
 ## Integrity and compatibility
 - The Phase 13.11.19 historical manifest, gate, package.json, and Phase 13.11.20/.21 snapshots remain unchanged.
 - CI invokes this successor directly; no package script or package hash changes.
-- The successor verifies the historical Phase 13.11.19 manifest and its own source-hash manifest.
+- The successor verifies the historical Phase 13.11.19 manifest, preserves the Phase 13.11.20/21 manifests as immutable historical snapshots, and verifies their key pinned identities through current documentation/exit successor checks. It does not falsely require evolved production sources to match historical hashes.
 - GAP-2 delivery assignment remains executed once in the dedicated `logistics_l18` job. Its readiness regression now recognizes that direct invocation without reintroducing duplicate CI execution.
 
 ## Verification status
