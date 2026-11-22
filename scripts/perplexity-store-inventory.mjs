@@ -1,14 +1,9 @@
 #!/usr/bin/env node
 /**
- * Perplexity audit tooling.
- *
- * Read-only inventory of backend/lib/store-sqlite.js.
- *
- * It identifies exported functions, SQL tables, migration markers, and
- * domain references to guide a behavior-preserving persistence refactor.
- * This script does not modify application source or runtime behavior.
+ * Static inventory of exports, CREATE TABLE declarations, and explicit
+ * schema_migrations version guards in backend/lib/store-sqlite.js.
+ * Domain labels are name-based hints, not persistence ownership evidence.
  */
-
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,32 +12,36 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 const storePath = path.join(repoRoot, 'backend', 'lib', 'store-sqlite.js');
 const outputDir = path.join(repoRoot, 'docs', 'perplexity-audit', 'generated');
-
 const source = await readFile(storePath, 'utf8');
 
 const exportedFunctions = [];
 const exportPattern = /export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g;
-
 for (const match of source.matchAll(exportPattern)) {
-  const line = source.slice(0, match.index).split('\n').length;
-  exportedFunctions.push({ name: match[1], line });
+  exportedFunctions.push({ name: match[1], line: source.slice(0, match.index).split('\n').length });
 }
 
-const tables = [];
-const tablePattern = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\"'`]?)([A-Za-z_][\w]*)\1/gi;
-
+const tableDeclarations = [];
+const tablePattern = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(["'`]?)([A-Za-z_][\w]*)\1/gi;
 for (const match of source.matchAll(tablePattern)) {
-  const line = source.slice(0, match.index).split('\n').length;
-  tables.push({ name: match[2], line });
+  tableDeclarations.push({ name: match[2], line: source.slice(0, match.index).split('\n').length });
 }
+const tableMap = new Map();
+for (const declaration of tableDeclarations) {
+  const current = tableMap.get(declaration.name) || { name: declaration.name, line: declaration.line, declarationCount: 0, declarationLines: [] };
+  current.declarationCount += 1;
+  current.declarationLines.push(declaration.line);
+  tableMap.set(declaration.name, current);
+}
+const tables = [...tableMap.values()].sort((a, b) => a.name.localeCompare(b.name));
 
+// Current store migration implementation gates each numbered migration with
+// if (!applied.includes(N)); the old migration[:=] scanner missed all of them.
 const migrations = [];
-const migrationPattern = /migration\s*[:=]\s*([\w-]+)/gi;
-
+const migrationPattern = /!applied\.includes\(\s*(\d+)\s*\)/g;
 for (const match of source.matchAll(migrationPattern)) {
-  const line = source.slice(0, match.index).split('\n').length;
-  migrations.push({ identifier: match[1], line });
+  migrations.push({ version: Number(match[1]), line: source.slice(0, match.index).split('\n').length });
 }
+migrations.sort((a, b) => a.version - b.version);
 
 const domainRules = [
   { domain: 'identity', patterns: ['user', 'membership', 'session', 'invite', 'pairing', 'auth'] },
@@ -59,83 +58,47 @@ const domainRules = [
   { domain: 'compliance', patterns: ['compliance', 'audit', 'country', 'tax'] },
   { domain: 'event', patterns: ['event', 'outbox', 'replay'] }
 ];
-
 function classifyFunction(name) {
   const normalized = String(name || '').toLowerCase();
-  for (const rule of domainRules) {
-    if (rule.patterns.some(pattern => normalized.includes(pattern))) {
-      return rule.domain;
-    }
-  }
-  return 'shared';
+  return domainRules.find(rule => rule.patterns.some(pattern => normalized.includes(pattern)))?.domain || 'shared';
 }
-
-const functions = exportedFunctions
-  .map(fn => ({ ...fn, proposedDomain: classifyFunction(fn.name) }))
-  .sort((a, b) => a.name.localeCompare(b.name));
-
+const functions = exportedFunctions.map(fn => ({ ...fn, proposedDomain: classifyFunction(fn.name) })).sort((a, b) => a.name.localeCompare(b.name));
 const byDomain = {};
-for (const fn of functions) {
-  byDomain[fn.proposedDomain] ||= [];
-  byDomain[fn.proposedDomain].push(fn);
-}
-
-const domainOrder = [
-  'identity',
-  'tenant',
-  'catalog',
-  'order',
-  'inventory',
-  'procurement',
-  'supplier',
-  'logistics',
-  'payment',
-  'marketplace',
-  'service',
-  'compliance',
-  'event',
-  'shared'
-];
-
-const domains = domainOrder
-  .filter(domain => byDomain[domain]?.length)
-  .map((domain, index) => ({
-    order: index + 1,
-    domain,
-    functionCount: byDomain[domain].length,
-    functions: byDomain[domain]
-  }));
+for (const fn of functions) (byDomain[fn.proposedDomain] ||= []).push(fn);
+const domainOrder = ['identity','tenant','catalog','order','inventory','procurement','supplier','logistics','payment','marketplace','service','compliance','event','shared'];
+const domains = domainOrder.filter(domain => byDomain[domain]?.length).map((domain, index) => ({
+  order: index + 1, domain, functionCount: byDomain[domain].length, functions: byDomain[domain]
+}));
 
 const inventory = {
   generatedAt: new Date().toISOString(),
   source: 'backend/lib/store-sqlite.js',
   exportedFunctionCount: functions.length,
   tableCount: tables.length,
+  tableDeclarationCount: tableDeclarations.length,
   migrationMarkerCount: migrations.length,
-  functions,
-  tables,
-  migrations,
+  functions, tables, migrations,
   notes: [
-    'This is a static, best-effort inventory.',
-    'It is intended to guide an incremental persistence refactor.',
-    'Do not extract a domain until its tables, transactions, foreign keys, and cross-domain invariants are understood.'
+    'Static, best-effort source inventory; exported function names do not establish ownership.',
+    'Table declarations are deduplicated by name; repeated declarations remain visible through declarationCount and declarationLines.',
+    'Migration versions are extracted from explicit applied.includes(N) guards.',
+    'Call graphs, foreign keys, transaction boundaries, SQL ownership, and cross-domain invariants require separate analysis.'
   ]
 };
 
 const refactorPlan = {
   generatedAt: new Date().toISOString(),
-  strategy: 'Extract one bounded persistence domain at a time while preserving SQL behavior, transactions, constraints, indexes, and migration compatibility.',
+  strategy: 'Map table ownership, foreign keys, transactions, migrations, and cross-domain invariants before considering one bounded persistence extraction.',
   prerequisites: [
-    'Create a table and foreign-key inventory before extracting any domain.',
+    'Review all tables and their foreign-key relationships.',
     'Identify transaction boundaries and cross-domain invariants.',
+    'Map exported function call sites and SQL read/write ownership.',
     'Run tenant-isolation, authorization, idempotency, replay, and adversarial gates after every extraction.'
   ],
   extractionSlices: domains.map(domain => ({
-    order: domain.order,
-    domain: domain.domain,
-    functionCount: domain.functionCount,
+    order: domain.order, domain: domain.domain, functionCount: domain.functionCount,
     targetDirectory: `backend/lib/persistence/${domain.domain}/`,
-    risk: ['payment', 'inventory', 'order'].includes(domain.domain) ? 'high' : 'medium',
+    risk: ['payment','inventory','order'].includes(domain.domain) ? 'high' : 'medium',
     requiredChecks: [
       'Migration compatibility regression',
       'Tenant and organization isolation regression',
@@ -159,57 +122,33 @@ await writeFile(path.join(outputDir, 'store-inventory.json'), `${JSON.stringify(
 await writeFile(path.join(outputDir, 'store-refactor-plan.json'), `${JSON.stringify(refactorPlan, null, 2)}\n`);
 
 const inventoryMarkdown = [
-  '# SQLite store inventory',
-  '',
-  `Generated: ${inventory.generatedAt}`,
-  '',
-  `Source: \`${inventory.source}\``,
-  '',
-  `Exported functions: ${inventory.exportedFunctionCount}`,
-  '',
-  `Tables detected: ${inventory.tableCount}`,
-  '',
-  `Migration markers detected: ${inventory.migrationMarkerCount}`,
-  '',
-  '## Proposed persistence domains',
-  '',
-  '| Order | Domain | Functions |',
-  '|---:|---|---:|',
+  '# SQLite store inventory', '',
+  `Generated: ${inventory.generatedAt}`, '',
+  `Source: \`${inventory.source}\``, '',
+  `Exported functions: ${inventory.exportedFunctionCount}`, '',
+  `Unique tables: ${inventory.tableCount}`, '',
+  `CREATE TABLE declarations: ${inventory.tableDeclarationCount}`, '',
+  `Migration version guards: ${inventory.migrationMarkerCount}`, '',
+  '## Proposed persistence domains', '',
+  '| Order | Domain | Functions |', '|---:|---|---:|',
   ...domains.map(domain => `| ${domain.order} | \`${domain.domain}\` | ${domain.functionCount} |`),
-  '',
-  '## Tables',
-  '',
-  '| Table | Source line |',
-  '|---|---:|',
-  ...tables.map(table => `| \`${table.name}\` | ${table.line} |`),
+  '', '## Tables', '', '| Table | Declarations | Source lines |', '|---|---:|---|',
+  ...tables.map(table => `| \`${table.name}\` | ${table.declarationCount} | ${table.declarationLines.join(', ')} |`),
+  '', '## Migration versions', '',
+  migrations.map(migration => `- ${migration.version} (line ${migration.line})`).join('\n'),
   ''
 ].join('\n');
-
 const planMarkdown = [
-  '# SQLite store refactor plan',
-  '',
-  `Generated: ${refactorPlan.generatedAt}`,
-  '',
-  refactorPlan.strategy,
-  '',
-  '## Extraction slices',
-  '',
-  '| Order | Domain | Functions | Target directory | Risk |',
-  '|---:|---|---:|---|---|',
+  '# SQLite store refactor plan', '',
+  `Generated: ${refactorPlan.generatedAt}`, '',
+  refactorPlan.strategy, '',
+  '## Extraction slices', '',
+  '| Order | Domain | Functions | Target directory | Risk |', '|---:|---|---:|---|---|',
   ...refactorPlan.extractionSlices.map(slice => `| ${slice.order} | \`${slice.domain}\` | ${slice.functionCount} | \`${slice.targetDirectory}\` | ${slice.risk} |`),
-  '',
-  '## Required checks per slice',
-  '',
-  ...refactorPlan.extractionSlices[0]?.requiredChecks.map(check => `- ${check}`),
-  '',
-  '## Non-goals',
-  '',
-  ...refactorPlan.nonGoals.map(item => `- ${item}`),
-  ''
+  '', '## Prerequisites', '', ...refactorPlan.prerequisites.map(item => `- ${item}`),
+  '', '## Non-goals', '', ...refactorPlan.nonGoals.map(item => `- ${item}`), ''
 ].join('\n');
-
 await writeFile(path.join(outputDir, 'store-inventory.md'), inventoryMarkdown);
 await writeFile(path.join(outputDir, 'store-refactor-plan.md'), planMarkdown);
-
-console.log(`Inventoried ${functions.length} exported functions, ${tables.length} tables, and ${migrations.length} migration markers.`);
+console.log(`Inventoried ${functions.length} exported functions, ${tables.length} unique tables (${tableDeclarations.length} declarations), and ${migrations.length} migration version guards.`);
 console.log(`Proposed ${domains.length} persistence domains.`);
