@@ -4,7 +4,7 @@
 
 This directory contains an independent architecture and remediation assessment for Sellify.
 
-The documents in this directory are additive and do not modify application source, tests, migrations, or existing phase documentation. The associated pull request also adds separate static inventory scripts, regression gates, and workflow/configuration changes outside this directory; the overall pull request is therefore not documentation-only.
+The documents in this directory are additive and do not modify application source, tests, migrations, or existing phase documentation. The associated pull request also adds static inventory tools, CI/configuration changes, a bounded shared HTTP response helper, the missing Payment production-certification route handler, and focused HTTP regressions. The overall pull request is therefore an audit plus a narrowly scoped implementation, not documentation-only.
 
 ## Deliverables
 
