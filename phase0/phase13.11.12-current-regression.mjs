@@ -106,7 +106,7 @@ assert.equal(contract.partial_commit, false);
 assert.equal(contract.shared_transaction_across_batch, false);
 assert.equal(contract.persistence_authority, 'existing sync_events');
 
-console.log('Phase 13.11.12 Failure Isolation Regression: PASS');
+console.log('Phase 13.11.12 Current Failure Isolation Regression: PASS');
 console.log('One-event transaction isolation: PASS');
 console.log('Failed event converted to isolated result: PASS');
 console.log('Sibling event continues after failure: PASS');
