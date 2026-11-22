@@ -175,7 +175,6 @@ export async function recordCanonicalInventoryMovementBatch(input = {}) {
       referenceId,
       reason,
       metadata,
-      occurredAt,
     };
   });
 
@@ -229,7 +228,7 @@ export async function recordCanonicalInventoryMovementBatch(input = {}) {
       error.code = result.code || 'INVENTORY_BATCH_REJECTED';
       throw error;
     }
-    const confirmed = movements.map(item => ({ ...item, syncStatus: 'synced' }));
+    const confirmed = movements.map(item => ({ ...item, occurredAt, syncStatus: 'synced' }));
     const byEvent = new Map(inventoryMovements.map(item => [String(item.eventId), item]));
     for (const item of confirmed) byEvent.set(item.eventId, item);
     setInventoryMovements([...byEvent.values()].sort((a, b) => String(b.occurredAt || '').localeCompare(String(a.occurredAt || ''))));
