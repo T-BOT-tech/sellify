@@ -89,9 +89,21 @@ try {
   const crossTenant = await request(base, { headers: headers(otherSession.token) });
   assert.equal(crossTenant.response.status, 403, 'a session for another tenant cannot read certifications');
 
-  const empty = await request(base, { headers: headers(ownerSession.token) });
+  const empty = await request(base, {
+    headers: { ...headers(ownerSession.token), Origin: 'http://localhost:3000' },
+  });
   assert.equal(empty.response.status, 200, JSON.stringify(empty.json));
   assert.deepEqual(empty.json.certifications, []);
+  assert.equal(empty.response.headers.get('access-control-allow-origin'), 'http://localhost:3000');
+  assert.equal(empty.response.headers.get('vary'), 'Origin');
+  assert.ok(empty.response.headers.get('x-request-id'));
+
+  const deniedOrigin = await request(base, {
+    headers: { ...headers(ownerSession.token), Origin: 'https://untrusted.example' },
+  });
+  assert.equal(deniedOrigin.response.status, 200);
+  assert.equal(deniedOrigin.response.headers.get('access-control-allow-origin'), null,
+    'disallowed origins must not receive an allow-origin header');
 
   const cashierRead = await request(base, { headers: headers(cashierSession.token) });
   assert.equal(cashierRead.response.status, 200, 'payments:view permits reading production certification');
