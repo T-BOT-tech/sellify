@@ -13,7 +13,7 @@ assert.equal(historical.length, 30, 'Historical Phase 21.16 manifest entry count
 for (const entry of [
   '1095c31a482244d7267fb85f9a614ac6b262df71eaff934cae441a70fd73ea11  app/src/phase21-capacity-availability-evidence.js',
   'a24db10269002c85c574f1f96e96520928e1330af7b54dd434185d73213054ac  package.json',
-  'aefd3830b6e15677bcde940510b8aa7a0113a32763bcbc21ee0be895a3cf72d4  phase0/phase21.16-hashes-documentation-regression.mjs',
+  'cae78e5920c4a292d837b3eb9830d320ecd9e4507db622892fef621d066ea71e  app/src/phase21-network-intelligence-control.js',
 ]) assert(historical.includes(entry), `Historical Phase 21.16 snapshot identity changed: ${entry}`);
 
 const handoff = read('PHASE21.16_IMPLEMENTATION_HANDOFF.md');
