@@ -10,19 +10,20 @@ This successor preserves the original cumulative controls while running a curren
 
 ## Verification chain
 
-- \`phase13.11.12-current-regression.mjs\`: retains the existing SQLite behavioral checks for event isolation, rollback, continuation, and failed-event non-persistence; replaces only the obsolete server-source assertion with checks for the current guarded asynchronous handler.
-- \`phase13.11.22-current-verification-gate.mjs\`: preserves the Phase 13.11.19 cumulative control list and historical manifest validation; substitutes the current Phase 13.11.12 regression for the obsolete alias invocation.
-- \`PHASE13.11.22-SOURCE-HASHES.sha256\`: pins both current regressions, the successor gate, this record, CI workflow, and GAP-2.12 regression.
+- `phase13.11.12-current-regression.mjs`: retains the existing SQLite behavioral checks for event isolation, rollback, continuation, and failed-event non-persistence; replaces only the obsolete server-source assertion with checks for the current guarded asynchronous handler.
+- `phase13.11.22-current-verification-gate.mjs`: preserves the Phase 13.11.19 cumulative control list and historical manifest validation; substitutes current-source regressions for Phase 13.11.12 and Phase 13.11.16 where historical source assertions no longer describe current code.
+- `phase13.11.16-current-adversarial-regression.mjs`: retains the adversarial behavioral checks and confirms the Regional Freight route-engine identifier is an explicit prohibition guard, not an implemented route engine.
+- `PHASE13.11.22-SOURCE-HASHES.sha256`: pins both current regressions, the successor gate, this record, CI workflow, and GAP-2.12 regression.
 - CI invokes the successor directly. The existing Phase 13.11.20 and Phase 13.11.21 snapshot checks remain in place and unchanged.
-- GAP-2.12 still requires the package alias to exist, but validates the intentional direct Node invocation in the dedicated \`logistics_l18\` job rather than requiring duplicate CI execution.
+- GAP-2.12 still requires the package alias to exist, but validates the intentional direct Node invocation in the dedicated `logistics_l18` job rather than requiring duplicate CI execution.
 
 ## Preserved boundaries
 
-- \`package.json\` and all Phase 13.11.19, .20, and .21 source-hash manifests remain unchanged.
+- `package.json` and all Phase 13.11.19, .20, and .21 source-hash manifests remain unchanged.
 - No historical test or hash was rewritten.
 - No application/server production behavior was modified.
 - No second Logistics or event-processing authority was introduced.
-- Node \`>=24\` remains required.
+- Node `>=24` remains required.
 
 ## Evidence status
 
