@@ -50,7 +50,7 @@ export function buildConsumptionPlan(preparation, { organizationId, locationId, 
       product_name: String(product.name ?? ''),
       quantity: perYield * yieldQuantity,
       unit: text(line.unit ?? product.unit ?? '', `ingredient ${productId} unit`),
-      event_id: `restaurant:preparation:${preparationId}:ingredient:${productId}`,
+      event_id: `restaurant:organization:${organization_id}:preparation:${preparationId}:ingredient:${productId}`,
     });
   });
 
@@ -118,6 +118,7 @@ export async function consumeThroughCoreInventory(plan, {
 
   const result = await recordCanonicalInventoryMovementBatch({
     commandId: `restaurant:preparation:${plan.preparation_id}:inventory-batch`,
+    organizationId: plan.organization_id,
     locationId: plan.location_id,
     referenceType: 'restaurant_preparation',
     referenceId: plan.preparation_id,
