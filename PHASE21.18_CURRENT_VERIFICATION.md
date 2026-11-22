@@ -1,6 +1,6 @@
 # Phase 21.18 — Current Capacity Evidence Quality Verification
 
-**Purpose:** introduce a current verification record for the Phase 21 capacity-quality correction without rewriting the frozen Phase 21.16 source snapshot.
+**Purpose:** introduce a current verification record for the Phase 21 capacity-quality correction without rewriting the frozen historical Phase 21.16 source snapshot.
 
 ## Defect corrected
 
