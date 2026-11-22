@@ -29,6 +29,10 @@ assert.match(store, /ON CONFLICT\(membership_id, role_id, scope_type, scope_id\)
 assert.match(store, /changed: true/);
 assert.match(store, /contextual_roles_json/);
 assert.match(store, /contextualRoles: parseJSON/);
+assert.match(store, /scope_type AS scopeType/);
+assert.match(store, /status,\s*source,\s*created_at AS grantedAt,\s*revoked_at AS revokedAt/);
+assert.match(store, /WHERE membership_id = \?\s+ORDER BY created_at, role_id, scope_type, scope_id/);
+
 
 assert.match(store, /export async function revokeMembershipContextualRole\(/);
 assert.match(store, /membership\.contextual_role\.revoked/);
@@ -56,6 +60,18 @@ assert.match(permissions, /membership:role:manage/);
 assert.match(frontend, /membership:role:manage/);
 assert.match(frontend, /MANAGER_ASSIGNABLE_ROLES/);
 assert.match(frontend, /cashier.*staff.*viewer/);
+assert.match(frontend, /contextualRoles/);
+assert.match(frontend, /data-grant-contextual/);
+assert.match(frontend, /data-revoke-contextual/);
+assert.match(frontend, /auth\/membership-contextual-role/);
+assert.match(frontend, /auth\/membership-contextual-role\/revoke/);
+assert.match(frontend, /scopeType/);
+assert.match(frontend, /LOCATION/);
+assert.match(frontend, /grantedAt/);
+assert.match(frontend, /revokedAt/);
+assert.match(frontend, /Contextual role grant confirmed by the server/);
+assert.match(frontend, /Contextual role revocation confirmed by the server/);
+
 
 console.log('GAP-5 IAM Membership/Contextual Role Regression: PASS');
 console.log('Generic role mutation protections: PASS');
