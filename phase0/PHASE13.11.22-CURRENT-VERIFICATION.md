@@ -12,7 +12,7 @@ This successor preserves the original cumulative controls while running a curren
 
 - `phase13.11.12-current-regression.mjs`: retains the existing SQLite behavioral checks for event isolation, rollback, continuation, and failed-event non-persistence; replaces only the obsolete server-source assertion with checks for the current guarded asynchronous handler.
 - `phase13.11.22-current-verification-gate.mjs`: preserves the Phase 13.11.19 cumulative control list and historical manifest validation; substitutes current-source regressions for Phase 13.11.12 and Phase 13.11.16 where historical source assertions no longer describe current code.
-- `phase13.11.16-current-adversarial-regression.mjs`: retains the adversarial behavioral checks and confirms that Regional Freight's route-engine identifier and Logistics Scheduling's forbidden route-engine input fields are explicit prohibition guards, not implemented route engines.
+- `phase13.11.16-current-adversarial-regression.mjs`: retains the adversarial behavioral checks and confirms that Regional Freight's route-engine identifier and Logistics Scheduling's forbidden route-engine input fields and `route_engine: false` metadata are explicit prohibition guards, not implemented route engines.
 - `PHASE13.11.22-SOURCE-HASHES.sha256`: pins both current regressions, the successor gate, this record, CI workflow, and GAP-2.12 regression.
 - CI invokes the successor directly. The existing Phase 13.11.20 and Phase 13.11.21 snapshot checks remain in place and unchanged.
 - GAP-2.12 still requires the package alias to exist, but validates the intentional direct Node invocation in the dedicated `logistics_l18` job rather than requiring duplicate CI execution.
