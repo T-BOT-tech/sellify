@@ -7490,7 +7490,7 @@ function upsertCustomerSync(chatId, input = {}, actor = null) {
   db.prepare(`INSERT INTO customers (id, organization_id, default_location_id, customer_type, name, phone, email, address, tax_id, notes, status, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, tenant.organizationId, value.defaultLocationId || null, value.customerType, value.name, value.phone, value.email, value.address, value.taxId, value.notes, value.status, value.source, now, now);
   audit(String(chatId), 'customer.created', 'customer', id, { source: value.source }, {
-    organizationId: tenant.organizationId,
+    organizationId: tenant.organizationId, actorId: actor?.userId || null, deviceId: actor?.deviceId || null,
   });
   return customerFromRow(db.prepare('SELECT * FROM customers WHERE id = ?').get(id));
 }
