@@ -15,9 +15,9 @@ It is a planning aid, not a replacement for executable tests or runtime verifica
 | Event outbox and replay | Implemented / verify continuously | Event replay, failure isolation, outbox integration, and tenant-scope tests are present. |
 | Offline-first PWA | Implemented / requires deeper verification | The repository describes an offline-first PWA in `app/`; runtime offline behavior requires frontend inspection and browser tests. |
 | Commerce and storefront | Implemented / requires deeper verification | Storefront, checkout, payment-state, cross-channel, and seller-journey regressions exist. |
-| Procurement | Implemented / extensive | Demand, RFQ, comparison, award, PO bridge, receiving, and settlement regressions exist. |
+| Procurement | Implemented / extensive | Demand, RFQ, comparison, award, PO bridge, receiving, settlement, and immutable RFQ-time supplier capacity evidence snapshots have targeted regression coverage. |
 | Supplier Network | Implemented / extensive | Supplier profile, capability, catalog, service area, commercial, qualification, performance, discovery, and marketplace integration tests exist. |
-| Discovery and matching | Implemented / partial for capacity evidence | Deterministic matching, ranking, opportunity, unified discovery, and AI-intent boundary tests exist; freshness/quality composition remains unresolved. |
+| Discovery and matching | Implemented / bounded capacity evidence path | Deterministic eligibility and ranking are implemented. Time-bound capacity matching enforces active status, SELF_REPORTED quality, observedAt, validUntil, evaluatedAt, period overlap, quantity, and unit; matching does not select, authorize, or execute providers. |
 | Warehouse and inventory | Implemented / extensive | Warehouse boundary, receiving, stock adjustment, inventory bridge, canonical mutation, and replay tests exist. |
 | Fulfillment | Implemented / requires deeper verification | Fulfillment bridge, lifecycle, unified fulfillment, and frontend authority regressions exist. |
 | Logistics | Partial | Logistics boundary, proof, returns, courier assignment, routes, tracking, and cross-feature tests exist; operational scheduling lacks a trusted capacity authority. |
@@ -29,7 +29,7 @@ It is a planning aid, not a replacement for executable tests or runtime verifica
 | Vertical packs | Implemented / extensive | Agriculture, restaurant, warehouse, service booking, and cross-pack integration regressions exist. |
 | AI procurement / discovery | Partial | AI intent, procurement context, evidence, preparation, explanation, and authorization tests exist; production readiness requires deeper review. |
 | Operational scheduling | Not implemented | No trusted capacity/feasibility authority is wired to the L11 evaluator. |
-| Verified capacity evidence matching | Partial | Capacity matching checks declared supply attributes but does not consistently evaluate freshness, validity, or quality. |
+| Time-bound capacity evidence matching | Implemented / bounded; independent verification partial | The current Discovery path fails closed for missing, stale, expired, future-observed, unknown, conflicting, or insufficiently valid evidence. Supplier declarations remain SELF_REPORTED; OBSERVED/VERIFIED evidence requires a trusted independent observer binding that does not yet exist. Legacy quantity-only searches retain a less strict path. |
 
 ## Interpretation
 
