@@ -45,14 +45,18 @@ assert.equal(warehouseAdversarialContract().duplicate_authority, false);
 // Execution is delegated through the existing authority and preserves the
 // exact event identity supplied by the Warehouse operation.
 let calls = [];
-const fakeApplyStockChange = (...args) => { calls.push(args); return { id: 'tx-1' }; };
+const fakeRecordCanonicalInventoryMovement = async input => {
+  calls.push(input);
+  return { queued: false, movement: { eventId: input.eventId } };
+};
 const { executeWarehouseInventoryBridge } = await import('../app/src/verticals/warehouse/inventory-bridge.js');
 const bridge = buildWarehouseReceivingBridge({ receiving, product: productA, location: locationA });
-executeWarehouseInventoryBridge(bridge, { applyStockChange: fakeApplyStockChange });
-executeWarehouseInventoryBridge(bridge, { applyStockChange: fakeApplyStockChange });
+await executeWarehouseInventoryBridge(bridge, { recordCanonicalInventoryMovement: fakeRecordCanonicalInventoryMovement });
+await executeWarehouseInventoryBridge(bridge, { recordCanonicalInventoryMovement: fakeRecordCanonicalInventoryMovement });
 assert.equal(calls.length, 2);
-assert.equal(calls[0][3].eventId, calls[1][3].eventId);
-assert.equal(calls[0][3].eventId, 'evt-recv-1');
+assert.equal(calls[0].eventId, calls[1].eventId);
+assert.equal(calls[0].eventId, 'evt-recv-1');
+assert.equal(calls[0].movementType, 'PURCHASE');
 
 console.log('Phase 13.9.11 Warehouse Adversarial / Idempotency / Isolation Regression: PASS');
 console.log('Cross-organization references: rejected');

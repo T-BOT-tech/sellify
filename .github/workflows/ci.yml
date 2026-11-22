@@ -145,6 +145,8 @@ jobs:
         run: npm run test:phase13.12.6
       - name: Restaurant payment intent authority regression
         run: npm run phase13.8.6:restaurant-order-payment-test
+      - name: Restaurant canonical Inventory batch consumption regression
+        run: npm run test:phase13.11.5
       - name: First-experience service catalog contract regression
         run: npm run test:service-catalog-contract
       - name: Service booking lifecycle contract regression

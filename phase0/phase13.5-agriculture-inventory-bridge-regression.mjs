@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import assert from 'node:assert/strict';
 import { defineHarvest, bridgeHarvestToInventory, AGRICULTURE_INVENTORY_CONTRACT } from '../app/src/verticals/agriculture/inventory-contract.js';
 
@@ -19,8 +21,8 @@ assert.equal(bridge.reference_type, 'agriculture_harvest');
 assert.equal(bridge.reference_id, 'harvest-1');
 assert.equal(bridge.event_id, 'agriculture:harvest:harvest-1:received');
 assert.equal(AGRICULTURE_INVENTORY_CONTRACT.authority, 'core_inventory');
-assert.equal(AGRICULTURE_INVENTORY_CONTRACT.stock_mutation, 'applyStockChange');
-assert.equal(AGRICULTURE_INVENTORY_CONTRACT.ledger, 'recordInventoryMovement');
+assert.equal(AGRICULTURE_INVENTORY_CONTRACT.stock_mutation, 'recordCanonicalInventoryMovement');
+assert.equal(AGRICULTURE_INVENTORY_CONTRACT.ledger, 'recordCanonicalInventoryMovement');
 
 assert.throws(
   () => bridgeHarvestToInventory({ harvest, product, collectionCenterLocation: { ...location, organization_id: 'other-org' } }),
@@ -34,5 +36,11 @@ assert.throws(
   () => bridgeHarvestToInventory({ harvest, product: { id: 'other-product' }, collectionCenterLocation: location }),
   /supplied Product/,
 );
+
+const runtimeBridge = fs.readFileSync(path.join(process.cwd(), 'app/src/verticals/agriculture/inventory-bridge.js'), 'utf8');
+assert.match(runtimeBridge, /recordCanonicalInventoryMovement/);
+assert.doesNotMatch(runtimeBridge, /applyStockChange/);
+assert.match(runtimeBridge, /syncStatus === 'synced'/);
+assert.match(runtimeBridge, /status: transaction\.queued \? 'pending' : 'confirmed'/);
 
 console.log('Phase 13.5 Agriculture Inventory Bridge Regression: PASS');

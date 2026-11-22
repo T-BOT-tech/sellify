@@ -83,8 +83,8 @@ export function buildAgricultureWarehouseReceivingHandoff({
     agriculture_inventory: agricultureInventory,
     warehouse_receiving: warehouseReceiving,
     stock_authority: 'inventory',
-    mutation_authority: 'app/src/warehouse/inventory.js#applyStockChange',
-    ledger_authority: 'app/src/warehouse/ledger.js#recordInventoryMovement',
+    mutation_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
+    ledger_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
     warehouse_authority: 'warehouse',
     location_authority: 'locations',
     idempotency: 'event_id',
@@ -197,8 +197,8 @@ export function isAgricultureWarehouseReceivingHandoff(value) {
     typeof value.harvest_id === 'string' &&
     typeof value.product_id === 'string' &&
     value.stock_authority === 'inventory' &&
-    value.mutation_authority === 'app/src/warehouse/inventory.js#applyStockChange' &&
-    value.ledger_authority === 'app/src/warehouse/ledger.js#recordInventoryMovement' &&
+    value.mutation_authority === 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement' &&
+    value.ledger_authority === 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement' &&
     value.warehouse_authority === 'warehouse' &&
     value.location_authority === 'locations' &&
     value.idempotency === 'event_id' &&
@@ -232,8 +232,8 @@ export const AGRICULTURE_WAREHOUSE_LOGISTICS_CONTRACT = Object.freeze({
   product_authority: 'commerce',
   order_authority: 'commerce',
   stock_authority: 'inventory',
-  mutation_authority: 'app/src/warehouse/inventory.js#applyStockChange',
-  ledger_authority: 'app/src/warehouse/ledger.js#recordInventoryMovement',
+  mutation_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
+  ledger_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
   fulfillment_authority: 'app/src/logistics/fulfillment.js',
   location_authority: 'locations',
   warehouse_role: 'receive_and_coordinate',

@@ -49,14 +49,14 @@ assert.match(restaurantPayment, /duplicate_order_authority:\s*false/);
 assert.match(restaurantPayment, /duplicate_payment_authority:\s*false/);
 
 const restaurantInventory = source('app/src/verticals/restaurant/inventory-consumption.js');
-assert.match(restaurantInventory, /mutation_authority:\s*'app\/src\/warehouse\/inventory\.js'/);
+assert.match(restaurantInventory, /mutation_authority:\s*'app\/src\/warehouse\/ledger\.js#recordCanonicalInventoryMovementBatch'/);
 assert.match(restaurantInventory, /ledger_authority:\s*'app\/src\/warehouse\/ledger\.js'/);
 assert.match(restaurantInventory, /idempotency:\s*'event_id'/);
 
 const agricultureInventory = source('app/src/verticals/agriculture/inventory-bridge.js');
 assert.match(agricultureInventory, /authority:\s*'core_inventory'/);
-assert.match(agricultureInventory, /stock_mutation:\s*'applyStockChange'/);
-assert.match(agricultureInventory, /ledger:\s*'recordInventoryMovement'/);
+assert.match(agricultureInventory, /stock_mutation:\s*'app\/src\/warehouse\/ledger\.js#recordCanonicalInventoryMovement'/);
+assert.match(agricultureInventory, /ledger:\s*'app\/src\/warehouse\/ledger\.js#recordCanonicalInventoryMovement'/);
 
 const agricultureCommerce = source('app/src/verticals/agriculture/commerce-contract.js');
 assert.match(agricultureCommerce, /idempotency_key:/);

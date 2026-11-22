@@ -82,8 +82,9 @@ assert.throws(() => buildAgricultureLogisticsFulfillmentHandoff({
 }), /different organization/);
 
 const source = fs.readFileSync(new URL('../app/src/verticals/agriculture/warehouse-logistics-contract.js', import.meta.url), 'utf8');
-assert.match(source, /applyStockChange/);
-assert.match(source, /recordInventoryMovement/);
+assert.match(source, /recordCanonicalInventoryMovement/);
+assert.doesNotMatch(source, /applyStockChange/);
+assert.match(source, /recordCanonicalInventoryMovement/);
 assert.doesNotMatch(source, /product\.stock\s*=/);
 assert.doesNotMatch(source, /new\s+(?:Inventory|AgricultureInventory|WarehouseInventory|LogisticsFulfillment)/);
 assert.match(source, /route_implementation:\s*false/);

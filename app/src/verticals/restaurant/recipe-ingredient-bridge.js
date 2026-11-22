@@ -80,8 +80,8 @@ export function recipeIngredientContract() {
     recipe_authority: 'restaurant',
     ingredient_identity: 'commerce.product',
     ingredient_stock_authority: 'inventory',
-    inventory_mutation: 'app/src/warehouse/inventory.js',
-    movement_ledger: 'app/src/warehouse/ledger.js',
+    inventory_mutation: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovementBatch',
+    movement_ledger: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovementBatch',
     duplicate_authority: false,
     stock_consumption_phase: '13.8.5',
   });

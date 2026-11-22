@@ -48,22 +48,35 @@ assert.throws(() => buildWarehouseInventoryReceiveHandoff({ receiving: { ...rece
 assert.throws(() => buildWarehouseInventoryAdjustmentHandoff({ adjustment: { ...adjustment, delta: 0 }, product: productA, location: locationA }), /finite non-zero/);
 
 const calls = [];
-const applyStockChange = (...args) => { calls.push(args); return { ok: true }; };
-assert.deepEqual(executeWarehouseInventoryHandoff(receive, { applyStockChange }), { ok: true });
-assert.deepEqual(executeWarehouseInventoryHandoff(receive, { applyStockChange }), { ok: true });
+const recordCanonicalInventoryMovement = async input => {
+  calls.push(input);
+  return { queued: false, movement: { eventId: input.eventId } };
+};
+const confirmed = await executeWarehouseInventoryHandoff(receive, { recordCanonicalInventoryMovement });
+assert.equal(confirmed.status, 'confirmed');
+assert.equal(confirmed.queued, false);
+assert.equal(confirmed.event_id, 'evt-recv-1');
+const adjusted = await executeWarehouseInventoryHandoff(adjust, { recordCanonicalInventoryMovement });
+assert.equal(adjusted.status, 'confirmed');
 assert.equal(calls.length, 2);
-assert.equal(calls[0][0], 'p-1');
-assert.equal(calls[0][1], 5);
-assert.equal(calls[0][2], 'received');
-assert.equal(calls[0][3].eventId, calls[1][3].eventId);
-assert.equal(calls[0][3].eventId, 'evt-recv-1');
-assert.equal(calls[0][3].referenceId, 'recv-1');
-assert.equal(calls[0][3].locationId, 'loc-a');
+assert.equal(calls[0].productId, 'p-1');
+assert.equal(calls[0].quantity, 5);
+assert.equal(calls[0].movementType, 'PURCHASE');
+assert.equal(calls[0].eventId, 'evt-recv-1');
+assert.equal(calls[0].referenceId, 'recv-1');
+assert.equal(calls[0].locationId, 'loc-a');
+assert.equal(calls[1].movementType, 'ADJUSTMENT');
+assert.equal(calls[1].quantity, -2);
+
+const queued = await executeWarehouseInventoryHandoff(receive, {
+  async recordCanonicalInventoryMovement() { return { queued: true, movement: null }; },
+});
+assert.equal(queued.status, 'pending', 'queued Inventory movement must not be reported as confirmed');
 
 const contract = warehouseInventoryContract();
 assert.equal(contract.stock_authority, 'inventory');
-assert.equal(contract.mutation_authority, 'app/src/warehouse/inventory.js#applyStockChange');
-assert.equal(contract.ledger_authority, 'app/src/warehouse/ledger.js#recordInventoryMovement');
+assert.equal(contract.mutation_authority, 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement');
+assert.equal(contract.ledger_authority, 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement');
 assert.equal(contract.duplicate_inventory_authority, false);
 assert.equal(contract.duplicate_ledger_authority, false);
 assert.equal(contract.direct_stock_mutation_by_warehouse, false);

@@ -1,6 +1,6 @@
 # Phase 13.11.6 — Agriculture ↔ Commerce / Inventory Integration
 
-**Status:** COMPLETE — 2026-09-08
+**Status:** CANONICAL INVENTORY BOUNDARY CORRECTED; actual harvest-to-Inventory workflow remains PARTIAL.
 
 ## Objective
 
@@ -26,8 +26,8 @@ Formalize the existing Agriculture ↔ Commerce and Agriculture ↔ Inventory bo
 | Order | Core Commerce |
 | Payment | Payments Core |
 | Fulfillment lifecycle | Existing Fulfillment authority |
-| Stock mutation | Core Inventory |
-| Inventory movement ledger | Core Inventory |
+| Stock mutation | `app/src/warehouse/ledger.js#recordCanonicalInventoryMovement` |
+| Inventory movement ledger | Core Inventory backend via canonical movement API |
 | Inventory idempotency | Existing `event_id` boundary |
 | Organization scope | Required |
 | Agriculture persistence added | None |
@@ -101,3 +101,4 @@ Observed test runtime remains Node `v22.16.0`. The project requirement remains N
 ## Next phase
 
 **Phase 13.11.7 — Agriculture ↔ Warehouse / Logistics**
+\n## Remaining product integration\n\nThe Agriculture harvest bridge now delegates to the canonical Inventory movement API and distinguishes pending from confirmed outcomes. The current audit did not find a persisted Agriculture UI/API caller for `receiveHarvestIntoInventory()`. Product integration, warehouse receiving handoff and logistics handoff remain open; this phase is not fully complete.\n

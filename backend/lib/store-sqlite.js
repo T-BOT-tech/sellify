@@ -5483,7 +5483,24 @@ export async function listProcurementReceipts(chatId, { purchaseOrderId = '', st
   return db.prepare(`SELECT * FROM procurement_receipts WHERE ${where.join(' AND ')} ORDER BY received_at DESC, created_at DESC LIMIT ?`).all(...params, n).map(row => getProcurementReceiptByIdSync(organizationId, row.id));
 }
 
+// SQLite uses one synchronous connection per process. Serialize receipt
+// posting across the full async operation so a second request cannot enter a
+// transaction while the first is awaiting tenant/Inventory work.
+let procurementReceiptWriteQueue = Promise.resolve();
+
 export async function createProcurementReceipt(chatId, purchaseOrderId, input = {}, actor = null) {
+  const previous = procurementReceiptWriteQueue;
+  let release;
+  procurementReceiptWriteQueue = new Promise(resolve => { release = resolve; });
+  await previous;
+  try {
+    return await createProcurementReceiptUnlocked(chatId, purchaseOrderId, input, actor);
+  } finally {
+    release();
+  }
+}
+
+async function createProcurementReceiptUnlocked(chatId, purchaseOrderId, input = {}, actor = null) {
   const organizationId = await tenantOrganizationId(chatId);
   const actorId = assertProcurementActor(organizationId, actor);
   const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ? AND organization_id = ?').get(String(purchaseOrderId), organizationId);
@@ -5527,39 +5544,74 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
   });
 
   const requestedReceivedAt = input.receivedAt ?? input.received_at ?? null;
-  const receivedAt = String(requestedReceivedAt || nowIso());
+  let receivedAt = String(requestedReceivedAt || nowIso());
   const notes = String(input.notes || '').trim().slice(0, 4000);
   const idempotencyKey = input.idempotencyKey ?? input.idempotency_key ?? null;
   const hash = procurementReceiptHash({ purchaseOrderId: po.id, locationId, receivedAt: requestedReceivedAt ? receivedAt : null, notes, items });
-  if (idempotencyKey) {
-    const old = db.prepare('SELECT * FROM procurement_receipts WHERE organization_id=? AND idempotency_key=?').get(organizationId, String(idempotencyKey));
-    if (old) {
-      if (old.request_hash !== hash) throw Object.assign(new Error('Idempotency key was already used with a different receipt payload'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
-      if (old.status === 'POSTED') return getProcurementReceiptByIdSync(organizationId, old.id);
-    }
-  }
-
-  const receiptId = String(input.id || crypto.randomUUID());
-  const receiptNumber = String(input.receiptNumber ?? input.receipt_number ?? '').trim() || nextProcurementReceiptNumber(organizationId);
+  const receiptNumberInput = String(input.receiptNumber ?? input.receipt_number ?? '').trim();
   const createdAt = nowIso();
-  const eventIds = items.map(item => `procurement_receipt:${receiptId}:${item.purchaseOrderItemId}`);
+  let receiptId = String(input.id || crypto.randomUUID());
+  let receiptNumber = receiptNumberInput || nextProcurementReceiptNumber(organizationId);
+  let eventIds = [];
 
+  // Resolve idempotency while holding the SQLite write lock. Concurrent retries
+  // with the same key must converge on the same pending/posted receipt identity.
   db.exec('BEGIN IMMEDIATE');
   try {
-    db.prepare(`INSERT INTO procurement_receipts(id,organization_id,purchase_order_id,location_id,receipt_number,status,received_at,notes,idempotency_key,request_hash,created_by_user_id,created_at,updated_at) VALUES(?,?,?,?,?,'PENDING',?,?,?,?,?,?,?)`)
-      .run(receiptId, organizationId, po.id, locationId, receiptNumber, receivedAt, notes, idempotencyKey, hash, actorId, createdAt, createdAt);
-    const insertLine = db.prepare(`INSERT INTO procurement_receipt_lines(id,receipt_id,purchase_order_item_id,product_id,received_quantity,notes,event_id,created_at) VALUES(?,?,?,?,?,?,?,?)`);
-    for (let i=0; i<items.length; i += 1) {
-      const item = items[i];
-      insertLine.run(crypto.randomUUID(), receiptId, item.purchaseOrderItemId, item.productId, item.receivedQuantity, item.notes, eventIds[i], createdAt);
+    const old = idempotencyKey
+      ? db.prepare('SELECT * FROM procurement_receipts WHERE organization_id=? AND idempotency_key=?').get(organizationId, String(idempotencyKey))
+      : null;
+    if (old) {
+      if (old.request_hash !== hash) throw Object.assign(new Error('Idempotency key was already used with a different receipt payload'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
+      if (old.status === 'POSTED') {
+        db.exec('COMMIT');
+        return getProcurementReceiptByIdSync(organizationId, old.id);
+      }
+      // A prior attempt may have persisted the receipt intent but failed before
+      // all Inventory movements committed. Resume that same receipt identity.
+      receiptId = String(old.id);
+      receiptNumber = String(old.receipt_number);
+      receivedAt = String(old.received_at || receivedAt);
+    } else {
+      db.prepare(`INSERT INTO procurement_receipts(id,organization_id,purchase_order_id,location_id,receipt_number,status,received_at,notes,idempotency_key,request_hash,created_by_user_id,created_at,updated_at) VALUES(?,?,?,?,?,'PENDING',?,?,?,?,?,?,?)`)
+        .run(receiptId, organizationId, po.id, locationId, receiptNumber, receivedAt, notes, idempotencyKey, hash, actorId, createdAt, createdAt);
+      const insertLine = db.prepare(`INSERT INTO procurement_receipt_lines(id,receipt_id,purchase_order_item_id,product_id,received_quantity,notes,event_id,created_at) VALUES(?,?,?,?,?,?,?,?)`);
+      for (let i=0; i<items.length; i += 1) {
+        const item = items[i];
+        const eventId = `procurement_receipt:${receiptId}:${item.purchaseOrderItemId}`;
+        insertLine.run(crypto.randomUUID(), receiptId, item.purchaseOrderItemId, item.productId, item.receivedQuantity, item.notes, eventId, createdAt);
+      }
     }
+    eventIds = items.map(item => `procurement_receipt:${receiptId}:${item.purchaseOrderItemId}`);
     db.exec('COMMIT');
-  } catch (error) { db.exec('ROLLBACK'); throw error; }
+  } catch (error) { if (db.isTransaction) db.exec('ROLLBACK'); throw error; }
 
-  // Physical stock boundary: delegate each posted receipt line to the same
-  // canonical inventory movement authority used by Warehouse Receiving.
-  // The deterministic event id makes retries idempotent at the ledger boundary.
+  // Keep every line in one caller-owned SQLite transaction. If any movement
+  // fails validation or persistence, all receipt movements roll back and the
+  // same PENDING receipt can be safely retried with its original event IDs.
   try {
+    await waitForInventoryTransactionSlot();
+    db.exec('BEGIN IMMEDIATE');
+    // Another same-key request may have completed while this caller waited
+    // for the Inventory write slot. Re-read under the write lock before any
+    // movement is appended so a concurrent replay cannot post twice.
+    const currentReceipt = db.prepare(
+      'SELECT status FROM procurement_receipts WHERE id=? AND organization_id=?'
+    ).get(receiptId, organizationId);
+    if (!currentReceipt) {
+      throw Object.assign(new Error('Pending procurement receipt was not found'), {
+        statusCode: 409, code: 'PROCUREMENT_RECEIPT_NOT_FOUND',
+      });
+    }
+    if (currentReceipt.status === 'POSTED') {
+      db.exec('COMMIT');
+      return getProcurementReceiptByIdSync(organizationId, receiptId);
+    }
+    if (currentReceipt.status !== 'PENDING') {
+      throw Object.assign(new Error('Procurement receipt is not in a postable state'), {
+        statusCode: 409, code: 'PROCUREMENT_RECEIPT_NOT_PENDING',
+      });
+    }
     for (let i=0; i<items.length; i += 1) {
       await appendInventoryMovement(chatId, {
         productId: items[i].productId,
@@ -5572,15 +5624,16 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
         occurredAt: receivedAt,
         reason: 'Procurement purchase-order receipt',
         metadata: { purchaseOrderId: po.id, purchaseOrderItemId: items[i].purchaseOrderItemId, receiptNumber },
-      }, actor);
+      }, actor, { withinTransaction: true });
     }
+    db.prepare("UPDATE procurement_receipts SET status='POSTED',updated_at=? WHERE id=? AND organization_id=? AND status='PENDING'").run(nowIso(), receiptId, organizationId);
+    audit(chatId, 'procurement.receipt.posted', 'procurement_receipt', receiptId, { purchaseOrderId: po.id, receiptNumber, lineCount: items.length, locationId }, { organizationId, actorId, locationId });
+    db.exec('COMMIT');
   } catch (error) {
+    if (db.isTransaction) db.exec('ROLLBACK');
     audit(chatId, 'procurement.receipt.inventory_pending', 'procurement_receipt', receiptId, { purchaseOrderId: po.id, errorCode: error?.code || 'INVENTORY_SYNC_FAILED' }, { organizationId, actorId, locationId });
     throw error;
   }
-
-  db.prepare("UPDATE procurement_receipts SET status='POSTED',updated_at=? WHERE id=? AND organization_id=? AND status='PENDING'").run(nowIso(), receiptId, organizationId);
-  audit(chatId, 'procurement.receipt.posted', 'procurement_receipt', receiptId, { purchaseOrderId: po.id, receiptNumber, lineCount: items.length, locationId }, { organizationId, actorId, locationId });
   return getProcurementReceiptByIdSync(organizationId, receiptId);
 }
 

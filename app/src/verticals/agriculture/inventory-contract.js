@@ -77,8 +77,8 @@ export function bridgeHarvestToInventory({ harvest, product, collectionCenterLoc
 
 export const AGRICULTURE_INVENTORY_CONTRACT = Object.freeze({
   authority: 'core_inventory',
-  stock_mutation: 'applyStockChange',
-  ledger: 'recordInventoryMovement',
+  stock_mutation: 'recordCanonicalInventoryMovement',
+  ledger: 'recordCanonicalInventoryMovement',
   movement_type: 'PURCHASE',
   reference_type: 'agriculture_harvest',
 });

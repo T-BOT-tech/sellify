@@ -35,23 +35,22 @@ assert.equal(adjustment.reference_type, 'warehouse_stock_adjustment');
 assert.equal(adjustment.event_id, 'warehouse:adjustment:adjustment-1:applied');
 
 const calls = [];
-const tx = executeWarehouseInventoryBridge(receiving, {
-  applyStockChange(productId, quantity, type, meta) {
-    calls.push({ productId, quantity, type, meta });
-    return { id: 'tx-1', product_id: productId, quantity, type };
+const tx = await executeWarehouseInventoryBridge(receiving, {
+  async recordCanonicalInventoryMovement(input) {
+    calls.push(input);
+    return { queued: false, movement: { eventId: input.eventId } };
   },
 });
-assert.equal(tx.id, 'tx-1');
+assert.equal(tx.status, 'confirmed');
+assert.equal(tx.event_id, 'warehouse:receiving:receiving-1:received');
 assert.deepEqual(calls[0], {
   productId: 'product-1',
   quantity: 25,
-  type: 'received',
-  meta: {
-    referenceType: 'warehouse_receiving',
-    referenceId: 'receiving-1',
-    eventId: 'warehouse:receiving:receiving-1:received',
-    locationId: 'location-1',
-  },
+  movementType: 'PURCHASE',
+  referenceType: 'warehouse_receiving',
+  referenceId: 'receiving-1',
+  eventId: 'warehouse:receiving:receiving-1:received',
+  locationId: 'location-1',
 });
 
 assert.equal(WAREHOUSE_INVENTORY_BRIDGE_CONTRACT.stock_authority, 'inventory');
@@ -90,9 +89,9 @@ assert.throws(
   }),
   /finite non-zero/,
 );
-assert.throws(
+await assert.rejects(
   () => executeWarehouseInventoryBridge(receiving, {}),
-  /applyStockChange authority/,
+  /Canonical Inventory movement authority/,
 );
 
 console.log('Phase 13.9.4 Warehouse Inventory Bridge Regression: PASS');

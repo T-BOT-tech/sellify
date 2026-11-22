@@ -46,8 +46,8 @@ export function warehouseAdversarialContract() {
     event_identity: 'event_id',
     repeated_event_identity: 'same_event_id_required',
     duplicate_authority: false,
-    stock_mutation_authority: 'app/src/warehouse/inventory.js#applyStockChange',
-    ledger_authority: 'app/src/warehouse/ledger.js#recordInventoryMovement',
+    stock_mutation_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
+    ledger_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
     execution_idempotency: 'delegated_to_existing_core_authority',
     persistence: 'none',
   });

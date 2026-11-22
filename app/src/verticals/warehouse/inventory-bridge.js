@@ -72,8 +72,8 @@ export function buildWarehouseReceivingBridge({ receiving, product, location } =
     reference_type: 'warehouse_receiving',
     reference_id: receivingId,
     event_id: eventId,
-    mutation_authority: 'app/src/warehouse/inventory.js#applyStockChange',
-    ledger_authority: 'app/src/warehouse/ledger.js#recordInventoryMovement',
+    mutation_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
+    ledger_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
     idempotency: 'event_id',
   });
 }
@@ -107,8 +107,8 @@ export function buildWarehouseStockAdjustmentBridge({ adjustment, product, locat
     reference_type: 'warehouse_stock_adjustment',
     reference_id: adjustmentId,
     event_id: eventId,
-    mutation_authority: 'app/src/warehouse/inventory.js#applyStockChange',
-    ledger_authority: 'app/src/warehouse/ledger.js#recordInventoryMovement',
+    mutation_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
+    ledger_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
     idempotency: 'event_id',
   });
 }
@@ -120,35 +120,44 @@ export function isWarehouseInventoryBridge(value) {
     typeof value.organization_id === 'string' &&
     typeof value.location_id === 'string' &&
     typeof value.event_id === 'string' &&
-    value.mutation_authority === 'app/src/warehouse/inventory.js#applyStockChange' &&
-    value.ledger_authority === 'app/src/warehouse/ledger.js#recordInventoryMovement' &&
+    value.mutation_authority === 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement' &&
+    value.ledger_authority === 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement' &&
     value.idempotency === 'event_id');
 }
 
 // Execute only after the bridge payload is validated. The injected function
 // is the existing Inventory authority; this module never mutates product.stock
 // or writes a movement record directly.
-export function executeWarehouseInventoryBridge(bridge, { applyStockChange } = {}) {
+export async function executeWarehouseInventoryBridge(bridge, { recordCanonicalInventoryMovement } = {}) {
   if (!isWarehouseInventoryBridge(bridge)) throw new TypeError('Valid Warehouse inventory bridge is required');
-  if (typeof applyStockChange !== 'function') throw new TypeError('Core inventory applyStockChange authority is required');
+  if (typeof recordCanonicalInventoryMovement !== 'function') {
+    throw new TypeError('Canonical Inventory movement authority is required');
+  }
 
-  const tx = applyStockChange(bridge.product_id, bridge.quantity, bridge.movement_type, {
+  const result = await recordCanonicalInventoryMovement({
+    productId: bridge.product_id,
+    quantity: bridge.quantity,
+    movementType: bridge.movement_type === 'received' ? 'PURCHASE' : 'ADJUSTMENT',
     referenceType: bridge.reference_type,
     referenceId: bridge.reference_id,
     eventId: bridge.event_id,
     locationId: bridge.location_id,
   });
-
-  if (!tx) throw new Error(`Core inventory rejected Warehouse ${bridge.operation} for product ${bridge.product_id}`);
-  return tx;
+  if (!result || typeof result !== 'object') throw new Error('Canonical Inventory did not return an execution result');
+  return Object.freeze({
+    status: result.queued ? 'pending' : 'confirmed',
+    queued: Boolean(result.queued),
+    movement: result.movement || null,
+    event_id: bridge.event_id,
+  });
 }
 
 export const WAREHOUSE_INVENTORY_BRIDGE_CONTRACT = Object.freeze({
   warehouse_authority: 'warehouse',
   product_authority: 'commerce',
   stock_authority: 'inventory',
-  mutation_authority: 'app/src/warehouse/inventory.js#applyStockChange',
-  ledger_authority: 'app/src/warehouse/ledger.js#recordInventoryMovement',
+  mutation_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
+  ledger_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
   receiving_movement_type: 'received',
   adjustment_movement_type: 'adjusted',
   receiving_reference_type: 'warehouse_receiving',

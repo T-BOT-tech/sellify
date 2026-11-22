@@ -47,8 +47,8 @@ assert.equal(inventory.inventory.product_id, 'product-1');
 assert.equal(inventory.inventory.quantity, 120);
 assert.equal(inventory.inventory.event_id, harvest.event_id);
 assert.equal(inventory.stock_authority, 'inventory');
-assert.equal(inventory.mutation_authority, 'app/src/warehouse/inventory.js#applyStockChange');
-assert.equal(inventory.ledger_authority, 'app/src/warehouse/ledger.js#recordInventoryMovement');
+assert.equal(inventory.mutation_authority, 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement');
+assert.equal(inventory.ledger_authority, 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement');
 assert.equal(inventory.idempotency, 'event_id');
 
 const context = buildAgricultureCommerceInventoryContext({
@@ -113,6 +113,11 @@ const executableSource = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)
 assert(!/\bnew\s+Agriculture(?:Order|Inventory|Product|Payment)\b/.test(executableSource));
 assert(!/\b(?:AgricultureOrder|AgricultureInventory|AgricultureProduct|AgriculturePayment)\b/.test(executableSource));
 assert(!/product\.stock\s*=/.test(source));
+
+const runtimeBridge = await fs.readFile(new URL('../app/src/verticals/agriculture/inventory-bridge.js', import.meta.url), 'utf8');
+assert.match(runtimeBridge, /recordCanonicalInventoryMovement/);
+assert.doesNotMatch(runtimeBridge, /applyStockChange/);
+assert.match(runtimeBridge, /syncStatus === 'synced'/);
 
 console.log('Phase 13.11.6 Agriculture ↔ Commerce / Inventory Integration Regression: PASS');
 console.log('Agriculture semantic authority preserved: PASS');
