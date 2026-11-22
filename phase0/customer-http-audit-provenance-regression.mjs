@@ -132,6 +132,34 @@ try {
   const missing = await request(`${base}/missing-customer-${suffix}`, { headers: auth(ownerSession.token) });
   assert.equal(missing.response.status, 404, 'customer lookup is tenant-scoped and returns not found');
 
+  const otherBase = `/tenants/${encodeURIComponent(otherTenant.chatId)}/customers`;
+  const crossTenantCustomerList = await request(otherBase, { headers: auth(otherSession.token) });
+  assert.equal(crossTenantCustomerList.response.status, 200);
+  assert.equal(crossTenantCustomerList.json.customers.some(customer => customer.id === customerId), false,
+    'a customer must never appear in another organization customer list');
+
+  const crossTenantCustomerRead = await request(`${otherBase}/${encodeURIComponent(customerId)}`, {
+    headers: auth(otherSession.token),
+  });
+  assert.equal(crossTenantCustomerRead.response.status, 404,
+    'a valid session for another tenant must not resolve this customer ID');
+
+  const crossTenantCustomerUpdate = await request(`${otherBase}/${encodeURIComponent(customerId)}`, {
+    method: 'PATCH',
+    headers: jsonAuth(otherSession.token),
+    body: JSON.stringify({ name: 'Cross-tenant overwrite attempt' }),
+  });
+  assert.equal(crossTenantCustomerUpdate.response.status, 404,
+    'a valid owner in another tenant must not update this customer ID');
+
+  const invalidCustomer = await request(base, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ email: 'not-enough-to-identify-a-customer@example.test' }),
+  });
+  assert.equal(invalidCustomer.response.status, 400,
+    'customer creation must require at least a name or phone number');
+
   const db = store.getDatabaseForTests();
   const organizationId = String(db.prepare(
     'SELECT organization_id FROM tenants WHERE chat_id = ?'
@@ -152,6 +180,19 @@ try {
       'customer audit event must retain canonical organization scope');
     assert.equal(String(event.chat_id), String(tenant.chatId));
   }
+
+  const deduplicated = await request(base, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ name: 'HTTP Audit Customer Updated', phone: '+251911000001' }),
+  });
+  assert.equal(deduplicated.response.status, 201);
+  assert.equal(deduplicated.json.customer.id, customerId,
+    'phone natural-key matching must update the existing organization customer rather than create a duplicate');
+  assert.equal(deduplicated.json.customer.name, 'HTTP Audit Customer Updated');
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM customers WHERE organization_id = ? AND phone = ?')
+    .get(organizationId, '+251911000001').count, 1,
+    'phone natural-key matching must not create duplicate customer rows');
 
   const syncCustomerId = `sync-customer-${suffix}`;
   const syncEvent = await store.processSyncEvent(tenant.chatId, {
