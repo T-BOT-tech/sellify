@@ -82,11 +82,15 @@ for (const quality of ['UNKNOWN', 'STALE', 'CONFLICTING', undefined, null]) {
     capacitySignals: [{ ...temporalCandidate.capacitySignals[0], quality }],
   }, windowContext).eligible, false, `time-bound capacity quality ${String(quality)} must fail closed`);
 }
-for (const quality of ['SELF_REPORTED', 'OBSERVED', 'VERIFIED']) {
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], quality: 'SELF_REPORTED' }],
+}, windowContext).eligible, true, 'fresh active supplier-declared evidence may qualify');
+for (const quality of ['OBSERVED', 'VERIFIED']) {
   assert.equal(evaluateDiscoveryMatch({
     ...temporalCandidate,
     capacitySignals: [{ ...temporalCandidate.capacitySignals[0], quality }],
-  }, windowContext).eligible, true, `explicit ${quality} capacity evidence may qualify when fresh and active`);
+  }, windowContext).eligible, false, `${quality} requires a trusted independent observer binding`);
 }
 assert.equal(evaluateDiscoveryMatch({
   ...temporalCandidate,
