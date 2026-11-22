@@ -144,7 +144,7 @@ try {
     aggregateId: syncCustomerId,
     occurredAt: new Date().toISOString(),
     payload: { id: syncCustomerId, name: 'Customer Sync Audit', source: 'http-regression' },
-  }, ownerSession);
+  }, { userId: owner.id, deviceId: ownerSession.deviceId });
   assert.equal(syncEvent.status, 'processed');
   const syncAudit = db.prepare(`
     SELECT actor_id, device_id, organization_id
