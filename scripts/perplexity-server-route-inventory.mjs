@@ -61,6 +61,23 @@ for (const item of inlineRoutes) {
 
 routes.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\routes.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));');
+}
+
+for (const route of routes) {
+  if (!route.handlerFunction) {
+    route.handlerResolution = route.sourceKind === 'ROUTES table' ? 'unresolved reference' : 'not applicable';
+    continue;
+  }
+  const name = escapeRegExp(route.handlerFunction);
+  const localDeclaration = new RegExp(`(?:async\\s+)?function\\s+${name}\\s*\\(`).test(source)
+    || new RegExp(`(?:const|let|var)\\s+${name}\\s*=`).test(source);
+  const importedBinding = new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from`).test(source);
+  route.handlerResolution = localDeclaration ? 'local declaration' : importedBinding ? 'imported binding' : 'unresolved reference';
+}
+
+
 const inventory = {
   generatedAt: new Date().toISOString(),
   source: 'backend/server.js',
@@ -70,11 +87,13 @@ const inventory = {
   handlerFunctionCount: new Set(routes.map(route => route.handlerFunction).filter(Boolean)).size,
   namedHandlerRouteCount: routes.filter(route => route.handlerFunction).length,
   unresolvedHandlerRouteCount: routes.filter(route => route.sourceKind === 'ROUTES table' && !route.handlerFunction).length,
+  unresolvedHandlerFunctionCount: new Set(routes.filter(route => route.handlerResolution === 'unresolved reference').map(route => route.handlerFunction || route.path)).size,
   inlineHandlerCount: routes.filter(route => route.sourceKind === 'inline handler').length,
   routes,
   notes: [
     'Static, best-effort inventory of the explicit ROUTES table and selected inline handlers.',
     'Regex route patterns are preserved alongside display paths; display paths are not executable route contracts.',
+    'Handler references are checked against local declarations and named imports in backend/server.js.',
     'This inventory does not capture authorization, middleware, handler side effects, or dynamic runtime behavior.',
     'Review every route and handler before defining extraction boundaries.'
   ]
@@ -100,4 +119,4 @@ const markdown = [
   ''
 ].join('\n');
 await writeFile(path.join(outputDir, 'server-route-inventory.md'), markdown);
-console.log(`Wrote ${routes.length} detected routes (${inventory.routeTableCount} ROUTES-table entries, ${inventory.handlerFunctionCount} distinct named handler functions across ${inventory.namedHandlerRouteCount} routes; ${inventory.unresolvedHandlerRouteCount} unresolved).`);
+console.log(`Wrote ${routes.length} detected routes (${inventory.routeTableCount} ROUTES-table entries, ${inventory.handlerFunctionCount} distinct named handler functions across ${inventory.namedHandlerRouteCount} routes; ${inventory.unresolvedHandlerFunctionCount} unresolved function references).`);
