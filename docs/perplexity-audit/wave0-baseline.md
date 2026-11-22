@@ -22,7 +22,9 @@
 |---|---:|---|
 | Explicit API route table entries | 247 | Parsed from the ROUTES array in backend/server.js. |
 | Inline HTTP handlers | 6 | Selected health, config, static-module, storefront, and tracking handlers. |
-| Distinct named route handler functions | 138 | Extracted from the 247 route-table entries; inline handlers are separately identified. |\n| Total detected route entries | 253 | 35 remain unclassified by the heuristic module classifier. |
+| Distinct named route handler functions | 137 | Extracted from the 247 route-table entries; all 247 route-table entries resolve to a local declaration or named import. |
+| Unresolved handler references | 0 | Static declaration/import resolution only; not a runtime execution guarantee. |
+| Total detected route entries | 253 | 35 remain unclassified by the heuristic module classifier. |
 | Duplicate method/path keys | 0 | No duplicate display keys detected by the inventory. |
 | Exported SQLite store functions | 253 | Static exported-function declarations in store-sqlite.js. |
 | Unique SQL tables | 110 | Deduplicated table names from 112 CREATE TABLE declarations. |
