@@ -73,7 +73,7 @@ export function isConsumptionPlan(value) {
     typeof value.organization_id === 'string' &&
     typeof value.location_id === 'string' &&
     Array.isArray(value.lines) &&
-    value.mutation_authority === 'app/src/warehouse/inventory.js' &&
+    value.mutation_authority === 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovementBatch' &&
     value.ledger_authority === 'app/src/warehouse/ledger.js' &&
     value.idempotency === 'event_id');
 }
