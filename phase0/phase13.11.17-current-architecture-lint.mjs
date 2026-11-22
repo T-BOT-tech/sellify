@@ -36,8 +36,8 @@ for (const file of packFiles) {
     // Some vertical packs publish explicit forbidden parallel-authority
     // declarations instead of a domain_entities list. Treat those as guard
     // metadata and separately validate the pack's owned entities.
-    const forbiddenBlock = source.match(/forbidden_parallel_authorities\\s*:\\s*Object\\.freeze\\(\\[([\\s\\S]*?)\\]\\)/);
-    const ownsBlock = source.match(/owns\\s*:\\s*Object\\.freeze\\(\\[([\\s\\S]*?)\\]\\)/);
+    const forbiddenBlock = source.match(/forbidden_parallel_authorities\s*:\s*Object\.freeze\(\[([\s\S]*?)\]\)/);
+    const ownsBlock = source.match(/owns\s*:\s*Object\.freeze\(\[([\s\S]*?)\]\)/);
     assert(forbiddenBlock, `domain entity or forbidden-authority declaration missing in ${file}`);
     assert(ownsBlock, `owned domain entity declaration missing in ${file}`);
     const verticalName = path.basename(path.dirname(file));
