@@ -39,7 +39,7 @@ for (const line of manifest) {
 const currentDoc = read('PHASE21.18_CURRENT_VERIFICATION.md');
 assert.match(currentDoc, /SELF_REPORTED/);
 assert.match(currentDoc, /UNKNOWN[\s\S]*STALE[\s\S]*CONFLICTING/);
-assert.match(currentDoc, /historical Phase 21.16 snapshot/);
+assert.match(currentDoc, /historical Phase 21\.16 source snapshot/);
 console.log('Phase 21.18 current evidence verification: PASS');
 console.log('Historical Phase 21.16 manifest and Node 22 handoff preserved: PASS');
 console.log('Current 11-entry SHA-256 source manifest: PASS');
