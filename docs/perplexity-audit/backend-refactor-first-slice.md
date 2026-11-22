@@ -92,3 +92,13 @@ Because this is an incremental extraction:
 - Revert the specific route-module extraction if a gate fails.
 - Do not combine multiple high-risk domains in one commit.
 - Do not merge without the required regression and security gates.
+
+## Customer sync authorization follow-up
+
+A subsequent handler-level review found that `POST /events/:chatId` enforced `inventory:edit` for Inventory events but did not enforce `customers:manage` for `customer.upsert`. This allowed a tenant-authenticated read-only Customer role to attempt a write through the offline event path, bypassing the direct Customer HTTP handler's permission check.
+
+The existing sync route now applies the canonical `customers:manage` authorization before passing `customer.upsert` to `processSyncEvent`. No new permission, event type, persistence authority, or schema was introduced. The Customer HTTP integration regression now verifies both:
+- a staff session without `customers:manage` receives a per-event rejection and creates no customer;
+- an authorized owner can submit `customer.upsert` through the actual HTTP event endpoint, with the authenticated actor and device preserved in canonical audit records.
+
+Verification for this follow-up is running in the current branch CI; do not treat it as passed until the workflow completes.
