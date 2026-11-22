@@ -18,7 +18,7 @@ import { assertTenantScope, assertLocationScope, TENANT_SCOPE } from '../backend
 import { buildAuditRecord, recordAudit } from '../app/src/audit/audit-boundary.js';
 import { normalizeLogisticsReturn } from '../app/src/verticals/logistics/proof-return-contract.js';
 import { assertRegionalFreightBoundary } from '../app/src/verticals/logistics/regional-freight-contract.js';
-import { normalizeLogisticsSchedulingRequest } from '../app/src/verticals/logistics/scheduling-contract.js';
+import { logisticsSchedulingContract, normalizeLogisticsSchedulingRequest } from '../app/src/verticals/logistics/scheduling-contract.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -129,6 +129,7 @@ assert.deepEqual(assertRegionalFreightBoundary({ createsRouteEngine: true }), {
 });
 assert.throws(() => normalizeLogisticsSchedulingRequest({ route_engine: true }), /cannot contain route_engine/);
 assert.throws(() => normalizeLogisticsSchedulingRequest({ routeEngine: true }), /cannot contain routeEngine/);
+assert.equal(logisticsSchedulingContract().route_engine, false);
 
 // 9. Source-level authority locks: no duplicate persistence, shared batch
 // transaction, route engine, or new domain authority may appear in this phase.
@@ -167,8 +168,8 @@ for (const name of logisticsFiles) {
       .split('\n')
       .filter((line) => !line.trimStart().startsWith('//'))
       .join('\n')
-      .replaceAll("'route_engine'", '')
-      .replaceAll("'routeEngine'", '');
+      .replaceAll('route_engine', '')
+      .replaceAll('routeEngine', '');
     assert.doesNotMatch(executableSource, /route[-_ ]?(engine|planner|optimizer)/i);
   } else {
     assert.doesNotMatch(content, /route[-_ ]?(engine|planner|optimizer)/i);
