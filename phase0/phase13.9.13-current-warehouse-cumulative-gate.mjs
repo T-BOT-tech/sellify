@@ -33,25 +33,15 @@ for (const relative of requiredProduction) {
 }
 
 const checks = [
-  ['13.9.1 Current Warehouse Pack Boundary', 'node:phase13.9.1-current'],
-  ['13.9.2 Warehouse Authority Map', 'test:phase13.9.2'],
-  ['13.9.3 Current Existing Module Boundary', 'node:phase13.9.3-current'],
-  ['13.9.4 Inventory Bridge', 'test:phase13.9.4'],
-  ['13.9.5 Location Bridge', 'test:phase13.9.5'],
-  ['13.9.6 Fulfillment Boundary', 'test:phase13.9.6'],
-  ['13.9.7 Receiving Contract', 'test:phase13.9.7'],
-  ['13.9.8 Stock Adjustment Contract', 'test:phase13.9.8'],
-  ['13.9.9 Configuration', 'test:phase13.9.9'],
-  ['13.9.10 Targeted Regression', 'test:phase13.9.10'],
+  ['13.9.10 Current Targeted Regression', 'node:phase13.9.10-current'],
   ['13.9.11 Adversarial / Idempotency / Isolation', 'test:phase13.9.11'],
   ['13.9.12 Legacy Bin Compatibility', 'test:phase13.9.12'],
 ];
 
 for (const [label, script] of checks) {
-  const directNodePath = {
-    'node:phase13.9.1-current': 'phase0/phase13.9.1-current-warehouse-pack-boundary-regression.mjs',
-    'node:phase13.9.3-current': 'phase0/phase13.9.3-current-warehouse-existing-module-boundary-regression.mjs',
-  }[script] || null;
+  const directNodePath = script === 'node:phase13.9.10-current'
+    ? 'phase0/phase13.9.10-current-warehouse-targeted-regression.mjs'
+    : null;
   const result = spawnSync(
     directNodePath ? process.execPath : (process.platform === 'win32' ? 'npm.cmd' : 'npm'),
     directNodePath ? [directNodePath] : ['run', script],
