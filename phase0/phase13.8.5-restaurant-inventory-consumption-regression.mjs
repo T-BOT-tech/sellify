@@ -77,7 +77,7 @@ const idempotent = await consumeThroughCoreInventory(plan, {
   products,
   inventoryMovements: [
     { eventId: 'restaurant:organization:org-1:preparation:prep-42:ingredient:tomato', productId: 'tomato', quantity: -6, movementType: 'SALE', locationId: 'loc-1', organizationId: 'org-1', metadata: { recipeId: 'recipe-7', unit: 'kg' }, reason: 'Restaurant preparation prep-42 / recipe recipe-7', syncStatus: 'synced' },
-    { eventId: 'restaurant:organization:org-1:preparation:prep-42:ingredient:oil', productId: 'oil', quantity: -2, movementType: 'SALE', locationId: 'loc-1', organizationId: 'org-1', metadata: { recipeId: 'recipe-7', unit: 'kg' }, reason: 'Restaurant preparation prep-42 / recipe recipe-7', syncStatus: 'synced' },
+    { eventId: 'restaurant:organization:org-1:preparation:prep-42:ingredient:oil', productId: 'oil', quantity: -2, movementType: 'SALE', locationId: 'loc-1', organizationId: 'org-1', metadata: { recipeId: 'recipe-7', unit: 'L' }, reason: 'Restaurant preparation prep-42 / recipe recipe-7', syncStatus: 'synced' },
   ],
   recordCanonicalInventoryMovementBatch() { throw new Error('must not execute a fully confirmed replay'); },
 });
