@@ -10,38 +10,38 @@
 
 ## Priority 1: establish current truth
 
-1. Create a concise architecture map and current-capability matrix.
+1. Keep the architecture map and capability matrix aligned with current source and executable evidence.
 2. Identify canonical owners for every major domain.
 3. Mark features as implemented, partial, request-only, or not implemented.
 4. Archive completed phase documents without deleting history.
 
 ## Priority 2: make the backend maintainable
 
-1. Extract shared HTTP middleware and route registration.
-2. Split routes by domain.
-3. Create a persistence inventory for SQLite.
-4. Extract one bounded store domain at a time.
-5. Run all relevant regression gates after each extraction.
+1. Complete route inventory review, including all unclassified entries and handler behavior.
+2. Build a route-to-handler map covering middleware, authorization, scope, errors, and side effects.
+3. Create a SQLite persistence map covering tables, foreign keys, indexes, migration dependencies, transactions, call sites, and cross-domain invariants.
+4. Select one genuinely bounded, low-risk slice only after those maps are reviewed.
+5. Run the relevant regression gates after each extraction; do not infer module boundaries from route paths or function names alone.
 
 ## Priority 3: consolidate developer workflow
 
-1. Add `test`, `test:integration`, `test:security`, `test:e2e`, and `test:release` entry points.
-2. Map existing phase scripts into those suites.
+1. Add clear test, test:integration, test:security, test:e2e, and test:release entry points only after mapping existing scripts and CI gates.
+2. Map existing phase scripts into those suites without deleting or renaming historical commands initially.
 3. Publish expected runtime and required environment variables.
 4. Make security and isolation tests fail closed.
 
-## Priority 4: resolve capacity and scheduling
+## Priority 4: preserve and complete capacity evidence boundaries
 
-1. Adopt the request-only scheduling boundary until a trusted authority exists.
-2. Add evidence freshness, validity, quality, and provenance fields only where the existing schema requires them.
-3. Enforce fail-closed behavior for stale or unknown evidence.
-4. Prevent supplier self-assertion of verified evidence.
-5. Disable or hide unauthorized scheduling transitions in the UI.
+1. Keep Logistics Scheduling request-only until a trusted resource/capacity and feasibility authority is explicitly established.
+2. Preserve the current fail-closed time-bound Discovery matching checks for status, quality, observation time, validity, period overlap, quantity, and unit.
+3. Review every other capacity consumer before allowing capacity evidence to drive time-sensitive operational decisions; do not assume all non-time-bound searches apply the same freshness checks.
+4. Add independent OBSERVED or VERIFIED evidence only after a trusted observer identity, provenance contract, and authorization boundary exist.
+5. Preserve immutable RFQ-time capacity evidence snapshots and the distinction between a supplier declaration, a matching result, and operational authorization.
 
 ## Priority 5: production readiness
 
 1. Define environment separation and deployment runbook.
-2. Add structured logs, request IDs, tenant context, health checks, and operational metrics.
+2. Add structured logs, request IDs, tenant context, health checks, and operational metrics where gaps are verified.
 3. Define backup, restore, migration, rollback, and incident procedures.
 4. Decide the long-term database strategy before SQLite becomes a scaling constraint.
 
