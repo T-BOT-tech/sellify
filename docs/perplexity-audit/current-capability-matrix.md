@@ -41,8 +41,9 @@ It is a planning aid, not a replacement for executable tests or runtime verifica
 
 ## Immediate unresolved decisions
 
-1. Define the canonical owner of logistics capacity and feasibility.
-2. Decide whether supplier-declared capacity can ever satisfy a hard time-sensitive constraint.
-3. Define evidence freshness, validity, quality, and provenance rules.
-4. Decide whether operational scheduling remains request-only until those rules exist.
-5. Define the long-term persistence strategy beyond SQLite.
+1. Define the trusted operational owner and evidence contract for Logistics Scheduling feasibility; current Discovery matching is not that authority.
+2. Explicitly accept or reject SELF_REPORTED supplier capacity as sufficient evidence for each hard time-sensitive use case; the current bounded matcher permits it only when its server-authored observation and validity checks pass.
+3. Define the trusted observer identity, provenance, and authorization contract required before OBSERVED or VERIFIED evidence can be accepted.
+4. Review legacy quantity-only capacity consumers before using them for hard time-sensitive decisions; do not assume they inherit the time-bound matcher's freshness guarantees.
+5. Keep operational scheduling request-only until the trusted feasibility path and its authorization, tenant/location scope, and side-effect boundaries are implemented and tested.
+6. Define the long-term persistence strategy beyond SQLite.
