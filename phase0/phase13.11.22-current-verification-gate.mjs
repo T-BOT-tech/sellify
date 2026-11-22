@@ -107,7 +107,7 @@ const checks = [
   ['13.11.16 Current Adversarial Regression', 'node:phase13.11.16-current'],
   ['13.11.17 Current Architecture-Lint', 'node:phase13.11.17-current'],
   ['13.11.18 Integration Matrix', 'test:phase13.11.18'],
-  ['13.9.13 Warehouse Cumulative', 'test:phase13.9.13'],
+  ['13.9.13 Current Warehouse Cumulative', 'node:phase13.9.13-current'],
   ['13.10.15 Logistics Cumulative', 'test:phase13.10.15'],
   ['Golden Regression', 'phase0:test'],
 ];
@@ -117,6 +117,7 @@ for (const [label, script] of checks) {
     'node:phase13.11.12-current': 'phase0/phase13.11.12-current-regression.mjs',
     'node:phase13.11.16-current': 'phase0/phase13.11.16-current-adversarial-regression.mjs',
     'node:phase13.11.17-current': 'phase0/phase13.11.17-current-architecture-lint.mjs',
+    'node:phase13.9.13-current': 'phase0/phase13.9.13-current-warehouse-cumulative-gate.mjs',
   }[script];
   const result = spawnSync(
     directNodePath ? process.execPath : (process.platform === 'win32' ? 'npm.cmd' : 'npm'),
