@@ -59,6 +59,13 @@ assert.match(source, /activity\.timezone \|\| workspaceTimezone/);
 assert.match(source, /timeZone, dateStyle: 'medium', timeStyle: 'short'/);
 assert.doesNotMatch(source, /Intl\.DateTimeFormat\(\)\.resolvedOptions\(\)\.timeZone/);
 assert.match(source, /logisticsSchedulingTimeZoneMissing/);
+assert.match(source, /const feasibilityBlocked = \['SCHEDULED', 'CONFIRMED'\]\.includes\(target\) && activity\.lastEvaluation !== 'FEASIBLE'/,
+  'Schedule and Confirm controls must remain blocked unless trusted feasibility is FEASIBLE');
+assert.match(source, /disabled aria-disabled/);
+assert.match(source, /logisticsSchedulingScheduleBlocked/);
+assert.match(source, /SCHEDULING_FEASIBILITY_UNKNOWN/);
+assert.match(source, /SCHEDULING_FEASIBILITY_CONFLICT/);
+
 const timezoneContract = await readFile(new URL('../app/src/verticals/logistics/scheduling-timezone-contract.js', import.meta.url), 'utf8');
 assert.match(timezoneContract, /SCHEDULING_LOCAL_TIME_AMBIGUOUS/);
 

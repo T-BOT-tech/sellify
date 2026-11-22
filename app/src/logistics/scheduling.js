@@ -121,7 +121,7 @@ function transitionTargets(status) {
 function renderActivity(activity) {
   const targets = canManageScheduling() ? transitionTargets(activity.status) : [];
   const transitionButtons = targets.map(target => {
-    const feasibilityBlocked = target === 'SCHEDULED' && activity.lastEvaluation !== 'FEASIBLE';
+    const feasibilityBlocked = ['SCHEDULED', 'CONFIRMED'].includes(target) && activity.lastEvaluation !== 'FEASIBLE';
     const blockedAttributes = feasibilityBlocked
       ? `disabled aria-disabled="true" title="${escapeHtml(t('logisticsSchedulingScheduleBlocked'))}"`
       : '';
