@@ -10,7 +10,7 @@ Its scope spans buyer and seller commerce, procurement, supplier networks, inven
 
 | Area | Location | Role |
 |---|---|---|
-| PWA frontend | `app/` | Browser application and operational workspaces. |
+| PWA frontend | `app/` | Vanilla HTML/CSS/ES-module browser application, PWA shell, and operational workspaces. |
 | Backend API | `backend/server.js` | HTTP server, route handling, and orchestration. |
 | Backend libraries | `backend/lib/` | Authorization, tenant isolation, events, discovery, logistics, payments, and vertical boundaries. |
 | Persistence | `backend/lib/store-sqlite.js` | SQLite-backed persistence and domain store logic. |
@@ -25,7 +25,7 @@ Its scope spans buyer and seller commerce, procurement, supplier networks, inven
 | Runtime | Node.js with ESM | The project targets a Node 24 runtime gate. |
 | Backend | Node.js HTTP server | `backend/server.js` is 274 KB and likely contains a large share of routing and orchestration. |
 | Persistence | SQLite | `backend/lib/store-sqlite.js` is 962 KB and is the principal persistence concentration. |
-| Frontend | PWA | Located in `app/`; exact UI framework requires a deeper frontend inspection. |
+| Frontend | Vanilla HTML/CSS and browser ES modules; PWA | `app/index.html` is the main shell; `app/src/main.js` imports local ES modules. `app/package.json` has no React, Vue, Angular, Svelte, or other frontend framework dependency. |
 | Testing | Node regression scripts | Extensive but highly fragmented across npm scripts. |
 | Integrations | Telegram, payments, logistics, country packs | Broad external and vertical integration surface. |
 
