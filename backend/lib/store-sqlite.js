@@ -5483,7 +5483,24 @@ export async function listProcurementReceipts(chatId, { purchaseOrderId = '', st
   return db.prepare(`SELECT * FROM procurement_receipts WHERE ${where.join(' AND ')} ORDER BY received_at DESC, created_at DESC LIMIT ?`).all(...params, n).map(row => getProcurementReceiptByIdSync(organizationId, row.id));
 }
 
+// SQLite uses one synchronous connection per process. Serialize receipt
+// posting across the full async operation so a second request cannot enter a
+// transaction while the first is awaiting tenant/Inventory work.
+let procurementReceiptWriteQueue = Promise.resolve();
+
 export async function createProcurementReceipt(chatId, purchaseOrderId, input = {}, actor = null) {
+  const previous = procurementReceiptWriteQueue;
+  let release;
+  procurementReceiptWriteQueue = new Promise(resolve => { release = resolve; });
+  await previous;
+  try {
+    return await createProcurementReceiptUnlocked(chatId, purchaseOrderId, input, actor);
+  } finally {
+    release();
+  }
+}
+
+async function createProcurementReceiptUnlocked(chatId, purchaseOrderId, input = {}, actor = null) {
   const organizationId = await tenantOrganizationId(chatId);
   const actorId = assertProcurementActor(organizationId, actor);
   const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ? AND organization_id = ?').get(String(purchaseOrderId), organizationId);
