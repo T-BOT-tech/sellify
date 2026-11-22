@@ -129,12 +129,22 @@ assert.throws(() => buildConsumptionPlan({ ...preparation, ingredients: [{ produ
 assert.throws(() => buildConsumptionPlan({ ...preparation, ingredients: [{ product_id: 'tomato', quantity: 0, unit: 'kg' }] }, { organizationId: 'org-1', locationId: 'loc-1', coreProducts: products }), /positive number/);
 await assert.rejects(
   consumeThroughCoreInventory(plan, {
-    products: [{ ...products[0], stock: 2 }, products[1]],
+    products: [{ ...products[0], stock: 20 }, products[1]],
     inventoryMovements: [],
-    recordCanonicalInventoryMovementBatch() { throw new Error('must not execute after failed preflight'); },
+    getInventoryBalance(productId) { return productId === 'tomato' ? 2 : 10; },
+    recordCanonicalInventoryMovementBatch() { throw new Error('must not execute after failed canonical preflight'); },
   }),
-  /Insufficient stock/,
+  /Insufficient canonical stock/,
 );
+
+const staleLegacyStock = await consumeThroughCoreInventory(plan, {
+  products: [{ ...products[0], stock: 0 }, products[1]],
+  inventoryMovements: [],
+  getInventoryBalance(productId) { return productId === 'tomato' ? 20 : 10; },
+  async recordCanonicalInventoryMovementBatch() { return { queued: false, movements: [] }; },
+});
+assert.equal(staleLegacyStock.sync_status, 'confirmed',
+  'stale legacy product.stock must not block a preparation when canonical balance is sufficient');
 
 const contract = inventoryConsumptionContract();
 assert.equal(contract.recipe_authority, 'restaurant');
