@@ -83,6 +83,7 @@ export function isConsumptionPlan(value) {
 export async function consumeThroughCoreInventory(plan, {
   products = [],
   inventoryMovements = [],
+  getInventoryBalance,
   recordCanonicalInventoryMovementBatch,
 } = {}) {
   if (!isConsumptionPlan(plan)) throw new TypeError('Valid Restaurant inventory consumption plan is required');
@@ -124,9 +125,14 @@ export async function consumeThroughCoreInventory(plan, {
   for (const line of pending) {
     const product = byId.get(line.product_id);
     if (!product) throw new TypeError(`Core Commerce product ${line.product_id} does not exist`);
-    const stock = typeof product.stock === 'number' ? product.stock : 0;
-    if (stock < line.quantity) {
-      throw new RangeError(`Insufficient stock for product ${line.product_id}: required ${line.quantity}, available ${stock}`);
+    // Only a canonical balance projection may be used for local preflight.
+    // Legacy product.stock is not authoritative in an authenticated tenant and
+    // may be stale; the server remains the final stock validator.
+    const stock = typeof getInventoryBalance === 'function'
+      ? Number(getInventoryBalance(line.product_id, plan.location_id))
+      : null;
+    if (Number.isFinite(stock) && stock < line.quantity) {
+      throw new RangeError(`Insufficient canonical stock for product ${line.product_id}: required ${line.quantity}, available ${stock}`);
     }
   }
 
