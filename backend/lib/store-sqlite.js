@@ -5535,8 +5535,6 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
   const createdAt = nowIso();
   let receiptId = String(input.id || crypto.randomUUID());
   let receiptNumber = receiptNumberInput || nextProcurementReceiptNumber(organizationId);
-  const eventIds = items.map(item => `procurement_receipt:${receiptId}:${item.purchaseOrderItemId}`);
-
   if (idempotencyKey) {
     const old = db.prepare('SELECT * FROM procurement_receipts WHERE organization_id=? AND idempotency_key=?').get(organizationId, String(idempotencyKey));
     if (old) {
@@ -5552,6 +5550,8 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
   const existingPending = idempotencyKey
     ? db.prepare("SELECT id FROM procurement_receipts WHERE organization_id=? AND idempotency_key=? AND status='PENDING'").get(organizationId, String(idempotencyKey))
     : null;
+
+  const eventIds = items.map(item => `procurement_receipt:${receiptId}:${item.purchaseOrderItemId}`);
 
   if (!existingPending) {
     db.exec('BEGIN IMMEDIATE');
