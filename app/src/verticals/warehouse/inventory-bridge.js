@@ -73,7 +73,7 @@ export function buildWarehouseReceivingBridge({ receiving, product, location } =
     reference_id: receivingId,
     event_id: eventId,
     mutation_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
-    ledger_authority: 'app/src/warehouse/ledger.js#recordInventoryMovement',
+    ledger_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
     idempotency: 'event_id',
   });
 }
@@ -108,7 +108,7 @@ export function buildWarehouseStockAdjustmentBridge({ adjustment, product, locat
     reference_id: adjustmentId,
     event_id: eventId,
     mutation_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
-    ledger_authority: 'app/src/warehouse/ledger.js#recordInventoryMovement',
+    ledger_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
     idempotency: 'event_id',
   });
 }
@@ -121,7 +121,7 @@ export function isWarehouseInventoryBridge(value) {
     typeof value.location_id === 'string' &&
     typeof value.event_id === 'string' &&
     value.mutation_authority === 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement' &&
-    value.ledger_authority === 'app/src/warehouse/ledger.js#recordInventoryMovement' &&
+    value.ledger_authority === 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement' &&
     value.idempotency === 'event_id');
 }
 
@@ -157,7 +157,7 @@ export const WAREHOUSE_INVENTORY_BRIDGE_CONTRACT = Object.freeze({
   product_authority: 'commerce',
   stock_authority: 'inventory',
   mutation_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
-  ledger_authority: 'app/src/warehouse/ledger.js#recordInventoryMovement',
+  ledger_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
   receiving_movement_type: 'received',
   adjustment_movement_type: 'adjusted',
   receiving_reference_type: 'warehouse_receiving',
