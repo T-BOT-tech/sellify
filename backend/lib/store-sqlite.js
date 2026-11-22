@@ -5535,37 +5535,38 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
   const createdAt = nowIso();
   let receiptId = String(input.id || crypto.randomUUID());
   let receiptNumber = receiptNumberInput || nextProcurementReceiptNumber(organizationId);
-  if (idempotencyKey) {
-    const old = db.prepare('SELECT * FROM procurement_receipts WHERE organization_id=? AND idempotency_key=?').get(organizationId, String(idempotencyKey));
+  let eventIds = [];
+
+  // Resolve idempotency while holding the SQLite write lock. Concurrent retries
+  // with the same key must converge on the same pending/posted receipt identity.
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const old = idempotencyKey
+      ? db.prepare('SELECT * FROM procurement_receipts WHERE organization_id=? AND idempotency_key=?').get(organizationId, String(idempotencyKey))
+      : null;
     if (old) {
       if (old.request_hash !== hash) throw Object.assign(new Error('Idempotency key was already used with a different receipt payload'), { statusCode: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
-      if (old.status === 'POSTED') return getProcurementReceiptByIdSync(organizationId, old.id);
+      if (old.status === 'POSTED') {
+        db.exec('COMMIT');
+        return getProcurementReceiptByIdSync(organizationId, old.id);
+      }
       // A prior attempt may have persisted the receipt intent but failed before
       // all Inventory movements committed. Resume that same receipt identity.
       receiptId = String(old.id);
       receiptNumber = String(old.receipt_number);
-    }
-  }
-
-  const existingPending = idempotencyKey
-    ? db.prepare("SELECT id FROM procurement_receipts WHERE organization_id=? AND idempotency_key=? AND status='PENDING'").get(organizationId, String(idempotencyKey))
-    : null;
-
-  const eventIds = items.map(item => `procurement_receipt:${receiptId}:${item.purchaseOrderItemId}`);
-
-  if (!existingPending) {
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    } else {
       db.prepare(`INSERT INTO procurement_receipts(id,organization_id,purchase_order_id,location_id,receipt_number,status,received_at,notes,idempotency_key,request_hash,created_by_user_id,created_at,updated_at) VALUES(?,?,?,?,?,'PENDING',?,?,?,?,?,?,?)`)
         .run(receiptId, organizationId, po.id, locationId, receiptNumber, receivedAt, notes, idempotencyKey, hash, actorId, createdAt, createdAt);
       const insertLine = db.prepare(`INSERT INTO procurement_receipt_lines(id,receipt_id,purchase_order_item_id,product_id,received_quantity,notes,event_id,created_at) VALUES(?,?,?,?,?,?,?,?)`);
       for (let i=0; i<items.length; i += 1) {
         const item = items[i];
-        insertLine.run(crypto.randomUUID(), receiptId, item.purchaseOrderItemId, item.productId, item.receivedQuantity, item.notes, eventIds[i], createdAt);
+        const eventId = `procurement_receipt:${receiptId}:${item.purchaseOrderItemId}`;
+        insertLine.run(crypto.randomUUID(), receiptId, item.purchaseOrderItemId, item.productId, item.receivedQuantity, item.notes, eventId, createdAt);
       }
-      db.exec('COMMIT');
-    } catch (error) { if (db.isTransaction) db.exec('ROLLBACK'); throw error; }
-  }
+    }
+    eventIds = items.map(item => `procurement_receipt:${receiptId}:${item.purchaseOrderItemId}`);
+    db.exec('COMMIT');
+  } catch (error) { if (db.isTransaction) db.exec('ROLLBACK'); throw error; }
 
   // Keep every line in one caller-owned SQLite transaction. If any movement
   // fails validation or persistence, all receipt movements roll back and the
