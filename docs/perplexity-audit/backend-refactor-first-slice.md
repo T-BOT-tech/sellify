@@ -10,7 +10,7 @@ Complete a low-risk, behavior-preserving first extraction from `backend/server.j
 - Kept `sendJSON` and `sendError` wrappers in `backend/server.js`; the server still supplies its configured CORS allowlist, so call sites and configuration ownership remain unchanged.
 - Added a focused response-contract regression for allowed/disallowed origins, wildcard development behavior, request IDs, content length, 4xx codes, and 5xx message/code redaction.
 - Added the missing Payment production-certification route handler and a real HTTP regression for authentication, tenant isolation, read/manage permissions, and fail-closed certification.
-- CI verification is pending for the exact current branch head. Do not mark this slice certified until the new tests and existing CI gates pass.
+- Focused payment-certification HTTP and shared-response contract regressions passed in Sellify CI run #3893 at commit `6d0f191d97c2d0466f5ba07256d3551c616e2a13`. The full baseline and exact-current-head CI remain pending; do not mark this slice fully certified until those gates complete.
 
 This slice does not change API contracts, database schemas, business rules, or authorization policy.
 
