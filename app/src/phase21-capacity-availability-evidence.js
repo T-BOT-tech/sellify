@@ -115,7 +115,7 @@ export function projectCapacityAvailabilityEvidence(signal = {}, options = {}) {
     ? 'UNKNOWN'
     : Date.parse(normalizedValidUntil) >= Date.parse(evaluatedAt) ? 'CURRENT' : 'STALE';
   const source = optionalText(signal.source, 'signal.source');
-  const provenanceType = source?.toUpperCase() === 'DECLARED' ? 'SELF_REPORTED' : 'UNKNOWN';
+  const provenanceType = ['DECLARED', 'SUPPLIER-NETWORK'].includes(source?.toUpperCase()) ? 'SELF_REPORTED' : 'UNKNOWN';
   // Supplier Network currently records declarations, not independent
   // observations or verification. Never trust a caller-supplied VERIFIED or
   // OBSERVED label on a declared capacity signal.
