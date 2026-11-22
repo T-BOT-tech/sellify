@@ -5527,7 +5527,7 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
   });
 
   const requestedReceivedAt = input.receivedAt ?? input.received_at ?? null;
-  const receivedAt = String(requestedReceivedAt || nowIso());
+  let receivedAt = String(requestedReceivedAt || nowIso());
   const notes = String(input.notes || '').trim().slice(0, 4000);
   const idempotencyKey = input.idempotencyKey ?? input.idempotency_key ?? null;
   const hash = procurementReceiptHash({ purchaseOrderId: po.id, locationId, receivedAt: requestedReceivedAt ? receivedAt : null, notes, items });
@@ -5554,6 +5554,7 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
       // all Inventory movements committed. Resume that same receipt identity.
       receiptId = String(old.id);
       receiptNumber = String(old.receipt_number);
+      receivedAt = String(old.received_at || receivedAt);
     } else {
       db.prepare(`INSERT INTO procurement_receipts(id,organization_id,purchase_order_id,location_id,receipt_number,status,received_at,notes,idempotency_key,request_hash,created_by_user_id,created_at,updated_at) VALUES(?,?,?,?,?,'PENDING',?,?,?,?,?,?,?)`)
         .run(receiptId, organizationId, po.id, locationId, receiptNumber, receivedAt, notes, idempotencyKey, hash, actorId, createdAt, createdAt);
