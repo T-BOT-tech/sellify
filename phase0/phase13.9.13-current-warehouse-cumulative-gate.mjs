@@ -62,7 +62,7 @@ for (const rel of requiredProduction) {
 const checks = [
   ['13.9.1 Current Warehouse Pack Boundary', 'node:phase0/phase13.9.1-current-warehouse-pack-boundary-regression.mjs'],
   ['13.9.2 Warehouse Authority Map', 'test:phase13.9.2'],
-  ['13.9.3 Existing Module Boundary', 'test:phase13.9.3'],
+  ['13.9.3 Current Existing Module Boundary', 'node:phase0/phase13.9.3-current-warehouse-existing-module-boundary-regression.mjs'],
   ['13.9.4 Inventory Bridge', 'test:phase13.9.4'],
   ['13.9.5 Location Bridge', 'test:phase13.9.5'],
   ['13.9.6 Fulfillment Boundary', 'test:phase13.9.6'],
