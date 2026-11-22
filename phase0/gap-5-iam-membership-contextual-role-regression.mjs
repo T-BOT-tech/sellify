@@ -75,6 +75,7 @@ assert.match(frontend, /Contextual role revocation confirmed by the server/);
 
 // Render the actual administration module against a minimal authenticated
 // tenant response so the UI contract is tested, not only source-string matched.
+globalThis.window = { __APP_CONFIG__: {} };
 const { config } = await import('../app/src/state.js');
 config.chatId = 'gap5-ui-tenant';
 config.sessionToken = 'gap5-ui-session';
@@ -112,6 +113,7 @@ assert.match(panel.innerHTML, /2026-11-21T10:00:00.000Z/);
 assert.match(panel.innerHTML, /data-grant-contextual/);
 assert.match(panel.innerHTML, /data-revoke-contextual/);
 delete globalThis.document;
+delete globalThis.window;
 
 console.log('GAP-5 IAM Membership/Contextual Role Regression: PASS');
 console.log('Generic role mutation protections: PASS');
