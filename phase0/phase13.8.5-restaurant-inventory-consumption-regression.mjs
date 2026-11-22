@@ -84,6 +84,22 @@ const idempotent = await consumeThroughCoreInventory(plan, {
 assert.equal(idempotent.applied_count, 0);
 assert.equal(idempotent.skipped_idempotent_count, 2);
 
+let partialReplayLines = 0;
+const partialProjectionReplay = await consumeThroughCoreInventory(plan, {
+  products,
+  inventoryMovements: [
+    { eventId: 'restaurant:organization:org-1:preparation:prep-42:ingredient:tomato', productId: 'tomato', quantity: -6, movementType: 'SALE', locationId: 'loc-1', organizationId: 'org-1', syncStatus: 'synced' },
+  ],
+  async recordCanonicalInventoryMovementBatch(command) {
+    partialReplayLines = command.lines.length;
+    return { queued: false, duplicate: true, movements: command.lines };
+  },
+});
+assert.equal(partialReplayLines, 2, 'partial local projection must replay the complete atomic batch');
+assert.equal(partialProjectionReplay.applied_count, 0);
+assert.equal(partialProjectionReplay.replayed_count, 2);
+
+
 let pendingRetryCalls = 0;
 const pendingRetry = await consumeThroughCoreInventory(plan, {
   products,
