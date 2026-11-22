@@ -105,7 +105,7 @@ const checks = [
   ['13.11.13 Cancellation / Returns', 'test:phase13.11.13'],
   ['13.11.14 Authorization / Tenant Isolation', 'test:phase13.11.14'],
   ['13.11.15 Audit / Observability', 'test:phase13.11.15'],
-  ['13.11.16 Adversarial Regression', 'test:phase13.11.16'],
+  ['13.11.16 Current Adversarial Regression', 'node:phase0/phase13.11.16-current-adversarial-regression.mjs'],
   ['13.11.17 Architecture-Lint', 'test:phase13.11.17'],
   ['13.11.18 Integration Matrix', 'test:phase13.11.18'],
   ['13.9.13 Warehouse Cumulative', 'test:phase13.9.13'],
