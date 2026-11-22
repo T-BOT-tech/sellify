@@ -18,9 +18,9 @@ All ingredient lines are sent as one event. The backend processes the complete m
 
 ## Idempotency
 Each ingredient retains the deterministic movement identity:
-`restaurant:preparation:<preparationId>:ingredient:<productId>`
+`restaurant:organization:<organizationId>:preparation:<preparationId>:ingredient:<productId>`
 
-The outer batch event also has a stable preparation-scoped identity:
+The outer batch event also has a stable organization- and preparation-scoped identity:
 `inventory.movement.batch.record:<organizationId>:restaurant:preparation:<preparationId>:inventory-batch`
 
 An exact replay returns the original processed result. Reusing the event identity with changed intent is rejected.
