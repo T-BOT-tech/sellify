@@ -1171,6 +1171,11 @@ async function handleSyncEvents(req, res, chatId) {
     results.push(await processEventIsolated(event, async (candidate) => {
       assertEventTenantScope(candidate, { chatId: tenant.chatId, organizationId: tenant.organizationId });
       const eventType = String(candidate?.eventType || candidate?.event_type || '').trim();
+      if (eventType === 'customer.upsert') {
+        await requireAuthorization(session, tenant, 'customers', 'customers:manage', {
+          deniedMessage: 'Customer management permission required',
+        });
+      }
       if (eventType === 'inventory.movement.record' || eventType === 'inventory.movement.batch.record') {
         await requireAuthorization(session, tenant, 'inventory', 'inventory:edit', {
           deniedMessage: 'Inventory edit permission required',
