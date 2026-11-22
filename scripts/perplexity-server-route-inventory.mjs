@@ -61,22 +61,17 @@ for (const item of inlineRoutes) {
 
 routes.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));
 
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\routes.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));');
-}
-
 for (const route of routes) {
   if (!route.handlerFunction) {
     route.handlerResolution = route.sourceKind === 'ROUTES table' ? 'unresolved reference' : 'not applicable';
     continue;
   }
-  const name = escapeRegExp(route.handlerFunction);
+  const name = route.handlerFunction;
   const localDeclaration = new RegExp(`(?:async\\s+)?function\\s+${name}\\s*\\(`).test(source)
     || new RegExp(`(?:const|let|var)\\s+${name}\\s*=`).test(source);
   const importedBinding = new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from`).test(source);
   route.handlerResolution = localDeclaration ? 'local declaration' : importedBinding ? 'imported binding' : 'unresolved reference';
 }
-
 
 const inventory = {
   generatedAt: new Date().toISOString(),
