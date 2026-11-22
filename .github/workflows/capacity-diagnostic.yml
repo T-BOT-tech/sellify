@@ -10,41 +10,134 @@ permissions:
   contents: read
 
 jobs:
-  capacity-diagnostic:
+  probe-contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 24
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs contract
 
-      - name: Verify runtime
-        run: node --version
+  probe-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs database
 
-      - name: Install dependencies
-        run: npm ci --ignore-scripts
+  probe-tenant:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs tenant
 
-      - name: Phase 18.5 supplier network capacity regression
-        run: node phase0/phase18.5-supplier-network-capacity-regression.mjs
+  probe-participation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs participation
 
-      - name: Phase 19.5 supplier network federation regression
-        run: node phase0/phase19.5-supplier-network-federation-regression.mjs
+  probe-upsert-valid:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs upsert-valid
 
-      - name: Phase 19.7 deterministic matching regression
-        run: npm run test:phase19.7
+  probe-reject-quantity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs reject-quantity
 
-      - name: Phase 21 cumulative regression gate
-        run: npm run test:phase21.14
+  probe-reject-period:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs reject-period
 
-      - name: Phase 21 Node 24 runtime verification
-        run: npm run test:phase21.15
+  probe-reject-availability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs reject-availability
 
-      - name: Phase 21.18 current evidence verification
-        run: node phase0/phase21.18-current-verification-regression.mjs
+  probe-reject-expired-validuntil:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs reject-expired-validuntil
 
-      - name: Phase 21.17 capacity evidence migration regression
-        run: npm run test:phase21.17
+  probe-update-preserves-expiry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs update-preserves-expiry
+
+  probe-clear-expiry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs clear-expiry
+
+  probe-lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node phase0/capacity-diagnostic-probe.mjs lifecycle
