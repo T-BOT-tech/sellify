@@ -33,7 +33,7 @@ for (const relative of requiredProduction) {
 }
 
 const checks = [
-  ['13.9.1 Warehouse Pack Boundary', 'phase13.9.1:warehouse-boundary-test'],
+  ['13.9.1 Current Warehouse Pack Boundary', 'node:phase13.9.1-current'],
   ['13.9.2 Warehouse Authority Map', 'test:phase13.9.2'],
   ['13.9.3 Existing Module Boundary', 'test:phase13.9.3'],
   ['13.9.4 Inventory Bridge', 'test:phase13.9.4'],
@@ -48,9 +48,14 @@ const checks = [
 ];
 
 for (const [label, script] of checks) {
-  const result = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', script], {
-    cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const directNodePath = script === 'node:phase13.9.1-current'
+    ? 'phase0/phase13.9.1-current-warehouse-pack-boundary-regression.mjs'
+    : null;
+  const result = spawnSync(
+    directNodePath ? process.execPath : (process.platform === 'win32' ? 'npm.cmd' : 'npm'),
+    directNodePath ? [directNodePath] : ['run', script],
+    { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+  );
   process.stdout.write(result.stdout || '');
   process.stderr.write(result.stderr || '');
   if (result.status !== 0) {
