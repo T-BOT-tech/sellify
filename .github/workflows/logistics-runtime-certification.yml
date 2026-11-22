@@ -7,15 +7,19 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   logistics-certification:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: npm install --no-package-lock
+      - run: npm ci --ignore-scripts
       - run: npm run test:logistics-master-exit
       - run: npm run test:logistics-l8-l21-certification
       - name: Phase 16.13 Logistics provider stack cumulative regression
