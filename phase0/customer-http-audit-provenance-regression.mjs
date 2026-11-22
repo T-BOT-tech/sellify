@@ -85,6 +85,23 @@ try {
   const crossTenantRead = await request(base, { headers: auth(otherSession.token) });
   assert.equal(crossTenantRead.response.status, 403, 'another tenant session cannot read this tenant customer list');
 
+  const conflictingCustomerId = `foreign-customer-id-${suffix}`;
+  await store.upsertCustomer(otherTenant.chatId, {
+    id: conflictingCustomerId, name: 'Private Other Tenant Customer',
+  });
+  const idCollision = await request(base, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ id: conflictingCustomerId, name: 'Must Not Claim Foreign ID' }),
+  });
+  assert.equal(idCollision.response.status, 409, 'a caller cannot reuse a customer ID owned by another organization');
+  assert.equal(idCollision.json.error?.code, 'CUSTOMER_ID_CONFLICT');
+  const foreignIdLookup = await request(`${base}/${encodeURIComponent(conflictingCustomerId)}`, {
+    headers: auth(ownerSession.token),
+  });
+  assert.equal(foreignIdLookup.response.status, 404,
+    'rejecting a foreign customer ID must not reveal the other organization customer');
+
   const staffRead = await request(base, { headers: auth(staffSession.token) });
   assert.equal(staffRead.response.status, 200, 'staff may read customers');
 
