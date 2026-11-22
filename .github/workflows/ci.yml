@@ -398,6 +398,8 @@ jobs:
         run: npm run gap-1.19:payment-production-certification-test
       - name: GAP-1.19 production certification HTTP authorization and tenant-isolation regression
         run: node phase0/gap-1.19-payment-production-certification-http-regression.mjs
+      - name: Shared HTTP response CORS and error-redaction regression
+        run: node phase0/http-response-contract-regression.mjs
       - name: GAP-1.19 Payment Core E2E certification regression
         run: npm run gap-1.19:payment-e2e-certification-test
       - name: GAP-1.19 adversarial Payment Core certification regression
