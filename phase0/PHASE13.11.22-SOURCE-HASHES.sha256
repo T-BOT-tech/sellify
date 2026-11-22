@@ -2,4 +2,5 @@ b8cdfa19f444f52d2d596520404d32eb6a50cdc87888d5d87cb5fe7ebb00adf2  .github/workfl
 b7db584a848c20bed26607c23670f5cd7f19a35ed5bbfcd7e16b5e6f7bed23b1  phase0/PHASE13.11.22-CURRENT-VERIFICATION.md
 18871a410f7f9b03ca5720fd6723224f9ff2fa90012123412beb91fc5352fbc1  phase0/gap-2-production-readiness-regression.mjs
 7aee04ec5c1341a17b6c467f90519b7ca492d0fa79ca01490d9f23a6e357b3a3  phase0/phase13.11.12-current-regression.mjs
-2f629317c6235d476513cf5f19e79db041549c2064ebb8261966fd0c89579439  phase0/phase13.11.22-current-verification-gate.mjs
+7cc15ad8db64a5291f045513db9d58e3403dc58c44bc371bf456641bafc59569  phase0/phase13.11.16-current-adversarial-regression.mjs
+b709b9ca20fc447a46e98bcd29be2b1855b2af05658609327d162ead80b9ad25  phase0/phase13.11.22-current-verification-gate.mjs
