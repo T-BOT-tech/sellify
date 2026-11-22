@@ -10,10 +10,10 @@
 |---|---|
 | Repository | T-BOT-tech/sellify |
 | Audit branch | audit/perplexity-codebase-modularity-20261122 |
-| Verified head | 1f8da95a7c8bd1c60c432e5a4e67fa70b56a9e46 |
+| Verified head | e7bd1ac1e650b81854f865feaa431e131e727f49 |
 | Audit workflow | .github/workflows/perplexity-audit.yml |
 | Inventory regression check | Passed |
-| CI run | https://github.com/T-BOT-tech/sellify/actions/runs/45068439341 |
+| CI run | https://github.com/T-BOT-tech/sellify/actions/runs/45068707343 |
 | Verification date | 2026-11-22 |
 
 ## Verified static inventory
@@ -22,7 +22,7 @@
 |---|---:|---|
 | Explicit API route table entries | 247 | Parsed from the ROUTES array in backend/server.js. |
 | Inline HTTP handlers | 6 | Selected health, config, static-module, storefront, and tracking handlers. |
-| Total detected route entries | 253 | 35 remain unclassified by the heuristic module classifier. |
+| Distinct named route handler functions | 137 | Extracted from the 247 route-table entries; inline handlers are separately identified. |\n| Total detected route entries | 253 | 35 remain unclassified by the heuristic module classifier. |
 | Duplicate method/path keys | 0 | No duplicate display keys detected by the inventory. |
 | Exported SQLite store functions | 253 | Static exported-function declarations in store-sqlite.js. |
 | Unique SQL tables | 110 | Deduplicated table names from 112 CREATE TABLE declarations. |
@@ -33,7 +33,7 @@
 
 The path classifier proposes 15 groups, but **35 routes remain unclassified**. It strips the tenant scope prefix before applying domain heuristics, so tenant-scoped procurement, supplier, payment, and logistics routes are not all collapsed into a generic tenant group.
 
-The proposed groups are only review hints. The inventory does not extract handler call graphs, middleware, authorization requirements, transaction behavior, or side effects. In particular, a route's URL prefix is not evidence that a proposed module owns the underlying canonical domain.
+The proposed groups are only review hints. The inventory now records the named handler function referenced by each route-table entry. It does not extract handler call graphs, middleware, authorization requirements, transaction behavior, or side effects. In particular, a route's URL prefix is not evidence that a proposed module owns the underlying canonical domain.
 
 ## Store inventory
 
