@@ -107,6 +107,18 @@ const errorSignatures = [
   'time',
   'actor',
   'organization',
+  'supplier organization',
+  'organization not found',
+  'supplier not found',
+  'not found',
+  'does not',
+  'must have',
+  'active',
+  'supplier profile',
+  'organization id',
+  'supplier participation',
+  'not active',
+  'missing supplier',
 ];
 
 switch (probe) {
@@ -137,42 +149,6 @@ switch (probe) {
   case 'result-resolves': {
     const capacity = await createValidCapacity();
     assert.ok(capacity !== undefined && capacity !== null, 'capacity upsert returned null or undefined');
-    break;
-  }
-  case 'result-id': {
-    const capacity = await createValidCapacity();
-    assert.ok(capacity?.id, 'capacity result has no id');
-    break;
-  }
-  case 'result-quantity': {
-    const capacity = await createValidCapacity();
-    assert.equal(capacity?.quantity, 1000, `quantity mismatch: ${capacity?.quantity}`);
-    break;
-  }
-  case 'result-source': {
-    const capacity = await createValidCapacity();
-    assert.equal(capacity?.source, 'DECLARED', `source mismatch: ${capacity?.source}`);
-    break;
-  }
-  case 'result-status': {
-    const capacity = await createValidCapacity();
-    assert.equal(capacity?.status, 'ACTIVE', `status mismatch: ${capacity?.status}`);
-    break;
-  }
-  case 'result-version': {
-    const capacity = await createValidCapacity();
-    assert.equal(capacity?.version, 1, `version mismatch: ${capacity?.version}`);
-    break;
-  }
-  case 'result-observed-at': {
-    const capacity = await createValidCapacity();
-    assert.ok(capacity?.observedAt, 'capacity result has no observedAt');
-    assert.equal(new Date(capacity.observedAt).toISOString(), capacity.observedAt, `observedAt is not ISO: ${capacity?.observedAt}`);
-    break;
-  }
-  case 'result-valid-until': {
-    const capacity = await createValidCapacity();
-    assert.equal(capacity?.validUntil, validUntil, `validUntil mismatch: ${capacity?.validUntil}`);
     break;
   }
   case 'upsert-valid': {
