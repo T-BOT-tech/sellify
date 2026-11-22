@@ -10,7 +10,9 @@ Complete a low-risk, behavior-preserving first extraction from `backend/server.j
 - Kept `sendJSON` and `sendError` wrappers in `backend/server.js`; the server still supplies its configured CORS allowlist, so call sites and configuration ownership remain unchanged.
 - Added focused response-contract coverage for allowed/disallowed JSON origins, OPTIONS preflight allow/deny behavior, wildcard development behavior, request IDs, content length, 4xx codes, and 5xx message/code redaction.
 - Added the missing Payment production-certification route handler and a real HTTP regression for authentication, tenant isolation, read/manage permissions, and fail-closed certification.
-- Focused payment-certification HTTP and shared-response contract regressions passed in Sellify CI run #3893 at commit `6d0f191d97c2d0466f5ba07256d3551c616e2a13`. The full baseline and exact-current-head CI remain pending; do not mark this slice fully certified until those gates complete.
+- The payment-certification HTTP, shared-response, and CORS preflight regressions passed in Sellify CI run #3900 at commit `b9afc747487b999ee70e4cd19ee1c36ecc2eb15a`.
+- Full Sellify CI run #3900 passed all five jobs, including the baseline, Phase 13.10.24, Phase 21 capacity evidence, Logistics L18, and Logistics exit certification jobs. Repository Security Checks #3364 and Perplexity inventory #72 also passed at that code head.
+- The implementation slice is CI-verified. This does not certify overall production readiness or approve bulk route extraction.
 
 This slice does not change API contracts, database schemas, business rules, or authorization policy.
 
