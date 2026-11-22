@@ -89,6 +89,25 @@ try {
   const crossTenant = await request(base, { headers: headers(otherSession.token) });
   assert.equal(crossTenant.response.status, 403, 'a session for another tenant cannot read certifications');
 
+  const allowedPreflight = await request(base, {
+    method: 'OPTIONS',
+    headers: {
+      Origin: 'http://localhost:3000',
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': 'authorization,content-type',
+    },
+  });
+  assert.equal(allowedPreflight.response.status, 204);
+  assert.equal(allowedPreflight.response.headers.get('access-control-allow-origin'), 'http://localhost:3000');
+  assert.equal(allowedPreflight.response.headers.get('access-control-allow-methods'), 'GET,POST,PATCH,OPTIONS');
+
+  const deniedPreflight = await request(base, {
+    method: 'OPTIONS',
+    headers: { Origin: 'https://untrusted.example', 'Access-Control-Request-Method': 'POST' },
+  });
+  assert.equal(deniedPreflight.response.status, 204);
+  assert.equal(deniedPreflight.response.headers.get('access-control-allow-origin'), null);
+
   const empty = await request(base, {
     headers: { ...headers(ownerSession.token), Origin: 'http://localhost:3000' },
   });
