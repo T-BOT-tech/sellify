@@ -112,6 +112,27 @@ try {
   });
   assert.equal(deniedStaffCreate.response.status, 403, 'staff view permission does not permit customer management');
 
+  const staffSyncCustomerId = `staff-sync-customer-${suffix}`;
+  const staffSyncEventId = `staff-sync-customer-event-${suffix}`;
+  const deniedStaffSync = await request(`/events/${encodeURIComponent(tenant.chatId)}`, {
+    method: 'POST',
+    headers: jsonAuth(staffSession.token),
+    body: JSON.stringify({ events: [{
+      eventId: staffSyncEventId,
+      eventType: 'customer.upsert',
+      aggregateType: 'customer',
+      aggregateId: staffSyncCustomerId,
+      occurredAt: new Date().toISOString(),
+      payload: { id: staffSyncCustomerId, name: 'Staff Must Not Sync Customer' },
+    }] }),
+  });
+  assert.equal(deniedStaffSync.response.status, 200, 'event batch reports per-event authorization rejection');
+  assert.equal(deniedStaffSync.json.results?.[0]?.status, 'rejected',
+    'customer.upsert must be rejected for a staff member without customers:manage');
+  assert.match(deniedStaffSync.json.results?.[0]?.error || '', /Customer management permission required/);
+  assert.equal(await store.getCustomer(tenant.chatId, staffSyncCustomerId), null,
+    'unauthorized customer.upsert must not reach the canonical customer store');
+
   const created = await request(base, {
     method: 'POST',
     headers: jsonAuth(ownerSession.token),
@@ -195,15 +216,22 @@ try {
     'phone natural-key matching must not create duplicate customer rows');
 
   const syncCustomerId = `sync-customer-${suffix}`;
-  const syncEvent = await store.processSyncEvent(tenant.chatId, {
-    eventId: `customer-sync-event-${suffix}`,
-    eventType: 'customer.upsert',
-    aggregateType: 'customer',
-    aggregateId: syncCustomerId,
-    occurredAt: new Date().toISOString(),
-    payload: { id: syncCustomerId, name: 'Customer Sync Audit', source: 'http-regression' },
-  }, { userId: owner.id, deviceId: ownerSession.deviceId });
-  assert.equal(syncEvent.status, 'processed');
+  const syncEventId = `customer-sync-event-${suffix}`;
+  const syncEvent = await request(`/events/${encodeURIComponent(tenant.chatId)}`, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ events: [{
+      eventId: syncEventId,
+      eventType: 'customer.upsert',
+      aggregateType: 'customer',
+      aggregateId: syncCustomerId,
+      occurredAt: new Date().toISOString(),
+      payload: { id: syncCustomerId, name: 'Customer Sync Audit', source: 'http-regression' },
+    }] }),
+  });
+  assert.equal(syncEvent.response.status, 200);
+  assert.equal(syncEvent.json.results?.[0]?.status, 'processed',
+    'owner customer.upsert must pass the authenticated HTTP event boundary');
   const syncAudit = db.prepare(`
     SELECT actor_id, device_id, organization_id
     FROM audit_events WHERE entity_type = 'customer' AND entity_id = ?
@@ -217,7 +245,7 @@ try {
 
   const syncReceipt = db.prepare(
     'SELECT actor_id, device_id FROM sync_events WHERE event_id = ?'
-  ).get(`customer-sync-event-${suffix}`);
+  ).get(syncEventId);
   assert.equal(String(syncReceipt.actor_id), String(owner.id));
   assert.equal(String(syncReceipt.device_id), String(ownerSession.deviceId));
 
