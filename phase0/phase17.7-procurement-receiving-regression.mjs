@@ -75,5 +75,22 @@ assert.equal(recoveredReceipt.status,'POSTED');
 assert.equal(db.prepare("SELECT COUNT(*) c FROM inventory_movements WHERE reference_type='procurement_receipt' AND reference_id=?").get(batchReceipt.id).c,2);
 assert.equal(db.prepare("SELECT quantity FROM inventory_movements WHERE event_id=?").get(`procurement_receipt:${batchReceipt.id}:${firstBatchItemId}`).quantity,2);
 assert.equal(db.prepare("SELECT quantity FROM inventory_movements WHERE event_id=?").get(`procurement_receipt:${batchReceipt.id}:${secondBatchItemId}`).quantity,3);
+// Two simultaneous retries with the same key must converge on one posted
+// receipt and one movement, even when both callers pass the initial lookup.
+const concurrentReceiptInput = {
+  locationId: location.id,
+  idempotencyKey: `receipt-concurrent-${x}`,
+  items: [{ purchaseOrderItemId: secondBatchItemId, receivedQuantity: 1 }],
+};
+const concurrentResults = await Promise.all([
+  createProcurementReceipt(buyer.tenant.chat_id,po.id,concurrentReceiptInput,buyer.actor),
+  createProcurementReceipt(buyer.tenant.chat_id,po.id,concurrentReceiptInput,buyer.actor),
+]);
+assert.equal(concurrentResults[0].id, concurrentResults[1].id);
+assert.equal(concurrentResults[0].status, 'POSTED');
+assert.equal(concurrentResults[1].status, 'POSTED');
+assert.equal(db.prepare("SELECT COUNT(*) c FROM inventory_movements WHERE event_id=?").get(
+  `procurement_receipt:${concurrentResults[0].id}:${secondBatchItemId}`
+).c, 1, 'concurrent same-key retries must create exactly one movement');
 const receipts=await listProcurementReceipts(buyer.tenant.chat_id,{purchaseOrderId:po.id},buyer.actor); assert.equal(receipts.length,4); assert.equal(db.prepare("SELECT COUNT(*) c FROM procurement_receipt_lines").get().c,5); assert.equal(db.prepare("SELECT COUNT(*) c FROM payments").get().c,0); assert.equal(db.prepare("SELECT COUNT(*) c FROM accounts_receivable").get().c,0);
 console.log('Phase 17.7 Procurement Receiving Regression: PASS');
