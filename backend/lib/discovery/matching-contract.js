@@ -114,7 +114,10 @@ function capacityMatches(candidate, context) {
       // Time-bound eligibility requires evidence with an explicit quality.
       // Unknown, stale, or conflicting declarations remain visible but cannot
       // satisfy a hard availability constraint.
-      if (!['SELF_REPORTED', 'OBSERVED', 'VERIFIED'].includes(upper(signal.quality))) return false;
+      // Independent OBSERVED/VERIFIED evidence requires a trusted observer binding,
+      // which is not yet part of this provider contract. Accept supplier-declared
+      // evidence only; never let a provider self-assert independent verification.
+      if (upper(signal.quality) !== 'SELF_REPORTED') return false;
       const evaluatedAt = parseInstant(context.evaluatedAt);
       const observedAt = parseInstant(signal.observedAt);
       const validUntil = parseInstant(signal.validUntil);
