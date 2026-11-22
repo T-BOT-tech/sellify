@@ -13,6 +13,7 @@ Its scope spans buyer and seller commerce, procurement, supplier networks, inven
 | PWA frontend | `app/` | Vanilla HTML/CSS/ES-module browser application, PWA shell, and operational workspaces. |
 | Backend API | `backend/server.js` | HTTP server, route handling, and orchestration. |
 | Backend libraries | `backend/lib/` | Authorization, tenant isolation, events, discovery, logistics, payments, and vertical boundaries. |
+| HTTP response helper | `backend/lib/http/response.js` | Shared JSON response headers, CORS response policy, request IDs, and structured error redaction; server retains configuration and wrapper signatures. |
 | Persistence | `backend/lib/store-sqlite.js` | SQLite-backed persistence and domain store logic. |
 | Regression suite | `phase0/` | Phase-specific contract, security, integration, adversarial, and runtime tests. |
 | Delivery documents | repository root | Phase handoffs, certification evidence, hashes, and gap analyses. |
