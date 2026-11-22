@@ -40,7 +40,7 @@ const inventory = buildRestaurantInventoryHandoff(preparation, {
   organizationId: orgA, locationId: locationA, coreProducts: products,
 });
 assert.equal(inventory.stock_authority, 'inventory');
-assert.equal(inventory.mutation_authority, 'app/src/warehouse/inventory.js');
+assert.equal(inventory.mutation_authority, 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovementBatch');
 assert.equal(inventory.ledger_authority, 'app/src/warehouse/ledger.js');
 assert.equal(inventory.lines[0].quantity, 2);
 assert.equal(inventory.lines[0].event_id, 'restaurant:preparation:prep-1:ingredient:p-rice');
@@ -90,6 +90,8 @@ assert.equal(contract.payment_authority, 'payments');
 assert.equal(contract.duplicate_order_authority, false);
 assert.equal(contract.duplicate_inventory_authority, false);
 assert.equal(contract.duplicate_payment_authority, false);
+assert.equal(contract.mutation_authority, 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovementBatch');
+assert.equal(contract.ledger_authority, 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovementBatch');
 assert.equal(contract.direct_stock_mutation_by_restaurant, false);
 assert.equal(contract.persistence_added, false);
 
