@@ -92,5 +92,5 @@ assert.equal(concurrentResults[1].status, 'POSTED');
 assert.equal(db.prepare("SELECT COUNT(*) c FROM inventory_movements WHERE event_id=?").get(
   `procurement_receipt:${concurrentResults[0].id}:${secondBatchItemId}`
 ).c, 1, 'concurrent same-key retries must create exactly one movement');
-const receipts=await listProcurementReceipts(buyer.tenant.chat_id,{purchaseOrderId:po.id},buyer.actor); assert.equal(receipts.length,4); assert.equal(db.prepare("SELECT COUNT(*) c FROM procurement_receipt_lines").get().c,5); assert.equal(db.prepare("SELECT COUNT(*) c FROM payments").get().c,0); assert.equal(db.prepare("SELECT COUNT(*) c FROM accounts_receivable").get().c,0);
+const receipts=await listProcurementReceipts(buyer.tenant.chat_id,{purchaseOrderId:po.id},buyer.actor); assert.equal(receipts.length,5); assert.equal(db.prepare("SELECT COUNT(*) c FROM procurement_receipt_lines").get().c,6); assert.equal(db.prepare("SELECT COUNT(*) c FROM payments").get().c,0); assert.equal(db.prepare("SELECT COUNT(*) c FROM accounts_receivable").get().c,0);
 console.log('Phase 17.7 Procurement Receiving Regression: PASS');
