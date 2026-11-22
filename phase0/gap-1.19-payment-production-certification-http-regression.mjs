@@ -63,6 +63,11 @@ try {
     userId: otherOwner.id, sellerName: `GAP-1.19 Other Tenant ${suffix}`,
     businessType: 'retail', country: 'ET', currency: 'ETB', timezone: 'Africa/Addis_Ababa',
   });
+  const db = store.getDatabaseForTests();
+  const organizationId = String(db.prepare(
+    'SELECT organization_id FROM tenants WHERE chat_id = ?'
+  ).get(tenant.chatId)?.organization_id || '');
+  assert.ok(organizationId, 'tenant must have a canonical organization');
 
   const manager = await store.getOrCreateUserByTelegram(`gap119-cert-manager-${suffix}`, 'GAP-1.19 Certification Manager');
   await store.ensureMembership(manager.id, tenant.chatId, 'manager');
@@ -116,8 +121,8 @@ try {
   });
   assert.equal(certified.response.status, 200, JSON.stringify(certified.json));
   assert.equal(certified.json.status, 'BLOCKED', 'unknown provider evidence must fail closed');
-  assert.equal(certified.json.certification.organizationId, undefined,
-    'HTTP result should not invent a client-supplied organization');
+  assert.equal(certified.json.certification.organizationId, organizationId,
+    'HTTP handler must use the tenant organization, not the forged request value');
   assert.equal(certified.json.certification.status, 'BLOCKED');
   assert.equal(certified.json.certification.certifiedByUserId, manager.id);
 
@@ -126,6 +131,7 @@ try {
   assert.equal(listed.json.certifications.length, 1);
   assert.equal(listed.json.certifications[0].providerId, 'unknown-test-provider');
   assert.equal(listed.json.certifications[0].status, 'BLOCKED');
+  assert.equal(listed.json.certifications[0].organizationId, organizationId);
   assert.notEqual(listed.json.certifications[0].organizationId, 'forged-organization');
 
   console.log('GAP-1.19 Payment production-certification HTTP authorization/isolation regression: PASS');
