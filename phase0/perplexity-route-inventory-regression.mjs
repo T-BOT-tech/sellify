@@ -69,6 +69,14 @@ if (!Number.isInteger(inventory.handlerFunctionCount) || inventory.handlerFuncti
   throw new Error(`Expected at least 100 distinct named route handlers; detected ${inventory.handlerFunctionCount}.`);
 }
 
+if (!Number.isInteger(inventory.unresolvedHandlerFunctionCount) || inventory.unresolvedHandlerFunctionCount !== 0) {
+  const unresolved = inventory.routes
+    .filter(route => route.handlerResolution === 'unresolved reference')
+    .map(route => `${route.method} ${route.path} -> ${route.handlerFunction || 'missing handler'}`)
+    .slice(0, 10);
+  throw new Error(`Found ${inventory.unresolvedHandlerFunctionCount} unresolved route handler references: ${unresolved.join(', ')}`);
+}
+
 if (inventory.routeCount !== inventory.routes.length) {
   throw new Error('Route inventory count does not match detected routes.');
 }
