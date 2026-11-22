@@ -2,7 +2,7 @@
 
 ## Status
 
-IMPLEMENTED / REGRESSION VERIFIED under the current runtime.
+CANONICAL EXECUTION BOUNDARY CORRECTED; full product workflow remains PARTIAL.
 
 Node >=24 remains a separate release-certification requirement because the current execution environment is Node 22.
 
@@ -41,7 +41,7 @@ It supports the two currently formalized Warehouse stock operations:
 - `receive`
 - `adjust`
 
-The contract is persistence-neutral and delegates execution to the existing Inventory mutation authority.
+The contract is persistence-neutral and delegates execution to the existing canonical Inventory movement API.
 
 ## Invariants
 
@@ -55,8 +55,8 @@ The contract is persistence-neutral and delegates execution to the existing Inve
 8. `event_id` is preserved for deterministic replay/idempotency handoff.
 9. Receiving maps to `received` / `warehouse_receiving`.
 10. Adjustment maps to `adjusted` / `warehouse_stock_adjustment`.
-11. Execution is delegated to `app/src/warehouse/inventory.js#applyStockChange`.
-12. Movement recording remains delegated to `app/src/warehouse/ledger.js#recordInventoryMovement`.
+11. Execution is delegated to `app/src/warehouse/ledger.js#recordCanonicalInventoryMovement`.
+12. Movement persistence, authorization, idempotency and audit remain owned by the canonical Inventory backend.
 13. No second persistence store is introduced.
 
 ## Explicit non-goals
@@ -86,3 +86,4 @@ Expected result:
 ```text
 Phase 13.11.4 Warehouse ↔ Inventory Integration Regression: PASS
 ```
+\n## Remaining product integration\n\nThe handoff contract and both bridge modules now target the canonical Inventory movement API. The receiving/adjustment user journey is not yet proven to invoke these contracts from the persisted Warehouse UI/API workflow. Do not mark Stage 2.2 complete until that caller, pending/unknown UI state and authenticated HTTP persistence regression are covered.\n
