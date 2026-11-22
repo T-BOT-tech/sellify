@@ -60,7 +60,7 @@ const unknownStatusProvider = {
 const unknownStatusProjection = projectLogisticsProviderForDiscovery(unknownStatusProvider);
 assert.equal(unknownStatusProjection.capacitySignals[0].status, undefined, 'normalization must preserve unknown status');
 assert.equal(unknownStatusProjection.capacitySignals[0].source, null, 'normalization must not invent declaration provenance');
-assert.equal(unknownStatusProjection.capacitySignals[0].quality, 'UNKNOWN', 'observation timestamps alone do not establish evidence quality');
+assert.equal(unknownStatusProjection.capacitySignals[0].quality, 'SELF_REPORTED', 'explicit supplier-declared quality remains self-reported');
 const unknownStatusMatch = matchLogisticsProviders([unknownStatusProvider], {
   capability: 'delivery', countryCode: 'ET', geoCode: 'ADDIS_ABABA',
   minimumQuantity: 20, unit: 'parcel',
@@ -68,5 +68,19 @@ const unknownStatusMatch = matchLogisticsProviders([unknownStatusProvider], {
   availabilityTo: '2026-12-12T23:59:59.999Z',
 });
 assert.equal(unknownStatusMatch.candidates.length, 0, 'missing status cannot satisfy time-bound capacity matching');
+
+const unknownQualityProvider = {
+  ...providers[0],
+  capacitySignals: [{ ...providers[0].capacitySignals[0], quality: undefined }],
+};
+const unknownQualityProjection = projectLogisticsProviderForDiscovery(unknownQualityProvider);
+assert.equal(unknownQualityProjection.capacitySignals[0].quality, 'UNKNOWN', 'observation timestamps alone do not establish evidence quality');
+const unknownQualityMatch = matchLogisticsProviders([unknownQualityProvider], {
+  capability: 'delivery', countryCode: 'ET', geoCode: 'ADDIS_ABABA',
+  minimumQuantity: 20, unit: 'parcel',
+  availabilityFrom: '2026-12-10T00:00:00.000Z',
+  availabilityTo: '2026-12-12T23:59:59.999Z',
+});
+assert.equal(unknownQualityMatch.candidates.length, 0, 'unknown quality cannot satisfy time-bound capacity matching');
 
 console.log('Phase 16.13.10 Logistics Provider Matching Regression: PASS');
