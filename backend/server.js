@@ -2455,6 +2455,37 @@ async function handlePaymentProviderCapabilityEvidence(req,res,chatId){
 }
 
 
+async function handlePaymentProductionCertification(req, res, chatId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+
+  if (req.method === 'GET') {
+    const query = new URL(req.url, 'http://localhost').searchParams;
+    const certifications = await paymentCore.listProductionCertifications({
+      chatId,
+      organizationId: tenant.organizationId,
+      certificationScope: query.get('scope'),
+      actor: session,
+    });
+    return sendJSON(res, 200, { certifications }, req);
+  }
+
+  if (req.method === 'POST') {
+    const body = await readBody(req);
+    const result = await paymentCore.certifyProductionReadiness({
+      ...body,
+      chatId,
+      organizationId: tenant.organizationId,
+      actor: session,
+    });
+    return sendJSON(res, 200, result, req);
+  }
+
+  return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+}
+
+
 async function handlePaymentOperationalActions(req,res,chatId,paymentId){
   const tenant=await getTenant(chatId);if(!tenant)return sendJSON(res,404,{error:{message:'Unknown store',status:404}},req);
   const session=await requireSession(req,tenant.chatId);
