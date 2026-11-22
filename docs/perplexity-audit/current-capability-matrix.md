@@ -29,7 +29,7 @@ It is a planning aid, not a replacement for executable tests or runtime verifica
 | Vertical packs | Implemented / extensive | Agriculture, restaurant, warehouse, service booking, and cross-pack integration regressions exist. |
 | AI procurement / discovery | Partial | AI intent, procurement context, evidence, preparation, explanation, and authorization tests exist; production readiness requires deeper review. |
 | Operational scheduling | Not implemented | No trusted capacity/feasibility authority is wired to the L11 evaluator. |
-| Time-bound capacity evidence matching | Implemented / bounded; independent verification partial | The current Discovery path fails closed for missing, stale, expired, future-observed, unknown, conflicting, or insufficiently valid evidence. Supplier declarations remain SELF_REPORTED; OBSERVED/VERIFIED evidence requires a trusted independent observer binding that does not yet exist. Legacy quantity-only searches retain a less strict path. |
+| Time-bound capacity evidence matching | Implemented / bounded; independent verification partial | The current Discovery path fails closed for missing, stale, expired, future-observed, unknown, conflicting, or insufficiently valid evidence. Supplier declarations with a server-authored observedAt are normalized as SELF_REPORTED; legacy declarations without it remain UNKNOWN. OBSERVED/VERIFIED evidence requires a trusted independent observer binding that does not yet exist. Legacy quantity-only searches retain a less strict path. |
 
 ## Interpretation
 
