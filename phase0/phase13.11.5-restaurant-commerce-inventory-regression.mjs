@@ -43,7 +43,7 @@ assert.equal(inventory.stock_authority, 'inventory');
 assert.equal(inventory.mutation_authority, 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovementBatch');
 assert.equal(inventory.ledger_authority, 'app/src/warehouse/ledger.js');
 assert.equal(inventory.lines[0].quantity, 2);
-assert.equal(inventory.lines[0].event_id, 'restaurant:preparation:prep-1:ingredient:p-rice');
+assert.equal(inventory.lines[0].event_id, 'restaurant:organization:org-a:preparation:prep-1:ingredient:p-rice');
 assert.equal(inventory.duplicate_inventory_authority, false);
 
 const context = buildRestaurantCommerceInventoryContext(order, preparation, {
@@ -80,7 +80,7 @@ assert.equal(calls[0].referenceType, 'restaurant_preparation');
 assert.equal(calls[0].lines[0].productId, 'p-rice');
 assert.equal(calls[0].lines[0].quantity, -2);
 assert.equal(calls[0].lines[0].movementType, 'SALE');
-assert.equal(calls[0].lines[0].eventId, 'restaurant:preparation:prep-1:ingredient:p-rice');
+assert.equal(calls[0].lines[0].eventId, 'restaurant:organization:org-a:preparation:prep-1:ingredient:p-rice');
 
 const contract = restaurantCommerceInventoryContract();
 assert.equal(contract.order_authority, 'commerce');
