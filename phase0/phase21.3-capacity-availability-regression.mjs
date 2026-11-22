@@ -57,14 +57,18 @@ test('normalizes observation window to ISO timestamps', () => {
   assert.equal(r.availabilityWindow.validUntil, '2026-09-20T10:00:00.000Z');
 });
 
-test('supports explicit evidence quality states', () => {
+test('Supplier Network declarations cannot self-assert independent quality', () => {
   for (const quality of ['SELF_REPORTED', 'OBSERVED', 'VERIFIED', 'STALE', 'UNKNOWN', 'CONFLICTING']) {
-    assert.equal(projectCapacityAvailabilityEvidence({ ...base, quality }).quality, quality);
+    const projected = projectCapacityAvailabilityEvidence({ ...base, source: 'DECLARED', quality });
+    assert.equal(projected.quality, 'SELF_REPORTED');
+    assert.equal(projected.provenanceType, 'SELF_REPORTED');
   }
+  const supplierNetworkProjection = projectCapacityAvailabilityEvidence({ ...base, quality: 'VERIFIED' });
+  assert.equal(supplierNetworkProjection.quality, 'SELF_REPORTED');
 });
 
-test('unknown quality does not become success', () => {
-  assert.equal(projectCapacityAvailabilityEvidence({ ...base, quality: undefined }).quality, 'UNKNOWN');
+test('unknown source quality does not become success', () => {
+  assert.equal(projectCapacityAvailabilityEvidence({ ...base, source: null, quality: 'VERIFIED' }).quality, 'UNKNOWN');
 });
 
 test('foreign authority fails closed', () => {
@@ -88,7 +92,7 @@ test('legacy records without observation time remain projectable as UNKNOWN', ()
   const projected = projectCapacityAvailabilityEvidence({ ...legacy, quality: 'UNKNOWN' });
   assert.equal(projected.availabilityWindow.observedAt, null);
   assert.equal(projected.freshness, 'UNKNOWN');
-  assert.equal(projected.provenanceType, 'UNKNOWN');
+  assert.equal(projected.provenanceType, 'SELF_REPORTED');
   const declaredWithVerifiedQuality = projectCapacityAvailabilityEvidence({
     ...base, source: 'DECLARED', quality: 'VERIFIED',
   });
