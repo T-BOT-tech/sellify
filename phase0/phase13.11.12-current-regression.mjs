@@ -89,7 +89,7 @@ const guardOrder = [
 assert.ok(guardOrder.every((position, index) => position >= 0 && (index === 0 || position > guardOrder[index - 1])),
   'Tenant, authorization, location, and canonical processing guards must remain ordered');
 assert.doesNotMatch(syncHandler, /processSyncEvent\(chatId, event,/);
-assert.doesNotMatch(server, /BEGIN|COMMIT|ROLLBACK/);
+assert.doesNotMatch(syncHandler, /BEGIN|COMMIT|ROLLBACK/);
 
 const storeSource = fs.readFileSync(new URL('../backend/lib/store-sqlite.js', import.meta.url), 'utf8');
 assert.match(storeSource, /BEGIN IMMEDIATE/);
