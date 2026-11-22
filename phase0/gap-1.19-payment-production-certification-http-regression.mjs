@@ -99,7 +99,7 @@ try {
   const cashierWrite = await request(base, {
     method: 'POST',
     headers: jsonHeaders(cashierSession.token),
-    body: JSON.stringify({ providerId: 'unknown-test-provider' }),
+    body: JSON.stringify({ providerId: 'telebirr' }),
   });
   assert.equal(cashierWrite.response.status, 403, 'payments:view alone cannot certify production readiness');
 
@@ -116,7 +116,7 @@ try {
     body: JSON.stringify({
       chatId: 'forged-chat',
       organizationId: 'forged-organization',
-      providerId: 'unknown-test-provider',
+      providerId: 'telebirr',
     }),
   });
   assert.equal(certified.response.status, 200, JSON.stringify(certified.json));
@@ -129,7 +129,7 @@ try {
   const listed = await request(`${base}?scope=PRODUCTION`, { headers: headers(ownerSession.token) });
   assert.equal(listed.response.status, 200, JSON.stringify(listed.json));
   assert.equal(listed.json.certifications.length, 1);
-  assert.equal(listed.json.certifications[0].providerId, 'unknown-test-provider');
+  assert.equal(listed.json.certifications[0].providerId, 'telebirr');
   assert.equal(listed.json.certifications[0].status, 'BLOCKED');
   assert.equal(listed.json.certifications[0].organizationId, organizationId);
   assert.notEqual(listed.json.certifications[0].organizationId, 'forged-organization');
