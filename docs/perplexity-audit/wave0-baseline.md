@@ -10,10 +10,10 @@
 |---|---|
 | Repository | T-BOT-tech/sellify |
 | Audit branch | audit/perplexity-codebase-modularity-20261122 |
-| Verified head | 6d0f191d97c2d0466f5ba07256d3551c616e2a13 |
+| Verified head | b9afc747487b999ee70e4cd19ee1c36ecc2eb15a |
 | Audit workflow | .github/workflows/perplexity-audit.yml |
 | Inventory regression check | Passed |
-| CI run | https://github.com/T-BOT-tech/sellify/actions/runs/45070416195 |
+| CI run | https://github.com/T-BOT-tech/sellify/actions/runs/45070742871 |
 | Verification date | 2026-11-22 |
 
 ## Verified static inventory
@@ -63,7 +63,7 @@ No route count, proposed module, store group, or extraction priority should be t
 
 ## Separate CI status
 
-The inventory workflow run above passed on the verified inventory commit. The full Sellify CI run for that same commit is still in progress. Phase 21 capacity evidence, Phase 13.10.24, Logistics L18, and Logistics exit certification have passed. The baseline job is still running; the new GAP-1.19 production-certification HTTP regression and shared HTTP response/CORS/error-redaction regression have both passed within that job:
-https://github.com/T-BOT-tech/sellify/actions/runs/45070416119
+The inventory workflow run above passed on the verified inventory commit. The full Sellify CI run for this exact source commit is still in progress. The preceding full CI run #3893 passed all five jobs at commit `6d0f191d97c2d0466f5ba07256d3551c616e2a13`; the current run additionally verifies the CORS preflight allow/deny regression added after that run:
+https://github.com/T-BOT-tech/sellify/actions/runs/45070742870
 
 A passing inventory workflow does not imply that the full CI, certification, or release gates passed.
