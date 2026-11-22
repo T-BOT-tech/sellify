@@ -10,10 +10,10 @@
 |---|---|
 | Repository | T-BOT-tech/sellify |
 | Audit branch | audit/perplexity-codebase-modularity-20261122 |
-| Verified head | e7bd1ac1e650b81854f865feaa431e131e727f49 |
+| Verified head | ce45143b2d66875ff459171c9dfca6e2430d689f |
 | Audit workflow | .github/workflows/perplexity-audit.yml |
 | Inventory regression check | Passed |
-| CI run | https://github.com/T-BOT-tech/sellify/actions/runs/45068707343 |
+| CI run | https://github.com/T-BOT-tech/sellify/actions/runs/45068920279 |
 | Verification date | 2026-11-22 |
 
 ## Verified static inventory
@@ -22,7 +22,7 @@
 |---|---:|---|
 | Explicit API route table entries | 247 | Parsed from the ROUTES array in backend/server.js. |
 | Inline HTTP handlers | 6 | Selected health, config, static-module, storefront, and tracking handlers. |
-| Distinct named route handler functions | 137 | Extracted from the 247 route-table entries; inline handlers are separately identified. |\n| Total detected route entries | 253 | 35 remain unclassified by the heuristic module classifier. |
+| Distinct named route handler functions | 138 | Extracted from the 247 route-table entries; inline handlers are separately identified. |\n| Total detected route entries | 253 | 35 remain unclassified by the heuristic module classifier. |
 | Duplicate method/path keys | 0 | No duplicate display keys detected by the inventory. |
 | Exported SQLite store functions | 253 | Static exported-function declarations in store-sqlite.js. |
 | Unique SQL tables | 110 | Deduplicated table names from 112 CREATE TABLE declarations. |
@@ -45,7 +45,7 @@ The 14 function groups are based on function-name substrings. They must not be u
 
 The inventory workflow checks parser coverage floors, record shape, duplicate route keys, unique table names, and migration guard presence/order. It does **not** prove that every runtime route is captured, every route is correctly classified, or each function/table belongs to its proposed group.
 
-Generated timestamped artifacts remain ignored by Git and are not committed. A reviewer must inspect the generated outputs from the same commit being evaluated.
+Generated timestamped artifacts remain ignored by Git and are not committed. The audit workflow uploads them as a run artifact with 14-day retention so reviewers can inspect the exact generated output from the evaluated commit.
 
 ## Still unverified
 
