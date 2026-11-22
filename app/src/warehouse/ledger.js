@@ -122,6 +122,129 @@ export async function recordCanonicalInventoryMovement(input = {}) {
   }
 }
 
+
+function canonicalizeInventoryBatchValue(value) {
+  if (Array.isArray(value)) return value.map(canonicalizeInventoryBatchValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalizeInventoryBatchValue(value[key])]));
+  }
+  return value;
+}
+
+export async function recordCanonicalInventoryMovementBatch(input = {}) {
+  const commandId = String(input.commandId || '').trim();
+  const locationId = String(input.locationId || config.locationId || '').trim();
+  const referenceType = input.referenceType || null;
+  const referenceId = input.referenceId || null;
+  const reason = String(input.reason || '').slice(0, 500);
+  if (!commandId || commandId.length > 128) throw new TypeError('Inventory batch commandId must be a non-empty string of at most 128 characters.');
+  if (!locationId) throw new TypeError('Inventory batch locationId is required.');
+  if (!Array.isArray(input.lines) || input.lines.length < 1 || input.lines.length > 100) {
+    throw new TypeError('Inventory batch must contain between 1 and 100 movement lines.');
+  }
+
+  const seen = new Set();
+  const occurredAt = input.occurredAt || new Date().toISOString();
+  const movements = input.lines.map((line, index) => {
+    const productId = String(line?.productId || '').trim();
+    const lineId = String(line?.lineId || productId).trim();
+    const quantity = Number(line?.quantity);
+    const type = movementType(line?.movementType || 'ADJUSTMENT');
+    if (!productId || !lineId || !Number.isFinite(quantity) || quantity === 0) {
+      throw new TypeError(`Inventory batch line ${index + 1} requires productId, lineId, and a non-zero quantity.`);
+    }
+    if (seen.has(lineId)) throw new TypeError(`Inventory batch contains duplicate lineId ${lineId}.`);
+    seen.add(lineId);
+    const metadata = line.metadata || {};
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+      throw new TypeError(`Inventory batch line ${lineId} metadata must be an object.`);
+    }
+    return {
+      eventId: String(line.eventId || `${commandId}:${lineId}`),
+      tenantChatId: String(config.chatId || ''),
+      organizationId: String(config.organizationId || ''),
+      productId,
+      quantity,
+      movementType: type,
+      locationId,
+      referenceType,
+      referenceId,
+      reason,
+      metadata,
+      occurredAt,
+    };
+  });
+
+  const batchEvent = {
+    eventId: `inventory.movement.batch.record:${String(config.organizationId || config.chatId || 'unscoped')}:${commandId}`,
+    tenantChatId: String(config.chatId || ''),
+    eventType: 'inventory.movement.batch.record',
+    aggregateType: 'inventory_movement_batch',
+    aggregateId: commandId,
+    payload: { movements },
+    occurredAt,
+  };
+  const queue = () => {
+    const queued = enqueueEvent(batchEvent.eventType, batchEvent.payload, {
+      aggregateType: batchEvent.aggregateType,
+      aggregateId: batchEvent.aggregateId,
+      eventId: batchEvent.eventId,
+      occurredAt: batchEvent.occurredAt,
+    });
+    if (queued && JSON.stringify(canonicalizeInventoryBatchValue(queued.payload))
+      !== JSON.stringify(canonicalizeInventoryBatchValue(batchEvent.payload))) {
+      throw Object.assign(new Error('Inventory batch command ID was already queued with different movement intent.'), {
+        code: 'INVENTORY_COMMAND_ID_REUSED',
+      });
+    }
+    return { queued: true, commandId, movements, syncStatus: 'pending' };
+  };
+
+  if (!config.chatId || !config.sessionToken || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+    return queue();
+  }
+
+  try {
+    const res = await fetch(`${baseUrl()}/events/${encodeURIComponent(config.chatId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.sessionToken}` },
+      body: JSON.stringify({ events: [batchEvent] }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const error = new Error(data?.error?.message || `Inventory batch failed (${res.status})`);
+      error.status = res.status;
+      error.code = data?.error?.code;
+      throw error;
+    }
+    const result = (data.results || []).find(item => String(item.eventId) === batchEvent.eventId);
+    if (result?.status !== 'processed') {
+      const error = new Error(result?.error || 'Inventory batch was not confirmed by the canonical authority.');
+      error.status = result?.status === 'rejected' ? 422 : 502;
+      error.code = result?.code || 'INVENTORY_BATCH_NOT_CONFIRMED';
+      throw error;
+    }
+    const confirmed = movements.map(item => ({ ...item, syncStatus: 'synced' }));
+    const byEvent = new Map(inventoryMovements.map(item => [String(item.eventId), item]));
+    for (const item of confirmed) byEvent.set(item.eventId, item);
+    setInventoryMovements([...byEvent.values()].sort((a, b) => String(b.occurredAt || '').localeCompare(String(a.occurredAt || ''))));
+    persist();
+    return {
+      queued: false,
+      commandId,
+      duplicate: Boolean(result.duplicate),
+      movements: confirmed,
+      syncStatus: 'confirmed',
+    };
+  } catch (error) {
+    // A transport failure is UNKNOWN. Queue the exact same event identity and
+    // payload so a server-side success can be safely replayed without a second
+    // stock mutation. Explicit authorization/validation rejections are returned.
+    if (!error?.status && !error?.code) return queue();
+    throw error;
+  }
+}
+
 export async function syncInventoryMovement(movement) {
   if (!movement || !config.chatId || !config.sessionToken) return null;
   const res = await fetch(`${baseUrl()}/tenants/${encodeURIComponent(config.chatId)}/inventory/movements`, {
