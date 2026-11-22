@@ -69,7 +69,7 @@ const checks = [
   ['13.9.7 Receiving Contract', 'test:phase13.9.7'],
   ['13.9.8 Stock Adjustment Contract', 'test:phase13.9.8'],
   ['13.9.9 Configuration', 'test:phase13.9.9'],
-  ['13.9.10 Targeted Regression', 'test:phase13.9.10'],
+  ['13.9.10 Current Targeted Regression', 'node:phase0/phase13.9.10-current-warehouse-targeted-regression.mjs'],
   ['13.9.11 Adversarial / Idempotency / Isolation', 'test:phase13.9.11'],
   ['13.9.12 Legacy Bin Compatibility', 'test:phase13.9.12'],
 ];
