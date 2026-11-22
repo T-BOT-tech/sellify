@@ -73,12 +73,12 @@ jobs:
       - name: Phase 13.10.24 Marketplace fulfillment boundary regression
         run: npm run test:phase13.10.24-marketplace-boundary
 
-      - name: Phase 13.11.19 cross-pack cumulative regression gate
-        run: npm run test:phase13.11.19
-      - name: Phase 13.11.20 documentation and integrity hash regression
-        run: npm run test:phase13.11.20
-      - name: Phase 13.11.21 final snapshot and exit regression
-        run: npm run test:phase13.11.21
+      - name: Phase 13.11.22 current cross-pack cumulative verification gate
+        run: node phase0/phase13.11.22-current-verification-gate.mjs
+      - name: Phase 13.11.20 current historical documentation continuity
+        run: node phase0/phase13.11.20-current-documentation-integrity-regression.mjs
+      - name: Phase 13.11.21 current historical snapshot and exit continuity
+        run: node phase0/phase13.11.21-current-snapshot-exit-regression.mjs
       - name: Service delivery readiness and assignment compatibility regression
         run: npm run test:service-catalog-http
       - name: Service Booking operator workspace regression

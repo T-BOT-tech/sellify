@@ -17,9 +17,16 @@ const requiredScripts = [
 for (const script of requiredScripts) assert.equal(typeof pkg.scripts?.[script], 'string', 'missing ' + script);
 assert.match(ci, /node-version: \[24\]/);
 const deliveryLifecycleCiAliases = ['test:gap-2-delivery-lifecycle', 'test:gap-2-delivery-exception'];
-for (const script of requiredScripts.filter(script => !deliveryLifecycleCiAliases.includes(script))) {
+for (const script of requiredScripts.filter(script =>
+  !deliveryLifecycleCiAliases.includes(script) && script !== 'test:gap-2-delivery-assignment')) {
   assert.ok(ci.includes('npm run ' + script), 'CI missing ' + script);
 }
+const logisticsStart = ci.indexOf('  logistics_l18:');
+const logisticsEnd = ci.indexOf('  logistics_exit_certification:', logisticsStart);
+assert.ok(logisticsStart >= 0 && logisticsEnd > logisticsStart, 'Dedicated logistics_l18 CI job missing');
+const logisticsL18Job = ci.slice(logisticsStart, logisticsEnd);
+assert.ok(logisticsL18Job.includes('run: node phase0/gap-2-delivery-assignment-authority-regression.mjs'),
+  'The dedicated logistics_l18 job must execute delivery-assignment authority regression directly');
 assert.ok(deliveryLifecycleCiAliases.some(script => ci.includes('npm run ' + script)),
   'CI must execute the shared delivery lifecycle/exception regression through one supported alias');
 
