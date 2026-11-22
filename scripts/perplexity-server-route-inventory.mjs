@@ -71,11 +71,11 @@ await writeFile(path.join(outputDir, 'server-route-inventory.json'), `${JSON.str
 const markdown = [
   '# Server route inventory',
   '',
-  `Generated: ${inventory.generatedAt}`,',
+  `Generated: ${inventory.generatedAt}`,
   '',
   `Source: \`${inventory.source}\``,
   '',
-  `Detected routes: ${inventory.routeCount}`,',
+  `Detected routes: ${inventory.routeCount}`,
   '',
   '> This is a static, best-effort inventory. Validate every extraction against existing HTTP, authorization, tenant-isolation, and adversarial regression gates.',
   '',
