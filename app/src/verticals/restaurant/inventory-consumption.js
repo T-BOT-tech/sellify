@@ -91,8 +91,33 @@ export async function consumeThroughCoreInventory(plan, {
   }
 
   const byId = new Map(products.map(product => [String(product.id), product]));
-  const existing = new Set(inventoryMovements.map(movement => String(movement.eventId || '')));
-  const pending = plan.lines.filter(line => !existing.has(line.event_id));
+  const confirmedByEventId = new Map(
+    inventoryMovements
+      .filter(movement => movement?.syncStatus === 'synced')
+      .map(movement => [String(movement.eventId || ''), movement]),
+  );
+  const pending = [];
+  for (const line of plan.lines) {
+    const existing = confirmedByEventId.get(line.event_id);
+    if (!existing) {
+      pending.push(line);
+      continue;
+    }
+    // A confirmed local projection may suppress a repeat only when it proves
+    // the exact same movement. Reusing an event identity for changed intent is
+    // a conflict, never a successful replay.
+    if (
+      String(existing.productId) !== line.product_id
+      || Number(existing.quantity) !== -line.quantity
+      || String(existing.movementType || '').toUpperCase() !== 'SALE'
+      || String(existing.locationId || '') !== plan.location_id
+      || String(existing.organizationId || '') !== plan.organization_id
+    ) {
+      throw Object.assign(new Error(`Inventory movement identity ${line.event_id} is already confirmed with different intent.`), {
+        code: 'INVENTORY_MOVEMENT_IDEMPOTENCY_CONFLICT',
+      });
+    }
+  }
 
   // Local preflight provides immediate feedback. The canonical batch command
   // remains the sole mutation boundary and commits all lines or none.
@@ -135,7 +160,8 @@ export async function consumeThroughCoreInventory(plan, {
 
   return Object.freeze({
     preparation_id: plan.preparation_id,
-    applied_count: result?.queued ? 0 : pending.length,
+    applied_count: result?.queued || result?.duplicate ? 0 : pending.length,
+    replayed_count: result?.duplicate ? pending.length : 0,
     queued_count: result?.queued ? pending.length : 0,
     skipped_idempotent_count: plan.lines.length - pending.length,
     queued: Boolean(result?.queued),
