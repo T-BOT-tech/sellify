@@ -486,7 +486,8 @@
     "test:country-evidence-source-registry": "node phase0/country-evidence-source-registry-regression.mjs",
     "test:service-availability-contract": "node phase0/service-availability-contract-regression.mjs",
     "test:service-availability-api": "node phase0/service-availability-api-regression.mjs",
-    "test:p1-14": "node phase0/p1-14-pack-recovery-regression.mjs"
+    "test:p1-14": "node phase0/p1-14-pack-recovery-regression.mjs",
+    "gap-1.19:payment-production-certification-http-test": "node phase0/gap-1.19-payment-production-certification-http-regression.mjs"
   },
   "engines": {
     "node": ">=24"
