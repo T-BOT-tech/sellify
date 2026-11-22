@@ -125,7 +125,7 @@ for (const [label, script] of checks) {
     console.error(`Phase 13.11.22 Current Verification Gate: FAIL — ${label}`);
     process.exit(result.status || 1);
   }
-  console.log(`Phase 13.11.19 cumulative check: PASS — ${label}`);
+  console.log(`Phase 13.11.22 successor cumulative check: PASS — ${label}`);
 }
 
 console.log('Phase 13.11.22 Current Verification Gate: PASS');
