@@ -1,6 +1,6 @@
 # Phase 13.9.4 — Inventory Bridge Contract
 
-**Status:** Implemented
+**Status:** Canonical execution boundary corrected; product workflow wiring remains open
 **Date:** 2026-09-07
 **Scope:** Formalize the Warehouse-to-Core Inventory bridge for existing receiving and stock-adjustment workflows.
 
@@ -15,7 +15,7 @@ The bridge exposes two persistence-neutral operations:
 
 Execution is delegated to the existing:
 
-- `app/src/warehouse/inventory.js#applyStockChange`
+- `app/src/warehouse/ledger.js#recordCanonicalInventoryMovement`
 - `app/src/warehouse/ledger.js#recordInventoryMovement`
 
 The bridge never writes `product.stock`, `stockTransactions`, or inventory movements itself.
@@ -53,7 +53,7 @@ Result:
 Phase 13.9.4 Warehouse Inventory Bridge Regression: PASS
 ```
 
-The regression covers receiving, adjustment, organization isolation, product identity, quantity validation, delegation to `applyStockChange`, and bridge authority declarations.
+The regression covers receiving, adjustment, organization isolation, product identity, quantity validation, delegation to `recordCanonicalInventoryMovement`, and bridge authority declarations.
 
 The project still declares Node >=24. This step is not the Node >=24 release verification scheduled for Phase 13.9.14.
 
