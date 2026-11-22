@@ -76,8 +76,8 @@ assert.deepEqual(calls[0].lines.map(line => line.eventId), [
 const idempotent = await consumeThroughCoreInventory(plan, {
   products,
   inventoryMovements: [
-    { eventId: 'restaurant:organization:org-1:preparation:prep-42:ingredient:tomato', productId: 'tomato', quantity: -6, movementType: 'SALE', locationId: 'loc-1', organizationId: 'org-1', syncStatus: 'synced' },
-    { eventId: 'restaurant:organization:org-1:preparation:prep-42:ingredient:oil', productId: 'oil', quantity: -2, movementType: 'SALE', locationId: 'loc-1', organizationId: 'org-1', syncStatus: 'synced' },
+    { eventId: 'restaurant:organization:org-1:preparation:prep-42:ingredient:tomato', productId: 'tomato', quantity: -6, movementType: 'SALE', locationId: 'loc-1', organizationId: 'org-1', metadata: { recipeId: 'recipe-7', unit: 'kg' }, reason: 'Restaurant preparation prep-42 / recipe recipe-7', syncStatus: 'synced' },
+    { eventId: 'restaurant:organization:org-1:preparation:prep-42:ingredient:oil', productId: 'oil', quantity: -2, movementType: 'SALE', locationId: 'loc-1', organizationId: 'org-1', metadata: { recipeId: 'recipe-7', unit: 'kg' }, reason: 'Restaurant preparation prep-42 / recipe recipe-7', syncStatus: 'synced' },
   ],
   recordCanonicalInventoryMovementBatch() { throw new Error('must not execute a fully confirmed replay'); },
 });
@@ -88,7 +88,7 @@ let partialReplayLines = 0;
 const partialProjectionReplay = await consumeThroughCoreInventory(plan, {
   products,
   inventoryMovements: [
-    { eventId: 'restaurant:organization:org-1:preparation:prep-42:ingredient:tomato', productId: 'tomato', quantity: -6, movementType: 'SALE', locationId: 'loc-1', organizationId: 'org-1', syncStatus: 'synced' },
+    { eventId: 'restaurant:organization:org-1:preparation:prep-42:ingredient:tomato', productId: 'tomato', quantity: -6, movementType: 'SALE', locationId: 'loc-1', organizationId: 'org-1', metadata: { recipeId: 'recipe-7', unit: 'kg' }, reason: 'Restaurant preparation prep-42 / recipe recipe-7', syncStatus: 'synced' },
   ],
   async recordCanonicalInventoryMovementBatch(command) {
     partialReplayLines = command.lines.length;
@@ -118,7 +118,7 @@ assert.equal(pendingRetry.sync_status, 'pending');
 assert.throws(() => consumeThroughCoreInventory(plan, {
   products,
   inventoryMovements: [
-    { eventId: 'restaurant:organization:org-1:preparation:prep-42:ingredient:tomato', productId: 'tomato', quantity: -5, movementType: 'SALE', locationId: 'loc-1', organizationId: 'org-1', syncStatus: 'synced' },
+    { eventId: 'restaurant:organization:org-1:preparation:prep-42:ingredient:tomato', productId: 'tomato', quantity: -5, movementType: 'SALE', locationId: 'loc-1', organizationId: 'org-1', metadata: { recipeId: 'recipe-7', unit: 'kg' }, reason: 'Restaurant preparation prep-42 / recipe recipe-7', syncStatus: 'synced' },
   ],
   recordCanonicalInventoryMovementBatch() { throw new Error('must reject conflicting confirmed movement'); },
 }), /already confirmed with different intent/);
