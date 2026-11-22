@@ -60,8 +60,8 @@ export function isWarehouseReceivingContract(value) {
     value.reference_type === 'warehouse_receiving' &&
     typeof value.reference_id === 'string' &&
     typeof value.event_id === 'string' &&
-    value.inventory_mutation_authority === 'app/src/warehouse/inventory.js#applyStockChange' &&
-    value.inventory_ledger_authority === 'app/src/warehouse/ledger.js#recordInventoryMovement' &&
+    value.inventory_mutation_authority === 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement' &&
+    value.inventory_ledger_authority === 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement' &&
     value.persistence === 'delegated_to_existing_inventory_authority');
 }
 
@@ -71,8 +71,8 @@ export function warehouseReceivingContract() {
     product_authority: 'commerce',
     inventory_authority: 'inventory',
     location_authority: 'locations',
-    mutation_authority: 'app/src/warehouse/inventory.js#applyStockChange',
-    ledger_authority: 'app/src/warehouse/ledger.js#recordInventoryMovement',
+    mutation_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
+    ledger_authority: 'app/src/warehouse/ledger.js#recordCanonicalInventoryMovement',
     movement_type: 'received',
     reference_type: 'warehouse_receiving',
     idempotency_key: 'event_id',
