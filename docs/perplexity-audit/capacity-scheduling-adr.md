@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted for bounded time-bound Discovery matching. Operational Logistics Scheduling remains request-only pending a trusted feasibility authority.
 
 ## Context
 
@@ -10,7 +10,7 @@ Current analysis indicates that Logistics Scheduling is a request-only coordinat
 
 A caller-provided `FEASIBLE` assertion cannot change an `UNKNOWN` evaluation to `FEASIBLE`, and a requested activity cannot transition to `SCHEDULED` without a trusted feasibility decision.
 
-Separately, supplier capacity matching currently evaluates declared quantity, unit, active status, availability, and period overlap, but does not consistently evaluate evidence freshness, validity, or quality.
+Separately, time-bound Discovery capacity matching now evaluates evidence freshness, validity, quality, active status, quantity, unit, and period overlap. The implementation does not make every legacy quantity-only search freshness-aware, and it does not establish independent evidence verification or operational scheduling feasibility.
 
 ## Decision
 
@@ -46,10 +46,10 @@ This does not establish independent verification or operational Logistics Schedu
 | Infer validity from supply period | Rejected: conflates commercial supply window with evidence freshness. |
 | Supplier self-verification | Rejected: creates an integrity and trust boundary violation. |
 
-## Exit criteria
+## Remaining exit criteria
 
-- Capacity evidence freshness and quality flow from source to matching to UI.
-- Expired, unknown, conflicting, and future-observed evidence cannot appear as fresh availability.
+- Independent OBSERVED or VERIFIED evidence requires a trusted observer identity, provenance contract, and authorization boundary.
+- Every non-time-bound capacity consumer must be reviewed before being used for hard time-sensitive decisions.
 - Scheduling cannot mutate orders, fulfillment, inventory, payments, or dispatch.
-- Tenant, organization, location, and role authorization tests pass.
+- Tenant, organization, location, and role authorization tests remain required for any scheduling execution path.
 - UI exposes only states that the evaluator can authorize.
