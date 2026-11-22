@@ -5575,6 +5575,26 @@ export async function createProcurementReceipt(chatId, purchaseOrderId, input = 
   try {
     await waitForInventoryTransactionSlot();
     db.exec('BEGIN IMMEDIATE');
+    // Another same-key request may have completed while this caller waited
+    // for the Inventory write slot. Re-read under the write lock before any
+    // movement is appended so a concurrent replay cannot post twice.
+    const currentReceipt = db.prepare(
+      'SELECT status FROM procurement_receipts WHERE id=? AND organization_id=?'
+    ).get(receiptId, organizationId);
+    if (!currentReceipt) {
+      throw Object.assign(new Error('Pending procurement receipt was not found'), {
+        statusCode: 409, code: 'PROCUREMENT_RECEIPT_NOT_FOUND',
+      });
+    }
+    if (currentReceipt.status === 'POSTED') {
+      db.exec('COMMIT');
+      return getProcurementReceiptByIdSync(organizationId, receiptId);
+    }
+    if (currentReceipt.status !== 'PENDING') {
+      throw Object.assign(new Error('Procurement receipt is not in a postable state'), {
+        statusCode: 409, code: 'PROCUREMENT_RECEIPT_NOT_PENDING',
+      });
+    }
     for (let i=0; i<items.length; i += 1) {
       await appendInventoryMovement(chatId, {
         productId: items[i].productId,
