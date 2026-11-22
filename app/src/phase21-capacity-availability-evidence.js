@@ -115,7 +115,11 @@ export function projectCapacityAvailabilityEvidence(signal = {}, options = {}) {
     ? 'UNKNOWN'
     : Date.parse(normalizedValidUntil) >= Date.parse(evaluatedAt) ? 'CURRENT' : 'STALE';
   const source = optionalText(signal.source, 'signal.source');
-  const provenanceType = source?.toUpperCase() === 'DECLARED' ? 'SELF_REPORTED' : 'UNKNOWN';
+  const provenanceType = ['DECLARED', 'SUPPLIER-NETWORK'].includes(source?.toUpperCase()) ? 'SELF_REPORTED' : 'UNKNOWN';
+  // Supplier Network currently records declarations, not independent
+  // observations or verification. Never trust a caller-supplied VERIFIED or
+  // OBSERVED label on a declared capacity signal.
+  const normalizedQuality = provenanceType === 'SELF_REPORTED' ? 'SELF_REPORTED' : 'UNKNOWN';
   const consistencyInput = String(signal.consistency ?? 'UNKNOWN').trim().toUpperCase();
   if (!PHASE21_CAPACITY_EVIDENCE_CONSISTENCY.includes(consistencyInput)) {
     invalid(`signal.consistency must be one of ${PHASE21_CAPACITY_EVIDENCE_CONSISTENCY.join(', ')}`);
@@ -140,7 +144,7 @@ export function projectCapacityAvailabilityEvidence(signal = {}, options = {}) {
     quantity,
     unit,
     availabilityWindow: Object.freeze({ observedAt, validUntil: normalizedValidUntil, evaluatedAt }),
-    quality,
+    quality: normalizedQuality,
     provenanceType,
     freshness,
     consistency: consistencyInput,

@@ -72,9 +72,26 @@ const temporalCandidate = {
     periodStart: '2026-12-01T00:00:00.000Z', periodEnd: '2026-12-05T00:00:00.000Z',
     availability: 'LIMITED', status: 'ACTIVE', source: 'DECLARED',
     observedAt: '2026-11-19T00:00:00.000Z', validUntil: '2026-12-10T00:00:00.000Z',
+    quality: 'SELF_REPORTED',
   }],
 };
 assert.equal(evaluateDiscoveryMatch(temporalCandidate, windowContext).eligible, true, 'overlapping LIMITED declared capacity qualifies');
+for (const quality of ['UNKNOWN', 'STALE', 'CONFLICTING', undefined, null]) {
+  assert.equal(evaluateDiscoveryMatch({
+    ...temporalCandidate,
+    capacitySignals: [{ ...temporalCandidate.capacitySignals[0], quality }],
+  }, windowContext).eligible, false, `time-bound capacity quality ${String(quality)} must fail closed`);
+}
+assert.equal(evaluateDiscoveryMatch({
+  ...temporalCandidate,
+  capacitySignals: [{ ...temporalCandidate.capacitySignals[0], quality: 'SELF_REPORTED' }],
+}, windowContext).eligible, true, 'fresh active supplier-declared evidence may qualify');
+for (const quality of ['OBSERVED', 'VERIFIED']) {
+  assert.equal(evaluateDiscoveryMatch({
+    ...temporalCandidate,
+    capacitySignals: [{ ...temporalCandidate.capacitySignals[0], quality }],
+  }, windowContext).eligible, false, `${quality} requires a trusted independent observer binding`);
+}
 assert.equal(evaluateDiscoveryMatch({
   ...temporalCandidate,
   capacitySignals: [{ ...temporalCandidate.capacitySignals[0], validUntil: windowContext.availabilityTo }],
