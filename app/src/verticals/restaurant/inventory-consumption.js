@@ -115,7 +115,36 @@ export async function consumeThroughCoreInventory(plan, {
         code: 'INVENTORY_MOVEMENT_IDEMPOTENCY_CONFLICT',
       });
     }
-    confirmedCount += 1;
+    let existingMetadata = existing.metadata ?? existing.metadata_json ?? null;
+    if (typeof existingMetadata === 'string') {
+      try { existingMetadata = JSON.parse(existingMetadata); } catch (_) { existingMetadata = null; }
+    }
+    const expectedReason = `Restaurant preparation ${plan.preparation_id} / recipe ${plan.recipe_id}`;
+    if (
+      existingMetadata && (
+        String(existingMetadata.recipeId || '') !== plan.recipe_id
+        || String(existingMetadata.unit || '') !== line.unit
+      )
+    ) {
+      throw Object.assign(new Error(`Inventory movement identity ${line.event_id} is already confirmed with different metadata.`), {
+        code: 'INVENTORY_MOVEMENT_IDEMPOTENCY_CONFLICT',
+      });
+    }
+    if (existing.reason && String(existing.reason) !== expectedReason) {
+      throw Object.assign(new Error(`Inventory movement identity ${line.event_id} is already confirmed with a different reason.`), {
+        code: 'INVENTORY_MOVEMENT_IDEMPOTENCY_CONFLICT',
+      });
+    }
+    // If a projection omits metadata or reason, it is insufficient to suppress
+    // the replay. Send the full batch and let the canonical batch event decide.
+    if (
+      existingMetadata
+      && String(existingMetadata.recipeId || '') === plan.recipe_id
+      && String(existingMetadata.unit || '') === line.unit
+      && String(existing.reason || '') === expectedReason
+    ) {
+      confirmedCount += 1;
+    }
   }
 
   // A multi-ingredient preparation is one atomic batch. Never send only the
