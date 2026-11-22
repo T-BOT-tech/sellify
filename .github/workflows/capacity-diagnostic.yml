@@ -2,6 +2,9 @@ name: Capacity evidence diagnostic
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - audit/perplexity-codebase-modularity-20261122
 
 permissions:
   contents: read
