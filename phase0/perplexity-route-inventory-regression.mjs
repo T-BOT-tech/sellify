@@ -62,6 +62,12 @@ if (inventory.routes.some(route => !route.method || !route.path || !route.source
 if (inventory.routes.some(route => route.sourceKind === 'ROUTES table' && !route.routePattern)) {
   throw new Error('ROUTES-table entry is missing its original regex pattern.');
 }
+if (inventory.routes.some(route => route.sourceKind === 'ROUTES table' && !route.handlerFunction)) {
+  throw new Error('ROUTES-table entry is missing its named handler function reference.');
+}
+if (!Number.isInteger(inventory.handlerFunctionCount) || inventory.handlerFunctionCount < 100) {
+  throw new Error(`Expected at least 100 distinct named route handlers; detected ${inventory.handlerFunctionCount}.`);
+}
 
 if (inventory.routeCount !== inventory.routes.length) {
   throw new Error('Route inventory count does not match detected routes.');
