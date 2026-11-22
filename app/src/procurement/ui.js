@@ -68,7 +68,21 @@ async function loadRfqs() {
   try {
     const data = await request(`/tenants/${encodeURIComponent(config.chatId)}/procurement/rfqs?limit=100`);
     const rows = data.rfqs || [];
-    list.innerHTML = rows.length ? rows.map(r => `<div class="table-card account-card"><div class="account-name">${esc(r.rfqNumber)} · ${esc(r.status)}</div><div class="account-contact">${esc(r.suppliers?.length || 0)} supplier(s) · ${esc(r.responses?.filter(x => x.status === 'SUBMITTED').length || 0)} response(s)</div><div class="account-notes">Demand ${esc(r.demandId)} · ${esc(r.responseDue || 'No response due date')}</div>${r.status === 'DRAFT' && can('procurement:rfq:send') ? `<div class="table-actions"><button type="button" data-rfq-action="send" data-id="${esc(r.id)}">Send RFQ</button></div>` : ''}${r.status === 'SENT' && can('procurement:rfq:close') ? `<div class="table-actions"><button type="button" data-rfq-action="close" data-id="${esc(r.id)}">Close RFQ</button></div>` : ''}${r.status === 'CLOSED' && can('procurement:comparison:create') ? `<div class="table-actions"><button type="button" data-rfq-action="compare" data-id="${esc(r.id)}">Create comparison</button></div>` : ''}</div>`).join('') : '<div class="empty">No RFQs yet.</div>';
+    list.innerHTML = rows.length ? rows.map(r => {
+      const supplierEvidence = (r.suppliers || []).map(supplier => {
+        const snapshot = Array.isArray(supplier.capacityEvidenceSnapshot) ? supplier.capacityEvidenceSnapshot : [];
+        const captureLabel = supplier.capacityEvidenceCapturedAt
+          ? `Evidence snapshot captured ${supplier.capacityEvidenceCapturedAt}`
+          : 'Legacy RFQ · no capacity evidence snapshot stored';
+        const evidenceRows = snapshot.length ? snapshot.map(signal =>
+          `<div>${esc(signal.subjectType)} · ${esc(signal.subjectId)} · ${esc(signal.quantity)} ${esc(signal.unit)} · ${esc(signal.availability)} · Quality ${esc(signal.quality)} · Freshness ${esc(signal.freshness)} · Declaration recorded ${esc(signal.observedAt || 'unknown')} · Valid until ${esc(signal.validUntil || 'unknown')}</div>`
+        ).join('') : supplier.capacityEvidenceCapturedAt
+          ? '<div>No matching visible product-capacity evidence at RFQ creation.</div>'
+          : '<div>No historical capacity evidence snapshot is available for this RFQ.</div>';
+        return `<div class="account-notes"><strong>${esc(supplier.supplierOrganizationName)}</strong> · ${esc(supplier.status)}<br><span class="muted">${esc(captureLabel)}</span>${evidenceRows}</div>`;
+      }).join('');
+      return `<div class="table-card account-card"><div class="account-name">${esc(r.rfqNumber)} · ${esc(r.status)}</div><div class="account-contact">${esc(r.suppliers?.length || 0)} supplier(s) · ${esc(r.responses?.filter(x => x.status === 'SUBMITTED').length || 0)} response(s)</div><div class="account-notes">Demand ${esc(r.demandId)} · ${esc(r.responseDue || 'No response due date')}</div>${supplierEvidence}<div class="muted">Capacity evidence is a read-only snapshot of supplier declarations at RFQ creation; it is not a reservation, verification, supplier selection or authorization.</div>${r.status === 'DRAFT' && can('procurement:rfq:send') ? `<div class="table-actions"><button type="button" data-rfq-action="send" data-id="${esc(r.id)}">Send RFQ</button></div>` : ''}${r.status === 'SENT' && can('procurement:rfq:close') ? `<div class="table-actions"><button type="button" data-rfq-action="close" data-id="${esc(r.id)}">Close RFQ</button></div>` : ''}${r.status === 'CLOSED' && can('procurement:comparison:create') ? `<div class="table-actions"><button type="button" data-rfq-action="compare" data-id="${esc(r.id)}">Create comparison</button></div>` : ''}</div>`;
+    }).join('') : '<div class="empty">No RFQs yet.</div>';
   } catch (error) { list.innerHTML = `<div class="empty">${esc(error.message)}</div>`; }
 }
 
