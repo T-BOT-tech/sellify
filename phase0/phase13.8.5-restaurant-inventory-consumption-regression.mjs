@@ -25,6 +25,9 @@ const ledger = fs.readFileSync(path.join(root, 'app/src/warehouse/ledger.js'), '
 const pack = fs.readFileSync(path.join(root, 'app/src/verticals/restaurant/pack.js'), 'utf8');
 assert.match(inventory, /export function applyStockChange/);
 assert.match(ledger, /export async function recordCanonicalInventoryMovementBatch/);
+assert.match(ledger, /eventType: 'inventory.movement.batch.record'/);
+assert.match(ledger, /\/events\/\$\{encodeURIComponent\(config.chatId\)\}/);
+assert.match(ledger, /enqueueEvent\(batchEvent.eventType/);
 const consumptionSource = fs.readFileSync(path.join(root, 'app/src/verticals/restaurant/inventory-consumption.js'), 'utf8');
 assert.doesNotMatch(consumptionSource, /applyStockChange/);
 assert.match(consumptionSource, /recordCanonicalInventoryMovementBatch/);
