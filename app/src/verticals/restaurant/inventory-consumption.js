@@ -128,9 +128,12 @@ export async function consumeThroughCoreInventory(plan, {
     // Only a canonical balance projection may be used for local preflight.
     // Legacy product.stock is not authoritative in an authenticated tenant and
     // may be stale; the server remains the final stock validator.
-    const stock = typeof getInventoryBalance === 'function'
-      ? Number(getInventoryBalance(line.product_id, plan.location_id))
+    const observedBalance = typeof getInventoryBalance === 'function'
+      ? getInventoryBalance(line.product_id, plan.location_id)
       : null;
+    const stock = observedBalance === null || observedBalance === undefined
+      ? null
+      : Number(observedBalance);
     if (Number.isFinite(stock) && stock < line.quantity) {
       throw new RangeError(`Insufficient canonical stock for product ${line.product_id}: required ${line.quantity}, available ${stock}`);
     }
