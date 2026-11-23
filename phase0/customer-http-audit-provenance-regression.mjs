@@ -239,6 +239,43 @@ try {
     .get(organizationId, '+251911000001').count, 1,
     'phone natural-key matching must not create duplicate customer rows');
 
+  // Characterize the documented name-only natural key: case is ignored, but
+  // the fallback is restricted to existing records without a phone number.
+  const nameOnlyCreated = await request(base, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ name: 'Name Only Natural Key' }),
+  });
+  assert.equal(nameOnlyCreated.response.status, 201);
+  const nameOnlyId = nameOnlyCreated.json.customer?.id;
+  assert.ok(nameOnlyId);
+
+  const nameOnlyReplay = await request(base, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ name: 'name only natural key' }),
+  });
+  assert.equal(nameOnlyReplay.response.status, 201);
+  assert.equal(nameOnlyReplay.json.customer.id, nameOnlyId,
+    'case-insensitive name-only matching must reuse a same-organization customer without a phone');
+
+  // A shared name is not sufficient to merge two customers that have
+  // different phone numbers; phone identity takes precedence.
+  const phoneIdentityA = await request(base, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ name: 'Shared Customer Name', phone: '+251911000002' }),
+  });
+  assert.equal(phoneIdentityA.response.status, 201);
+  const phoneIdentityB = await request(base, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ name: 'Shared Customer Name', phone: '+251911000003' }),
+  });
+  assert.equal(phoneIdentityB.response.status, 201);
+  assert.notEqual(phoneIdentityB.json.customer.id, phoneIdentityA.json.customer.id,
+    'same-name customers with distinct phone numbers must not be merged by the name-only fallback');
+
   const syncCustomerId = `sync-customer-${suffix}`;
   const syncEventId = `customer-sync-event-${suffix}`;
   const syncEvent = await request(`/events/${encodeURIComponent(tenant.chatId)}`, {
