@@ -1,9 +1,10 @@
 # SQLite persistence dependency map — initial evidence map
 
-**Baseline:** `main` at `15737ee0c83e057113baa3881638186542ed6999`  
+**Static inventory baseline:** `main` at `07985fcc841e3f16fd5b6f4f46f1bb5101443085`  
 **Audit branch:** `audit/route-auth-sqlite-continuation-20261123`  
 **Source:** `backend/lib/store-sqlite.js`  
-**Status:** static schema/function inventory complete; SQL read/write ownership and transaction graph remain in progress.
+**Manual characterization baseline:** current `main` at `15737ee0c83e057113baa3881638186542ed6999`  
+**Status:** static counts below remain anchored to the original baseline; 20 selected functions have been manually re-characterized against current main. SQL read/write ownership and transaction graph remain in progress.
 
 ## Verified source inventory
 
@@ -23,7 +24,7 @@
 | `.run()` / `.get()` / `.all()` calls | 349 / 482 / 165 |
 | `BEGIN` / `BEGIN IMMEDIATE` tokens | 107 / 64 |
 | `COMMIT` / `ROLLBACK` / `SAVEPOINT` tokens | 100 / 65 / 1 |
-| Source size | 965,573 bytes |
+| Source size at static inventory baseline | 965,573 bytes |
 
 ## Findings that change the earlier inventory picture
 
