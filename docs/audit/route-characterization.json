@@ -63,7 +63,8 @@
         "phase0/gap-1-payment-store-foundation-regression.mjs",
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 2,
@@ -117,7 +118,8 @@
         "phase0/tg6-telegram-checkout-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs",
         "phase0/tg8-telegram-fulfillment-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 3,
@@ -166,7 +168,8 @@
         "endLine": 901
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 4,
@@ -204,7 +207,8 @@
         "endLine": 935
       },
       "classification": "mixed",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 5,
@@ -254,7 +258,8 @@
       "classification": "domain capability",
       "testCandidates": [
         "phase0/event-outbox-tenant-scope-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 6,
@@ -296,7 +301,8 @@
       "classification": "domain capability",
       "testCandidates": [
         "phase0/event-outbox-tenant-scope-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 7,
@@ -347,7 +353,8 @@
         "endLine": 1009
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 8,
@@ -387,7 +394,8 @@
         "endLine": 1015
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 9,
@@ -428,7 +436,8 @@
         "endLine": 1024
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 10,
@@ -474,7 +483,8 @@
         "endLine": 1038
       },
       "classification": "mixed",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 11,
@@ -524,7 +534,8 @@
         "endLine": 1059
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 12,
@@ -589,7 +600,8 @@
         "phase0/inventory-refresh-lifecycle-regression.mjs",
         "phase0/p1-16-pack-security-regression.mjs",
         "phase0/phase12.3-physical-lifecycle-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 13,
@@ -654,7 +666,8 @@
         "phase0/inventory-refresh-lifecycle-regression.mjs",
         "phase0/p1-16-pack-security-regression.mjs",
         "phase0/phase12.3-physical-lifecycle-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 14,
@@ -709,7 +722,8 @@
       "classification": "mixed",
       "testCandidates": [
         "phase0/p1-09-membership-role-change-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 15,
@@ -763,7 +777,8 @@
       "classification": "mixed",
       "testCandidates": [
         "phase0/gap-5-iam-membership-contextual-role-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 16,
@@ -817,7 +832,8 @@
       "classification": "mixed",
       "testCandidates": [
         "phase0/gap-5-iam-membership-contextual-role-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 17,
@@ -858,7 +874,8 @@
         "endLine": 1047
       },
       "classification": "mixed",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 18,
@@ -902,7 +919,8 @@
         "endLine": 1129
       },
       "classification": "mixed",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 19,
@@ -950,7 +968,8 @@
         "endLine": 1175
       },
       "classification": "mixed",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 20,
@@ -991,7 +1010,8 @@
         "endLine": 1119
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 21,
@@ -1032,7 +1052,8 @@
         "endLine": 1136
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 22,
@@ -1077,7 +1098,8 @@
         "endLine": 1154
       },
       "classification": "mixed",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 23,
@@ -1118,7 +1140,8 @@
         "endLine": 1243
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 24,
@@ -1182,7 +1205,8 @@
         "phase0/phase13.12.14-events-outbox-integration-regression.mjs",
         "phase0/phase14.11-country-events-outbox-regression.mjs",
         "phase0/phase15.18-country-events-outbox-expansion-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 25,
@@ -1224,7 +1248,8 @@
         "endLine": 1264
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 26,
@@ -1276,7 +1301,8 @@
         "phase0/order-sync-idempotency-regression.mjs",
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 27,
@@ -1335,7 +1361,8 @@
       "testCandidates": [
         "phase0/sc-03.5-service-provider-booking-queue-regression.mjs",
         "phase0/service-provider-resource-scope-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 28,
@@ -1396,7 +1423,8 @@
         "phase0/service-booking-scheduling-authority-boundary-regression.mjs",
         "phase0/service-bookings-appointments-navigation-regression.mjs",
         "phase0/service-provider-resource-scope-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 29,
@@ -1478,7 +1506,8 @@
         "endLine": 3612
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 30,
@@ -1560,7 +1589,8 @@
         "endLine": 3612
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 31,
@@ -1642,7 +1672,8 @@
         "endLine": 3612
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 32,
@@ -1700,7 +1731,8 @@
         "phase0/sc-03.5-location-aware-availability-timezone-regression.mjs",
         "phase0/service-availability-api-regression.mjs",
         "phase0/service-availability-contract-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 33,
@@ -1758,7 +1790,8 @@
         "phase0/sc-03.5-location-aware-availability-timezone-regression.mjs",
         "phase0/service-availability-api-regression.mjs",
         "phase0/service-availability-contract-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 34,
@@ -1820,7 +1853,8 @@
         "phase0/service-bookings-appointments-navigation-regression.mjs",
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 35,
@@ -1882,7 +1916,8 @@
         "phase0/service-bookings-appointments-navigation-regression.mjs",
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 36,
@@ -1944,7 +1979,8 @@
         "phase0/service-bookings-appointments-navigation-regression.mjs",
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 37,
@@ -1989,7 +2025,8 @@
         "phase0/order-sync-idempotency-regression.mjs",
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 38,
@@ -2063,7 +2100,8 @@
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs",
         "phase0/tg8-telegram-fulfillment-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 39,
@@ -2126,7 +2164,8 @@
         "phase0/order-sync-idempotency-regression.mjs",
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 40,
@@ -2189,7 +2228,8 @@
         "phase0/order-sync-idempotency-regression.mjs",
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 41,
@@ -2272,7 +2312,8 @@
         "phase0/logistics-multi-leg-movement-regression.mjs",
         "phase0/logistics-network-corridor-intelligence-regression.mjs",
         "phase0/logistics-p2p-delivery-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 42,
@@ -2355,7 +2396,8 @@
         "phase0/logistics-multi-leg-movement-regression.mjs",
         "phase0/logistics-network-corridor-intelligence-regression.mjs",
         "phase0/logistics-p2p-delivery-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 43,
@@ -2438,7 +2480,8 @@
         "phase0/logistics-multi-leg-movement-regression.mjs",
         "phase0/logistics-network-corridor-intelligence-regression.mjs",
         "phase0/logistics-p2p-delivery-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 44,
@@ -2521,7 +2564,8 @@
         "phase0/logistics-multi-leg-movement-regression.mjs",
         "phase0/logistics-network-corridor-intelligence-regression.mjs",
         "phase0/logistics-p2p-delivery-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 45,
@@ -2604,7 +2648,8 @@
         "phase0/logistics-l8-l21-final-certification.mjs",
         "phase0/logistics-multi-leg-movement-regression.mjs",
         "phase0/logistics-network-corridor-intelligence-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 46,
@@ -2655,7 +2700,8 @@
         "endLine": 3460
       },
       "classification": "needs-review",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 47,
@@ -2718,7 +2764,8 @@
         "phase0/order-sync-idempotency-regression.mjs",
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 48,
@@ -2792,7 +2839,8 @@
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs",
         "phase0/tg8-telegram-fulfillment-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 49,
@@ -2839,7 +2887,8 @@
         "phase0/first-experience-service-catalog-http-regression.mjs",
         "phase0/p1-01-iam-role-catalog-regression.mjs",
         "phase0/phase18.3-supplier-network-catalog-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 50,
@@ -2887,7 +2936,8 @@
         "endLine": 503
       },
       "classification": "needs-review",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 51,
@@ -2935,7 +2985,8 @@
         "endLine": 494
       },
       "classification": "needs-review",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 52,
@@ -2985,7 +3036,8 @@
       "classification": "domain capability",
       "testCandidates": [
         "phase0/tg1-telegram-storefront-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 53,
@@ -3028,7 +3080,8 @@
       "classification": "domain capability",
       "testCandidates": [
         "phase0/tg1-telegram-storefront-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 54,
@@ -3078,7 +3131,8 @@
       "classification": "domain capability",
       "testCandidates": [
         "phase0/tg1-telegram-storefront-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 55,
@@ -3139,7 +3193,8 @@
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg1-telegram-storefront-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 56,
@@ -3200,7 +3255,8 @@
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg1-telegram-storefront-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 57,
@@ -3252,7 +3308,8 @@
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg1-telegram-storefront-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 58,
@@ -3315,7 +3372,8 @@
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg1-telegram-storefront-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 59,
@@ -3377,7 +3435,8 @@
         "phase0/tg1-telegram-storefront-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs",
         "phase0/tg8-telegram-fulfillment-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 60,
@@ -3433,7 +3492,8 @@
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg1-telegram-storefront-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 61,
@@ -3486,7 +3546,8 @@
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg1-telegram-storefront-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 62,
@@ -3536,7 +3597,8 @@
       "classification": "domain capability",
       "testCandidates": [
         "phase0/tg1-telegram-storefront-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 63,
@@ -3590,7 +3652,8 @@
       "classification": "domain capability",
       "testCandidates": [
         "phase0/tg1-telegram-storefront-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 64,
@@ -3649,7 +3712,8 @@
         "phase0/first-experience-service-catalog-http-regression.mjs",
         "phase0/p1-01-iam-role-catalog-regression.mjs",
         "phase0/phase18.3-supplier-network-catalog-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 65,
@@ -3691,7 +3755,8 @@
       "classification": "needs-review",
       "testCandidates": [
         "phase0/event-outbox-tenant-scope-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 66,
@@ -3741,7 +3806,8 @@
         "endLine": 1366
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 67,
@@ -3789,7 +3855,8 @@
         "endLine": 1386
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 68,
@@ -3837,7 +3904,8 @@
         "endLine": 1376
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 69,
@@ -3885,7 +3953,8 @@
         "endLine": 1396
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 70,
@@ -3935,7 +4004,8 @@
       "testCandidates": [
         "phase0/fux-56-b2b-customer-pricing-frontend-authority-regression.mjs",
         "phase0/phase11.3-b2b-custom-pricing-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 71,
@@ -3985,7 +4055,8 @@
       "testCandidates": [
         "phase0/fux-56-b2b-customer-pricing-frontend-authority-regression.mjs",
         "phase0/phase11.3-b2b-custom-pricing-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 72,
@@ -4035,7 +4106,8 @@
       "testCandidates": [
         "phase0/fux-56-b2b-customer-pricing-frontend-authority-regression.mjs",
         "phase0/phase11.3-b2b-custom-pricing-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 73,
@@ -4085,7 +4157,8 @@
       "testCandidates": [
         "phase0/fux-56-b2b-customer-pricing-frontend-authority-regression.mjs",
         "phase0/phase11.3-b2b-custom-pricing-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 74,
@@ -4153,7 +4226,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 75,
@@ -4221,7 +4295,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 76,
@@ -4289,7 +4364,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 77,
@@ -4357,7 +4433,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 78,
@@ -4425,7 +4502,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 79,
@@ -4493,7 +4571,8 @@
         "phase0/phase18.5-supplier-network-capacity-regression.mjs",
         "phase0/phase18.6-supplier-network-commercial-regression.mjs",
         "phase0/phase18.7-supplier-network-qualification-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 80,
@@ -4561,7 +4640,8 @@
         "phase0/phase18.5-supplier-network-capacity-regression.mjs",
         "phase0/phase18.6-supplier-network-commercial-regression.mjs",
         "phase0/phase18.7-supplier-network-qualification-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 81,
@@ -4629,7 +4709,8 @@
         "phase0/phase18.5-supplier-network-capacity-regression.mjs",
         "phase0/phase18.6-supplier-network-commercial-regression.mjs",
         "phase0/phase18.7-supplier-network-qualification-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 82,
@@ -4697,7 +4778,8 @@
         "phase0/phase18.5-supplier-network-capacity-regression.mjs",
         "phase0/phase18.6-supplier-network-commercial-regression.mjs",
         "phase0/phase18.7-supplier-network-qualification-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 83,
@@ -4765,7 +4847,8 @@
         "phase0/phase18.5-supplier-network-capacity-regression.mjs",
         "phase0/phase18.6-supplier-network-commercial-regression.mjs",
         "phase0/phase18.7-supplier-network-qualification-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 84,
@@ -4833,7 +4916,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 85,
@@ -4901,7 +4985,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 86,
@@ -4969,7 +5054,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 87,
@@ -5037,7 +5123,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 88,
@@ -5105,7 +5192,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 89,
@@ -5173,7 +5261,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 90,
@@ -5241,7 +5330,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 91,
@@ -5309,7 +5399,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 92,
@@ -5377,7 +5468,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 93,
@@ -5445,7 +5537,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 94,
@@ -5513,7 +5606,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 95,
@@ -5581,7 +5675,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 96,
@@ -5649,7 +5744,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 97,
@@ -5717,7 +5813,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 98,
@@ -5785,7 +5882,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 99,
@@ -5853,7 +5951,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 100,
@@ -5921,7 +6020,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 101,
@@ -5989,7 +6089,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 102,
@@ -6057,7 +6158,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 103,
@@ -6125,7 +6227,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 104,
@@ -6195,7 +6298,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 105,
@@ -6259,7 +6363,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 106,
@@ -6323,7 +6428,8 @@
         "phase0/phase18.4-supplier-network-service-area-regression.mjs",
         "phase0/phase18.5-supplier-network-capacity-regression.mjs",
         "phase0/phase18.6-supplier-network-commercial-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 107,
@@ -6387,7 +6493,8 @@
         "phase0/phase18.4-supplier-network-service-area-regression.mjs",
         "phase0/phase18.5-supplier-network-capacity-regression.mjs",
         "phase0/phase18.6-supplier-network-commercial-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 108,
@@ -6457,7 +6564,8 @@
         "phase0/phase18.7-supplier-network-qualification-regression.mjs",
         "phase0/phase18.8-supplier-network-performance-regression.mjs",
         "phase0/phase18.9-supplier-network-trust-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 109,
@@ -6527,7 +6635,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 110,
@@ -6598,7 +6707,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 111,
@@ -6669,7 +6779,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 112,
@@ -6740,7 +6851,8 @@
         "phase0/phase18.9-supplier-network-trust-regression.mjs",
         "phase0/phase19.5-supplier-network-federation-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 113,
@@ -6806,7 +6918,8 @@
         "phase0/phase18.6-supplier-network-commercial-regression.mjs",
         "phase0/phase18.7-supplier-network-qualification-regression.mjs",
         "phase0/phase18.8-supplier-network-performance-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 114,
@@ -6872,7 +6985,8 @@
         "phase0/phase18.6-supplier-network-commercial-regression.mjs",
         "phase0/phase18.7-supplier-network-qualification-regression.mjs",
         "phase0/phase18.8-supplier-network-performance-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 115,
@@ -6938,7 +7052,8 @@
         "phase0/phase18.6-supplier-network-commercial-regression.mjs",
         "phase0/phase18.7-supplier-network-qualification-regression.mjs",
         "phase0/phase18.8-supplier-network-performance-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 116,
@@ -7004,7 +7119,8 @@
         "phase0/phase18.6-supplier-network-commercial-regression.mjs",
         "phase0/phase18.7-supplier-network-qualification-regression.mjs",
         "phase0/phase18.8-supplier-network-performance-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 117,
@@ -7080,7 +7196,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 118,
@@ -7156,7 +7273,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 119,
@@ -7232,7 +7350,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 120,
@@ -7306,7 +7425,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 121,
@@ -7380,7 +7500,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 122,
@@ -7454,7 +7575,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 123,
@@ -7528,7 +7650,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 124,
@@ -7598,7 +7721,8 @@
         "phase0/phase17.8-procurement-payment-regression.mjs",
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 125,
@@ -7668,7 +7792,8 @@
         "phase0/phase17.8-procurement-payment-regression.mjs",
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 126,
@@ -7741,7 +7866,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 127,
@@ -7814,7 +7940,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 128,
@@ -7887,7 +8014,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 129,
@@ -7960,7 +8088,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 130,
@@ -8022,7 +8151,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 131,
@@ -8084,7 +8214,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 132,
@@ -8146,7 +8277,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 133,
@@ -8227,7 +8359,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 134,
@@ -8308,7 +8441,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 135,
@@ -8389,7 +8523,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 136,
@@ -8470,7 +8605,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 137,
@@ -8551,7 +8687,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 138,
@@ -8632,7 +8769,8 @@
         "phase0/phase17.8-procurement-payment-regression.mjs",
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 139,
@@ -8713,7 +8851,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 140,
@@ -8763,7 +8902,8 @@
       "testCandidates": [
         "phase0/fux-53-b2b-quotes-frontend-authority-regression.mjs",
         "phase0/phase11.3-b2b-quotes-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 141,
@@ -8813,7 +8953,8 @@
       "testCandidates": [
         "phase0/fux-53-b2b-quotes-frontend-authority-regression.mjs",
         "phase0/phase11.3-b2b-quotes-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 142,
@@ -8863,7 +9004,8 @@
       "testCandidates": [
         "phase0/fux-53-b2b-quotes-frontend-authority-regression.mjs",
         "phase0/phase11.3-b2b-quotes-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 143,
@@ -8913,7 +9055,8 @@
       "testCandidates": [
         "phase0/fux-53-b2b-quotes-frontend-authority-regression.mjs",
         "phase0/phase11.3-b2b-quotes-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 144,
@@ -8986,7 +9129,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 145,
@@ -9059,7 +9203,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 146,
@@ -9132,7 +9277,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 147,
@@ -9205,7 +9351,8 @@
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 148,
@@ -9265,7 +9412,8 @@
         "endLine": 1812
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 149,
@@ -9325,7 +9473,8 @@
         "endLine": 1812
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 150,
@@ -9385,7 +9534,8 @@
         "endLine": 1812
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 151,
@@ -9445,7 +9595,8 @@
         "endLine": 1812
       },
       "classification": "domain capability",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 152,
@@ -9495,7 +9646,8 @@
       "classification": "needs-review",
       "testCandidates": [
         "phase0/phase11.3-b2b-credit-terms-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 153,
@@ -9545,7 +9697,8 @@
       "classification": "needs-review",
       "testCandidates": [
         "phase0/phase11.3-b2b-credit-terms-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 154,
@@ -9595,7 +9748,8 @@
       "classification": "needs-review",
       "testCandidates": [
         "phase0/phase11.3-b2b-credit-terms-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 155,
@@ -9645,7 +9799,8 @@
       "classification": "needs-review",
       "testCandidates": [
         "phase0/phase11.3-b2b-credit-terms-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 156,
@@ -9716,7 +9871,8 @@
         "phase0/inventory-sync-event-authorization-http-regression.mjs",
         "phase0/perplexity-route-inventory-regression.mjs",
         "phase0/perplexity-store-inventory-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 157,
@@ -9785,7 +9941,8 @@
         "phase0/inventory-sync-event-authorization-http-regression.mjs",
         "phase0/perplexity-route-inventory-regression.mjs",
         "phase0/perplexity-store-inventory-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 158,
@@ -9856,7 +10013,8 @@
         "phase0/inventory-refresh-lifecycle-regression.mjs",
         "phase0/inventory-sync-event-authorization-http-regression.mjs",
         "phase0/perplexity-route-inventory-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 159,
@@ -9925,7 +10083,8 @@
         "phase0/inventory-sync-event-authorization-http-regression.mjs",
         "phase0/perplexity-route-inventory-regression.mjs",
         "phase0/perplexity-store-inventory-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 160,
@@ -9975,7 +10134,8 @@
       "classification": "domain capability",
       "testCandidates": [
         "phase0/phase13.12.6-location-scope-gate-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 161,
@@ -10025,7 +10185,8 @@
       "classification": "domain capability",
       "testCandidates": [
         "phase0/phase13.12.6-location-scope-gate-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 162,
@@ -10076,7 +10237,8 @@
       "classification": "domain capability",
       "testCandidates": [
         "phase0/phase13.12.6-location-scope-gate-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 163,
@@ -10140,7 +10302,8 @@
         "phase0/phase22.7-action-proposal-authorization-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs",
         "phase0/supplier-network-discovery-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 164,
@@ -10200,7 +10363,8 @@
         "phase0/phase22.7-action-proposal-authorization-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs",
         "phase0/supplier-network-discovery-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 165,
@@ -10261,7 +10425,8 @@
         "phase0/phase22.7-action-proposal-authorization-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs",
         "phase0/supplier-network-discovery-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 166,
@@ -10322,7 +10487,8 @@
         "phase0/phase22.7-action-proposal-authorization-regression.mjs",
         "phase0/supplier-network-activation-http-authorization-regression.mjs",
         "phase0/supplier-network-discovery-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 167,
@@ -10367,7 +10533,8 @@
       "classification": "mixed",
       "testCandidates": [
         "phase0/business-template-persistence-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 168,
@@ -10412,7 +10579,8 @@
       "classification": "mixed",
       "testCandidates": [
         "phase0/business-template-persistence-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 169,
@@ -10457,7 +10625,8 @@
       "classification": "mixed",
       "testCandidates": [
         "phase0/business-template-persistence-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 170,
@@ -10509,7 +10678,8 @@
         "endLine": 2238
       },
       "classification": "needs-review",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 171,
@@ -10561,7 +10731,8 @@
         "endLine": 2238
       },
       "classification": "needs-review",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 172,
@@ -10625,7 +10796,8 @@
         "phase0/phase21.17-capacity-evidence-migration-regression.mjs",
         "phase0/phase21.19-capacity-evidence-display-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 173,
@@ -10689,7 +10861,8 @@
         "phase0/phase21.17-capacity-evidence-migration-regression.mjs",
         "phase0/phase21.19-capacity-evidence-display-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 174,
@@ -10753,7 +10926,8 @@
         "phase0/phase21.17-capacity-evidence-migration-regression.mjs",
         "phase0/phase21.19-capacity-evidence-display-regression.mjs",
         "phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 175,
@@ -10809,7 +10983,8 @@
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/phase16.13.6-logistics-provider-selection-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 176,
@@ -10870,7 +11045,8 @@
         "phase0/gap-1-payment-store-foundation-regression.mjs",
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 177,
@@ -10931,7 +11107,8 @@
         "phase0/gap-1-payment-store-foundation-regression.mjs",
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 178,
@@ -10994,7 +11171,8 @@
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/phase17.8-payment-core-outbound-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 179,
@@ -11057,7 +11235,8 @@
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/phase17.8-payment-core-outbound-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 180,
@@ -11120,7 +11299,8 @@
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/phase17.8-payment-core-outbound-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 181,
@@ -11183,7 +11363,8 @@
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/phase17.8-payment-core-outbound-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 182,
@@ -11247,7 +11428,8 @@
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.16-payment-routing-regression.mjs",
         "phase0/gap-1.17-payment-operations-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 183,
@@ -11311,7 +11493,8 @@
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 184,
@@ -11375,7 +11558,8 @@
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 185,
@@ -11439,7 +11623,8 @@
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 186,
@@ -11498,7 +11683,8 @@
         "phase0/order-sync-idempotency-regression.mjs",
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 187,
@@ -11554,7 +11740,8 @@
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/phase10.5-inventory-ledger-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 188,
@@ -11610,7 +11797,8 @@
         "phase0/gap-1.12-payment-reconciliation-regression.mjs",
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 189,
@@ -11668,7 +11856,8 @@
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/p1-04-pack-role-reconciliation-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 190,
@@ -11726,7 +11915,8 @@
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/p1-04-pack-role-reconciliation-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 191,
@@ -11781,7 +11971,8 @@
         "phase0/gap-1-payment-store-foundation-regression.mjs",
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 192,
@@ -11837,7 +12028,8 @@
         "phase0/gap-1.11-payment-provider-status-regression.mjs",
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 193,
@@ -11894,7 +12086,8 @@
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18-provider-verification-lifecycle-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 194,
@@ -11943,7 +12136,8 @@
         "phase0/gap-1.14-payment-refund-regression.mjs",
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 195,
@@ -12001,7 +12195,8 @@
         "phase0/gap-1.18C-capability-certification-regression.mjs",
         "phase0/gap-1.19-payment-adversarial-certification-regression.mjs",
         "phase0/gap-1.19-payment-e2e-certification-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 196,
@@ -12052,7 +12247,8 @@
         "phase0/gap-1.18-provider-capability-probe-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/phase16.13.6-logistics-provider-selection-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 197,
@@ -12104,7 +12300,8 @@
         "phase0/gap-1.18-provider-capability-evidence-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/phase16.13.6-logistics-provider-selection-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 198,
@@ -12156,7 +12353,8 @@
         "phase0/gap-1.18-provider-capability-evidence-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/phase16.13.6-logistics-provider-selection-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 199,
@@ -12207,7 +12405,8 @@
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/gap-1.19-payment-production-certification-http-regression.mjs",
         "phase0/gap-1.19-production-certification-gate-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 200,
@@ -12258,7 +12457,8 @@
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/gap-1.19-payment-production-certification-http-regression.mjs",
         "phase0/gap-1.19-production-certification-gate-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 201,
@@ -12307,7 +12507,8 @@
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.17-payment-operations-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 202,
@@ -12356,7 +12557,8 @@
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.17-payment-operations-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 203,
@@ -12406,7 +12608,8 @@
         "phase0/gap-1.17-payment-operations-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/gap-1.23-migration-retry-runtime-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 204,
@@ -12455,7 +12658,8 @@
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.17-payment-operations-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 205,
@@ -12505,7 +12709,8 @@
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 206,
@@ -12561,7 +12766,8 @@
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.16-payment-routing-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 207,
@@ -12614,7 +12820,8 @@
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.16-payment-routing-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 208,
@@ -12667,7 +12874,8 @@
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.16-payment-routing-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 209,
@@ -12717,7 +12925,8 @@
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 210,
@@ -12767,7 +12976,8 @@
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs",
         "phase0/phase17.9-procurement-settlement-contract-regression.mjs",
         "phase0/phase17.9-procurement-settlement-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 211,
@@ -12816,7 +13026,8 @@
         "phase0/gap-1.14-payment-refund-regression.mjs",
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 212,
@@ -12880,7 +13091,8 @@
         "phase0/gap-1-payment-store-foundation-regression.mjs",
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 213,
@@ -12944,7 +13156,8 @@
         "phase0/gap-1-payment-store-foundation-regression.mjs",
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 214,
@@ -13008,7 +13221,8 @@
         "phase0/gap-1-payment-store-foundation-regression.mjs",
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 215,
@@ -13072,7 +13286,8 @@
         "phase0/gap-1-payment-store-foundation-regression.mjs",
         "phase0/gap-1.15-payment-settlement-regression.mjs",
         "phase0/gap-1.18AB-payment-security-boundary-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 216,
@@ -13132,7 +13347,8 @@
         "endLine": 2766
       },
       "classification": "needs-review",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 217,
@@ -13192,7 +13408,8 @@
         "endLine": 2766
       },
       "classification": "needs-review",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 218,
@@ -13252,7 +13469,8 @@
         "endLine": 2766
       },
       "classification": "needs-review",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 219,
@@ -13312,7 +13530,8 @@
         "endLine": 2766
       },
       "classification": "needs-review",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 220,
@@ -13374,7 +13593,8 @@
       "classification": "needs-review",
       "testCandidates": [
         "phase0/phase10.5-inventory-ledger-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 221,
@@ -13422,7 +13642,8 @@
         "endLine": 2795
       },
       "classification": "needs-review",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 222,
@@ -13470,7 +13691,8 @@
         "endLine": 2795
       },
       "classification": "needs-review",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 223,
@@ -13518,7 +13740,8 @@
         "endLine": 2795
       },
       "classification": "needs-review",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 224,
@@ -13566,7 +13789,8 @@
         "endLine": 2795
       },
       "classification": "needs-review",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 225,
@@ -13626,7 +13850,8 @@
         "endLine": 2766
       },
       "classification": "needs-review",
-      "testCandidates": []
+      "testCandidates": [],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 226,
@@ -13686,7 +13911,8 @@
         "phase0/p1-15-pack-audit-regression.mjs",
         "phase0/phase13.11.15-audit-observability-regression.mjs",
         "phase0/phase13.12.10-sensitive-action-audit-gate-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 227,
@@ -13740,7 +13966,8 @@
         "phase0/phase10.7-compliance-regression.mjs",
         "phase0/phase14.8-ethiopia-compliance-boundary-regression.mjs",
         "phase0/phase15.16-compliance-expansion-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 228,
@@ -13794,7 +14021,8 @@
         "phase0/phase10.7-compliance-regression.mjs",
         "phase0/phase14.8-ethiopia-compliance-boundary-regression.mjs",
         "phase0/phase15.16-compliance-expansion-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 229,
@@ -13852,7 +14080,8 @@
         "phase0/phase10.7-compliance-regression.mjs",
         "phase0/phase14.8-ethiopia-compliance-boundary-regression.mjs",
         "phase0/phase15.16-compliance-expansion-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 230,
@@ -13910,7 +14139,8 @@
         "phase0/phase10.7-compliance-regression.mjs",
         "phase0/phase14.8-ethiopia-compliance-boundary-regression.mjs",
         "phase0/phase15.16-compliance-expansion-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 231,
@@ -13968,7 +14198,8 @@
         "phase0/phase10.7-compliance-regression.mjs",
         "phase0/phase14.8-ethiopia-compliance-boundary-regression.mjs",
         "phase0/phase15.16-compliance-expansion-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 232,
@@ -14024,7 +14255,8 @@
         "phase0/phase10.7-compliance-regression.mjs",
         "phase0/phase14.8-ethiopia-compliance-boundary-regression.mjs",
         "phase0/phase15.16-compliance-expansion-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 233,
@@ -14080,7 +14312,8 @@
         "phase0/phase10.7-compliance-regression.mjs",
         "phase0/phase14.8-ethiopia-compliance-boundary-regression.mjs",
         "phase0/phase15.16-compliance-expansion-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 234,
@@ -14123,7 +14356,8 @@
       "testCandidates": [
         "phase0/database-backup-collision-regression.mjs",
         "phase0/database-backup-restore-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 235,
@@ -14170,7 +14404,8 @@
         "phase0/phase13.10.24-marketplace-fulfillment-boundary-regression.mjs",
         "phase0/phase18.11-supplier-network-marketplace-integration-regression.mjs",
         "phase0/phase19.3-cross-marketplace-product-discovery-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 236,
@@ -14225,7 +14460,8 @@
         "phase0/phase19.4-seller-organization-discovery-regression.mjs",
         "phase0/phase21.8-discovery-ranking-integration-regression.mjs",
         "phase0/supplier-network-discovery-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 237,
@@ -14286,7 +14522,8 @@
         "phase0/phase19.4-seller-organization-discovery-regression.mjs",
         "phase0/phase21.8-discovery-ranking-integration-regression.mjs",
         "phase0/supplier-network-discovery-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 238,
@@ -14347,7 +14584,8 @@
         "phase0/phase19.4-seller-organization-discovery-regression.mjs",
         "phase0/phase21.8-discovery-ranking-integration-regression.mjs",
         "phase0/supplier-network-discovery-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 239,
@@ -14402,7 +14640,8 @@
         "phase0/phase19.4-seller-organization-discovery-regression.mjs",
         "phase0/phase21.8-discovery-ranking-integration-regression.mjs",
         "phase0/supplier-network-discovery-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 240,
@@ -14464,7 +14703,8 @@
         "phase0/phase19.4-seller-organization-discovery-regression.mjs",
         "phase0/phase21.8-discovery-ranking-integration-regression.mjs",
         "phase0/supplier-network-discovery-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 241,
@@ -14526,7 +14766,8 @@
         "phase0/phase19.4-seller-organization-discovery-regression.mjs",
         "phase0/phase21.8-discovery-ranking-integration-regression.mjs",
         "phase0/supplier-network-discovery-http-authorization-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 242,
@@ -14590,7 +14831,8 @@
         "phase0/phase18.11-supplier-network-marketplace-integration-regression.mjs",
         "phase0/phase19.3-cross-marketplace-product-discovery-regression.mjs",
         "phase0/tg6-telegram-checkout-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 243,
@@ -14640,7 +14882,8 @@
         "phase0/phase19.3-cross-marketplace-product-discovery-regression.mjs",
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 244,
@@ -14706,7 +14949,8 @@
         "phase0/phase19.3-cross-marketplace-product-discovery-regression.mjs",
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
         "phase0/tg7-telegram-buyer-orders-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 245,
@@ -14773,7 +15017,8 @@
         "phase0/phase13.8.6-restaurant-order-payment-regression.mjs",
         "phase0/phase13.8.7-restaurant-regression-gate.mjs",
         "phase0/restaurant-recipe-persistence-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 246,
@@ -14840,7 +15085,8 @@
         "phase0/phase13.8.6-restaurant-order-payment-regression.mjs",
         "phase0/phase13.8.7-restaurant-regression-gate.mjs",
         "phase0/restaurant-recipe-persistence-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": 247,
@@ -14907,7 +15153,8 @@
         "phase0/phase13.8.6-restaurant-order-payment-regression.mjs",
         "phase0/phase13.8.7-restaurant-regression-gate.mjs",
         "phase0/restaurant-recipe-persistence-regression.mjs"
-      ]
+      ],
+      "sourceKind": "ROUTES"
     },
     {
       "id": "inline-/health",
