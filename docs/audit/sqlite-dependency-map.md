@@ -3,8 +3,8 @@
 - Source commit: `e216db18ade2a5ffa66aff9dc3096e207251a918`
 - Source: `backend/lib/store-sqlite.js`
 - Exported store functions: **253**
-- Literal SQL API call sites in the full file: **1321** (950 inside exported function bodies)
-- Split literal SQL statements: **1677**
+- SQL API call sites in the full file: **1321** (1,318 literal + 3 dynamic; 950 inside exported function bodies, of which 947 are literal)
+- Split literal SQL statements: **1639**
 - Dynamic SQL call sites: **3**
 - Unique tables: **110** (112 table declarations)
 - Foreign-key declarations / deduplicated edges: **286 / 280**
