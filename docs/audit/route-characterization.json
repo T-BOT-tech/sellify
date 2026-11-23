@@ -18,9 +18,9 @@
         "routeLine": 3841,
         "handlerLine": 2239
       },
-      "authentication": "Payment Core central authorization",
+      "authentication": "provider adapter notification-authentication capability required; no tenant session",
       "authorization": [
-        "PaymentCore authorization callback"
+        "provider-specific notification authentication delegated to Payment adapter/Payment Core"
       ],
       "scope": {
         "tenant": "global/auth/provider",
@@ -12936,8 +12936,10 @@
         "routeLine": 4076,
         "handlerLine": 2903
       },
-      "authentication": "needs-review: authentication mechanism not identified in handler",
-      "authorization": [],
+      "authentication": "public read; deterministic Discovery provider; no tenant session",
+      "authorization": [
+        "public discovery search; provider boundary"
+      ],
       "scope": {
         "tenant": "global/auth/provider",
         "location": "not detected"
@@ -13062,8 +13064,10 @@
         "routeLine": 4079,
         "handlerLine": 2979
       },
-      "authentication": "needs-review: authentication mechanism not identified in handler",
-      "authorization": [],
+      "authentication": "public read; deterministic Discovery provider; no tenant session",
+      "authorization": [
+        "public discovery search; provider boundary"
+      ],
       "scope": {
         "tenant": "global/auth/provider",
         "location": "not detected"
@@ -13651,7 +13655,7 @@
     "inline/static": 6
   },
   "authenticationCounts": {
-    "Payment Core central authorization": 1,
+    "provider adapter notification-authentication capability required; no tenant session": 1,
     "Telegram initData signature/age verification": 2,
     "public read endpoint": 3,
     "tenant-scoped session required; owner-role gate": 14,
@@ -13666,7 +13670,7 @@
     "tenant-scoped session required; Payment Core central authorization; central permission/scope evaluator": 13,
     "tenant-scoped session required; Payment Core central authorization": 16,
     "configured bearer backup token": 1,
-    "needs-review: authentication mechanism not identified in handler": 2,
+    "public read; deterministic Discovery provider; no tenant session": 2,
     "Telegram buyer initData verified with configured bot secret; optional bearer session token; public storefront context/token validation": 1,
     "public/static": 6
   }
