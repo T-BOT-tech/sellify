@@ -10,7 +10,7 @@ process.env.SELLIFY_DB_PATH = path.join(tmp, 'test.sqlite');
 const store = await import('../backend/lib/store-sqlite.js');
 
 const user = await store.getOrCreateUserByTelegram(`tg-${Date.now()}`, 'B2B Test');
-const tenant = await store.createTenantForUser({ userId: user.id, sellerName: 'B2B Test', currency: 'ETB' });
+const tenant = await store.createTenantForUser({ userId: user.id, sellerName: 'B2B Test', businessType: 'retail', country: 'ET', currency: 'ETB', timezone: 'Africa/Addis_Ababa' });
 const chatId = tenant.chatId;
 
 // Seed a canonical business customer and product through the existing store contracts.
