@@ -41,6 +41,10 @@ The 43 lexical fragments comprise 38 trigger `END` terminators, one `DYNAMIC`, o
 
 The SQL-site operation counts for BEGIN/COMMIT/ROLLBACK (67/96/67) differ from the function-body marker scan (109/103/67). The first counts parsed SQL call-site statements; the second counts lexical transaction markers across function spans. Neither count alone proves a balanced or atomic transaction.
 
+## Perplexity inventory cross-check
+
+The current-main Perplexity workflow (run `45254875666`) also passed its SQLite inventory step. The generator counts exports, unique table names, declaration counts and migration guards, then assigns name-based domain hints. It deduplicates table names into a `Map` before its unique-table assertion, so that assertion does not prove the source has no repeated `CREATE TABLE` declarations; declaration counts/lines are retained, and this audit independently records the two repeated names. The generator does not map SQL function-to-table edges, foreign keys, indexes, transaction boundaries, migration trigger DDL or canonical ownership. This dependency map adds those evidence layers without accepting name-based domains as ownership.
+
 ## Function, table, foreign-key and migration map
 
 The JSON records every exported function, source span, SQL operation/table/line, direct named function calls, transaction markers, table consumers, table declarations, foreign-key references, indexes and migration guards. Each migration now also records trigger declarations in its source block.
