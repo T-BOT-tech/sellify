@@ -158,7 +158,7 @@ Regression evidence: `phase0/fux-55-seller-storefront-channel-authority-regressi
 **Disposition:** preserve projection-only behavior; no extraction approved.
 
 
-## Characterization batch 3 — Identity, authentication, devices, invitations and membership
+## Characterization batch 5 — Identity, authentication, devices, invitations and membership
 
 **Baseline:** current `main` at `15737ee0c83e057113baa3881638186542ed6999`. **Status:** 16 route/method entries reviewed against current handlers and store functions.
 
@@ -197,3 +197,8 @@ Regression evidence: `phase0/fux-55-seller-storefront-channel-authority-regressi
 ### Regression inventory
 
 Relevant existing files include `phase0/gap-5-iam-membership-contextual-role-regression.mjs`, `phase0/p1-09-membership-role-change-regression.mjs`, `phase0/phase13.12.1-authorization-authority-inventory-regression.mjs`, `phase0/phase13.11.14-authorization-tenant-isolation-regression.mjs`, `phase0/phase10.3-authorization-regression.mjs`, and `phase0/first-experience-tenant-isolation-http-regression.mjs`. These establish selected authorization contracts; no dedicated cross-process one-time-token test was identified. No production code was changed.
+
+
+## Characterization count reconciliation
+
+The original Markdown batch tables list 29 route/method entries (8 + 13 + 6 + 2). In the original JSON, 25 were marked `characterized` and four were separately marked `characterized-with-defect-candidate`; those four are characterized findings, not inventory-only routes. The current JSON therefore counts both categories in the characterized total.
