@@ -3,135 +3,127 @@
 - Baseline: `e216db18ade2a5ffa66aff9dc3096e207251a918`
 - Source: `backend/lib/store-sqlite.js` (blob `061581230a4443413224508d22aba21eecdbca1b`)
 - Exported functions: **253**
-- Referenced tables: **117**
-- CREATE TABLE declarations: **112** (110 unique)
+- Declared tables: **110** (112 declarations)
 - Migration guards: **85**
 - Index declarations: **206**
 - Inline foreign-key REFERENCES clauses: **292**
 
-> This is a persistence dependency inventory, not an ownership assignment or extraction approval. Table usage is recorded from SQL statements in each exported function body.
+> Dependency inventory, not an ownership assignment or extraction approval. Function/table dependencies are derived from source-level SQL references. Table ownership remains explicitly unassigned.
 
 ## Table dependency map
 
-| Table | Declaration lines | Function access (operations) | Indexes |
-|---|---|---|---|
-| `Payment` | not detected | insertPaymentDecision:READ; commitPaymentDecision:READ | none |
-| `SET` | not detected | upsertCustomerPricing:UPDATE; setServiceResourceAvailability:UPDATE; saveBusinessTemplateConfig:UPDATE; assignMembershipContextualRole:UPDATE; setAuditRetentionPolicy:UPDATE | none |
-| `a` | not detected | insertPaymentVerification:READ; commitPaymentDecision:READ; saveQueuedOrders:READ | none |
-| `accounts_receivable` | 1043 | getReceivable:READ; listReceivables:READ; createReceivable:READ/INSERT; transitionReceivable:UPDATE; allocatePaymentToReceivable:UPDATE | idx_ar_org_status, idx_ar_org_customer |
-| `any` | not detected | transitionOrderFulfillment:READ | none |
-| `ar_ledger_entries` | 1067 | createReceivable:INSERT; transitionReceivable:INSERT; allocatePaymentToReceivable:INSERT; listReceivableLedger:READ | idx_ar_ledger_receivable |
-| `ar_payment_allocations` | 1085 | allocatePaymentToReceivable:READ/INSERT | idx_ar_alloc_payment |
-| `audit_events` | 355 | listAuditEvents:READ; verifyAuditEventChain:READ; buildComplianceExport:READ | idx_audit_tenant_created, idx_audit_organization_created, idx_audit_org_time, idx_audit_actor_time, idx_audit_entity_time, idx_audit_lineage |
-| `audit_retention_policies` | 690 | getAuditRetentionPolicy:READ; setAuditRetentionPolicy:INSERT | none |
-| `auth_challenges` | 410 | createTenantForUser:READ/UPDATE; createAuthChallenge:INSERT; getAuthChallengeForTenantCreation:READ; consumeAuthChallenge:READ/UPDATE | none |
-| `buyer` | not detected | createPurchaseOrderFromProcurementAward:READ | none |
-| `caller` | not detected | transitionOrderFulfillment:READ | none |
-| `catalog_products` | 316 | upsertSupplierNetworkCommercialTerms:READ; upsertSupplierNetworkCatalogListing:READ; getSupplierNetworkMarketplaceIntegration:READ; discoverSupplierNetwork:READ; createProcurementReceipt:READ; updateTenant:READ; getCatalog:READ; saveCatalog:READ/DELETE; searchMarketplaceListings:READ; createMarketplaceOrder:READ; updateMarketplaceOrderStatus:READ | idx_catalog_marketplace, idx_catalog_currency |
-| `channel_identities` | 497 | getIdentityForTenant:READ | idx_channel_identities_org |
-| `compliance_requests` | 697 | createComplianceRequest:INSERT; getComplianceRequest:READ; listComplianceRequests:READ; resolveComplianceRequest:UPDATE | idx_compliance_requests_org_status, idx_compliance_requests_subject |
-| `customer_credit_terms` | 1008 | getCreditTerms:READ; listCreditTerms:READ; createCreditTerms:READ/INSERT; transitionCreditTerms:UPDATE; updateCreditTerms:UPDATE; createReceivable:READ | idx_credit_terms_org_status, idx_credit_terms_org_customer |
-| `customer_pricing_rules` | 873 | listCustomerPricing:READ; getCustomerPricing:READ; upsertCustomerPricing:READ/INSERT; createQuote:READ | idx_customer_pricing_org_customer, idx_customer_pricing_org_product |
-| `customers` | 585 | listCustomers:READ; getCustomer:READ; createPaymentWithIntent:READ; createPayment:READ; saveQueuedOrders:READ; createComplianceRequest:READ; buildComplianceExport:READ | idx_customers_org_updated, idx_customers_org_phone, idx_customers_org_name |
-| `delivery_assignment_commands` | 2588 | assignDeliveryCourier:READ/INSERT; transitionDeliveryAssignment:READ/INSERT | idx_delivery_assignment_commands_order |
-| `delivery_assignments` | 2224 | selectDeliveryCourier:READ; assignDeliveryCourier:READ/INSERT; listDeliveryAssignments:READ; getDeliveryAssignment:READ; transitionDeliveryAssignment:READ/INSERT/UPDATE; transitionOrderFulfillment:READ | idx_delivery_assignments_courier, idx_delivery_assignments_org, idx_delivery_assignments_courier, idx_delivery_assignments_org, idx_delivery_assignments_active_fulfillment UNIQUE |
-| `devices` | 390 | authenticateSessionToken:READ/UPDATE; listDevices:READ; revokeDevice:READ/UPDATE | idx_devices_tenant |
-| `durable` | not detected | recordServiceDeliveryAssessment:READ; assignDeliveryCourier:READ | none |
-| `expiring` | not detected | listDevices:READ | none |
-| `fulfillment` | not detected | coreFulfillmentContract:UPDATE | none |
-| `fulfillment_commands` | 2551 | transitionOrderFulfillment:READ/INSERT | idx_fulfillment_commands_order |
-| `fulfillments` | 2195 | getOrderFulfillment:READ; assignDeliveryCourier:READ/INSERT; listDeliveryAssignments:READ; getDeliveryAssignment:READ; transitionDeliveryAssignment:READ/UPDATE; transitionOrderFulfillment:READ/INSERT/UPDATE; getTelegramBuyerFulfillmentExperience:READ | idx_fulfillments_org_status, idx_fulfillments_location_status |
-| `incomplete` | not detected | assessTelegramBuyerServiceFeasibility:READ | none |
-| `inventory_movements` | 622 | saveCatalog:READ; listInventoryMovements:READ; getInventoryBalances:READ; appendInventoryMovementBatch:READ; createMarketplaceOrder:READ; updateMarketplaceOrderStatus:READ | idx_inventory_movements_org_product_time, idx_inventory_movements_location_product_time, idx_inventory_movements_reference |
-| `invites` | 449 | createInvite:INSERT; listInvites:READ; revokeInvite:READ/UPDATE; consumeInvite:READ/UPDATE | idx_invites_tenant |
-| `invoice_items` | 1133 | createInvoice:INSERT | idx_invoice_items_invoice |
-| `invoices` | 1111 | getInvoice:READ; listInvoices:READ; createInvoice:READ/INSERT; transitionInvoice:READ/UPDATE | idx_invoices_org_status, idx_invoices_org_customer |
-| `its` | not detected | completePaymentStatusQuery:READ | none |
-| `locations` | 485 | createProcurementReceipt:READ; listOrganizationLocations:READ; getOrganizationLocation:READ; createOrganizationLocation:READ/INSERT; updateOrganizationLocation:READ/UPDATE; getIdentityForTenant:READ; getServiceResourceAvailability:READ; setServiceResourceAvailability:READ; transitionServiceBooking:READ; listDeliveryAssignments:READ; getDeliveryAssignment:READ; transitionDeliveryAssignment:READ; transitionOrderFulfillment:READ; createMarketplaceOrder:READ; updateMarketplaceOrderStatus:READ; assessTelegramBuyerServiceFeasibility:READ; assignMembershipContextualRole:READ; createSession:READ; authenticateSessionToken:READ; createComplianceRequest:READ; buildComplianceExport:READ | idx_locations_org, idx_locations_org_code, idx_locations_org_type |
-| `logistics_scheduling_activities` | 3236 | createLogisticsSchedulingActivity:READ/INSERT; getLogisticsSchedulingActivity:READ; listLogisticsSchedulingActivities:READ; evaluateLogisticsSchedulingActivity:READ; transitionLogisticsSchedulingActivity:READ/UPDATE | idx_logistics_scheduling_org_status, idx_logistics_scheduling_org_location, idx_logistics_scheduling_order, idx_logistics_scheduling_fulfillment |
-| `marketplace_checkout_idempotency` | 1267 | createMarketplaceOrder:READ/INSERT | idx_marketplace_checkout_idem_buyer |
-| `marketplace_fulfillments` | 1192 | createMarketplaceOrder:INSERT; updateMarketplaceOrderStatus:UPDATE; getTelegramBuyerFulfillmentExperience:READ | idx_marketplace_fulfillments_order |
-| `marketplace_inventory_reservations` | 1205 | createMarketplaceOrder:INSERT; updateMarketplaceOrderStatus:UPDATE | idx_marketplace_reservations_product |
-| `marketplace_orders` | 1154 | createMarketplaceOrder:READ/INSERT/UPDATE; updateMarketplaceOrderStatus:UPDATE; getTelegramBuyerFulfillmentExperience:READ; listTelegramBuyerOrders:READ; getTelegramBuyerServiceBookings:READ | uq_marketplace_orders_idempotency UNIQUE, idx_marketplace_orders_buyer, idx_marketplace_orders_status |
-| `marketplace_payment_allocations` | 1220 | commitPaymentDecision:READ/UPDATE; finalizePaymentRefund:READ/UPDATE; transitionPayment:READ/UPDATE; createMarketplaceOrder:INSERT; updateMarketplaceOrderStatus:READ/UPDATE | idx_marketplace_payment_allocations_order, idx_marketplace_payment_allocations_order |
-| `marketplace_refunds` | 1251 | finalizePaymentRefund:READ/UPDATE; updateMarketplaceOrderStatus:INSERT | idx_marketplace_refunds_order |
-| `marketplace_seller_orders` | 1175 | commitPaymentDecision:READ; transitionPayment:READ; createMarketplaceOrder:INSERT; updateMarketplaceOrderStatus:READ/UPDATE; getTelegramBuyerFulfillmentExperience:READ; listTelegramBuyerOrders:READ; getTelegramBuyerServiceBookings:READ | idx_marketplace_seller_orders_seller |
-| `marketplace_settlements` | 1236 | commitPaymentDecision:UPDATE; finalizePaymentRefund:UPDATE; transitionPayment:UPDATE; createMarketplaceOrder:INSERT; updateMarketplaceOrderStatus:UPDATE | idx_marketplace_settlements_org_status |
-| `membership_roles` | 3136 | selectDeliveryCourier:READ; assignDeliveryCourier:READ; listDeliveryAssignments:READ; getDeliveryAssignment:READ; assertCourierOwnsDelivery:READ; transitionDeliveryAssignment:READ; assessTelegramBuyerServiceFeasibility:READ; listTenantMemberships:READ; assignMembershipContextualRole:READ/INSERT; revokeMembershipContextualRole:READ/UPDATE; changeMembershipRole:INSERT/UPDATE; createSession:READ; authenticateSessionToken:READ | idx_membership_roles_membership, idx_membership_roles_scope |
-| `memberships` | 379 | selectDeliveryCourier:READ; assignDeliveryCourier:READ; listDeliveryAssignments:READ; getDeliveryAssignment:READ; assertCourierOwnsDelivery:READ; transitionDeliveryAssignment:READ; assessTelegramBuyerServiceFeasibility:READ; listTenantMemberships:READ; listUserMemberships:READ; assignMembershipContextualRole:READ; revokeMembershipContextualRole:READ; changeMembershipRole:READ/UPDATE; createSession:READ; authenticateSessionToken:READ; revokeDevice:READ; createPairingChallenge:READ; createInvite:READ; revokeInvite:READ; consumeInvite:READ/UPDATE | idx_memberships_user, idx_memberships_tenant |
-| `name` | not detected | saveQueuedOrders:READ | none |
-| `orders` | 329 | createReceivable:READ; createServiceBooking:READ; transitionServiceBooking:READ; recordServiceDeliveryAssessment:READ/UPDATE; updateTenant:READ; saveCatalog:READ; createPaymentWithIntent:READ; insertPaymentIntent:READ; createPayment:READ; getOrderPaymentSummary:READ; assignDeliveryCourier:READ; transitionDeliveryAssignment:READ; transitionOrderFulfillment:READ; getOrders:READ; saveQueuedOrders:READ; pullNewOrders:READ/UPDATE; updateMarketplaceOrderStatus:READ/UPDATE; getMarketplaceOrderTracking:READ; getTelegramBuyerFulfillmentExperience:READ; getTelegramBuyerServiceBookings:READ; buildComplianceExport:READ | idx_orders_tenant_created, idx_orders_undelivered, idx_orders_marketplace, idx_orders_customer, idx_orders_currency |
-| `organizations` | 476 | upsertSupplierNetworkProfile:READ; discoverProcurementSuppliers:READ; listProcurementSupplierRelationships:READ; createProcurementSupplierRelationship:READ; transitionProcurementSupplierRelationship:READ; createProcurementRfqResponse:READ; transitionProcurementRfqResponse:READ; getSupplierNetworkMarketplaceIntegration:READ; discoverSupplierNetwork:READ; createProcurementComparison:READ; getIdentityForTenant:READ; getServiceResourceAvailability:READ; setServiceResourceAvailability:READ; transitionServiceBooking:READ; updateTenant:UPDATE; assessTelegramBuyerServiceFeasibility:READ | none |
-| `pack_lifecycle` | 2161 | transitionPackLifecycle:READ/INSERT/UPDATE; getPackLifecycle:READ; createSession:READ; authenticateSessionToken:READ | idx_pack_lifecycle_org_state, idx_pack_lifecycle_pack |
-| `pairing_challenges` | 417, 433 | createPairingChallenge:INSERT; consumePairingChallenge:READ/UPDATE | idx_pairing_challenges_tenant, idx_pairing_challenges_tenant |
-| `payment_accounts` | 776 | createPaymentWithIntent:READ; insertPaymentIntent:READ; getPaymentAccountForProviderNotification:READ; insertProviderNotificationEvidence:READ; commitPaymentDecision:READ; listPaymentAccounts:READ; createPaymentAccount:INSERT; createPayment:READ | idx_payment_accounts_org |
-| `payment_confirmation_attempts` | 2420 | createPaymentConfirmationAttempt:READ/INSERT; updatePaymentConfirmationAttempt:READ/UPDATE; getPaymentConfirmationAttempt:READ; getPaymentConfirmationAttemptByProviderTransaction:READ | idx_payment_confirmation_attempts_org_status, idx_payment_confirmation_attempts_evidence, idx_payment_confirmation_attempts_intent, uq_payment_confirmation_attempts_provider_tx UNIQUE |
-| `payment_decisions` | 2368 | insertPaymentDecision:READ/INSERT; listPaymentDecisions:READ; commitPaymentDecision:INSERT | idx_payment_decisions_payment, idx_payment_decisions_evidence, idx_payment_decisions_verification, idx_payment_decisions_org_created |
-| `payment_evidence` | 2312 | resolvePaymentIntentForProviderEvidence:READ; insertProviderNotificationEvidence:READ/INSERT; createPaymentConfirmationAttempt:READ; getPaymentConfirmationAttemptByProviderTransaction:READ; insertPaymentEvidence:READ/INSERT; listPaymentEvidence:READ; insertPaymentVerification:READ; commitPaymentDecision:READ | idx_payment_evidence_org_provider_fingerprint UNIQUE, idx_payment_evidence_org_provider_transaction UNIQUE, idx_payment_evidence_payment, idx_payment_evidence_intent, idx_payment_evidence_org_status, idx_payment_evidence_external_reference, uq_payment_evidence_notification UNIQUE, idx_payment_evidence_auth_reference |
-| `payment_idempotency_keys` | 2388 | createPaymentWithIntent:READ/INSERT; getPaymentIdempotency:READ; insertPaymentIdempotency:INSERT; updatePaymentIdempotencyProgress:UPDATE; completePaymentIdempotency:UPDATE; commitPaymentDecision:READ/INSERT | idx_payment_idempotency_expiry |
-| `payment_intents` | 2290 | createPaymentWithIntent:READ/INSERT; getPaymentIntent:READ; insertPaymentIntent:READ/INSERT; resolvePaymentIntentForProviderEvidence:READ; createPaymentConfirmationAttempt:READ; insertPaymentEvidence:READ; insertPaymentVerification:READ; commitPaymentDecision:READ | idx_payment_intents_org_created, idx_payment_intents_org_order, idx_payment_intents_org_status |
-| `payment_ledger_entries` | 824 | createPaymentWithIntent:INSERT; commitPaymentDecision:INSERT; createPayment:INSERT; finalizePaymentRefund:INSERT; transitionPayment:INSERT; listPaymentLedger:READ | idx_payment_ledger_payment, idx_payment_ledger_decision, idx_payment_ledger_payment |
-| `payment_operational_actions` | 2807 | createPaymentOperationalAction:READ/INSERT; updatePaymentOperationalAction:READ/UPDATE; listPaymentOperationalActions:READ | uq_payment_operational_idempotency UNIQUE, idx_payment_operational_payment, idx_payment_operational_status |
-| `payment_outbound_intents` | 1777 | listPaymentOutboundIntents:READ; getPaymentOutboundIntent:READ; createPaymentOutboundIntent:READ/INSERT; transitionPaymentOutboundIntent:READ/UPDATE; listProcurementSettlementAllocations:READ; allocateConfirmedOutboundPaymentToProcurementSettlement:READ | idx_payment_outbound_org_state, idx_payment_outbound_po, idx_payment_outbound_counterparty |
-| `payment_procurement_settlement_allocations` | 1827 | getProcurementSettlement:READ; listProcurementSettlements:READ; listProcurementSettlementAllocations:READ; allocateConfirmedOutboundPaymentToProcurementSettlement:READ/INSERT | idx_payment_procurement_settlement_allocations_settlement, idx_payment_procurement_settlement_allocations_intent |
-| `payment_procurement_settlements` | 1811 | getProcurementSettlement:READ; listProcurementSettlements:READ; listProcurementSettlementAllocations:READ; allocateConfirmedOutboundPaymentToProcurementSettlement:UPDATE | idx_payment_procurement_settlements_org_status |
-| `payment_production_certifications` | 2841 | recordPaymentProductionCertification:READ/INSERT; listPaymentProductionCertifications:READ | idx_payment_production_certifications |
-| `payment_provider_capability_certifications` | 2871 | recordPaymentProviderCapabilityEvidence:READ/INSERT; certifyPaymentProviderCapability:READ/INSERT; listPaymentProviderCapabilityEvidence:READ | idx_payment_provider_capability_certification |
-| `payment_reconciliations` | 841 | recordPaymentReconciliation:READ/INSERT; listPaymentReconciliations:READ; reconcilePayment:READ/INSERT | idx_payment_reconciliation_org, idx_payment_reconciliation_payment_created, idx_payment_reconciliation_fingerprint |
-| `payment_refunds` | 2988 | createPaymentWithIntent:READ; getPaymentRefunds:READ; getPaymentRefundByIdempotencyKey:READ; createPaymentRefundRequest:READ/INSERT; finalizePaymentRefund:READ/UPDATE; getOrderPaymentSummary:READ; updateMarketplaceOrderStatus:READ/INSERT | idx_payment_refunds_payment, idx_payment_refunds_org_status, idx_payment_refunds_provider |
-| `payment_routing_policies` | 2782 | listPaymentRoutingPolicies:READ; upsertPaymentRoutingPolicy:READ/INSERT/UPDATE | idx_payment_routing_policy_match |
-| `payment_settlements` | 2949 | getPaymentSettlementByIdempotencyKey:READ; createPaymentSettlement:READ/INSERT; finalizePaymentSettlement:READ/UPDATE; listPaymentSettlements:READ | idx_payment_settlements_payment, idx_payment_settlements_org_status, idx_payment_settlements_provider_reference |
-| `payment_status_query_commands` | 2452 | beginPaymentStatusQuery:READ/INSERT/UPDATE; markPaymentStatusQueryProviderStarted:UPDATE; completePaymentStatusQuery:READ/UPDATE; commitPaymentDecision:READ | idx_payment_status_query_commands_payment |
-| `payment_verifications` | 2341 | insertPaymentVerification:READ/INSERT; listPaymentVerifications:READ; insertPaymentDecision:READ; commitPaymentDecision:READ | idx_payment_verifications_payment, idx_payment_verifications_evidence, idx_payment_verifications_intent, idx_payment_verifications_org_result, idx_payment_verifications_evidence_verifier UNIQUE, uq_payment_verifications_provider_transaction UNIQUE, idx_payment_verifications_provider_transaction |
-| `payments` | 790 | createPaymentWithIntent:READ/INSERT; createPaymentConfirmationAttempt:READ; insertPaymentEvidence:READ; insertPaymentVerification:READ; insertPaymentDecision:READ; beginPaymentStatusQuery:READ; commitPaymentDecision:READ/UPDATE; createPayment:READ/INSERT; createPaymentSettlement:READ; createPaymentRefundRequest:READ; finalizePaymentRefund:READ/UPDATE; getPayment:READ; getOrderPaymentSummary:READ; listPayments:READ; transitionPayment:READ/UPDATE; saveQueuedOrders:READ; updateMarketplaceOrderStatus:READ; updatePaymentOperationalAction:READ | idx_payments_org_created, idx_payments_order, idx_payments_state, uq_payments_external_reference UNIQUE, idx_payments_payment_intent, idx_payments_org_created, idx_payments_order, idx_payments_state, idx_payments_payment_intent, uq_payments_external_reference UNIQUE |
-| `procurement_award_lines` | 1612 | createProcurementAward:INSERT; transitionProcurementAward:READ; createPurchaseOrderFromProcurementAward:READ | idx_procurement_award_lines_award |
-| `procurement_awards` | 1586 | listProcurementAwards:READ; createProcurementAward:READ/INSERT; transitionProcurementAward:READ/UPDATE; createPurchaseOrderFromProcurementAward:READ | idx_procurement_awards_org_status, idx_procurement_awards_demand |
-| `procurement_comparison_line_offers` | 1557 | createProcurementComparison:INSERT; createProcurementAward:READ | idx_procurement_comparison_lines_comparison |
-| `procurement_comparison_suppliers` | 1536 | createProcurementComparison:INSERT | idx_procurement_comparison_suppliers_rank |
-| `procurement_comparisons` | 1523 | listProcurementComparisons:READ; createProcurementComparison:READ/INSERT; createProcurementAward:READ | idx_procurement_comparisons_rfq |
-| `procurement_demand_items` | 1321 | createProcurementDemand:INSERT; getProcurementDemand:READ; updateProcurementDemand:READ/INSERT/DELETE; createProcurementRfq:READ | idx_procurement_demand_items_demand, idx_procurement_demand_items_product |
-| `procurement_demands` | 1288 | createProcurementDemand:READ/INSERT; getProcurementDemand:READ; updateProcurementDemand:READ/UPDATE; transitionProcurementDemand:READ/UPDATE; createProcurementAward:READ; transitionProcurementAward:UPDATE | idx_procurement_demands_org_status, idx_procurement_demands_requester, idx_procurement_demands_source |
-| `procurement_receipt_lines` | 1742 | recalculateSupplierNetworkPerformance:READ; createProcurementReceipt:READ/INSERT | idx_procurement_receipt_lines_receipt |
-| `procurement_receipts` | 1722 | recalculateSupplierNetworkPerformance:READ; listProcurementReceipts:READ; createProcurementReceipt:READ/INSERT/UPDATE | idx_procurement_receipts_po |
-| `procurement_rfq_items` | 1430 | createProcurementRfq:INSERT; createProcurementRfqResponse:READ; createProcurementComparison:READ; createProcurementAward:READ; createPurchaseOrderFromProcurementAward:READ | idx_procurement_rfq_items_rfq |
-| `procurement_rfq_response_items` | 1483 | createProcurementRfqResponse:READ/INSERT/DELETE; transitionProcurementRfqResponse:READ; createProcurementComparison:READ | idx_procurement_rfq_response_items_response |
-| `procurement_rfq_responses` | 1459 | createProcurementRfqResponse:READ/INSERT/UPDATE; transitionProcurementRfqResponse:READ/UPDATE; recalculateSupplierNetworkPerformance:READ; createProcurementComparison:READ; createProcurementAward:READ | idx_procurement_rfq_responses_rfq, idx_procurement_rfq_responses_supplier |
-| `procurement_rfq_suppliers` | 1447 | createProcurementRfq:INSERT; transitionProcurementRfq:READ; transitionProcurementRfqResponse:UPDATE; recalculateSupplierNetworkPerformance:READ | idx_procurement_rfq_suppliers_supplier |
-| `procurement_rfqs` | 1404 | createProcurementRfq:READ/INSERT; listProcurementRfqs:READ; transitionProcurementRfq:READ/UPDATE; createProcurementRfqResponse:READ; transitionProcurementRfqResponse:READ; recalculateSupplierNetworkPerformance:READ; createProcurementComparison:READ; createProcurementAward:READ | idx_procurement_rfqs_org_status, idx_procurement_rfqs_demand |
-| `procurement_supplier_participants` | 1369 | setProcurementSupplierParticipation:INSERT/UPDATE; discoverProcurementSuppliers:READ; listSupplierNetworkTrustEvidence:READ; refreshSupplierNetworkTrustEvidence:READ; recalculateSupplierNetworkPerformance:READ; discoverSupplierNetwork:READ | idx_procurement_supplier_discovery |
-| `procurement_supplier_relationships` | 1379 | listProcurementSupplierRelationships:READ; createProcurementSupplierRelationship:READ/INSERT; transitionProcurementSupplierRelationship:READ/UPDATE; listSupplierNetworkTrustEvidence:READ; refreshSupplierNetworkTrustEvidence:READ; listSupplierNetworkPerformance:READ; getSupplierNetworkPerformance:READ; discoverSupplierNetwork:READ | idx_procurement_supplier_relationships_buyer, idx_procurement_supplier_relationships_supplier |
-| `public` | not detected | saveQueuedOrders:READ | none |
-| `purchase_order_items` | 974 | recalculateSupplierNetworkPerformance:READ; createPurchaseOrder:INSERT; createProcurementReceipt:READ; createPurchaseOrderFromProcurementAward:INSERT | idx_purchase_order_items_order, idx_purchase_order_items_order |
-| `purchase_orders` | 950 | createPaymentOutboundIntent:READ; createProcurementPaymentIntent:READ; recalculateSupplierNetworkPerformance:READ; listPurchaseOrders:READ; createPurchaseOrder:READ/INSERT; createProcurementReceipt:READ; createPurchaseOrderFromProcurementAward:READ/INSERT; transitionPurchaseOrder:UPDATE | idx_purchase_orders_org_customer, idx_purchase_orders_org_status, idx_purchase_orders_org_customer, idx_purchase_orders_org_supplier, idx_purchase_orders_org_status, idx_purchase_orders_org_source |
-| `quote_items` | 923 | createQuote:INSERT | idx_quote_items_quote |
-| `quotes` | 902 | listQuotes:READ; createQuote:INSERT; transitionQuote:UPDATE | idx_quotes_org_customer, idx_quotes_org_status |
-| `real` | not detected | saveBusinessTemplateConfig:READ | none |
-| `restaurant_recipes` | 3558 | listRestaurantRecipes:READ; createRestaurantRecipe:READ/INSERT; updateRestaurantRecipe:READ/UPDATE | idx_restaurant_recipes_org_status, idx_restaurant_recipes_chat_updated |
-| `service_booking_commands` | 2668 | createServiceBooking:READ/INSERT; transitionServiceBooking:READ/INSERT | idx_service_booking_commands_booking |
-| `service_bookings` | 2652 | createServiceBooking:READ/INSERT; transitionServiceBooking:READ/UPDATE; listServiceProviderBookings:READ; listServiceBookings:READ; getTelegramBuyerServiceBookings:READ; assessTelegramBuyerServiceFeasibility:READ | idx_service_bookings_order, idx_service_bookings_resource_window |
-| `service_delivery_assessment_commands` | 2606 | recordServiceDeliveryAssessment:READ/INSERT | idx_service_delivery_assessment_commands_order |
-| `service_resource_availability` | 3358 | getServiceResourceAvailability:READ; setServiceResourceAvailability:READ/INSERT; transitionServiceBooking:READ; assessTelegramBuyerServiceFeasibility:READ | idx_service_resource_availability_org |
-| `service_resource_availability_commands` | 3371 | setServiceResourceAvailability:READ/INSERT | none |
-| `service_resource_commands` | 3340 | createServiceResource:READ/INSERT; updateServiceResource:READ/INSERT | idx_service_resource_commands_resource |
-| `service_resource_commitments` | 3394, 3440 | updateServiceResource:READ; setServiceResourceAvailability:READ; transitionServiceBooking:READ/INSERT/UPDATE; listServiceProviderBookings:READ; getTelegramBuyerServiceBookings:READ; assessTelegramBuyerServiceFeasibility:READ | idx_service_resource_commitments_overlap, idx_service_resource_commitments_overlap |
-| `service_resources` | 3319 | listServiceResources:READ; createServiceResource:READ/INSERT; updateServiceResource:READ/UPDATE; getServiceResourceAvailability:READ; setServiceResourceAvailability:READ; transitionServiceBooking:READ; listServiceProviderBookings:READ; getTelegramBuyerServiceBookings:READ; assessTelegramBuyerServiceFeasibility:READ; assignMembershipContextualRole:READ | idx_service_resources_org_status, idx_service_resources_service |
-| `sessions` | 400 | createSession:INSERT; authenticateSessionToken:READ; revokeSession:UPDATE; listDevices:READ; revokeDevice:UPDATE | idx_sessions_hash, idx_sessions_device |
-| `supplier_network_capabilities` | 3204 | upsertSupplierNetworkCommercialTerms:READ; listSupplierNetworkCapabilities:READ; upsertSupplierNetworkCapability:READ/INSERT/UPDATE; transitionSupplierNetworkCapability:UPDATE; discoverSupplierNetwork:READ | idx_supplier_network_capabilities_org_status, idx_supplier_network_capabilities_discovery |
-| `supplier_network_capacity_signals` | 1924 | listSupplierNetworkCapacities:READ; upsertSupplierNetworkCapacity:READ/INSERT/UPDATE; transitionSupplierNetworkCapacity:UPDATE; discoverSupplierNetwork:READ | idx_supplier_network_capacity_org_status, idx_supplier_network_capacity_discovery |
-| `supplier_network_catalog_listings` | 1890 | listSupplierNetworkCatalogListings:READ; upsertSupplierNetworkCatalogListing:READ/INSERT/UPDATE; transitionSupplierNetworkCatalogListing:UPDATE; getSupplierNetworkMarketplaceIntegration:READ; discoverSupplierNetwork:READ | idx_supplier_network_catalog_org_status, idx_supplier_network_catalog_product |
-| `supplier_network_commercial_terms` | 1959 | listSupplierNetworkCommercialTerms:READ; upsertSupplierNetworkCommercialTerms:READ/INSERT/UPDATE; transitionSupplierNetworkCommercialTerms:UPDATE; discoverSupplierNetwork:READ | idx_supplier_network_commercial_org_status, idx_supplier_network_commercial_discovery, uq_supplier_network_commercial_network UNIQUE |
-| `supplier_network_performance_observations` | 2032 | refreshSupplierNetworkTrustEvidence:READ; listSupplierNetworkPerformance:READ; getSupplierNetworkPerformance:READ; recalculateSupplierNetworkPerformance:INSERT | idx_supplier_network_performance_supplier_metric, idx_supplier_network_performance_visibility |
-| `supplier_network_profiles` | 1860 | upsertSupplierNetworkProfile:INSERT/UPDATE; transitionSupplierNetworkProfile:UPDATE; getSupplierNetworkMarketplaceIntegration:READ; discoverSupplierNetwork:READ | idx_supplier_network_profiles_visibility_status |
-| `supplier_network_qualifications` | 1996 | listSupplierNetworkQualifications:READ; upsertSupplierNetworkQualification:READ/INSERT/UPDATE; transitionSupplierNetworkQualification:UPDATE; listSupplierNetworkTrustEvidence:READ; refreshSupplierNetworkTrustEvidence:READ; discoverSupplierNetwork:READ | idx_supplier_network_qualification_org_status, idx_supplier_network_qualification_discovery, uq_supplier_network_qualification_reference UNIQUE |
-| `supplier_network_service_areas` | 3172 | listSupplierNetworkServiceAreas:READ; upsertSupplierNetworkServiceArea:READ/INSERT/UPDATE; transitionSupplierNetworkServiceArea:UPDATE; discoverSupplierNetwork:READ | idx_supplier_network_service_areas_org_status, idx_supplier_network_service_areas_discovery |
-| `supplier_network_trust_evidence` | 2066 | listSupplierNetworkTrustEvidence:READ; getSupplierNetworkTrustEvidence:READ; refreshSupplierNetworkTrustEvidence:INSERT; discoverSupplierNetwork:READ | idx_supplier_network_trust_supplier_type, idx_supplier_network_trust_visibility, uq_supplier_network_trust_source UNIQUE |
-| `sync_events` | 650 | processSyncEvent:READ/INSERT | idx_sync_events_org_time, idx_sync_events_org_type |
-| `telegram_storefront_configs` | 2132 | getTelegramStorefrontConfig:READ; upsertTelegramStorefrontConfig:INSERT/UPDATE; verifyTelegramStorefront:UPDATE | idx_telegram_storefront_status |
-| `tenant_business_templates` | 3285 | getBusinessTemplateConfig:READ; saveBusinessTemplateConfig:INSERT | none |
-| `tenant_creation_requests` | 3301 | createTenantForUser:READ/INSERT; getAuthChallengeForTenantCreation:READ | idx_tenant_creation_requests_user |
-| `tenants` | 306 | getTelegramStorefrontConfig:READ; getSupplierNetworkMarketplaceIntegration:READ; discoverSupplierNetwork:READ; createServiceResource:READ; updateServiceResource:READ; setServiceResourceAvailability:READ; createServiceBooking:READ; transitionServiceBooking:READ; recordServiceDeliveryAssessment:READ; getOrCreateTenant:READ/INSERT; getTenant:READ; getTenantByApiKey:READ; updateTenant:READ/UPDATE; listTenants:READ; saveCatalog:READ; getPaymentAccountForProviderNotification:READ; assignDeliveryCourier:READ; transitionDeliveryAssignment:READ; transitionOrderFulfillment:READ; saveQueuedOrders:READ; searchMarketplaceListings:READ; createMarketplaceOrder:READ; updateMarketplaceOrderStatus:READ; getMarketplaceOrderTracking:READ; listUserMemberships:READ; assignMembershipContextualRole:READ; createTenantForUser:INSERT; createSession:READ; authenticateSessionToken:READ; consumeInvite:READ; updatePaymentOperationalAction:READ | idx_tenants_organization |
-| `the` | not detected | upsertCustomerPricing:READ; recordServiceDeliveryAssessment:READ; saveCatalog:READ | none |
-| `users` | 372 | listDeliveryAssignments:READ; transitionOrderFulfillment:READ; getOrCreateUserByTelegram:READ/INSERT/UPDATE; listTenantMemberships:READ; consumePairingChallenge:INSERT; listInvites:READ | none |
+| Table | Declaration lines | Function access (operations) | Indexes | Ownership |
+|---|---|---|---|---|
+| `accounts_receivable` | 1043 | getReceivable:READ; listReceivables:READ; createReceivable:READ/INSERT; transitionReceivable:UPDATE; allocatePaymentToReceivable:UPDATE | idx_ar_org_status, idx_ar_org_customer | not assigned |
+| `ar_ledger_entries` | 1067 | createReceivable:INSERT; transitionReceivable:INSERT; allocatePaymentToReceivable:INSERT; listReceivableLedger:READ | idx_ar_ledger_receivable | not assigned |
+| `ar_payment_allocations` | 1085 | allocatePaymentToReceivable:READ/INSERT | idx_ar_alloc_payment | not assigned |
+| `audit_events` | 355 | listAuditEvents:READ; verifyAuditEventChain:READ; buildComplianceExport:READ | idx_audit_tenant_created, idx_audit_organization_created, idx_audit_org_time, idx_audit_actor_time, idx_audit_entity_time, idx_audit_lineage | not assigned |
+| `audit_retention_policies` | 690 | getAuditRetentionPolicy:READ; setAuditRetentionPolicy:INSERT | none | not assigned |
+| `auth_challenges` | 410 | createTenantForUser:READ/UPDATE; createAuthChallenge:INSERT; getAuthChallengeForTenantCreation:READ; consumeAuthChallenge:READ/UPDATE | none | not assigned |
+| `catalog_products` | 316 | upsertSupplierNetworkCommercialTerms:READ; upsertSupplierNetworkCatalogListing:READ; getSupplierNetworkMarketplaceIntegration:READ; discoverSupplierNetwork:READ; createProcurementReceipt:READ; updateTenant:READ; getCatalog:READ; saveCatalog:READ/DELETE; searchMarketplaceListings:READ; createMarketplaceOrder:READ; updateMarketplaceOrderStatus:READ | idx_catalog_marketplace, idx_catalog_currency | not assigned |
+| `channel_identities` | 497 | getIdentityForTenant:READ | idx_channel_identities_org | not assigned |
+| `compliance_requests` | 697 | createComplianceRequest:INSERT; getComplianceRequest:READ; listComplianceRequests:READ; resolveComplianceRequest:UPDATE | idx_compliance_requests_org_status, idx_compliance_requests_subject | not assigned |
+| `customer_credit_terms` | 1008 | getCreditTerms:READ; listCreditTerms:READ; createCreditTerms:READ/INSERT; transitionCreditTerms:UPDATE; updateCreditTerms:UPDATE; createReceivable:READ | idx_credit_terms_org_status, idx_credit_terms_org_customer | not assigned |
+| `customer_pricing_rules` | 873 | listCustomerPricing:READ; getCustomerPricing:READ; upsertCustomerPricing:READ/INSERT; createQuote:READ | idx_customer_pricing_org_customer, idx_customer_pricing_org_product | not assigned |
+| `customers` | 585 | listCustomers:READ; getCustomer:READ; createPaymentWithIntent:READ; createPayment:READ; saveQueuedOrders:READ; createComplianceRequest:READ; buildComplianceExport:READ | idx_customers_org_updated, idx_customers_org_phone, idx_customers_org_name | not assigned |
+| `delivery_assignment_commands` | 2588 | assignDeliveryCourier:READ/INSERT; transitionDeliveryAssignment:READ/INSERT | idx_delivery_assignment_commands_order | not assigned |
+| `delivery_assignments` | 2224 | selectDeliveryCourier:READ; assignDeliveryCourier:READ/INSERT; listDeliveryAssignments:READ; getDeliveryAssignment:READ; transitionDeliveryAssignment:READ/INSERT/UPDATE; transitionOrderFulfillment:READ | idx_delivery_assignments_courier, idx_delivery_assignments_org, idx_delivery_assignments_courier, idx_delivery_assignments_org, idx_delivery_assignments_active_fulfillment UNIQUE | not assigned |
+| `delivery_assignments_v44` | 2254 | none detected | none | not assigned |
+| `devices` | 390 | authenticateSessionToken:READ/UPDATE; listDevices:READ; revokeDevice:READ/UPDATE | idx_devices_tenant | not assigned |
+| `fulfillment_commands` | 2551 | transitionOrderFulfillment:READ/INSERT | idx_fulfillment_commands_order | not assigned |
+| `fulfillments` | 2195 | getOrderFulfillment:READ; assignDeliveryCourier:READ/INSERT; listDeliveryAssignments:READ; getDeliveryAssignment:READ; transitionDeliveryAssignment:READ/UPDATE; transitionOrderFulfillment:READ/INSERT/UPDATE; getTelegramBuyerFulfillmentExperience:READ | idx_fulfillments_org_status, idx_fulfillments_location_status | not assigned |
+| `inventory_movements` | 622 | saveCatalog:READ; listInventoryMovements:READ; getInventoryBalances:READ; appendInventoryMovementBatch:READ; createMarketplaceOrder:READ; updateMarketplaceOrderStatus:READ | idx_inventory_movements_org_product_time, idx_inventory_movements_location_product_time, idx_inventory_movements_reference | not assigned |
+| `invites` | 449 | createInvite:INSERT; listInvites:READ; revokeInvite:READ/UPDATE; consumeInvite:READ/UPDATE | idx_invites_tenant | not assigned |
+| `invoice_items` | 1133 | createInvoice:INSERT | idx_invoice_items_invoice | not assigned |
+| `invoices` | 1111 | getInvoice:READ; listInvoices:READ; createInvoice:READ/INSERT; transitionInvoice:READ/UPDATE | idx_invoices_org_status, idx_invoices_org_customer | not assigned |
+| `locations` | 485 | createProcurementReceipt:READ; listOrganizationLocations:READ; getOrganizationLocation:READ; createOrganizationLocation:READ/INSERT; updateOrganizationLocation:READ/UPDATE; getIdentityForTenant:READ; getServiceResourceAvailability:READ; setServiceResourceAvailability:READ; transitionServiceBooking:READ; listDeliveryAssignments:READ; getDeliveryAssignment:READ; transitionDeliveryAssignment:READ; transitionOrderFulfillment:READ; createMarketplaceOrder:READ; updateMarketplaceOrderStatus:READ; assessTelegramBuyerServiceFeasibility:READ; assignMembershipContextualRole:READ; createSession:READ; authenticateSessionToken:READ; createComplianceRequest:READ; buildComplianceExport:READ | idx_locations_org, idx_locations_org_code, idx_locations_org_type | not assigned |
+| `logistics_scheduling_activities` | 3236 | createLogisticsSchedulingActivity:READ/INSERT; getLogisticsSchedulingActivity:READ; listLogisticsSchedulingActivities:READ; evaluateLogisticsSchedulingActivity:READ; transitionLogisticsSchedulingActivity:READ/UPDATE | idx_logistics_scheduling_org_status, idx_logistics_scheduling_org_location, idx_logistics_scheduling_order, idx_logistics_scheduling_fulfillment | not assigned |
+| `marketplace_checkout_idempotency` | 1267 | createMarketplaceOrder:READ/INSERT | idx_marketplace_checkout_idem_buyer | not assigned |
+| `marketplace_fulfillments` | 1192 | createMarketplaceOrder:INSERT; updateMarketplaceOrderStatus:UPDATE; getTelegramBuyerFulfillmentExperience:READ | idx_marketplace_fulfillments_order | not assigned |
+| `marketplace_inventory_reservations` | 1205 | createMarketplaceOrder:INSERT; updateMarketplaceOrderStatus:UPDATE | idx_marketplace_reservations_product | not assigned |
+| `marketplace_orders` | 1154 | createMarketplaceOrder:READ/INSERT/UPDATE; updateMarketplaceOrderStatus:UPDATE; getTelegramBuyerFulfillmentExperience:READ; listTelegramBuyerOrders:READ; getTelegramBuyerServiceBookings:READ | uq_marketplace_orders_idempotency UNIQUE, idx_marketplace_orders_buyer, idx_marketplace_orders_status | not assigned |
+| `marketplace_payment_allocations` | 1220 | commitPaymentDecision:READ/UPDATE; finalizePaymentRefund:READ/UPDATE; transitionPayment:READ/UPDATE; createMarketplaceOrder:INSERT; updateMarketplaceOrderStatus:READ/UPDATE | idx_marketplace_payment_allocations_order, idx_marketplace_payment_allocations_order | not assigned |
+| `marketplace_payment_allocations_v40` | 2106 | none detected | none | not assigned |
+| `marketplace_refunds` | 1251 | finalizePaymentRefund:READ/UPDATE; updateMarketplaceOrderStatus:INSERT | idx_marketplace_refunds_order | not assigned |
+| `marketplace_seller_orders` | 1175 | commitPaymentDecision:READ; transitionPayment:READ; createMarketplaceOrder:INSERT; updateMarketplaceOrderStatus:READ/UPDATE; getTelegramBuyerFulfillmentExperience:READ; listTelegramBuyerOrders:READ; getTelegramBuyerServiceBookings:READ | idx_marketplace_seller_orders_seller | not assigned |
+| `marketplace_settlements` | 1236 | commitPaymentDecision:UPDATE; finalizePaymentRefund:UPDATE; transitionPayment:UPDATE; createMarketplaceOrder:INSERT; updateMarketplaceOrderStatus:UPDATE | idx_marketplace_settlements_org_status | not assigned |
+| `membership_roles` | 3136 | selectDeliveryCourier:READ; assignDeliveryCourier:READ; listDeliveryAssignments:READ; getDeliveryAssignment:READ; assertCourierOwnsDelivery:READ; transitionDeliveryAssignment:READ; assessTelegramBuyerServiceFeasibility:READ; listTenantMemberships:READ; assignMembershipContextualRole:READ/INSERT; revokeMembershipContextualRole:READ/UPDATE; changeMembershipRole:INSERT/UPDATE; createSession:READ; authenticateSessionToken:READ | idx_membership_roles_membership, idx_membership_roles_scope | not assigned |
+| `memberships` | 379 | selectDeliveryCourier:READ; assignDeliveryCourier:READ; listDeliveryAssignments:READ; getDeliveryAssignment:READ; assertCourierOwnsDelivery:READ; transitionDeliveryAssignment:READ; assessTelegramBuyerServiceFeasibility:READ; listTenantMemberships:READ; listUserMemberships:READ; assignMembershipContextualRole:READ; revokeMembershipContextualRole:READ; changeMembershipRole:READ/UPDATE; createSession:READ; authenticateSessionToken:READ; revokeDevice:READ; createPairingChallenge:READ; createInvite:READ; revokeInvite:READ; consumeInvite:READ/UPDATE | idx_memberships_user, idx_memberships_tenant | not assigned |
+| `metadata` | 297 | none detected | none | not assigned |
+| `orders` | 329 | createReceivable:READ; createServiceBooking:READ; transitionServiceBooking:READ; recordServiceDeliveryAssessment:READ/UPDATE; updateTenant:READ; saveCatalog:READ; createPaymentWithIntent:READ; insertPaymentIntent:READ; createPayment:READ; getOrderPaymentSummary:READ; assignDeliveryCourier:READ; transitionDeliveryAssignment:READ; transitionOrderFulfillment:READ; getOrders:READ; saveQueuedOrders:READ; pullNewOrders:READ/UPDATE; updateMarketplaceOrderStatus:READ/UPDATE; getMarketplaceOrderTracking:READ; getTelegramBuyerFulfillmentExperience:READ; getTelegramBuyerServiceBookings:READ; buildComplianceExport:READ | idx_orders_tenant_created, idx_orders_undelivered, idx_orders_marketplace, idx_orders_customer, idx_orders_currency | not assigned |
+| `organizations` | 476 | upsertSupplierNetworkProfile:READ; discoverProcurementSuppliers:READ; listProcurementSupplierRelationships:READ; createProcurementSupplierRelationship:READ; transitionProcurementSupplierRelationship:READ; createProcurementRfqResponse:READ; transitionProcurementRfqResponse:READ; getSupplierNetworkMarketplaceIntegration:READ; discoverSupplierNetwork:READ; createProcurementComparison:READ; getIdentityForTenant:READ; getServiceResourceAvailability:READ; setServiceResourceAvailability:READ; transitionServiceBooking:READ; updateTenant:UPDATE; assessTelegramBuyerServiceFeasibility:READ | none | not assigned |
+| `pack_lifecycle` | 2161 | transitionPackLifecycle:READ/INSERT/UPDATE; getPackLifecycle:READ; createSession:READ; authenticateSessionToken:READ | idx_pack_lifecycle_org_state, idx_pack_lifecycle_pack | not assigned |
+| `pairing_challenges` | 417, 433 | createPairingChallenge:INSERT; consumePairingChallenge:READ/UPDATE | idx_pairing_challenges_tenant, idx_pairing_challenges_tenant | not assigned |
+| `payment_accounts` | 776 | createPaymentWithIntent:READ; insertPaymentIntent:READ; getPaymentAccountForProviderNotification:READ; insertProviderNotificationEvidence:READ; commitPaymentDecision:READ; listPaymentAccounts:READ; createPaymentAccount:INSERT; createPayment:READ | idx_payment_accounts_org | not assigned |
+| `payment_confirmation_attempts` | 2420 | createPaymentConfirmationAttempt:READ/INSERT; updatePaymentConfirmationAttempt:READ/UPDATE; getPaymentConfirmationAttempt:READ; getPaymentConfirmationAttemptByProviderTransaction:READ | idx_payment_confirmation_attempts_org_status, idx_payment_confirmation_attempts_evidence, idx_payment_confirmation_attempts_intent, uq_payment_confirmation_attempts_provider_tx UNIQUE | not assigned |
+| `payment_decisions` | 2368 | insertPaymentDecision:READ/INSERT; listPaymentDecisions:READ; commitPaymentDecision:INSERT | idx_payment_decisions_payment, idx_payment_decisions_evidence, idx_payment_decisions_verification, idx_payment_decisions_org_created | not assigned |
+| `payment_evidence` | 2312 | resolvePaymentIntentForProviderEvidence:READ; insertProviderNotificationEvidence:READ/INSERT; createPaymentConfirmationAttempt:READ; getPaymentConfirmationAttemptByProviderTransaction:READ; insertPaymentEvidence:READ/INSERT; listPaymentEvidence:READ; insertPaymentVerification:READ; commitPaymentDecision:READ | idx_payment_evidence_org_provider_fingerprint UNIQUE, idx_payment_evidence_org_provider_transaction UNIQUE, idx_payment_evidence_payment, idx_payment_evidence_intent, idx_payment_evidence_org_status, idx_payment_evidence_external_reference, uq_payment_evidence_notification UNIQUE, idx_payment_evidence_auth_reference | not assigned |
+| `payment_idempotency_keys` | 2388 | createPaymentWithIntent:READ/INSERT; getPaymentIdempotency:READ; insertPaymentIdempotency:INSERT; updatePaymentIdempotencyProgress:UPDATE; completePaymentIdempotency:UPDATE; commitPaymentDecision:READ/INSERT | idx_payment_idempotency_expiry | not assigned |
+| `payment_intents` | 2290 | createPaymentWithIntent:READ/INSERT; getPaymentIntent:READ; insertPaymentIntent:READ/INSERT; resolvePaymentIntentForProviderEvidence:READ; createPaymentConfirmationAttempt:READ; insertPaymentEvidence:READ; insertPaymentVerification:READ; commitPaymentDecision:READ | idx_payment_intents_org_created, idx_payment_intents_org_order, idx_payment_intents_org_status | not assigned |
+| `payment_ledger_entries` | 824 | createPaymentWithIntent:INSERT; commitPaymentDecision:INSERT; createPayment:INSERT; finalizePaymentRefund:INSERT; transitionPayment:INSERT; listPaymentLedger:READ | idx_payment_ledger_payment, idx_payment_ledger_decision, idx_payment_ledger_payment | not assigned |
+| `payment_ledger_entries_gap113` | 3071 | none detected | none | not assigned |
+| `payment_operational_actions` | 2807 | createPaymentOperationalAction:READ/INSERT; updatePaymentOperationalAction:READ/UPDATE; listPaymentOperationalActions:READ | uq_payment_operational_idempotency UNIQUE, idx_payment_operational_payment, idx_payment_operational_status | not assigned |
+| `payment_outbound_intents` | 1777 | listPaymentOutboundIntents:READ; getPaymentOutboundIntent:READ; createPaymentOutboundIntent:READ/INSERT; transitionPaymentOutboundIntent:READ/UPDATE; listProcurementSettlementAllocations:READ; allocateConfirmedOutboundPaymentToProcurementSettlement:READ | idx_payment_outbound_org_state, idx_payment_outbound_po, idx_payment_outbound_counterparty | not assigned |
+| `payment_procurement_settlement_allocations` | 1827 | getProcurementSettlement:READ; listProcurementSettlements:READ; listProcurementSettlementAllocations:READ; allocateConfirmedOutboundPaymentToProcurementSettlement:READ/INSERT | idx_payment_procurement_settlement_allocations_settlement, idx_payment_procurement_settlement_allocations_intent | not assigned |
+| `payment_procurement_settlements` | 1811 | getProcurementSettlement:READ; listProcurementSettlements:READ; listProcurementSettlementAllocations:READ; allocateConfirmedOutboundPaymentToProcurementSettlement:UPDATE | idx_payment_procurement_settlements_org_status | not assigned |
+| `payment_production_certifications` | 2841 | recordPaymentProductionCertification:READ/INSERT; listPaymentProductionCertifications:READ | idx_payment_production_certifications | not assigned |
+| `payment_provider_capability_certifications` | 2871 | recordPaymentProviderCapabilityEvidence:READ/INSERT; certifyPaymentProviderCapability:READ/INSERT; listPaymentProviderCapabilityEvidence:READ | idx_payment_provider_capability_certification | not assigned |
+| `payment_reconciliations` | 841 | recordPaymentReconciliation:READ/INSERT; listPaymentReconciliations:READ; reconcilePayment:READ/INSERT | idx_payment_reconciliation_org, idx_payment_reconciliation_payment_created, idx_payment_reconciliation_fingerprint | not assigned |
+| `payment_refunds` | 2988 | createPaymentWithIntent:READ; getPaymentRefunds:READ; getPaymentRefundByIdempotencyKey:READ; createPaymentRefundRequest:READ/INSERT; finalizePaymentRefund:READ/UPDATE; getOrderPaymentSummary:READ; updateMarketplaceOrderStatus:READ/INSERT | idx_payment_refunds_payment, idx_payment_refunds_org_status, idx_payment_refunds_provider | not assigned |
+| `payment_routing_policies` | 2782 | listPaymentRoutingPolicies:READ; upsertPaymentRoutingPolicy:READ/INSERT/UPDATE | idx_payment_routing_policy_match | not assigned |
+| `payment_settlements` | 2949 | getPaymentSettlementByIdempotencyKey:READ; createPaymentSettlement:READ/INSERT; finalizePaymentSettlement:READ/UPDATE; listPaymentSettlements:READ | idx_payment_settlements_payment, idx_payment_settlements_org_status, idx_payment_settlements_provider_reference | not assigned |
+| `payment_status_query_commands` | 2452 | beginPaymentStatusQuery:READ/INSERT/UPDATE; markPaymentStatusQueryProviderStarted:UPDATE; completePaymentStatusQuery:READ/UPDATE; commitPaymentDecision:READ | idx_payment_status_query_commands_payment | not assigned |
+| `payment_verifications` | 2341 | insertPaymentVerification:READ/INSERT; listPaymentVerifications:READ; insertPaymentDecision:READ; commitPaymentDecision:READ | idx_payment_verifications_payment, idx_payment_verifications_evidence, idx_payment_verifications_intent, idx_payment_verifications_org_result, idx_payment_verifications_evidence_verifier UNIQUE, uq_payment_verifications_provider_transaction UNIQUE, idx_payment_verifications_provider_transaction | not assigned |
+| `payments` | 790 | createPaymentWithIntent:READ/INSERT; createPaymentConfirmationAttempt:READ; insertPaymentEvidence:READ; insertPaymentVerification:READ; insertPaymentDecision:READ; beginPaymentStatusQuery:READ; commitPaymentDecision:READ/UPDATE; createPayment:READ/INSERT; createPaymentSettlement:READ; createPaymentRefundRequest:READ; finalizePaymentRefund:READ/UPDATE; getPayment:READ; getOrderPaymentSummary:READ; listPayments:READ; transitionPayment:READ/UPDATE; saveQueuedOrders:READ; updateMarketplaceOrderStatus:READ; updatePaymentOperationalAction:READ | idx_payments_org_created, idx_payments_order, idx_payments_state, uq_payments_external_reference UNIQUE, idx_payments_payment_intent, idx_payments_org_created, idx_payments_order, idx_payments_state, idx_payments_payment_intent, uq_payments_external_reference UNIQUE | not assigned |
+| `payments_gap113` | 3030 | none detected | none | not assigned |
+| `phone_routing` | 349 | none detected | none | not assigned |
+| `procurement_award_lines` | 1612 | createProcurementAward:INSERT; transitionProcurementAward:READ; createPurchaseOrderFromProcurementAward:READ | idx_procurement_award_lines_award | not assigned |
+| `procurement_awards` | 1586 | listProcurementAwards:READ; createProcurementAward:READ/INSERT; transitionProcurementAward:READ/UPDATE; createPurchaseOrderFromProcurementAward:READ | idx_procurement_awards_org_status, idx_procurement_awards_demand | not assigned |
+| `procurement_comparison_line_offers` | 1557 | createProcurementComparison:INSERT; createProcurementAward:READ | idx_procurement_comparison_lines_comparison | not assigned |
+| `procurement_comparison_suppliers` | 1536 | createProcurementComparison:INSERT | idx_procurement_comparison_suppliers_rank | not assigned |
+| `procurement_comparisons` | 1523 | listProcurementComparisons:READ; createProcurementComparison:READ/INSERT; createProcurementAward:READ | idx_procurement_comparisons_rfq | not assigned |
+| `procurement_demand_items` | 1321 | createProcurementDemand:INSERT; getProcurementDemand:READ; updateProcurementDemand:READ/INSERT/DELETE; createProcurementRfq:READ | idx_procurement_demand_items_demand, idx_procurement_demand_items_product | not assigned |
+| `procurement_demands` | 1288 | createProcurementDemand:READ/INSERT; getProcurementDemand:READ; updateProcurementDemand:READ/UPDATE; transitionProcurementDemand:READ/UPDATE; createProcurementAward:READ; transitionProcurementAward:UPDATE | idx_procurement_demands_org_status, idx_procurement_demands_requester, idx_procurement_demands_source | not assigned |
+| `procurement_receipt_lines` | 1742 | recalculateSupplierNetworkPerformance:READ; createProcurementReceipt:READ/INSERT | idx_procurement_receipt_lines_receipt | not assigned |
+| `procurement_receipts` | 1722 | recalculateSupplierNetworkPerformance:READ; listProcurementReceipts:READ; createProcurementReceipt:READ/INSERT/UPDATE | idx_procurement_receipts_po | not assigned |
+| `procurement_rfq_items` | 1430 | createProcurementRfq:INSERT; createProcurementRfqResponse:READ; createProcurementComparison:READ; createProcurementAward:READ; createPurchaseOrderFromProcurementAward:READ | idx_procurement_rfq_items_rfq | not assigned |
+| `procurement_rfq_response_items` | 1483 | createProcurementRfqResponse:READ/INSERT/DELETE; transitionProcurementRfqResponse:READ; createProcurementComparison:READ | idx_procurement_rfq_response_items_response | not assigned |
+| `procurement_rfq_responses` | 1459 | createProcurementRfqResponse:READ/INSERT/UPDATE; transitionProcurementRfqResponse:READ/UPDATE; recalculateSupplierNetworkPerformance:READ; createProcurementComparison:READ; createProcurementAward:READ | idx_procurement_rfq_responses_rfq, idx_procurement_rfq_responses_supplier | not assigned |
+| `procurement_rfq_suppliers` | 1447 | createProcurementRfq:INSERT; transitionProcurementRfq:READ; transitionProcurementRfqResponse:UPDATE; recalculateSupplierNetworkPerformance:READ | idx_procurement_rfq_suppliers_supplier | not assigned |
+| `procurement_rfqs` | 1404 | createProcurementRfq:READ/INSERT; listProcurementRfqs:READ; transitionProcurementRfq:READ/UPDATE; createProcurementRfqResponse:READ; transitionProcurementRfqResponse:READ; recalculateSupplierNetworkPerformance:READ; createProcurementComparison:READ; createProcurementAward:READ | idx_procurement_rfqs_org_status, idx_procurement_rfqs_demand | not assigned |
+| `procurement_supplier_participants` | 1369 | setProcurementSupplierParticipation:INSERT/UPDATE; discoverProcurementSuppliers:READ; listSupplierNetworkTrustEvidence:READ; refreshSupplierNetworkTrustEvidence:READ; recalculateSupplierNetworkPerformance:READ; discoverSupplierNetwork:READ | idx_procurement_supplier_discovery | not assigned |
+| `procurement_supplier_relationships` | 1379 | listProcurementSupplierRelationships:READ; createProcurementSupplierRelationship:READ/INSERT; transitionProcurementSupplierRelationship:READ/UPDATE; listSupplierNetworkTrustEvidence:READ; refreshSupplierNetworkTrustEvidence:READ; listSupplierNetworkPerformance:READ; getSupplierNetworkPerformance:READ; discoverSupplierNetwork:READ | idx_procurement_supplier_relationships_buyer, idx_procurement_supplier_relationships_supplier | not assigned |
+| `purchase_order_items` | 974 | recalculateSupplierNetworkPerformance:READ; createPurchaseOrder:INSERT; createProcurementReceipt:READ; createPurchaseOrderFromProcurementAward:INSERT | idx_purchase_order_items_order, idx_purchase_order_items_order | not assigned |
+| `purchase_orders` | 950 | createPaymentOutboundIntent:READ; createProcurementPaymentIntent:READ; recalculateSupplierNetworkPerformance:READ; listPurchaseOrders:READ; createPurchaseOrder:READ/INSERT; createProcurementReceipt:READ; createPurchaseOrderFromProcurementAward:READ/INSERT; transitionPurchaseOrder:UPDATE | idx_purchase_orders_org_customer, idx_purchase_orders_org_status, idx_purchase_orders_org_customer, idx_purchase_orders_org_supplier, idx_purchase_orders_org_status, idx_purchase_orders_org_source | not assigned |
+| `purchase_orders_phase17_6_new` | 1656 | none detected | none | not assigned |
+| `quote_items` | 923 | createQuote:INSERT | idx_quote_items_quote | not assigned |
+| `quotes` | 902 | listQuotes:READ; createQuote:INSERT; transitionQuote:UPDATE | idx_quotes_org_customer, idx_quotes_org_status | not assigned |
+| `restaurant_recipes` | 3558 | listRestaurantRecipes:READ; createRestaurantRecipe:READ/INSERT; updateRestaurantRecipe:READ/UPDATE | idx_restaurant_recipes_org_status, idx_restaurant_recipes_chat_updated | not assigned |
+| `schema_migrations` | 293 | none detected | none | not assigned |
+| `service_booking_commands` | 2668 | createServiceBooking:READ/INSERT; transitionServiceBooking:READ/INSERT | idx_service_booking_commands_booking | not assigned |
+| `service_bookings` | 2652 | createServiceBooking:READ/INSERT; transitionServiceBooking:READ/UPDATE; listServiceProviderBookings:READ; listServiceBookings:READ; getTelegramBuyerServiceBookings:READ; assessTelegramBuyerServiceFeasibility:READ | idx_service_bookings_order, idx_service_bookings_resource_window | not assigned |
+| `service_delivery_assessment_commands` | 2606 | recordServiceDeliveryAssessment:READ/INSERT | idx_service_delivery_assessment_commands_order | not assigned |
+| `service_resource_availability` | 3358 | getServiceResourceAvailability:READ; setServiceResourceAvailability:READ/INSERT; transitionServiceBooking:READ; assessTelegramBuyerServiceFeasibility:READ | idx_service_resource_availability_org | not assigned |
+| `service_resource_availability_commands` | 3371 | setServiceResourceAvailability:READ/INSERT | none | not assigned |
+| `service_resource_commands` | 3340 | createServiceResource:READ/INSERT; updateServiceResource:READ/INSERT | idx_service_resource_commands_resource | not assigned |
+| `service_resource_commitments` | 3394, 3440 | updateServiceResource:READ; setServiceResourceAvailability:READ; transitionServiceBooking:READ/INSERT/UPDATE; listServiceProviderBookings:READ; getTelegramBuyerServiceBookings:READ; assessTelegramBuyerServiceFeasibility:READ | idx_service_resource_commitments_overlap, idx_service_resource_commitments_overlap | not assigned |
+| `service_resources` | 3319 | listServiceResources:READ; createServiceResource:READ/INSERT; updateServiceResource:READ/UPDATE; getServiceResourceAvailability:READ; setServiceResourceAvailability:READ; transitionServiceBooking:READ; listServiceProviderBookings:READ; getTelegramBuyerServiceBookings:READ; assessTelegramBuyerServiceFeasibility:READ; assignMembershipContextualRole:READ | idx_service_resources_org_status, idx_service_resources_service | not assigned |
+| `sessions` | 400 | createSession:INSERT; authenticateSessionToken:READ; revokeSession:UPDATE; listDevices:READ; revokeDevice:UPDATE | idx_sessions_hash, idx_sessions_device | not assigned |
+| `supplier_network_capabilities` | 3204 | upsertSupplierNetworkCommercialTerms:READ; listSupplierNetworkCapabilities:READ; upsertSupplierNetworkCapability:READ/INSERT/UPDATE; transitionSupplierNetworkCapability:UPDATE; discoverSupplierNetwork:READ | idx_supplier_network_capabilities_org_status, idx_supplier_network_capabilities_discovery | not assigned |
+| `supplier_network_capacity_signals` | 1924 | listSupplierNetworkCapacities:READ; upsertSupplierNetworkCapacity:READ/INSERT/UPDATE; transitionSupplierNetworkCapacity:UPDATE; discoverSupplierNetwork:READ | idx_supplier_network_capacity_org_status, idx_supplier_network_capacity_discovery | not assigned |
+| `supplier_network_catalog_listings` | 1890 | listSupplierNetworkCatalogListings:READ; upsertSupplierNetworkCatalogListing:READ/INSERT/UPDATE; transitionSupplierNetworkCatalogListing:UPDATE; getSupplierNetworkMarketplaceIntegration:READ; discoverSupplierNetwork:READ | idx_supplier_network_catalog_org_status, idx_supplier_network_catalog_product | not assigned |
+| `supplier_network_commercial_terms` | 1959 | listSupplierNetworkCommercialTerms:READ; upsertSupplierNetworkCommercialTerms:READ/INSERT/UPDATE; transitionSupplierNetworkCommercialTerms:UPDATE; discoverSupplierNetwork:READ | idx_supplier_network_commercial_org_status, idx_supplier_network_commercial_discovery, uq_supplier_network_commercial_network UNIQUE | not assigned |
+| `supplier_network_performance_observations` | 2032 | refreshSupplierNetworkTrustEvidence:READ; listSupplierNetworkPerformance:READ; getSupplierNetworkPerformance:READ; recalculateSupplierNetworkPerformance:INSERT | idx_supplier_network_performance_supplier_metric, idx_supplier_network_performance_visibility | not assigned |
+| `supplier_network_profiles` | 1860 | upsertSupplierNetworkProfile:INSERT/UPDATE; transitionSupplierNetworkProfile:UPDATE; getSupplierNetworkMarketplaceIntegration:READ; discoverSupplierNetwork:READ | idx_supplier_network_profiles_visibility_status | not assigned |
+| `supplier_network_qualifications` | 1996 | listSupplierNetworkQualifications:READ; upsertSupplierNetworkQualification:READ/INSERT/UPDATE; transitionSupplierNetworkQualification:UPDATE; listSupplierNetworkTrustEvidence:READ; refreshSupplierNetworkTrustEvidence:READ; discoverSupplierNetwork:READ | idx_supplier_network_qualification_org_status, idx_supplier_network_qualification_discovery, uq_supplier_network_qualification_reference UNIQUE | not assigned |
+| `supplier_network_service_areas` | 3172 | listSupplierNetworkServiceAreas:READ; upsertSupplierNetworkServiceArea:READ/INSERT/UPDATE; transitionSupplierNetworkServiceArea:UPDATE; discoverSupplierNetwork:READ | idx_supplier_network_service_areas_org_status, idx_supplier_network_service_areas_discovery | not assigned |
+| `supplier_network_trust_evidence` | 2066 | listSupplierNetworkTrustEvidence:READ; getSupplierNetworkTrustEvidence:READ; refreshSupplierNetworkTrustEvidence:INSERT; discoverSupplierNetwork:READ | idx_supplier_network_trust_supplier_type, idx_supplier_network_trust_visibility, uq_supplier_network_trust_source UNIQUE | not assigned |
+| `sync_events` | 650 | processSyncEvent:READ/INSERT | idx_sync_events_org_time, idx_sync_events_org_type | not assigned |
+| `telegram_storefront_configs` | 2132 | getTelegramStorefrontConfig:READ; upsertTelegramStorefrontConfig:INSERT/UPDATE; verifyTelegramStorefront:UPDATE | idx_telegram_storefront_status | not assigned |
+| `tenant_business_templates` | 3285 | getBusinessTemplateConfig:READ; saveBusinessTemplateConfig:INSERT | none | not assigned |
+| `tenant_creation_requests` | 3301 | createTenantForUser:READ/INSERT; getAuthChallengeForTenantCreation:READ | idx_tenant_creation_requests_user | not assigned |
+| `tenants` | 306 | getTelegramStorefrontConfig:READ; getSupplierNetworkMarketplaceIntegration:READ; discoverSupplierNetwork:READ; createServiceResource:READ; updateServiceResource:READ; setServiceResourceAvailability:READ; createServiceBooking:READ; transitionServiceBooking:READ; recordServiceDeliveryAssessment:READ; getOrCreateTenant:READ/INSERT; getTenant:READ; getTenantByApiKey:READ; updateTenant:READ/UPDATE; listTenants:READ; saveCatalog:READ; getPaymentAccountForProviderNotification:READ; assignDeliveryCourier:READ; transitionDeliveryAssignment:READ; transitionOrderFulfillment:READ; saveQueuedOrders:READ; searchMarketplaceListings:READ; createMarketplaceOrder:READ; updateMarketplaceOrderStatus:READ; getMarketplaceOrderTracking:READ; listUserMemberships:READ; assignMembershipContextualRole:READ; createTenantForUser:INSERT; createSession:READ; authenticateSessionToken:READ; consumeInvite:READ; updatePaymentOperationalAction:READ | idx_tenants_organization | not assigned |
+| `users` | 372 | listDeliveryAssignments:READ; transitionOrderFulfillment:READ; getOrCreateUserByTelegram:READ/INSERT/UPDATE; listTenantMemberships:READ; consumePairingChallenge:INSERT; listInvites:READ | none | not assigned |
 
 ## Exported function map
 
@@ -211,7 +203,7 @@
 | `transitionProcurementAward` | 5053 | procurement_awards:READ/UPDATE, procurement_award_lines:READ, procurement_demands:UPDATE | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
 | `listCustomerPricing` | 5106 | customer_pricing_rules:READ | none detected | none | none |
 | `getCustomerPricing` | 5118 | customer_pricing_rules:READ | none detected | none | none |
-| `upsertCustomerPricing` | 5123 | the:READ, customer_pricing_rules:READ/INSERT, SET:UPDATE | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
+| `upsertCustomerPricing` | 5123 | customer_pricing_rules:READ/INSERT | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
 | `updateCustomerPricing` | 5184 | none detected | getCustomerPricing, upsertCustomerPricing | none | none |
 | `getQuote` | 5218 | none detected | none detected | none | none |
 | `listQuotes` | 5223 | quotes:READ | none detected | none | none |
@@ -228,7 +220,7 @@
 | `getProcurementReceipt` | 5562 | none detected | none detected | none | none |
 | `listProcurementReceipts` | 5568 | procurement_receipts:READ | none detected | none | none |
 | `createProcurementReceipt` | 5579 | purchase_orders:READ, locations:READ, purchase_order_items:READ, procurement_receipt_lines:READ/INSERT, procurement_receipts:READ/INSERT/UPDATE, catalog_products:READ | appendInventoryMovement | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
-| `createPurchaseOrderFromProcurementAward` | 5680 | procurement_awards:READ, procurement_award_lines:READ, procurement_rfq_items:READ, purchase_orders:READ/INSERT, buyer:READ, purchase_order_items:INSERT | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
+| `createPurchaseOrderFromProcurementAward` | 5680 | procurement_awards:READ, procurement_award_lines:READ, procurement_rfq_items:READ, purchase_orders:READ/INSERT, purchase_order_items:INSERT | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
 | `transitionPurchaseOrder` | 5732 | purchase_orders:UPDATE | none detected | none | none |
 | `getReceivable` | 5775 | accounts_receivable:READ | none detected | none | none |
 | `listReceivables` | 5781 | accounts_receivable:READ | none detected | none | none |
@@ -249,21 +241,21 @@
 | `createServiceResource` | 6557 | tenants:READ, service_resource_commands:READ/INSERT, service_resources:READ/INSERT | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
 | `updateServiceResource` | 6602 | tenants:READ, service_resources:READ/UPDATE, service_resource_commands:READ/INSERT, service_resource_commitments:READ | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
 | `getServiceResourceAvailability` | 6691 | service_resources:READ, organizations:READ, locations:READ, service_resource_availability:READ | none detected | none | none |
-| `setServiceResourceAvailability` | 6725 | tenants:READ, service_resources:READ, locations:READ, organizations:READ, service_resource_availability_commands:READ/INSERT, service_resource_availability:READ/INSERT, service_resource_commitments:READ, SET:UPDATE | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
+| `setServiceResourceAvailability` | 6725 | tenants:READ, service_resources:READ, locations:READ, organizations:READ, service_resource_availability_commands:READ/INSERT, service_resource_availability:READ/INSERT, service_resource_commitments:READ | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
 | `createServiceBooking` | 6817 | tenants:READ, orders:READ, service_booking_commands:READ/INSERT, service_bookings:READ/INSERT | getTenant | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
 | `transitionServiceBooking` | 6867 | tenants:READ, service_bookings:READ/UPDATE, service_booking_commands:READ/INSERT, service_resources:READ, orders:READ, service_resource_availability:READ, organizations:READ, locations:READ, service_resource_commitments:READ/INSERT/UPDATE | getTenant | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
 | `listServiceProviderBookings` | 6998 | service_bookings:READ, service_resource_commitments:READ, service_resources:READ | getTenant | none | none |
 | `listServiceBookings` | 7028 | service_bookings:READ | getTenant | none | none |
-| `recordServiceDeliveryAssessment` | 7036 | orders:READ/UPDATE, the:READ, tenants:READ, service_delivery_assessment_commands:READ/INSERT, durable:READ | getTenant | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
+| `recordServiceDeliveryAssessment` | 7036 | orders:READ/UPDATE, tenants:READ, service_delivery_assessment_commands:READ/INSERT | getTenant | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
 | `getOrCreateTenant` | 7255 | tenants:READ/INSERT | none detected | none | none |
 | `getTenant` | 7275 | tenants:READ | none detected | none | none |
 | `getBusinessTemplateConfig` | 7287 | tenant_business_templates:READ | getTenant | none | none |
-| `saveBusinessTemplateConfig` | 7301 | real:READ, tenant_business_templates:INSERT, SET:UPDATE | getTenant | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
+| `saveBusinessTemplateConfig` | 7301 | tenant_business_templates:INSERT | getTenant | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
 | `getTenantByApiKey` | 7368 | tenants:READ | none detected | none | none |
 | `updateTenant` | 7374 | catalog_products:READ, orders:READ, tenants:READ/UPDATE, organizations:UPDATE | getTenant | none | none |
 | `listTenants` | 7416 | tenants:READ | none detected | none | none |
 | `getCatalog` | 7421 | catalog_products:READ | none detected | none | none |
-| `saveCatalog` | 7428 | catalog_products:READ/DELETE, tenants:READ, inventory_movements:READ, orders:READ, the:READ | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
+| `saveCatalog` | 7428 | catalog_products:READ/DELETE, tenants:READ, inventory_movements:READ, orders:READ | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
 | `listCustomers` | 7536 | customers:READ | getTenant | none | none |
 | `getCustomer` | 7553 | customers:READ | getTenant | none | none |
 | `upsertCustomer` | 7647 | none detected | none detected | none | none |
@@ -285,9 +277,9 @@
 | `getPaymentConfirmationAttemptByProviderTransaction` | 8687 | payment_confirmation_attempts:READ, payment_evidence:READ | none detected | none | none |
 | `insertPaymentEvidence` | 8710 | payment_intents:READ, payments:READ, payment_evidence:READ/INSERT | none detected | none | none |
 | `listPaymentEvidence` | 8781 | payment_evidence:READ | getPayment | none | none |
-| `insertPaymentVerification` | 8787 | payment_evidence:READ, payments:READ, payment_intents:READ, payment_verifications:READ/INSERT, a:READ | none detected | none | none |
+| `insertPaymentVerification` | 8787 | payment_evidence:READ, payments:READ, payment_intents:READ, payment_verifications:READ/INSERT | none detected | none | none |
 | `listPaymentVerifications` | 8917 | payment_verifications:READ | getPayment | none | none |
-| `insertPaymentDecision` | 8923 | payments:READ, payment_verifications:READ, payment_decisions:READ/INSERT, Payment:READ | none detected | none | none |
+| `insertPaymentDecision` | 8923 | payments:READ, payment_verifications:READ, payment_decisions:READ/INSERT | none detected | none | none |
 | `listPaymentDecisions` | 8970 | payment_decisions:READ | getPayment | none | none |
 | `getPaymentIdempotency` | 8976 | payment_idempotency_keys:READ | none detected | none | none |
 | `insertPaymentIdempotency` | 8981 | payment_idempotency_keys:INSERT | getPaymentIdempotency | none | none |
@@ -295,8 +287,8 @@
 | `completePaymentIdempotency` | 9015 | payment_idempotency_keys:UPDATE | getPaymentIdempotency | none | none |
 | `beginPaymentStatusQuery` | 9040 | payment_status_query_commands:READ/INSERT/UPDATE, payments:READ | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
 | `markPaymentStatusQueryProviderStarted` | 9137 | payment_status_query_commands:UPDATE | none detected | none | none |
-| `completePaymentStatusQuery` | 9164 | payment_status_query_commands:READ/UPDATE, its:READ | none detected | none | none |
-| `commitPaymentDecision` | 9205 | payment_idempotency_keys:READ/INSERT, payment_status_query_commands:READ, payments:READ/UPDATE, payment_verifications:READ, payment_evidence:READ, payment_intents:READ, payment_accounts:READ, a:READ, Payment:READ, marketplace_payment_allocations:READ/UPDATE, marketplace_seller_orders:READ, payment_decisions:INSERT, payment_ledger_entries:INSERT, marketplace_settlements:UPDATE | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
+| `completePaymentStatusQuery` | 9164 | payment_status_query_commands:READ/UPDATE | none detected | none | none |
+| `commitPaymentDecision` | 9205 | payment_idempotency_keys:READ/INSERT, payment_status_query_commands:READ, payments:READ/UPDATE, payment_verifications:READ, payment_evidence:READ, payment_intents:READ, payment_accounts:READ, marketplace_payment_allocations:READ/UPDATE, marketplace_seller_orders:READ, payment_decisions:INSERT, payment_ledger_entries:INSERT, marketplace_settlements:UPDATE | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
 | `listPaymentAccounts` | 9633 | payment_accounts:READ | none detected | none | none |
 | `createPaymentAccount` | 9644 | payment_accounts:INSERT | listPaymentAccounts | none | none |
 | `createPayment` | 9661 | orders:READ, customers:READ, payment_accounts:READ, payments:READ/INSERT, payment_ledger_entries:INSERT | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
@@ -320,7 +312,7 @@
 | `reconcilePayment` | 10292 | payment_reconciliations:READ/INSERT | getPayment, transitionPayment | none | none |
 | `getOrderFulfillment` | 10411 | fulfillments:READ | none detected | none | none |
 | `selectDeliveryCourier` | 10487 | memberships:READ, membership_roles:READ, delivery_assignments:READ | none detected | none | none |
-| `assignDeliveryCourier` | 10521 | fulfillments:READ/INSERT, orders:READ, tenants:READ, durable:READ, delivery_assignment_commands:READ/INSERT, delivery_assignments:READ/INSERT, memberships:READ, membership_roles:READ | getTenant, selectDeliveryCourier | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
+| `assignDeliveryCourier` | 10521 | fulfillments:READ/INSERT, orders:READ, tenants:READ, delivery_assignment_commands:READ/INSERT, delivery_assignments:READ/INSERT, memberships:READ, membership_roles:READ | getTenant, selectDeliveryCourier | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
 | `listDeliveryAssignments` | 10683 | locations:READ, memberships:READ, membership_roles:READ, delivery_assignments:READ, fulfillments:READ, users:READ | getTenant | none | none |
 | `getDeliveryAssignment` | 10784 | delivery_assignments:READ, fulfillments:READ, locations:READ, memberships:READ, membership_roles:READ | getTenant | none | none |
 | `assertCourierOwnsDelivery` | 10846 | memberships:READ, membership_roles:READ | getTenant, getDeliveryAssignment | none | none |
@@ -331,10 +323,10 @@
 | `evaluateLogisticsSchedulingActivity` | 11289 | logistics_scheduling_activities:READ | getTenant | none | none |
 | `transitionLogisticsSchedulingActivity` | 11362 | logistics_scheduling_activities:READ/UPDATE | getTenant | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
 | `transitionDeliveryAssignment` | 11650 | tenants:READ, fulfillments:READ/UPDATE, orders:READ, delivery_assignment_commands:READ/INSERT, delivery_assignments:READ/INSERT/UPDATE, memberships:READ, membership_roles:READ, locations:READ | getTenant | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
-| `transitionOrderFulfillment` | 11912 | users:READ, orders:READ, tenants:READ, fulfillment_commands:READ/INSERT, locations:READ, fulfillments:READ/INSERT/UPDATE, caller:READ, any:READ, delivery_assignments:READ | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
-| `coreFulfillmentContract` | 12144 | fulfillment:UPDATE | none detected | none | none |
+| `transitionOrderFulfillment` | 11912 | users:READ, orders:READ, tenants:READ, fulfillment_commands:READ/INSERT, locations:READ, fulfillments:READ/INSERT/UPDATE, delivery_assignments:READ | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
+| `coreFulfillmentContract` | 12144 | none detected | none detected | none | none |
 | `getOrders` | 12164 | orders:READ | none detected | none | none |
-| `saveQueuedOrders` | 12172 | orders:READ, payments:READ, tenants:READ, customers:READ, public:READ, a:READ, name:READ | none detected | BEGIN, COMMIT, ROLLBACK | none |
+| `saveQueuedOrders` | 12172 | orders:READ, payments:READ, tenants:READ, customers:READ | none detected | BEGIN, COMMIT, ROLLBACK | none |
 | `pullNewOrders` | 12272 | orders:READ/UPDATE | none detected | BEGIN, COMMIT, ROLLBACK | none |
 | `searchMarketplaceListings` | 12299 | catalog_products:READ, tenants:READ | none detected | none | none |
 | `createMarketplaceOrder` | 12327 | catalog_products:READ, marketplace_checkout_idempotency:READ/INSERT, marketplace_orders:READ/INSERT/UPDATE, tenants:READ, locations:READ, inventory_movements:READ, marketplace_seller_orders:INSERT, marketplace_fulfillments:INSERT, marketplace_inventory_reservations:INSERT, marketplace_payment_allocations:INSERT, marketplace_settlements:INSERT | none detected | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
@@ -343,14 +335,14 @@
 | `getTelegramBuyerFulfillmentExperience` | 12929 | marketplace_orders:READ, marketplace_seller_orders:READ, orders:READ, fulfillments:READ, marketplace_fulfillments:READ | getTenant | none | none |
 | `listTelegramBuyerOrders` | 12983 | marketplace_orders:READ, marketplace_seller_orders:READ | getTenant | none | none |
 | `getTelegramBuyerServiceBookings` | 13017 | marketplace_orders:READ, marketplace_seller_orders:READ, orders:READ, service_bookings:READ, service_resource_commitments:READ, service_resources:READ | getTenant | none | none |
-| `assessTelegramBuyerServiceFeasibility` | 13079 | organizations:READ, membership_roles:READ, memberships:READ, service_resources:READ, service_resource_availability:READ, locations:READ, incomplete:READ, service_bookings:READ, service_resource_commitments:READ | getTelegramBuyerServiceBookings, getTenant | none | none |
+| `assessTelegramBuyerServiceFeasibility` | 13079 | organizations:READ, membership_roles:READ, memberships:READ, service_resources:READ, service_resource_availability:READ, locations:READ, service_bookings:READ, service_resource_commitments:READ | getTelegramBuyerServiceBookings, getTenant | none | none |
 | `listAuditEvents` | 13217 | audit_events:READ | getTenant | none | none |
 | `verifyAuditEventChain` | 13252 | audit_events:READ | getTenant | none | none |
 | `createDatabaseBackup` | 13323 | none detected | none detected | none | none |
 | `getOrCreateUserByTelegram` | 13346 | users:READ/INSERT/UPDATE | none detected | none | none |
 | `listTenantMemberships` | 13360 | memberships:READ, users:READ, membership_roles:READ | none detected | none | none |
 | `listUserMemberships` | 13380 | memberships:READ, tenants:READ | none detected | none | none |
-| `assignMembershipContextualRole` | 13448 | tenants:READ, locations:READ, service_resources:READ, memberships:READ, membership_roles:READ/INSERT, SET:UPDATE | none detected | none | none |
+| `assignMembershipContextualRole` | 13448 | tenants:READ, locations:READ, service_resources:READ, memberships:READ, membership_roles:READ/INSERT | none detected | none | none |
 | `revokeMembershipContextualRole` | 13541 | memberships:READ, membership_roles:READ/UPDATE | none detected | none | none |
 | `changeMembershipRole` | 13602 | memberships:READ/UPDATE, membership_roles:INSERT/UPDATE | none detected | none | none |
 | `ensureMembership` | 13657 | none detected | none detected | none | none |
@@ -359,14 +351,14 @@
 | `authenticateSessionToken` | 13776 | locations:READ, membership_roles:READ, pack_lifecycle:READ, sessions:READ, devices:READ/UPDATE, memberships:READ, tenants:READ | none detected | none | none |
 | `recordAuditEvent` | 13906 | none detected | none detected | none | none |
 | `getAuditRetentionPolicy` | 13925 | audit_retention_policies:READ | getTenant | none | none |
-| `setAuditRetentionPolicy` | 13938 | audit_retention_policies:INSERT, SET:UPDATE | getTenant, getAuditRetentionPolicy | none | none |
+| `setAuditRetentionPolicy` | 13938 | audit_retention_policies:INSERT | getTenant, getAuditRetentionPolicy | none | none |
 | `createComplianceRequest` | 13965 | customers:READ, locations:READ, compliance_requests:INSERT | getTenant, getComplianceRequest | none | none |
 | `getComplianceRequest` | 14010 | compliance_requests:READ | getTenant | none | none |
 | `listComplianceRequests` | 14023 | compliance_requests:READ | getTenant | none | none |
 | `resolveComplianceRequest` | 14040 | compliance_requests:UPDATE | getTenant, getComplianceRequest | none | none |
 | `buildComplianceExport` | 14073 | customers:READ, orders:READ, audit_events:READ, locations:READ | getTenant, listComplianceRequests, getAuditRetentionPolicy | none | none |
 | `revokeSession` | 14157 | sessions:UPDATE | none detected | none | none |
-| `listDevices` | 14169 | devices:READ, sessions:READ, expiring:READ | none detected | none | none |
+| `listDevices` | 14169 | devices:READ, sessions:READ | none detected | none | none |
 | `revokeDevice` | 14220 | memberships:READ, devices:READ/UPDATE, sessions:UPDATE | none detected | none | none |
 | `createAuthChallenge` | 14236 | auth_challenges:INSERT | none detected | none | none |
 | `getAuthChallengeForTenantCreation` | 14245 | auth_challenges:READ, tenant_creation_requests:READ | none detected | none | none |
@@ -390,6 +382,125 @@
 | `listRestaurantRecipes` | 14776 | restaurant_recipes:READ | getTenant | none | none |
 | `createRestaurantRecipe` | 14786 | restaurant_recipes:READ/INSERT | getTenant | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
 | `updateRestaurantRecipe` | 14825 | restaurant_recipes:READ/UPDATE | getTenant | BEGIN IMMEDIATE, COMMIT, ROLLBACK | none |
+
+## Transaction coupling signals
+
+- **upsertSupplierNetworkCommercialTerms**: catalog_products, supplier_network_capabilities, supplier_network_commercial_terms; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **upsertSupplierNetworkCatalogListing**: catalog_products, supplier_network_catalog_listings; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **upsertSupplierNetworkProfile**: organizations, supplier_network_profiles; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **allocateConfirmedOutboundPaymentToProcurementSettlement**: payment_outbound_intents, payment_procurement_settlement_allocations, payment_procurement_settlements; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls getProcurementSettlement
+- **createProcurementDemand**: procurement_demands, procurement_demand_items; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls getProcurementDemand
+- **updateProcurementDemand**: procurement_demands, procurement_demand_items; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls getProcurementDemand
+- **createProcurementRfq**: procurement_rfqs, procurement_demand_items, procurement_rfq_items, procurement_rfq_suppliers; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls getProcurementDemand
+- **transitionProcurementRfq**: procurement_rfqs, procurement_rfq_suppliers; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **createProcurementRfqResponse**: procurement_rfqs, procurement_rfq_items, procurement_rfq_responses, organizations, procurement_rfq_response_items; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **transitionProcurementRfqResponse**: procurement_rfq_responses, procurement_rfqs, organizations, procurement_rfq_response_items, procurement_rfq_suppliers; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **refreshSupplierNetworkTrustEvidence**: procurement_supplier_participants, procurement_supplier_relationships, supplier_network_qualifications, supplier_network_performance_observations, supplier_network_trust_evidence; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls listSupplierNetworkTrustEvidence
+- **recalculateSupplierNetworkPerformance**: procurement_supplier_participants, procurement_rfq_responses, procurement_rfq_suppliers, procurement_rfqs, purchase_orders, procurement_receipt_lines, procurement_receipts, purchase_order_items, supplier_network_performance_observations; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls listSupplierNetworkPerformance
+- **createProcurementComparison**: procurement_rfqs, procurement_rfq_items, procurement_rfq_responses, organizations, procurement_comparisons, procurement_rfq_response_items, procurement_comparison_suppliers, procurement_comparison_line_offers; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **createProcurementAward**: procurement_demands, procurement_rfqs, procurement_comparisons, procurement_comparison_line_offers, procurement_rfq_responses, procurement_rfq_items, procurement_awards, procurement_award_lines; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **transitionProcurementAward**: procurement_awards, procurement_award_lines, procurement_demands; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **createQuote**: customer_pricing_rules, quotes, quote_items; BEGIN, COMMIT, ROLLBACK; calls none
+- **createPurchaseOrder**: purchase_orders, purchase_order_items; BEGIN, COMMIT, ROLLBACK; calls createPurchaseOrderFromProcurementAward
+- **createProcurementReceipt**: purchase_orders, locations, purchase_order_items, procurement_receipt_lines, procurement_receipts, catalog_products; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls appendInventoryMovement
+- **createPurchaseOrderFromProcurementAward**: procurement_awards, procurement_award_lines, procurement_rfq_items, purchase_orders, purchase_order_items; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **createReceivable**: customer_credit_terms, orders, accounts_receivable, ar_ledger_entries; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls getReceivable
+- **allocatePaymentToReceivable**: ar_payment_allocations, ar_ledger_entries, accounts_receivable; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls getReceivable, getPayment
+- **createInvoice**: invoices, invoice_items; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls getReceivable, getInvoice
+- **createServiceResource**: tenants, service_resource_commands, service_resources; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **updateServiceResource**: tenants, service_resources, service_resource_commands, service_resource_commitments; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **setServiceResourceAvailability**: tenants, service_resources, locations, organizations, service_resource_availability_commands, service_resource_availability, service_resource_commitments; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **createServiceBooking**: tenants, orders, service_booking_commands, service_bookings; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls getTenant
+- **transitionServiceBooking**: tenants, service_bookings, service_booking_commands, service_resources, orders, service_resource_availability, organizations, locations, service_resource_commitments; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls getTenant
+- **recordServiceDeliveryAssessment**: orders, tenants, service_delivery_assessment_commands; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls getTenant
+- **saveCatalog**: catalog_products, tenants, inventory_movements, orders; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **createPaymentWithIntent**: orders, customers, payment_accounts, payment_idempotency_keys, payments, payment_intents, payment_refunds, payment_ledger_entries; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **beginPaymentStatusQuery**: payment_status_query_commands, payments; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **commitPaymentDecision**: payment_idempotency_keys, payment_status_query_commands, payments, payment_verifications, payment_evidence, payment_intents, payment_accounts, marketplace_payment_allocations, marketplace_seller_orders, payment_decisions, payment_ledger_entries, marketplace_settlements; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **createPayment**: orders, customers, payment_accounts, payments, payment_ledger_entries; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **finalizePaymentRefund**: payment_refunds, payments, marketplace_refunds, marketplace_payment_allocations, payment_ledger_entries, marketplace_settlements; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **transitionPayment**: payments, marketplace_payment_allocations, marketplace_seller_orders, payment_ledger_entries, marketplace_settlements; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **assignDeliveryCourier**: fulfillments, orders, tenants, delivery_assignment_commands, delivery_assignments, memberships, membership_roles; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls getTenant, selectDeliveryCourier
+- **transitionDeliveryAssignment**: tenants, fulfillments, orders, delivery_assignment_commands, delivery_assignments, memberships, membership_roles, locations; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls getTenant
+- **transitionOrderFulfillment**: users, orders, tenants, fulfillment_commands, locations, fulfillments, delivery_assignments; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **saveQueuedOrders**: orders, payments, tenants, customers; BEGIN, COMMIT, ROLLBACK; calls none
+- **createMarketplaceOrder**: catalog_products, marketplace_checkout_idempotency, marketplace_orders, tenants, locations, inventory_movements, marketplace_seller_orders, marketplace_fulfillments, marketplace_inventory_reservations, marketplace_payment_allocations, marketplace_settlements; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **updateMarketplaceOrderStatus**: orders, marketplace_seller_orders, catalog_products, tenants, locations, inventory_movements, marketplace_payment_allocations, payments, payment_refunds, marketplace_refunds, marketplace_inventory_reservations, marketplace_settlements, marketplace_fulfillments, marketplace_orders; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **createTenantForUser**: tenant_creation_requests, auth_challenges, tenants; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **consumePairingChallenge**: pairing_challenges, users; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+- **consumeInvite**: invites, memberships, tenants; BEGIN IMMEDIATE, COMMIT, ROLLBACK; calls none
+
+## Single-table review candidates (not extraction approvals)
+
+- `getPackLifecycle` → `pack_lifecycle`
+- `listSupplierNetworkQualifications` → `supplier_network_qualifications`
+- `transitionSupplierNetworkQualification` → `supplier_network_qualifications`
+- `listSupplierNetworkCommercialTerms` → `supplier_network_commercial_terms`
+- `transitionSupplierNetworkCommercialTerms` → `supplier_network_commercial_terms`
+- `listSupplierNetworkCapacities` → `supplier_network_capacity_signals`
+- `transitionSupplierNetworkCapacity` → `supplier_network_capacity_signals`
+- `listSupplierNetworkServiceAreas` → `supplier_network_service_areas`
+- `transitionSupplierNetworkServiceArea` → `supplier_network_service_areas`
+- `listSupplierNetworkCatalogListings` → `supplier_network_catalog_listings`
+- `transitionSupplierNetworkCatalogListing` → `supplier_network_catalog_listings`
+- `listSupplierNetworkCapabilities` → `supplier_network_capabilities`
+- `transitionSupplierNetworkCapability` → `supplier_network_capabilities`
+- `transitionSupplierNetworkProfile` → `supplier_network_profiles`
+- `listPaymentOutboundIntents` → `payment_outbound_intents`
+- `getPaymentOutboundIntent` → `payment_outbound_intents`
+- `transitionPaymentOutboundIntent` → `payment_outbound_intents`
+- `listProcurementRfqs` → `procurement_rfqs`
+- `getSupplierNetworkTrustEvidence` → `supplier_network_trust_evidence`
+- `listProcurementComparisons` → `procurement_comparisons`
+- `listProcurementAwards` → `procurement_awards`
+- `listCustomerPricing` → `customer_pricing_rules`
+- `getCustomerPricing` → `customer_pricing_rules`
+- `listQuotes` → `quotes`
+- `transitionQuote` → `quotes`
+- `getCreditTerms` → `customer_credit_terms`
+- `listCreditTerms` → `customer_credit_terms`
+- `listPurchaseOrders` → `purchase_orders`
+- `listProcurementReceipts` → `procurement_receipts`
+- `transitionPurchaseOrder` → `purchase_orders`
+- `getReceivable` → `accounts_receivable`
+- `listReceivables` → `accounts_receivable`
+- `getInvoice` → `invoices`
+- `listInvoices` → `invoices`
+- `listOrganizationLocations` → `locations`
+- `getOrganizationLocation` → `locations`
+- `createOrganizationLocation` → `locations`
+- `updateOrganizationLocation` → `locations`
+- `listServiceResources` → `service_resources`
+- `getOrCreateTenant` → `tenants`
+- `getTenant` → `tenants`
+- `getTenantByApiKey` → `tenants`
+- `listTenants` → `tenants`
+- `getCatalog` → `catalog_products`
+- `getPaymentIntent` → `payment_intents`
+- `updatePaymentConfirmationAttempt` → `payment_confirmation_attempts`
+- `getPaymentConfirmationAttempt` → `payment_confirmation_attempts`
+- `getPaymentIdempotency` → `payment_idempotency_keys`
+- `markPaymentStatusQueryProviderStarted` → `payment_status_query_commands`
+- `completePaymentStatusQuery` → `payment_status_query_commands`
+- `listPaymentAccounts` → `payment_accounts`
+- `listPaymentRoutingPolicies` → `payment_routing_policies`
+- `getPaymentSettlementByIdempotencyKey` → `payment_settlements`
+- `listPaymentSettlements` → `payment_settlements`
+- `getPaymentRefunds` → `payment_refunds`
+- `getPaymentRefundByIdempotencyKey` → `payment_refunds`
+- `getPayment` → `payments`
+- `listPayments` → `payments`
+- `getOrderFulfillment` → `fulfillments`
+- `getOrders` → `orders`
+- `getOrCreateUserByTelegram` → `users`
+- `revokeSession` → `sessions`
+- `createAuthChallenge` → `auth_challenges`
+- `consumeAuthChallenge` → `auth_challenges`
+- `recordPaymentProviderCapabilityEvidence` → `payment_provider_capability_certifications`
+- `certifyPaymentProviderCapability` → `payment_provider_capability_certifications`
+- `listPaymentProviderCapabilityEvidence` → `payment_provider_capability_certifications`
+- `recordPaymentProductionCertification` → `payment_production_certifications`
+- `listPaymentProductionCertifications` → `payment_production_certifications`
 
 ## Indexes
 
@@ -985,6 +1096,24 @@
 - Version 84, line 3587
 - Version 85, line 3596
 
+## Lexical non-table tokens excluded
+
+- `Payment` (observed in insertPaymentDecision, commitPaymentDecision)
+- `SET` (observed in upsertCustomerPricing, setServiceResourceAvailability, saveBusinessTemplateConfig, assignMembershipContextualRole, setAuditRetentionPolicy)
+- `a` (observed in insertPaymentVerification, commitPaymentDecision, saveQueuedOrders)
+- `any` (observed in transitionOrderFulfillment)
+- `buyer` (observed in createPurchaseOrderFromProcurementAward)
+- `caller` (observed in transitionOrderFulfillment)
+- `durable` (observed in recordServiceDeliveryAssessment, assignDeliveryCourier)
+- `expiring` (observed in listDevices)
+- `fulfillment` (observed in coreFulfillmentContract)
+- `incomplete` (observed in assessTelegramBuyerServiceFeasibility)
+- `its` (observed in completePaymentStatusQuery)
+- `name` (observed in saveQueuedOrders)
+- `public` (observed in saveQueuedOrders)
+- `real` (observed in saveBusinessTemplateConfig)
+- `the` (observed in upsertCustomerPricing, recordServiceDeliveryAssessment, saveCatalog)
+
 ## Safe extraction criteria
 
 - Preserve multi-table mutations and their explicit transaction boundary as one unit.
@@ -998,3 +1127,5 @@
 - REFERENCES clauses are captured only when inline in this source; runtime PRAGMA foreign_key_list remains required.
 - Function-to-function edges include direct calls to exported functions only.
 - Table-to-domain ownership is not inferred from names; the map records observed access only.
+- Table register is normalized to all 110 declared table names; lexical non-table tokens (for example prose words accidentally matched after SQL keywords) are excluded and listed separately.
+- The table list includes declared tables with no observed exported-function access; these may be migration-only, legacy, or accessed through non-exported helpers.
