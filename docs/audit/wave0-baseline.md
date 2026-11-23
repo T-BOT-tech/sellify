@@ -11,7 +11,8 @@ Branch used for this audit: `audit/route-sqlite-dependency-map` (created from th
 | Backend HTTP composition root | `backend/server.js` — 4,170 lines / 274,791 bytes |
 | SQLite store and persistence/domain concentration | `backend/lib/store-sqlite.js` — 14,867 lines / 971,694 bytes |
 | Explicit route-table entries | 247 |
-| Pre-dispatch inline/static entries | 6 |
+| Intentional inline/static handlers | 5
+| Pre-dispatch health infrastructure endpoint | 1 |
 | Total route entries | 253 |
 | Distinct named route handlers | 137 |
 | Exported SQLite store functions | 253 |
