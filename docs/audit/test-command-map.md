@@ -7,7 +7,7 @@ Baseline `e216db18ade2a5ffa66aff9dc3096e207251a918`; root package blob `f7041ced
 - **482** root scripts; **476** names match test/regression/check/verification/certification/gate/baseline naming.
 - Command targets: **475** direct Node scripts, **2** shell scripts, **5** nested-package commands.
 - **11** exact duplicate-command groups involve **46** script names.
-- **172** distinct root scripts are directly referenced by the 11 workflow files; **310** are not reachable from those direct CI references. That is not proof of obsolescence: local workflows, docs, nested scripts, manual certification and external consumers may still rely on them.
+- **171** distinct root scripts are directly referenced by the 11 workflow files; **311** are not reachable from those direct CI references. That is not proof of obsolescence: local workflows, docs, nested scripts, manual certification and external consumers may still rely on them.
 - All direct Node/shell targets and nested script references resolve in the current tree; no CI script reference is missing.
 - The proposed `test`, `test:integration`, `test:security`, `test:e2e`, and `test:release` commands are **not present** in `package.json`.
 
@@ -31,7 +31,7 @@ The JSON records every extracted `npm run` and direct `node phase0` reference by
 
 ## Security, integration, E2E and release mapping
 
-Suite tags in the JSON are keyword-based candidates and overlap. The main workflow includes direct security evidence such as tenant isolation, location scope, IAM/contextual-role, API-boundary, inventory sync authorization, Payment security, Logistics authorization and adversarial delivery checks. The separate `security.yml` job only enforces source hygiene; do not mistake it for the full security test suite.
+Suite tags in the JSON are keyword-based candidates and overlap. The main workflow includes direct security evidence such as tenant isolation, location scope, IAM/contextual-role, API-boundary, inventory sync authorization, Payment security, Logistics authorization and adversarial delivery checks. The separate `security.yml` job only enforces source hygiene; do not mistake it for the full security test suite. The route audit found no focused HTTP authorization regression for the Payment routing-policy GET/POST endpoints or POST /sync: existing Payment security coverage exercises PaymentCore, while the routing bootstrap regression calls store functions directly. Add route-level assertions for denied roles, allowed roles, tenant/location scope and mutation side effects.
 
 Integration coverage includes HTTP/API, SQLite persistence, migrations, event/outbox/replay, Inventory/Procurement bridges, Payment lifecycle, Supplier Network visibility, and cross-pack contracts. E2E candidates include browser/UI, storefront, checkout, Telegram and first-merchant journeys. Release certification is distinct: the release workflow enforces Node major >=24 and `node:sqlite`, then runs P1-22 through P1-25 and `phase0:release-check`. The main CI Node 24 matrix and release workflow passing do not replace a deployment smoke run.
 
