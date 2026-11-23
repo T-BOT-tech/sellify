@@ -5049,6 +5049,7 @@ export async function getCustomerPricing(chatId, pricingId) {
 }
 
 export async function upsertCustomerPricing(chatId, input = {}, actor = null) {
+  input = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
   const organizationId = await tenantOrganizationId(chatId);
   const customerId = String(input.customerId ?? input.customer_id ?? '').trim();
   const productId = String(input.productId ?? input.product_id ?? '').trim();
