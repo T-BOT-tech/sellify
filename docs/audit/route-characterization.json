@@ -3,7 +3,9 @@
   "sourceBlob": "a4a5abdcaae344252fba26c600406829c4e98bce",
   "stats": {
     "explicit": 247,
-    "distinctHandlers": 137
+    "distinctHandlers": 137,
+    "total": 253,
+    "inline": 6
   },
   "routes": [
     {
@@ -1981,6 +1983,228 @@
       "path": "/tenants/([^/]+)/restaurant/recipes/([^/]+)",
       "handler": "handleRestaurantRecipes",
       "routeLine": 4087
+    },
+    {
+      "id": "inline-/health",
+      "method": "ANY",
+      "path": "/health",
+      "pattern": null,
+      "handlerExpression": "inline health response",
+      "handler": "inline health response",
+      "sourceKind": "inline/static",
+      "routeLine": 4107,
+      "handlerSource": null,
+      "authentication": [
+        "public/static boundary; no tenant session at inline dispatch"
+      ],
+      "authorization": {
+        "permissionKeys": [],
+        "explicitKeyStatus": "not applicable at inline dispatcher; underlying resource handler may enforce separately"
+      },
+      "scope": [
+        "none at inline dispatcher"
+      ],
+      "inputValidation": [
+        "URL/method allowlist check in server dispatcher"
+      ],
+      "errorBehavior": {
+        "explicitStatusCodes": [],
+        "dispatcherFallback": "inline handler response"
+      },
+      "idempotency": "not applicable",
+      "transactionBoundary": "not applicable",
+      "storeFunctionsCalled": [],
+      "sideEffects": [
+        "static/health/config response"
+      ],
+      "testCandidates": [],
+      "classification": "infrastructure",
+      "reviewStatus": "intentional pre-route handler; inspect static allowlist separately"
+    },
+    {
+      "id": "inline-/config.js",
+      "method": "GET",
+      "path": "/config.js",
+      "pattern": null,
+      "handlerExpression": "handleConfigJs",
+      "handler": "handleConfigJs",
+      "sourceKind": "inline/static",
+      "routeLine": 4116,
+      "handlerSource": null,
+      "authentication": [
+        "public/static boundary; no tenant session at inline dispatch"
+      ],
+      "authorization": {
+        "permissionKeys": [],
+        "explicitKeyStatus": "not applicable at inline dispatcher; underlying resource handler may enforce separately"
+      },
+      "scope": [
+        "none at inline dispatcher"
+      ],
+      "inputValidation": [
+        "URL/method allowlist check in server dispatcher"
+      ],
+      "errorBehavior": {
+        "explicitStatusCodes": [],
+        "dispatcherFallback": "inline handler response"
+      },
+      "idempotency": "not applicable",
+      "transactionBoundary": "not applicable",
+      "storeFunctionsCalled": [],
+      "sideEffects": [
+        "static/health/config response"
+      ],
+      "testCandidates": [],
+      "classification": "inline/static",
+      "reviewStatus": "intentional pre-route handler; inspect static allowlist separately"
+    },
+    {
+      "id": "inline-/backend/lib/*",
+      "method": "GET",
+      "path": "/backend/lib/*",
+      "pattern": null,
+      "handlerExpression": "serveBrowserBackendModule",
+      "handler": "serveBrowserBackendModule",
+      "sourceKind": "inline/static",
+      "routeLine": 4123,
+      "handlerSource": null,
+      "authentication": [
+        "public/static boundary; no tenant session at inline dispatch"
+      ],
+      "authorization": {
+        "permissionKeys": [],
+        "explicitKeyStatus": "not applicable at inline dispatcher; underlying resource handler may enforce separately"
+      },
+      "scope": [
+        "none at inline dispatcher"
+      ],
+      "inputValidation": [
+        "URL/method allowlist check in server dispatcher"
+      ],
+      "errorBehavior": {
+        "explicitStatusCodes": [],
+        "dispatcherFallback": "inline handler response"
+      },
+      "idempotency": "not applicable",
+      "transactionBoundary": "not applicable",
+      "storeFunctionsCalled": [],
+      "sideEffects": [
+        "static/health/config response"
+      ],
+      "testCandidates": [],
+      "classification": "inline/static",
+      "reviewStatus": "intentional pre-route handler; inspect static allowlist separately"
+    },
+    {
+      "id": "inline-/shared/*",
+      "method": "GET",
+      "path": "/shared/*",
+      "pattern": null,
+      "handlerExpression": "serveBrowserSharedModule",
+      "handler": "serveBrowserSharedModule",
+      "sourceKind": "inline/static",
+      "routeLine": 4126,
+      "handlerSource": null,
+      "authentication": [
+        "public/static boundary; no tenant session at inline dispatch"
+      ],
+      "authorization": {
+        "permissionKeys": [],
+        "explicitKeyStatus": "not applicable at inline dispatcher; underlying resource handler may enforce separately"
+      },
+      "scope": [
+        "none at inline dispatcher"
+      ],
+      "inputValidation": [
+        "URL/method allowlist check in server dispatcher"
+      ],
+      "errorBehavior": {
+        "explicitStatusCodes": [],
+        "dispatcherFallback": "inline handler response"
+      },
+      "idempotency": "not applicable",
+      "transactionBoundary": "not applicable",
+      "storeFunctionsCalled": [],
+      "sideEffects": [
+        "static/health/config response"
+      ],
+      "testCandidates": [],
+      "classification": "inline/static",
+      "reviewStatus": "intentional pre-route handler; inspect static allowlist separately"
+    },
+    {
+      "id": "inline-/store/:id",
+      "method": "GET",
+      "path": "/store/:id",
+      "pattern": null,
+      "handlerExpression": "serveStatic",
+      "handler": "serveStatic",
+      "sourceKind": "inline/static",
+      "routeLine": 4131,
+      "handlerSource": null,
+      "authentication": [
+        "public/static boundary; no tenant session at inline dispatch"
+      ],
+      "authorization": {
+        "permissionKeys": [],
+        "explicitKeyStatus": "not applicable at inline dispatcher; underlying resource handler may enforce separately"
+      },
+      "scope": [
+        "none at inline dispatcher"
+      ],
+      "inputValidation": [
+        "URL/method allowlist check in server dispatcher"
+      ],
+      "errorBehavior": {
+        "explicitStatusCodes": [],
+        "dispatcherFallback": "inline handler response"
+      },
+      "idempotency": "not applicable",
+      "transactionBoundary": "not applicable",
+      "storeFunctionsCalled": [],
+      "sideEffects": [
+        "static/health/config response"
+      ],
+      "testCandidates": [],
+      "classification": "inline/static",
+      "reviewStatus": "intentional pre-route handler; inspect static allowlist separately"
+    },
+    {
+      "id": "inline-/track",
+      "method": "GET",
+      "path": "/track",
+      "pattern": null,
+      "handlerExpression": "serveStatic",
+      "handler": "serveStatic",
+      "sourceKind": "inline/static",
+      "routeLine": 4134,
+      "handlerSource": null,
+      "authentication": [
+        "public/static boundary; no tenant session at inline dispatch"
+      ],
+      "authorization": {
+        "permissionKeys": [],
+        "explicitKeyStatus": "not applicable at inline dispatcher; underlying resource handler may enforce separately"
+      },
+      "scope": [
+        "none at inline dispatcher"
+      ],
+      "inputValidation": [
+        "URL/method allowlist check in server dispatcher"
+      ],
+      "errorBehavior": {
+        "explicitStatusCodes": [],
+        "dispatcherFallback": "inline handler response"
+      },
+      "idempotency": "not applicable",
+      "transactionBoundary": "not applicable",
+      "storeFunctionsCalled": [],
+      "sideEffects": [
+        "static/health/config response"
+      ],
+      "testCandidates": [],
+      "classification": "inline/static",
+      "reviewStatus": "intentional pre-route handler; inspect static allowlist separately"
     }
   ],
   "limitations": [
