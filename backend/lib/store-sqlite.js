@@ -5794,43 +5794,43 @@ export async function createReceivable(chatId, input = {}, actor = null) {
   const ownsTransaction = !db.isTransaction;
   if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
   try {
-  const sourceType = String(input.sourceType || input.source_type || '').toLowerCase();
-  const sourceId = String(input.sourceId || input.source_id || '');
-  if (!['purchase_order', 'order'].includes(sourceType) || !sourceId) throw Object.assign(new Error('sourceType must be purchase_order or order and sourceId is required'), { statusCode: 400, code: 'INVALID_AR_SOURCE' });
+    const sourceType = String(input.sourceType || input.source_type || '').toLowerCase();
+    const sourceId = String(input.sourceId || input.source_id || '');
+    if (!['purchase_order', 'order'].includes(sourceType) || !sourceId) throw Object.assign(new Error('sourceType must be purchase_order or order and sourceId is required'), { statusCode: 400, code: 'INVALID_AR_SOURCE' });
 
-  let customerId = null; let amountMinor = 0; let currency = tenantCurrency(chatId); let locationId = null; let creditTerms = null;
-  if (sourceType === 'purchase_order') {
-    const po = getPurchaseOrderByIdSync(organizationId, sourceId);
-    if (!po) throw Object.assign(new Error('Purchase order not found'), { statusCode: 404, code: 'PO_NOT_FOUND' });
-    if (po.status !== 'APPROVED') throw Object.assign(new Error('Accounts receivable requires an approved purchase order'), { statusCode: 409, code: 'PO_NOT_APPROVED' });
-    customerId = po.customerId; amountMinor = Number(po.totalMinor); currency = normaliseCurrency(po.currency, currency);
-    creditTerms = db.prepare(`SELECT * FROM customer_credit_terms WHERE organization_id = ? AND customer_id = ? AND status = 'APPROVED' ORDER BY updated_at DESC LIMIT 1`).get(organizationId, customerId);
-  } else {
-    const order = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?').get(String(chatId), sourceId);
-    if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
-    customerId = order.customer_id || parseJSON(order.order_json, {}).customer_id || null; amountMinor = Number(order.total_minor); currency = normaliseCurrency(order.currency, currency);
-    creditTerms = customerId ? db.prepare(`SELECT * FROM customer_credit_terms WHERE organization_id = ? AND customer_id = ? AND status = 'APPROVED' ORDER BY updated_at DESC LIMIT 1`).get(organizationId, customerId) : null;
-  }
-  if (!customerId) throw Object.assign(new Error('A business customer is required for receivables'), { statusCode: 409, code: 'B2B_CUSTOMER_REQUIRED' });
-  assertBusinessCustomerForReceivable(organizationId, customerId);
-  if (currency !== tenantCurrency(chatId)) throw Object.assign(new Error('Receivable currency must match the organization currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
-  if (!Number.isInteger(amountMinor) || amountMinor <= 0) throw Object.assign(new Error('Receivable amount must be a positive integer minor-unit amount'), { statusCode: 400, code: 'INVALID_AR_AMOUNT' });
-  if (!creditTerms || creditTerms.currency !== currency) throw Object.assign(new Error('Approved credit terms are required before creating a receivable'), { statusCode: 409, code: 'CREDIT_TERMS_REQUIRED' });
-  if (sourceType === 'order' && Number(creditTerms.requires_po) === 1) throw Object.assign(new Error('These credit terms require a purchase order before creating a receivable'), { statusCode: 409, code: 'PO_REQUIRED' });
-  const existing = db.prepare('SELECT id FROM accounts_receivable WHERE organization_id = ? AND source_type = ? AND source_id = ?').get(organizationId, sourceType, sourceId);
-  if (existing) throw Object.assign(new Error('A receivable already exists for this source'), { statusCode: 409, code: 'AR_EXISTS' });
-  const open = db.prepare(`SELECT COALESCE(SUM(outstanding_minor),0) AS outstanding FROM accounts_receivable WHERE organization_id = ? AND customer_id = ? AND status IN ('OPEN','PARTIAL','OVERDUE')`).get(organizationId, customerId);
-  if (Number(open.outstanding) + amountMinor > Number(creditTerms.credit_limit_minor)) throw Object.assign(new Error('Receivable would exceed the customer credit limit'), { statusCode: 409, code: 'CREDIT_LIMIT_EXCEEDED' });
-  const now = nowIso(); const id = crypto.randomUUID(); const dueAt = input.dueAt || input.due_at || addDaysIso(now, Number(creditTerms.payment_due_days));
-  db.prepare(`INSERT INTO accounts_receivable (id, organization_id, location_id, customer_id, credit_terms_id, source_type, source_id, currency, amount_minor, outstanding_minor, due_at, status, notes, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?)`).run(
-    id, organizationId, locationId, customerId, creditTerms.id, sourceType, sourceId, currency, amountMinor, amountMinor, String(dueAt), String(input.notes || ''), actor?.userId || null, now, now
-  );
-  db.prepare(`INSERT INTO ar_ledger_entries (id, receivable_id, organization_id, entry_type, amount_minor, currency, from_status, to_status, payment_id, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, 'CHARGE', ?, ?, NULL, 'OPEN', NULL, ?, ?, ?, ?)`).run(
-    crypto.randomUUID(), id, organizationId, amountMinor, currency, actor?.userId || null, String(input.reason || ''), json({ sourceType, sourceId }), now
-  );
-  audit(String(chatId), 'b2b.receivable.created', 'accounts_receivable', id, { sourceType, sourceId, customerId, amountMinor, currency, dueAt }, { organizationId, actorId: actor?.userId || null, reason: input.reason || '' });
-  if (ownsTransaction) db.exec('COMMIT');
-  return getReceivable(chatId, id);
+    let customerId = null; let amountMinor = 0; let currency = tenantCurrency(chatId); let locationId = null; let creditTerms = null;
+    if (sourceType === 'purchase_order') {
+      const po = getPurchaseOrderByIdSync(organizationId, sourceId);
+      if (!po) throw Object.assign(new Error('Purchase order not found'), { statusCode: 404, code: 'PO_NOT_FOUND' });
+      if (po.status !== 'APPROVED') throw Object.assign(new Error('Accounts receivable requires an approved purchase order'), { statusCode: 409, code: 'PO_NOT_APPROVED' });
+      customerId = po.customerId; amountMinor = Number(po.totalMinor); currency = normaliseCurrency(po.currency, currency);
+      creditTerms = db.prepare(`SELECT * FROM customer_credit_terms WHERE organization_id = ? AND customer_id = ? AND status = 'APPROVED' ORDER BY updated_at DESC LIMIT 1`).get(organizationId, customerId);
+    } else {
+      const order = db.prepare('SELECT * FROM orders WHERE chat_id = ? AND server_order_id = ?').get(String(chatId), sourceId);
+      if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+      customerId = order.customer_id || parseJSON(order.order_json, {}).customer_id || null; amountMinor = Number(order.total_minor); currency = normaliseCurrency(order.currency, currency);
+      creditTerms = customerId ? db.prepare(`SELECT * FROM customer_credit_terms WHERE organization_id = ? AND customer_id = ? AND status = 'APPROVED' ORDER BY updated_at DESC LIMIT 1`).get(organizationId, customerId) : null;
+    }
+    if (!customerId) throw Object.assign(new Error('A business customer is required for receivables'), { statusCode: 409, code: 'B2B_CUSTOMER_REQUIRED' });
+    assertBusinessCustomerForReceivable(organizationId, customerId);
+    if (currency !== tenantCurrency(chatId)) throw Object.assign(new Error('Receivable currency must match the organization currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
+    if (!Number.isInteger(amountMinor) || amountMinor <= 0) throw Object.assign(new Error('Receivable amount must be a positive integer minor-unit amount'), { statusCode: 400, code: 'INVALID_AR_AMOUNT' });
+    if (!creditTerms || creditTerms.currency !== currency) throw Object.assign(new Error('Approved credit terms are required before creating a receivable'), { statusCode: 409, code: 'CREDIT_TERMS_REQUIRED' });
+    if (sourceType === 'order' && Number(creditTerms.requires_po) === 1) throw Object.assign(new Error('These credit terms require a purchase order before creating a receivable'), { statusCode: 409, code: 'PO_REQUIRED' });
+    const existing = db.prepare('SELECT id FROM accounts_receivable WHERE organization_id = ? AND source_type = ? AND source_id = ?').get(organizationId, sourceType, sourceId);
+    if (existing) throw Object.assign(new Error('A receivable already exists for this source'), { statusCode: 409, code: 'AR_EXISTS' });
+    const open = db.prepare(`SELECT COALESCE(SUM(outstanding_minor),0) AS outstanding FROM accounts_receivable WHERE organization_id = ? AND customer_id = ? AND status IN ('OPEN','PARTIAL','OVERDUE')`).get(organizationId, customerId);
+    if (Number(open.outstanding) + amountMinor > Number(creditTerms.credit_limit_minor)) throw Object.assign(new Error('Receivable would exceed the customer credit limit'), { statusCode: 409, code: 'CREDIT_LIMIT_EXCEEDED' });
+    const now = nowIso(); const id = crypto.randomUUID(); const dueAt = input.dueAt || input.due_at || addDaysIso(now, Number(creditTerms.payment_due_days));
+    db.prepare(`INSERT INTO accounts_receivable (id, organization_id, location_id, customer_id, credit_terms_id, source_type, source_id, currency, amount_minor, outstanding_minor, due_at, status, notes, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?)`).run(
+      id, organizationId, locationId, customerId, creditTerms.id, sourceType, sourceId, currency, amountMinor, amountMinor, String(dueAt), String(input.notes || ''), actor?.userId || null, now, now
+    );
+    db.prepare(`INSERT INTO ar_ledger_entries (id, receivable_id, organization_id, entry_type, amount_minor, currency, from_status, to_status, payment_id, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, 'CHARGE', ?, ?, NULL, 'OPEN', NULL, ?, ?, ?, ?)`).run(
+      crypto.randomUUID(), id, organizationId, amountMinor, currency, actor?.userId || null, String(input.reason || ''), json({ sourceType, sourceId }), now
+    );
+    audit(String(chatId), 'b2b.receivable.created', 'accounts_receivable', id, { sourceType, sourceId, customerId, amountMinor, currency, dueAt }, { organizationId, actorId: actor?.userId || null, reason: input.reason || '' });
+    if (ownsTransaction) db.exec('COMMIT');
+    return getReceivable(chatId, id);
   } catch (error) {
     if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
     throw error;
