@@ -11,6 +11,29 @@
 - Index declarations / unique names: **206 / 192**
 - Migration guards: **85**
 
+## SQL operation mix
+
+| Operation | Statements |
+|---|---:|
+| SELECT | 613 |
+| INSERT | 239 |
+| UPDATE | 118 |
+| DELETE | 3 |
+| CREATE TABLE | 112 |
+| CREATE INDEX | 206 |
+| ALTER TABLE | 43 |
+| CREATE TRIGGER | 38 |
+| DROP TRIGGER | 1 |
+| DROP TABLE | 5 |
+| DROP INDEX | 2 |
+| BEGIN | 67 |
+| COMMIT | 96 |
+| ROLLBACK | 67 |
+| PRAGMA | 28 |
+| VACUUM | 1 |
+
+Transaction syntax was detected in 64 exported functions with local BEGIN/COMMIT/ROLLBACK, five with caller-owned transaction support markers, and four using the serialized Inventory write slot. These are syntactic dependency signals, not proof that all callers share a safe boundary.
+
 ## Method and limitations
 
 - Every literal `db.prepare()` / `db.exec()` call in the file is recorded in `sqlCalls`; each literal SQL block is split into individual statements in `sqlStatements` (including multiple DDL statements inside one `db.exec`).
