@@ -32,13 +32,13 @@ Branch used for this audit: `audit/route-sqlite-dependency-map` (created from th
 
 The 253 route entries are represented in `route-characterization.json`. The map records handler source locations, detectable authentication/permission evidence, scope indicators, input validation/error evidence, idempotency references, direct SQLite calls and transaction evidence, side-effect hints, test candidates and classification.
 
-The route dispatcher rate-limits before route dispatch but has no universal session middleware. Handler-level or delegated authorization is therefore a primary boundary. 166 route entries contain literal permission-key evidence; shared handlers are often method-conditional. Seven buyer/read surfaces are explicitly public or token-scoped. Filename-based test matches are not proof of route coverage.
+The route dispatcher rate-limits before dispatch but has no universal session middleware. The detailed source scan records 205 route entries with explicit permission-key evidence and 201 entries with handler authorization calls. 153 route entries use handlers registered for multiple methods; 166 are method-conditional, so handler-wide dependencies must not be attributed to every method. Three entries remain in the security review queue: POST /sync and GET/POST Payment routing-policy routes. Seven buyer/read surfaces are explicitly public or token-scoped. Filename-based test matches are not proof of route coverage.
 
 ## SQLite baseline
 
-The 253 exported store functions are mapped to direct SQL operations, tables, direct named function calls and transaction markers. Table ownership remains unassigned unless canonical authority evidence proves it; name-based candidate areas are hints only.
+The 253 exported store functions are mapped to direct SQL operations, tables, direct named function calls and transaction markers. The route map joins 873 direct store references; 790 resolve to SQL table evidence, 83 have no SQL in their own exported-function span, and 90 distinct tables are reached by direct store calls. Table ownership remains unassigned unless canonical authority evidence proves it; name-based candidate areas are hints only.
 
-The 1,681 SQL sub-statements come from 983 `db.prepare` calls and 338 `db.exec` calls. Three dynamic arguments remain unresolved. The inventory records 950 sites within exported-function source spans and 731 sites attributed approximately to internal helper declarations.
+The 1,681 SQL sub-statements come from 983 `db.prepare` calls and 338 `db.exec` calls. Three dynamic arguments remain unresolved. The inventory records 950 sites within exported-function source spans and 731 sites attributed approximately to internal helper declarations. It also maps 38 triggers across 16 migration blocks; migrations 65 and 66 are trigger-only. Two table names are declared twice across migration history (pairing_challenges and service_resource_commitments); these are repeated IF NOT EXISTS declarations, not two physical tables.
 
 Three high-severity current-main findings are confirmed:
 1. Procurement receipt posting commits receipt records before sequential Inventory movement writes; multi-line posting is not atomic.
@@ -47,7 +47,7 @@ Three high-severity current-main findings are confirmed:
 
 ## Test and CI baseline
 
-- 172? No: the current test map records **171 distinct root scripts directly referenced** by the 11 workflow files; 311 root scripts are not reachable from those direct CI references. This does not prove they are unused.
+- **171 distinct root scripts** are directly referenced by the 11 workflow files; **311** root scripts are not reachable from those direct CI references. This does not prove they are unused.
 - 30 distinct direct `node phase0/*` targets appear in workflow commands.
 - 11 exact duplicate-command groups map multiple npm aliases to identical command strings.
 - Main CI contains baseline, Phase 13 browser/workspace, Logistics L18, Logistics exit certification and Phase 21 capacity evidence jobs.
