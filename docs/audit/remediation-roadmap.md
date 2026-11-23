@@ -19,7 +19,7 @@
 
 ## P1 — preserve SQLite invariants before extraction
 
-1. Validate the 947 literal SQL statement inventory against dynamic SQL and indirect helper paths.
+1. Validate the 1,639 individual SQL statement inventory against dynamic SQL and indirect helper paths.
 2. Review transaction callers for the Marketplace, Payment, Inventory/Fulfillment, Procurement Receiving, Service and Identity clusters identified in `sqlite-dependency-map.md`.
 3. Preserve migration source order; 85 guards are not in monotonically increasing numeric order.
 4. Validate provisional table ownership with canonical domain contracts. Do not use table prefixes as ownership proof.
