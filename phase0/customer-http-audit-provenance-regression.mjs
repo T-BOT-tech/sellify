@@ -273,6 +273,66 @@ try {
   assert.equal(String(syncReceipt.actor_id), String(owner.id));
   assert.equal(String(syncReceipt.device_id), String(ownerSession.deviceId));
 
+  // Customer sync must obey the shared event replay contract: exact retries
+  // return the existing receipt without re-running the canonical upsert.
+  const exactSyncReplay = await request(`/events/${encodeURIComponent(tenant.chatId)}`, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ events: [syncEvent.json ? {
+      eventId: syncEventId,
+      eventType: 'customer.upsert',
+      aggregateType: 'customer',
+      aggregateId: syncCustomerId,
+      occurredAt: new Date().toISOString(),
+      payload: { id: syncCustomerId, name: 'Customer Sync Audit', source: 'http-regression' },
+    } : null] }),
+  });
+  assert.equal(exactSyncReplay.response.status, 200);
+  assert.equal(exactSyncReplay.json.results?.[0]?.status, 'processed');
+  assert.equal(exactSyncReplay.json.results?.[0]?.duplicate, true,
+    'an exact customer event retry must be recognized as a duplicate');
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM audit_events
+    WHERE entity_type = 'customer' AND entity_id = ? AND action = 'customer.created'
+  `).get(syncCustomerId).count, 1,
+  'an exact customer event retry must not execute the canonical customer upsert again');
+
+  const changedSyncReplay = await request(`/events/${encodeURIComponent(tenant.chatId)}`, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ events: [{
+      eventId: syncEventId,
+      eventType: 'customer.upsert',
+      aggregateType: 'customer',
+      aggregateId: syncCustomerId,
+      occurredAt: new Date().toISOString(),
+      payload: { id: syncCustomerId, name: 'Changed Customer Sync Payload', source: 'http-regression' },
+    }] }),
+  });
+  assert.equal(changedSyncReplay.json.results?.[0]?.status, 'rejected');
+  assert.equal(changedSyncReplay.json.results?.[0]?.code, 'EVENT_ID_REUSED',
+    'reusing a customer event ID with changed payload must fail closed');
+  assert.equal((await store.getCustomer(tenant.chatId, syncCustomerId)).name, 'Customer Sync Audit',
+    'a conflicting customer event must not mutate the canonical customer');
+
+  const crossOrgSyncReplay = await request(`/events/${encodeURIComponent(otherTenant.chatId)}`, {
+    method: 'POST',
+    headers: jsonAuth(otherSession.token),
+    body: JSON.stringify({ events: [{
+      eventId: syncEventId,
+      eventType: 'customer.upsert',
+      aggregateType: 'customer',
+      aggregateId: syncCustomerId,
+      occurredAt: new Date().toISOString(),
+      payload: { id: syncCustomerId, name: 'Customer Sync Audit', source: 'http-regression' },
+    }] }),
+  });
+  assert.equal(crossOrgSyncReplay.json.results?.[0]?.status, 'rejected');
+  assert.equal(crossOrgSyncReplay.json.results?.[0]?.code, 'EVENT_ID_REUSED',
+    'another organization cannot replay a customer event ID owned by this organization');
+  assert.equal(await store.getCustomer(otherTenant.chatId, syncCustomerId), null,
+    'cross-organization event ID reuse must not create a customer in the other tenant');
+
   console.log('Customer HTTP authorization, tenant isolation, and audit actor provenance regression: PASS');
 } finally {
   child.kill('SIGTERM');
