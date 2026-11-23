@@ -32,7 +32,7 @@ The current source-derived audit artifacts are maintained in `docs/audit/`:
 - `wave0-baseline.md`
 - `remediation-roadmap.md`
 - `route-characterization.md` / `.json`
-- `sqlite-dependency-map.md` / `.json`
+- `sqlite-dependency-map.md` / `.json` plus complete `sqlite-sql-statements.json`
 - `test-command-map.md` / `.json`
 - `capacity-scheduling-boundary.md`
 
