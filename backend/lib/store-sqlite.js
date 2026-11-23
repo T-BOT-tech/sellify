@@ -5082,10 +5082,22 @@ export async function upsertCustomerPricing(chatId, input = {}, actor = null) {
     input.effectiveFrom ?? input.effective_from ?? null,
     input.effectiveTo ?? input.effective_to ?? null,
     String(input.reason || ''), actor?.userId || null, now, now);
-  audit(String(chatId), 'b2b.custom-pricing.upserted', 'customer_pricing_rule', id,
+  // Resolve by the unique business key: on conflict SQLite retains the
+  // existing row ID, which may differ from the newly generated candidate ID.
+  const savedRow = db.prepare(
+    'SELECT * FROM customer_pricing_rules WHERE organization_id = ? AND customer_id = ? AND product_id = ?'
+  ).get(organizationId, customerId, productId);
+  const saved = customerPricingFromRow(savedRow);
+  if (!saved) {
+    throw Object.assign(new Error('Custom pricing rule could not be reloaded after save'), {
+      statusCode: 500,
+      code: 'CUSTOM_PRICING_SAVE_RELOAD_FAILED',
+    });
+  }
+  audit(String(chatId), 'b2b.custom-pricing.upserted', 'customer_pricing_rule', saved.id,
     { customerId, productId, priceMinor, currency },
     { organizationId, actorId: actor?.userId || null, reason: input.reason || '' });
-  return getCustomerPricing(chatId, id);
+  return saved;
 }
 
 export async function updateCustomerPricing(chatId, pricingId, input = {}, actor = null) {
