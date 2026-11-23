@@ -5791,6 +5791,9 @@ export async function listReceivables(chatId, { customerId = '', status = 'all',
 export async function createReceivable(chatId, input = {}, actor = null) {
   ensureDatabase();
   const organizationId = await tenantOrganizationId(chatId);
+  const ownsTransaction = !db.isTransaction;
+  if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
+  try {
   const sourceType = String(input.sourceType || input.source_type || '').toLowerCase();
   const sourceId = String(input.sourceId || input.source_id || '');
   if (!['purchase_order', 'order'].includes(sourceType) || !sourceId) throw Object.assign(new Error('sourceType must be purchase_order or order and sourceId is required'), { statusCode: 400, code: 'INVALID_AR_SOURCE' });
@@ -5830,7 +5833,12 @@ export async function createReceivable(chatId, input = {}, actor = null) {
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
   audit(String(chatId), 'b2b.receivable.created', 'accounts_receivable', id, { sourceType, sourceId, customerId, amountMinor, currency, dueAt }, { organizationId, actorId: actor?.userId || null, reason: input.reason || '' });
+  if (ownsTransaction) db.exec('COMMIT');
   return getReceivable(chatId, id);
+  } catch (error) {
+    if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 const RECEIVABLE_TRANSITIONS = Object.freeze({
