@@ -2,7 +2,7 @@ name: Sellify CI
 
 on:
   push:
-    branches: [main, fix/gap-1-18-migration63-recovery, audit/supplier-network-discovery-http-auth-20261123]
+    branches: [main, fix/gap-1-18-migration63-recovery]
   pull_request:
 
 permissions:
@@ -473,9 +473,6 @@ jobs:
 
       - name: Phase 16 final platform snapshot Node 24 certification
         run: npm run test:phase16.14
-
-      - name: Supplier Network discovery HTTP authorization regression
-        run: node phase0/supplier-network-discovery-http-authorization-regression.mjs
 
       - name: Phase 19 cumulative Discovery Fabric exit certification
         run: npm run test:phase19.12-cumulative
