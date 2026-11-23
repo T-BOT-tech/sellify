@@ -8,9 +8,9 @@
     "inline": 6,
     "classification": {
       "infrastructure": 6,
-      "domain capability": 28,
-      "needs-review": 205,
-      "mixed": 9,
+      "domain capability": 219,
+      "needs-review": 9,
+      "mixed": 14,
       "inline/static": 5
     },
     "handlerSpansResolved": 252
@@ -20,7 +20,7 @@
       "id": 1,
       "method": "POST",
       "pattern": "^\\/integrations\\/payments\\/([^/]+)\\/notifications$",
-      "path": "/integrations/payments/([^/]+)/notifications",
+      "path": "/integrations/payments/:param/notifications",
       "handler": "handlePaymentProviderNotification",
       "routeLine": 3841,
       "authentication": [
@@ -490,7 +490,7 @@
       "id": 11,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/memberships$",
-      "path": "/tenants/([^/]+)/memberships",
+      "path": "/tenants/:param/memberships",
       "handler": "handleListTenantMemberships",
       "routeLine": 3851,
       "authentication": [
@@ -532,7 +532,7 @@
         "startLine": 1048,
         "endLine": 1059
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -540,7 +540,7 @@
       "id": 12,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/packs\\/([^/]+)\\/lifecycle$",
-      "path": "/tenants/([^/]+)/packs/([^/]+)/lifecycle",
+      "path": "/tenants/:param/packs/:param/lifecycle",
       "handler": "handlePackLifecycle",
       "routeLine": 3852,
       "authentication": [
@@ -582,7 +582,7 @@
         "startLine": 3230,
         "endLine": 3337
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux13-pack-lifecycle-api-adversarial-regression.mjs",
         "phase0/fux13-pack-lifecycle-api-regression.mjs",
@@ -605,7 +605,7 @@
       "id": 13,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/packs\\/([^/]+)\\/lifecycle$",
-      "path": "/tenants/([^/]+)/packs/([^/]+)/lifecycle",
+      "path": "/tenants/:param/packs/:param/lifecycle",
       "handler": "handlePackLifecycle",
       "routeLine": 3853,
       "authentication": [
@@ -647,7 +647,7 @@
         "startLine": 3230,
         "endLine": 3337
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux13-pack-lifecycle-api-adversarial-regression.mjs",
         "phase0/fux13-pack-lifecycle-api-regression.mjs",
@@ -969,7 +969,7 @@
       "id": 20,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/invites$",
-      "path": "/tenants/([^/]+)/invites",
+      "path": "/tenants/:param/invites",
       "handler": "handleListInvites",
       "routeLine": 3860,
       "authentication": [
@@ -1003,7 +1003,7 @@
         "startLine": 1113,
         "endLine": 1119
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -1011,7 +1011,7 @@
       "id": 21,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/devices$",
-      "path": "/tenants/([^/]+)/devices",
+      "path": "/tenants/:param/devices",
       "handler": "handleListDevices",
       "routeLine": 3861,
       "authentication": [
@@ -1045,7 +1045,7 @@
         "startLine": 1130,
         "endLine": 1136
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -1099,7 +1099,7 @@
       "id": 23,
       "method": "POST",
       "pattern": "^\\/sync\\/([^/]+)$",
-      "path": "/sync/([^/]+)",
+      "path": "/sync/:param",
       "handler": "handleSync",
       "routeLine": 3863,
       "authentication": [
@@ -1141,7 +1141,7 @@
       "id": 24,
       "method": "POST",
       "pattern": "^\\/events\\/([^/]+)$",
-      "path": "/events/([^/]+)",
+      "path": "/events/:param",
       "handler": "handleSyncEvents",
       "routeLine": 3864,
       "authentication": [
@@ -1205,7 +1205,7 @@
       "id": 25,
       "method": "GET",
       "pattern": "^\\/sync\\/([^/]+)$",
-      "path": "/sync/([^/]+)",
+      "path": "/sync/:param",
       "handler": "handleSyncPull",
       "routeLine": 3865,
       "authentication": [
@@ -1248,7 +1248,7 @@
       "id": 26,
       "method": "GET",
       "pattern": "^\\/orders\\/([^/]+)$",
-      "path": "/orders/([^/]+)",
+      "path": "/orders/:param",
       "handler": "handleOrdersFeed",
       "routeLine": 3866,
       "authentication": [
@@ -1300,7 +1300,7 @@
       "id": 27,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/service-provider\\/resources$",
-      "path": "/tenants/([^/]+)/service-provider/resources",
+      "path": "/tenants/:param/service-provider/resources",
       "handler": "handleServiceProviderResources",
       "routeLine": 3867,
       "authentication": [
@@ -1348,7 +1348,7 @@
         "startLine": 3650,
         "endLine": 3682
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/sc-03.5-service-provider-booking-queue-regression.mjs",
         "phase0/service-provider-resource-scope-regression.mjs"
@@ -1359,7 +1359,7 @@
       "id": 28,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/service-provider\\/bookings$",
-      "path": "/tenants/([^/]+)/service-provider/bookings",
+      "path": "/tenants/:param/service-provider/bookings",
       "handler": "handleServiceProviderBookings",
       "routeLine": 3868,
       "authentication": [
@@ -1407,7 +1407,7 @@
         "startLine": 3683,
         "endLine": 3715
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/sc-03.5-service-provider-booking-queue-regression.mjs",
         "phase0/service-booking-scheduling-authority-boundary-regression.mjs",
@@ -1420,7 +1420,7 @@
       "id": 29,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/service-resources$",
-      "path": "/tenants/([^/]+)/service-resources",
+      "path": "/tenants/:param/service-resources",
       "handler": "handleServiceResources",
       "routeLine": 3869,
       "authentication": [
@@ -1494,7 +1494,7 @@
         "startLine": 3508,
         "endLine": 3612
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -1502,7 +1502,7 @@
       "id": 30,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/service-resources$",
-      "path": "/tenants/([^/]+)/service-resources",
+      "path": "/tenants/:param/service-resources",
       "handler": "handleServiceResources",
       "routeLine": 3870,
       "authentication": [
@@ -1576,7 +1576,7 @@
         "startLine": 3508,
         "endLine": 3612
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -1584,7 +1584,7 @@
       "id": 31,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/service-resources\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/service-resources/([^/]+)",
+      "path": "/tenants/:param/service-resources/:param",
       "handler": "handleServiceResources",
       "routeLine": 3871,
       "authentication": [
@@ -1658,7 +1658,7 @@
         "startLine": 3508,
         "endLine": 3612
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -1666,7 +1666,7 @@
       "id": 32,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/service-resources\\/([^/]+)\\/availability$",
-      "path": "/tenants/([^/]+)/service-resources/([^/]+)/availability",
+      "path": "/tenants/:param/service-resources/:param/availability",
       "handler": "handleServiceResourceAvailability",
       "routeLine": 3872,
       "authentication": [
@@ -1710,7 +1710,7 @@
         "startLine": 3613,
         "endLine": 3649
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/first-experience-add-availability-regression.mjs",
         "phase0/phase21.3-capacity-availability-regression.mjs",
@@ -1724,7 +1724,7 @@
       "id": 33,
       "method": "PUT",
       "pattern": "^\\/tenants\\/([^/]+)\\/service-resources\\/([^/]+)\\/availability$",
-      "path": "/tenants/([^/]+)/service-resources/([^/]+)/availability",
+      "path": "/tenants/:param/service-resources/:param/availability",
       "handler": "handleServiceResourceAvailability",
       "routeLine": 3873,
       "authentication": [
@@ -1768,7 +1768,7 @@
         "startLine": 3613,
         "endLine": 3649
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/first-experience-add-availability-regression.mjs",
         "phase0/phase21.3-capacity-availability-regression.mjs",
@@ -1782,7 +1782,7 @@
       "id": 34,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/service-bookings$",
-      "path": "/tenants/([^/]+)/orders/([^/]+)/service-bookings",
+      "path": "/tenants/:param/orders/:param/service-bookings",
       "handler": "handleServiceBookings",
       "routeLine": 3874,
       "authentication": [
@@ -1830,7 +1830,7 @@
         "startLine": 3716,
         "endLine": 3766
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/order-sync-idempotency-regression.mjs",
         "phase0/service-booking-scheduling-authority-boundary-regression.mjs",
@@ -1844,7 +1844,7 @@
       "id": 35,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/service-bookings$",
-      "path": "/tenants/([^/]+)/orders/([^/]+)/service-bookings",
+      "path": "/tenants/:param/orders/:param/service-bookings",
       "handler": "handleServiceBookings",
       "routeLine": 3875,
       "authentication": [
@@ -1892,7 +1892,7 @@
         "startLine": 3716,
         "endLine": 3766
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/order-sync-idempotency-regression.mjs",
         "phase0/service-booking-scheduling-authority-boundary-regression.mjs",
@@ -1906,7 +1906,7 @@
       "id": 36,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/service-bookings\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/orders/([^/]+)/service-bookings/([^/]+)",
+      "path": "/tenants/:param/orders/:param/service-bookings/:param",
       "handler": "handleServiceBookings",
       "routeLine": 3876,
       "authentication": [
@@ -1954,7 +1954,7 @@
         "startLine": 3716,
         "endLine": 3766
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/order-sync-idempotency-regression.mjs",
         "phase0/service-booking-scheduling-authority-boundary-regression.mjs",
@@ -1968,7 +1968,7 @@
       "id": 37,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/service-delivery-assessment$",
-      "path": "/tenants/([^/]+)/orders/([^/]+)/service-delivery-assessment",
+      "path": "/tenants/:param/orders/:param/service-delivery-assessment",
       "handler": "handleServiceDeliveryAssessment",
       "routeLine": 3877,
       "authentication": [
@@ -2002,7 +2002,7 @@
         "startLine": 3767,
         "endLine": 3791
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/order-sync-idempotency-regression.mjs",
         "phase0/take-order-sticky-cart-accessibility-regression.mjs",
@@ -2014,7 +2014,7 @@
       "id": 38,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/fulfillment$",
-      "path": "/tenants/([^/]+)/orders/([^/]+)/fulfillment",
+      "path": "/tenants/:param/orders/:param/fulfillment",
       "handler": "handleOrderFulfillment",
       "routeLine": 3878,
       "authentication": [
@@ -2067,7 +2067,7 @@
         "startLine": 3792,
         "endLine": 4170
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fulfillment-queued-target-reconciliation-regression.mjs",
         "phase0/fux-42-core-fulfillment-regression.mjs",
@@ -2088,7 +2088,7 @@
       "id": 39,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/delivery-assignment$",
-      "path": "/tenants/([^/]+)/orders/([^/]+)/delivery-assignment",
+      "path": "/tenants/:param/orders/:param/delivery-assignment",
       "handler": "handleDeliveryAssignment",
       "routeLine": 3879,
       "authentication": [
@@ -2137,7 +2137,7 @@
         "startLine": 3461,
         "endLine": 3507
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/gap-2-delivery-assignment-authority-regression.mjs",
         "phase0/gap-2-delivery-assignment-lifecycle-regression.mjs",
@@ -2151,7 +2151,7 @@
       "id": 40,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/delivery-assignment$",
-      "path": "/tenants/([^/]+)/orders/([^/]+)/delivery-assignment",
+      "path": "/tenants/:param/orders/:param/delivery-assignment",
       "handler": "handleDeliveryAssignment",
       "routeLine": 3880,
       "authentication": [
@@ -2200,7 +2200,7 @@
         "startLine": 3461,
         "endLine": 3507
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/gap-2-delivery-assignment-authority-regression.mjs",
         "phase0/gap-2-delivery-assignment-lifecycle-regression.mjs",
@@ -2214,7 +2214,7 @@
       "id": 41,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/logistics\\/scheduling$",
-      "path": "/tenants/([^/]+)/logistics/scheduling",
+      "path": "/tenants/:param/logistics/scheduling",
       "handler": "handleLogisticsScheduling",
       "routeLine": 3881,
       "authentication": [
@@ -2273,7 +2273,7 @@
         "startLine": 3338,
         "endLine": 3442
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/gap-2-logistics-authorization-foundation-regression.mjs",
         "phase0/logistics-b2b-distribution-regression.mjs",
@@ -2297,7 +2297,7 @@
       "id": 42,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/logistics\\/scheduling$",
-      "path": "/tenants/([^/]+)/logistics/scheduling",
+      "path": "/tenants/:param/logistics/scheduling",
       "handler": "handleLogisticsScheduling",
       "routeLine": 3882,
       "authentication": [
@@ -2356,7 +2356,7 @@
         "startLine": 3338,
         "endLine": 3442
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/gap-2-logistics-authorization-foundation-regression.mjs",
         "phase0/logistics-b2b-distribution-regression.mjs",
@@ -2380,7 +2380,7 @@
       "id": 43,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/logistics\\/scheduling\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/logistics/scheduling/([^/]+)",
+      "path": "/tenants/:param/logistics/scheduling/:param",
       "handler": "handleLogisticsScheduling",
       "routeLine": 3883,
       "authentication": [
@@ -2439,7 +2439,7 @@
         "startLine": 3338,
         "endLine": 3442
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/gap-2-logistics-authorization-foundation-regression.mjs",
         "phase0/logistics-b2b-distribution-regression.mjs",
@@ -2463,7 +2463,7 @@
       "id": 44,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/logistics\\/scheduling\\/([^/]+)\\/evaluate$",
-      "path": "/tenants/([^/]+)/logistics/scheduling/([^/]+)/evaluate",
+      "path": "/tenants/:param/logistics/scheduling/:param/evaluate",
       "handler": "handleLogisticsScheduling",
       "routeLine": 3884,
       "authentication": [
@@ -2522,7 +2522,7 @@
         "startLine": 3338,
         "endLine": 3442
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/gap-2-logistics-authorization-foundation-regression.mjs",
         "phase0/logistics-b2b-distribution-regression.mjs",
@@ -2546,7 +2546,7 @@
       "id": 45,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/logistics\\/scheduling\\/([^/]+)\\/transition$",
-      "path": "/tenants/([^/]+)/logistics/scheduling/([^/]+)/transition",
+      "path": "/tenants/:param/logistics/scheduling/:param/transition",
       "handler": "handleLogisticsScheduling",
       "routeLine": 3885,
       "authentication": [
@@ -2605,7 +2605,7 @@
         "startLine": 3338,
         "endLine": 3442
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/gap-1.18U-financial-transition-idempotency-regression.mjs",
         "phase0/gap-2-logistics-authorization-foundation-regression.mjs",
@@ -2629,7 +2629,7 @@
       "id": 46,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/delivery-assignments$",
-      "path": "/tenants/([^/]+)/delivery-assignments",
+      "path": "/tenants/:param/delivery-assignments",
       "handler": "handleDeliveryAssignmentsList",
       "routeLine": 3886,
       "authentication": [
@@ -2672,7 +2672,7 @@
         "startLine": 3443,
         "endLine": 3460
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -2680,7 +2680,7 @@
       "id": 47,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/delivery-assignment$",
-      "path": "/tenants/([^/]+)/orders/([^/]+)/delivery-assignment",
+      "path": "/tenants/:param/orders/:param/delivery-assignment",
       "handler": "handleDeliveryAssignment",
       "routeLine": 3887,
       "authentication": [
@@ -2729,7 +2729,7 @@
         "startLine": 3461,
         "endLine": 3507
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/gap-2-delivery-assignment-authority-regression.mjs",
         "phase0/gap-2-delivery-assignment-lifecycle-regression.mjs",
@@ -2743,7 +2743,7 @@
       "id": 48,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/fulfillment$",
-      "path": "/tenants/([^/]+)/orders/([^/]+)/fulfillment",
+      "path": "/tenants/:param/orders/:param/fulfillment",
       "handler": "handleOrderFulfillment",
       "routeLine": 3888,
       "authentication": [
@@ -2796,7 +2796,7 @@
         "startLine": 3792,
         "endLine": 4170
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fulfillment-queued-target-reconciliation-regression.mjs",
         "phase0/fux-42-core-fulfillment-regression.mjs",
@@ -2817,7 +2817,7 @@
       "id": 49,
       "method": "GET",
       "pattern": "^\\/catalog\\/([^/]+)$",
-      "path": "/catalog/([^/]+)",
+      "path": "/catalog/:param",
       "handler": "handleCatalogGet",
       "routeLine": 3889,
       "authentication": [
@@ -2865,7 +2865,7 @@
       "id": 50,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/storefront-channels$",
-      "path": "/tenants/([^/]+)/storefront-channels",
+      "path": "/tenants/:param/storefront-channels",
       "handler": "handleSellerStorefrontChannelsGet",
       "routeLine": 3890,
       "authentication": [
@@ -2905,7 +2905,7 @@
         "startLine": 495,
         "endLine": 503
       },
-      "classification": "needs-review",
+      "classification": "mixed",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -2913,7 +2913,7 @@
       "id": 51,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/storefront-consistency$",
-      "path": "/tenants/([^/]+)/storefront-consistency",
+      "path": "/tenants/:param/storefront-consistency",
       "handler": "handleCrossChannelConsistencyGet",
       "routeLine": 3891,
       "authentication": [
@@ -2953,7 +2953,7 @@
         "startLine": 484,
         "endLine": 494
       },
-      "classification": "needs-review",
+      "classification": "mixed",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -2961,7 +2961,7 @@
       "id": 52,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/telegram-storefront$",
-      "path": "/tenants/([^/]+)/telegram-storefront",
+      "path": "/tenants/:param/telegram-storefront",
       "handler": "handleTelegramStorefrontGet",
       "routeLine": 3892,
       "authentication": [
@@ -3001,7 +3001,7 @@
         "startLine": 504,
         "endLine": 513
       },
-      "classification": "needs-review",
+      "classification": "mixed",
       "testCandidates": [
         "phase0/tg1-telegram-storefront-regression.mjs"
       ],
@@ -3011,7 +3011,7 @@
       "id": 53,
       "method": "GET",
       "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)$",
-      "path": "/api/telegram-storefront/([^/]+)",
+      "path": "/api/telegram-storefront/:param",
       "handler": "handleTelegramStorefrontPublicGet",
       "routeLine": 3893,
       "authentication": [
@@ -3055,7 +3055,7 @@
       "id": 54,
       "method": "POST",
       "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)\\/buyer-session$",
-      "path": "/api/telegram-storefront/([^/]+)/buyer-session",
+      "path": "/api/telegram-storefront/:param/buyer-session",
       "handler": "handleTelegramStorefrontBuyerSession",
       "routeLine": 3894,
       "authentication": [
@@ -3106,7 +3106,7 @@
       "id": 55,
       "method": "GET",
       "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)\\/orders\\/([^/]+)\\/service-bookings$",
-      "path": "/api/telegram-storefront/([^/]+)/orders/([^/]+)/service-bookings",
+      "path": "/api/telegram-storefront/:param/orders/:param/service-bookings",
       "handler": "handleTelegramStorefrontServiceBookings",
       "routeLine": 3895,
       "authentication": [
@@ -3168,7 +3168,7 @@
       "id": 56,
       "method": "POST",
       "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)\\/orders\\/([^/]+)\\/service-bookings$",
-      "path": "/api/telegram-storefront/([^/]+)/orders/([^/]+)/service-bookings",
+      "path": "/api/telegram-storefront/:param/orders/:param/service-bookings",
       "handler": "handleTelegramStorefrontServiceBookings",
       "routeLine": 3896,
       "authentication": [
@@ -3230,7 +3230,7 @@
       "id": 57,
       "method": "GET",
       "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)\\/orders\\/([^/]+)\\/service-feasibility$",
-      "path": "/api/telegram-storefront/([^/]+)/orders/([^/]+)/service-feasibility",
+      "path": "/api/telegram-storefront/:param/orders/:param/service-feasibility",
       "handler": "handleTelegramStorefrontServiceFeasibility",
       "routeLine": 3897,
       "authentication": [
@@ -3283,7 +3283,7 @@
       "id": 58,
       "method": "POST",
       "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)\\/orders\\/([^/]+)\\/service-bookings\\/([^/]+)\\/cancel$",
-      "path": "/api/telegram-storefront/([^/]+)/orders/([^/]+)/service-bookings/([^/]+)/cancel",
+      "path": "/api/telegram-storefront/:param/orders/:param/service-bookings/:param/cancel",
       "handler": "handleTelegramStorefrontServiceBookingCancel",
       "routeLine": 3898,
       "authentication": [
@@ -3347,7 +3347,7 @@
       "id": 59,
       "method": "GET",
       "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)\\/orders\\/([^/]+)\\/fulfillment$",
-      "path": "/api/telegram-storefront/([^/]+)/orders/([^/]+)/fulfillment",
+      "path": "/api/telegram-storefront/:param/orders/:param/fulfillment",
       "handler": "handleTelegramStorefrontFulfillment",
       "routeLine": 3899,
       "authentication": [
@@ -3410,7 +3410,7 @@
       "id": 60,
       "method": "GET",
       "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)\\/orders\\/([^/]+)$",
-      "path": "/api/telegram-storefront/([^/]+)/orders/([^/]+)",
+      "path": "/api/telegram-storefront/:param/orders/:param",
       "handler": "handleTelegramStorefrontOrder",
       "routeLine": 3900,
       "authentication": [
@@ -3467,7 +3467,7 @@
       "id": 61,
       "method": "GET",
       "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)\\/orders$",
-      "path": "/api/telegram-storefront/([^/]+)/orders",
+      "path": "/api/telegram-storefront/:param/orders",
       "handler": "handleTelegramStorefrontOrderHistory",
       "routeLine": 3901,
       "authentication": [
@@ -3521,7 +3521,7 @@
       "id": 62,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/telegram-storefront\\/verify$",
-      "path": "/tenants/([^/]+)/telegram-storefront/verify",
+      "path": "/tenants/:param/telegram-storefront/verify",
       "handler": "handleTelegramStorefrontVerify",
       "routeLine": 3902,
       "authentication": [
@@ -3561,7 +3561,7 @@
         "startLine": 514,
         "endLine": 522
       },
-      "classification": "needs-review",
+      "classification": "mixed",
       "testCandidates": [
         "phase0/tg1-telegram-storefront-regression.mjs"
       ],
@@ -3571,7 +3571,7 @@
       "id": 63,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/telegram-storefront$",
-      "path": "/tenants/([^/]+)/telegram-storefront",
+      "path": "/tenants/:param/telegram-storefront",
       "handler": "handleTelegramStorefrontPatch",
       "routeLine": 3903,
       "authentication": [
@@ -3615,7 +3615,7 @@
         "startLine": 523,
         "endLine": 535
       },
-      "classification": "needs-review",
+      "classification": "mixed",
       "testCandidates": [
         "phase0/tg1-telegram-storefront-regression.mjs"
       ],
@@ -3625,7 +3625,7 @@
       "id": 64,
       "method": "POST",
       "pattern": "^\\/catalog\\/([^/]+)$",
-      "path": "/catalog/([^/]+)",
+      "path": "/catalog/:param",
       "handler": "handleCatalogPost",
       "routeLine": 3904,
       "authentication": [
@@ -3728,7 +3728,7 @@
       "id": 66,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/customers$",
-      "path": "/tenants/([^/]+)/customers",
+      "path": "/tenants/:param/customers",
       "handler": "handleCustomersList",
       "routeLine": 3906,
       "authentication": [
@@ -3770,7 +3770,7 @@
         "startLine": 1353,
         "endLine": 1366
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -3778,7 +3778,7 @@
       "id": 67,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/customers$",
-      "path": "/tenants/([^/]+)/customers",
+      "path": "/tenants/:param/customers",
       "handler": "handleCustomerCreate",
       "routeLine": 3907,
       "authentication": [
@@ -3818,7 +3818,7 @@
         "startLine": 1377,
         "endLine": 1386
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -3826,7 +3826,7 @@
       "id": 68,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/customers\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/customers/([^/]+)",
+      "path": "/tenants/:param/customers/:param",
       "handler": "handleCustomerGet",
       "routeLine": 3908,
       "authentication": [
@@ -3866,7 +3866,7 @@
         "startLine": 1367,
         "endLine": 1376
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -3874,7 +3874,7 @@
       "id": 69,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/customers\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/customers/([^/]+)",
+      "path": "/tenants/:param/customers/:param",
       "handler": "handleCustomerPatch",
       "routeLine": 3909,
       "authentication": [
@@ -3914,7 +3914,7 @@
         "startLine": 1387,
         "endLine": 1396
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -3922,7 +3922,7 @@
       "id": 70,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/pricing$",
-      "path": "/tenants/([^/]+)/b2b/pricing",
+      "path": "/tenants/:param/b2b/pricing",
       "handler": "handleCustomerPricing",
       "routeLine": 3910,
       "authentication": [
@@ -3961,7 +3961,7 @@
         "startLine": 1397,
         "endLine": 1419
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-56-b2b-customer-pricing-frontend-authority-regression.mjs",
         "phase0/phase11.3-b2b-custom-pricing-regression.mjs"
@@ -3972,7 +3972,7 @@
       "id": 71,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/pricing$",
-      "path": "/tenants/([^/]+)/b2b/pricing",
+      "path": "/tenants/:param/b2b/pricing",
       "handler": "handleCustomerPricing",
       "routeLine": 3911,
       "authentication": [
@@ -4011,7 +4011,7 @@
         "startLine": 1397,
         "endLine": 1419
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-56-b2b-customer-pricing-frontend-authority-regression.mjs",
         "phase0/phase11.3-b2b-custom-pricing-regression.mjs"
@@ -4022,7 +4022,7 @@
       "id": 72,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/pricing\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/b2b/pricing/([^/]+)",
+      "path": "/tenants/:param/b2b/pricing/:param",
       "handler": "handleCustomerPricing",
       "routeLine": 3912,
       "authentication": [
@@ -4061,7 +4061,7 @@
         "startLine": 1397,
         "endLine": 1419
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-56-b2b-customer-pricing-frontend-authority-regression.mjs",
         "phase0/phase11.3-b2b-custom-pricing-regression.mjs"
@@ -4072,7 +4072,7 @@
       "id": 73,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/pricing\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/b2b/pricing/([^/]+)",
+      "path": "/tenants/:param/b2b/pricing/:param",
       "handler": "handleCustomerPricing",
       "routeLine": 3913,
       "authentication": [
@@ -4111,7 +4111,7 @@
         "startLine": 1397,
         "endLine": 1419
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-56-b2b-customer-pricing-frontend-authority-regression.mjs",
         "phase0/phase11.3-b2b-custom-pricing-regression.mjs"
@@ -4122,7 +4122,7 @@
       "id": 74,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capabilities$",
-      "path": "/tenants/([^/]+)/supplier-network/capabilities",
+      "path": "/tenants/:param/supplier-network/capabilities",
       "handler": "handleSupplierNetworkCapabilities",
       "routeLine": 3914,
       "authentication": [
@@ -4166,7 +4166,7 @@
         "startLine": 1420,
         "endLine": 1451
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -4190,7 +4190,7 @@
       "id": 75,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capabilities$",
-      "path": "/tenants/([^/]+)/supplier-network/capabilities",
+      "path": "/tenants/:param/supplier-network/capabilities",
       "handler": "handleSupplierNetworkCapabilities",
       "routeLine": 3915,
       "authentication": [
@@ -4234,7 +4234,7 @@
         "startLine": 1420,
         "endLine": 1451
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -4258,7 +4258,7 @@
       "id": 76,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capabilities\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/supplier-network/capabilities/([^/]+)",
+      "path": "/tenants/:param/supplier-network/capabilities/:param",
       "handler": "handleSupplierNetworkCapabilities",
       "routeLine": 3916,
       "authentication": [
@@ -4302,7 +4302,7 @@
         "startLine": 1420,
         "endLine": 1451
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -4326,7 +4326,7 @@
       "id": 77,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capabilities\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/supplier-network/capabilities/([^/]+)",
+      "path": "/tenants/:param/supplier-network/capabilities/:param",
       "handler": "handleSupplierNetworkCapabilities",
       "routeLine": 3917,
       "authentication": [
@@ -4370,7 +4370,7 @@
         "startLine": 1420,
         "endLine": 1451
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -4394,7 +4394,7 @@
       "id": 78,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capabilities\\/([^/]+)\\/(activate|deactivate)$",
-      "path": "/tenants/([^/]+)/supplier-network/capabilities/([^/]+)/(activate|deactivate)",
+      "path": "/tenants/:param/supplier-network/capabilities/:param/(activate|deactivate)",
       "handler": "handleSupplierNetworkCapabilities",
       "routeLine": 3918,
       "authentication": [
@@ -4438,7 +4438,7 @@
         "startLine": 1420,
         "endLine": 1451
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -4462,7 +4462,7 @@
       "id": 79,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/catalog$",
-      "path": "/tenants/([^/]+)/supplier-network/catalog",
+      "path": "/tenants/:param/supplier-network/catalog",
       "handler": "handleSupplierNetworkCatalog",
       "routeLine": 3919,
       "authentication": [
@@ -4506,7 +4506,7 @@
         "startLine": 1452,
         "endLine": 1476
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/first-experience-service-catalog-contract-regression.mjs",
         "phase0/first-experience-service-catalog-frontend-sync-regression.mjs",
@@ -4530,7 +4530,7 @@
       "id": 80,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/catalog$",
-      "path": "/tenants/([^/]+)/supplier-network/catalog",
+      "path": "/tenants/:param/supplier-network/catalog",
       "handler": "handleSupplierNetworkCatalog",
       "routeLine": 3920,
       "authentication": [
@@ -4574,7 +4574,7 @@
         "startLine": 1452,
         "endLine": 1476
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/first-experience-service-catalog-contract-regression.mjs",
         "phase0/first-experience-service-catalog-frontend-sync-regression.mjs",
@@ -4598,7 +4598,7 @@
       "id": 81,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/catalog\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/supplier-network/catalog/([^/]+)",
+      "path": "/tenants/:param/supplier-network/catalog/:param",
       "handler": "handleSupplierNetworkCatalog",
       "routeLine": 3921,
       "authentication": [
@@ -4642,7 +4642,7 @@
         "startLine": 1452,
         "endLine": 1476
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/first-experience-service-catalog-contract-regression.mjs",
         "phase0/first-experience-service-catalog-frontend-sync-regression.mjs",
@@ -4666,7 +4666,7 @@
       "id": 82,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/catalog\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/supplier-network/catalog/([^/]+)",
+      "path": "/tenants/:param/supplier-network/catalog/:param",
       "handler": "handleSupplierNetworkCatalog",
       "routeLine": 3922,
       "authentication": [
@@ -4710,7 +4710,7 @@
         "startLine": 1452,
         "endLine": 1476
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/first-experience-service-catalog-contract-regression.mjs",
         "phase0/first-experience-service-catalog-frontend-sync-regression.mjs",
@@ -4734,7 +4734,7 @@
       "id": 83,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/catalog\\/([^/]+)\\/(activate|deactivate)$",
-      "path": "/tenants/([^/]+)/supplier-network/catalog/([^/]+)/(activate|deactivate)",
+      "path": "/tenants/:param/supplier-network/catalog/:param/(activate|deactivate)",
       "handler": "handleSupplierNetworkCatalog",
       "routeLine": 3923,
       "authentication": [
@@ -4778,7 +4778,7 @@
         "startLine": 1452,
         "endLine": 1476
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/first-experience-service-catalog-contract-regression.mjs",
         "phase0/first-experience-service-catalog-frontend-sync-regression.mjs",
@@ -4802,7 +4802,7 @@
       "id": 84,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/qualifications$",
-      "path": "/tenants/([^/]+)/supplier-network/qualifications",
+      "path": "/tenants/:param/supplier-network/qualifications",
       "handler": "handleSupplierNetworkQualifications",
       "routeLine": 3924,
       "authentication": [
@@ -4846,7 +4846,7 @@
         "startLine": 1477,
         "endLine": 1484
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -4870,7 +4870,7 @@
       "id": 85,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/qualifications$",
-      "path": "/tenants/([^/]+)/supplier-network/qualifications",
+      "path": "/tenants/:param/supplier-network/qualifications",
       "handler": "handleSupplierNetworkQualifications",
       "routeLine": 3925,
       "authentication": [
@@ -4914,7 +4914,7 @@
         "startLine": 1477,
         "endLine": 1484
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -4938,7 +4938,7 @@
       "id": 86,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/qualifications\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/supplier-network/qualifications/([^/]+)",
+      "path": "/tenants/:param/supplier-network/qualifications/:param",
       "handler": "handleSupplierNetworkQualifications",
       "routeLine": 3926,
       "authentication": [
@@ -4982,7 +4982,7 @@
         "startLine": 1477,
         "endLine": 1484
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -5006,7 +5006,7 @@
       "id": 87,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/qualifications\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/supplier-network/qualifications/([^/]+)",
+      "path": "/tenants/:param/supplier-network/qualifications/:param",
       "handler": "handleSupplierNetworkQualifications",
       "routeLine": 3927,
       "authentication": [
@@ -5050,7 +5050,7 @@
         "startLine": 1477,
         "endLine": 1484
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -5074,7 +5074,7 @@
       "id": 88,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/qualifications\\/([^/]+)\\/(verify|document|revoke)$",
-      "path": "/tenants/([^/]+)/supplier-network/qualifications/([^/]+)/(verify|document|revoke)",
+      "path": "/tenants/:param/supplier-network/qualifications/:param/(verify|document|revoke)",
       "handler": "handleSupplierNetworkQualifications",
       "routeLine": 3928,
       "authentication": [
@@ -5118,7 +5118,7 @@
         "startLine": 1477,
         "endLine": 1484
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -5142,7 +5142,7 @@
       "id": 89,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/commercial-terms$",
-      "path": "/tenants/([^/]+)/supplier-network/commercial-terms",
+      "path": "/tenants/:param/supplier-network/commercial-terms",
       "handler": "handleSupplierNetworkCommercialTerms",
       "routeLine": 3929,
       "authentication": [
@@ -5186,7 +5186,7 @@
         "startLine": 1485,
         "endLine": 1492
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -5210,7 +5210,7 @@
       "id": 90,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/commercial-terms$",
-      "path": "/tenants/([^/]+)/supplier-network/commercial-terms",
+      "path": "/tenants/:param/supplier-network/commercial-terms",
       "handler": "handleSupplierNetworkCommercialTerms",
       "routeLine": 3930,
       "authentication": [
@@ -5254,7 +5254,7 @@
         "startLine": 1485,
         "endLine": 1492
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -5278,7 +5278,7 @@
       "id": 91,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/commercial-terms\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/supplier-network/commercial-terms/([^/]+)",
+      "path": "/tenants/:param/supplier-network/commercial-terms/:param",
       "handler": "handleSupplierNetworkCommercialTerms",
       "routeLine": 3931,
       "authentication": [
@@ -5322,7 +5322,7 @@
         "startLine": 1485,
         "endLine": 1492
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -5346,7 +5346,7 @@
       "id": 92,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/commercial-terms\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/supplier-network/commercial-terms/([^/]+)",
+      "path": "/tenants/:param/supplier-network/commercial-terms/:param",
       "handler": "handleSupplierNetworkCommercialTerms",
       "routeLine": 3932,
       "authentication": [
@@ -5390,7 +5390,7 @@
         "startLine": 1485,
         "endLine": 1492
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -5414,7 +5414,7 @@
       "id": 93,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/commercial-terms\\/([^/]+)\\/(activate|deactivate)$",
-      "path": "/tenants/([^/]+)/supplier-network/commercial-terms/([^/]+)/(activate|deactivate)",
+      "path": "/tenants/:param/supplier-network/commercial-terms/:param/(activate|deactivate)",
       "handler": "handleSupplierNetworkCommercialTerms",
       "routeLine": 3933,
       "authentication": [
@@ -5458,7 +5458,7 @@
         "startLine": 1485,
         "endLine": 1492
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -5482,7 +5482,7 @@
       "id": 94,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capacities$",
-      "path": "/tenants/([^/]+)/supplier-network/capacities",
+      "path": "/tenants/:param/supplier-network/capacities",
       "handler": "handleSupplierNetworkCapacities",
       "routeLine": 3934,
       "authentication": [
@@ -5526,7 +5526,7 @@
         "startLine": 1493,
         "endLine": 1500
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -5550,7 +5550,7 @@
       "id": 95,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capacities$",
-      "path": "/tenants/([^/]+)/supplier-network/capacities",
+      "path": "/tenants/:param/supplier-network/capacities",
       "handler": "handleSupplierNetworkCapacities",
       "routeLine": 3935,
       "authentication": [
@@ -5594,7 +5594,7 @@
         "startLine": 1493,
         "endLine": 1500
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -5618,7 +5618,7 @@
       "id": 96,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capacities\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/supplier-network/capacities/([^/]+)",
+      "path": "/tenants/:param/supplier-network/capacities/:param",
       "handler": "handleSupplierNetworkCapacities",
       "routeLine": 3936,
       "authentication": [
@@ -5662,7 +5662,7 @@
         "startLine": 1493,
         "endLine": 1500
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -5686,7 +5686,7 @@
       "id": 97,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capacities\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/supplier-network/capacities/([^/]+)",
+      "path": "/tenants/:param/supplier-network/capacities/:param",
       "handler": "handleSupplierNetworkCapacities",
       "routeLine": 3937,
       "authentication": [
@@ -5730,7 +5730,7 @@
         "startLine": 1493,
         "endLine": 1500
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -5754,7 +5754,7 @@
       "id": 98,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capacities\\/([^/]+)\\/(activate|deactivate)$",
-      "path": "/tenants/([^/]+)/supplier-network/capacities/([^/]+)/(activate|deactivate)",
+      "path": "/tenants/:param/supplier-network/capacities/:param/(activate|deactivate)",
       "handler": "handleSupplierNetworkCapacities",
       "routeLine": 3938,
       "authentication": [
@@ -5798,7 +5798,7 @@
         "startLine": 1493,
         "endLine": 1500
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -5822,7 +5822,7 @@
       "id": 99,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/service-areas$",
-      "path": "/tenants/([^/]+)/supplier-network/service-areas",
+      "path": "/tenants/:param/supplier-network/service-areas",
       "handler": "handleSupplierNetworkServiceAreas",
       "routeLine": 3939,
       "authentication": [
@@ -5866,7 +5866,7 @@
         "startLine": 1501,
         "endLine": 1513
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -5890,7 +5890,7 @@
       "id": 100,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/service-areas$",
-      "path": "/tenants/([^/]+)/supplier-network/service-areas",
+      "path": "/tenants/:param/supplier-network/service-areas",
       "handler": "handleSupplierNetworkServiceAreas",
       "routeLine": 3940,
       "authentication": [
@@ -5934,7 +5934,7 @@
         "startLine": 1501,
         "endLine": 1513
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -5958,7 +5958,7 @@
       "id": 101,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/service-areas\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/supplier-network/service-areas/([^/]+)",
+      "path": "/tenants/:param/supplier-network/service-areas/:param",
       "handler": "handleSupplierNetworkServiceAreas",
       "routeLine": 3941,
       "authentication": [
@@ -6002,7 +6002,7 @@
         "startLine": 1501,
         "endLine": 1513
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -6026,7 +6026,7 @@
       "id": 102,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/service-areas\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/supplier-network/service-areas/([^/]+)",
+      "path": "/tenants/:param/supplier-network/service-areas/:param",
       "handler": "handleSupplierNetworkServiceAreas",
       "routeLine": 3942,
       "authentication": [
@@ -6070,7 +6070,7 @@
         "startLine": 1501,
         "endLine": 1513
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -6094,7 +6094,7 @@
       "id": 103,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/service-areas\\/([^/]+)\\/(activate|deactivate)$",
-      "path": "/tenants/([^/]+)/supplier-network/service-areas/([^/]+)/(activate|deactivate)",
+      "path": "/tenants/:param/supplier-network/service-areas/:param/(activate|deactivate)",
       "handler": "handleSupplierNetworkServiceAreas",
       "routeLine": 3943,
       "authentication": [
@@ -6138,7 +6138,7 @@
         "startLine": 1501,
         "endLine": 1513
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -6162,7 +6162,7 @@
       "id": 104,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/trust$",
-      "path": "/tenants/([^/]+)/supplier-network/trust",
+      "path": "/tenants/:param/supplier-network/trust",
       "handler": "handleSupplierNetworkTrust",
       "routeLine": 3944,
       "authentication": [
@@ -6208,7 +6208,7 @@
         "startLine": 1526,
         "endLine": 1532
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -6232,7 +6232,7 @@
       "id": 105,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/marketplace-integration(?:\\/([^/]+))?$",
-      "path": "/tenants/([^/]+)/supplier-network/marketplace-integration(?:/([^/]+))?",
+      "path": "/tenants/:param/supplier-network/marketplace-integration(?:/:param)?",
       "handler": "handleSupplierNetworkMarketplaceIntegration",
       "routeLine": 3945,
       "authentication": [
@@ -6272,7 +6272,7 @@
         "startLine": 1514,
         "endLine": 1515
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -6296,7 +6296,7 @@
       "id": 106,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/discovery$",
-      "path": "/tenants/([^/]+)/supplier-network/discovery",
+      "path": "/tenants/:param/supplier-network/discovery",
       "handler": "handleSupplierNetworkDiscovery",
       "routeLine": 3946,
       "authentication": [
@@ -6336,7 +6336,7 @@
         "startLine": 1516,
         "endLine": 1525
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/first-experience-ecosystem-discovery-regression.mjs",
         "phase0/first-experience-visitor-discovery-regression.mjs",
@@ -6360,7 +6360,7 @@
       "id": 107,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/discovery$",
-      "path": "/tenants/([^/]+)/supplier-network/discovery",
+      "path": "/tenants/:param/supplier-network/discovery",
       "handler": "handleSupplierNetworkDiscovery",
       "routeLine": 3947,
       "authentication": [
@@ -6400,7 +6400,7 @@
         "startLine": 1516,
         "endLine": 1525
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/first-experience-ecosystem-discovery-regression.mjs",
         "phase0/first-experience-visitor-discovery-regression.mjs",
@@ -6424,7 +6424,7 @@
       "id": 108,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/trust\\/([^/]+)\\/refresh$",
-      "path": "/tenants/([^/]+)/supplier-network/trust/([^/]+)/refresh",
+      "path": "/tenants/:param/supplier-network/trust/:param/refresh",
       "handler": "handleSupplierNetworkTrust",
       "routeLine": 3948,
       "authentication": [
@@ -6470,7 +6470,7 @@
         "startLine": 1526,
         "endLine": 1532
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/inventory-refresh-behavior-regression.mjs",
@@ -6494,7 +6494,7 @@
       "id": 109,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/trust\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/supplier-network/trust/([^/]+)",
+      "path": "/tenants/:param/supplier-network/trust/:param",
       "handler": "handleSupplierNetworkTrust",
       "routeLine": 3949,
       "authentication": [
@@ -6540,7 +6540,7 @@
         "startLine": 1526,
         "endLine": 1532
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -6564,7 +6564,7 @@
       "id": 110,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/performance$",
-      "path": "/tenants/([^/]+)/supplier-network/performance",
+      "path": "/tenants/:param/supplier-network/performance",
       "handler": "handleSupplierNetworkPerformance",
       "routeLine": 3950,
       "authentication": [
@@ -6611,7 +6611,7 @@
         "startLine": 1533,
         "endLine": 1539
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -6635,7 +6635,7 @@
       "id": 111,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/performance\\/([^/]+)\\/recalculate$",
-      "path": "/tenants/([^/]+)/supplier-network/performance/([^/]+)/recalculate",
+      "path": "/tenants/:param/supplier-network/performance/:param/recalculate",
       "handler": "handleSupplierNetworkPerformance",
       "routeLine": 3951,
       "authentication": [
@@ -6682,7 +6682,7 @@
         "startLine": 1533,
         "endLine": 1539
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -6706,7 +6706,7 @@
       "id": 112,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/performance\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/supplier-network/performance/([^/]+)",
+      "path": "/tenants/:param/supplier-network/performance/:param",
       "handler": "handleSupplierNetworkPerformance",
       "routeLine": 3952,
       "authentication": [
@@ -6753,7 +6753,7 @@
         "startLine": 1533,
         "endLine": 1539
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/phase18.1-supplier-network-profile-regression.mjs",
@@ -6777,7 +6777,7 @@
       "id": 113,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/profile$",
-      "path": "/tenants/([^/]+)/supplier-network/profile",
+      "path": "/tenants/:param/supplier-network/profile",
       "handler": "handleSupplierNetworkProfile",
       "routeLine": 3953,
       "authentication": [
@@ -6819,7 +6819,7 @@
         "startLine": 1540,
         "endLine": 1565
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/logistics-capacity-profile-regression.mjs",
@@ -6843,7 +6843,7 @@
       "id": 114,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/profile$",
-      "path": "/tenants/([^/]+)/supplier-network/profile",
+      "path": "/tenants/:param/supplier-network/profile",
       "handler": "handleSupplierNetworkProfile",
       "routeLine": 3954,
       "authentication": [
@@ -6885,7 +6885,7 @@
         "startLine": 1540,
         "endLine": 1565
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/logistics-capacity-profile-regression.mjs",
@@ -6909,7 +6909,7 @@
       "id": 115,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/profile$",
-      "path": "/tenants/([^/]+)/supplier-network/profile",
+      "path": "/tenants/:param/supplier-network/profile",
       "handler": "handleSupplierNetworkProfile",
       "routeLine": 3955,
       "authentication": [
@@ -6951,7 +6951,7 @@
         "startLine": 1540,
         "endLine": 1565
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/logistics-capacity-profile-regression.mjs",
@@ -6975,7 +6975,7 @@
       "id": 116,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/profile\\/(publish|suspend|draft)$",
-      "path": "/tenants/([^/]+)/supplier-network/profile/(publish|suspend|draft)",
+      "path": "/tenants/:param/supplier-network/profile/(publish|suspend|draft)",
       "handler": "handleSupplierNetworkProfile",
       "routeLine": 3956,
       "authentication": [
@@ -7017,7 +7017,7 @@
         "startLine": 1540,
         "endLine": 1565
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-supplier-network-contextual-role-regression.mjs",
         "phase0/logistics-capacity-profile-regression.mjs",
@@ -7041,7 +7041,7 @@
       "id": 117,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/supplier-relationships$",
-      "path": "/tenants/([^/]+)/procurement/supplier-relationships",
+      "path": "/tenants/:param/procurement/supplier-relationships",
       "handler": "handleProcurementSupplierRelationships",
       "routeLine": 3957,
       "authentication": [
@@ -7093,7 +7093,7 @@
         "startLine": 1671,
         "endLine": 1692
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -7117,7 +7117,7 @@
       "id": 118,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/supplier-relationships$",
-      "path": "/tenants/([^/]+)/procurement/supplier-relationships",
+      "path": "/tenants/:param/procurement/supplier-relationships",
       "handler": "handleProcurementSupplierRelationships",
       "routeLine": 3958,
       "authentication": [
@@ -7169,7 +7169,7 @@
         "startLine": 1671,
         "endLine": 1692
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -7193,7 +7193,7 @@
       "id": 119,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/supplier-relationships\\/([^/]+)\\/(active|declined|blocked|suspended)$",
-      "path": "/tenants/([^/]+)/procurement/supplier-relationships/([^/]+)/(active|declined|blocked|suspended)",
+      "path": "/tenants/:param/procurement/supplier-relationships/:param/(active|declined|blocked|suspended)",
       "handler": "handleProcurementSupplierRelationships",
       "routeLine": 3959,
       "authentication": [
@@ -7245,7 +7245,7 @@
         "startLine": 1671,
         "endLine": 1692
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -7269,7 +7269,7 @@
       "id": 120,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/rfqs$",
-      "path": "/tenants/([^/]+)/procurement/rfqs",
+      "path": "/tenants/:param/procurement/rfqs",
       "handler": "handleProcurementRfqs",
       "routeLine": 3960,
       "authentication": [
@@ -7319,7 +7319,7 @@
         "startLine": 1620,
         "endLine": 1655
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -7343,7 +7343,7 @@
       "id": 121,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/rfqs$",
-      "path": "/tenants/([^/]+)/procurement/rfqs",
+      "path": "/tenants/:param/procurement/rfqs",
       "handler": "handleProcurementRfqs",
       "routeLine": 3961,
       "authentication": [
@@ -7393,7 +7393,7 @@
         "startLine": 1620,
         "endLine": 1655
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -7417,7 +7417,7 @@
       "id": 122,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/rfqs\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/procurement/rfqs/([^/]+)",
+      "path": "/tenants/:param/procurement/rfqs/:param",
       "handler": "handleProcurementRfqs",
       "routeLine": 3962,
       "authentication": [
@@ -7467,7 +7467,7 @@
         "startLine": 1620,
         "endLine": 1655
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -7491,7 +7491,7 @@
       "id": 123,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/rfqs\\/([^/]+)\\/(send|close|cancel)$",
-      "path": "/tenants/([^/]+)/procurement/rfqs/([^/]+)/(send|close|cancel)",
+      "path": "/tenants/:param/procurement/rfqs/:param/(send|close|cancel)",
       "handler": "handleProcurementRfqs",
       "routeLine": 3963,
       "authentication": [
@@ -7541,7 +7541,7 @@
         "startLine": 1620,
         "endLine": 1655
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -7565,7 +7565,7 @@
       "id": 124,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/rfqs\\/([^/]+)\\/responses$",
-      "path": "/tenants/([^/]+)/procurement/rfqs/([^/]+)/responses",
+      "path": "/tenants/:param/procurement/rfqs/:param/responses",
       "handler": "handleProcurementRfqResponses",
       "routeLine": 3964,
       "authentication": [
@@ -7611,7 +7611,7 @@
         "startLine": 1656,
         "endLine": 1670
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -7635,7 +7635,7 @@
       "id": 125,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/rfqs\\/([^/]+)\\/responses\\/([^/]+)\\/submit$",
-      "path": "/tenants/([^/]+)/procurement/rfqs/([^/]+)/responses/([^/]+)/submit",
+      "path": "/tenants/:param/procurement/rfqs/:param/responses/:param/submit",
       "handler": "handleProcurementRfqResponses",
       "routeLine": 3965,
       "authentication": [
@@ -7681,7 +7681,7 @@
         "startLine": 1656,
         "endLine": 1670
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -7705,7 +7705,7 @@
       "id": 126,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/awards$",
-      "path": "/tenants/([^/]+)/procurement/awards",
+      "path": "/tenants/:param/procurement/awards",
       "handler": "handleProcurementAwards",
       "routeLine": 3966,
       "authentication": [
@@ -7754,7 +7754,7 @@
         "startLine": 1693,
         "endLine": 1726
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -7778,7 +7778,7 @@
       "id": 127,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/awards$",
-      "path": "/tenants/([^/]+)/procurement/awards",
+      "path": "/tenants/:param/procurement/awards",
       "handler": "handleProcurementAwards",
       "routeLine": 3967,
       "authentication": [
@@ -7827,7 +7827,7 @@
         "startLine": 1693,
         "endLine": 1726
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -7851,7 +7851,7 @@
       "id": 128,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/awards\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/procurement/awards/([^/]+)",
+      "path": "/tenants/:param/procurement/awards/:param",
       "handler": "handleProcurementAwards",
       "routeLine": 3968,
       "authentication": [
@@ -7900,7 +7900,7 @@
         "startLine": 1693,
         "endLine": 1726
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -7924,7 +7924,7 @@
       "id": 129,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/awards\\/([^/]+)\\/(confirm|cancel)$",
-      "path": "/tenants/([^/]+)/procurement/awards/([^/]+)/(confirm|cancel)",
+      "path": "/tenants/:param/procurement/awards/:param/(confirm|cancel)",
       "handler": "handleProcurementAwards",
       "routeLine": 3969,
       "authentication": [
@@ -7973,7 +7973,7 @@
         "startLine": 1693,
         "endLine": 1726
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -7997,7 +7997,7 @@
       "id": 130,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/comparisons$",
-      "path": "/tenants/([^/]+)/procurement/comparisons",
+      "path": "/tenants/:param/procurement/comparisons",
       "handler": "handleProcurementComparisons",
       "routeLine": 3970,
       "authentication": [
@@ -8035,7 +8035,7 @@
         "startLine": 1727,
         "endLine": 1752
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -8059,7 +8059,7 @@
       "id": 131,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/comparisons$",
-      "path": "/tenants/([^/]+)/procurement/comparisons",
+      "path": "/tenants/:param/procurement/comparisons",
       "handler": "handleProcurementComparisons",
       "routeLine": 3971,
       "authentication": [
@@ -8097,7 +8097,7 @@
         "startLine": 1727,
         "endLine": 1752
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -8121,7 +8121,7 @@
       "id": 132,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/comparisons\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/procurement/comparisons/([^/]+)",
+      "path": "/tenants/:param/procurement/comparisons/:param",
       "handler": "handleProcurementComparisons",
       "routeLine": 3972,
       "authentication": [
@@ -8159,7 +8159,7 @@
         "startLine": 1727,
         "endLine": 1752
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -8183,7 +8183,7 @@
       "id": 133,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/demands$",
-      "path": "/tenants/([^/]+)/procurement/demands",
+      "path": "/tenants/:param/procurement/demands",
       "handler": "handleProcurementDemands",
       "routeLine": 3973,
       "authentication": [
@@ -8240,7 +8240,7 @@
         "startLine": 1566,
         "endLine": 1619
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -8264,7 +8264,7 @@
       "id": 134,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/demands$",
-      "path": "/tenants/([^/]+)/procurement/demands",
+      "path": "/tenants/:param/procurement/demands",
       "handler": "handleProcurementDemands",
       "routeLine": 3974,
       "authentication": [
@@ -8321,7 +8321,7 @@
         "startLine": 1566,
         "endLine": 1619
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -8345,7 +8345,7 @@
       "id": 135,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/demands\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/procurement/demands/([^/]+)",
+      "path": "/tenants/:param/procurement/demands/:param",
       "handler": "handleProcurementDemands",
       "routeLine": 3975,
       "authentication": [
@@ -8402,7 +8402,7 @@
         "startLine": 1566,
         "endLine": 1619
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -8426,7 +8426,7 @@
       "id": 136,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/demands\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/procurement/demands/([^/]+)",
+      "path": "/tenants/:param/procurement/demands/:param",
       "handler": "handleProcurementDemands",
       "routeLine": 3976,
       "authentication": [
@@ -8483,7 +8483,7 @@
         "startLine": 1566,
         "endLine": 1619
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -8507,7 +8507,7 @@
       "id": 137,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/demands\\/([^/]+)\\/submit$",
-      "path": "/tenants/([^/]+)/procurement/demands/([^/]+)/submit",
+      "path": "/tenants/:param/procurement/demands/:param/submit",
       "handler": "handleProcurementDemands",
       "routeLine": 3977,
       "authentication": [
@@ -8564,7 +8564,7 @@
         "startLine": 1566,
         "endLine": 1619
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -8588,7 +8588,7 @@
       "id": 138,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/demands\\/([^/]+)\\/cancel$",
-      "path": "/tenants/([^/]+)/procurement/demands/([^/]+)/cancel",
+      "path": "/tenants/:param/procurement/demands/:param/cancel",
       "handler": "handleProcurementDemands",
       "routeLine": 3978,
       "authentication": [
@@ -8645,7 +8645,7 @@
         "startLine": 1566,
         "endLine": 1619
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -8669,7 +8669,7 @@
       "id": 139,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/demands\\/([^/]+)\\/start-sourcing$",
-      "path": "/tenants/([^/]+)/procurement/demands/([^/]+)/start-sourcing",
+      "path": "/tenants/:param/procurement/demands/:param/start-sourcing",
       "handler": "handleProcurementDemands",
       "routeLine": 3979,
       "authentication": [
@@ -8726,7 +8726,7 @@
         "startLine": 1566,
         "endLine": 1619
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -8750,7 +8750,7 @@
       "id": 140,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/quotes$",
-      "path": "/tenants/([^/]+)/b2b/quotes",
+      "path": "/tenants/:param/b2b/quotes",
       "handler": "handleB2BQuotes",
       "routeLine": 3980,
       "authentication": [
@@ -8789,7 +8789,7 @@
         "startLine": 1753,
         "endLine": 1779
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-53-b2b-quotes-frontend-authority-regression.mjs",
         "phase0/phase11.3-b2b-quotes-regression.mjs"
@@ -8800,7 +8800,7 @@
       "id": 141,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/quotes$",
-      "path": "/tenants/([^/]+)/b2b/quotes",
+      "path": "/tenants/:param/b2b/quotes",
       "handler": "handleB2BQuotes",
       "routeLine": 3981,
       "authentication": [
@@ -8839,7 +8839,7 @@
         "startLine": 1753,
         "endLine": 1779
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-53-b2b-quotes-frontend-authority-regression.mjs",
         "phase0/phase11.3-b2b-quotes-regression.mjs"
@@ -8850,7 +8850,7 @@
       "id": 142,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/quotes\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/b2b/quotes/([^/]+)",
+      "path": "/tenants/:param/b2b/quotes/:param",
       "handler": "handleB2BQuotes",
       "routeLine": 3982,
       "authentication": [
@@ -8889,7 +8889,7 @@
         "startLine": 1753,
         "endLine": 1779
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-53-b2b-quotes-frontend-authority-regression.mjs",
         "phase0/phase11.3-b2b-quotes-regression.mjs"
@@ -8900,7 +8900,7 @@
       "id": 143,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/quotes\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/b2b/quotes/([^/]+)",
+      "path": "/tenants/:param/b2b/quotes/:param",
       "handler": "handleB2BQuotes",
       "routeLine": 3983,
       "authentication": [
@@ -8939,7 +8939,7 @@
         "startLine": 1753,
         "endLine": 1779
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-53-b2b-quotes-frontend-authority-regression.mjs",
         "phase0/phase11.3-b2b-quotes-regression.mjs"
@@ -8950,7 +8950,7 @@
       "id": 144,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/receipts$",
-      "path": "/tenants/([^/]+)/procurement/receipts",
+      "path": "/tenants/:param/procurement/receipts",
       "handler": "handleProcurementReceipts",
       "routeLine": 3984,
       "authentication": [
@@ -8999,7 +8999,7 @@
         "startLine": 1813,
         "endLine": 1840
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -9023,7 +9023,7 @@
       "id": 145,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/receipts\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/procurement/receipts/([^/]+)",
+      "path": "/tenants/:param/procurement/receipts/:param",
       "handler": "handleProcurementReceipts",
       "routeLine": 3985,
       "authentication": [
@@ -9072,7 +9072,7 @@
         "startLine": 1813,
         "endLine": 1840
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -9096,7 +9096,7 @@
       "id": 146,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/purchase-orders\\/([^/]+)\\/receipts$",
-      "path": "/tenants/([^/]+)/procurement/purchase-orders/([^/]+)/receipts",
+      "path": "/tenants/:param/procurement/purchase-orders/:param/receipts",
       "handler": "handleProcurementReceipts",
       "routeLine": 3986,
       "authentication": [
@@ -9145,7 +9145,7 @@
         "startLine": 1813,
         "endLine": 1840
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -9169,7 +9169,7 @@
       "id": 147,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/purchase-orders\\/([^/]+)\\/receipts$",
-      "path": "/tenants/([^/]+)/procurement/purchase-orders/([^/]+)/receipts",
+      "path": "/tenants/:param/procurement/purchase-orders/:param/receipts",
       "handler": "handleProcurementReceipts",
       "routeLine": 3987,
       "authentication": [
@@ -9218,7 +9218,7 @@
         "startLine": 1813,
         "endLine": 1840
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-procurement-contextual-role-regression.mjs",
         "phase0/p0-03-procurement-receiving-ui-regression.mjs",
@@ -9242,7 +9242,7 @@
       "id": 148,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/purchase-orders$",
-      "path": "/tenants/([^/]+)/b2b/purchase-orders",
+      "path": "/tenants/:param/b2b/purchase-orders",
       "handler": "handleB2BPurchaseOrders",
       "routeLine": 3988,
       "authentication": [
@@ -9294,7 +9294,7 @@
         "startLine": 1780,
         "endLine": 1812
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -9302,7 +9302,7 @@
       "id": 149,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/purchase-orders$",
-      "path": "/tenants/([^/]+)/b2b/purchase-orders",
+      "path": "/tenants/:param/b2b/purchase-orders",
       "handler": "handleB2BPurchaseOrders",
       "routeLine": 3989,
       "authentication": [
@@ -9354,7 +9354,7 @@
         "startLine": 1780,
         "endLine": 1812
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -9362,7 +9362,7 @@
       "id": 150,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/purchase-orders\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/b2b/purchase-orders/([^/]+)",
+      "path": "/tenants/:param/b2b/purchase-orders/:param",
       "handler": "handleB2BPurchaseOrders",
       "routeLine": 3990,
       "authentication": [
@@ -9414,7 +9414,7 @@
         "startLine": 1780,
         "endLine": 1812
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -9422,7 +9422,7 @@
       "id": 151,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/purchase-orders\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/b2b/purchase-orders/([^/]+)",
+      "path": "/tenants/:param/b2b/purchase-orders/:param",
       "handler": "handleB2BPurchaseOrders",
       "routeLine": 3991,
       "authentication": [
@@ -9474,7 +9474,7 @@
         "startLine": 1780,
         "endLine": 1812
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -9482,7 +9482,7 @@
       "id": 152,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/credit-terms$",
-      "path": "/tenants/([^/]+)/b2b/credit-terms",
+      "path": "/tenants/:param/b2b/credit-terms",
       "handler": "handleB2BCreditTerms",
       "routeLine": 3992,
       "authentication": [
@@ -9522,7 +9522,7 @@
         "startLine": 1841,
         "endLine": 1873
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/phase11.3-b2b-credit-terms-regression.mjs"
       ],
@@ -9532,7 +9532,7 @@
       "id": 153,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/credit-terms$",
-      "path": "/tenants/([^/]+)/b2b/credit-terms",
+      "path": "/tenants/:param/b2b/credit-terms",
       "handler": "handleB2BCreditTerms",
       "routeLine": 3993,
       "authentication": [
@@ -9572,7 +9572,7 @@
         "startLine": 1841,
         "endLine": 1873
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/phase11.3-b2b-credit-terms-regression.mjs"
       ],
@@ -9582,7 +9582,7 @@
       "id": 154,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/credit-terms\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/b2b/credit-terms/([^/]+)",
+      "path": "/tenants/:param/b2b/credit-terms/:param",
       "handler": "handleB2BCreditTerms",
       "routeLine": 3994,
       "authentication": [
@@ -9622,7 +9622,7 @@
         "startLine": 1841,
         "endLine": 1873
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/phase11.3-b2b-credit-terms-regression.mjs"
       ],
@@ -9632,7 +9632,7 @@
       "id": 155,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/credit-terms\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/b2b/credit-terms/([^/]+)",
+      "path": "/tenants/:param/b2b/credit-terms/:param",
       "handler": "handleB2BCreditTerms",
       "routeLine": 3995,
       "authentication": [
@@ -9672,7 +9672,7 @@
         "startLine": 1841,
         "endLine": 1873
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/phase11.3-b2b-credit-terms-regression.mjs"
       ],
@@ -9682,7 +9682,7 @@
       "id": 156,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/inventory\\/movements$",
-      "path": "/tenants/([^/]+)/inventory/movements",
+      "path": "/tenants/:param/inventory/movements",
       "handler": "handleInventoryMovementsList",
       "routeLine": 3996,
       "authentication": [
@@ -9729,7 +9729,7 @@
         "startLine": 1874,
         "endLine": 1893
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-46-canonical-inventory-mutation-regression.mjs",
         "phase0/fux-47-canonical-inventory-projection-regression.mjs",
@@ -9753,7 +9753,7 @@
       "id": 157,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/inventory\\/balances$",
-      "path": "/tenants/([^/]+)/inventory/balances",
+      "path": "/tenants/:param/inventory/balances",
       "handler": "handleInventoryBalances",
       "routeLine": 3997,
       "authentication": [
@@ -9798,7 +9798,7 @@
         "startLine": 1894,
         "endLine": 1909
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-46-canonical-inventory-mutation-regression.mjs",
         "phase0/fux-47-canonical-inventory-projection-regression.mjs",
@@ -9822,7 +9822,7 @@
       "id": 158,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/inventory\\/movements\\/batch$",
-      "path": "/tenants/([^/]+)/inventory/movements/batch",
+      "path": "/tenants/:param/inventory/movements/batch",
       "handler": "handleInventoryMovementBatchCreate",
       "routeLine": 3998,
       "authentication": [
@@ -9869,7 +9869,7 @@
         "startLine": 1948,
         "endLine": 1966
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-46-canonical-inventory-mutation-regression.mjs",
         "phase0/fux-47-canonical-inventory-projection-regression.mjs",
@@ -9893,7 +9893,7 @@
       "id": 159,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/inventory\\/movements$",
-      "path": "/tenants/([^/]+)/inventory/movements",
+      "path": "/tenants/:param/inventory/movements",
       "handler": "handleInventoryMovementCreate",
       "routeLine": 3999,
       "authentication": [
@@ -9938,7 +9938,7 @@
         "startLine": 1910,
         "endLine": 1924
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-46-canonical-inventory-mutation-regression.mjs",
         "phase0/fux-47-canonical-inventory-projection-regression.mjs",
@@ -9962,7 +9962,7 @@
       "id": 160,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/locations$",
-      "path": "/tenants/([^/]+)/locations",
+      "path": "/tenants/:param/locations",
       "handler": "handleLocationsList",
       "routeLine": 4000,
       "authentication": [
@@ -10002,7 +10002,7 @@
         "startLine": 1967,
         "endLine": 1976
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/phase13.12.6-location-scope-gate-regression.mjs"
       ],
@@ -10012,7 +10012,7 @@
       "id": 161,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/locations$",
-      "path": "/tenants/([^/]+)/locations",
+      "path": "/tenants/:param/locations",
       "handler": "handleLocationCreate",
       "routeLine": 4001,
       "authentication": [
@@ -10052,7 +10052,7 @@
         "startLine": 1977,
         "endLine": 1986
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/phase13.12.6-location-scope-gate-regression.mjs"
       ],
@@ -10062,7 +10062,7 @@
       "id": 162,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/locations\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/locations/([^/]+)",
+      "path": "/tenants/:param/locations/:param",
       "handler": "handleLocationPatch",
       "routeLine": 4002,
       "authentication": [
@@ -10103,7 +10103,7 @@
         "startLine": 1987,
         "endLine": 1996
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/phase13.12.6-location-scope-gate-regression.mjs"
       ],
@@ -10113,7 +10113,7 @@
       "id": 163,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/authorization\\/scope-context$",
-      "path": "/tenants/([^/]+)/authorization/scope-context",
+      "path": "/tenants/:param/authorization/scope-context",
       "handler": "handleAuthorizationScopeContext",
       "routeLine": 4003,
       "authentication": [
@@ -10177,7 +10177,7 @@
       "id": 164,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/authorization\\/conditions-contract$",
-      "path": "/tenants/([^/]+)/authorization/conditions-contract",
+      "path": "/tenants/:param/authorization/conditions-contract",
       "handler": "handleAuthorizationConditionsContract",
       "routeLine": 4004,
       "authentication": [
@@ -10237,7 +10237,7 @@
       "id": 165,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/authorization\\/role-matrix$",
-      "path": "/tenants/([^/]+)/authorization/role-matrix",
+      "path": "/tenants/:param/authorization/role-matrix",
       "handler": "handleAuthorizationRoleMatrix",
       "routeLine": 4005,
       "authentication": [
@@ -10298,7 +10298,7 @@
       "id": 166,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/authorization\\/iam-certification$",
-      "path": "/tenants/([^/]+)/authorization/iam-certification",
+      "path": "/tenants/:param/authorization/iam-certification",
       "handler": "handleAuthorizationIamCertification",
       "routeLine": 4006,
       "authentication": [
@@ -10359,7 +10359,7 @@
       "id": 167,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/business-template$",
-      "path": "/tenants/([^/]+)/business-template",
+      "path": "/tenants/:param/business-template",
       "handler": "handleBusinessTemplateConfig",
       "routeLine": 4007,
       "authentication": [
@@ -10405,7 +10405,7 @@
       "id": 168,
       "method": "PUT",
       "pattern": "^\\/tenants\\/([^/]+)\\/business-template$",
-      "path": "/tenants/([^/]+)/business-template",
+      "path": "/tenants/:param/business-template",
       "handler": "handleBusinessTemplateConfig",
       "routeLine": 4008,
       "authentication": [
@@ -10451,7 +10451,7 @@
       "id": 169,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/business-template$",
-      "path": "/tenants/([^/]+)/business-template",
+      "path": "/tenants/:param/business-template",
       "handler": "handleBusinessTemplateConfig",
       "routeLine": 4009,
       "authentication": [
@@ -10497,7 +10497,7 @@
       "id": 170,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)$",
-      "path": "/tenants/([^/]+)",
+      "path": "/tenants/:param",
       "handler": "handleTenantPatch",
       "routeLine": 4010,
       "authentication": [
@@ -10542,7 +10542,7 @@
         "startLine": 2165,
         "endLine": 2238
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -10550,7 +10550,7 @@
       "id": 171,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)$",
-      "path": "/tenants/([^/]+)",
+      "path": "/tenants/:param",
       "handler": "handleTenantPatch",
       "routeLine": 4011,
       "authentication": [
@@ -10595,7 +10595,7 @@
         "startLine": 2165,
         "endLine": 2238
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -10603,7 +10603,7 @@
       "id": 172,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/evidence$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/evidence",
+      "path": "/tenants/:param/payments/:param/evidence",
       "handler": "handlePaymentEvidenceList",
       "routeLine": 4012,
       "authentication": [
@@ -10643,7 +10643,7 @@
         "startLine": 2577,
         "endLine": 2592
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -10667,7 +10667,7 @@
       "id": 173,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/evidence\\/([^/]+)\\/review$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/evidence/([^/]+)/review",
+      "path": "/tenants/:param/payments/:param/evidence/:param/review",
       "handler": "handleManualPaymentEvidenceReview",
       "routeLine": 4013,
       "authentication": [
@@ -10707,7 +10707,7 @@
         "startLine": 2558,
         "endLine": 2576
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -10731,7 +10731,7 @@
       "id": 174,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/evidence$",
-      "path": "/tenants/([^/]+)/payments/evidence",
+      "path": "/tenants/:param/payments/evidence",
       "handler": "handlePaymentEvidenceSubmission",
       "routeLine": 4014,
       "authentication": [
@@ -10771,7 +10771,7 @@
         "startLine": 2593,
         "endLine": 2628
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -10795,7 +10795,7 @@
       "id": 175,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/providers$",
-      "path": "/tenants/([^/]+)/payments/providers",
+      "path": "/tenants/:param/payments/providers",
       "handler": "handlePaymentProviderMetadata",
       "routeLine": 4015,
       "authentication": [
@@ -10834,7 +10834,7 @@
         "startLine": 2286,
         "endLine": 2293
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -10851,7 +10851,7 @@
       "id": 176,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/accounts$",
-      "path": "/tenants/([^/]+)/payments/accounts",
+      "path": "/tenants/:param/payments/accounts",
       "handler": "handlePaymentAccounts",
       "routeLine": 4016,
       "authentication": [
@@ -10897,7 +10897,7 @@
         "startLine": 2294,
         "endLine": 2309
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -10912,7 +10912,7 @@
       "id": 177,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/accounts$",
-      "path": "/tenants/([^/]+)/payments/accounts",
+      "path": "/tenants/:param/payments/accounts",
       "handler": "handlePaymentAccounts",
       "routeLine": 4017,
       "authentication": [
@@ -10958,7 +10958,7 @@
         "startLine": 2294,
         "endLine": 2309
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -10973,7 +10973,7 @@
       "id": 178,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/outbound$",
-      "path": "/tenants/([^/]+)/payments/outbound",
+      "path": "/tenants/:param/payments/outbound",
       "handler": "handlePaymentOutbound",
       "routeLine": 4018,
       "authentication": [
@@ -11020,7 +11020,7 @@
         "startLine": 2362,
         "endLine": 2362
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11036,7 +11036,7 @@
       "id": 179,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/outbound$",
-      "path": "/tenants/([^/]+)/payments/outbound",
+      "path": "/tenants/:param/payments/outbound",
       "handler": "handlePaymentOutbound",
       "routeLine": 4019,
       "authentication": [
@@ -11083,7 +11083,7 @@
         "startLine": 2362,
         "endLine": 2362
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11099,7 +11099,7 @@
       "id": 180,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/outbound\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/payments/outbound/([^/]+)",
+      "path": "/tenants/:param/payments/outbound/:param",
       "handler": "handlePaymentOutbound",
       "routeLine": 4020,
       "authentication": [
@@ -11146,7 +11146,7 @@
         "startLine": 2362,
         "endLine": 2362
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11162,7 +11162,7 @@
       "id": 181,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/outbound\\/([^/]+)\\/(submit|confirm|fail|cancel)$",
-      "path": "/tenants/([^/]+)/payments/outbound/([^/]+)/(submit|confirm|fail|cancel)",
+      "path": "/tenants/:param/payments/outbound/:param/(submit|confirm|fail|cancel)",
       "handler": "handlePaymentOutbound",
       "routeLine": 4021,
       "authentication": [
@@ -11209,7 +11209,7 @@
         "startLine": 2362,
         "endLine": 2362
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11225,7 +11225,7 @@
       "id": 182,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/purchase-orders\\/([^/]+)\\/payment$",
-      "path": "/tenants/([^/]+)/procurement/purchase-orders/([^/]+)/payment",
+      "path": "/tenants/:param/procurement/purchase-orders/:param/payment",
       "handler": "handleProcurementPayment",
       "routeLine": 4022,
       "authentication": [
@@ -11265,7 +11265,7 @@
         "startLine": 2365,
         "endLine": 2366
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11289,7 +11289,7 @@
       "id": 183,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/procurement-settlements$",
-      "path": "/tenants/([^/]+)/payments/procurement-settlements",
+      "path": "/tenants/:param/payments/procurement-settlements",
       "handler": "handleProcurementSettlement",
       "routeLine": 4023,
       "authentication": [
@@ -11336,7 +11336,7 @@
         "startLine": 2363,
         "endLine": 2364
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11353,7 +11353,7 @@
       "id": 184,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/procurement-settlements\\/purchase-orders\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/payments/procurement-settlements/purchase-orders/([^/]+)",
+      "path": "/tenants/:param/payments/procurement-settlements/purchase-orders/:param",
       "handler": "handleProcurementSettlement",
       "routeLine": 4024,
       "authentication": [
@@ -11400,7 +11400,7 @@
         "startLine": 2363,
         "endLine": 2364
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11417,7 +11417,7 @@
       "id": 185,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/procurement-settlements\\/purchase-orders\\/([^/]+)\\/allocate$",
-      "path": "/tenants/([^/]+)/payments/procurement-settlements/purchase-orders/([^/]+)/allocate",
+      "path": "/tenants/:param/payments/procurement-settlements/purchase-orders/:param/allocate",
       "handler": "handleProcurementSettlement",
       "routeLine": 4025,
       "authentication": [
@@ -11464,7 +11464,7 @@
         "startLine": 2363,
         "endLine": 2364
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11481,7 +11481,7 @@
       "id": 186,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/payments\\/summary$",
-      "path": "/tenants/([^/]+)/orders/([^/]+)/payments/summary",
+      "path": "/tenants/:param/orders/:param/payments/summary",
       "handler": "handleOrderPaymentSummary",
       "routeLine": 4026,
       "authentication": [
@@ -11522,7 +11522,7 @@
         "startLine": 2377,
         "endLine": 2385
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11540,7 +11540,7 @@
       "id": 187,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/ledger$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/ledger",
+      "path": "/tenants/:param/payments/:param/ledger",
       "handler": "handlePaymentLedger",
       "routeLine": 4027,
       "authentication": [
@@ -11580,7 +11580,7 @@
         "startLine": 2367,
         "endLine": 2376
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11596,7 +11596,7 @@
       "id": 188,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/reconcile$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/reconcile",
+      "path": "/tenants/:param/payments/:param/reconcile",
       "handler": "handlePaymentReconciliation",
       "routeLine": 4028,
       "authentication": [
@@ -11636,7 +11636,7 @@
         "startLine": 2707,
         "endLine": 2722
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11652,7 +11652,7 @@
       "id": 189,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/reconciliation$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/reconciliation",
+      "path": "/tenants/:param/payments/:param/reconciliation",
       "handler": "handlePaymentCoreReconciliation",
       "routeLine": 4029,
       "authentication": [
@@ -11692,7 +11692,7 @@
         "startLine": 2681,
         "endLine": 2696
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11710,7 +11710,7 @@
       "id": 190,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/reconciliation$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/reconciliation",
+      "path": "/tenants/:param/payments/:param/reconciliation",
       "handler": "handlePaymentReconciliationHistory",
       "routeLine": 4030,
       "authentication": [
@@ -11750,7 +11750,7 @@
         "startLine": 2697,
         "endLine": 2706
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11768,7 +11768,7 @@
       "id": 191,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/confirmation-attempts\\/([^/]+)\\/finalize$",
-      "path": "/tenants/([^/]+)/payments/confirmation-attempts/([^/]+)/finalize",
+      "path": "/tenants/:param/payments/confirmation-attempts/:param/finalize",
       "handler": "handlePaymentConfirmationFinalization",
       "routeLine": 4031,
       "authentication": [
@@ -11808,7 +11808,7 @@
         "startLine": 2629,
         "endLine": 2646
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11823,7 +11823,7 @@
       "id": 192,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/status$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/status",
+      "path": "/tenants/:param/payments/:param/status",
       "handler": "handlePaymentStatusQuery",
       "routeLine": 4032,
       "authentication": [
@@ -11863,7 +11863,7 @@
         "startLine": 2662,
         "endLine": 2680
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11879,7 +11879,7 @@
       "id": 193,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/lifecycle$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/lifecycle",
+      "path": "/tenants/:param/payments/:param/lifecycle",
       "handler": "handlePaymentLifecycle",
       "routeLine": 4033,
       "authentication": [
@@ -11913,7 +11913,7 @@
         "startLine": 2647,
         "endLine": 2661
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11937,7 +11937,7 @@
       "id": 194,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/refund$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/refund",
+      "path": "/tenants/:param/payments/:param/refund",
       "handler": "handlePaymentRefund",
       "routeLine": 4034,
       "authentication": [
@@ -11971,7 +11971,7 @@
         "startLine": 2531,
         "endLine": 2545
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -11987,7 +11987,7 @@
       "id": 195,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/providers\\/certification$",
-      "path": "/tenants/([^/]+)/payments/providers/certification",
+      "path": "/tenants/:param/payments/providers/certification",
       "handler": "handlePaymentProviderCertification",
       "routeLine": 4035,
       "authentication": [
@@ -12022,7 +12022,7 @@
         "startLine": 2412,
         "endLine": 2425
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "app/src/authorization/iam-certification.js",
         "backend/lib/payments/capability-certification.js",
@@ -12046,7 +12046,7 @@
       "id": 196,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/providers\\/capability-probe$",
-      "path": "/tenants/([^/]+)/payments/providers/capability-probe",
+      "path": "/tenants/:param/payments/providers/capability-probe",
       "handler": "handlePaymentProviderCapabilityProbe",
       "routeLine": 4036,
       "authentication": [
@@ -12080,7 +12080,7 @@
         "startLine": 2426,
         "endLine": 2432
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12098,7 +12098,7 @@
       "id": 197,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/providers\\/capability-evidence$",
-      "path": "/tenants/([^/]+)/payments/providers/capability-evidence",
+      "path": "/tenants/:param/payments/providers/capability-evidence",
       "handler": "handlePaymentProviderCapabilityEvidence",
       "routeLine": 4037,
       "authentication": [
@@ -12133,7 +12133,7 @@
         "startLine": 2433,
         "endLine": 2452
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12151,7 +12151,7 @@
       "id": 198,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/providers\\/capability-evidence$",
-      "path": "/tenants/([^/]+)/payments/providers/capability-evidence",
+      "path": "/tenants/:param/payments/providers/capability-evidence",
       "handler": "handlePaymentProviderCapabilityEvidence",
       "routeLine": 4038,
       "authentication": [
@@ -12186,7 +12186,7 @@
         "startLine": 2433,
         "endLine": 2452
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12204,7 +12204,7 @@
       "id": 199,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/production-certification$",
-      "path": "/tenants/([^/]+)/payments/production-certification",
+      "path": "/tenants/:param/payments/production-certification",
       "handler": "handlePaymentProductionCertification",
       "routeLine": 4039,
       "authentication": [
@@ -12239,7 +12239,7 @@
         "startLine": 2453,
         "endLine": 2483
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12256,7 +12256,7 @@
       "id": 200,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/production-certification$",
-      "path": "/tenants/([^/]+)/payments/production-certification",
+      "path": "/tenants/:param/payments/production-certification",
       "handler": "handlePaymentProductionCertification",
       "routeLine": 4040,
       "authentication": [
@@ -12291,7 +12291,7 @@
         "startLine": 2453,
         "endLine": 2483
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12308,7 +12308,7 @@
       "id": 201,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/operations$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/operations",
+      "path": "/tenants/:param/payments/:param/operations",
       "handler": "handlePaymentOperationalActions",
       "routeLine": 4041,
       "authentication": [
@@ -12342,7 +12342,7 @@
         "startLine": 2484,
         "endLine": 2490
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12358,7 +12358,7 @@
       "id": 202,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/operations$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/operations",
+      "path": "/tenants/:param/payments/:param/operations",
       "handler": "handlePaymentOperationalActions",
       "routeLine": 4042,
       "authentication": [
@@ -12392,7 +12392,7 @@
         "startLine": 2484,
         "endLine": 2490
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12408,7 +12408,7 @@
       "id": 203,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/operations\\/retry$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/operations/retry",
+      "path": "/tenants/:param/payments/:param/operations/retry",
       "handler": "handlePaymentOperationalRetry",
       "routeLine": 4043,
       "authentication": [
@@ -12442,7 +12442,7 @@
         "startLine": 2491,
         "endLine": 2495
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12459,7 +12459,7 @@
       "id": 204,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/operations\\/manual-review$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/operations/manual-review",
+      "path": "/tenants/:param/payments/:param/operations/manual-review",
       "handler": "handlePaymentManualReview",
       "routeLine": 4044,
       "authentication": [
@@ -12493,7 +12493,7 @@
         "startLine": 2496,
         "endLine": 2501
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12509,7 +12509,7 @@
       "id": 205,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/settlement$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/settlement",
+      "path": "/tenants/:param/payments/:param/settlement",
       "handler": "handlePaymentSettlement",
       "routeLine": 4045,
       "authentication": [
@@ -12543,7 +12543,7 @@
         "startLine": 2502,
         "endLine": 2511
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12560,7 +12560,7 @@
       "id": 206,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/routing\\/resolve$",
-      "path": "/tenants/([^/]+)/payments/routing/resolve",
+      "path": "/tenants/:param/payments/routing/resolve",
       "handler": "handlePaymentRoutingResolve",
       "routeLine": 4046,
       "authentication": [
@@ -12600,7 +12600,7 @@
         "startLine": 2386,
         "endLine": 2396
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12616,7 +12616,7 @@
       "id": 207,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/routing\\/policies$",
-      "path": "/tenants/([^/]+)/payments/routing/policies",
+      "path": "/tenants/:param/payments/routing/policies",
       "handler": "handlePaymentRoutingPolicies",
       "routeLine": 4047,
       "authentication": [
@@ -12654,7 +12654,7 @@
         "startLine": 2397,
         "endLine": 2411
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12670,7 +12670,7 @@
       "id": 208,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/routing\\/policies$",
-      "path": "/tenants/([^/]+)/payments/routing/policies",
+      "path": "/tenants/:param/payments/routing/policies",
       "handler": "handlePaymentRoutingPolicies",
       "routeLine": 4048,
       "authentication": [
@@ -12708,7 +12708,7 @@
         "startLine": 2397,
         "endLine": 2411
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12724,7 +12724,7 @@
       "id": 209,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/settlement\\/finalize$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/settlement/finalize",
+      "path": "/tenants/:param/payments/:param/settlement/finalize",
       "handler": "handlePaymentSettlementFinalize",
       "routeLine": 4049,
       "authentication": [
@@ -12758,7 +12758,7 @@
         "startLine": 2512,
         "endLine": 2521
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12775,7 +12775,7 @@
       "id": 210,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/settlement$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/settlement",
+      "path": "/tenants/:param/payments/:param/settlement",
       "handler": "handlePaymentSettlementHistory",
       "routeLine": 4050,
       "authentication": [
@@ -12809,7 +12809,7 @@
         "startLine": 2522,
         "endLine": 2530
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12826,7 +12826,7 @@
       "id": 211,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/refund$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)/refund",
+      "path": "/tenants/:param/payments/:param/refund",
       "handler": "handlePaymentRefundHistory",
       "routeLine": 4051,
       "authentication": [
@@ -12860,7 +12860,7 @@
         "startLine": 2546,
         "endLine": 2557
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12876,7 +12876,7 @@
       "id": 212,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)",
+      "path": "/tenants/:param/payments/:param",
       "handler": "handlePayments",
       "routeLine": 4052,
       "authentication": [
@@ -12925,7 +12925,7 @@
         "startLine": 2310,
         "endLine": 2361
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -12940,7 +12940,7 @@
       "id": 213,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments$",
-      "path": "/tenants/([^/]+)/payments",
+      "path": "/tenants/:param/payments",
       "handler": "handlePayments",
       "routeLine": 4053,
       "authentication": [
@@ -12989,7 +12989,7 @@
         "startLine": 2310,
         "endLine": 2361
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -13004,7 +13004,7 @@
       "id": 214,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments$",
-      "path": "/tenants/([^/]+)/payments",
+      "path": "/tenants/:param/payments",
       "handler": "handlePayments",
       "routeLine": 4054,
       "authentication": [
@@ -13053,7 +13053,7 @@
         "startLine": 2310,
         "endLine": 2361
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -13068,7 +13068,7 @@
       "id": 215,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/payments/([^/]+)",
+      "path": "/tenants/:param/payments/:param",
       "handler": "handlePayments",
       "routeLine": 4055,
       "authentication": [
@@ -13117,7 +13117,7 @@
         "startLine": 2310,
         "endLine": 2361
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "backend/lib/payments/capability-certification.js",
         "backend/lib/payments/invariant-gate.js",
@@ -13132,7 +13132,7 @@
       "id": 216,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/receivables$",
-      "path": "/tenants/([^/]+)/b2b/receivables",
+      "path": "/tenants/:param/b2b/receivables",
       "handler": "handleB2BReceivables",
       "routeLine": 4056,
       "authentication": [
@@ -13184,7 +13184,7 @@
         "startLine": 2723,
         "endLine": 2766
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -13192,7 +13192,7 @@
       "id": 217,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/receivables$",
-      "path": "/tenants/([^/]+)/b2b/receivables",
+      "path": "/tenants/:param/b2b/receivables",
       "handler": "handleB2BReceivables",
       "routeLine": 4057,
       "authentication": [
@@ -13244,7 +13244,7 @@
         "startLine": 2723,
         "endLine": 2766
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -13252,7 +13252,7 @@
       "id": 218,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/receivables\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/b2b/receivables/([^/]+)",
+      "path": "/tenants/:param/b2b/receivables/:param",
       "handler": "handleB2BReceivables",
       "routeLine": 4058,
       "authentication": [
@@ -13304,7 +13304,7 @@
         "startLine": 2723,
         "endLine": 2766
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -13312,7 +13312,7 @@
       "id": 219,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/receivables\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/b2b/receivables/([^/]+)",
+      "path": "/tenants/:param/b2b/receivables/:param",
       "handler": "handleB2BReceivables",
       "routeLine": 4059,
       "authentication": [
@@ -13364,7 +13364,7 @@
         "startLine": 2723,
         "endLine": 2766
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -13372,7 +13372,7 @@
       "id": 220,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/receivables\\/([^/]+)\\/ledger$",
-      "path": "/tenants/([^/]+)/b2b/receivables/([^/]+)/ledger",
+      "path": "/tenants/:param/b2b/receivables/:param/ledger",
       "handler": "handleB2BReceivables",
       "routeLine": 4060,
       "authentication": [
@@ -13424,7 +13424,7 @@
         "startLine": 2723,
         "endLine": 2766
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/phase10.5-inventory-ledger-regression.mjs"
       ],
@@ -13434,7 +13434,7 @@
       "id": 221,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/invoices$",
-      "path": "/tenants/([^/]+)/b2b/invoices",
+      "path": "/tenants/:param/b2b/invoices",
       "handler": "handleB2BInvoices",
       "routeLine": 4061,
       "authentication": [
@@ -13474,7 +13474,7 @@
         "startLine": 2767,
         "endLine": 2795
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -13482,7 +13482,7 @@
       "id": 222,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/invoices$",
-      "path": "/tenants/([^/]+)/b2b/invoices",
+      "path": "/tenants/:param/b2b/invoices",
       "handler": "handleB2BInvoices",
       "routeLine": 4062,
       "authentication": [
@@ -13522,7 +13522,7 @@
         "startLine": 2767,
         "endLine": 2795
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -13530,7 +13530,7 @@
       "id": 223,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/invoices\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/b2b/invoices/([^/]+)",
+      "path": "/tenants/:param/b2b/invoices/:param",
       "handler": "handleB2BInvoices",
       "routeLine": 4063,
       "authentication": [
@@ -13570,7 +13570,7 @@
         "startLine": 2767,
         "endLine": 2795
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -13578,7 +13578,7 @@
       "id": 224,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/invoices\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/b2b/invoices/([^/]+)",
+      "path": "/tenants/:param/b2b/invoices/:param",
       "handler": "handleB2BInvoices",
       "routeLine": 4064,
       "authentication": [
@@ -13618,7 +13618,7 @@
         "startLine": 2767,
         "endLine": 2795
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -13626,7 +13626,7 @@
       "id": 225,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/receivables\\/([^/]+)\\/allocate$",
-      "path": "/tenants/([^/]+)/b2b/receivables/([^/]+)/allocate",
+      "path": "/tenants/:param/b2b/receivables/:param/allocate",
       "handler": "handleB2BReceivables",
       "routeLine": 4065,
       "authentication": [
@@ -13678,7 +13678,7 @@
         "startLine": 2723,
         "endLine": 2766
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [],
       "sourceKind": "ROUTES"
     },
@@ -13686,7 +13686,7 @@
       "id": 226,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/audit$",
-      "path": "/tenants/([^/]+)/audit",
+      "path": "/tenants/:param/audit",
       "handler": "handleTenantAudit",
       "routeLine": 4066,
       "authentication": [
@@ -13732,7 +13732,7 @@
         "startLine": 2796,
         "endLine": 2815
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/customer-http-audit-provenance-regression.mjs",
         "phase0/gap-1.18O-audit-lineage-regression.mjs",
@@ -13746,7 +13746,7 @@
       "id": 227,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/compliance\\/retention$",
-      "path": "/tenants/([^/]+)/compliance/retention",
+      "path": "/tenants/:param/compliance/retention",
       "handler": "handleAuditRetention",
       "routeLine": 4067,
       "authentication": [
@@ -13787,7 +13787,7 @@
         "startLine": 2816,
         "endLine": 2828
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-54-compliance-frontend-authority-regression.mjs",
         "phase0/phase10.7-compliance-regression.mjs",
@@ -13800,7 +13800,7 @@
       "id": 228,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/compliance\\/retention$",
-      "path": "/tenants/([^/]+)/compliance/retention",
+      "path": "/tenants/:param/compliance/retention",
       "handler": "handleAuditRetention",
       "routeLine": 4068,
       "authentication": [
@@ -13841,7 +13841,7 @@
         "startLine": 2816,
         "endLine": 2828
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-54-compliance-frontend-authority-regression.mjs",
         "phase0/phase10.7-compliance-regression.mjs",
@@ -13854,7 +13854,7 @@
       "id": 229,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/compliance\\/requests$",
-      "path": "/tenants/([^/]+)/compliance/requests",
+      "path": "/tenants/:param/compliance/requests",
       "handler": "handleComplianceRequests",
       "routeLine": 4069,
       "authentication": [
@@ -13899,7 +13899,7 @@
         "startLine": 2829,
         "endLine": 2852
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-54-compliance-frontend-authority-regression.mjs",
         "phase0/phase10.7-compliance-regression.mjs",
@@ -13912,7 +13912,7 @@
       "id": 230,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/compliance\\/requests$",
-      "path": "/tenants/([^/]+)/compliance/requests",
+      "path": "/tenants/:param/compliance/requests",
       "handler": "handleComplianceRequests",
       "routeLine": 4070,
       "authentication": [
@@ -13957,7 +13957,7 @@
         "startLine": 2829,
         "endLine": 2852
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-54-compliance-frontend-authority-regression.mjs",
         "phase0/phase10.7-compliance-regression.mjs",
@@ -13970,7 +13970,7 @@
       "id": 231,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/compliance\\/requests$",
-      "path": "/tenants/([^/]+)/compliance/requests",
+      "path": "/tenants/:param/compliance/requests",
       "handler": "handleComplianceRequests",
       "routeLine": 4071,
       "authentication": [
@@ -14015,7 +14015,7 @@
         "startLine": 2829,
         "endLine": 2852
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-54-compliance-frontend-authority-regression.mjs",
         "phase0/phase10.7-compliance-regression.mjs",
@@ -14028,7 +14028,7 @@
       "id": 232,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/compliance\\/export\\/([^/]+)\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/compliance/export/([^/]+)/([^/]+)",
+      "path": "/tenants/:param/compliance/export/:param/:param",
       "handler": "handleComplianceExport",
       "routeLine": 4072,
       "authentication": [
@@ -14071,7 +14071,7 @@
         "startLine": 2853,
         "endLine": 2869
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-54-compliance-frontend-authority-regression.mjs",
         "phase0/phase10.7-compliance-regression.mjs",
@@ -14084,7 +14084,7 @@
       "id": 233,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/compliance\\/export\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/compliance/export/([^/]+)",
+      "path": "/tenants/:param/compliance/export/:param",
       "handler": "handleComplianceExport",
       "routeLine": 4073,
       "authentication": [
@@ -14127,7 +14127,7 @@
         "startLine": 2853,
         "endLine": 2869
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux-54-compliance-frontend-authority-regression.mjs",
         "phase0/phase10.7-compliance-regression.mjs",
@@ -14286,7 +14286,7 @@
       "id": 237,
       "method": "GET",
       "pattern": "^\\/api\\/discovery\\/suppliers\\/([^/]+)$",
-      "path": "/api/discovery/suppliers/([^/]+)",
+      "path": "/api/discovery/suppliers/:param",
       "handler": "handleDiscoverySuppliers",
       "routeLine": 4077,
       "authentication": [
@@ -14347,7 +14347,7 @@
       "id": 238,
       "method": "POST",
       "pattern": "^\\/api\\/discovery\\/suppliers\\/([^/]+)$",
-      "path": "/api/discovery/suppliers/([^/]+)",
+      "path": "/api/discovery/suppliers/:param",
       "handler": "handleDiscoverySuppliers",
       "routeLine": 4078,
       "authentication": [
@@ -14653,7 +14653,7 @@
       "id": 243,
       "method": "GET",
       "pattern": "^\\/api\\/marketplace\\/orders\\/([^/]+)$",
-      "path": "/api/marketplace/orders/([^/]+)",
+      "path": "/api/marketplace/orders/:param",
       "handler": "handleMarketplaceOrderTracking",
       "routeLine": 4083,
       "authentication": [
@@ -14704,7 +14704,7 @@
       "id": 244,
       "method": "PATCH",
       "pattern": "^\\/api\\/marketplace\\/orders\\/status\\/([^/]+)$",
-      "path": "/api/marketplace/orders/status/([^/]+)",
+      "path": "/api/marketplace/orders/status/:param",
       "handler": "handleMarketplaceOrderStatus",
       "routeLine": 4084,
       "authentication": [
@@ -14770,7 +14770,7 @@
       "id": 245,
       "method": "GET",
       "pattern": "^\\/tenants\\/([^/]+)\\/restaurant\\/recipes$",
-      "path": "/tenants/([^/]+)/restaurant/recipes",
+      "path": "/tenants/:param/restaurant/recipes",
       "handler": "handleRestaurantRecipes",
       "routeLine": 4085,
       "authentication": [
@@ -14817,7 +14817,7 @@
         "startLine": 1925,
         "endLine": 1947
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-restaurant-contextual-role-regression.mjs",
         "phase0/phase13.11.5-restaurant-commerce-inventory-regression.mjs",
@@ -14837,7 +14837,7 @@
       "id": 246,
       "method": "POST",
       "pattern": "^\\/tenants\\/([^/]+)\\/restaurant\\/recipes$",
-      "path": "/tenants/([^/]+)/restaurant/recipes",
+      "path": "/tenants/:param/restaurant/recipes",
       "handler": "handleRestaurantRecipes",
       "routeLine": 4086,
       "authentication": [
@@ -14884,7 +14884,7 @@
         "startLine": 1925,
         "endLine": 1947
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-restaurant-contextual-role-regression.mjs",
         "phase0/phase13.11.5-restaurant-commerce-inventory-regression.mjs",
@@ -14904,7 +14904,7 @@
       "id": 247,
       "method": "PATCH",
       "pattern": "^\\/tenants\\/([^/]+)\\/restaurant\\/recipes\\/([^/]+)$",
-      "path": "/tenants/([^/]+)/restaurant/recipes/([^/]+)",
+      "path": "/tenants/:param/restaurant/recipes/:param",
       "handler": "handleRestaurantRecipes",
       "routeLine": 4087,
       "authentication": [
@@ -14951,7 +14951,7 @@
         "startLine": 1925,
         "endLine": 1947
       },
-      "classification": "needs-review",
+      "classification": "domain capability",
       "testCandidates": [
         "phase0/fux6-restaurant-contextual-role-regression.mjs",
         "phase0/phase13.11.5-restaurant-commerce-inventory-regression.mjs",
