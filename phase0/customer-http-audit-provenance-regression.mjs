@@ -81,12 +81,13 @@ let localMutationCount = 0;
 const tenantRaceSandbox = {
   config: { chatId: 'tenant-a', sessionToken: 'token-a' },
   customers: [],
-  setCustomers(next) { this.customers = next; },
+  setCustomers: null,
   api: () => new Promise(resolve => { resolveCustomerSync = resolve; }),
   upsertLocalCustomer: value => { localMutationCount += 1; return value; },
   persist: () => { persistCount += 1; },
   console: { warn: () => {} },
 };
+tenantRaceSandbox.setCustomers = next => { tenantRaceSandbox.customers = next; };
 const customerAsyncFunctions = vm.runInNewContext(
   `${syncSource}\n${loadSource}\n({ syncCustomer, loadCustomers })`,
   tenantRaceSandbox
