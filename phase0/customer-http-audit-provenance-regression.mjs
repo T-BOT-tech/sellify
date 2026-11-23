@@ -456,6 +456,37 @@ try {
     tenant.chatId, pricingCustomer.id, pricingProductId
   )).length, 1,
   'repeated authenticated B2B pricing POST must not create duplicate rows');
+
+  // A failed audit insert must roll back the B2B pricing HTTP mutation too.
+  db.exec(`
+    CREATE TRIGGER fail_customer_pricing_audit_insert
+    BEFORE INSERT ON audit_events
+    WHEN NEW.entity_type = 'customer_pricing_rule'
+    BEGIN
+      SELECT RAISE(ABORT, 'forced B2B pricing audit failure');
+    END;
+  `);
+  try {
+    const failedPricingWrite = await request(pricingBase, {
+      method: 'POST',
+      headers: jsonAuth(ownerSession.token),
+      body: JSON.stringify({
+        customerId: pricingCustomer.id,
+        productId: pricingProductId,
+        priceMinor: 9900,
+        currency: 'ETB',
+        reason: 'Must roll back with audit failure',
+      }),
+    });
+    assert.equal(failedPricingWrite.response.status, 500,
+      'a B2B pricing request must fail when its required audit insert fails');
+    assert.equal((await store.listCustomerPricing(
+      tenant.chatId, pricingCustomer.id, pricingProductId
+    ))[0].priceMinor, 10200,
+    'a failed B2B pricing audit must roll back the HTTP pricing mutation');
+  } finally {
+    db.exec('DROP TRIGGER IF EXISTS fail_customer_pricing_audit_insert');
+  }
   const otherTenantPricingGet = await request(
     `/tenants/${encodeURIComponent(otherTenant.chatId)}/b2b/pricing/${encodeURIComponent(firstPricingRule.id)}`,
     { headers: auth(otherSession.token) }
