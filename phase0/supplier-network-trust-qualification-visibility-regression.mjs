@@ -74,6 +74,48 @@ const buyerEvidence = await refreshSupplierNetworkTrustEvidence(
   {},
   buyer.actor,
 );
+const participationEvidence = buyerEvidence.find(item => item.evidenceType === 'SUPPLIER_PARTICIPATION');
+assert.ok(participationEvidence);
+assert.equal(participationEvidence.visibility, 'NETWORK', 'discoverable supplier participation may be network-visible');
+const outsiderBeforeDiscoverabilityChange = await listSupplierNetworkTrustEvidence(
+  outsider.chatId,
+  { supplierOrganizationId: supplier.organizationId },
+  outsider.actor,
+);
+assert.ok(outsiderBeforeDiscoverabilityChange.some(item => item.evidenceType === 'SUPPLIER_PARTICIPATION'));
+
+const hiddenSupplier = await tenant('hidden-supplier', 'Non-discoverable Trust Supplier');
+await setProcurementSupplierParticipation(hiddenSupplier.chatId, {
+  status: 'ACTIVE',
+  discoverable: false,
+}, hiddenSupplier.actor);
+const hiddenRelationship = await createProcurementSupplierRelationship(buyer.chatId, {
+  supplierOrganizationId: hiddenSupplier.organizationId,
+  source: 'DIRECT',
+}, buyer.actor);
+await transitionProcurementSupplierRelationship(buyer.chatId, hiddenRelationship.id, 'ACTIVE', buyer.actor);
+const hiddenSupplierEvidence = await refreshSupplierNetworkTrustEvidence(
+  buyer.chatId,
+  hiddenSupplier.organizationId,
+  {},
+  buyer.actor,
+);
+const hiddenParticipationEvidence = hiddenSupplierEvidence.find(item => item.evidenceType === 'SUPPLIER_PARTICIPATION');
+assert.equal(hiddenParticipationEvidence?.visibility, 'RELATIONSHIP',
+  'non-discoverable supplier participation must be relationship-scoped at projection time');
+const outsiderHiddenSupplierEvidence = await listSupplierNetworkTrustEvidence(
+  outsider.chatId,
+  { supplierOrganizationId: hiddenSupplier.organizationId },
+  outsider.actor,
+);
+assert.equal(outsiderHiddenSupplierEvidence.some(item => item.evidenceType === 'SUPPLIER_PARTICIPATION'), false);
+const buyerHiddenSupplierEvidence = await listSupplierNetworkTrustEvidence(
+  buyer.chatId,
+  { supplierOrganizationId: hiddenSupplier.organizationId },
+  buyer.actor,
+);
+assert.ok(buyerHiddenSupplierEvidence.some(item => item.evidenceType === 'SUPPLIER_PARTICIPATION'));
+
 const buyerQualificationEvidence = buyerEvidence.filter(item => item.evidenceType === 'QUALIFICATION_VERIFIED');
 const buyerVisibleIds = new Set(buyerQualificationEvidence.map(item => item.sourceEntityId));
 const byVisibility = Object.fromEntries(sourceQualifications.map(item => [item.title.split(' ')[0], item]));
@@ -148,6 +190,41 @@ assert.equal(afterRevocation.some(item => item.sourceEntityId === byVisibility.N
 const ownPrivateQualification = await getSupplierNetworkQualification(supplier.chatId, byVisibility.PRIVATE.id);
 assert.equal(ownPrivateQualification.visibility, 'PRIVATE',
   'the supplier organization retains access to its own private source qualification');
+
+// An immutable NETWORK participation row must stop being visible to unrelated
+// buyers when the canonical Procurement participation becomes non-discoverable.
+await setProcurementSupplierParticipation(supplier.chatId, {
+  status: 'ACTIVE',
+  discoverable: false,
+}, supplier.actor);
+const outsiderAfterDiscoverabilityChange = await listSupplierNetworkTrustEvidence(
+  outsider.chatId,
+  { supplierOrganizationId: supplier.organizationId },
+  outsider.actor,
+);
+assert.equal(outsiderAfterDiscoverabilityChange.some(item => item.evidenceType === 'SUPPLIER_PARTICIPATION'), false,
+  'non-discoverable supplier participation must not remain network-visible through an immutable trust row');
+assert.equal(await getSupplierNetworkTrustEvidence(outsider.chatId, participationEvidence.id, outsider.actor), null,
+  'single-item trust reads must enforce current supplier discoverability');
+const buyerAfterDiscoverabilityChange = await listSupplierNetworkTrustEvidence(
+  buyer.chatId,
+  { supplierOrganizationId: supplier.organizationId },
+  buyer.actor,
+);
+assert.ok(buyerAfterDiscoverabilityChange.some(item => item.evidenceType === 'SUPPLIER_PARTICIPATION'),
+  'an active relationship may still view non-discoverable supplier participation');
+
+await setProcurementSupplierParticipation(supplier.chatId, {
+  status: 'INACTIVE',
+  discoverable: false,
+}, supplier.actor);
+const buyerAfterSupplierDeactivation = await listSupplierNetworkTrustEvidence(
+  buyer.chatId,
+  { supplierOrganizationId: supplier.organizationId },
+  buyer.actor,
+);
+assert.equal(buyerAfterSupplierDeactivation.some(item => item.evidenceType === 'SUPPLIER_PARTICIPATION'), false,
+  'inactive supplier participation must no longer appear as current trust evidence');
 
 console.log('Supplier Network trust qualification visibility regression: PASS');
 console.log('Private/confidential qualification evidence is not promoted to network trust visibility');
