@@ -364,6 +364,52 @@ try {
     assert.equal(String(event.chat_id), String(tenant.chatId));
   }
 
+  // A customer mutation and its mandatory audit event are one atomic write.
+  // Force the audit insert to fail and prove neither create nor update leaks
+  // a customer mutation without its corresponding audit record.
+  const auditFailureUpdateId = `customer-audit-atomic-update-${suffix}`;
+  await store.upsertCustomer(tenant.chatId, {
+    id: auditFailureUpdateId,
+    name: 'Customer Before Forced Audit Failure',
+    phone: `+2519119${suffix.slice(-6)}`,
+    source: 'http-regression',
+  }, { userId: owner.id, deviceId: ownerSession.deviceId });
+  db.exec(`
+    CREATE TRIGGER fail_customer_audit_insert
+    BEFORE INSERT ON audit_events
+    WHEN NEW.entity_type = 'customer'
+    BEGIN
+      SELECT RAISE(ABORT, 'forced customer audit failure');
+    END;
+  `);
+  try {
+    const auditFailureCreateId = `customer-audit-atomic-create-${suffix}`;
+    await assert.rejects(
+      () => store.upsertCustomer(tenant.chatId, {
+        id: auditFailureCreateId,
+        name: 'Must Roll Back With Audit',
+        source: 'http-regression',
+      }, { userId: owner.id, deviceId: ownerSession.deviceId }),
+      /forced customer audit failure/
+    );
+    assert.equal(await store.getCustomer(tenant.chatId, auditFailureCreateId), null,
+      'failed customer-created audit must roll back the customer insert');
+
+    await assert.rejects(
+      () => store.upsertCustomer(tenant.chatId, {
+        id: auditFailureUpdateId,
+        name: 'Must Not Persist Without Audit',
+        source: 'http-regression',
+      }, { userId: owner.id, deviceId: ownerSession.deviceId }),
+      /forced customer audit failure/
+    );
+    assert.equal((await store.getCustomer(tenant.chatId, auditFailureUpdateId)).name,
+      'Customer Before Forced Audit Failure',
+      'failed customer-updated audit must roll back the customer update');
+  } finally {
+    db.exec('DROP TRIGGER IF EXISTS fail_customer_audit_insert');
+  }
+
   const deduplicated = await request(base, {
     method: 'POST',
     headers: jsonAuth(ownerSession.token),
