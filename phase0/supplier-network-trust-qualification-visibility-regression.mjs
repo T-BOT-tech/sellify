@@ -219,7 +219,7 @@ assert.ok(buyerAfterDiscoverabilityChange.some(item => item.evidenceType === 'SU
   'an active relationship may still view non-discoverable supplier participation');
 
 await setProcurementSupplierParticipation(supplier.chatId, {
-  status: 'INACTIVE',
+  status: 'SUSPENDED',
   discoverable: false,
 }, supplier.actor);
 const buyerAfterSupplierDeactivation = await listSupplierNetworkTrustEvidence(
