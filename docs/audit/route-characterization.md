@@ -252,3 +252,17 @@ The production wiring is important: `PaymentCore.#authorize` returns without enf
 - `phase0/gap-1.14-payment-refund-regression.mjs`, `phase0/gap-1.15-payment-settlement-regression.mjs`, `phase0/gap-1.12-payment-reconciliation-regression.mjs`, `phase0/gap-1.13-payment-lifecycle-regression.mjs`, `phase0/gap-1.11-payment-provider-status-regression.mjs`, and `phase0/gap-1-provider-confirmation-finalization-regression.mjs`.
 
 The files and their package-script registrations were reviewed; **no tests were executed in this audit session**. The route and PaymentCore source was inspected directly. No production code was changed and no Payment Core authority was extracted.
+
+
+## Correction — B2B customer-pricing defect candidate resolved on current main
+
+The original route inventory recorded four B2B Pricing method/path entries as `characterized-with-defect-candidate`. Those entries have now been rechecked against current main after PR #305.
+
+Current `upsertCustomerPricing`:
+- opens or reuses a `BEGIN IMMEDIATE` transaction;
+- performs the unique-key upsert;
+- reloads the persisted row by `organization_id + customer_id + product_id`;
+- audits using the persisted row's canonical ID; and
+- commits the pricing write and audit together, rolling back if audit insertion fails.
+
+The current `phase0/phase11.3-b2b-custom-pricing-regression.mjs` includes repeated save, stable row ID, no duplicate row, audit entity ID, and forced audit-failure rollback assertions. The four route entries are therefore now classified as `characterized`, not defect candidates. The original defect description above is retained only as historical audit provenance; it is not an open defect.
