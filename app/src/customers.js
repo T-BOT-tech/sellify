@@ -93,8 +93,13 @@ async function api(path, options = {}) {
 
 export async function syncCustomer(customer) {
   if (!customer || !config.chatId || !config.sessionToken) return null;
+  const requestChatId = String(config.chatId);
+  const requestSessionToken = String(config.sessionToken);
   try {
-    const data = await api(`/tenants/${encodeURIComponent(config.chatId)}/customers`, { method: 'POST', body: JSON.stringify(customer) });
+    const data = await api(`/tenants/${encodeURIComponent(requestChatId)}/customers`, { method: 'POST', body: JSON.stringify(customer) });
+    // A tenant switch can happen while the request is in flight. Never apply
+    // a previous tenant's response to the newly selected tenant's local cache.
+    if (String(config.chatId || '') !== requestChatId || String(config.sessionToken || '') !== requestSessionToken) return null;
     const remote = data.customer;
     if (remote) upsertLocalCustomer({ ...customer, id: remote.id, name: remote.name, phone: remote.phone, email: remote.email, address: remote.address, taxId: remote.taxId, notes: remote.notes, customerType: remote.customerType, status: remote.status, source: remote.source });
     return remote || null;
@@ -106,8 +111,13 @@ export async function syncCustomer(customer) {
 
 export async function loadCustomers({ query = '' } = {}) {
   if (!config.chatId || !config.sessionToken) return customers;
+  const requestChatId = String(config.chatId);
+  const requestSessionToken = String(config.sessionToken);
   try {
-    const data = await api(`/tenants/${encodeURIComponent(config.chatId)}/customers?q=${encodeURIComponent(query)}`);
+    const data = await api(`/tenants/${encodeURIComponent(requestChatId)}/customers?q=${encodeURIComponent(query)}`);
+    // Tenant state is shared in memory during a switch. Discard stale reads
+    // before they can merge or persist data into the next tenant's cache.
+    if (String(config.chatId || '') !== requestChatId || String(config.sessionToken || '') !== requestSessionToken) return customers;
     if (Array.isArray(data.customers)) {
       const byId = new Map(customers.map(c => [String(c.id), c]));
       data.customers.forEach(remote => byId.set(String(remote.id), { ...remote, id: String(remote.id) }));
