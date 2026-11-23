@@ -20,7 +20,7 @@ This directory is the current-state audit package. It records source-derived rou
 - No production behavior, route code, schema, migrations, `package.json`, or CI workflow is changed by this audit.
 - No route modules or SQLite store modules are extracted.
 - Canonical domain authorities remain authoritative; Packs, business templates, experiences and channels compose capabilities but do not create duplicate truth.
-- Static scanner evidence is labelled as such. A route filename match is not test coverage; a table/function name is not ownership; a transaction marker is not proof of atomicity.
+- Static scanner evidence is labelled as such. A route filename match is not test coverage; a table/function name is not ownership; a transaction marker is not proof of atomicity. The Perplexity inventory workflow is used as an independent count gate, but its pre-check deduplication and name-based groupings are not treated as raw-source duplicate or canonical-ownership proof.
 - All current-state claims are tied to the specified base commit and source locations. Historical hash manifests and audit records are retained without rewriting.
 
 ## Branch
