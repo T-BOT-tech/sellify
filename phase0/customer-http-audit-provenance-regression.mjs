@@ -347,6 +347,121 @@ try {
   const organizationId = String(db.prepare(
     'SELECT organization_id FROM tenants WHERE chat_id = ?'
   ).get(tenant.chatId).organization_id);
+
+  // The customer boundary's existing CI gate also exercises the canonical
+  // B2B customer-pricing relation and repeated-save identity behavior.
+  const pricingCustomer = await store.upsertCustomer(tenant.chatId, {
+    id: `b2b-pricing-customer-${suffix}`,
+    customerType: 'business',
+    name: 'B2B Pricing Customer',
+    source: 'http-regression',
+  }, { userId: owner.id, deviceId: ownerSession.deviceId });
+  await store.saveCatalog(tenant.chatId, [{
+    id: `b2b-pricing-product-${suffix}`,
+    name: 'Cement',
+    price: 12500,
+    currency: 'ETB',
+    stock: 100,
+  }]);
+  const pricingProductId = `b2b-pricing-product-${suffix}`;
+  const firstPricingRule = await store.upsertCustomerPricing(tenant.chatId, {
+    customerId: pricingCustomer.id,
+    productId: pricingProductId,
+    priceMinor: 11000,
+    currency: 'ETB',
+    reason: 'Initial contract price',
+  }, { userId: owner.id });
+  assert.ok(firstPricingRule?.id, 'B2B pricing create must return its canonical row');
+  const repeatedPricingRule = await store.upsertCustomerPricing(tenant.chatId, {
+    customerId: pricingCustomer.id,
+    productId: pricingProductId,
+    priceMinor: 10500,
+    currency: 'ETB',
+    reason: 'Renewed contract price',
+  }, { userId: owner.id });
+  assert.ok(repeatedPricingRule,
+    'repeated B2B pricing upsert must return the persisted rule');
+  assert.equal(repeatedPricingRule.id, firstPricingRule.id,
+    'repeated B2B pricing upsert must retain and return the original row ID');
+  assert.equal(repeatedPricingRule.priceMinor, 10500,
+    'repeated B2B pricing upsert must persist the updated price');
+  const repeatedPricingRows = await store.listCustomerPricing(
+    tenant.chatId, pricingCustomer.id, pricingProductId
+  );
+  assert.equal(repeatedPricingRows.length, 1,
+    'repeated B2B pricing upsert must not create duplicate rules');
+  const pricingAudit = db.prepare(`
+    SELECT entity_id FROM audit_events
+    WHERE entity_type = 'customer_pricing_rule'
+    ORDER BY id DESC LIMIT 1
+  `).get();
+  assert.equal(pricingAudit?.entity_id, firstPricingRule.id,
+    'B2B pricing audit provenance must reference the canonical persisted row ID');
+
+  const pricingBase = `/tenants/${encodeURIComponent(tenant.chatId)}/b2b/pricing`;
+  const unauthenticatedPricingRead = await request(pricingBase);
+  assert.equal(unauthenticatedPricingRead.response.status, 401,
+    'B2B pricing reads must require an authenticated tenant session');
+  const staffPricingRead = await request(pricingBase, {
+    headers: auth(staffSession.token),
+  });
+  assert.equal(staffPricingRead.response.status, 403,
+    'customer-view staff must not gain B2B pricing visibility without b2b:pricing:view');
+  const crossTenantPricingRead = await request(pricingBase, {
+    headers: auth(otherSession.token),
+  });
+  assert.equal(crossTenantPricingRead.response.status, 403,
+    'a session from another tenant cannot read this tenant B2B pricing');
+  const ownerPricingRead = await request(
+    `${pricingBase}?customer_id=${encodeURIComponent(pricingCustomer.id)}&product_id=${encodeURIComponent(pricingProductId)}`,
+    { headers: auth(ownerSession.token) }
+  );
+  assert.equal(ownerPricingRead.response.status, 200);
+  assert.equal(ownerPricingRead.json.pricing?.length, 1,
+    'authorized B2B pricing list must return the canonical tenant-scoped rule');
+  assert.equal(ownerPricingRead.json.pricing[0].id, firstPricingRule.id);
+  const staffPricingWrite = await request(pricingBase, {
+    method: 'POST',
+    headers: jsonAuth(staffSession.token),
+    body: JSON.stringify({
+      customerId: pricingCustomer.id,
+      productId: pricingProductId,
+      priceMinor: 10000,
+      currency: 'ETB',
+    }),
+  });
+  assert.equal(staffPricingWrite.response.status, 403,
+    'customer-view staff must not manage B2B customer pricing');
+  assert.equal((await store.listCustomerPricing(
+    tenant.chatId, pricingCustomer.id, pricingProductId
+  ))[0].priceMinor, 10500,
+  'a denied B2B pricing write must not mutate the canonical rule');
+  const ownerPricingWrite = await request(pricingBase, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({
+      customerId: pricingCustomer.id,
+      productId: pricingProductId,
+      priceMinor: 10200,
+      currency: 'ETB',
+      reason: 'Updated through authenticated pricing HTTP route',
+    }),
+  });
+  assert.equal(ownerPricingWrite.response.status, 201, JSON.stringify(ownerPricingWrite.json));
+  assert.equal(ownerPricingWrite.json.pricing.id, firstPricingRule.id,
+    'the authenticated B2B pricing POST must return the existing canonical row ID');
+  assert.equal(ownerPricingWrite.json.pricing.priceMinor, 10200,
+    'the authenticated B2B pricing POST must return its persisted updated price');
+  assert.equal((await store.listCustomerPricing(
+    tenant.chatId, pricingCustomer.id, pricingProductId
+  )).length, 1,
+  'repeated authenticated B2B pricing POST must not create duplicate rows');
+  const otherTenantPricingGet = await request(
+    `/tenants/${encodeURIComponent(otherTenant.chatId)}/b2b/pricing/${encodeURIComponent(firstPricingRule.id)}`,
+    { headers: auth(otherSession.token) }
+  );
+  assert.equal(otherTenantPricingGet.response.status, 404,
+    'a B2B pricing rule ID must not resolve in another organization');
   const auditRows = db.prepare(`
     SELECT action, entity_id, actor_id, device_id, organization_id, chat_id
     FROM audit_events
