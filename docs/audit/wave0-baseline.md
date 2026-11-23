@@ -32,7 +32,7 @@ Branch used for this audit: `audit/route-sqlite-dependency-map` (created from th
 
 The 253 route entries are represented in `route-characterization.json`. The map records handler source locations, detectable authentication/permission evidence, scope indicators, input validation/error evidence, idempotency references, direct SQLite calls and transaction evidence, side-effect hints, test candidates and classification.
 
-The route dispatcher rate-limits before dispatch but has no universal session middleware. The detailed source scan records 205 route entries with explicit permission-key evidence and 201 entries with handler authorization calls. 153 route entries use handlers registered for multiple methods; 166 are method-conditional, so handler-wide dependencies must not be attributed to every method. Three entries remain in the security review queue: POST /sync and GET/POST Payment routing-policy routes. Seven buyer/read surfaces are explicitly public or token-scoped. Filename-based test matches are not proof of route coverage.
+The route dispatcher rate-limits before dispatch but has no universal session middleware. The detailed source scan records 205 route entries with explicit permission-key evidence and 201 entries with handler authorization calls. It maps 873 direct route-to-store references: 790 join to SQL table evidence, 83 have no direct SQL in their exported function span, and 90 distinct tables are reached by direct exported store calls. 153 route entries use handlers registered for multiple methods; 166 are method-conditional, so handler-wide dependencies must not be attributed to every method. Three entries remain in the security review queue: POST /sync and GET/POST Payment routing-policy routes. Seven buyer/read surfaces are explicitly public or token-scoped. Filename-based test matches are not proof of route coverage.
 
 ## SQLite baseline
 
@@ -58,6 +58,10 @@ Three high-severity current-main findings are confirmed:
 ## Source-hash baseline
 
 There are 189 SHA-256 manifests. At least 11 verified manifests pin root `package.json`; at least two verified manifests pin `.github/workflows/ci.yml`. `PHASE21.18-SOURCE-HASHES.sha256` pins both. Historical manifests must be preserved; do not rewrite old hashes to make a current tree appear to match an older snapshot.
+
+## Perplexity inventory cross-check
+
+The Perplexity inventory workflow passed on this exact main commit (`45254875666`, Node 24), including route and SQLite inventory regression steps. It is a useful independent minimum-coverage gate, not a complete boundary audit. Its route generator deduplicates method/pattern keys before duplicate checking; its store generator deduplicates table names before its uniqueness assertion. This audit independently checks raw route entries and declaration lines, and does not treat proposed module/domain groupings as canonical ownership. The branch `audit/perplexity-codebase-modularity-20261122` has zero commits ahead of current main and is 38 commits behind; its branch snapshot is not a useful current baseline. Historical `docs/perplexity-audit/` records remain preserved.
 
 ## CI evidence on the baseline commit
 
