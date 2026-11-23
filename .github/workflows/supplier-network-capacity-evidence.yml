@@ -1,0 +1,51 @@
+name: Supplier Network capacity evidence lifecycle
+
+on:
+  push:
+    branches:
+      - audit/supplier-network-capacity-evidence-ci-20261123
+    paths:
+      - '.github/workflows/supplier-network-capacity-evidence.yml'
+      - 'backend/lib/store-sqlite.js'
+      - 'backend/lib/discovery/**'
+      - 'app/src/phase21-capacity-availability-evidence.js'
+      - 'app/src/procurement/capacity-evidence-display.js'
+      - 'app/src/procurement/ui.js'
+      - 'phase0/phase21.17-capacity-evidence-migration-regression.mjs'
+      - 'phase0/phase21.18-current-verification-regression.mjs'
+      - 'phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs'
+  pull_request:
+    paths:
+      - '.github/workflows/supplier-network-capacity-evidence.yml'
+      - 'backend/lib/store-sqlite.js'
+      - 'backend/lib/discovery/**'
+      - 'app/src/phase21-capacity-availability-evidence.js'
+      - 'app/src/procurement/capacity-evidence-display.js'
+      - 'app/src/procurement/ui.js'
+      - 'phase0/phase21.17-capacity-evidence-migration-regression.mjs'
+      - 'phase0/phase21.18-current-verification-regression.mjs'
+      - 'phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  supplier_network_capacity_evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install root dependencies
+        run: npm install --ignore-scripts
+      - name: Verify Node.js runtime
+        run: node --version
+      - name: Phase 21.17 capacity evidence migration regression
+        run: node phase0/phase21.17-capacity-evidence-migration-regression.mjs
+      - name: Phase 21.18 current capacity evidence verification
+        run: node phase0/phase21.18-current-verification-regression.mjs
+      - name: Phase 21.20 Procurement RFQ capacity evidence snapshot regression
+        run: node phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs
