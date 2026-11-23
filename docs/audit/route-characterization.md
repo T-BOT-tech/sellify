@@ -24,6 +24,8 @@ Baseline `e216db18ade2a5ffa66aff9dc3096e207251a918`; source `backend/server.js` 
 
 The dispatcher rate-limits before dispatch but does **not** provide universal session/auth middleware. Authentication and authorization are established at handler, delegated capability, store or public/token boundary.
 
+The detailed source scan records **205 route entries with explicit permission keys**, **201 route entries with handler authorization calls**, **158 unique handler helper call sites**, and **28 delegated PaymentCore methods**. Three entries remain in the security review queue.
+
 The JSON records:
 - `requireAuthorization` and `requireOwnerRole` calls with source line and arguments;
 - courier ownership, location and event-tenant scope helpers;
@@ -38,8 +40,8 @@ The categories overlap. Public projections, signed identity flows, provider noti
 **Three route entries need explicit policy clarification or remediation review:**
 
 1. `POST /sync/:chatId` — session authentication only, then `saveQueuedOrders` writes canonical orders and ensures canonical Payment state. The store function accepts no actor and has no role-permission check. The central role policy contains `orders:create` and `sync:manual`; confirm intended device-role access and enforce the applicable permission if restricted. Source: `backend/server.js:1221-1243`, `backend/lib/store-sqlite.js:12172-12270`.
-2. `GET /tenants/:chatId/payments/routing/policies` — session authentication only; direct store list function is tenant/organization scoped but has no action-level authorization evidence.
-3. `POST /tenants/:chatId/payments/routing/policies` — session authentication only; direct store upsert function persists routing policy without action-level authorization. `PaymentCore.resolveRouting` separately checks `payments:route`, but this HTTP handler bypasses it. Source: `backend/server.js:2397-2411`, `backend/lib/store-sqlite.js:9717-9762`, `backend/lib/payments/payment-core.js:25-29`.
+2. `GET /tenants/:chatId/payments/routing/policies` — session authentication only; direct store list function is tenant/organization scoped but has no action-level authorization. The role policy exposes `payments:view`, which this route does not evaluate.
+3. `POST /tenants/:chatId/payments/routing/policies` — session authentication only; direct store upsert function persists routing policy without action-level authorization. The role policy exposes `payments:route`; `PaymentCore.resolveRouting` checks it, but this HTTP handler bypasses that method. Source: `backend/server.js:2397-2411`, `backend/lib/store-sqlite.js:9717-9762`, `backend/lib/payments/payment-core.js:25-29`.
 
 The membership-list and logout endpoints are self-service and session-scoped. Public/token-scoped projections and provider/identity-authenticated routes are separately classified; missing tenant permission keys on those routes are not automatically defects.
 
