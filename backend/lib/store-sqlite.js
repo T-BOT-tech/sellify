@@ -5485,6 +5485,9 @@ export async function createPurchaseOrder(chatId, input = {}, actor = null) {
   if (sourceType === 'PROCUREMENT_AWARD') {
     return createPurchaseOrderFromProcurementAward(chatId, input, actor);
   }
+  const ownsTransaction = !db.isTransaction;
+  if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
+  try {
   const quoteId = String(input.quoteId ?? input.quote_id ?? '').trim();
   if (!quoteId) throw Object.assign(new Error('quoteId is required'), { statusCode: 400, code: 'PO_QUOTE_REQUIRED' });
   const quote = getQuoteByIdSync(organizationId, quoteId);
@@ -5507,7 +5510,12 @@ export async function createPurchaseOrder(chatId, input = {}, actor = null) {
     db.exec('COMMIT');
   } catch (error) { db.exec('ROLLBACK'); throw error; }
   audit(String(chatId), 'b2b.purchase-order.created', 'purchase_order', id, { poNumber, quoteId, customerId: quote.customerId, totalMinor: quote.totalMinor, currency: quote.currency, sourceType: 'B2B_QUOTE' }, { organizationId, actorId: actor?.userId || null });
+  if (ownsTransaction) db.exec('COMMIT');
   return getPurchaseOrderByIdSync(organizationId, id);
+  } catch (error) {
+    if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 
@@ -5940,6 +5948,9 @@ function sourceItemsForInvoice(chatId, organizationId, receivable) {
 export async function createInvoice(chatId, input = {}, actor = null) {
   ensureDatabase();
   const organizationId = await tenantOrganizationId(chatId);
+  const ownsTransaction = !db.isTransaction;
+  if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
+  try {
   const receivableId = String(input.receivableId || input.receivable_id || '');
   if (!receivableId) throw Object.assign(new Error('receivableId is required'), { statusCode: 400, code: 'RECEIVABLE_REQUIRED' });
   const receivable = await getReceivable(chatId, receivableId);
@@ -5953,15 +5964,16 @@ export async function createInvoice(chatId, input = {}, actor = null) {
   const total = items.reduce((sum, i) => sum + Number(i.lineTotalMinor), 0);
   if (total !== receivable.amountMinor) throw Object.assign(new Error('Invoice items must equal the receivable amount'), { statusCode: 409, code: 'INVOICE_TOTAL_MISMATCH' });
   const now = nowIso(); const id = crypto.randomUUID(); const number = String(input.invoiceNumber || input.invoice_number || nextInvoiceNumber(organizationId));
-  db.exec('BEGIN IMMEDIATE');
-  try {
-    db.prepare(`INSERT INTO invoices (id, organization_id, location_id, customer_id, receivable_id, invoice_number, currency, subtotal_minor, total_minor, status, issued_at, due_at, notes, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', NULL, ?, ?, ?, ?, ?)`).run(id, organizationId, receivable.locationId || null, receivable.customerId, receivable.id, number, receivable.currency, total, total, receivable.dueAt, String(input.notes || ''), actor?.userId || null, now, now);
-    const stmt = db.prepare(`INSERT INTO invoice_items (id, invoice_id, product_id, description, quantity, unit_price_minor, line_total_minor, currency, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    for (const item of items) stmt.run(crypto.randomUUID(), id, item.productId, String(item.description), Number(item.quantity), Number(item.unitPriceMinor), Number(item.lineTotalMinor), receivable.currency, now);
-    db.exec('COMMIT');
-  } catch (e) { db.exec('ROLLBACK'); throw e; }
+  db.prepare(`INSERT INTO invoices (id, organization_id, location_id, customer_id, receivable_id, invoice_number, currency, subtotal_minor, total_minor, status, issued_at, due_at, notes, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', NULL, ?, ?, ?, ?, ?)`).run(id, organizationId, receivable.locationId || null, receivable.customerId, receivable.id, number, receivable.currency, total, total, receivable.dueAt, String(input.notes || ''), actor?.userId || null, now, now);
+  const stmt = db.prepare(`INSERT INTO invoice_items (id, invoice_id, product_id, description, quantity, unit_price_minor, line_total_minor, currency, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  for (const item of items) stmt.run(crypto.randomUUID(), id, item.productId, String(item.description), Number(item.quantity), Number(item.unitPriceMinor), Number(item.lineTotalMinor), receivable.currency, now);
   audit(String(chatId), 'b2b.invoice.created', 'invoices', id, { receivableId: receivable.id, invoiceNumber: number, totalMinor: total, currency: receivable.currency }, { organizationId, actorId: actor?.userId || null, reason: input.reason || '' });
+  if (ownsTransaction) db.exec('COMMIT');
   return getInvoice(chatId, id);
+  } catch (error) {
+    if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 const INVOICE_TRANSITIONS = Object.freeze({ DRAFT: new Set(['ISSUED','CANCELLED']), ISSUED: new Set(['VOID']), VOID: new Set([]), CANCELLED: new Set([]) });
