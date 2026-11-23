@@ -397,6 +397,51 @@ try {
   `).get();
   assert.equal(pricingAudit?.entity_id, firstPricingRule.id,
     'B2B pricing audit provenance must reference the canonical persisted row ID');
+
+  const pricingBase = `/tenants/${encodeURIComponent(tenant.chatId)}/b2b/pricing`;
+  const unauthenticatedPricingRead = await request(pricingBase);
+  assert.equal(unauthenticatedPricingRead.response.status, 401,
+    'B2B pricing reads must require an authenticated tenant session');
+  const staffPricingRead = await request(pricingBase, {
+    headers: auth(staffSession.token),
+  });
+  assert.equal(staffPricingRead.response.status, 403,
+    'customer-view staff must not gain B2B pricing visibility without b2b:pricing:view');
+  const crossTenantPricingRead = await request(pricingBase, {
+    headers: auth(otherSession.token),
+  });
+  assert.equal(crossTenantPricingRead.response.status, 403,
+    'a session from another tenant cannot read this tenant B2B pricing');
+  const ownerPricingRead = await request(
+    `${pricingBase}?customer_id=${encodeURIComponent(pricingCustomer.id)}&product_id=${encodeURIComponent(pricingProductId)}`,
+    { headers: auth(ownerSession.token) }
+  );
+  assert.equal(ownerPricingRead.response.status, 200);
+  assert.equal(ownerPricingRead.json.pricing?.length, 1,
+    'authorized B2B pricing list must return the canonical tenant-scoped rule');
+  assert.equal(ownerPricingRead.json.pricing[0].id, firstPricingRule.id);
+  const staffPricingWrite = await request(pricingBase, {
+    method: 'POST',
+    headers: jsonAuth(staffSession.token),
+    body: JSON.stringify({
+      customerId: pricingCustomer.id,
+      productId: pricingProductId,
+      priceMinor: 10000,
+      currency: 'ETB',
+    }),
+  });
+  assert.equal(staffPricingWrite.response.status, 403,
+    'customer-view staff must not manage B2B customer pricing');
+  assert.equal((await store.listCustomerPricing(
+    tenant.chatId, pricingCustomer.id, pricingProductId
+  ))[0].priceMinor, 10500,
+  'a denied B2B pricing write must not mutate the canonical rule');
+  const otherTenantPricingGet = await request(
+    `/tenants/${encodeURIComponent(otherTenant.chatId)}/b2b/pricing/${encodeURIComponent(firstPricingRule.id)}`,
+    { headers: auth(otherSession.token) }
+  );
+  assert.equal(otherTenantPricingGet.response.status, 404,
+    'a B2B pricing rule ID must not resolve in another organization');
   const auditRows = db.prepare(`
     SELECT action, entity_id, actor_id, device_id, organization_id, chat_id
     FROM audit_events
