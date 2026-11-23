@@ -42,6 +42,7 @@ Related open PRs #306 and #298 contain proposed work but are stale relative to c
 3. Proposed wrappers: `test`, `test:integration`, `test:security`, `test:e2e`, `test:release`. Keep them additive and invoke each underlying suite once.
 4. Keep release certification separate from fast tests; keep source-hash checks and Node 24 runtime checks in the release path.
 5. Do not modify historical source-hash manifests to accommodate new aliases. Reconcile active manifests first.
+6. Harden the Perplexity inventory gates: preserve raw route entries until duplicate checks run, and assert repeated table declarations from declaration lines rather than from an already-deduplicated table map. Keep path/name-based classifications as review hints only.
 
 ## P3 — modularization after invariants are fixed
 
