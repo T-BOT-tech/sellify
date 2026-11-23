@@ -12,7 +12,9 @@ Baseline `e216db18ade2a5ffa66aff9dc3096e207251a918`; source `backend/lib/store-s
 - **228** exported function bodies with direct SQL candidates; **25** have no direct SQL candidate.
 - **64** exported functions contain transaction/lock markers.
 - **1,681** SQL sub-statements were extracted from **983** `db.prepare` calls and **338** `db.exec` calls. Three arguments are dynamic expressions and remain unresolved.
+- **287** provisional cross-area function/table SQL edges.
 - **74** low-coupling read/projection candidates are listed for further review; none is approved for extraction.
+- SQL call-site attribution: 950 sites are within exported-function spans; 731 are assigned to the nearest internal helper declaration (approximate attribution); none is left unassigned.
 
 ### SQL operation counts
 
@@ -28,11 +30,33 @@ Baseline `e216db18ade2a5ffa66aff9dc3096e207251a918`; source `backend/lib/store-s
 | ALTER TABLE | 43 |
 | DROP | 8 |
 | PRAGMA | 28 |
-| BEGIN / COMMIT / ROLLBACK | 230 combined |
+| BEGIN | 67 |
+| COMMIT | 96 |
+| ROLLBACK | 67 |
 | VACUUM | 1 |
-| Other / dynamic / trigger terminator tokens | 4 |
+| Other/dynamic/trigger terminator tokens | 43 |
 
 Counts are lexical call-site evidence. `db.exec` blocks are split on semicolons; trigger terminators and comments can appear as separate tokens, and the three dynamic SQL expressions are explicitly unresolved. The SQL site list includes source line, operation, referenced tables, owning export/helper attribution, and a bounded SQL preview.
+
+## Confirmed boundary findings on current main
+
+### High — Procurement receipt and Inventory posting are not atomic as one multi-line operation
+
+`createProcurementReceipt` at line 5579 commits the PENDING receipt and receipt lines in its initial `BEGIN IMMEDIATE` transaction. It then calls `appendInventoryMovement` sequentially after that commit (line 5657). If a later line fails, earlier Inventory movements may already be committed while the receipt remains PENDING. Deterministic per-line event IDs help safe retries, but they do not provide all-or-nothing multi-line receipt posting. PR #298 proposes a transaction/serialization fix, but it is not part of this main baseline.
+
+### High — Payment refund/settlement audit arguments are misaligned
+
+The canonical helper signature at line 239 is:
+
+`audit(chatId, action, entityType, entityId, metadata = {}, context = {})`.
+
+The Payment settlement/refund call sites at lines 9834, 9991, 10031, 10082 and Marketplace cancellation refund line 12814 pass the payment ID into `entityType` and the actor user ID into `entityId`. This misidentifies the audited entity and loses the actor from audit context. PR #306 proposes the provenance correction, but it is not part of this main baseline.
+
+### High — Refund/settlement request and audit persistence are not atomic
+
+`createPaymentSettlement` (line 9772) and `createPaymentRefundRequest` (line 9936) insert their child records and call `audit` without a shared transaction. If the audit write fails, the request row can remain persisted without its required audit event. The fix must preserve caller-owned transactions and be regression-tested for rollback.
+
+These findings are deliberately recorded rather than silently treated as safe extraction candidates. Keep the affected functions and their audit/ledger/Inventory consequences together until fixed and verified on the current base.
 
 ## Function, table and migration map
 
@@ -43,7 +67,7 @@ Every table's canonical owner remains **UNASSIGNED**. `candidateArea` is a name/
 ## Cross-domain invariants that constrain extraction
 
 1. Payment decision/ledger changes with Marketplace allocations and settlements.
-2. Payment refund finalization with Marketplace refund/allocation/settlement consequences.
+2. Payment refund finalization with Marketplace refund/allocation/settlement consequences and audit provenance.
 3. Marketplace checkout with catalog reads, inventory reservations, payment allocations, settlement and fulfillment records.
 4. Marketplace seller-order status with inventory, refund, settlement and fulfillment consequences.
 5. Procurement receipt posting with canonical Inventory movements.
