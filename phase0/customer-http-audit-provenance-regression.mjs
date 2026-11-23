@@ -436,6 +436,26 @@ try {
     tenant.chatId, pricingCustomer.id, pricingProductId
   ))[0].priceMinor, 10500,
   'a denied B2B pricing write must not mutate the canonical rule');
+  const ownerPricingWrite = await request(pricingBase, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({
+      customerId: pricingCustomer.id,
+      productId: pricingProductId,
+      priceMinor: 10200,
+      currency: 'ETB',
+      reason: 'Updated through authenticated pricing HTTP route',
+    }),
+  });
+  assert.equal(ownerPricingWrite.response.status, 201, JSON.stringify(ownerPricingWrite.json));
+  assert.equal(ownerPricingWrite.json.pricing.id, firstPricingRule.id,
+    'the authenticated B2B pricing POST must return the existing canonical row ID');
+  assert.equal(ownerPricingWrite.json.pricing.priceMinor, 10200,
+    'the authenticated B2B pricing POST must return its persisted updated price');
+  assert.equal((await store.listCustomerPricing(
+    tenant.chatId, pricingCustomer.id, pricingProductId
+  )).length, 1,
+  'repeated authenticated B2B pricing POST must not create duplicate rows');
   const otherTenantPricingGet = await request(
     `/tenants/${encodeURIComponent(otherTenant.chatId)}/b2b/pricing/${encodeURIComponent(firstPricingRule.id)}`,
     { headers: auth(otherSession.token) }
