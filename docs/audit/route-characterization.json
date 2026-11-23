@@ -6158,7 +6158,7 @@
     "Only the Customer and B2B Pricing route handlers are manually characterized in this revision; all other route records remain inventory-only.",
     "The six Telegram buyer storefront routes related to service bookings/fulfillment remain a separate channel-specific characterization batch."
   ],
-  "characterizedRouteCount": 41,
+  "characterizedRouteCount": 45,
   "characterizationBatches": [
     {
       "name": "Customer and B2B Pricing",
@@ -6215,5 +6215,7 @@
       "note": "Read-only projections; existing Sellify domains remain canonical."
     }
   ],
-  "pendingRouteCount": 212
+  "pendingRouteCount": 208,
+  "fullyCharacterizedRouteCount": 41,
+  "defectCandidateRouteCount": 4
 }
