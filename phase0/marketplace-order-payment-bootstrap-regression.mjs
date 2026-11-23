@@ -315,6 +315,18 @@ try {
   assert.equal(Number(settlementBody.settlement.providerFeeMinor), 25);
   assert.equal(Number(settlementBody.settlement.sellifyFeeMinor), 25);
   assert.equal(Number(settlementBody.settlement.netAmountMinor), 2450);
+
+  const settlementRequestedAudit = db.prepare(`
+    SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json
+    FROM audit_events WHERE action = 'payment.settlement.requested' AND entity_id = ?
+    ORDER BY id DESC LIMIT 1
+  `).get(payment.id);
+  assert.ok(settlementRequestedAudit, 'marketplace settlement creation must emit payment audit provenance');
+  assert.equal(settlementRequestedAudit.entity_type, 'payment');
+  assert.equal(settlementRequestedAudit.entity_id, payment.id);
+  assert.equal(settlementRequestedAudit.actor_id, user.id);
+  assert.equal(settlementRequestedAudit.device_id, session.deviceId);
+  assert.equal(JSON.parse(settlementRequestedAudit.metadata_json).settlementId, settlementBody.settlement.id);
   assert.equal((await store.getPayment(tenant.chatId, payment.id)).state, 'VERIFIED',
     'settlement creation must not mutate payment verification');
 
@@ -355,6 +367,17 @@ try {
   assert.equal(finalizedSettlement.financialEffect, false,
     'settlement confirmation records evidence; it does not claim Sellify moved funds');
   assert.equal(finalizedSettlement.paymentStateMutated, false);
+  const settlementFinalizedAudit = db.prepare(`
+    SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json
+    FROM audit_events WHERE action = 'payment.settlement.settled' AND entity_id = ?
+    ORDER BY id DESC LIMIT 1
+  `).get(payment.id);
+  assert.ok(settlementFinalizedAudit, 'marketplace settlement finalization must emit payment audit provenance');
+  assert.equal(settlementFinalizedAudit.entity_type, 'payment');
+  assert.equal(settlementFinalizedAudit.entity_id, payment.id);
+  assert.equal(settlementFinalizedAudit.actor_id, user.id);
+  assert.equal(settlementFinalizedAudit.device_id, session.deviceId);
+  assert.equal(JSON.parse(settlementFinalizedAudit.metadata_json).settlementId, settlementBody.settlement.id);
   assert.equal((await store.getPayment(tenant.chatId, payment.id)).state, 'VERIFIED',
     'provider settlement confirmation must not rewrite the payment decision');
   const ledgerAfterSettlementFinalize = await store.listPaymentLedger(tenant.chatId, payment.id);
@@ -396,6 +419,16 @@ try {
   assert.equal(refundBody.supported, false);
   assert.equal(refundBody.status, 'UNKNOWN');
   assert.equal(refundBody.refund?.status, 'UNKNOWN');
+  const refundRequestedAudit = db.prepare(`
+    SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json
+    FROM audit_events WHERE action = 'payment.refund.requested' AND entity_id = ?
+    ORDER BY id ASC
+  `).all(payment.id).find(row => JSON.parse(row.metadata_json).refundId === refundBody.refund.id);
+  assert.ok(refundRequestedAudit, 'marketplace refund request must emit payment audit provenance');
+  assert.equal(refundRequestedAudit.entity_type, 'payment');
+  assert.equal(refundRequestedAudit.entity_id, payment.id);
+  assert.equal(refundRequestedAudit.actor_id, user.id);
+  assert.equal(refundRequestedAudit.device_id, session.deviceId);
 
   const refundHistoryResponse = await fetch(refundPath, {
     headers: { Authorization: 'Bearer ' + session.token },
@@ -404,6 +437,17 @@ try {
   const refundHistory = await refundHistoryResponse.json();
   assert.equal(refundHistory.refunds?.length, 1);
   assert.equal(refundHistory.refunds[0].status, 'UNKNOWN');
+  const refundResultAudit = db.prepare(`
+    SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json
+    FROM audit_events WHERE action = 'payment.refund.result' AND entity_id = ?
+    ORDER BY id DESC LIMIT 1
+  `).get(payment.id);
+  assert.ok(refundResultAudit, 'marketplace refund result must emit payment audit provenance');
+  assert.equal(refundResultAudit.entity_type, 'payment');
+  assert.equal(refundResultAudit.entity_id, payment.id);
+  assert.equal(refundResultAudit.actor_id, user.id);
+  assert.equal(refundResultAudit.device_id, session.deviceId);
+  assert.equal(JSON.parse(refundResultAudit.metadata_json).refundId, refundBody.refund.id);
 
   const replayReview = await submitManualPaymentEvidenceReview(
     payment.id,
@@ -426,6 +470,28 @@ try {
   assert.equal(db.prepare(
     'SELECT COUNT(*) AS count FROM marketplace_payment_allocations WHERE marketplace_order_id = ? AND payment_id IS NOT NULL'
   ).get(String(checkout.marketplace_order_id)).count, 1);
+
+  // Marketplace cancellation creates a canonical Payment Core refund request.
+  // Its audit event must reference the payment aggregate, not shift payment ID
+  // and actor ID into the entity-type/entity-ID slots.
+  await store.updateMarketplaceOrderStatus(tenant.chatId, canonicalOrder.id, 'cancelled');
+  const cancellationRefundKey = `marketplace-cancel:${db.prepare(
+    'SELECT id FROM marketplace_seller_orders WHERE seller_order_id = ?'
+  ).get(canonicalOrder.id).id}:${payment.id}`;
+  const cancellationRefund = await store.getPaymentRefundByIdempotencyKey(tenant.chatId, cancellationRefundKey);
+  assert.ok(cancellationRefund, 'marketplace cancellation must create the canonical refund request');
+  const cancellationRefundAudit = db.prepare(`
+    SELECT action, entity_type, entity_id, actor_id, organization_id, metadata_json
+    FROM audit_events WHERE action = 'payment.refund.requested' AND entity_id = ?
+    ORDER BY id DESC
+  `).all(payment.id).find(row => JSON.parse(row.metadata_json).refundId === cancellationRefund.id);
+  assert.ok(cancellationRefundAudit, 'marketplace cancellation refund must emit canonical payment audit provenance');
+  assert.equal(cancellationRefundAudit.entity_type, 'payment');
+  assert.equal(cancellationRefundAudit.entity_id, payment.id);
+  assert.equal(cancellationRefundAudit.actor_id, null,
+    'system-generated cancellation refund audit must not invent a user actor');
+  assert.equal(cancellationRefundAudit.organization_id, String(session.organizationId));
+  assert.equal(JSON.parse(cancellationRefundAudit.metadata_json).source, 'marketplace-cancellation');
 
   console.log('Marketplace order → Payment Core bootstrap regression: PASS');
   console.log('Canonical order pull creates one UNPAID Payment Core payment and links marketplace allocation: PASS');
