@@ -47,3 +47,10 @@ It is a planning aid, not a replacement for executable tests or runtime verifica
 4. Review legacy quantity-only capacity consumers before using them for hard time-sensitive decisions; do not assume they inherit the time-bound matcher's freshness guarantees.
 5. Keep operational scheduling request-only until the trusted feasibility path and its authorization, tenant/location scope, and side-effect boundaries are implemented and tested.
 6. Define the long-term persistence strategy beyond SQLite.
+
+
+## Current-main boundary clarification (2026-11-23)
+
+The strict time-bound capacity checks apply in the unified `/api/discovery` flow. The direct `/tenants/:chatId/supplier-network/discovery` route calls the legacy store discovery function directly and retains quantity-only capacity ranking without freshness, validity, period-overlap, or unit enforcement. Do not use that direct legacy result for hard time-sensitive decisions. See `docs/audit/capacity-scheduling-boundary.md`.
+
+A separate route authorization gap was confirmed: `GET/POST /tenants/:chatId/payments/routing/policies` require a tenant session but do not enforce the central `payments:view` / management permission boundary. See `docs/audit/route-characterization.md`.
