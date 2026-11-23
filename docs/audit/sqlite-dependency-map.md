@@ -192,3 +192,22 @@ All four have package scripts in current `package.json`. Their source files and 
 - Not established: a complete dependency DAG for every migration; successful execution of every supported historical upgrade path; a full fresh-install and upgrade test run in this audit session.
 - No evidence supports renumbering or reordering the migrations merely to make source order monotonic. Do not reorder them.
 - Next migration work should map each block's actual DDL/DML prerequisites and data transformations, then execute the existing regression scripts and add only missing representative upgrade fixtures. Treat any suspected dependency as unverified until the relevant schema state and test demonstrate it.
+
+
+## Characterization batch 3 — Procurement demand persistence
+
+Current `main` at `15737ee0c83e057113baa3881638186542ed6999`, `backend/lib/store-sqlite.js` lines 4128–4369.
+
+| Function | Read dependencies | Write dependencies | Transaction boundary |
+|---|---|---|---|
+| `createProcurementDemand` | tenant/org, active membership, optional location, catalog product, existing idempotency record | `procurement_demands`, `procurement_demand_items`, `audit_events` | `BEGIN IMMEDIATE` covers header, all item inserts and audit |
+| `getProcurementDemand` | `procurement_demands`, `procurement_demand_items` | — | Read-only; demand lookup constrained by organization |
+| `listProcurementDemands` | `procurement_demands`, `procurement_demand_items` | — | Read-only; organization/status/requester filters and bounded limit |
+| `updateProcurementDemand` | tenant/org, active membership, location, catalog product, demand and items | `procurement_demands`, `procurement_demand_items`, `audit_events` | `BEGIN IMMEDIATE` covers draft update, item replacement and audit |
+| `transitionProcurementDemand` | tenant/org, active membership and current demand | `procurement_demands`, `audit_events` | `BEGIN IMMEDIATE` covers status transition and audit |
+
+The store's `assertProcurementActor` enforces active membership in the organization; the HTTP handler separately enforces the specific procurement-demand permission. Do not treat the store membership check as a replacement for route authorization.
+
+### Existing regression evidence reviewed
+
+`phase0/phase17.1-procurement-demand-regression.mjs` covers creation, replay with the same idempotency key, payload mismatch, draft editing, submit/sourcing transitions, invalid transition and audit rows. `phase0/phase17.1-procurement-demand-contract-regression.mjs` checks the state-transition contract. Both are source-reviewed only; not executed in this audit session.
