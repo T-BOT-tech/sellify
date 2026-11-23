@@ -25,7 +25,7 @@ Its scope spans buyer and seller commerce, procurement, supplier networks, inven
 |---|---|---|
 | Runtime | Node.js with ESM | The project targets a Node 24 runtime gate. |
 | Backend | Node.js HTTP server | `backend/server.js` is 274,791 characters and currently contains 247 explicit route entries, 6 inline dispatch branches, and 137 distinct named handlers. |
-| Persistence | SQLite | `backend/lib/store-sqlite.js` is 971,694 characters, with 253 exported functions, 947 literal SQL statements, and 110 unique tables. |
+| Persistence | SQLite | `backend/lib/store-sqlite.js` is 971,694 characters, with 253 exported functions, 1,639 individual SQL statements (1,318 literal SQL API calls; 947 literal calls inside exported functions), and 110 unique tables. |
 | Frontend | Vanilla HTML/CSS and browser ES modules; PWA | `app/index.html` is the main shell; `app/src/main.js` imports local ES modules. `app/package.json` has no React, Vue, Angular, Svelte, or other frontend framework dependency. |
 | Testing | Node regression scripts | Extensive but highly fragmented across npm scripts. |
 | Integrations | Telegram, payments, logistics, country packs | Broad external and vertical integration surface. |
