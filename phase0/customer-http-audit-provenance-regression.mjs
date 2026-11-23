@@ -1,10 +1,70 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import vm from 'node:vm';
 import { setTimeout as sleep } from 'node:timers/promises';
+
+// Exercise the real local Customer upsert implementation with a sparse
+// order-shaped payload before starting the backend integration regression.
+const customerModuleSource = await readFile(
+  new URL('../app/src/customers.js', import.meta.url), 'utf8'
+);
+const normalizeSource = customerModuleSource.match(/function normalize\\(value = \\{\\}\\) \\{[\\s\\S]*?^\\}/m)?.[0];
+const localUpsertSource = customerModuleSource.match(/export function upsertLocalCustomer\\(input = \\{\\}\\) \\{[\\s\\S]*?^\\}/m)?.[0]
+  ?.replace('export function', 'function');
+assert.ok(normalizeSource && localUpsertSource, 'local Customer normalization and upsert functions must remain inspectable');
+const localCustomers = [{
+  id: 'local-sparse-customer',
+  name: 'Existing Local Customer',
+  phone: '+251911000099',
+  email: 'local-preserve@example.test',
+  address: 'Local preserved address',
+  taxId: 'LOCAL-TAX-99',
+  notes: 'Local preserved notes',
+  customerType: 'business',
+  status: 'inactive',
+  source: 'manual',
+  createdAt: 1,
+}];
+const localCustomerSandbox = {
+  customers: localCustomers,
+  uid: () => 'generated-local-customer',
+  setCustomers: () => {},
+  persist: () => {},
+  findCustomerById: id => localCustomers.find(customer => String(customer.id) === String(id)) || null,
+  findCustomerByContact: (name, phone) => localCustomers.find(customer =>
+    (phone && customer.phone === phone) || (!phone && customer.name.toLowerCase() === String(name).toLowerCase())
+  ) || null,
+};
+const localUpsert = vm.runInNewContext(
+  `${normalizeSource}\\n${localUpsertSource}\\nupsertLocalCustomer`,
+  localCustomerSandbox
+);
+const locallyUpdated = localUpsert({
+  name: 'Existing Local Customer Updated',
+  phone: '+251911000099',
+  source: 'order',
+});
+assert.equal(locallyUpdated.email, 'local-preserve@example.test',
+  'sparse local order upsert must preserve email');
+assert.equal(locallyUpdated.address, 'Local preserved address');
+assert.equal(locallyUpdated.taxId, 'LOCAL-TAX-99');
+assert.equal(locallyUpdated.notes, 'Local preserved notes');
+assert.equal(locallyUpdated.customerType, 'business');
+assert.equal(locallyUpdated.status, 'inactive');
+const locallyCleared = localUpsert({
+  name: 'Existing Local Customer Updated',
+  phone: '+251911000099',
+  email: '',
+  source: 'manual',
+});
+assert.equal(locallyCleared.email, '',
+  'an explicit empty local editor value must clear email');
+assert.equal(locallyCleared.address, 'Local preserved address',
+  'clearing one local field must not clear omitted fields');
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const dataDir = await mkdtemp(path.join(tmpdir(), 'sellify-customer-http-'));
