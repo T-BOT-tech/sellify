@@ -119,6 +119,17 @@ try {
   assert.equal(buyerBody.ai, false);
   assert.ok(Array.isArray(buyerBody.results));
 
+  const directPostResponse = await request(baseUrl, directPath, {
+    token: buyerSession.token,
+    method: 'POST',
+    body: { search: 'supplier discovery HTTP regression' },
+  });
+  assert.equal(directPostResponse.status, 200,
+    'authorized buyer session may use the supported POST discovery route');
+  const directPostBody = await directPostResponse.json();
+  assert.equal(directPostBody.deterministic, true);
+  assert.ok(Array.isArray(directPostBody.results));
+
   const unifiedPath = '/api/discovery';
   const missingTenant = await request(baseUrl, unifiedPath, {
     method: 'POST',
