@@ -66,6 +66,59 @@ assert.equal(locallyCleared.email, '',
 assert.equal(locallyCleared.address, 'Local preserved address',
   'clearing one local field must not clear omitted fields');
 
+// Tenant switches can overlap in-flight Customer requests. Exercise the real
+// exported sync/load functions and prove stale responses cannot contaminate the
+// next tenant's shared local Customer cache.
+const syncSource = customerModuleSource.match(/export async function syncCustomer\(customer\) \{[\\s\\S]*?^\}/m)?.[0]
+  ?.replace('export async function', 'async function');
+const loadSource = customerModuleSource.match(/export async function loadCustomers\(\{ query = '' \} = \{\}\) \{[\\s\\S]*?^\}/m)?.[0]
+  ?.replace('export async function', 'async function');
+assert.ok(syncSource && loadSource, 'Customer sync and load functions must remain inspectable');
+let resolveCustomerSync;
+let resolveCustomerLoad;
+let persistCount = 0;
+let localMutationCount = 0;
+const tenantRaceSandbox = {
+  config: { chatId: 'tenant-a', sessionToken: 'token-a' },
+  customers: [],
+  setCustomers(next) { this.customers = next; },
+  api: () => new Promise(resolve => { resolveCustomerSync = resolve; }),
+  upsertLocalCustomer: value => { localMutationCount += 1; return value; },
+  persist: () => { persistCount += 1; },
+  console: { warn: () => {} },
+};
+const customerAsyncFunctions = vm.runInNewContext(
+  `${syncSource}\\n${loadSource}\\n({ syncCustomer, loadCustomers })`,
+  tenantRaceSandbox
+);
+const staleSync = customerAsyncFunctions.syncCustomer({
+  id: 'tenant-a-customer', name: 'Tenant A Customer',
+});
+tenantRaceSandbox.config.chatId = 'tenant-b';
+tenantRaceSandbox.config.sessionToken = 'token-b';
+resolveCustomerSync({ customer: { id: 'tenant-a-customer', name: 'Tenant A Customer' } });
+assert.equal(await staleSync, null,
+  'a customer sync response from a previous tenant must be discarded');
+assert.equal(localMutationCount, 0,
+  'a stale customer sync response must not mutate the current tenant cache');
+assert.equal(persistCount, 0,
+  'a stale customer sync response must not persist into the current tenant cache');
+
+tenantRaceSandbox.config.chatId = 'tenant-a';
+tenantRaceSandbox.config.sessionToken = 'token-a';
+tenantRaceSandbox.customers = [{ id: 'tenant-b-customer', name: 'Tenant B Customer' }];
+tenantRaceSandbox.api = () => new Promise(resolve => { resolveCustomerLoad = resolve; });
+const staleLoad = customerAsyncFunctions.loadCustomers();
+tenantRaceSandbox.config.chatId = 'tenant-b';
+tenantRaceSandbox.config.sessionToken = 'token-b';
+resolveCustomerLoad({ customers: [{ id: 'tenant-a-customer', name: 'Tenant A Customer' }] });
+const currentTenantCustomers = await staleLoad;
+assert.equal(currentTenantCustomers[0]?.id, 'tenant-b-customer',
+  'a stale customer list response must leave the current tenant cache unchanged');
+assert.equal(tenantRaceSandbox.customers[0]?.id, 'tenant-b-customer');
+assert.equal(persistCount, 0,
+  'a stale customer list response must not persist into the current tenant cache');
+
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const dataDir = await mkdtemp(path.join(tmpdir(), 'sellify-customer-http-'));
 const port = await new Promise((resolve, reject) => {
