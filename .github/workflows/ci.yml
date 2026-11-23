@@ -2,7 +2,7 @@ name: Sellify CI
 
 on:
   push:
-    branches: [main, fix/gap-1-18-migration63-recovery]
+    branches: [main, fix/gap-1-18-migration63-recovery, audit/supplier-network-discovery-http-auth-20261123]
   pull_request:
 
 permissions:
