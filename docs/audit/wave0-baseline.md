@@ -17,6 +17,7 @@
 | Duplicate method/pattern keys | 0 | Static route-key comparison. |
 | Heuristic unclassified entries | 35 | 30 real domain routes + 5 static/inline branches; `/config.js` is separately classified. |
 | Exported SQLite store functions | 253 | Static declarations in `backend/lib/store-sqlite.js`. |
+| SQL API call sites | 1,321 | 1,318 literal SQL calls plus three dynamic call sites across the full file. |
 | Individual SQL statements | 1,639 | From 1,318 literal SQL API calls across the full file; 947 literal calls are inside exported function bodies. |
 | Dynamic SQL call sites | 3 | Listed separately in SQLite JSON. |
 | Unique SQL tables | 110 | From 112 table declarations. |
