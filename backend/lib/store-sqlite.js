@@ -4544,8 +4544,19 @@ function supplierNetworkTrustEvidenceFromRow(row) {
   return { id:String(row.id), supplierOrganizationId:String(row.supplier_organization_id), evidenceType:String(row.evidence_type), sourceAuthority:String(row.source_authority), sourceEntityType:String(row.source_entity_type), sourceEntityId:String(row.source_entity_id), claim:String(row.claim), value:parseJSON(row.value_json,{}), evidenceState:String(row.evidence_state), visibility:String(row.visibility), observedAt:String(row.observed_at), createdAt:String(row.created_at), createdByUserId:row.created_by_user_id||null, version:Number(row.version||1) };
 }
 
-function supplierNetworkTrustCanAccessEvidence(org,supplierId,visibility){
+function supplierNetworkTrustCanAccessEvidence(org,supplierId,visibility,evidence=null){
   if(String(org)===String(supplierId)) return true;
+  if(evidence?.evidenceType==='QUALIFICATION_VERIFIED'){
+    const source=db.prepare('SELECT status,visibility,valid_until FROM supplier_network_qualifications WHERE id=? AND organization_id=?').get(String(evidence.sourceEntityId),String(supplierId));
+    if(!source||source.status!=='VERIFIED') return false;
+    if(source.valid_until){
+      const validUntil=Date.parse(source.valid_until);
+      if(!Number.isFinite(validUntil)||validUntil<Date.now()) return false;
+    }
+    if(source.visibility==='PUBLIC'||source.visibility==='NETWORK') return true;
+    if(source.visibility==='RELATIONSHIP') return Boolean(db.prepare("SELECT 1 FROM procurement_supplier_relationships WHERE buyer_organization_id=? AND supplier_organization_id=? AND status='ACTIVE'").get(String(org),String(supplierId)));
+    return false;
+  }
   if(visibility==='NETWORK') return true;
   if(visibility==='RELATIONSHIP') return Boolean(db.prepare("SELECT 1 FROM procurement_supplier_relationships WHERE buyer_organization_id=? AND supplier_organization_id=? AND status='ACTIVE'").get(String(org),String(supplierId)));
   return false;
@@ -4554,7 +4565,28 @@ function supplierNetworkTrustCanAccessEvidence(org,supplierId,visibility){
 export async function listSupplierNetworkTrustEvidence(chatId,{supplierOrganizationId='',evidenceType='',limit=100}={},actor=null){
   ensureDatabase(); const org=await tenantOrganizationId(chatId); assertProcurementActor(org,actor);
   const supplierId=String(supplierOrganizationId||org).trim(); const where=['supplier_organization_id=?']; const params=[supplierId];
-  if(supplierId!==String(org)){where.push("visibility IN ('NETWORK','RELATIONSHIP')"); if(!supplierNetworkTrustCanAccessEvidence(org,supplierId,'RELATIONSHIP')) where[where.length-1]="visibility='NETWORK'";}
+  if(supplierId!==String(org)){
+    where.push("visibility IN ('NETWORK','RELATIONSHIP')");
+    if(!supplierNetworkTrustCanAccessEvidence(org,supplierId,'RELATIONSHIP')) where.push("visibility='NETWORK'");
+    where.push(`(
+      evidence_type <> 'QUALIFICATION_VERIFIED'
+      OR EXISTS (
+        SELECT 1 FROM supplier_network_qualifications q
+        WHERE q.id=supplier_network_trust_evidence.source_entity_id
+          AND q.organization_id=supplier_network_trust_evidence.supplier_organization_id
+          AND q.status='VERIFIED'
+          AND (q.valid_until IS NULL OR (julianday(q.valid_until) IS NOT NULL AND julianday(q.valid_until)>=julianday(?)))
+          AND (
+            q.visibility IN ('PUBLIC','NETWORK')
+            OR (q.visibility='RELATIONSHIP' AND EXISTS (
+              SELECT 1 FROM procurement_supplier_relationships r
+              WHERE r.buyer_organization_id=? AND r.supplier_organization_id=? AND r.status='ACTIVE'
+            ))
+          )
+      )
+    )`);
+    params.push(nowIso(),String(org),String(supplierId));
+  }
   if(evidenceType){where.push('evidence_type=?');params.push(String(evidenceType).toUpperCase());}
   const n=Math.min(500,Math.max(1,Number(limit)||100));
   return db.prepare(`SELECT * FROM supplier_network_trust_evidence WHERE ${where.join(' AND ')} ORDER BY observed_at DESC,id ASC LIMIT ?`).all(...params,n).map(supplierNetworkTrustEvidenceFromRow);
@@ -4563,8 +4595,9 @@ export async function listSupplierNetworkTrustEvidence(chatId,{supplierOrganizat
 export async function getSupplierNetworkTrustEvidence(chatId,evidenceId,actor=null){
   ensureDatabase(); const org=await tenantOrganizationId(chatId); assertProcurementActor(org,actor);
   const row=db.prepare('SELECT * FROM supplier_network_trust_evidence WHERE id=?').get(String(evidenceId));
-  if(!row || !supplierNetworkTrustCanAccessEvidence(org,row.supplier_organization_id,row.visibility)) return null;
-  return supplierNetworkTrustEvidenceFromRow(row);
+  const evidence=row?supplierNetworkTrustEvidenceFromRow(row):null;
+  if(!evidence || !supplierNetworkTrustCanAccessEvidence(org,evidence.supplierOrganizationId,evidence.visibility,evidence)) return null;
+  return evidence;
 }
 
 export async function refreshSupplierNetworkTrustEvidence(chatId,supplierOrganizationId,input={},actor=null){
@@ -4578,8 +4611,13 @@ export async function refreshSupplierNetworkTrustEvidence(chatId,supplierOrganiz
   }
   const now=nowIso(); const evidence=[];
   evidence.push(['SUPPLIER_PARTICIPATION','procurement','supplier_participant',supplierId,'Supplier is an active procurement supplier participant',{status:'ACTIVE',discoverable:Boolean(participant.discoverable)},'OBSERVED','NETWORK',now]);
-  const quals=db.prepare("SELECT id,qualification_type,title,issuer,reference_number,status,verified_at,valid_until FROM supplier_network_qualifications WHERE organization_id=? AND status='VERIFIED' ORDER BY verified_at DESC,id ASC").all(supplierId);
-  for(const q of quals) evidence.push(['QUALIFICATION_VERIFIED','supplier_network','supplier_network_qualification',q.id,`Qualification ${q.qualification_type} is verified`,{qualificationType:q.qualification_type,title:q.title,issuer:q.issuer,referenceNumber:q.reference_number,verifiedAt:q.verified_at,validUntil:q.valid_until},'VERIFIED','NETWORK',q.verified_at||now]);
+  const quals=db.prepare("SELECT id,qualification_type,title,issuer,reference_number,status,verified_at,valid_until,visibility FROM supplier_network_qualifications WHERE organization_id=? AND status='VERIFIED' AND (valid_until IS NULL OR (julianday(valid_until) IS NOT NULL AND julianday(valid_until)>=julianday(?))) ORDER BY verified_at DESC,id ASC").all(supplierId,now);
+  for(const q of quals){
+    const sourceVisibility=String(q.visibility||'NETWORK').toUpperCase();
+    if(sourceVisibility==='PRIVATE'||sourceVisibility==='CONFIDENTIAL') continue;
+    const trustVisibility=sourceVisibility==='RELATIONSHIP'?'RELATIONSHIP':'NETWORK';
+    evidence.push(['QUALIFICATION_VERIFIED','supplier_network','supplier_network_qualification',q.id,`Qualification ${q.qualification_type} is verified`,{qualificationType:q.qualification_type,title:q.title,issuer:q.issuer,referenceNumber:q.reference_number,verifiedAt:q.verified_at,validUntil:q.valid_until},'VERIFIED',trustVisibility,q.verified_at||now]);
+  }
   const perf=db.prepare(`SELECT p.* FROM supplier_network_performance_observations p WHERE p.supplier_organization_id=? AND p.id=(SELECT p2.id FROM supplier_network_performance_observations p2 WHERE p2.supplier_organization_id=p.supplier_organization_id AND p2.metric_type=p.metric_type ORDER BY p2.calculated_at DESC,p2.id DESC LIMIT 1) ORDER BY p.metric_type`).all(supplierId);
   for(const m of perf) evidence.push(['PERFORMANCE_OBSERVED','supplier_network','supplier_network_performance_observation',m.id,`Observed supplier performance: ${m.metric_type}`,{metricType:m.metric_type,numerator:Number(m.numerator),denominator:Number(m.denominator),value:Number(m.value),unit:m.unit,periodStart:m.period_start,periodEnd:m.period_end},'OBSERVED',m.visibility,m.calculated_at]);
   if(supplierId!==org){
