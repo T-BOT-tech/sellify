@@ -7512,7 +7512,23 @@ export async function upsertCustomer(chatId, input = {}, actor = null) {
 export async function updateCustomer(chatId, customerId, patch = {}, actor = null) {
   const current = await getCustomer(chatId, customerId);
   if (!current) throw Object.assign(new Error('Customer not found'), { statusCode: 404 });
-  return upsertCustomer(chatId, { ...current, ...patch, id: current.id }, actor);
+  const input = { ...current, ...patch, id: current.id };
+  // PATCH accepts both canonical camelCase fields and the snake_case aliases
+  // accepted by customer creation. Existing canonical values must not mask
+  // an explicitly supplied alias when the canonical key is absent.
+  const aliases = [
+    ['customerType', 'customer_type'],
+    ['name', 'customer_name'],
+    ['phone', 'customer_phone'],
+    ['taxId', 'tax_id'],
+    ['defaultLocationId', 'default_location_id'],
+  ];
+  for (const [canonical, alias] of aliases) {
+    if (Object.hasOwn(patch, alias) && !Object.hasOwn(patch, canonical)) {
+      input[canonical] = patch[alias];
+    }
+  }
+  return upsertCustomer(chatId, input, actor);
 }
 
 function inventoryMovementFromRow(row) {
