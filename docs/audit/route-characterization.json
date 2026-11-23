@@ -9,8 +9,8 @@
   "routeTableCount": 247,
   "inlineBranchCount": 6,
   "namedHandlerCount": 137,
-  "handlerSourceLocations": 247,
-  "needsReviewCount": 31,
+  "handlerSourceLocations": 248,
+  "needsReviewCount": 2,
   "duplicateMethodPatternKeys": 0,
   "notes": [
     "247 central ROUTES entries plus six inline dispatch branches.",
@@ -1157,7 +1157,7 @@
       "handler": "handleListInvites",
       "handlerSourceLine": 1112,
       "domainGroup": "Identity and access",
-      "classification": "needs-review",
+      "classification": "infrastructure",
       "authentication": "tenant-scoped session required",
       "authorization": {
         "calls": [
@@ -1215,7 +1215,7 @@
       "handler": "handleListDevices",
       "handlerSourceLine": 1129,
       "domainGroup": "Identity and access",
-      "classification": "needs-review",
+      "classification": "infrastructure",
       "authentication": "tenant-scoped session required",
       "authorization": {
         "calls": [
@@ -11953,17 +11953,9 @@
       "classification": "infrastructure",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [
-          {
-            "helper": "requireOwnerRole",
-            "permission": "administration:settings:configure",
-            "appliesTo": "writes; GET is authenticated tenant-member read"
-          }
-        ],
-        "permissionKeys": [
-          "administration:settings:configure"
-        ],
-        "serverPolicy": "central authorize() via requireOwnerRole"
+        "calls": [],
+        "permissionKeys": [],
+        "serverPolicy": "authenticated tenant-member read"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -12016,8 +12008,7 @@
         "calls": [
           {
             "helper": "requireOwnerRole",
-            "permission": "administration:settings:configure",
-            "appliesTo": "writes; GET is authenticated tenant-member read"
+            "permission": "administration:settings:configure"
           }
         ],
         "permissionKeys": [
@@ -12076,8 +12067,7 @@
         "calls": [
           {
             "helper": "requireOwnerRole",
-            "permission": "administration:settings:configure",
-            "appliesTo": "writes; GET is authenticated tenant-member read"
+            "permission": "administration:settings:configure"
           }
         ],
         "permissionKeys": [
@@ -12133,17 +12123,9 @@
       "classification": "infrastructure",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [
-          {
-            "helper": "requireOwnerRole",
-            "permission": "administration:settings:configure",
-            "appliesTo": "writes; GET is authenticated tenant-member read"
-          }
-        ],
-        "permissionKeys": [
-          "administration:settings:configure"
-        ],
-        "serverPolicy": "central authorize() via requireOwnerRole"
+        "calls": [],
+        "permissionKeys": [],
+        "serverPolicy": "authenticated tenant-member read"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -12199,8 +12181,7 @@
         "calls": [
           {
             "helper": "requireOwnerRole",
-            "permission": "administration:settings:configure",
-            "appliesTo": "writes; GET is authenticated tenant-member read"
+            "permission": "administration:settings:configure"
           }
         ],
         "permissionKeys": [
@@ -13582,7 +13563,8 @@
           {
             "helper": "PaymentCore.#authorize",
             "permission": "payments:manage OR payments:accept",
-            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+            "enforcement": "server injects central authorize(actor, organizationId, locationId, 'payments', permission)",
+            "detail": "PaymentCore selects manage for CANCELLED/REVERSED; accept for other permitted lifecycle targets."
           }
         ],
         "permissionKeys": [
@@ -13625,7 +13607,7 @@
         "phase0/gap-1.13-payment-lifecycle-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "reviewStatus": "manually reviewed against method-specific PaymentCore authorization and store calls",
       "paymentCoreMethods": [
         {
           "method": "transitionLifecycle",
@@ -13657,7 +13639,8 @@
           {
             "helper": "PaymentCore.#authorize",
             "permission": "payments:manage",
-            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+            "enforcement": "server injects central authorize(actor, organizationId, locationId, 'payments', permission)",
+            "detail": null
           }
         ],
         "permissionKeys": [
@@ -13692,7 +13675,7 @@
         "phase0/gap-1.14-payment-refund-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "reviewStatus": "manually reviewed against method-specific PaymentCore authorization and store calls",
       "paymentCoreMethods": [
         {
           "method": "refund",
@@ -13731,13 +13714,13 @@
         "calls": [
           {
             "helper": "PaymentCore.#authorize",
-            "permission": "payments:view OR payments:manage",
-            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+            "permission": "payments:view",
+            "enforcement": "server injects central authorize(actor, organizationId, locationId, 'payments', permission)",
+            "detail": null
           }
         ],
         "permissionKeys": [
-          "payments:view",
-          "payments:manage"
+          "payments:view"
         ],
         "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
@@ -13776,7 +13759,7 @@
         "phase0/gap-2-delivery-end-to-end-certification-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "reviewStatus": "manually reviewed against method-specific PaymentCore authorization and store calls",
       "paymentCoreMethods": [
         {
           "method": "certifyProviderCapabilities",
@@ -13791,19 +13774,10 @@
           "storeFunctions": [
             "listPaymentProviderCapabilityEvidence"
           ]
-        },
-        {
-          "method": "certifyProviderCapability",
-          "permission": "payments:manage",
-          "storeFunctions": [
-            "listPaymentProviderCapabilityEvidence",
-            "certifyPaymentProviderCapability"
-          ]
         }
       ],
       "delegatedStoreFunctions": [
-        "listPaymentProviderCapabilityEvidence",
-        "certifyPaymentProviderCapability"
+        "listPaymentProviderCapabilityEvidence"
       ]
     },
     {
@@ -13822,7 +13796,8 @@
           {
             "helper": "PaymentCore.#authorize",
             "permission": "payments:manage",
-            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+            "enforcement": "server injects central authorize(actor, organizationId, locationId, 'payments', permission)",
+            "detail": null
           }
         ],
         "permissionKeys": [
@@ -13856,7 +13831,7 @@
       "sideEffects": [],
       "testCandidates": [],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "reviewStatus": "manually reviewed against method-specific PaymentCore authorization and store calls",
       "paymentCoreMethods": [
         {
           "method": "probeProviderCapability",
@@ -13885,13 +13860,13 @@
         "calls": [
           {
             "helper": "PaymentCore.#authorize",
-            "permission": "payments:view OR payments:manage",
-            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+            "permission": "payments:view",
+            "enforcement": "server injects central authorize(actor, organizationId, locationId, 'payments', permission)",
+            "detail": null
           }
         ],
         "permissionKeys": [
-          "payments:view",
-          "payments:manage"
+          "payments:view"
         ],
         "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
@@ -13921,7 +13896,7 @@
       "sideEffects": [],
       "testCandidates": [],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "reviewStatus": "manually reviewed against method-specific PaymentCore authorization and store calls",
       "paymentCoreMethods": [
         {
           "method": "listProviderCapabilityEvidence",
@@ -13929,18 +13904,10 @@
           "storeFunctions": [
             "listPaymentProviderCapabilityEvidence"
           ]
-        },
-        {
-          "method": "recordProviderCapabilityEvidence",
-          "permission": "payments:manage",
-          "storeFunctions": [
-            "recordPaymentProviderCapabilityEvidence"
-          ]
         }
       ],
       "delegatedStoreFunctions": [
-        "listPaymentProviderCapabilityEvidence",
-        "recordPaymentProviderCapabilityEvidence"
+        "listPaymentProviderCapabilityEvidence"
       ]
     },
     {
@@ -13958,12 +13925,12 @@
         "calls": [
           {
             "helper": "PaymentCore.#authorize",
-            "permission": "payments:view OR payments:manage",
-            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+            "permission": "payments:manage",
+            "enforcement": "server injects central authorize(actor, organizationId, locationId, 'payments', permission)",
+            "detail": null
           }
         ],
         "permissionKeys": [
-          "payments:view",
           "payments:manage"
         ],
         "serverPolicy": "central authorize() enforced inside PaymentCore"
@@ -13994,15 +13961,8 @@
       "sideEffects": [],
       "testCandidates": [],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "reviewStatus": "manually reviewed against method-specific PaymentCore authorization and store calls",
       "paymentCoreMethods": [
-        {
-          "method": "listProviderCapabilityEvidence",
-          "permission": "payments:view",
-          "storeFunctions": [
-            "listPaymentProviderCapabilityEvidence"
-          ]
-        },
         {
           "method": "recordProviderCapabilityEvidence",
           "permission": "payments:manage",
@@ -14012,7 +13972,6 @@
         }
       ],
       "delegatedStoreFunctions": [
-        "listPaymentProviderCapabilityEvidence",
         "recordPaymentProviderCapabilityEvidence"
       ]
     },
@@ -14031,13 +13990,13 @@
         "calls": [
           {
             "helper": "PaymentCore.#authorize",
-            "permission": "payments:view OR payments:manage",
-            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+            "permission": "payments:view",
+            "enforcement": "server injects central authorize(actor, organizationId, locationId, 'payments', permission)",
+            "detail": null
           }
         ],
         "permissionKeys": [
-          "payments:view",
-          "payments:manage"
+          "payments:view"
         ],
         "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
@@ -14067,7 +14026,7 @@
       "sideEffects": [],
       "testCandidates": [],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "reviewStatus": "manually reviewed against method-specific PaymentCore authorization and store calls",
       "paymentCoreMethods": [
         {
           "method": "listProductionCertifications",
@@ -14075,20 +14034,10 @@
           "storeFunctions": [
             "listPaymentProductionCertifications"
           ]
-        },
-        {
-          "method": "certifyProductionReadiness",
-          "permission": "payments:manage",
-          "storeFunctions": [
-            "listPaymentProviderCapabilityEvidence",
-            "recordPaymentProductionCertification"
-          ]
         }
       ],
       "delegatedStoreFunctions": [
-        "listPaymentProductionCertifications",
-        "listPaymentProviderCapabilityEvidence",
-        "recordPaymentProductionCertification"
+        "listPaymentProductionCertifications"
       ]
     },
     {
@@ -14106,12 +14055,12 @@
         "calls": [
           {
             "helper": "PaymentCore.#authorize",
-            "permission": "payments:view OR payments:manage",
-            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+            "permission": "payments:manage",
+            "enforcement": "server injects central authorize(actor, organizationId, locationId, 'payments', permission)",
+            "detail": null
           }
         ],
         "permissionKeys": [
-          "payments:view",
           "payments:manage"
         ],
         "serverPolicy": "central authorize() enforced inside PaymentCore"
@@ -14142,15 +14091,8 @@
       "sideEffects": [],
       "testCandidates": [],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "reviewStatus": "manually reviewed against method-specific PaymentCore authorization and store calls",
       "paymentCoreMethods": [
-        {
-          "method": "listProductionCertifications",
-          "permission": "payments:view",
-          "storeFunctions": [
-            "listPaymentProductionCertifications"
-          ]
-        },
         {
           "method": "certifyProductionReadiness",
           "permission": "payments:manage",
@@ -14161,7 +14103,6 @@
         }
       ],
       "delegatedStoreFunctions": [
-        "listPaymentProductionCertifications",
         "listPaymentProviderCapabilityEvidence",
         "recordPaymentProductionCertification"
       ]
@@ -14181,13 +14122,13 @@
         "calls": [
           {
             "helper": "PaymentCore.#authorize",
-            "permission": "payments:view OR payments:manage",
-            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+            "permission": "payments:view",
+            "enforcement": "server injects central authorize(actor, organizationId, locationId, 'payments', permission)",
+            "detail": null
           }
         ],
         "permissionKeys": [
-          "payments:view",
-          "payments:manage"
+          "payments:view"
         ],
         "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
@@ -14219,7 +14160,7 @@
         "phase0/gap-1.17-payment-operations-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "reviewStatus": "manually reviewed against method-specific PaymentCore authorization and store calls",
       "paymentCoreMethods": [
         {
           "method": "listOperationalActions",
@@ -14227,18 +14168,10 @@
           "storeFunctions": [
             "listPaymentOperationalActions"
           ]
-        },
-        {
-          "method": "recordOperationalAction",
-          "permission": "dynamic permission",
-          "storeFunctions": [
-            "createPaymentOperationalAction"
-          ]
         }
       ],
       "delegatedStoreFunctions": [
-        "listPaymentOperationalActions",
-        "createPaymentOperationalAction"
+        "listPaymentOperationalActions"
       ]
     },
     {
@@ -14257,7 +14190,8 @@
           {
             "helper": "PaymentCore.#authorize",
             "permission": "payments:view OR payments:manage",
-            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+            "enforcement": "server injects central authorize(actor, organizationId, locationId, 'payments', permission)",
+            "detail": "MANUAL_REVIEW action requires manage; other operational action recording uses view policy."
           }
         ],
         "permissionKeys": [
@@ -14294,15 +14228,8 @@
         "phase0/gap-1.17-payment-operations-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "reviewStatus": "manually reviewed against method-specific PaymentCore authorization and store calls",
       "paymentCoreMethods": [
-        {
-          "method": "listOperationalActions",
-          "permission": "payments:view",
-          "storeFunctions": [
-            "listPaymentOperationalActions"
-          ]
-        },
         {
           "method": "recordOperationalAction",
           "permission": "dynamic permission",
@@ -14312,7 +14239,6 @@
         }
       ],
       "delegatedStoreFunctions": [
-        "listPaymentOperationalActions",
         "createPaymentOperationalAction"
       ]
     },
@@ -14332,7 +14258,8 @@
           {
             "helper": "PaymentCore.#authorize",
             "permission": "payments:manage",
-            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+            "enforcement": "server injects central authorize(actor, organizationId, locationId, 'payments', permission)",
+            "detail": null
           }
         ],
         "permissionKeys": [
@@ -14368,7 +14295,7 @@
         "phase0/gap-1.23-migration-retry-runtime-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "reviewStatus": "manually reviewed against method-specific PaymentCore authorization and store calls",
       "paymentCoreMethods": [
         {
           "method": "retryOperationalAction",
@@ -14400,7 +14327,8 @@
           {
             "helper": "PaymentCore.#authorize",
             "permission": "payments:manage",
-            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+            "enforcement": "server injects central authorize(actor, organizationId, locationId, 'payments', permission)",
+            "detail": null
           }
         ],
         "permissionKeys": [
@@ -14435,7 +14363,7 @@
         "phase0/gap-1.17-payment-operations-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "reviewStatus": "manually reviewed against method-specific PaymentCore authorization and store calls",
       "paymentCoreMethods": [
         {
           "method": "resolveManualReview",
@@ -14465,7 +14393,8 @@
           {
             "helper": "PaymentCore.#authorize",
             "permission": "payments:settlement:allocate",
-            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+            "enforcement": "server injects central authorize(actor, organizationId, locationId, 'payments', permission)",
+            "detail": null
           }
         ],
         "permissionKeys": [
@@ -14502,7 +14431,7 @@
         "phase0/phase17.9-procurement-settlement-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "reviewStatus": "manually reviewed against method-specific PaymentCore authorization and store calls",
       "paymentCoreMethods": [
         {
           "method": "createSettlement",
@@ -14587,7 +14516,7 @@
       "authorization": {
         "calls": [],
         "permissionKeys": [],
-        "serverPolicy": "GAP: handler requires a tenant session only. It bypasses requireAuthorization and PaymentCore.#authorize; upsertPaymentRoutingPolicy does not authorize actor."
+        "serverPolicy": "GAP: tenant session only; no requireAuthorization or PaymentCore.#authorize. Store function does not authorize actor."
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -14609,8 +14538,7 @@
       "idempotency": "no explicit idempotency signal found",
       "transactionBoundary": "delegated to store functions; see SQLite dependency map",
       "storeFunctions": [
-        "listPaymentRoutingPolicies",
-        "upsertPaymentRoutingPolicy"
+        "listPaymentRoutingPolicies"
       ],
       "sideEffects": [
         "upsertPaymentRoutingPolicy"
@@ -14623,10 +14551,10 @@
       "securityFindings": [
         {
           "severity": "medium",
-          "finding": "Authenticated tenant member can read provider routing configuration without the payments:view permission used by the explicit routing endpoint.",
+          "finding": "Authenticated tenant member can read provider routing configuration without the payments:view permission.",
           "evidence": [
-            "backend/server.js handler calls requireSession but no requireAuthorization for GET",
-            "GET lists active tenant-scoped policies"
+            "backend/server.js handlePaymentRoutingPolicies requires session only",
+            "backend/lib/store-sqlite.js upsertPaymentRoutingPolicy checks tenant and payload but not actor authorization"
           ],
           "testGap": "No dedicated route-level authorization regression found."
         }
@@ -14646,7 +14574,7 @@
       "authorization": {
         "calls": [],
         "permissionKeys": [],
-        "serverPolicy": "GAP: handler requires a tenant session only. It bypasses requireAuthorization and PaymentCore.#authorize; upsertPaymentRoutingPolicy does not authorize actor."
+        "serverPolicy": "GAP: tenant session only; no requireAuthorization or PaymentCore.#authorize. Store function does not authorize actor."
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -14668,7 +14596,6 @@
       "idempotency": "no explicit idempotency signal found",
       "transactionBoundary": "delegated to store functions; see SQLite dependency map",
       "storeFunctions": [
-        "listPaymentRoutingPolicies",
         "upsertPaymentRoutingPolicy"
       ],
       "sideEffects": [
@@ -14682,13 +14609,12 @@
       "securityFindings": [
         {
           "severity": "high",
-          "finding": "Authenticated tenant member can change payment provider routing policies without a permission check.",
+          "finding": "Authenticated tenant member can change provider routing policy without a permission check.",
           "evidence": [
-            "backend/server.js handlePaymentRoutingPolicies only calls requireSession",
-            "backend/lib/store-sqlite.js upsertPaymentRoutingPolicy validates tenant and payload but does not authorize actor",
-            "PaymentCore exposes central payments:route/management permissions but this handler bypasses PaymentCore"
+            "backend/server.js handlePaymentRoutingPolicies requires session only",
+            "backend/lib/store-sqlite.js upsertPaymentRoutingPolicy checks tenant and payload but not actor authorization"
           ],
-          "testGap": "No dedicated route-level authorization regression found; existing routing regression covers routing/core behavior rather than this HTTP permission boundary."
+          "testGap": "No dedicated route-level authorization regression found."
         }
       ]
     },
@@ -14708,7 +14634,8 @@
           {
             "helper": "PaymentCore.#authorize",
             "permission": "payments:settlement:allocate",
-            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+            "enforcement": "server injects central authorize(actor, organizationId, locationId, 'payments', permission)",
+            "detail": null
           }
         ],
         "permissionKeys": [
@@ -14745,7 +14672,7 @@
         "phase0/phase17.9-procurement-settlement-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "reviewStatus": "manually reviewed against method-specific PaymentCore authorization and store calls",
       "paymentCoreMethods": [
         {
           "method": "finalizeSettlement",
@@ -14775,7 +14702,8 @@
           {
             "helper": "PaymentCore.#authorize",
             "permission": "payments:settlement:view",
-            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+            "enforcement": "server injects central authorize(actor, organizationId, locationId, 'payments', permission)",
+            "detail": null
           }
         ],
         "permissionKeys": [
@@ -14812,7 +14740,7 @@
         "phase0/phase17.9-procurement-settlement-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "reviewStatus": "manually reviewed against method-specific PaymentCore authorization and store calls",
       "paymentCoreMethods": [
         {
           "method": "listSettlements",
@@ -14842,7 +14770,8 @@
           {
             "helper": "PaymentCore.#authorize",
             "permission": "payments:view",
-            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+            "enforcement": "server injects central authorize(actor, organizationId, locationId, 'payments', permission)",
+            "detail": null
           }
         ],
         "permissionKeys": [
@@ -14877,7 +14806,7 @@
         "phase0/gap-1.14-payment-refund-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "reviewStatus": "manually reviewed against method-specific PaymentCore authorization and store calls",
       "paymentCoreMethods": [
         {
           "method": "listRefunds",
@@ -17487,20 +17416,7 @@
     }
   ],
   "summary": {
-    "confirmedSecurityFindings": [
-      {
-        "method": "GET",
-        "path": "/tenants/:param/payments/routing/policies",
-        "severity": "medium",
-        "finding": "Authenticated tenant member can read provider routing configuration without the payments:view permission used by the explicit routing endpoint."
-      },
-      {
-        "method": "POST",
-        "path": "/tenants/:param/payments/routing/policies",
-        "severity": "high",
-        "finding": "Authenticated tenant member can change payment provider routing policies without a permission check."
-      }
-    ],
+    "confirmedSecurityFindings": 2,
     "manuallyReviewedHandlers": [
       "handleTelegramAuth",
       "handleLegacyMigration",
@@ -17527,6 +17443,12 @@
       "handlePaymentRefundHistory"
     ],
     "manuallyReviewedHandlersCount": 23,
-    "authorizationGapCount": 2
+    "authorizationGapCount": 2,
+    "routeCount": 253,
+    "routeTableCount": 253,
+    "inlineBranchCount": 0,
+    "namedHandlerCount": 143,
+    "duplicateMethodPatternKeys": 0,
+    "needsReviewCount": 2
   }
 }
