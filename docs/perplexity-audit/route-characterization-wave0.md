@@ -1,3 +1,5 @@
+<!-- Historical snapshot: reviewed on audit/perplexity-codebase-modularity-20261122 at 479bb1f272c2be96bd4086fb7598e134dde8cb80. Current-main route map is docs/audit/route-characterization.md and route-characterization.json. -->
+
 # Manual route characterization — Wave 0
 
 Reviewed against `backend/server.js` on branch `audit/perplexity-codebase-modularity-20261122`, head `479bb1f272c2be96bd4086fb7598e134dde8cb80`.
@@ -45,3 +47,8 @@ A safe next slice should be selected only after:
 ## Source-of-truth limitations
 
 This is a manual characterization of the current route dispatch and the inspected handler portions. It is not a complete dynamic call-graph audit, does not prove all store invariants, and is not a production-readiness certification. Generated route classifications remain review aids, not ownership authority.
+
+
+## Current-main supersession note (2026-11-23)
+
+The route inventory has been refreshed against `main` at `e216db18ade2a5ffa66aff9dc3096e207251a918`. The current map includes per-route auth and permission evidence, direct/delegated store dependencies, error/idempotency signals, and the confirmed payment routing policy permission gap. This historical manual review remains intact; use `docs/audit/route-characterization.md` for current route state.
