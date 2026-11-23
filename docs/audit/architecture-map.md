@@ -45,7 +45,7 @@ backend/lib/store-sqlite.js
 canonical domain state + events/audit
 ```
 
-This is a dependency map, not a proposed new gateway. The route layer authenticates and authorizes each request; the dispatcher does not provide a universal session check. See [route characterization](./route-characterization.md).
+This is a dependency map, not a proposed new gateway. Routes are responsible for their own authentication and authorization; the dispatcher does not provide a universal session check. The current route scan found three entries requiring explicit policy review: `POST /sync/:chatId` and `GET`/`POST /tenants/:chatId/payments/routing/policies`. See [route characterization](./route-characterization.md).
 
 ## 3. Existing logical capability boundaries
 
@@ -84,10 +84,12 @@ The route-to-store and function-to-table edges are recorded in:
 - [Route characterization JSON](./route-characterization.json)
 - [SQLite dependency map JSON](./sqlite-dependency-map.json)
 
-Three high-severity current-main boundaries are confirmed:
+Three high-severity persistence boundaries are confirmed on current main:
 1. Procurement receipt and multi-line Inventory posting are not one atomic transaction.
 2. Payment refund/settlement audit calls pass the wrong positional arguments.
 3. Payment refund/settlement request persistence is not atomic with its audit event.
+
+The route audit also identifies two server-authorization gaps: payment routing-policy GET/POST routes bypass their expected action permissions, and POST sync writes orders using session authentication without evaluating the role permission. These are recorded for remediation; this audit does not change runtime behavior.
 
 See the [SQLite dependency map](./sqlite-dependency-map.md) for exact source lines and behavior.
 
