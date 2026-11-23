@@ -285,7 +285,7 @@ try {
       aggregateId: syncCustomerId,
       occurredAt: new Date().toISOString(),
       payload: { id: syncCustomerId, name: 'Customer Sync Audit', source: 'http-regression' },
-    } : null] }),
+    }] }),
   });
   assert.equal(exactSyncReplay.response.status, 200);
   assert.equal(exactSyncReplay.json.results?.[0]?.status, 'processed');
