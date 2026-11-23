@@ -7464,7 +7464,7 @@ export async function getCustomer(chatId, customerId) {
   return customerFromRow(db.prepare('SELECT * FROM customers WHERE id = ? AND organization_id = ?').get(String(customerId), tenant.organizationId));
 }
 
-function upsertCustomerSync(chatId, input = {}, actor = null) {
+function upsertCustomerSyncInTransaction(chatId, input = {}, actor = null) {
   ensureDatabase();
   const tenant = getTenantByChatId(chatId);
   if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
@@ -7528,6 +7528,25 @@ function upsertCustomerSync(chatId, input = {}, actor = null) {
     organizationId: tenant.organizationId, actorId: actor?.userId || null, deviceId: actor?.deviceId || null,
   });
   return customerFromRow(db.prepare('SELECT * FROM customers WHERE id = ?').get(id));
+}
+
+
+function upsertCustomerSync(chatId, input = {}, actor = null) {
+  ensureDatabase();
+  // Customer upserts are also called from larger order/sync transactions.
+  // Own a transaction only for standalone calls; nested callers keep control
+  // of their existing transaction so customer, audit, and enclosing writes
+  // commit or roll back together.
+  const ownsTransaction = !db.isTransaction;
+  if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
+  try {
+    const customer = upsertCustomerSyncInTransaction(chatId, input, actor);
+    if (ownsTransaction) db.exec('COMMIT');
+    return customer;
+  } catch (error) {
+    if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 // Preserve the existing async API for callers while exposing a synchronous
