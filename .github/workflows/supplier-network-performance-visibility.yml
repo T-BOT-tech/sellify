@@ -1,0 +1,35 @@
+name: Supplier Network performance visibility regression
+
+on:
+  push:
+    branches:
+      - audit/supplier-network-performance-visibility-20261123
+    paths:
+      - '.github/workflows/supplier-network-performance-visibility.yml'
+      - 'backend/lib/store-sqlite.js'
+      - 'app/src/supplier-network/performance-contract.js'
+      - 'phase0/supplier-network-performance-visibility-regression.mjs'
+  pull_request:
+    paths:
+      - '.github/workflows/supplier-network-performance-visibility.yml'
+      - 'backend/lib/store-sqlite.js'
+      - 'app/src/supplier-network/performance-contract.js'
+      - 'phase0/supplier-network-performance-visibility-regression.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  supplier_network_performance_visibility:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install root dependencies
+        run: npm install --ignore-scripts
+      - name: Supplier Network performance visibility regression
+        run: node phase0/supplier-network-performance-visibility-regression.mjs
