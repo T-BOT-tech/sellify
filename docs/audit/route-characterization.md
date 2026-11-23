@@ -202,3 +202,53 @@ Relevant existing files include `phase0/gap-5-iam-membership-contextual-role-reg
 ## Characterization count reconciliation
 
 The original Markdown batch tables list 29 route/method entries (8 + 13 + 6 + 2). In the original JSON, 25 were marked `characterized` and four were separately marked `characterized-with-defect-candidate`; those four are characterized findings, not inventory-only routes. The current JSON therefore counts both categories in the characterized total.
+
+
+## Characterization batch 6 — Payment Core commands, evidence, lifecycle, refunds and settlements
+
+**Baseline:** current `main` at `15737ee0c83e057113baa3881638186542ed6999`. This batch characterizes 19 route/method entries across 15 handlers.
+
+### Central authorization finding
+
+Some payment handlers do not call `requireAuthorization` directly. That is not, by itself, evidence of a missing authorization check. Production `backend/server.js` constructs `PaymentCore` with an injected callback that delegates to the central `authorize(actor, organizationId, locationId, resource, permission)` function. The PaymentCore methods then call `#authorize` with their required permission before accessing mutation/query store methods.
+
+The production wiring is important: `PaymentCore.#authorize` returns without enforcement when no authorization callback is injected. Isolated unit tests often construct PaymentCore without that callback; the production constructor does inject it. Regression `phase0/gap-1.18AB-payment-security-boundary-regression.mjs` explicitly checks the production wiring and denial-before-mutation behavior.
+
+### Route-level boundaries
+
+| Route family | Effective permission | Canonical boundary / effect |
+|---|---|---|
+| `GET /tenants/:tenant/payments[/:payment]` | `payments:view` at HTTP boundary | Read-only payment projection |
+| `POST /tenants/:tenant/payments` | `payments:accept` at HTTP and PaymentCore | Creates canonical payment and intent; idempotency key required; client cannot set VERIFIED state |
+| `PATCH /tenants/:tenant/payments/:payment` | PaymentCore chooses `payments:manage` for CANCELLED/REVERSED, otherwise `payments:accept` | Lifecycle transition; VERIFIED/RECONCILED are rejected from this generic route |
+| `GET /tenants/:tenant/payments/:payment/evidence` | `payments:view` at HTTP and PaymentCore | Evidence read projection |
+| `POST /tenants/:tenant/payments/:payment/evidence/:evidence/review` | `payments:accept` at HTTP and PaymentCore | Explicit manual attestation; durable idempotency and canonical decision path |
+| `GET /tenants/:tenant/payments/:payment/ledger` | `payments:view` at HTTP boundary | Read-only ledger history |
+| `POST /tenants/:tenant/payments/:payment/lifecycle` | PaymentCore dynamically selects `payments:manage` or `payments:accept` | Canonical lifecycle decision; route itself does not add a separate authorization call |
+| `POST /tenants/:tenant/payments/evidence` | `payments:accept` at HTTP and PaymentCore | Stores received evidence only; response states `verificationStatus: NOT_PERFORMED` and `paymentStateMutated: false` |
+| `GET /tenants/:tenant/payments/:payment/reconciliation` | `payments:reconcile` at HTTP boundary | Read-only reconciliation history |
+| `POST /tenants/:tenant/payments/:payment/reconciliation` | `payments:reconcile` at HTTP and PaymentCore | Records reconciliation finding; it does not directly mutate payment state |
+| `POST /tenants/:tenant/payments/:payment/refund` | `payments:manage` inside PaymentCore | Requires idempotency key and VERIFIED/RECONCILED payment; provider call is between durable request and finalization |
+| `GET /tenants/:tenant/payments/:payment/refund` | `payments:view` inside PaymentCore | Read-only refund history |
+| `POST /tenants/:tenant/payments/:payment/settlement` | `payments:settlement:allocate` inside PaymentCore | Creates settlement obligation; PaymentCore returns `financialEffect: false` |
+| `GET /tenants/:tenant/payments/:payment/settlement` | `payments:settlement:view` inside PaymentCore | Read-only settlement history |
+| `POST /tenants/:tenant/payments/:payment/settlement/finalize` | `payments:settlement:allocate` inside PaymentCore | Finalizes settlement; response declares `financialEffect: false` and `paymentStateMutated: false` |
+| `POST /tenants/:tenant/payments/:payment/status` | `payments:accept` at HTTP and PaymentCore | Idempotent provider status query; query claim/lease and canonical decision are separate boundaries |
+| `POST /tenants/:tenant/payments/confirmation-attempts/:attempt/finalize` | `payments:accept` at HTTP and PaymentCore | Validates provider/account/transaction binding and finalizes through PaymentCore |
+
+### Important domain boundaries preserved
+
+- Evidence submission is not verification and does not itself change Payment state.
+- Reconciliation findings are not Payment decisions.
+- Refund execution is a PaymentCore-managed provider operation; only normalized success is reported as a financial effect.
+- Settlement allocation/finalization records settlement obligations and does not create a second payment ledger or directly mutate Payment state.
+- Generic lifecycle routes cannot set VERIFIED or RECONCILED; those states require canonical verification/reconciliation commands.
+- Provider notification ingestion is a separate trusted integration path and was not characterized in this batch.
+
+### Existing regression evidence reviewed
+
+- `phase0/gap-1.18AB-payment-security-boundary-regression.mjs`: PaymentCore permission enforcement, production central-authorization wiring, denial-before-store-mutation, and untrusted evidence authority-field rejection.
+- `phase0/gap-pf-1L-payment-frontend-http-sqlite-e2e-regression.mjs`: HTTP + SQLite payment lifecycle, tenant separation, provider callbacks/recovery scenarios.
+- `phase0/gap-1.14-payment-refund-regression.mjs`, `phase0/gap-1.15-payment-settlement-regression.mjs`, `phase0/gap-1.12-payment-reconciliation-regression.mjs`, `phase0/gap-1.13-payment-lifecycle-regression.mjs`, `phase0/gap-1.11-payment-provider-status-regression.mjs`, and `phase0/gap-1-provider-confirmation-finalization-regression.mjs`.
+
+The files and their package-script registrations were reviewed; **no tests were executed in this audit session**. The route and PaymentCore source was inspected directly. No production code was changed and no Payment Core authority was extracted.
