@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceCommit": "07985fcc841e3f16fd5b6f4f46f1bb5101443085",
+  "sourceCommit": "15737ee0c83e057113baa3881638186542ed6999",
   "source": "backend/lib/store-sqlite.js",
   "generatedFrom": "Static lexical inventory counts remain anchored to the original 07985fcc baseline; selected function dependencies and transaction boundaries were manually re-characterized against current main 15737ee0c83e057113baa3881638186542ed6999.",
   "counts": {
@@ -11132,7 +11132,7 @@
     "Do not use this inventory to approve persistence extraction.",
     "Only the Customer and B2B Pricing function group has manually verified SQL read/write dependencies in this revision; remaining exported functions stay pending."
   ],
-  "characterizedFunctionCount": 20,
+  "characterizedFunctionCount": 35,
   "characterizationBatches": [
     {
       "name": "Customer and B2B Pricing persistence",
@@ -11155,7 +11155,7 @@
         "catalog_products",
         "audit_events"
       ],
-      "note": "Includes repeated pricing upsert defect candidate; no production change made."
+      "note": "Repeated B2B pricing upsert return-ID defect and pricing-write/audit atomicity were subsequently fixed on current main by PR #305; repeated-save and audit-failure regressions were added."
     },
     {
       "name": "Service resource, booking, delivery assessment and fulfillment persistence",
@@ -11175,6 +11175,43 @@
       ],
       "status": "source-characterized",
       "note": "Explicit BEGIN IMMEDIATE command transactions and durable replay boundaries verified in source."
+    },
+    {
+      "name": "Identity, authentication, device, invite and membership persistence",
+      "functions": [
+        "listUserMemberships",
+        "createSession",
+        "authenticateSessionToken",
+        "createAuthChallenge",
+        "consumeAuthChallenge",
+        "createPairingChallenge",
+        "consumePairingChallenge",
+        "createInvite",
+        "consumeInvite",
+        "revokeInvite",
+        "revokeDevice",
+        "changeMembershipRole",
+        "assignMembershipContextualRole",
+        "revokeMembershipContextualRole",
+        "getTenantByApiKey"
+      ],
+      "status": "source-characterized",
+      "tables": [
+        "users",
+        "tenants",
+        "memberships",
+        "membership_roles",
+        "devices",
+        "sessions",
+        "auth_challenges",
+        "pairing_challenges",
+        "invites",
+        "locations",
+        "service_resources",
+        "pack_lifecycle",
+        "audit_events"
+      ],
+      "note": "Read/write tables and transaction boundaries were reviewed from current store source. ensureMembershipSync is an internal helper called by pairing/invite consumers, not counted as an exported function. No production change made."
     }
   ],
   "staticSqlScan": {
@@ -12892,5 +12929,42 @@
       "nextLine": 3202
     }
   ],
-  "characterizedAgainstCommit": "15737ee0c83e057113baa3881638186542ed6999"
+  "characterizedAgainstCommit": "15737ee0c83e057113baa3881638186542ed6999",
+  "migrationRuntimeEvidence": [
+    {
+      "test": "phase0/gap-1.18I-migration-independence-regression.mjs",
+      "script": "gap-1.18:provider-verification-migration-test",
+      "evidence": "Seeds a database with migration 53 recorded but 54 missing, invokes the real store migration runner, and checks migration 54 plus its unique index. Also simulates partial migration 63 DDL and retries through the real store runner.",
+      "status": "source-reviewed; not executed in this audit"
+    },
+    {
+      "test": "phase0/gap-1.23-migration-retry-runtime-regression.mjs",
+      "script": "test:gap-1.23-migration-retry",
+      "evidence": "Extracts migration 63 and tests column-presence variants, preserved evidence, index uniqueness scope, and interrupted retry behavior.",
+      "status": "source-reviewed; not executed in this audit"
+    },
+    {
+      "test": "phase0/service-resource-migration-80-81-compatibility-regression.mjs",
+      "script": "test:service-resource-migration-compatibility",
+      "evidence": "Runs the store against a fresh temporary DB, constructs two historical v80 shapes, restarts the store and verifies migration 81 compatibility.",
+      "status": "source-reviewed; not executed in this audit"
+    },
+    {
+      "test": "phase0/sc-03.4-resource-commitment-migration-regression.mjs",
+      "script": "test:sc-03.4-resource-commitment-migration",
+      "evidence": "Runs the real store against a fresh temporary DB and checks migration 80 schema, indexes, foreign keys and uniqueness constraints.",
+      "status": "source-reviewed; not executed in this audit"
+    }
+  ],
+  "migrationSourceOrderReview": {
+    "observedVersionCount": 85,
+    "versionsUnique": true,
+    "versionRange": [
+      1,
+      85
+    ],
+    "missingVersions": [],
+    "sourceOrderDecreases": 12,
+    "interpretation": "Non-monotonic source order is confirmed. The decreases alone do not establish a defect. Migration guards execute in source order; explicit source comments and existing regression tests show some deliberate dependency/recovery handling. A complete migration-to-migration dependency graph and exhaustive historical upgrade matrix have not been established."
+  }
 }
