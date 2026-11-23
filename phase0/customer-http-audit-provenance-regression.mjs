@@ -173,6 +173,16 @@ try {
   assert.equal(crossTenantCustomerUpdate.response.status, 404,
     'a valid owner in another tenant must not update this customer ID');
 
+  const malformedJson = await request(base, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: '{"name":',
+  });
+  assert.equal(malformedJson.response.status, 400,
+    'malformed JSON must be rejected at the shared HTTP body boundary');
+  assert.equal(malformedJson.json.error?.message, 'Invalid JSON body');
+  assert.equal(malformedJson.json.error?.status, 400);
+
   const invalidCustomer = await request(base, {
     method: 'POST',
     headers: jsonAuth(ownerSession.token),
