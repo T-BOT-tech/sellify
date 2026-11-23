@@ -12,8 +12,8 @@ import { setTimeout as sleep } from 'node:timers/promises';
 const customerModuleSource = await readFile(
   new URL('../app/src/customers.js', import.meta.url), 'utf8'
 );
-const normalizeSource = customerModuleSource.match(/function normalize\(value = \{\}\) \{[\s\\S]*?^\}/m)?.[0];
-const localUpsertSource = customerModuleSource.match(/export function upsertLocalCustomer\(input = \{\}\) \{[\s\\S]*?^\}/m)?.[0]
+const normalizeSource = customerModuleSource.match(/function normalize\(value = \{\}\) \{[\s\S]*?^\}/m)?.[0];
+const localUpsertSource = customerModuleSource.match(/export function upsertLocalCustomer\(input = \{\}\) \{[\s\S]*?^\}/m)?.[0]
   ?.replace('export function', 'function');
 assert.ok(normalizeSource && localUpsertSource, 'local Customer normalization and upsert functions must remain inspectable');
 const localCustomers = [{
