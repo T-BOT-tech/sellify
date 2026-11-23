@@ -9697,7 +9697,7 @@ export async function getPaymentSettlementByIdempotencyKey(chatId, idempotencyKe
   return row ? normalizePaymentSettlement(row) : null;
 }
 
-export async function createPaymentSettlement(chatId, input = {}, actor = null) {
+function createPaymentSettlementInTransaction(chatId, input = {}, actor = null) {
   const db = ensureDatabase();
   const tenant = getTenantByChatId(chatId);
   if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
@@ -9759,11 +9759,31 @@ export async function createPaymentSettlement(chatId, input = {}, actor = null) 
       settlement.settlement_reference, settlement.reconciliation_id, settlement.provider_settlement_reference,
       settlement.evidence_json, settlement.reason, settlement.created_by_user_id, now, now, null
   );
-  audit(String(chatId), 'payment.settlement.requested', payment.id, actor?.userId || null, {
+  audit(String(chatId), 'payment.settlement.requested', 'payment', payment.id, {
     settlementId: settlement.id, grossAmountMinor: gross, providerFeeMinor: providerFee,
     sellifyFeeMinor: sellifyFee, netAmountMinor: net, currency,
+  }, {
+    organizationId: tenant.organizationId,
+    actorId: actor?.userId || actor?.user_id || null,
+    deviceId: actor?.deviceId || actor?.device_id || null,
+    reason: settlement.reason,
   });
   return { settlement: normalizePaymentSettlement(settlement), duplicate: false };
+}
+
+
+export async function createPaymentSettlement(chatId, input = {}, actor = null) {
+  const db = ensureDatabase();
+  const ownsTransaction = !db.isTransaction;
+  if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = createPaymentSettlementInTransaction(chatId, input, actor);
+    if (ownsTransaction) db.exec('COMMIT');
+    return result;
+  } catch (error) {
+    if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 export async function finalizePaymentSettlement(chatId, settlementId, input = {}, actor = null) {
@@ -9795,10 +9815,15 @@ export async function finalizePaymentSettlement(chatId, settlementId, input = {}
       status === 'SETTLED' ? now : row.settled_at,
       row.id, tenant.organizationId
     );
-    audit(String(chatId), `payment.settlement.${status.toLowerCase()}`, row.payment_id, actor?.userId || null, {
+    audit(String(chatId), `payment.settlement.${status.toLowerCase()}`, 'payment', row.payment_id, {
       settlementId: row.id, status, grossAmountMinor: row.gross_amount_minor,
       providerFeeMinor: row.provider_fee_minor, sellifyFeeMinor: row.sellify_fee_minor,
       netAmountMinor: row.net_amount_minor,
+    }, {
+      organizationId: tenant.organizationId,
+      actorId: actor?.userId || actor?.user_id || null,
+      deviceId: actor?.deviceId || actor?.device_id || null,
+      reason: String(input.reason || row.reason || ''),
     });
     db.exec('COMMIT');
     return normalizePaymentSettlement(db.prepare('SELECT * FROM payment_settlements WHERE id = ?').get(row.id));
@@ -9861,7 +9886,7 @@ export async function getPaymentRefundByIdempotencyKey(chatId, idempotencyKey) {
   return row ? normalizePaymentRefund(row) : null;
 }
 
-export async function createPaymentRefundRequest(chatId, input = {}, actor = null) {
+function createPaymentRefundRequestInTransaction(chatId, input = {}, actor = null) {
   const db = ensureDatabase();
   const tenant = getTenantByChatId(chatId);
   if (!tenant) throw Object.assign(new Error('Unknown store'), { statusCode: 404, code: 'UNKNOWN_STORE' });
@@ -9916,10 +9941,30 @@ export async function createPaymentRefundRequest(chatId, input = {}, actor = nul
       refund.idempotency_key, refund.amount_minor, refund.currency, refund.status, refund.reason,
       null, null, null, null, null, refund.requested_by_user_id, now, now, null
     );
-  audit(String(chatId), 'payment.refund.requested', payment.id, actor?.userId || null, {
+  audit(String(chatId), 'payment.refund.requested', 'payment', payment.id, {
     refundId: refund.id, amountMinor, currency, idempotencyKey: key,
+  }, {
+    organizationId: tenant.organizationId,
+    actorId: actor?.userId || actor?.user_id || null,
+    deviceId: actor?.deviceId || actor?.device_id || null,
+    reason: refund.reason,
   });
   return { refund: normalizePaymentRefund(refund), duplicate: false };
+}
+
+
+export async function createPaymentRefundRequest(chatId, input = {}, actor = null) {
+  const db = ensureDatabase();
+  const ownsTransaction = !db.isTransaction;
+  if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = createPaymentRefundRequestInTransaction(chatId, input, actor);
+    if (ownsTransaction) db.exec('COMMIT');
+    return result;
+  } catch (error) {
+    if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 export async function finalizePaymentRefund(chatId, refundId, input = {}, actor = null) {
@@ -9956,7 +10001,13 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
         db.prepare("UPDATE marketplace_settlements SET status = 'HELD' WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')")
           .run(marketplaceRefund.seller_order_id);
       }
-      audit(String(chatId), 'payment.refund.result', payment.id, actor?.userId || null, { refundId: refund.id, status: status || 'UNKNOWN' });
+      audit(String(chatId), 'payment.refund.result', 'payment', payment.id,
+        { refundId: refund.id, status: status || 'UNKNOWN' }, {
+          organizationId: tenant.organizationId,
+          actorId: actor?.userId || actor?.user_id || null,
+          deviceId: actor?.deviceId || actor?.device_id || null,
+          reason: String(input.reason || refund.reason || ''),
+        });
       db.exec('COMMIT');
       return normalizePaymentRefund(db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(refund.id));
     }
@@ -10007,8 +10058,13 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
       json({ lifecycle: 'GAP-1.14', refundId: refund.id, providerRefundId: input.providerRefundId || input.provider_refund_id || null }),
       now
     );
-    audit(String(chatId), 'payment.refund.succeeded', payment.id, actor?.userId || null, {
+    audit(String(chatId), 'payment.refund.succeeded', 'payment', payment.id, {
       refundId: refund.id, amountMinor: refund.amount_minor, fullRefund,
+    }, {
+      organizationId: tenant.organizationId,
+      actorId: actor?.userId || actor?.user_id || null,
+      deviceId: actor?.deviceId || actor?.device_id || null,
+      reason: String(input.reason || refund.reason || ''),
     });
     db.exec('COMMIT');
     return normalizePaymentRefund(db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(refund.id));
@@ -12739,9 +12795,13 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
               'Marketplace order cancellation', createdAt, createdAt
             );
             canonicalRefund = db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(refundId);
-            audit(String(chatId), 'payment.refund.requested', allocation.payment_id, null, {
+            audit(String(chatId), 'payment.refund.requested', 'payment', allocation.payment_id, {
               refundId, amountMinor: allocation.amount_minor, currency: allocation.currency, idempotencyKey,
               source: 'marketplace-cancellation',
+            }, {
+              organizationId: allocation.organization_id,
+              actorId: null,
+              reason: 'Marketplace order cancellation',
             });
           }
           db.prepare(`
