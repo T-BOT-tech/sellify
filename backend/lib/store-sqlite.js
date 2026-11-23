@@ -4600,6 +4600,10 @@ export async function listSupplierNetworkPerformance(chatId, { supplierOrganizat
   assertProcurementActor(organizationId, actor);
   const supplierId = String(supplierOrganizationId || organizationId).trim();
   const where = ['supplier_organization_id = ?']; const params = [supplierId];
+  if (supplierId !== String(organizationId)) {
+    const hasRelationship = Boolean(db.prepare("SELECT 1 FROM procurement_supplier_relationships WHERE buyer_organization_id=? AND supplier_organization_id=? AND status='ACTIVE'").get(String(organizationId), supplierId));
+    where.push(hasRelationship ? "visibility IN ('NETWORK','RELATIONSHIP')" : "visibility='NETWORK'");
+  }
   if (metricType) { where.push('metric_type = ?'); params.push(String(metricType).toUpperCase()); }
   const n = Math.min(500, Math.max(1, Number(limit) || 100));
   return db.prepare(`SELECT * FROM supplier_network_performance_observations WHERE ${where.join(' AND ')} ORDER BY calculated_at DESC, id ASC LIMIT ?`).all(...params,n).map(supplierNetworkPerformanceFromRow);
@@ -4609,6 +4613,12 @@ export async function getSupplierNetworkPerformance(chatId, observationId, actor
   const organizationId = await tenantOrganizationId(chatId);
   assertProcurementActor(organizationId, actor);
   const row = db.prepare('SELECT * FROM supplier_network_performance_observations WHERE id=?').get(String(observationId));
+  if (!row) return null;
+  if (String(row.supplier_organization_id) !== String(organizationId)) {
+    if (row.visibility === 'PRIVATE') return null;
+    if (row.visibility === 'RELATIONSHIP' && !db.prepare("SELECT 1 FROM procurement_supplier_relationships WHERE buyer_organization_id=? AND supplier_organization_id=? AND status='ACTIVE'").get(String(organizationId), String(row.supplier_organization_id))) return null;
+    if (!['NETWORK','RELATIONSHIP'].includes(String(row.visibility))) return null;
+  }
   return supplierNetworkPerformanceFromRow(row);
 }
 
@@ -4617,6 +4627,7 @@ export async function recalculateSupplierNetworkPerformance(chatId, supplierOrga
   const actorId = assertProcurementActor(organizationId, actor);
   const supplierId = String(supplierOrganizationId || '').trim();
   if (!supplierId) throw Object.assign(new Error('supplierOrganizationId is required'), {statusCode:400,code:'SUPPLIER_REQUIRED'});
+  if (supplierId !== String(organizationId)) throw Object.assign(new Error('Supplier performance can only be recalculated by the supplier organization'), {statusCode:403,code:'SUPPLIER_PERFORMANCE_SCOPE_FORBIDDEN'});
   const participant = db.prepare("SELECT organization_id FROM procurement_supplier_participants WHERE organization_id=? AND status='ACTIVE'").get(supplierId);
   if (!participant) throw Object.assign(new Error('Supplier network performance requires an active supplier participant'), {statusCode:409,code:'SUPPLIER_PARTICIPATION_REQUIRED'});
   const days = Math.min(3650, Math.max(1, Number(input.days) || 180));
