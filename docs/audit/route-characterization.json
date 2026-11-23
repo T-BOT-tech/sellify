@@ -15,12 +15,15 @@
     "handlerSpansResolved": 252,
     "authentication": {
       "tenantSession": 224,
-      "centralAuthorization": 187,
+      "centralAuthorization": 205,
       "signedIdentity": 12,
       "bearer": 4,
       "challengeOrInvite": 3,
       "publicOrTokenScoped": 7,
-      "unresolved": 0
+      "unresolved": 0,
+      "permissionKeyEntries": 205,
+      "handlerAuthorizationCallEntries": 201,
+      "needsReviewRouteEntries": 3
     },
     "methodConditionalRouteEntries": 166,
     "routesWithHelperPolicies": 17,
@@ -81372,7 +81375,7 @@
       "methodSpecificity": "shared handler; branch-specific behavior must be read from methodBranchCoverage; dependency/validation fields are handler-wide",
       "securityReview": {
         "status": "needs-review",
-        "reason": "Session authentication only. The handler directly calls listPaymentRoutingPolicies/upsertPaymentRoutingPolicy; these store functions scope by organization but have no action-level authorization. PaymentCore.resolveRouting separately checks payments:route but this handler bypasses it."
+        "reason": "Session authentication only. The explicit GET branch calls listPaymentRoutingPolicies; the store function scopes by organization but has no action-level authorization. The role policy exposes payments:view, but this route does not evaluate it."
       },
       "methodSpecificStoreFunctions": [
         "getTenant",
@@ -81483,7 +81486,8 @@
         "tenantLookup": "404 unknown store",
         "success": 200,
         "dispatcher": "handler exception mapped to e.statusCode || 500"
-      }
+      },
+      "methodSpecificPermissionExpected": "payments:view"
     },
     {
       "id": 208,
@@ -81720,7 +81724,7 @@
       "methodSpecificity": "shared handler; branch-specific behavior must be read from methodBranchCoverage; dependency/validation fields are handler-wide",
       "securityReview": {
         "status": "needs-review",
-        "reason": "Session authentication only. The handler directly calls listPaymentRoutingPolicies/upsertPaymentRoutingPolicy; these store functions scope by organization but have no action-level authorization. PaymentCore.resolveRouting separately checks payments:route but this handler bypasses it."
+        "reason": "Session authentication only. The POST fallback calls upsertPaymentRoutingPolicy; the store function scopes by organization but has no action-level authorization. The role policy exposes payments:route, but this route does not evaluate it. PaymentCore.resolveRouting checks payments:route, but this handler bypasses it."
       },
       "methodSpecificStoreFunctions": [
         "getTenant",
@@ -81840,7 +81844,8 @@
         "tenantLookup": "404 unknown store",
         "success": 200,
         "dispatcher": "handler exception mapped to e.statusCode || 500"
-      }
+      },
+      "methodSpecificPermissionExpected": "payments:route"
     },
     {
       "id": 209,
