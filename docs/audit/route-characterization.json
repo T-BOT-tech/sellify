@@ -5,7 +5,7 @@
     "explicit": 247,
     "distinctHandlers": 137,
     "total": 253,
-    "inline": 6,
+    "inline": 5,
     "classification": {
       "infrastructure": 6,
       "domain capability": 229,
@@ -25,7 +25,8 @@
     "methodConditionalRouteEntries": 166,
     "routesWithHelperPolicies": 17,
     "routesWithStoreIdempotency": 70,
-    "routesWithExplicitErrorCodes": 46
+    "routesWithExplicitErrorCodes": 46,
+    "infrastructurePreDispatch": 1
   },
   "routes": [
     {
@@ -34319,7 +34320,7 @@
       "pattern": null,
       "handlerExpression": "inline health response",
       "handler": "inline health response",
-      "sourceKind": "inline/static",
+      "sourceKind": "infrastructure",
       "routeLine": 4107,
       "handlerSource": null,
       "authentication": [],
@@ -34349,7 +34350,7 @@
       ],
       "testCandidates": [],
       "classification": "infrastructure",
-      "reviewStatus": "intentional pre-route handler; inspect static allowlist separately",
+      "reviewStatus": "intentional health endpoint handled before route table",
       "storeDependencies": [],
       "nonStoreDependencies": [],
       "handlerMethodBranches": []
