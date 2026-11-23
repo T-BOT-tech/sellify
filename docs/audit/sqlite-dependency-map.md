@@ -1047,4 +1047,4 @@
 
 **No extraction from `store-sqlite.js` is approved by this audit pass.** Validate the SQL and caller graph against tests before considering any bounded slice. A domain-shaped table prefix or function-name cluster is not proof of a safe persistence boundary.
 
-Machine-readable full SQL call/statement/function/table/index/FK/migration records: `sqlite-dependency-map.json`.
+Machine-readable function/table/index/FK/migration map: `sqlite-dependency-map.json`; all 1,677 full SQL statements: `sqlite-sql-statements.json`.
