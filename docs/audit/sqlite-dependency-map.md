@@ -60,7 +60,7 @@ The lexical counts of transaction-control tokens are not a transaction graph. Do
 | `listCustomers` | `tenants`, `customers` | — | Organization-scoped list; limit 1–200 |
 | `getCustomer` | `tenants`, `customers` | — | ID and organization constrained |
 | `upsertCustomer` | `tenants`, `customers`, `locations` | `customers`, `audit_events` | Organization natural-key upsert; optional location scope; sparse sync semantics |
-| `updateCustomer` | `tenants`, `customers`, `locations` | `customers`, `audit_events` | Read/merge/upsert; alias handling; no explicit transaction wrapper |
+| `updateCustomer` | `tenants`, `customers`, `locations` | `customers`, `audit_events` | Read/merge/upsert; alias handling; PR #304 makes standalone customer write plus audit atomic |
 | `listCustomerPricing` | `tenants`, `customer_pricing_rules` | — | Organization-scoped list; limit 1–500 |
 | `getCustomerPricing` | `tenants`, `customer_pricing_rules` | — | ID and organization constrained |
 | `upsertCustomerPricing` | `tenants`, `customers`, `catalog_products` | `customer_pricing_rules`, `audit_events` | Business-customer/product/currency invariants; unique organization/customer/product key |
@@ -72,9 +72,9 @@ The lexical counts of transaction-control tokens are not a transaction graph. Do
 - `customer_pricing_rules.organization_id` references `organizations.id`; `customer_pricing_rules.customer_id` references `customers.id`.
 - `customer_pricing_rules.product_id` has no declared SQL foreign key to `catalog_products`; same-tenant product ownership is enforced by `assertCatalogProductForOrganization` in the store layer.
 - The pricing table has a unique constraint on `(organization_id, customer_id, product_id)`; its indexes support organization/customer/status and organization/product/status lookup.
-- Customer and pricing writes append audit events after the primary mutation; the inspected functions do not wrap both writes in an explicit transaction. Atomicity/failure behavior should be tested before extraction or persistence splitting.
+- Customer standalone mutations and their audit events are now atomic on current main (PR #304); the Customer HTTP regression forces audit failure and verifies rollback. B2B pricing mutation and audit are also atomic after PR #305. Do not carry the original pre-fix atomicity finding forward as an open issue.
 
-### Confirmed defect candidate carried from the route audit
+### Resolved defect carried from the route audit
 
 RESOLVED on current main by PR #305. The store reloads the persisted row by its unique business key, audits the canonical row ID, and commits the pricing mutation plus audit append atomically.
 
