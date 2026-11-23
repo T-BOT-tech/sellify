@@ -9759,7 +9759,7 @@ function createPaymentSettlementInTransaction(chatId, input = {}, actor = null) 
       settlement.settlement_reference, settlement.reconciliation_id, settlement.provider_settlement_reference,
       settlement.evidence_json, settlement.reason, settlement.created_by_user_id, now, now, null
   );
-  audit(String(chatId), 'payment.settlement.requested', 'payment', payment.id, {
+  audit(String(chatId), 'payment.settlement.requested', 'payment_settlement', settlement.id, {
     settlementId: settlement.id, grossAmountMinor: gross, providerFeeMinor: providerFee,
     sellifyFeeMinor: sellifyFee, netAmountMinor: net, currency,
   }, {
@@ -9815,7 +9815,7 @@ export async function finalizePaymentSettlement(chatId, settlementId, input = {}
       status === 'SETTLED' ? now : row.settled_at,
       row.id, tenant.organizationId
     );
-    audit(String(chatId), `payment.settlement.${status.toLowerCase()}`, 'payment', row.payment_id, {
+    audit(String(chatId), `payment.settlement.${status.toLowerCase()}`, 'payment_settlement', row.id, {
       settlementId: row.id, status, grossAmountMinor: row.gross_amount_minor,
       providerFeeMinor: row.provider_fee_minor, sellifyFeeMinor: row.sellify_fee_minor,
       netAmountMinor: row.net_amount_minor,
@@ -9941,7 +9941,7 @@ function createPaymentRefundRequestInTransaction(chatId, input = {}, actor = nul
       refund.idempotency_key, refund.amount_minor, refund.currency, refund.status, refund.reason,
       null, null, null, null, null, refund.requested_by_user_id, now, now, null
     );
-  audit(String(chatId), 'payment.refund.requested', 'payment', payment.id, {
+  audit(String(chatId), 'payment.refund.requested', 'payment_refund', refund.id, {
     refundId: refund.id, amountMinor, currency, idempotencyKey: key,
   }, {
     organizationId: tenant.organizationId,
@@ -10001,7 +10001,7 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
         db.prepare("UPDATE marketplace_settlements SET status = 'HELD' WHERE seller_order_id = ? AND status IN ('PENDING','READY','HELD')")
           .run(marketplaceRefund.seller_order_id);
       }
-      audit(String(chatId), 'payment.refund.result', 'payment', payment.id,
+      audit(String(chatId), 'payment.refund.result', 'payment_refund', refund.id,
         { refundId: refund.id, status: status || 'UNKNOWN' }, {
           organizationId: tenant.organizationId,
           actorId: actor?.userId || actor?.user_id || null,
@@ -10058,7 +10058,7 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
       json({ lifecycle: 'GAP-1.14', refundId: refund.id, providerRefundId: input.providerRefundId || input.provider_refund_id || null }),
       now
     );
-    audit(String(chatId), 'payment.refund.succeeded', 'payment', payment.id, {
+    audit(String(chatId), 'payment.refund.succeeded', 'payment_refund', refund.id, {
       refundId: refund.id, amountMinor: refund.amount_minor, fullRefund,
     }, {
       organizationId: tenant.organizationId,
@@ -12795,7 +12795,7 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
               'Marketplace order cancellation', createdAt, createdAt
             );
             canonicalRefund = db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(refundId);
-            audit(String(chatId), 'payment.refund.requested', 'payment', allocation.payment_id, {
+            audit(String(chatId), 'payment.refund.requested', 'payment_refund', refundId, {
               refundId, amountMinor: allocation.amount_minor, currency: allocation.currency, idempotencyKey,
               source: 'marketplace-cancellation',
             }, {
