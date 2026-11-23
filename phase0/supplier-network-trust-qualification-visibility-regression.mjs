@@ -87,13 +87,17 @@ assert.ok(outsiderBeforeDiscoverabilityChange.some(item => item.evidenceType ===
 const hiddenSupplier = await tenant('hidden-supplier', 'Non-discoverable Trust Supplier');
 await setProcurementSupplierParticipation(hiddenSupplier.chatId, {
   status: 'ACTIVE',
-  discoverable: false,
+  discoverable: true,
 }, hiddenSupplier.actor);
 const hiddenRelationship = await createProcurementSupplierRelationship(buyer.chatId, {
   supplierOrganizationId: hiddenSupplier.organizationId,
   source: 'DIRECT',
 }, buyer.actor);
 await transitionProcurementSupplierRelationship(buyer.chatId, hiddenRelationship.id, 'ACTIVE', buyer.actor);
+await setProcurementSupplierParticipation(hiddenSupplier.chatId, {
+  status: 'ACTIVE',
+  discoverable: false,
+}, hiddenSupplier.actor);
 const hiddenSupplierEvidence = await refreshSupplierNetworkTrustEvidence(
   buyer.chatId,
   hiddenSupplier.organizationId,
