@@ -7507,6 +7507,11 @@ function upsertCustomerSync(chatId, input = {}, actor = null) {
     });
     return customerFromRow(db.prepare('SELECT * FROM customers WHERE id = ?').get(existing.id));
   }
+  if (!value.name && !value.phone) throw Object.assign(new Error('Customer name or phone is required'), { statusCode: 400 });
+  if (value.defaultLocationId) {
+    const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(String(value.defaultLocationId), tenant.organizationId);
+    if (!location) throw Object.assign(new Error('Customer location does not belong to this organization'), { statusCode: 400 });
+  }
   if (input.id) {
     const conflictingId = db.prepare('SELECT 1 FROM customers WHERE id = ?').get(String(input.id));
     if (conflictingId) {
