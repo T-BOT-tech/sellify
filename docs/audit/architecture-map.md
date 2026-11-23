@@ -28,8 +28,9 @@ Sellify is an offline-first, multi-tenant commerce and operations platform. The 
 | Duplicate method/pattern keys | 0 |
 | `backend/lib/store-sqlite.js` | 971,694 characters in fetched source |
 | Exported store functions | 253 |
-| Literal SQL statements in exported functions | 947; full-file SQL statements | 1,639 |
-| Full-file literal SQL statements | 1,639 |\n| Unique SQL tables | 110 |
+| Literal SQL API calls inside exported functions | 947 |
+| Full-file individual SQL statements | 1,639 |
+| Unique SQL tables | 110 |
 | Foreign-key declarations / unique edges | 286 / 280 |
 | Index declarations / unique names | 206 / 192 |
 | Migration guards | 85 |
