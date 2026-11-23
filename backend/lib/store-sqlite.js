@@ -5100,8 +5100,6 @@ export async function upsertCustomerPricing(chatId, input = {}, actor = null) {
     audit(String(chatId), 'b2b.custom-pricing.upserted', 'customer_pricing_rule', saved.id,
       { customerId, productId, priceMinor, currency },
       { organizationId, actorId: actor?.userId || null, reason: input.reason || '' });
-    return saved;
-  
     if (ownsTransaction) db.exec('COMMIT');
     return saved;
   } catch (error) {
