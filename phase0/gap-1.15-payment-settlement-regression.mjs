@@ -113,7 +113,7 @@ test('GAP-1.15 settlement captures gross, provider fee, Sellify fee and net with
 
   const db = store.getDatabaseForTests();
   const settlementRequestedAudit = db.prepare(`
-    SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json
+    SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json, lineage_type, lineage_id
     FROM audit_events WHERE action = 'payment.settlement.requested' AND entity_id = ?
     ORDER BY id DESC LIMIT 1
   `).get(created.settlement.id);
@@ -121,6 +121,8 @@ test('GAP-1.15 settlement captures gross, provider fee, Sellify fee and net with
   assert.equal(settlementRequestedAudit.entity_type, 'payment_settlement',
     'settlement request audit must use the canonical settlement entity type');
   assert.equal(settlementRequestedAudit.entity_id, created.settlement.id);
+  assert.equal(settlementRequestedAudit.lineage_type, 'payment_settlement');
+  assert.equal(settlementRequestedAudit.lineage_id, created.settlement.id);
   assert.equal(settlementRequestedAudit.actor_id, settlementActor.userId);
   assert.equal(settlementRequestedAudit.device_id, settlementActor.deviceId);
   assert.equal(JSON.parse(settlementRequestedAudit.metadata_json).settlementId, created.settlement.id);
@@ -145,13 +147,15 @@ test('GAP-1.15 settlement captures gross, provider fee, Sellify fee and net with
   assert.equal(settled.financialEffect, false);
   assert.equal(settled.paymentStateMutated, false);
   const settlementFinalizedAudit = db.prepare(`
-    SELECT action, entity_type, entity_id, actor_id, device_id, metadata_json
+    SELECT action, entity_type, entity_id, actor_id, device_id, metadata_json, lineage_type, lineage_id
     FROM audit_events WHERE action = 'payment.settlement.settled' AND entity_id = ?
     ORDER BY id DESC LIMIT 1
   `).get(created.settlement.id);
   assert.ok(settlementFinalizedAudit, 'settlement finalization must emit an audit event');
   assert.equal(settlementFinalizedAudit.entity_type, 'payment_settlement');
   assert.equal(settlementFinalizedAudit.entity_id, created.settlement.id);
+  assert.equal(settlementFinalizedAudit.lineage_type, 'payment_settlement');
+  assert.equal(settlementFinalizedAudit.lineage_id, created.settlement.id);
   assert.equal(settlementFinalizedAudit.actor_id, settlementActor.userId);
   assert.equal(settlementFinalizedAudit.device_id, settlementActor.deviceId);
   assert.equal(JSON.parse(settlementFinalizedAudit.metadata_json).settlementId, created.settlement.id);
