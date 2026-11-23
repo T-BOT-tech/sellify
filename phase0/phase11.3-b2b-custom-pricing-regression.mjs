@@ -54,6 +54,35 @@ const latestPricingAudit = store.getDatabaseForTests().prepare(
 ).get();
 assert.equal(latestPricingAudit?.entity_id, rule.id);
 
+// A pricing mutation and its mandatory audit event must commit atomically.
+const db = store.getDatabaseForTests();
+db.exec(`
+  CREATE TRIGGER fail_customer_pricing_audit_insert
+  BEFORE INSERT ON audit_events
+  WHEN NEW.entity_type = 'customer_pricing_rule'
+  BEGIN
+    SELECT RAISE(ABORT, 'forced B2B pricing audit failure');
+  END;
+`);
+try {
+  await assert.rejects(
+    () => store.upsertCustomerPricing(chatId, {
+      customerId: customer.id,
+      productId: 'cement',
+      priceMinor: 10000,
+      currency: 'ETB',
+      reason: 'Must roll back with audit failure',
+    }, { userId: user.id }),
+    /forced B2B pricing audit failure/
+  );
+  const afterFailedAudit = await store.listCustomerPricing(chatId, customer.id, 'cement');
+  assert.equal(afterFailedAudit.length, 1);
+  assert.equal(afterFailedAudit[0].priceMinor, 10500,
+    'failed pricing audit must roll back the pricing row update');
+} finally {
+  db.exec('DROP TRIGGER IF EXISTS fail_customer_pricing_audit_insert');
+}
+
 await assert.rejects(
   () => store.upsertCustomerPricing(chatId, { customerId: customer.id, productId: 'cement', priceMinor: 10000, currency: 'USD' }, { userId: user.id }),
   error => error?.code === 'CURRENCY_MISMATCH' && error?.statusCode === 409
