@@ -5,7 +5,7 @@
     "blob": "061581230a4443413224508d22aba21eecdbca1b"
   },
   "exportedFunctionCount": 253,
-  "uniqueReferencedTableCount": 117,
+  "uniqueReferencedTableCount": 110,
   "tableDeclarationCount": 112,
   "migrationGuardCount": 85,
   "functions": [
@@ -1955,22 +1955,10 @@
       "line": 5123,
       "tables": [
         {
-          "table": "the",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
           "table": "customer_pricing_rules",
           "operations": [
             "READ",
             "INSERT"
-          ]
-        },
-        {
-          "table": "SET",
-          "operations": [
-            "UPDATE"
           ]
         }
       ],
@@ -2364,12 +2352,6 @@
           "operations": [
             "READ",
             "INSERT"
-          ]
-        },
-        {
-          "table": "buyer",
-          "operations": [
-            "READ"
           ]
         },
         {
@@ -2974,12 +2956,6 @@
           "operations": [
             "READ"
           ]
-        },
-        {
-          "table": "SET",
-          "operations": [
-            "UPDATE"
-          ]
         }
       ],
       "calls": [],
@@ -3214,12 +3190,6 @@
           ]
         },
         {
-          "table": "the",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
           "table": "tenants",
           "operations": [
             "READ"
@@ -3230,12 +3200,6 @@
           "operations": [
             "READ",
             "INSERT"
-          ]
-        },
-        {
-          "table": "durable",
-          "operations": [
-            "READ"
           ]
         }
       ],
@@ -3321,21 +3285,9 @@
       "line": 7301,
       "tables": [
         {
-          "table": "real",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
           "table": "tenant_business_templates",
           "operations": [
             "INSERT"
-          ]
-        },
-        {
-          "table": "SET",
-          "operations": [
-            "UPDATE"
           ]
         }
       ],
@@ -3467,12 +3419,6 @@
         },
         {
           "table": "orders",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
-          "table": "the",
           "operations": [
             "READ"
           ]
@@ -4052,12 +3998,6 @@
             "READ",
             "INSERT"
           ]
-        },
-        {
-          "table": "a",
-          "operations": [
-            "READ"
-          ]
         }
       ],
       "calls": [],
@@ -4115,12 +4055,6 @@
           "operations": [
             "READ",
             "INSERT"
-          ]
-        },
-        {
-          "table": "Payment",
-          "operations": [
-            "READ"
           ]
         }
       ],
@@ -4291,12 +4225,6 @@
             "READ",
             "UPDATE"
           ]
-        },
-        {
-          "table": "its",
-          "operations": [
-            "READ"
-          ]
         }
       ],
       "calls": [],
@@ -4351,18 +4279,6 @@
         },
         {
           "table": "payment_accounts",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
-          "table": "a",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
-          "table": "Payment",
           "operations": [
             "READ"
           ]
@@ -5025,12 +4941,6 @@
           ]
         },
         {
-          "table": "durable",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
           "table": "delivery_assignment_commands",
           "operations": [
             "READ",
@@ -5478,18 +5388,6 @@
           ]
         },
         {
-          "table": "caller",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
-          "table": "any",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
           "table": "delivery_assignments",
           "operations": [
             "READ"
@@ -5523,14 +5421,7 @@
     {
       "name": "coreFulfillmentContract",
       "line": 12144,
-      "tables": [
-        {
-          "table": "fulfillment",
-          "operations": [
-            "UPDATE"
-          ]
-        }
-      ],
+      "tables": [],
       "calls": [],
       "transaction": [],
       "migrationGuards": [],
@@ -5576,24 +5467,6 @@
         },
         {
           "table": "customers",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
-          "table": "public",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
-          "table": "a",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
-          "table": "name",
           "operations": [
             "READ"
           ]
@@ -6040,12 +5913,6 @@
           ]
         },
         {
-          "table": "incomplete",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
           "table": "service_bookings",
           "operations": [
             "READ"
@@ -6217,12 +6084,6 @@
           "operations": [
             "READ",
             "INSERT"
-          ]
-        },
-        {
-          "table": "SET",
-          "operations": [
-            "UPDATE"
           ]
         }
       ],
@@ -6465,12 +6326,6 @@
           "operations": [
             "INSERT"
           ]
-        },
-        {
-          "table": "SET",
-          "operations": [
-            "UPDATE"
-          ]
         }
       ],
       "calls": [
@@ -6633,12 +6488,6 @@
         },
         {
           "table": "sessions",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
-          "table": "expiring",
           "operations": [
             "READ"
           ]
@@ -7154,87 +7003,6 @@
   ],
   "tables": [
     {
-      "name": "Payment",
-      "declaredAt": [],
-      "accessedBy": [
-        {
-          "function": "insertPaymentDecision",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
-          "function": "commitPaymentDecision",
-          "operations": [
-            "READ"
-          ]
-        }
-      ],
-      "indexes": []
-    },
-    {
-      "name": "SET",
-      "declaredAt": [],
-      "accessedBy": [
-        {
-          "function": "upsertCustomerPricing",
-          "operations": [
-            "UPDATE"
-          ]
-        },
-        {
-          "function": "setServiceResourceAvailability",
-          "operations": [
-            "UPDATE"
-          ]
-        },
-        {
-          "function": "saveBusinessTemplateConfig",
-          "operations": [
-            "UPDATE"
-          ]
-        },
-        {
-          "function": "assignMembershipContextualRole",
-          "operations": [
-            "UPDATE"
-          ]
-        },
-        {
-          "function": "setAuditRetentionPolicy",
-          "operations": [
-            "UPDATE"
-          ]
-        }
-      ],
-      "indexes": []
-    },
-    {
-      "name": "a",
-      "declaredAt": [],
-      "accessedBy": [
-        {
-          "function": "insertPaymentVerification",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
-          "function": "commitPaymentDecision",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
-          "function": "saveQueuedOrders",
-          "operations": [
-            "READ"
-          ]
-        }
-      ],
-      "indexes": []
-    },
-    {
       "name": "accounts_receivable",
       "declaredAt": [
         1043
@@ -7285,20 +7053,11 @@
           "unique": false,
           "line": 1064
         }
-      ]
-    },
-    {
-      "name": "any",
-      "declaredAt": [],
-      "accessedBy": [
-        {
-          "function": "transitionOrderFulfillment",
-          "operations": [
-            "READ"
-          ]
-        }
       ],
-      "indexes": []
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "ar_ledger_entries",
@@ -7338,7 +7097,11 @@
           "unique": false,
           "line": 1082
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "ar_payment_allocations",
@@ -7361,7 +7124,11 @@
           "unique": false,
           "line": 1096
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "audit_events",
@@ -7425,7 +7192,11 @@
           "unique": false,
           "line": 2923
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "audit_retention_policies",
@@ -7446,7 +7217,11 @@
           ]
         }
       ],
-      "indexes": []
+      "indexes": [],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "auth_challenges",
@@ -7481,33 +7256,11 @@
           ]
         }
       ],
-      "indexes": []
-    },
-    {
-      "name": "buyer",
-      "declaredAt": [],
-      "accessedBy": [
-        {
-          "function": "createPurchaseOrderFromProcurementAward",
-          "operations": [
-            "READ"
-          ]
-        }
-      ],
-      "indexes": []
-    },
-    {
-      "name": "caller",
-      "declaredAt": [],
-      "accessedBy": [
-        {
-          "function": "transitionOrderFulfillment",
-          "operations": [
-            "READ"
-          ]
-        }
-      ],
-      "indexes": []
+      "indexes": [],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "catalog_products",
@@ -7596,7 +7349,11 @@
           "unique": false,
           "line": 759
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "channel_identities",
@@ -7618,7 +7375,11 @@
           "unique": false,
           "line": 507
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "compliance_requests",
@@ -7664,7 +7425,11 @@
           "unique": false,
           "line": 713
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "customer_credit_terms",
@@ -7723,7 +7488,11 @@
           "unique": false,
           "line": 1034
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "customer_pricing_rules",
@@ -7770,7 +7539,11 @@
           "unique": false,
           "line": 891
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "customers",
@@ -7840,7 +7613,11 @@
           "unique": false,
           "line": 606
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "delivery_assignment_commands",
@@ -7870,7 +7647,11 @@
           "unique": false,
           "line": 2597
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "delivery_assignments",
@@ -7949,7 +7730,23 @@
           "unique": true,
           "line": 2278
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
+    },
+    {
+      "name": "delivery_assignments_v44",
+      "declaredAt": [
+        2254
+      ],
+      "accessedBy": [],
+      "indexes": [],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "devices",
@@ -7985,52 +7782,11 @@
           "unique": false,
           "line": 399
         }
-      ]
-    },
-    {
-      "name": "durable",
-      "declaredAt": [],
-      "accessedBy": [
-        {
-          "function": "recordServiceDeliveryAssessment",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
-          "function": "assignDeliveryCourier",
-          "operations": [
-            "READ"
-          ]
-        }
       ],
-      "indexes": []
-    },
-    {
-      "name": "expiring",
-      "declaredAt": [],
-      "accessedBy": [
-        {
-          "function": "listDevices",
-          "operations": [
-            "READ"
-          ]
-        }
-      ],
-      "indexes": []
-    },
-    {
-      "name": "fulfillment",
-      "declaredAt": [],
-      "accessedBy": [
-        {
-          "function": "coreFulfillmentContract",
-          "operations": [
-            "UPDATE"
-          ]
-        }
-      ],
-      "indexes": []
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "fulfillment_commands",
@@ -8053,7 +7809,11 @@
           "unique": false,
           "line": 2560
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "fulfillments",
@@ -8121,20 +7881,11 @@
           "unique": false,
           "line": 2215
         }
-      ]
-    },
-    {
-      "name": "incomplete",
-      "declaredAt": [],
-      "accessedBy": [
-        {
-          "function": "assessTelegramBuyerServiceFeasibility",
-          "operations": [
-            "READ"
-          ]
-        }
       ],
-      "indexes": []
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "inventory_movements",
@@ -8198,7 +7949,11 @@
           "unique": false,
           "line": 643
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "invites",
@@ -8240,7 +7995,11 @@
           "unique": false,
           "line": 460
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "invoice_items",
@@ -8262,7 +8021,11 @@
           "unique": false,
           "line": 1144
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "invoices",
@@ -8310,20 +8073,11 @@
           "unique": false,
           "line": 1132
         }
-      ]
-    },
-    {
-      "name": "its",
-      "declaredAt": [],
-      "accessedBy": [
-        {
-          "function": "completePaymentStatusQuery",
-          "operations": [
-            "READ"
-          ]
-        }
       ],
-      "indexes": []
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "locations",
@@ -8479,7 +8233,11 @@
           "unique": false,
           "line": 573
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "logistics_scheduling_activities",
@@ -8545,7 +8303,11 @@
           "unique": false,
           "line": 3275
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "marketplace_checkout_idempotency",
@@ -8568,7 +8330,11 @@
           "unique": false,
           "line": 1276
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "marketplace_fulfillments",
@@ -8602,7 +8368,11 @@
           "unique": false,
           "line": 1202
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "marketplace_inventory_reservations",
@@ -8630,7 +8400,11 @@
           "unique": false,
           "line": 1217
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "marketplace_orders",
@@ -8690,7 +8464,11 @@
           "unique": false,
           "line": 1172
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "marketplace_payment_allocations",
@@ -8746,7 +8524,23 @@
           "unique": false,
           "line": 2124
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
+    },
+    {
+      "name": "marketplace_payment_allocations_v40",
+      "declaredAt": [
+        2106
+      ],
+      "accessedBy": [],
+      "indexes": [],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "marketplace_refunds",
@@ -8775,7 +8569,11 @@
           "unique": false,
           "line": 1264
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "marketplace_seller_orders",
@@ -8834,7 +8632,11 @@
           "unique": false,
           "line": 1189
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "marketplace_settlements",
@@ -8880,7 +8682,11 @@
           "unique": false,
           "line": 1248
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "membership_roles",
@@ -8983,7 +8789,11 @@
           "unique": false,
           "line": 3150
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "memberships",
@@ -9121,20 +8931,23 @@
           "unique": false,
           "line": 389
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
-      "name": "name",
-      "declaredAt": [],
-      "accessedBy": [
-        {
-          "function": "saveQueuedOrders",
-          "operations": [
-            "READ"
-          ]
-        }
+      "name": "metadata",
+      "declaredAt": [
+        297
       ],
-      "indexes": []
+      "accessedBy": [],
+      "indexes": [],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "orders",
@@ -9303,7 +9116,11 @@
           "unique": false,
           "line": 761
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "organizations",
@@ -9408,7 +9225,11 @@
           ]
         }
       ],
-      "indexes": []
+      "indexes": [],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "pack_lifecycle",
@@ -9456,7 +9277,11 @@
           "unique": false,
           "line": 2184
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "pairing_challenges",
@@ -9492,7 +9317,11 @@
           "unique": false,
           "line": 442
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_accounts",
@@ -9556,7 +9385,11 @@
           "unique": false,
           "line": 787
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_confirmation_attempts",
@@ -9616,7 +9449,11 @@
           "unique": true,
           "line": 2443
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_decisions",
@@ -9669,7 +9506,11 @@
           "unique": false,
           "line": 2386
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_evidence",
@@ -9777,7 +9618,11 @@
           "unique": false,
           "line": 2761
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_idempotency_keys",
@@ -9831,7 +9676,11 @@
           "unique": false,
           "line": 2402
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_intents",
@@ -9909,7 +9758,11 @@
           "unique": false,
           "line": 2310
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_ledger_entries",
@@ -9973,7 +9826,23 @@
           "unique": false,
           "line": 3096
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
+    },
+    {
+      "name": "payment_ledger_entries_gap113",
+      "declaredAt": [
+        3071
+      ],
+      "accessedBy": [],
+      "indexes": [],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_operational_actions",
@@ -10021,7 +9890,11 @@
           "unique": false,
           "line": 2830
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_outbound_intents",
@@ -10087,7 +9960,11 @@
           "unique": false,
           "line": 1794
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_procurement_settlement_allocations",
@@ -10134,7 +10011,11 @@
           "unique": false,
           "line": 1839
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_procurement_settlements",
@@ -10174,7 +10055,11 @@
           "unique": false,
           "line": 1825
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_production_certifications",
@@ -10203,7 +10088,11 @@
           "unique": false,
           "line": 2858
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_provider_capability_certifications",
@@ -10239,7 +10128,11 @@
           "unique": false,
           "line": 2889
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_reconciliations",
@@ -10287,7 +10180,11 @@
           "unique": false,
           "line": 3125
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_refunds",
@@ -10360,7 +10257,11 @@
           "unique": false,
           "line": 3015
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_routing_policies",
@@ -10390,7 +10291,11 @@
           "unique": false,
           "line": 2798
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_settlements",
@@ -10444,7 +10349,11 @@
           "unique": false,
           "line": 2977
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_status_query_commands",
@@ -10487,7 +10396,11 @@
           "unique": false,
           "line": 2465
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payment_verifications",
@@ -10564,7 +10477,11 @@
           "unique": false,
           "line": 2937
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "payments",
@@ -10747,7 +10664,35 @@
           "unique": true,
           "line": 3067
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
+    },
+    {
+      "name": "payments_gap113",
+      "declaredAt": [
+        3030
+      ],
+      "accessedBy": [],
+      "indexes": [],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
+    },
+    {
+      "name": "phone_routing",
+      "declaredAt": [
+        349
+      ],
+      "accessedBy": [],
+      "indexes": [],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "procurement_award_lines",
@@ -10781,7 +10726,11 @@
           "unique": false,
           "line": 1629
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "procurement_awards",
@@ -10829,7 +10778,11 @@
           "unique": false,
           "line": 1610
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "procurement_comparison_line_offers",
@@ -10857,7 +10810,11 @@
           "unique": false,
           "line": 1575
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "procurement_comparison_suppliers",
@@ -10879,7 +10836,11 @@
           "unique": false,
           "line": 1556
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "procurement_comparisons",
@@ -10914,7 +10875,11 @@
           "unique": false,
           "line": 1535
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "procurement_demand_items",
@@ -10962,7 +10927,11 @@
           "unique": false,
           "line": 1338
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "procurement_demands",
@@ -11029,7 +10998,11 @@
           "unique": false,
           "line": 1318
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "procurement_receipt_lines",
@@ -11058,7 +11031,11 @@
           "unique": false,
           "line": 1753
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "procurement_receipts",
@@ -11094,7 +11071,11 @@
           "unique": false,
           "line": 1740
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "procurement_rfq_items",
@@ -11140,7 +11121,11 @@
           "unique": false,
           "line": 1445
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "procurement_rfq_response_items",
@@ -11176,7 +11161,11 @@
           "unique": false,
           "line": 1496
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "procurement_rfq_responses",
@@ -11231,7 +11220,11 @@
           "unique": false,
           "line": 1481
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "procurement_rfq_suppliers",
@@ -11271,7 +11264,11 @@
           "unique": false,
           "line": 1457
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "procurement_rfqs",
@@ -11343,7 +11340,11 @@
           "unique": false,
           "line": 1428
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "procurement_supplier_participants",
@@ -11396,7 +11397,11 @@
           "unique": false,
           "line": 1378
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "procurement_supplier_relationships",
@@ -11468,20 +11473,11 @@
           "unique": false,
           "line": 1394
         }
-      ]
-    },
-    {
-      "name": "public",
-      "declaredAt": [],
-      "accessedBy": [
-        {
-          "function": "saveQueuedOrders",
-          "operations": [
-            "READ"
-          ]
-        }
       ],
-      "indexes": []
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "purchase_order_items",
@@ -11527,7 +11523,11 @@
           "unique": false,
           "line": 1700
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "purchase_orders",
@@ -11623,7 +11623,23 @@
           "unique": false,
           "line": 1699
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
+    },
+    {
+      "name": "purchase_orders_phase17_6_new",
+      "declaredAt": [
+        1656
+      ],
+      "accessedBy": [],
+      "indexes": [],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "quote_items",
@@ -11645,7 +11661,11 @@
           "unique": false,
           "line": 939
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "quotes",
@@ -11685,20 +11705,11 @@
           "unique": false,
           "line": 937
         }
-      ]
-    },
-    {
-      "name": "real",
-      "declaredAt": [],
-      "accessedBy": [
-        {
-          "function": "saveBusinessTemplateConfig",
-          "operations": [
-            "READ"
-          ]
-        }
       ],
-      "indexes": []
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "restaurant_recipes",
@@ -11740,7 +11751,23 @@
           "unique": false,
           "line": 3579
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
+    },
+    {
+      "name": "schema_migrations",
+      "declaredAt": [
+        293
+      ],
+      "accessedBy": [],
+      "indexes": [],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "service_booking_commands",
@@ -11770,7 +11797,11 @@
           "unique": false,
           "line": 2677
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "service_bookings",
@@ -11830,7 +11861,11 @@
           "unique": false,
           "line": 3456
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "service_delivery_assessment_commands",
@@ -11853,7 +11888,11 @@
           "unique": false,
           "line": 2614
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "service_resource_availability",
@@ -11894,7 +11933,11 @@
           "unique": false,
           "line": 3369
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "service_resource_availability_commands",
@@ -11910,7 +11953,11 @@
           ]
         }
       ],
-      "indexes": []
+      "indexes": [],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "service_resource_commands",
@@ -11940,7 +11987,11 @@
           "unique": false,
           "line": 3349
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "service_resource_commitments",
@@ -12001,7 +12052,11 @@
           "unique": false,
           "line": 3454
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "service_resources",
@@ -12085,7 +12140,11 @@
           "unique": false,
           "line": 3338
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "sessions",
@@ -12137,7 +12196,11 @@
           "unique": false,
           "line": 409
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "supplier_network_capabilities",
@@ -12191,7 +12254,11 @@
           "unique": false,
           "line": 3224
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "supplier_network_capacity_signals",
@@ -12239,7 +12306,11 @@
           "unique": false,
           "line": 1948
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "supplier_network_catalog_listings",
@@ -12293,7 +12364,11 @@
           "unique": false,
           "line": 1914
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "supplier_network_commercial_terms",
@@ -12347,7 +12422,11 @@
           "unique": true,
           "line": 1987
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "supplier_network_performance_observations",
@@ -12393,7 +12472,11 @@
           "unique": false,
           "line": 2050
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "supplier_network_profiles",
@@ -12434,7 +12517,11 @@
           "unique": false,
           "line": 1878
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "supplier_network_qualifications",
@@ -12500,7 +12587,11 @@
           "unique": true,
           "line": 2021
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "supplier_network_service_areas",
@@ -12548,7 +12639,11 @@
           "unique": false,
           "line": 3194
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "supplier_network_trust_evidence",
@@ -12600,7 +12695,11 @@
           "unique": true,
           "line": 2086
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "sync_events",
@@ -12629,7 +12728,11 @@
           "unique": false,
           "line": 666
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "telegram_storefront_configs",
@@ -12664,7 +12767,11 @@
           "unique": false,
           "line": 2148
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "tenant_business_templates",
@@ -12685,7 +12792,11 @@
           ]
         }
       ],
-      "indexes": []
+      "indexes": [],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "tenant_creation_requests",
@@ -12714,7 +12825,11 @@
           "unique": false,
           "line": 3309
         }
-      ]
+      ],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "tenants",
@@ -12918,32 +13033,11 @@
           "unique": false,
           "line": 510
         }
-      ]
-    },
-    {
-      "name": "the",
-      "declaredAt": [],
-      "accessedBy": [
-        {
-          "function": "upsertCustomerPricing",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
-          "function": "recordServiceDeliveryAssessment",
-          "operations": [
-            "READ"
-          ]
-        },
-        {
-          "function": "saveCatalog",
-          "operations": [
-            "READ"
-          ]
-        }
       ],
-      "indexes": []
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     },
     {
       "name": "users",
@@ -12990,7 +13084,11 @@
           ]
         }
       ],
-      "indexes": []
+      "indexes": [],
+      "ownership": {
+        "status": "not assigned",
+        "reason": "SQL access is evidence of dependency, not proof of exclusive domain ownership"
+      }
     }
   ],
   "indexes": [
@@ -16039,6 +16137,1198 @@
     "SQL keyword scanning within exported function bodies can miss SQL composed by helper functions or dynamic fragments.",
     "REFERENCES clauses are captured only when inline in this source; runtime PRAGMA foreign_key_list remains required.",
     "Function-to-function edges include direct calls to exported functions only.",
-    "Table-to-domain ownership is not inferred from names; the map records observed access only."
+    "Table-to-domain ownership is not inferred from names; the map records observed access only.",
+    "Table register is normalized to all 110 declared table names; lexical non-table tokens (for example prose words accidentally matched after SQL keywords) are excluded and listed separately.",
+    "The table list includes declared tables with no observed exported-function access; these may be migration-only, legacy, or accessed through non-exported helpers."
+  ],
+  "declaredTableCount": 110,
+  "lexicalNonTableTokensExcluded": [
+    {
+      "token": "Payment",
+      "observedIn": [
+        "insertPaymentDecision",
+        "commitPaymentDecision"
+      ]
+    },
+    {
+      "token": "SET",
+      "observedIn": [
+        "upsertCustomerPricing",
+        "setServiceResourceAvailability",
+        "saveBusinessTemplateConfig",
+        "assignMembershipContextualRole",
+        "setAuditRetentionPolicy"
+      ]
+    },
+    {
+      "token": "a",
+      "observedIn": [
+        "insertPaymentVerification",
+        "commitPaymentDecision",
+        "saveQueuedOrders"
+      ]
+    },
+    {
+      "token": "any",
+      "observedIn": [
+        "transitionOrderFulfillment"
+      ]
+    },
+    {
+      "token": "buyer",
+      "observedIn": [
+        "createPurchaseOrderFromProcurementAward"
+      ]
+    },
+    {
+      "token": "caller",
+      "observedIn": [
+        "transitionOrderFulfillment"
+      ]
+    },
+    {
+      "token": "durable",
+      "observedIn": [
+        "recordServiceDeliveryAssessment",
+        "assignDeliveryCourier"
+      ]
+    },
+    {
+      "token": "expiring",
+      "observedIn": [
+        "listDevices"
+      ]
+    },
+    {
+      "token": "fulfillment",
+      "observedIn": [
+        "coreFulfillmentContract"
+      ]
+    },
+    {
+      "token": "incomplete",
+      "observedIn": [
+        "assessTelegramBuyerServiceFeasibility"
+      ]
+    },
+    {
+      "token": "its",
+      "observedIn": [
+        "completePaymentStatusQuery"
+      ]
+    },
+    {
+      "token": "name",
+      "observedIn": [
+        "saveQueuedOrders"
+      ]
+    },
+    {
+      "token": "public",
+      "observedIn": [
+        "saveQueuedOrders"
+      ]
+    },
+    {
+      "token": "real",
+      "observedIn": [
+        "saveBusinessTemplateConfig"
+      ]
+    },
+    {
+      "token": "the",
+      "observedIn": [
+        "upsertCustomerPricing",
+        "recordServiceDeliveryAssessment",
+        "saveCatalog"
+      ]
+    }
+  ],
+  "crossTableTransactionFunctions": [
+    {
+      "function": "upsertSupplierNetworkCommercialTerms",
+      "tables": [
+        "catalog_products",
+        "supplier_network_capabilities",
+        "supplier_network_commercial_terms"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "upsertSupplierNetworkCatalogListing",
+      "tables": [
+        "catalog_products",
+        "supplier_network_catalog_listings"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "upsertSupplierNetworkProfile",
+      "tables": [
+        "organizations",
+        "supplier_network_profiles"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "allocateConfirmedOutboundPaymentToProcurementSettlement",
+      "tables": [
+        "payment_outbound_intents",
+        "payment_procurement_settlement_allocations",
+        "payment_procurement_settlements"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": [
+        "getProcurementSettlement"
+      ]
+    },
+    {
+      "function": "createProcurementDemand",
+      "tables": [
+        "procurement_demands",
+        "procurement_demand_items"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": [
+        "getProcurementDemand"
+      ]
+    },
+    {
+      "function": "updateProcurementDemand",
+      "tables": [
+        "procurement_demands",
+        "procurement_demand_items"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": [
+        "getProcurementDemand"
+      ]
+    },
+    {
+      "function": "createProcurementRfq",
+      "tables": [
+        "procurement_rfqs",
+        "procurement_demand_items",
+        "procurement_rfq_items",
+        "procurement_rfq_suppliers"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": [
+        "getProcurementDemand"
+      ]
+    },
+    {
+      "function": "transitionProcurementRfq",
+      "tables": [
+        "procurement_rfqs",
+        "procurement_rfq_suppliers"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "createProcurementRfqResponse",
+      "tables": [
+        "procurement_rfqs",
+        "procurement_rfq_items",
+        "procurement_rfq_responses",
+        "organizations",
+        "procurement_rfq_response_items"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "transitionProcurementRfqResponse",
+      "tables": [
+        "procurement_rfq_responses",
+        "procurement_rfqs",
+        "organizations",
+        "procurement_rfq_response_items",
+        "procurement_rfq_suppliers"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "refreshSupplierNetworkTrustEvidence",
+      "tables": [
+        "procurement_supplier_participants",
+        "procurement_supplier_relationships",
+        "supplier_network_qualifications",
+        "supplier_network_performance_observations",
+        "supplier_network_trust_evidence"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": [
+        "listSupplierNetworkTrustEvidence"
+      ]
+    },
+    {
+      "function": "recalculateSupplierNetworkPerformance",
+      "tables": [
+        "procurement_supplier_participants",
+        "procurement_rfq_responses",
+        "procurement_rfq_suppliers",
+        "procurement_rfqs",
+        "purchase_orders",
+        "procurement_receipt_lines",
+        "procurement_receipts",
+        "purchase_order_items",
+        "supplier_network_performance_observations"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": [
+        "listSupplierNetworkPerformance"
+      ]
+    },
+    {
+      "function": "createProcurementComparison",
+      "tables": [
+        "procurement_rfqs",
+        "procurement_rfq_items",
+        "procurement_rfq_responses",
+        "organizations",
+        "procurement_comparisons",
+        "procurement_rfq_response_items",
+        "procurement_comparison_suppliers",
+        "procurement_comparison_line_offers"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "createProcurementAward",
+      "tables": [
+        "procurement_demands",
+        "procurement_rfqs",
+        "procurement_comparisons",
+        "procurement_comparison_line_offers",
+        "procurement_rfq_responses",
+        "procurement_rfq_items",
+        "procurement_awards",
+        "procurement_award_lines"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "transitionProcurementAward",
+      "tables": [
+        "procurement_awards",
+        "procurement_award_lines",
+        "procurement_demands"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "createQuote",
+      "tables": [
+        "customer_pricing_rules",
+        "quotes",
+        "quote_items"
+      ],
+      "transaction": [
+        "BEGIN",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "createPurchaseOrder",
+      "tables": [
+        "purchase_orders",
+        "purchase_order_items"
+      ],
+      "transaction": [
+        "BEGIN",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": [
+        "createPurchaseOrderFromProcurementAward"
+      ]
+    },
+    {
+      "function": "createProcurementReceipt",
+      "tables": [
+        "purchase_orders",
+        "locations",
+        "purchase_order_items",
+        "procurement_receipt_lines",
+        "procurement_receipts",
+        "catalog_products"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": [
+        "appendInventoryMovement"
+      ]
+    },
+    {
+      "function": "createPurchaseOrderFromProcurementAward",
+      "tables": [
+        "procurement_awards",
+        "procurement_award_lines",
+        "procurement_rfq_items",
+        "purchase_orders",
+        "purchase_order_items"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "createReceivable",
+      "tables": [
+        "customer_credit_terms",
+        "orders",
+        "accounts_receivable",
+        "ar_ledger_entries"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": [
+        "getReceivable"
+      ]
+    },
+    {
+      "function": "allocatePaymentToReceivable",
+      "tables": [
+        "ar_payment_allocations",
+        "ar_ledger_entries",
+        "accounts_receivable"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": [
+        "getReceivable",
+        "getPayment"
+      ]
+    },
+    {
+      "function": "createInvoice",
+      "tables": [
+        "invoices",
+        "invoice_items"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": [
+        "getReceivable",
+        "getInvoice"
+      ]
+    },
+    {
+      "function": "createServiceResource",
+      "tables": [
+        "tenants",
+        "service_resource_commands",
+        "service_resources"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "updateServiceResource",
+      "tables": [
+        "tenants",
+        "service_resources",
+        "service_resource_commands",
+        "service_resource_commitments"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "setServiceResourceAvailability",
+      "tables": [
+        "tenants",
+        "service_resources",
+        "locations",
+        "organizations",
+        "service_resource_availability_commands",
+        "service_resource_availability",
+        "service_resource_commitments"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "createServiceBooking",
+      "tables": [
+        "tenants",
+        "orders",
+        "service_booking_commands",
+        "service_bookings"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": [
+        "getTenant"
+      ]
+    },
+    {
+      "function": "transitionServiceBooking",
+      "tables": [
+        "tenants",
+        "service_bookings",
+        "service_booking_commands",
+        "service_resources",
+        "orders",
+        "service_resource_availability",
+        "organizations",
+        "locations",
+        "service_resource_commitments"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": [
+        "getTenant"
+      ]
+    },
+    {
+      "function": "recordServiceDeliveryAssessment",
+      "tables": [
+        "orders",
+        "tenants",
+        "service_delivery_assessment_commands"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": [
+        "getTenant"
+      ]
+    },
+    {
+      "function": "saveCatalog",
+      "tables": [
+        "catalog_products",
+        "tenants",
+        "inventory_movements",
+        "orders"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "createPaymentWithIntent",
+      "tables": [
+        "orders",
+        "customers",
+        "payment_accounts",
+        "payment_idempotency_keys",
+        "payments",
+        "payment_intents",
+        "payment_refunds",
+        "payment_ledger_entries"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "beginPaymentStatusQuery",
+      "tables": [
+        "payment_status_query_commands",
+        "payments"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "commitPaymentDecision",
+      "tables": [
+        "payment_idempotency_keys",
+        "payment_status_query_commands",
+        "payments",
+        "payment_verifications",
+        "payment_evidence",
+        "payment_intents",
+        "payment_accounts",
+        "marketplace_payment_allocations",
+        "marketplace_seller_orders",
+        "payment_decisions",
+        "payment_ledger_entries",
+        "marketplace_settlements"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "createPayment",
+      "tables": [
+        "orders",
+        "customers",
+        "payment_accounts",
+        "payments",
+        "payment_ledger_entries"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "finalizePaymentRefund",
+      "tables": [
+        "payment_refunds",
+        "payments",
+        "marketplace_refunds",
+        "marketplace_payment_allocations",
+        "payment_ledger_entries",
+        "marketplace_settlements"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "transitionPayment",
+      "tables": [
+        "payments",
+        "marketplace_payment_allocations",
+        "marketplace_seller_orders",
+        "payment_ledger_entries",
+        "marketplace_settlements"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "assignDeliveryCourier",
+      "tables": [
+        "fulfillments",
+        "orders",
+        "tenants",
+        "delivery_assignment_commands",
+        "delivery_assignments",
+        "memberships",
+        "membership_roles"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": [
+        "getTenant",
+        "selectDeliveryCourier"
+      ]
+    },
+    {
+      "function": "transitionDeliveryAssignment",
+      "tables": [
+        "tenants",
+        "fulfillments",
+        "orders",
+        "delivery_assignment_commands",
+        "delivery_assignments",
+        "memberships",
+        "membership_roles",
+        "locations"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": [
+        "getTenant"
+      ]
+    },
+    {
+      "function": "transitionOrderFulfillment",
+      "tables": [
+        "users",
+        "orders",
+        "tenants",
+        "fulfillment_commands",
+        "locations",
+        "fulfillments",
+        "delivery_assignments"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "saveQueuedOrders",
+      "tables": [
+        "orders",
+        "payments",
+        "tenants",
+        "customers"
+      ],
+      "transaction": [
+        "BEGIN",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "createMarketplaceOrder",
+      "tables": [
+        "catalog_products",
+        "marketplace_checkout_idempotency",
+        "marketplace_orders",
+        "tenants",
+        "locations",
+        "inventory_movements",
+        "marketplace_seller_orders",
+        "marketplace_fulfillments",
+        "marketplace_inventory_reservations",
+        "marketplace_payment_allocations",
+        "marketplace_settlements"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "updateMarketplaceOrderStatus",
+      "tables": [
+        "orders",
+        "marketplace_seller_orders",
+        "catalog_products",
+        "tenants",
+        "locations",
+        "inventory_movements",
+        "marketplace_payment_allocations",
+        "payments",
+        "payment_refunds",
+        "marketplace_refunds",
+        "marketplace_inventory_reservations",
+        "marketplace_settlements",
+        "marketplace_fulfillments",
+        "marketplace_orders"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "createTenantForUser",
+      "tables": [
+        "tenant_creation_requests",
+        "auth_challenges",
+        "tenants"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "consumePairingChallenge",
+      "tables": [
+        "pairing_challenges",
+        "users"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    },
+    {
+      "function": "consumeInvite",
+      "tables": [
+        "invites",
+        "memberships",
+        "tenants"
+      ],
+      "transaction": [
+        "BEGIN IMMEDIATE",
+        "COMMIT",
+        "ROLLBACK"
+      ],
+      "calls": []
+    }
+  ],
+  "singleTableNoTransactionReviewCandidates": [
+    {
+      "function": "getPackLifecycle",
+      "table": "pack_lifecycle",
+      "reviewOnly": true
+    },
+    {
+      "function": "listSupplierNetworkQualifications",
+      "table": "supplier_network_qualifications",
+      "reviewOnly": true
+    },
+    {
+      "function": "transitionSupplierNetworkQualification",
+      "table": "supplier_network_qualifications",
+      "reviewOnly": true
+    },
+    {
+      "function": "listSupplierNetworkCommercialTerms",
+      "table": "supplier_network_commercial_terms",
+      "reviewOnly": true
+    },
+    {
+      "function": "transitionSupplierNetworkCommercialTerms",
+      "table": "supplier_network_commercial_terms",
+      "reviewOnly": true
+    },
+    {
+      "function": "listSupplierNetworkCapacities",
+      "table": "supplier_network_capacity_signals",
+      "reviewOnly": true
+    },
+    {
+      "function": "transitionSupplierNetworkCapacity",
+      "table": "supplier_network_capacity_signals",
+      "reviewOnly": true
+    },
+    {
+      "function": "listSupplierNetworkServiceAreas",
+      "table": "supplier_network_service_areas",
+      "reviewOnly": true
+    },
+    {
+      "function": "transitionSupplierNetworkServiceArea",
+      "table": "supplier_network_service_areas",
+      "reviewOnly": true
+    },
+    {
+      "function": "listSupplierNetworkCatalogListings",
+      "table": "supplier_network_catalog_listings",
+      "reviewOnly": true
+    },
+    {
+      "function": "transitionSupplierNetworkCatalogListing",
+      "table": "supplier_network_catalog_listings",
+      "reviewOnly": true
+    },
+    {
+      "function": "listSupplierNetworkCapabilities",
+      "table": "supplier_network_capabilities",
+      "reviewOnly": true
+    },
+    {
+      "function": "transitionSupplierNetworkCapability",
+      "table": "supplier_network_capabilities",
+      "reviewOnly": true
+    },
+    {
+      "function": "transitionSupplierNetworkProfile",
+      "table": "supplier_network_profiles",
+      "reviewOnly": true
+    },
+    {
+      "function": "listPaymentOutboundIntents",
+      "table": "payment_outbound_intents",
+      "reviewOnly": true
+    },
+    {
+      "function": "getPaymentOutboundIntent",
+      "table": "payment_outbound_intents",
+      "reviewOnly": true
+    },
+    {
+      "function": "transitionPaymentOutboundIntent",
+      "table": "payment_outbound_intents",
+      "reviewOnly": true
+    },
+    {
+      "function": "listProcurementRfqs",
+      "table": "procurement_rfqs",
+      "reviewOnly": true
+    },
+    {
+      "function": "getSupplierNetworkTrustEvidence",
+      "table": "supplier_network_trust_evidence",
+      "reviewOnly": true
+    },
+    {
+      "function": "listProcurementComparisons",
+      "table": "procurement_comparisons",
+      "reviewOnly": true
+    },
+    {
+      "function": "listProcurementAwards",
+      "table": "procurement_awards",
+      "reviewOnly": true
+    },
+    {
+      "function": "listCustomerPricing",
+      "table": "customer_pricing_rules",
+      "reviewOnly": true
+    },
+    {
+      "function": "getCustomerPricing",
+      "table": "customer_pricing_rules",
+      "reviewOnly": true
+    },
+    {
+      "function": "listQuotes",
+      "table": "quotes",
+      "reviewOnly": true
+    },
+    {
+      "function": "transitionQuote",
+      "table": "quotes",
+      "reviewOnly": true
+    },
+    {
+      "function": "getCreditTerms",
+      "table": "customer_credit_terms",
+      "reviewOnly": true
+    },
+    {
+      "function": "listCreditTerms",
+      "table": "customer_credit_terms",
+      "reviewOnly": true
+    },
+    {
+      "function": "listPurchaseOrders",
+      "table": "purchase_orders",
+      "reviewOnly": true
+    },
+    {
+      "function": "listProcurementReceipts",
+      "table": "procurement_receipts",
+      "reviewOnly": true
+    },
+    {
+      "function": "transitionPurchaseOrder",
+      "table": "purchase_orders",
+      "reviewOnly": true
+    },
+    {
+      "function": "getReceivable",
+      "table": "accounts_receivable",
+      "reviewOnly": true
+    },
+    {
+      "function": "listReceivables",
+      "table": "accounts_receivable",
+      "reviewOnly": true
+    },
+    {
+      "function": "getInvoice",
+      "table": "invoices",
+      "reviewOnly": true
+    },
+    {
+      "function": "listInvoices",
+      "table": "invoices",
+      "reviewOnly": true
+    },
+    {
+      "function": "listOrganizationLocations",
+      "table": "locations",
+      "reviewOnly": true
+    },
+    {
+      "function": "getOrganizationLocation",
+      "table": "locations",
+      "reviewOnly": true
+    },
+    {
+      "function": "createOrganizationLocation",
+      "table": "locations",
+      "reviewOnly": true
+    },
+    {
+      "function": "updateOrganizationLocation",
+      "table": "locations",
+      "reviewOnly": true
+    },
+    {
+      "function": "listServiceResources",
+      "table": "service_resources",
+      "reviewOnly": true
+    },
+    {
+      "function": "getOrCreateTenant",
+      "table": "tenants",
+      "reviewOnly": true
+    },
+    {
+      "function": "getTenant",
+      "table": "tenants",
+      "reviewOnly": true
+    },
+    {
+      "function": "getTenantByApiKey",
+      "table": "tenants",
+      "reviewOnly": true
+    },
+    {
+      "function": "listTenants",
+      "table": "tenants",
+      "reviewOnly": true
+    },
+    {
+      "function": "getCatalog",
+      "table": "catalog_products",
+      "reviewOnly": true
+    },
+    {
+      "function": "getPaymentIntent",
+      "table": "payment_intents",
+      "reviewOnly": true
+    },
+    {
+      "function": "updatePaymentConfirmationAttempt",
+      "table": "payment_confirmation_attempts",
+      "reviewOnly": true
+    },
+    {
+      "function": "getPaymentConfirmationAttempt",
+      "table": "payment_confirmation_attempts",
+      "reviewOnly": true
+    },
+    {
+      "function": "getPaymentIdempotency",
+      "table": "payment_idempotency_keys",
+      "reviewOnly": true
+    },
+    {
+      "function": "markPaymentStatusQueryProviderStarted",
+      "table": "payment_status_query_commands",
+      "reviewOnly": true
+    },
+    {
+      "function": "completePaymentStatusQuery",
+      "table": "payment_status_query_commands",
+      "reviewOnly": true
+    },
+    {
+      "function": "listPaymentAccounts",
+      "table": "payment_accounts",
+      "reviewOnly": true
+    },
+    {
+      "function": "listPaymentRoutingPolicies",
+      "table": "payment_routing_policies",
+      "reviewOnly": true
+    },
+    {
+      "function": "getPaymentSettlementByIdempotencyKey",
+      "table": "payment_settlements",
+      "reviewOnly": true
+    },
+    {
+      "function": "listPaymentSettlements",
+      "table": "payment_settlements",
+      "reviewOnly": true
+    },
+    {
+      "function": "getPaymentRefunds",
+      "table": "payment_refunds",
+      "reviewOnly": true
+    },
+    {
+      "function": "getPaymentRefundByIdempotencyKey",
+      "table": "payment_refunds",
+      "reviewOnly": true
+    },
+    {
+      "function": "getPayment",
+      "table": "payments",
+      "reviewOnly": true
+    },
+    {
+      "function": "listPayments",
+      "table": "payments",
+      "reviewOnly": true
+    },
+    {
+      "function": "getOrderFulfillment",
+      "table": "fulfillments",
+      "reviewOnly": true
+    },
+    {
+      "function": "getOrders",
+      "table": "orders",
+      "reviewOnly": true
+    },
+    {
+      "function": "getOrCreateUserByTelegram",
+      "table": "users",
+      "reviewOnly": true
+    },
+    {
+      "function": "revokeSession",
+      "table": "sessions",
+      "reviewOnly": true
+    },
+    {
+      "function": "createAuthChallenge",
+      "table": "auth_challenges",
+      "reviewOnly": true
+    },
+    {
+      "function": "consumeAuthChallenge",
+      "table": "auth_challenges",
+      "reviewOnly": true
+    },
+    {
+      "function": "recordPaymentProviderCapabilityEvidence",
+      "table": "payment_provider_capability_certifications",
+      "reviewOnly": true
+    },
+    {
+      "function": "certifyPaymentProviderCapability",
+      "table": "payment_provider_capability_certifications",
+      "reviewOnly": true
+    },
+    {
+      "function": "listPaymentProviderCapabilityEvidence",
+      "table": "payment_provider_capability_certifications",
+      "reviewOnly": true
+    },
+    {
+      "function": "recordPaymentProductionCertification",
+      "table": "payment_production_certifications",
+      "reviewOnly": true
+    },
+    {
+      "function": "listPaymentProductionCertifications",
+      "table": "payment_production_certifications",
+      "reviewOnly": true
+    }
   ]
 }
