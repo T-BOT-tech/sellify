@@ -7464,7 +7464,7 @@ export async function getCustomer(chatId, customerId) {
   return customerFromRow(db.prepare('SELECT * FROM customers WHERE id = ? AND organization_id = ?').get(String(customerId), tenant.organizationId));
 }
 
-function upsertCustomerSync(chatId, input = {}) {
+function upsertCustomerSync(chatId, input = {}, actor = null) {
   ensureDatabase();
   const tenant = getTenantByChatId(chatId);
   if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
@@ -7482,29 +7482,54 @@ function upsertCustomerSync(chatId, input = {}) {
       next.defaultLocationId || null, next.customerType, next.name, next.phone, next.email, next.address, next.taxId, next.notes, next.status, next.source, now, existing.id, tenant.organizationId
     );
     audit(String(chatId), 'customer.updated', 'customer', existing.id, { source: value.source }, {
-      organizationId: tenant.organizationId,
+      organizationId: tenant.organizationId, actorId: actor?.userId || null, deviceId: actor?.deviceId || null,
     });
     return customerFromRow(db.prepare('SELECT * FROM customers WHERE id = ?').get(existing.id));
+  }
+  if (input.id) {
+    const conflictingId = db.prepare('SELECT 1 FROM customers WHERE id = ?').get(String(input.id));
+    if (conflictingId) {
+      throw Object.assign(new Error('Customer ID is already in use'), {
+        statusCode: 409, code: 'CUSTOMER_ID_CONFLICT',
+      });
+    }
   }
   const id = String(input.id || crypto.randomUUID());
   db.prepare(`INSERT INTO customers (id, organization_id, default_location_id, customer_type, name, phone, email, address, tax_id, notes, status, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, tenant.organizationId, value.defaultLocationId || null, value.customerType, value.name, value.phone, value.email, value.address, value.taxId, value.notes, value.status, value.source, now, now);
   audit(String(chatId), 'customer.created', 'customer', id, { source: value.source }, {
-    organizationId: tenant.organizationId,
+    organizationId: tenant.organizationId, actorId: actor?.userId || null, deviceId: actor?.deviceId || null,
   });
   return customerFromRow(db.prepare('SELECT * FROM customers WHERE id = ?').get(id));
 }
 
 // Preserve the existing async API for callers while exposing a synchronous
 // internal path for callers that must not yield inside a SQLite transaction.
-export async function upsertCustomer(chatId, input = {}) {
-  return upsertCustomerSync(chatId, input);
+export async function upsertCustomer(chatId, input = {}, actor = null) {
+  return upsertCustomerSync(chatId, input, actor);
 }
 
-export async function updateCustomer(chatId, customerId, patch = {}) {
+export async function updateCustomer(chatId, customerId, patch = {}, actor = null) {
   const current = await getCustomer(chatId, customerId);
   if (!current) throw Object.assign(new Error('Customer not found'), { statusCode: 404 });
-  return upsertCustomer(chatId, { ...current, ...patch, id: current.id });
+  const updates = patch && typeof patch === 'object' && !Array.isArray(patch) ? patch : {};
+  const input = { ...current, ...updates, id: current.id };
+  // PATCH accepts both canonical camelCase fields and the snake_case aliases
+  // accepted by customer creation. Existing canonical values must not mask
+  // an explicitly supplied alias when the canonical key is absent.
+  const aliases = [
+    ['customerType', 'customer_type'],
+    ['name', 'customer_name'],
+    ['phone', 'customer_phone'],
+    ['taxId', 'tax_id'],
+    ['defaultLocationId', 'default_location_id'],
+  ];
+  for (const [canonical, alias] of aliases) {
+    if (Object.hasOwn(updates, alias) && !Object.hasOwn(updates, canonical)) {
+      input[canonical] = updates[alias];
+    }
+  }
+  return upsertCustomer(chatId, input, actor);
 }
 
 function inventoryMovementFromRow(row) {
@@ -7891,7 +7916,7 @@ export async function processSyncEvent(chatId, event = {}, actor = null) {
         appendInventoryMovementInTransaction(chatId, String(tenant.organizationId), movement, actor);
       }
     } else if (eventType === 'customer.upsert') {
-      upsertCustomerSync(chatId, event.payload);
+      upsertCustomerSync(chatId, event.payload, actor);
     } else {
       throw Object.assign(new Error(`Unsupported sync event type: ${eventType}`), { statusCode: 400 });
     }

@@ -163,6 +163,7 @@ import { listPaymentChannels } from './lib/payments/channel-registry.js';
 import { processEventIsolated } from './lib/event-failure-isolation.js';
 import { assertEventTenantScope } from './lib/event-replay.js';
 import { listOnboardingCountryOptions } from './lib/country-pack-onboarding.js';
+import { corsOriginFor as resolveCorsOrigin, sendJSON as writeJSON, sendError as writeError } from './lib/http/response.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -304,44 +305,16 @@ function clientIp(req) {
 }
 
 function corsOriginFor(req) {
-  const origin = req.headers['origin'];
-  if (CORS_ALLOWED_ORIGINS.length === 0) return '*'; // dev fallback, warned about at startup
-  if (origin && CORS_ALLOWED_ORIGINS.includes(origin)) return origin;
-  return null; // not allowed — omit the header, browser blocks the cross-origin read
+  return resolveCorsOrigin(req, CORS_ALLOWED_ORIGINS);
 }
 
 function sendJSON(res, status, body, req) {
-  const payload = JSON.stringify(body);
-  const headers = {
-    'Content-Type': 'application/json',
-    'Content-Length': Buffer.byteLength(payload),
-    ...(req?._requestId ? { 'X-Request-Id': req._requestId } : {}),
-  };
-  const allowOrigin = req ? corsOriginFor(req) : '*';
-  if (allowOrigin) {
-    headers['Access-Control-Allow-Origin'] = allowOrigin;
-    headers['Vary'] = 'Origin';
-  }
-  res.writeHead(status, headers);
-  res.end(payload);
+  return writeJSON(res, status, body, req, CORS_ALLOWED_ORIGINS);
 }
 
-// Structured error body. For 5xx we deliberately don't echo e.message —
-// that's a Node/store internal error, not something written for a
-// client to read, and could leak implementation details. For 4xx, the
-// message IS the intended validation text (e.g. "Invalid or missing API
-// key"), so it's shown as-is.
 function sendError(res, status, err, req) {
-  const message = status >= 500 ? 'Internal error' : (err.message || 'Request error');
-  if (status >= 500) console.error('[error]', err);
-  // Keep stable, machine-readable domain codes on expected client errors.
-  // Never expose internal error codes for 5xx responses.
-  const code = status < 500 && typeof err?.code === 'string' && /^[A-Z][A-Z0-9_]{1,79}$/.test(err.code)
-    ? err.code
-    : undefined;
-  sendJSON(res, status, { error: { message, status, ...(code ? { code } : {}) } }, req);
+  return writeError(res, status, err, req, CORS_ALLOWED_ORIGINS);
 }
-
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -363,25 +336,39 @@ function readRawBody(req) {
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let data = '';
+    const chunks = [];
+    let size = 0;
+    let settled = false;
+
     req.on('data', chunk => {
-      data += chunk;
-      // Basic body-size guard — 2MB is generous for an order/catalog
-      // sync payload and prevents an unbounded read from a bad client.
-      if (data.length > 2 * 1024 * 1024) {
+      if (settled) return;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += buffer.length;
+      // Enforce the same 2 MiB network-byte limit as readRawBody().
+      if (size > 2 * 1024 * 1024) {
+        settled = true;
         reject(Object.assign(new Error('Payload too large'), { statusCode: 413 }));
         req.destroy();
+        return;
       }
+      chunks.push(buffer);
     });
     req.on('end', () => {
+      if (settled) return;
+      settled = true;
+      const data = Buffer.concat(chunks).toString('utf8');
       if (!data) return resolve({});
       try {
         resolve(JSON.parse(data));
-      } catch (e) {
+      } catch {
         reject(Object.assign(new Error('Invalid JSON body'), { statusCode: 400 }));
       }
     });
-    req.on('error', reject);
+    req.on('error', error => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    });
   });
 }
 
@@ -1198,6 +1185,11 @@ async function handleSyncEvents(req, res, chatId) {
     results.push(await processEventIsolated(event, async (candidate) => {
       assertEventTenantScope(candidate, { chatId: tenant.chatId, organizationId: tenant.organizationId });
       const eventType = String(candidate?.eventType || candidate?.event_type || '').trim();
+      if (eventType === 'customer.upsert') {
+        await requireAuthorization(session, tenant, 'customers', 'customers:manage', {
+          deniedMessage: 'Customer management permission required',
+        });
+      }
       if (eventType === 'inventory.movement.record' || eventType === 'inventory.movement.batch.record') {
         await requireAuthorization(session, tenant, 'inventory', 'inventory:edit', {
           deniedMessage: 'Inventory edit permission required',
@@ -1388,7 +1380,7 @@ async function handleCustomerCreate(req, res, chatId) {
   const session = await requireSession(req, tenant.chatId);
   await requireAuthorization(session, tenant, 'customers', 'customers:manage', { deniedMessage: 'Customer management permission required' });
   const body = await readBody(req);
-  const customer = await upsertCustomer(chatId, body);
+  const customer = await upsertCustomer(chatId, body, session);
   sendJSON(res, 201, { customer }, req);
 }
 
@@ -1398,7 +1390,7 @@ async function handleCustomerPatch(req, res, chatId, customerId) {
   const session = await requireSession(req, tenant.chatId);
   await requireAuthorization(session, tenant, 'customers', 'customers:manage', { deniedMessage: 'Customer management permission required' });
   const body = await readBody(req);
-  const customer = await updateCustomer(chatId, customerId, body);
+  const customer = await updateCustomer(chatId, customerId, body, session);
   sendJSON(res, 200, { customer }, req);
 }
 
@@ -2452,6 +2444,37 @@ async function handlePaymentProviderCapabilityEvidence(req,res,chatId){
     }),req);
   }
   return sendJSON(res,405,{error:{message:'Method not allowed',status:405}},req);
+}
+
+
+async function handlePaymentProductionCertification(req, res, chatId) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, tenant.chatId);
+
+  if (req.method === 'GET') {
+    const query = new URL(req.url, 'http://localhost').searchParams;
+    const certifications = await paymentCore.listProductionCertifications({
+      chatId,
+      organizationId: tenant.organizationId,
+      certificationScope: query.get('scope'),
+      actor: session,
+    });
+    return sendJSON(res, 200, { certifications }, req);
+  }
+
+  if (req.method === 'POST') {
+    const body = await readBody(req);
+    const result = await paymentCore.certifyProductionReadiness({
+      ...body,
+      chatId,
+      organizationId: tenant.organizationId,
+      actor: session,
+    });
+    return sendJSON(res, 200, result, req);
+  }
+
+  return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
 }
 
 

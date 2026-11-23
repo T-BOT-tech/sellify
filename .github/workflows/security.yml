@@ -19,8 +19,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git ls-files | grep -E '(^|/)(\.env|.*\.pem|.*\.key|.*\.p12|.*\.pfx)$' | grep -v '^\.env\.example$'; then
-            echo 'Potential secret file is tracked.'
+          if git ls-files | grep -E '(^|/)(\.env|.*\.pem|.*\.key|.*\.p12|.*\.pfx|.*credential.*\.json|.*secret.*\.json|.*\.db|.*\.db-shm|.*\.db-wal|.*\.sqlite3)$' | grep -v '^\.env\.example$'; then
+            echo 'Potential secret or runtime state file is tracked.'
             exit 1
           fi
           if git ls-files | grep -E '(^|/)(data|backups)/|\.sqlite(-shm|-wal)?$'; then

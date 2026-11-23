@@ -7,6 +7,39 @@ if (!baseUrl) {
   process.exit(2);
 }
 
+let parsedUrl;
+try {
+  parsedUrl = new URL(baseUrl);
+} catch {
+  console.error('BLOCKED: SELLIFY_DEPLOYMENT_URL is not a valid URL.');
+  process.exit(2);
+}
+
+if (parsedUrl.protocol !== 'https:') {
+  console.error('BLOCKED: SELLIFY_DEPLOYMENT_URL must use HTTPS.');
+  process.exit(2);
+}
+
+const hostname = parsedUrl.hostname.toLowerCase();
+const blockedHosts = new Set(['localhost', 'metadata.google.internal']);
+const blockedIpPatterns = [
+  /^127\./,
+  /^10\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^192\.168\./,
+  /^169\.254\./,
+  /^0\./,
+  /^::1$/,
+  /^fc00:/i,
+  /^fd[0-9a-f]{2}:/i,
+  /^fe80:/i
+];
+
+if (blockedHosts.has(hostname) || blockedIpPatterns.some((pattern) => pattern.test(hostname))) {
+  console.error('BLOCKED: SELLIFY_DEPLOYMENT_URL must not target a private, loopback, link-local, or cloud-metadata address.');
+  process.exit(2);
+}
+
 const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
@@ -16,6 +49,7 @@ function record(name, ok, detail) {
 async function get(path, options = {}) {
   const response = await fetch(baseUrl + path, {
     redirect: 'manual',
+    signal: AbortSignal.timeout(15000),
     ...options,
     headers: {
       accept: '*/*',
@@ -45,14 +79,14 @@ try {
   const rootType = root.response.headers.get('content-type') || '';
   record(
     'PWA root',
-    root.response.status === 200 && /text\\/(html|plain)/i.test(rootType),
+    root.response.status === 200 && /text\/(html|plain)/i.test(rootType),
     `HTTP ${root.response.status}; content-type=${rootType || 'missing'}`
   );
 
   const config = await get('/config.js');
   record(
     'runtime config',
-    config.response.status === 200 && /application\\/javascript|text\\/javascript/i.test(config.response.headers.get('content-type') || ''),
+    config.response.status === 200 && /application\/javascript|text\/javascript/i.test(config.response.headers.get('content-type') || ''),
     `HTTP ${config.response.status}; content-type=${config.response.headers.get('content-type') || 'missing'}`
   );
 

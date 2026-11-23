@@ -1,0 +1,43 @@
+name: Perplexity audit inventory
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify runtime
+        run: node --version
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Route inventory regression
+        run: node phase0/perplexity-route-inventory-regression.mjs
+
+      - name: SQLite store inventory regression
+        run: node phase0/perplexity-store-inventory-regression.mjs
+
+      - name: Upload generated inventory artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sellify-static-inventory-${{ github.sha }}
+          path: docs/perplexity-audit/generated/
+          if-no-files-found: warn
+          retention-days: 14
