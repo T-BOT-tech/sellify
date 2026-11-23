@@ -5499,16 +5499,12 @@ export async function createPurchaseOrder(chatId, input = {}, actor = null) {
   const id = String(input.id || crypto.randomUUID());
   const poNumber = String(input.poNumber ?? input.po_number ?? '').trim() || nextPurchaseOrderNumber(organizationId);
   const now = nowIso();
-  db.exec('BEGIN');
-  try {
-    db.prepare(`INSERT INTO purchase_orders (id, organization_id, customer_id, quote_id, procurement_award_id, supplier_organization_id, source_type, po_number, currency, status, subtotal_minor, total_minor, buyer_reference, notes, rejection_reason, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, NULL, 'B2B_QUOTE', ?, ?, 'DRAFT', ?, ?, ?, ?, '', ?, ?, ?)`).run(
-      id, organizationId, quote.customerId, quote.id, poNumber, quote.currency, quote.subtotalMinor, quote.totalMinor,
-      buyerReference, String(input.notes || ''), actor?.userId || null, now, now
-    );
-    const stmt = db.prepare(`INSERT INTO purchase_order_items (id, purchase_order_id, product_id, description, quantity, unit_price_minor, currency, line_total_minor, quote_item_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    for (const item of quote.items) stmt.run(crypto.randomUUID(), id, item.productId, item.description, item.quantity, item.unitPriceMinor, item.currency, item.lineTotalMinor, item.id, now);
-    db.exec('COMMIT');
-  } catch (error) { db.exec('ROLLBACK'); throw error; }
+  db.prepare(`INSERT INTO purchase_orders (id, organization_id, customer_id, quote_id, procurement_award_id, supplier_organization_id, source_type, po_number, currency, status, subtotal_minor, total_minor, buyer_reference, notes, rejection_reason, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, NULL, 'B2B_QUOTE', ?, ?, 'DRAFT', ?, ?, ?, ?, '', ?, ?, ?)`).run(
+    id, organizationId, quote.customerId, quote.id, poNumber, quote.currency, quote.subtotalMinor, quote.totalMinor,
+    buyerReference, String(input.notes || ''), actor?.userId || null, now, now
+  );
+  const stmt = db.prepare(`INSERT INTO purchase_order_items (id, purchase_order_id, product_id, description, quantity, unit_price_minor, currency, line_total_minor, quote_item_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  for (const item of quote.items) stmt.run(crypto.randomUUID(), id, item.productId, item.description, item.quantity, item.unitPriceMinor, item.currency, item.lineTotalMinor, item.id, now);
   audit(String(chatId), 'b2b.purchase-order.created', 'purchase_order', id, { poNumber, quoteId, customerId: quote.customerId, totalMinor: quote.totalMinor, currency: quote.currency, sourceType: 'B2B_QUOTE' }, { organizationId, actorId: actor?.userId || null });
   if (ownsTransaction) db.exec('COMMIT');
   return getPurchaseOrderByIdSync(organizationId, id);
