@@ -1,0 +1,30 @@
+name: B2B Customer Pricing Regression
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/lib/store-sqlite.js'
+      - 'app/src/b2b/customer-pricing.js'
+      - 'phase0/phase11.3-b2b-custom-pricing-regression.mjs'
+      - 'package.json'
+      - '.github/workflows/b2b-customer-pricing.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  b2b-customer-pricing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install root dependencies
+        run: npm install --ignore-scripts
+      - name: B2B customer pricing persistence and repeated-upsert regression
+        run: npm run phase11.3:b2b-test
