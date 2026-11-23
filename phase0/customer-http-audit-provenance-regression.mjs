@@ -150,6 +150,20 @@ try {
   assert.equal(updated.response.status, 200, JSON.stringify(updated.json));
   assert.equal(updated.json.customer.notes, 'Updated through authenticated HTTP boundary');
 
+  const aliasUpdated = await request(`${base}/${encodeURIComponent(customerId)}`, {
+    method: 'PATCH',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({
+      customer_name: 'Updated Customer Alias',
+      customer_type: 'business',
+    }),
+  });
+  assert.equal(aliasUpdated.response.status, 200, JSON.stringify(aliasUpdated.json));
+  assert.equal(aliasUpdated.json.customer.name, 'Updated Customer Alias',
+    'PATCH must apply supported snake_case customer_name aliases');
+  assert.equal(aliasUpdated.json.customer.customerType, 'business',
+    'PATCH must apply supported snake_case customer_type aliases over existing camelCase values');
+
   const missing = await request(`${base}/missing-customer-${suffix}`, { headers: auth(ownerSession.token) });
   assert.equal(missing.response.status, 404, 'customer lookup is tenant-scoped and returns not found');
 
@@ -201,7 +215,7 @@ try {
     WHERE entity_type = 'customer' AND entity_id = ?
     ORDER BY id ASC
   `).all(customerId);
-  assert.deepEqual(auditRows.map(row => row.action), ['customer.created', 'customer.updated']);
+  assert.deepEqual(auditRows.map(row => row.action), ['customer.created', 'customer.updated', 'customer.updated']);
   for (const event of auditRows) {
     assert.equal(String(event.actor_id), String(owner.id),
       `${event.action} must persist the authenticated user in canonical audit_events.actor_id`);
