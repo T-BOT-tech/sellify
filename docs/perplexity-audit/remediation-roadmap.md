@@ -54,3 +54,8 @@ A remediation item is complete only when:
 - Documentation reflects the actual behavior.
 - No duplicate canonical authority is introduced.
 - The change is reviewable in a focused pull request.
+
+
+## Current-main audit delta (2026-11-23)
+
+The first route and SQLite dependency maps and the test-command map are now available under `docs/audit/`. The immediate newly confirmed security priority is the missing central permission check on payment routing policy GET/POST routes. The capacity boundary also distinguishes the strict unified Discovery matcher from the legacy direct Supplier Network discovery endpoint. Keep Logistics Scheduling request-only; no extraction or operational capacity authority is approved.
