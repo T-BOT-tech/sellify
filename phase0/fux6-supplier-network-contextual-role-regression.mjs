@@ -5,6 +5,8 @@ import {
   getOrCreateUserByTelegram,
   createTenantForUser,
   assignMembershipContextualRole,
+  createSession,
+  authenticateSessionToken,
 } from '../backend/lib/store-sqlite.js';
 
 const db = getDatabaseForTests();
@@ -23,13 +25,24 @@ const membership = db.prepare('SELECT id FROM memberships WHERE user_id = ? AND 
 const actor = { userId: user.id, role: 'owner', organizationId: row.organization_id, chatId: row.chat_id };
 
 await assignMembershipContextualRole({ actorUserId: user.id, chatId: row.chat_id, membershipId: membership.id, role: 'supplier_network_admin', scopeType: 'ORGANIZATION' });
-await assignMembershipContextualRole({ actorUserId: user.id, chatId: row.chat_id, membershipId: membership.id, role: 'supplier_network_staff', scopeType: 'RESOURCE', scopeId: `supplier:${row.organization_id}` });
-const roles = db.prepare("SELECT role_id AS role FROM membership_roles WHERE membership_id = ? AND status = 'active'").all(membership.id);
-assert.ok(roles.some(r => r.role === 'supplier_network_admin'));
-assert.ok(roles.some(r => r.role === 'supplier_network_staff'));
+await assignMembershipContextualRole({ actorUserId: user.id, chatId: row.chat_id, membershipId: membership.id, role: 'supplier_network_staff', scopeType: 'ORGANIZATION' });
+const roles = db.prepare("SELECT role_id AS role, scope_type FROM membership_roles WHERE membership_id = ? AND status = 'active'").all(membership.id);
+assert.ok(roles.some(r => r.role === 'supplier_network_admin' && r.scope_type === 'ORGANIZATION'));
+assert.ok(roles.some(r => r.role === 'supplier_network_staff' && r.scope_type === 'ORGANIZATION'));
 
-const admin = { userId: user.id, role: 'supplier_network_admin', roles: ['supplier_network_admin'], organizationId: row.organization_id, chatId: row.chat_id };
-const staff = { userId: user.id, role: 'supplier_network_staff', roles: ['supplier_network_staff'], organizationId: row.organization_id, chatId: row.chat_id };
+// Assign while the actor is still the tenant owner, then authenticate as a
+// normal staff member so the test proves contextual permissions rather than
+// inheriting the owner's wildcard permissions.
+db.prepare("UPDATE memberships SET role = 'staff' WHERE id = ?").run(membership.id);
+const issued = await createSession({ userId: user.id, chatId: row.chat_id, deviceName: 'FUX6 contextual role regression' });
+const session = await authenticateSessionToken(issued.token);
+assert.ok(session, 'the persisted session must authenticate');
+assert.equal(session.role, 'staff');
+assert.ok(session.contextualRoles.some(r => r.role === 'supplier_network_admin' && r.scopeType === 'ORGANIZATION'));
+assert.ok(session.contextualRoles.some(r => r.role === 'supplier_network_staff' && r.scopeType === 'ORGANIZATION'));
+
+const admin = { ...session, role: 'supplier_network_admin' };
+const staff = { ...session, role: 'supplier_network_staff' };
 
 assert.equal(authorize(admin, row.organization_id, null, 'supplier_network_profile', 'supplier-network:view'), 'ALLOW');
 assert.equal(authorize(admin, row.organization_id, null, 'supplier_network_profile', 'supplier-network:publish'), 'ALLOW');

@@ -13,6 +13,7 @@ function run(label, file) {
   return (r.stdout || '').trim();
 }
 
+run('FUX-6 Supplier Network contextual roles', 'fux6-supplier-network-contextual-role-regression.mjs');
 run('Phase 18.12 structural exit', 'phase18.12-supplier-network-final-exit-regression.mjs');
 run('Phase 18.11 cumulative prerequisite', 'phase18.11-cumulative-gate.mjs');
 run('Phase 16.12', 'phase16.12-platform-regression.mjs');
