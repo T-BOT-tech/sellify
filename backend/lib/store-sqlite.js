@@ -9767,6 +9767,8 @@ function createPaymentSettlementInTransaction(chatId, input = {}, actor = null) 
     actorId: actor?.userId || actor?.user_id || null,
     deviceId: actor?.deviceId || actor?.device_id || null,
     reason: settlement.reason,
+    lineageType: 'payment_settlement',
+    lineageId: settlement.id,
   });
   return { settlement: normalizePaymentSettlement(settlement), duplicate: false };
 }
@@ -9824,6 +9826,8 @@ export async function finalizePaymentSettlement(chatId, settlementId, input = {}
       actorId: actor?.userId || actor?.user_id || null,
       deviceId: actor?.deviceId || actor?.device_id || null,
       reason: String(input.reason || row.reason || ''),
+      lineageType: 'payment_settlement',
+      lineageId: row.id,
     });
     db.exec('COMMIT');
     return normalizePaymentSettlement(db.prepare('SELECT * FROM payment_settlements WHERE id = ?').get(row.id));
@@ -9948,6 +9952,8 @@ function createPaymentRefundRequestInTransaction(chatId, input = {}, actor = nul
     actorId: actor?.userId || actor?.user_id || null,
     deviceId: actor?.deviceId || actor?.device_id || null,
     reason: refund.reason,
+    lineageType: 'payment_refund',
+    lineageId: refund.id,
   });
   return { refund: normalizePaymentRefund(refund), duplicate: false };
 }
@@ -10007,6 +10013,8 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
           actorId: actor?.userId || actor?.user_id || null,
           deviceId: actor?.deviceId || actor?.device_id || null,
           reason: String(input.reason || refund.reason || ''),
+          lineageType: 'payment_refund',
+          lineageId: refund.id,
         });
       db.exec('COMMIT');
       return normalizePaymentRefund(db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(refund.id));
@@ -10065,6 +10073,8 @@ export async function finalizePaymentRefund(chatId, refundId, input = {}, actor 
       actorId: actor?.userId || actor?.user_id || null,
       deviceId: actor?.deviceId || actor?.device_id || null,
       reason: String(input.reason || refund.reason || ''),
+      lineageType: 'payment_refund',
+      lineageId: refund.id,
     });
     db.exec('COMMIT');
     return normalizePaymentRefund(db.prepare('SELECT * FROM payment_refunds WHERE id = ?').get(refund.id));
@@ -12802,6 +12812,8 @@ export async function updateMarketplaceOrderStatus(chatId, localId, nextStatus) 
               organizationId: allocation.organization_id,
               actorId: null,
               reason: 'Marketplace order cancellation',
+              lineageType: 'payment_refund',
+              lineageId: refundId,
             });
           }
           db.prepare(`
