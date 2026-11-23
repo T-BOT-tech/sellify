@@ -6,18 +6,39 @@ Baseline `e216db18ade2a5ffa66aff9dc3096e207251a918`; source `backend/lib/store-s
 
 - **253** exported store functions.
 - **110** unique tables across **112** CREATE TABLE declarations.
-- **85** explicit migration guards (85 distinct version numbers); 83 migration blocks contain detected CREATE/ALTER TABLE or CREATE INDEX changes.
+- **85** explicit migration guards (85 distinct versions); 83 migration blocks contain detected CREATE/ALTER TABLE or CREATE INDEX changes.
 - **206** index declarations.
-- **292** REFERENCES clauses, spanning 37 distinct referenced parent tables; all referenced table names resolve to a declared table in this scan.
+- **292** REFERENCES clauses, spanning 37 distinct referenced parent tables.
 - **228** exported function bodies with direct SQL candidates; **25** have no direct SQL candidate.
 - **64** exported functions contain transaction/lock markers.
-- **283** provisional cross-area function/table SQL edges; **74** low-coupling read/projection candidates are listed for further review, not approved extraction.
+- **1,681** SQL sub-statements were extracted from **983** `db.prepare` calls and **338** `db.exec` calls. Three arguments are dynamic expressions and remain unresolved.
+- **74** low-coupling read/projection candidates are listed for further review; none is approved for extraction.
+
+### SQL operation counts
+
+| Operation | Statements |
+|---|---:|
+| SELECT | 613 |
+| INSERT | 239 |
+| UPDATE | 118 |
+| DELETE | 3 |
+| CREATE TABLE | 111 |
+| CREATE INDEX | 206 |
+| CREATE TRIGGER | 38 |
+| ALTER TABLE | 43 |
+| DROP | 8 |
+| PRAGMA | 28 |
+| BEGIN / COMMIT / ROLLBACK | 230 combined |
+| VACUUM | 1 |
+| Other / dynamic / trigger terminator tokens | 4 |
+
+Counts are lexical call-site evidence. `db.exec` blocks are split on semicolons; trigger terminators and comments can appear as separate tokens, and the three dynamic SQL expressions are explicitly unresolved. The SQL site list includes source line, operation, referenced tables, owning export/helper attribution, and a bounded SQL preview.
 
 ## Function, table and migration map
 
-The JSON records every exported function, source span, candidate area, SQL statement operation/table/line, direct named function calls, transaction markers, table consumer, table declaration, REFERENCES clause, index and migration guard. Each migration guard is associated with detected tables/indexes created or altered in its source block.
+The JSON records every exported function, source span, candidate area, SQL operation/table/line, direct named function calls, transaction markers, table consumer, table declaration, REFERENCES clause, index and migration guard. Each migration guard is associated with detected tables/indexes created or altered in its source block.
 
-Every table's canonical owner remains **UNASSIGNED**. `candidateArea` is a name/consumer-derived triage hint only. It must not be treated as proof of domain ownership. The cross-area edge list is similarly a review queue, not a violation list.
+Every table's canonical owner remains **UNASSIGNED**. `candidateArea` is a name/consumer-derived triage hint only. It must not be treated as proof of domain ownership. The cross-area edge list is a review queue, not a violation list.
 
 ## Cross-domain invariants that constrain extraction
 
@@ -31,10 +52,10 @@ Every table's canonical owner remains **UNASSIGNED**. `candidateArea` is a name/
 8. Supplier Network trust/performance derived evidence over Procurement source facts.
 9. Identity memberships, contextual roles, sessions, devices, invites and tenant scope.
 
-These clusters must preserve one atomic mutation boundary and existing canonical authorities. For example, Supplier Network performance/trust is derived evidence; it must not become a duplicate Procurement authority. Procurement receiving must call the existing Inventory authority rather than create a second stock ledger.
+These clusters must preserve one atomic mutation boundary and existing canonical authorities. Supplier Network performance/trust is derived evidence; it must not become a duplicate Procurement authority. Procurement receiving must call the existing Inventory authority rather than create a second stock ledger.
 
 ## Transaction and extraction interpretation
 
-Transaction marker counts are not a correctness verdict. Preserve caller-owned transactions, `BEGIN IMMEDIATE` locks, rollback, async work, idempotency, audit/outbox writes, serialization queues and `withinTransaction` behavior. The 74 read/projection candidates are only initial low-coupling candidates; helper dependencies, indirect calls, authorization, API callers and migration coupling must be checked before moving even a read function.
+Transaction marker counts are not a correctness verdict. Preserve caller-owned transactions, `BEGIN IMMEDIATE` locks, rollback, async work, idempotency, audit/outbox writes, serialization queues and `withinTransaction` behavior. A function with no direct transaction marker may still participate in a caller-owned transaction or delegate to a transactional helper. The 74 read/projection candidates still require helper dependencies, indirect calls, authorization, API callers and migration coupling review.
 
 **No persistence extraction is approved.** Keep each cross-domain invariant cluster together. Do not rename tables, change SQL semantics, alter migrations, or create duplicate domain authorities in this audit.
