@@ -266,3 +266,31 @@ Current `upsertCustomerPricing`:
 - commits the pricing write and audit together, rolling back if audit insertion fails.
 
 The current `phase0/phase11.3-b2b-custom-pricing-regression.mjs` includes repeated save, stable row ID, no duplicate row, audit entity ID, and forced audit-failure rollback assertions. The four route entries are therefore now classified as `characterized`, not defect candidates. The original defect description above is retained only as historical audit provenance; it is not an open defect.
+
+
+## Characterization batch 7 — Procurement demand preparation and lifecycle
+
+**Baseline:** current `main` at `15737ee0c83e057113baa3881638186542ed6999`. Seven route/method entries across one handler were inspected.
+
+- GET list/detail: `procurement:demand:view`.
+- POST create: `procurement:demand:create`.
+- PATCH draft edit: `procurement:demand:manage`.
+- POST submit/cancel/start-sourcing: separate `procurement:demand:submit`, `procurement:demand:cancel`, and `procurement:demand:sourcing` permissions.
+
+The handler's central authorization check is followed by store-level organization scoping. `assertProcurementActor` verifies the actor is an active member of the tenant organization; it does not independently reproduce the route's role/permission policy.
+
+### Persistence and state boundaries
+
+- Demand creation validates one or more items, positive quantities, units, product ownership and currency, optional delivery-location scope, and optional idempotency key/request hash.
+- Creation uses `BEGIN IMMEDIATE` to commit the demand header, item rows and audit event together.
+- Editing is allowed only while status is `DRAFT`; the update, item replacement and audit event share a transaction.
+- Submit/cancel/start-sourcing use the canonical demand state-transition map; the state update and audit event share a transaction.
+- The demand store is preparation state. RFQ, comparison, award, purchase order, receipt and payment execution are separate subsequent procurement capabilities; this route does not itself award or purchase.
+
+### Regression evidence reviewed
+
+- `phase0/phase17.1-procurement-demand-regression.mjs`: create/list/update, idempotent replay and payload mismatch, submit/sourcing transitions, invalid transition, and audit event assertions.
+- `phase0/phase17.1-procurement-demand-contract-regression.mjs`: allowed/denied demand state transitions.
+- `phase0/p0-09-procurement-demand-rfq-preparation-regression.mjs`: earlier procurement demand/RFQ preparation contract.
+
+The source files were reviewed; **the tests were not executed in this audit session**. No production code changed.
