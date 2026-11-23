@@ -150,3 +150,45 @@ Tenant creation uses a separate explicit transaction for tenant bootstrap and ch
 ### Single-use token caveat
 
 The challenge, pairing and invite consumers read token state before the final write/transaction. There is no `await` between read and mutation, so same-process event-loop interleaving is not established. Cross-process/multi-connection single-use semantics remain conditional until the supported SQLite deployment topology is confirmed; this is not a confirmed vulnerability.
+
+
+## Migration source-order characterization — current main
+
+**Source inspected:** `backend/lib/store-sqlite.js` at `15737ee0c83e057113baa3881638186542ed6999`, `runMigrations()` lines 287–3606.
+
+The runner creates `schema_migrations`, reads the already-applied version set, then evaluates guarded migration blocks in their literal source order. The source contains 85 migration guards, versions 1 through 85 exactly once, with no missing version numbers. It contains 12 source-order decreases:
+
+| Previous version | Next version | Next block line | Directly observable note |
+|---:|---:|---:|---|
+| 60 | 39 | 2130 | Version 60 rebuilds marketplace payment allocations before version 39 creates Telegram storefront configuration |
+| 75 | 67 | 2712 | Version 67 adds payment status-query claim/lease columns |
+| 67 | 63 | 2745 | Version 63 adds provider-notification/authentication columns and indexes to `payment_evidence` |
+| 63 | 46 | 2769 | Version 46 adds `payment_intent_id` to `payments` |
+| 55 | 53 | 2869 | Version 53 creates provider capability certification persistence |
+| 59 | 50 | 2947 | Version 50 creates payment settlement persistence |
+| 50 | 49 | 2986 | Version 49 creates payment refund persistence |
+| 49 | 48 | 3025 | Version 48 rebuilds payment and payment-ledger tables to expand lifecycle states |
+| 48 | 47 | 3111 | Version 47 adds columns/indexes to payment reconciliation |
+| 47 | 41 | 3134 | Version 41 creates the multi-role membership compatibility bridge |
+| 41 | 33 | 3170 | Version 33 creates Supplier Network service-area persistence |
+| 33 | 31 | 3202 | Version 31 creates Supplier Network capability persistence |
+
+The source explicitly comments that payment migrations 61–63 are placed after migration 45 creates `payment_evidence`. It also explicitly keeps migration 54 independent of migration 53 so installations with 53 recorded can still apply 54 after an interrupted or older deployment. These comments are direct evidence of intentional ordering/recovery considerations. They do not explain every source-order decrease.
+
+### Existing migration regression coverage found
+
+| Regression | What its source actually exercises |
+|---|---|
+| `gap-1.18I-migration-independence-regression.mjs` | Seeds migration 53 without 54, invokes the real store migration runner, checks migration 54/index; also simulates partial migration 63 and retries through the real runner |
+| `gap-1.23-migration-retry-runtime-regression.mjs` | Tests migration 63 with column-presence variants, preserved evidence, uniqueness scope and interrupted retry |
+| `service-resource-migration-80-81-compatibility-regression.mjs` | Runs against a fresh temporary DB, constructs two historical v80 schema shapes, restarts the store and checks migration 81 compatibility |
+| `sc-03.4-resource-commitment-migration-regression.mjs` | Runs against a fresh temporary DB and checks migration 80 schema, indexes, foreign keys and uniqueness |
+
+All four have package scripts in current `package.json`. Their source files and script registrations were reviewed; **they were not executed in this audit session**.
+
+### What is and is not established
+
+- Established: 85 unique, contiguous version guards; 12 literal source-order decreases; runner evaluates blocks in source order; selected interrupted-upgrade and historical-shape regressions exist.
+- Not established: a complete dependency DAG for every migration; successful execution of every supported historical upgrade path; a full fresh-install and upgrade test run in this audit session.
+- No evidence supports renumbering or reordering the migrations merely to make source order monotonic. Do not reorder them.
+- Next migration work should map each block's actual DDL/DML prerequisites and data transformations, then execute the existing regression scripts and add only missing representative upgrade fixtures. Treat any suspected dependency as unverified until the relevant schema state and test demonstrate it.
