@@ -5064,40 +5064,50 @@ export async function upsertCustomerPricing(chatId, input = {}, actor = null) {
   }
   const id = String(input.id || crypto.randomUUID());
   const now = nowIso();
-  db.prepare(`
-    INSERT INTO customer_pricing_rules
-      (id, organization_id, customer_id, product_id, price_minor, currency, status, effective_from, effective_to, reason, created_by_user_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(organization_id, customer_id, product_id) DO UPDATE SET
-      price_minor = excluded.price_minor,
-      currency = excluded.currency,
-      status = excluded.status,
-      effective_from = excluded.effective_from,
-      effective_to = excluded.effective_to,
-      reason = excluded.reason,
-      created_by_user_id = excluded.created_by_user_id,
-      updated_at = excluded.updated_at
-  `).run(id, organizationId, customerId, productId, priceMinor, currency,
-    ['active','inactive'].includes(String(input.status)) ? String(input.status) : 'active',
-    input.effectiveFrom ?? input.effective_from ?? null,
-    input.effectiveTo ?? input.effective_to ?? null,
-    String(input.reason || ''), actor?.userId || null, now, now);
-  // Resolve by the unique business key: on conflict SQLite retains the
-  // existing row ID, which may differ from the newly generated candidate ID.
-  const savedRow = db.prepare(
-    'SELECT * FROM customer_pricing_rules WHERE organization_id = ? AND customer_id = ? AND product_id = ?'
-  ).get(organizationId, customerId, productId);
-  const saved = customerPricingFromRow(savedRow);
-  if (!saved) {
-    throw Object.assign(new Error('Custom pricing rule could not be reloaded after save'), {
-      statusCode: 500,
-      code: 'CUSTOM_PRICING_SAVE_RELOAD_FAILED',
-    });
+  const ownsTransaction = !db.isTransaction;
+  if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
+  try {
+    db.prepare(`
+      INSERT INTO customer_pricing_rules
+        (id, organization_id, customer_id, product_id, price_minor, currency, status, effective_from, effective_to, reason, created_by_user_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(organization_id, customer_id, product_id) DO UPDATE SET
+        price_minor = excluded.price_minor,
+        currency = excluded.currency,
+        status = excluded.status,
+        effective_from = excluded.effective_from,
+        effective_to = excluded.effective_to,
+        reason = excluded.reason,
+        created_by_user_id = excluded.created_by_user_id,
+        updated_at = excluded.updated_at
+    `).run(id, organizationId, customerId, productId, priceMinor, currency,
+      ['active','inactive'].includes(String(input.status)) ? String(input.status) : 'active',
+      input.effectiveFrom ?? input.effective_from ?? null,
+      input.effectiveTo ?? input.effective_to ?? null,
+      String(input.reason || ''), actor?.userId || null, now, now);
+    // Resolve by the unique business key: on conflict SQLite retains the
+    // existing row ID, which may differ from the newly generated candidate ID.
+    const savedRow = db.prepare(
+      'SELECT * FROM customer_pricing_rules WHERE organization_id = ? AND customer_id = ? AND product_id = ?'
+    ).get(organizationId, customerId, productId);
+    const saved = customerPricingFromRow(savedRow);
+    if (!saved) {
+      throw Object.assign(new Error('Custom pricing rule could not be reloaded after save'), {
+        statusCode: 500,
+        code: 'CUSTOM_PRICING_SAVE_RELOAD_FAILED',
+      });
+    }
+    audit(String(chatId), 'b2b.custom-pricing.upserted', 'customer_pricing_rule', saved.id,
+      { customerId, productId, priceMinor, currency },
+      { organizationId, actorId: actor?.userId || null, reason: input.reason || '' });
+    return saved;
+  
+    if (ownsTransaction) db.exec('COMMIT');
+    return saved;
+  } catch (error) {
+    if (ownsTransaction && db.isTransaction) db.exec('ROLLBACK');
+    throw error;
   }
-  audit(String(chatId), 'b2b.custom-pricing.upserted', 'customer_pricing_rule', saved.id,
-    { customerId, productId, priceMinor, currency },
-    { organizationId, actorId: actor?.userId || null, reason: input.reason || '' });
-  return saved;
 }
 
 export async function updateCustomerPricing(chatId, pricingId, input = {}, actor = null) {
