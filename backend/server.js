@@ -336,25 +336,39 @@ function readRawBody(req) {
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let data = '';
+    const chunks = [];
+    let size = 0;
+    let settled = false;
+
     req.on('data', chunk => {
-      data += chunk;
-      // Basic body-size guard — 2MB is generous for an order/catalog
-      // sync payload and prevents an unbounded read from a bad client.
-      if (data.length > 2 * 1024 * 1024) {
+      if (settled) return;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += buffer.length;
+      // Enforce the same 2 MiB network-byte limit as readRawBody().
+      if (size > 2 * 1024 * 1024) {
+        settled = true;
         reject(Object.assign(new Error('Payload too large'), { statusCode: 413 }));
         req.destroy();
+        return;
       }
+      chunks.push(buffer);
     });
     req.on('end', () => {
+      if (settled) return;
+      settled = true;
+      const data = Buffer.concat(chunks).toString('utf8');
       if (!data) return resolve({});
       try {
         resolve(JSON.parse(data));
-      } catch (e) {
+      } catch {
         reject(Object.assign(new Error('Invalid JSON body'), { statusCode: 400 }));
       }
     });
-    req.on('error', reject);
+    req.on('error', error => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    });
   });
 }
 
