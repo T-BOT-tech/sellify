@@ -93,6 +93,7 @@ test('GAP-1.15 settlement captures gross, provider fee, Sellify fee and net with
   const base = await setup();
   const pc = core();
 
+  const settlementActor = { userId: 'gap1-15-settlement-actor', deviceId: 'gap1-15-settlement-device' };
   const created = await pc.createSettlement({
     ...base,
     idempotencyKey: 'settlement-1',
@@ -101,6 +102,7 @@ test('GAP-1.15 settlement captures gross, provider fee, Sellify fee and net with
     sellifyFeeMinor: 350,
     currency: 'ETB',
     reason: 'Provider settlement batch',
+    actor: settlementActor,
   });
   assert.equal(created.settlement.status, 'PENDING');
   assert.equal(created.settlement.grossAmountMinor, 10000);
@@ -108,6 +110,20 @@ test('GAP-1.15 settlement captures gross, provider fee, Sellify fee and net with
   assert.equal(created.settlement.sellifyFeeMinor, 350);
   assert.equal(created.settlement.netAmountMinor, 9400);
   assert.equal((await store.getPayment(base.chatId, base.paymentId)).state, 'VERIFIED');
+
+  const db = store.getDatabaseForTests();
+  const settlementRequestedAudit = db.prepare(`
+    SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json
+    FROM audit_events WHERE action = 'payment.settlement.requested' AND entity_id = ?
+    ORDER BY id DESC LIMIT 1
+  `).get(base.paymentId);
+  assert.ok(settlementRequestedAudit, 'settlement request must emit an audit event');
+  assert.equal(settlementRequestedAudit.entity_type, 'payment',
+    'settlement request audit must use the canonical payment aggregate type');
+  assert.equal(settlementRequestedAudit.entity_id, base.paymentId);
+  assert.equal(settlementRequestedAudit.actor_id, settlementActor.userId);
+  assert.equal(settlementRequestedAudit.device_id, settlementActor.deviceId);
+  assert.equal(JSON.parse(settlementRequestedAudit.metadata_json).settlementId, created.settlement.id);
 
   const duplicate = await pc.createSettlement({
     ...base, idempotencyKey: 'settlement-1',
@@ -123,16 +139,61 @@ test('GAP-1.15 settlement captures gross, provider fee, Sellify fee and net with
     settlementReference: 'SETTLEMENT-BATCH-001',
     providerSettlementReference: 'PROVIDER-BATCH-001',
     reason: 'Settlement confirmed',
+    actor: settlementActor,
   });
   assert.equal(settled.settlement.status, 'SETTLED');
   assert.equal(settled.financialEffect, false);
   assert.equal(settled.paymentStateMutated, false);
+  const settlementFinalizedAudit = db.prepare(`
+    SELECT action, entity_type, entity_id, actor_id, device_id, metadata_json
+    FROM audit_events WHERE action = 'payment.settlement.settled' AND entity_id = ?
+    ORDER BY id DESC LIMIT 1
+  `).get(base.paymentId);
+  assert.ok(settlementFinalizedAudit, 'settlement finalization must emit an audit event');
+  assert.equal(settlementFinalizedAudit.entity_type, 'payment');
+  assert.equal(settlementFinalizedAudit.entity_id, base.paymentId);
+  assert.equal(settlementFinalizedAudit.actor_id, settlementActor.userId);
+  assert.equal(settlementFinalizedAudit.device_id, settlementActor.deviceId);
+  assert.equal(JSON.parse(settlementFinalizedAudit.metadata_json).settlementId, created.settlement.id);
 
   const history = await pc.listSettlements({ ...base });
   assert.equal(history.settlements.length, 1);
 
   const ledger = await store.listPaymentLedger(base.chatId, base.paymentId);
   assert.deepEqual(ledger.map(x => x.entryType), ['CREATED', 'VERIFIED']);
+});
+
+test('GAP-1.15 settlement request and audit event commit atomically', async () => {
+  const base = await setup();
+  const db = store.getDatabaseForTests();
+  const idempotencyKey = 'settlement-audit-atomicity';
+  db.exec(`
+    CREATE TRIGGER fail_payment_settlement_audit
+    BEFORE INSERT ON audit_events
+    WHEN NEW.action = 'payment.settlement.requested'
+    BEGIN
+      SELECT RAISE(ABORT, 'forced payment settlement audit failure');
+    END;
+  `);
+  try {
+    await assert.rejects(
+      () => store.createPaymentSettlement(base.chatId, {
+        paymentId: base.paymentId,
+        idempotencyKey,
+        grossAmountMinor: 10000,
+        providerFeeMinor: 0,
+        sellifyFeeMinor: 0,
+        currency: 'ETB',
+        reason: 'Atomicity regression',
+      }, { userId: 'settlement-atomic-actor' }),
+      /forced payment settlement audit failure/
+    );
+    const persisted = await store.getPaymentSettlementByIdempotencyKey(base.chatId, idempotencyKey);
+    assert.equal(persisted, null,
+      'a failed settlement audit must roll back the payment_settlements insert');
+  } finally {
+    db.exec('DROP TRIGGER IF EXISTS fail_payment_settlement_audit');
+  }
 });
 
 test('GAP-1.15 prevents invalid fees and settlement gross above payment', async () => {
