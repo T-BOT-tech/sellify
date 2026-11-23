@@ -1491,14 +1491,14 @@
       "handlerFunction": "handleCustomerPricing",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "characterized-with-defect-candidate",
+        "status": "characterized",
         "authentication": "tenant session via requireSession",
         "authorization": "GET: b2b:pricing:view; POST/PATCH: b2b:pricing:manage",
         "tenantOrganizationLocationResourceScope": "tenant chatId resolved by getTenant; store derives organizationId; customer must belong to same organization and be business type; product must belong to tenant/organization",
         "validation": "GET supports customer_id/product_id/status/limit; list limit clamped 1..500. Writes require customerId, productId and non-negative integer priceMinor; currency must match product currency; status constrained to active/inactive",
         "errorBehavior": "404 unknown store/rule/customer/product; 409 B2B_CUSTOMER_REQUIRED or CURRENCY_MISMATCH; 400 INVALID_CUSTOM_PRICING; POST returns 201 and PATCH 200",
         "idempotency": "no request idempotency key; unique organization/customer/product key makes writes conflict-upserted",
-        "transactionBoundary": "no explicit transaction around pricing upsert and audit event",
+        "transactionBoundary": "BEGIN IMMEDIATE transaction covers customer_pricing_rules upsert, canonical row reload and audit event; nested callers reuse caller transaction",
         "storeCalls": [
           "getTenant",
           "listCustomerPricing",
@@ -1509,12 +1509,11 @@
           "assertCatalogProductForOrganization",
           "audit"
         ],
-        "sideEffects": "INSERT/ON CONFLICT UPDATE customer_pricing_rules; append b2b.custom-pricing.upserted audit event",
+        "sideEffects": "INSERT/ON CONFLICT UPDATE customer_pricing_rules; append b2b.custom-pricing.upserted audit event using persisted row ID",
         "regressionCoverage": [
           "phase0/fux-56-b2b-customer-pricing-frontend-authority-regression.mjs",
-          "phase0/phase11.3-b2b-custom-pricing-regression.mjs"
-        ],
-        "defectCandidate": "Repeated POST for an existing organization/customer/product tuple without a supplied id can return null: upsertCustomerPricing generates a fresh id, ON CONFLICT preserves the existing row id, then getCustomerPricing is called with the fresh id. Current UI sends no id; current phase11.3 regression tests only first creation. Confirm with a repeated-save regression before production fix."
+          "phase0/phase11.3-b2b-custom-pricing-regression.mjs (repeated save, stable canonical ID, no duplicate, audit entity_id, forced audit failure rollback)"
+        ]
       }
     },
     {
@@ -1527,14 +1526,14 @@
       "handlerFunction": "handleCustomerPricing",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "characterized-with-defect-candidate",
+        "status": "characterized",
         "authentication": "tenant session via requireSession",
         "authorization": "GET: b2b:pricing:view; POST/PATCH: b2b:pricing:manage",
         "tenantOrganizationLocationResourceScope": "tenant chatId resolved by getTenant; store derives organizationId; customer must belong to same organization and be business type; product must belong to tenant/organization",
         "validation": "GET supports customer_id/product_id/status/limit; list limit clamped 1..500. Writes require customerId, productId and non-negative integer priceMinor; currency must match product currency; status constrained to active/inactive",
         "errorBehavior": "404 unknown store/rule/customer/product; 409 B2B_CUSTOMER_REQUIRED or CURRENCY_MISMATCH; 400 INVALID_CUSTOM_PRICING; POST returns 201 and PATCH 200",
         "idempotency": "no request idempotency key; unique organization/customer/product key makes writes conflict-upserted",
-        "transactionBoundary": "no explicit transaction around pricing upsert and audit event",
+        "transactionBoundary": "BEGIN IMMEDIATE transaction covers customer_pricing_rules upsert, canonical row reload and audit event; nested callers reuse caller transaction",
         "storeCalls": [
           "getTenant",
           "listCustomerPricing",
@@ -1545,12 +1544,11 @@
           "assertCatalogProductForOrganization",
           "audit"
         ],
-        "sideEffects": "INSERT/ON CONFLICT UPDATE customer_pricing_rules; append b2b.custom-pricing.upserted audit event",
+        "sideEffects": "INSERT/ON CONFLICT UPDATE customer_pricing_rules; append b2b.custom-pricing.upserted audit event using persisted row ID",
         "regressionCoverage": [
           "phase0/fux-56-b2b-customer-pricing-frontend-authority-regression.mjs",
-          "phase0/phase11.3-b2b-custom-pricing-regression.mjs"
-        ],
-        "defectCandidate": "Repeated POST for an existing organization/customer/product tuple without a supplied id can return null: upsertCustomerPricing generates a fresh id, ON CONFLICT preserves the existing row id, then getCustomerPricing is called with the fresh id. Current UI sends no id; current phase11.3 regression tests only first creation. Confirm with a repeated-save regression before production fix."
+          "phase0/phase11.3-b2b-custom-pricing-regression.mjs (repeated save, stable canonical ID, no duplicate, audit entity_id, forced audit failure rollback)"
+        ]
       }
     },
     {
@@ -1563,14 +1561,14 @@
       "handlerFunction": "handleCustomerPricing",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "characterized-with-defect-candidate",
+        "status": "characterized",
         "authentication": "tenant session via requireSession",
         "authorization": "GET: b2b:pricing:view; POST/PATCH: b2b:pricing:manage",
         "tenantOrganizationLocationResourceScope": "tenant chatId resolved by getTenant; store derives organizationId; customer must belong to same organization and be business type; product must belong to tenant/organization",
         "validation": "GET supports customer_id/product_id/status/limit; list limit clamped 1..500. Writes require customerId, productId and non-negative integer priceMinor; currency must match product currency; status constrained to active/inactive",
         "errorBehavior": "404 unknown store/rule/customer/product; 409 B2B_CUSTOMER_REQUIRED or CURRENCY_MISMATCH; 400 INVALID_CUSTOM_PRICING; POST returns 201 and PATCH 200",
         "idempotency": "no request idempotency key; unique organization/customer/product key makes writes conflict-upserted",
-        "transactionBoundary": "no explicit transaction around pricing upsert and audit event",
+        "transactionBoundary": "BEGIN IMMEDIATE transaction covers customer_pricing_rules upsert, canonical row reload and audit event; nested callers reuse caller transaction",
         "storeCalls": [
           "getTenant",
           "listCustomerPricing",
@@ -1581,12 +1579,11 @@
           "assertCatalogProductForOrganization",
           "audit"
         ],
-        "sideEffects": "INSERT/ON CONFLICT UPDATE customer_pricing_rules; append b2b.custom-pricing.upserted audit event",
+        "sideEffects": "INSERT/ON CONFLICT UPDATE customer_pricing_rules; append b2b.custom-pricing.upserted audit event using persisted row ID",
         "regressionCoverage": [
           "phase0/fux-56-b2b-customer-pricing-frontend-authority-regression.mjs",
-          "phase0/phase11.3-b2b-custom-pricing-regression.mjs"
-        ],
-        "defectCandidate": "Repeated POST for an existing organization/customer/product tuple without a supplied id can return null: upsertCustomerPricing generates a fresh id, ON CONFLICT preserves the existing row id, then getCustomerPricing is called with the fresh id. Current UI sends no id; current phase11.3 regression tests only first creation. Confirm with a repeated-save regression before production fix."
+          "phase0/phase11.3-b2b-custom-pricing-regression.mjs (repeated save, stable canonical ID, no duplicate, audit entity_id, forced audit failure rollback)"
+        ]
       }
     },
     {
@@ -1599,14 +1596,14 @@
       "handlerFunction": "handleCustomerPricing",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "characterized-with-defect-candidate",
+        "status": "characterized",
         "authentication": "tenant session via requireSession",
         "authorization": "GET: b2b:pricing:view; POST/PATCH: b2b:pricing:manage",
         "tenantOrganizationLocationResourceScope": "tenant chatId resolved by getTenant; store derives organizationId; customer must belong to same organization and be business type; product must belong to tenant/organization",
         "validation": "GET supports customer_id/product_id/status/limit; list limit clamped 1..500. Writes require customerId, productId and non-negative integer priceMinor; currency must match product currency; status constrained to active/inactive",
         "errorBehavior": "404 unknown store/rule/customer/product; 409 B2B_CUSTOMER_REQUIRED or CURRENCY_MISMATCH; 400 INVALID_CUSTOM_PRICING; POST returns 201 and PATCH 200",
         "idempotency": "no request idempotency key; unique organization/customer/product key makes writes conflict-upserted",
-        "transactionBoundary": "no explicit transaction around pricing upsert and audit event",
+        "transactionBoundary": "BEGIN IMMEDIATE transaction covers customer_pricing_rules upsert, canonical row reload and audit event; nested callers reuse caller transaction",
         "storeCalls": [
           "getTenant",
           "listCustomerPricing",
@@ -1617,12 +1614,11 @@
           "assertCatalogProductForOrganization",
           "audit"
         ],
-        "sideEffects": "INSERT/ON CONFLICT UPDATE customer_pricing_rules; append b2b.custom-pricing.upserted audit event",
+        "sideEffects": "INSERT/ON CONFLICT UPDATE customer_pricing_rules; append b2b.custom-pricing.upserted audit event using persisted row ID",
         "regressionCoverage": [
           "phase0/fux-56-b2b-customer-pricing-frontend-authority-regression.mjs",
-          "phase0/phase11.3-b2b-custom-pricing-regression.mjs"
-        ],
-        "defectCandidate": "Repeated POST for an existing organization/customer/product tuple without a supplied id can return null: upsertCustomerPricing generates a fresh id, ON CONFLICT preserves the existing row id, then getCustomerPricing is called with the fresh id. Current UI sends no id; current phase11.3 regression tests only first creation. Confirm with a repeated-save regression before production fix."
+          "phase0/phase11.3-b2b-custom-pricing-regression.mjs (repeated save, stable canonical ID, no duplicate, audit entity_id, forced audit failure rollback)"
+        ]
       }
     },
     {
