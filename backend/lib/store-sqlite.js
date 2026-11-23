@@ -7431,11 +7431,11 @@ function findCustomerByNaturalKey(organizationId, phone, name) {
   const cleanPhone = String(phone || '').trim();
   const cleanName = String(name || '').trim();
   if (cleanPhone) {
-    const row = db.prepare(`SELECT * FROM customers WHERE organization_id = ? AND phone = ? ORDER BY updated_at DESC LIMIT 1`).get(String(organizationId), cleanPhone);
+    const row = db.prepare(`SELECT * FROM customers WHERE organization_id = ? AND phone = ? AND status != 'inactive' ORDER BY updated_at DESC LIMIT 1`).get(String(organizationId), cleanPhone);
     if (row) return row;
   }
   if (cleanName) {
-    return db.prepare(`SELECT * FROM customers WHERE organization_id = ? AND phone = '' AND lower(name) = lower(?) ORDER BY updated_at DESC LIMIT 1`).get(String(organizationId), cleanName);
+    return db.prepare(`SELECT * FROM customers WHERE organization_id = ? AND phone = '' AND status != 'inactive' AND lower(name) = lower(?) ORDER BY updated_at DESC LIMIT 1`).get(String(organizationId), cleanName);
   }
   return null;
 }
@@ -7468,16 +7468,38 @@ function upsertCustomerSync(chatId, input = {}, actor = null) {
   ensureDatabase();
   const tenant = getTenantByChatId(chatId);
   if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
-  const value = normalizeCustomerInput(input);
-  if (!value.name && !value.phone) throw Object.assign(new Error('Customer name or phone is required'), { statusCode: 400 });
-  if (value.defaultLocationId) {
-    const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(String(value.defaultLocationId), tenant.organizationId);
-    if (!location) throw Object.assign(new Error('Customer location does not belong to this organization'), { statusCode: 400 });
-  }
-  const existing = input.id ? db.prepare('SELECT * FROM customers WHERE id = ? AND organization_id = ?').get(String(input.id), tenant.organizationId) : findCustomerByNaturalKey(tenant.organizationId, value.phone, value.name);
+  const payload = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const value = normalizeCustomerInput(payload);
+  const hasInputField = (...keys) => keys.some(key => Object.hasOwn(payload, key));
+  const existing = payload.id ? db.prepare('SELECT * FROM customers WHERE id = ? AND organization_id = ?').get(String(payload.id), tenant.organizationId) : findCustomerByNaturalKey(tenant.organizationId, value.phone, value.name);
   const now = nowIso();
   if (existing) {
-    const next = { ...customerFromRow(existing), ...value, id: existing.id, organizationId: tenant.organizationId, createdAt: existing.created_at, updatedAt: now };
+    const current = customerFromRow(existing);
+    // Sync upserts may be sparse (for example, an order carrying only a
+    // customer ID/name). Preserve omitted fields, while an explicitly
+    // supplied empty value remains an intentional clear.
+    const next = {
+      ...current,
+      name: hasInputField('name', 'customer_name') ? value.name : current.name,
+      phone: hasInputField('phone', 'customer_phone') ? value.phone : current.phone,
+      email: hasInputField('email') ? value.email : current.email,
+      address: hasInputField('address') ? value.address : current.address,
+      taxId: hasInputField('taxId', 'tax_id') ? value.taxId : current.taxId,
+      notes: hasInputField('notes') ? value.notes : current.notes,
+      customerType: hasInputField('customerType', 'customer_type') ? value.customerType : current.customerType,
+      status: hasInputField('status') ? value.status : current.status,
+      defaultLocationId: hasInputField('defaultLocationId', 'default_location_id') ? value.defaultLocationId : current.defaultLocationId,
+      source: hasInputField('source') ? value.source : current.source,
+      id: existing.id,
+      organizationId: tenant.organizationId,
+      createdAt: existing.created_at,
+      updatedAt: now,
+    };
+    if (!next.name && !next.phone) throw Object.assign(new Error('Customer name or phone is required'), { statusCode: 400 });
+    if (next.defaultLocationId) {
+      const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(String(next.defaultLocationId), tenant.organizationId);
+      if (!location) throw Object.assign(new Error('Customer location does not belong to this organization'), { statusCode: 400 });
+    }
     db.prepare(`UPDATE customers SET default_location_id = ?, customer_type = ?, name = ?, phone = ?, email = ?, address = ?, tax_id = ?, notes = ?, status = ?, source = ?, updated_at = ? WHERE id = ? AND organization_id = ?`).run(
       next.defaultLocationId || null, next.customerType, next.name, next.phone, next.email, next.address, next.taxId, next.notes, next.status, next.source, now, existing.id, tenant.organizationId
     );
@@ -7486,15 +7508,20 @@ function upsertCustomerSync(chatId, input = {}, actor = null) {
     });
     return customerFromRow(db.prepare('SELECT * FROM customers WHERE id = ?').get(existing.id));
   }
-  if (input.id) {
-    const conflictingId = db.prepare('SELECT 1 FROM customers WHERE id = ?').get(String(input.id));
+  if (!value.name && !value.phone) throw Object.assign(new Error('Customer name or phone is required'), { statusCode: 400 });
+  if (value.defaultLocationId) {
+    const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(String(value.defaultLocationId), tenant.organizationId);
+    if (!location) throw Object.assign(new Error('Customer location does not belong to this organization'), { statusCode: 400 });
+  }
+  if (payload.id) {
+    const conflictingId = db.prepare('SELECT 1 FROM customers WHERE id = ?').get(String(payload.id));
     if (conflictingId) {
       throw Object.assign(new Error('Customer ID is already in use'), {
         statusCode: 409, code: 'CUSTOMER_ID_CONFLICT',
       });
     }
   }
-  const id = String(input.id || crypto.randomUUID());
+  const id = String(payload.id || crypto.randomUUID());
   db.prepare(`INSERT INTO customers (id, organization_id, default_location_id, customer_type, name, phone, email, address, tax_id, notes, status, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, tenant.organizationId, value.defaultLocationId || null, value.customerType, value.name, value.phone, value.email, value.address, value.taxId, value.notes, value.status, value.source, now, now);
   audit(String(chatId), 'customer.created', 'customer', id, { source: value.source }, {

@@ -49,7 +49,24 @@ export function upsertLocalCustomer(input = {}) {
   if (!value.name && !value.phone) return null;
   const existing = input.id ? findCustomerById(input.id) : findCustomerByContact(value.name, value.phone);
   if (existing) {
-    Object.assign(existing, value, { id: existing.id, createdAt: existing.createdAt || Date.now() });
+    // Checkout/order callers often provide only name, phone, and source.
+    // Keep omitted customer details locally; explicit empty strings still
+    // clear a field when the customer editor intentionally submits one.
+    const supplied = key => Object.hasOwn(input, key);
+    Object.assign(existing, {
+      ...value,
+      name: supplied('name') ? value.name : existing.name,
+      phone: supplied('phone') ? value.phone : existing.phone,
+      email: supplied('email') ? value.email : existing.email,
+      address: supplied('address') ? value.address : existing.address,
+      taxId: supplied('taxId') ? value.taxId : existing.taxId,
+      notes: supplied('notes') ? value.notes : existing.notes,
+      customerType: supplied('customerType') ? value.customerType : existing.customerType,
+      status: supplied('status') ? value.status : existing.status,
+      source: supplied('source') ? value.source : existing.source,
+      id: existing.id,
+      createdAt: existing.createdAt || Date.now(),
+    });
     persist();
     return existing;
   }

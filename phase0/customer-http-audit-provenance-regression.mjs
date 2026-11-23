@@ -1,10 +1,70 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import vm from 'node:vm';
 import { setTimeout as sleep } from 'node:timers/promises';
+
+// Exercise the real local Customer upsert implementation with a sparse
+// order-shaped payload before starting the backend integration regression.
+const customerModuleSource = await readFile(
+  new URL('../app/src/customers.js', import.meta.url), 'utf8'
+);
+const normalizeSource = customerModuleSource.match(/function normalize\(value = \{\}\) \{[\s\S]*?^\}/m)?.[0];
+const localUpsertSource = customerModuleSource.match(/export function upsertLocalCustomer\(input = \{\}\) \{[\s\S]*?^\}/m)?.[0]
+  ?.replace('export function', 'function');
+assert.ok(normalizeSource && localUpsertSource, 'local Customer normalization and upsert functions must remain inspectable');
+const localCustomers = [{
+  id: 'local-sparse-customer',
+  name: 'Existing Local Customer',
+  phone: '+251911000099',
+  email: 'local-preserve@example.test',
+  address: 'Local preserved address',
+  taxId: 'LOCAL-TAX-99',
+  notes: 'Local preserved notes',
+  customerType: 'business',
+  status: 'inactive',
+  source: 'manual',
+  createdAt: 1,
+}];
+const localCustomerSandbox = {
+  customers: localCustomers,
+  uid: () => 'generated-local-customer',
+  setCustomers: () => {},
+  persist: () => {},
+  findCustomerById: id => localCustomers.find(customer => String(customer.id) === String(id)) || null,
+  findCustomerByContact: (name, phone) => localCustomers.find(customer =>
+    (phone && customer.phone === phone) || (!phone && customer.name.toLowerCase() === String(name).toLowerCase())
+  ) || null,
+};
+const localUpsert = vm.runInNewContext(
+  `${normalizeSource}\n${localUpsertSource}\nupsertLocalCustomer`,
+  localCustomerSandbox
+);
+const locallyUpdated = localUpsert({
+  name: 'Existing Local Customer Updated',
+  phone: '+251911000099',
+  source: 'order',
+});
+assert.equal(locallyUpdated.email, 'local-preserve@example.test',
+  'sparse local order upsert must preserve email');
+assert.equal(locallyUpdated.address, 'Local preserved address');
+assert.equal(locallyUpdated.taxId, 'LOCAL-TAX-99');
+assert.equal(locallyUpdated.notes, 'Local preserved notes');
+assert.equal(locallyUpdated.customerType, 'business');
+assert.equal(locallyUpdated.status, 'inactive');
+const locallyCleared = localUpsert({
+  name: 'Existing Local Customer Updated',
+  phone: '+251911000099',
+  email: '',
+  source: 'manual',
+});
+assert.equal(locallyCleared.email, '',
+  'an explicit empty local editor value must clear email');
+assert.equal(locallyCleared.address, 'Local preserved address',
+  'clearing one local field must not clear omitted fields');
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const dataDir = await mkdtemp(path.join(tmpdir(), 'sellify-customer-http-'));
@@ -133,6 +193,14 @@ try {
   assert.equal(await store.getCustomer(tenant.chatId, staffSyncCustomerId), null,
     'unauthorized customer.upsert must not reach the canonical customer store');
 
+  const invalidCustomerBody = await request(base, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify(null),
+  });
+  assert.equal(invalidCustomerBody.response.status, 400,
+    'a null customer request body must be rejected as invalid input rather than causing a server error');
+
   const created = await request(base, {
     method: 'POST',
     headers: jsonAuth(ownerSession.token),
@@ -141,6 +209,22 @@ try {
   assert.equal(created.response.status, 201, JSON.stringify(created.json));
   const customerId = created.json.customer?.id;
   assert.ok(customerId, 'customer creation returns the canonical customer');
+
+  const staffCustomerRead = await request(`${base}/${encodeURIComponent(customerId)}`, {
+    headers: auth(staffSession.token),
+  });
+  assert.equal(staffCustomerRead.response.status, 200,
+    'staff with customers:view may read an individual customer');
+
+  const deniedStaffPatch = await request(`${base}/${encodeURIComponent(customerId)}`, {
+    method: 'PATCH',
+    headers: jsonAuth(staffSession.token),
+    body: JSON.stringify({ notes: 'Staff must not modify customer details' }),
+  });
+  assert.equal(deniedStaffPatch.response.status, 403,
+    'staff with customers:view but without customers:manage cannot update a customer');
+  assert.equal((await store.getCustomer(tenant.chatId, customerId)).notes, '',
+    'a denied customer PATCH must not mutate the canonical customer');
 
   const updated = await request(`${base}/${encodeURIComponent(customerId)}`, {
     method: 'PATCH',
@@ -238,6 +322,144 @@ try {
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM customers WHERE organization_id = ? AND phone = ?')
     .get(organizationId, '+251911000001').count, 1,
     'phone natural-key matching must not create duplicate customer rows');
+
+  // Characterize the documented name-only natural key: case is ignored, but
+  // the fallback is restricted to existing records without a phone number.
+  const nameOnlyCreated = await request(base, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ name: 'Name Only Natural Key' }),
+  });
+  assert.equal(nameOnlyCreated.response.status, 201);
+  const nameOnlyId = nameOnlyCreated.json.customer?.id;
+  assert.ok(nameOnlyId);
+
+  const nameOnlyReplay = await request(base, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ name: 'name only natural key' }),
+  });
+  assert.equal(nameOnlyReplay.response.status, 201);
+  assert.equal(nameOnlyReplay.json.customer.id, nameOnlyId,
+    'case-insensitive name-only matching must reuse a same-organization customer without a phone');
+
+  // A shared name is not sufficient to merge two customers that have
+  // different phone numbers; phone identity takes precedence.
+  const phoneIdentityA = await request(base, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ name: 'Shared Customer Name', phone: '+251911000002' }),
+  });
+  assert.equal(phoneIdentityA.response.status, 201);
+  const phoneIdentityB = await request(base, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ name: 'Shared Customer Name', phone: '+251911000003' }),
+  });
+  assert.equal(phoneIdentityB.response.status, 201);
+  assert.notEqual(phoneIdentityB.json.customer.id, phoneIdentityA.json.customer.id,
+    'same-name customers with distinct phone numbers must not be merged by the name-only fallback');
+
+  // Inactive customers are not eligible for natural-key reuse. This keeps
+  // backend order/customer sync consistent with the local checkout lookup.
+  const inactivePhoneId = `inactive-phone-customer-${suffix}`;
+  await store.upsertCustomer(tenant.chatId, {
+    id: inactivePhoneId,
+    name: 'Inactive Phone Match Customer',
+    phone: '+251911000005',
+    status: 'inactive',
+    source: 'http-regression',
+  });
+  const activePhoneReplacement = await store.upsertCustomer(tenant.chatId, {
+    name: 'Replacement Phone Match Customer',
+    phone: '+251911000005',
+    source: 'order',
+  });
+  assert.notEqual(activePhoneReplacement.id, inactivePhoneId,
+    'phone natural-key matching must not reuse an inactive customer');
+  assert.equal(activePhoneReplacement.status, 'active');
+  assert.equal((await store.getCustomer(tenant.chatId, inactivePhoneId)).status, 'inactive',
+    'natural-key replacement must not reactivate or mutate the inactive customer');
+
+  const inactiveNameId = `inactive-name-customer-${suffix}`;
+  await store.upsertCustomer(tenant.chatId, {
+    id: inactiveNameId,
+    name: 'Inactive Name Only Match',
+    phone: '',
+    status: 'inactive',
+    source: 'http-regression',
+  });
+  const activeNameReplacement = await store.upsertCustomer(tenant.chatId, {
+    name: 'Inactive Name Only Match',
+    phone: '',
+    source: 'order',
+  });
+  assert.notEqual(activeNameReplacement.id, inactiveNameId,
+    'name-only natural-key matching must not reuse an inactive customer');
+  assert.equal(activeNameReplacement.status, 'active');
+
+  // Sparse customer.upsert payloads (such as those emitted by order sync)
+  // must not erase fields omitted from the event. Explicit empty values still
+  // clear the corresponding field.
+  const sparseCustomerId = `sparse-sync-customer-${suffix}`;
+  await store.upsertCustomer(tenant.chatId, {
+    id: sparseCustomerId,
+    name: 'Customer With Complete Details',
+    phone: '+251911000004',
+    email: 'preserve@example.test',
+    address: 'Preserved customer address',
+    taxId: 'ET-TAX-004',
+    notes: 'Preserved customer notes',
+    customerType: 'business',
+    status: 'inactive',
+    source: 'http-regression',
+  });
+  const sparseSyncEventId = `sparse-customer-event-${suffix}`;
+  const sparseSync = await request(`/events/${encodeURIComponent(tenant.chatId)}`, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ events: [{
+      eventId: sparseSyncEventId,
+      eventType: 'customer.upsert',
+      aggregateType: 'customer',
+      aggregateId: sparseCustomerId,
+      occurredAt: new Date().toISOString(),
+      payload: { id: sparseCustomerId, name: 'Customer Name Updated By Sparse Sync', source: 'order' },
+    }] }),
+  });
+  assert.equal(sparseSync.json.results?.[0]?.status, 'processed');
+  const sparseAfterUpdate = await store.getCustomer(tenant.chatId, sparseCustomerId);
+  assert.equal(sparseAfterUpdate.name, 'Customer Name Updated By Sparse Sync');
+  assert.equal(sparseAfterUpdate.phone, '+251911000004');
+  assert.equal(sparseAfterUpdate.email, 'preserve@example.test',
+    'sparse sync must preserve omitted email');
+  assert.equal(sparseAfterUpdate.address, 'Preserved customer address',
+    'sparse sync must preserve omitted address');
+  assert.equal(sparseAfterUpdate.taxId, 'ET-TAX-004',
+    'sparse sync must preserve omitted tax ID');
+  assert.equal(sparseAfterUpdate.notes, 'Preserved customer notes',
+    'sparse sync must preserve omitted notes');
+  assert.equal(sparseAfterUpdate.customerType, 'business');
+  assert.equal(sparseAfterUpdate.status, 'inactive');
+
+  const explicitClearEvent = await request(`/events/${encodeURIComponent(tenant.chatId)}`, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ events: [{
+      eventId: `sparse-customer-clear-event-${suffix}`,
+      eventType: 'customer.upsert',
+      aggregateType: 'customer',
+      aggregateId: sparseCustomerId,
+      occurredAt: new Date().toISOString(),
+      payload: { id: sparseCustomerId, name: 'Customer Name Updated By Sparse Sync', email: '', source: 'order' },
+    }] }),
+  });
+  assert.equal(explicitClearEvent.json.results?.[0]?.status, 'processed');
+  const sparseAfterClear = await store.getCustomer(tenant.chatId, sparseCustomerId);
+  assert.equal(sparseAfterClear.email, '',
+    'an explicitly supplied empty email must clear the stored value');
+  assert.equal(sparseAfterClear.address, 'Preserved customer address',
+    'clearing one field must not clear other omitted fields');
 
   const syncCustomerId = `sync-customer-${suffix}`;
   const syncEventId = `customer-sync-event-${suffix}`;
