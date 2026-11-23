@@ -206,7 +206,7 @@ The original Markdown batch tables list 29 route/method entries (8 + 13 + 6 + 2)
 
 ## Characterization batch 6 — Payment Core commands, evidence, lifecycle, refunds and settlements
 
-**Baseline:** current `main` at `15737ee0c83e057113baa3881638186542ed6999`. This batch characterizes 19 route/method entries across 15 handlers.
+**Baseline:** current `main` at `15737ee0c83e057113baa3881638186542ed6999`. This batch characterizes 18 route/method entries across 15 handlers.
 
 ### Central authorization finding
 
