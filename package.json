@@ -486,8 +486,7 @@
     "test:country-evidence-source-registry": "node phase0/country-evidence-source-registry-regression.mjs",
     "test:service-availability-contract": "node phase0/service-availability-contract-regression.mjs",
     "test:service-availability-api": "node phase0/service-availability-api-regression.mjs",
-    "test:p1-14": "node phase0/p1-14-pack-recovery-regression.mjs",
-    "test:supplier-network-discovery-http": "node phase0/supplier-network-discovery-http-authorization-regression.mjs"
+    "test:p1-14": "node phase0/p1-14-pack-recovery-regression.mjs"
   },
   "engines": {
     "node": ">=24"

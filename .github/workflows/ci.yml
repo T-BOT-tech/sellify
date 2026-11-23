@@ -475,7 +475,7 @@ jobs:
         run: npm run test:phase16.14
 
       - name: Supplier Network discovery HTTP authorization regression
-        run: npm run test:supplier-network-discovery-http
+        run: node phase0/supplier-network-discovery-http-authorization-regression.mjs
 
       - name: Phase 19 cumulative Discovery Fabric exit certification
         run: npm run test:phase19.12-cumulative
