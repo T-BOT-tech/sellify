@@ -1,0 +1,37 @@
+name: Supplier Network capacity evidence snapshot regression
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/supplier-network-capacity-snapshot.yml'
+      - 'backend/lib/store-sqlite.js'
+      - 'app/src/procurement/ui.js'
+      - 'phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs'
+  pull_request:
+    paths:
+      - '.github/workflows/supplier-network-capacity-snapshot.yml'
+      - 'backend/lib/store-sqlite.js'
+      - 'app/src/procurement/ui.js'
+      - 'phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  supplier_network_capacity_snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install root dependencies
+        run: npm install --ignore-scripts
+      - name: Verify Node.js runtime
+        run: node --version
+      - name: Procurement RFQ capacity evidence snapshot persistence regression
+        run: node phase0/phase21.20-procurement-rfq-capacity-evidence-snapshot-regression.mjs
