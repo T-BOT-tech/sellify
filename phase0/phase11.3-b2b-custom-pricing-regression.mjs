@@ -32,6 +32,28 @@ assert.equal(rule.status, 'active');
 const listed = await store.listCustomerPricing(chatId, customer.id, 'cement');
 assert.equal(listed.length, 1);
 
+// Repeated POST/upsert without a client-supplied ID must update and return the
+// original canonical row rather than looking up the newly generated conflict ID.
+const updatedRule = await store.upsertCustomerPricing(chatId, {
+  customerId: customer.id,
+  productId: 'cement',
+  priceMinor: 10500,
+  currency: 'ETB',
+  reason: 'Renewed contract price',
+}, { userId: user.id });
+assert.ok(updatedRule, 'repeated upsert must return the persisted pricing rule');
+assert.equal(updatedRule.id, rule.id, 'unique-key update must retain and return the original row ID');
+assert.equal(updatedRule.priceMinor, 10500, 'repeated upsert must persist the updated price');
+const afterRepeatedSave = await store.listCustomerPricing(chatId, customer.id, 'cement');
+assert.equal(afterRepeatedSave.length, 1, 'repeated upsert must not create a duplicate rule');
+assert.equal(afterRepeatedSave[0].id, rule.id);
+
+// Audit provenance must point at the canonical row that SQLite actually updated.
+const latestPricingAudit = store.getDatabaseForTests().prepare(
+  "SELECT entity_id FROM audit_events WHERE entity_type = 'customer_pricing_rule' ORDER BY rowid DESC LIMIT 1"
+).get();
+assert.equal(latestPricingAudit?.entity_id, rule.id);
+
 await assert.rejects(
   () => store.upsertCustomerPricing(chatId, { customerId: customer.id, productId: 'cement', priceMinor: 10000, currency: 'USD' }, { userId: user.id }),
   error => error?.code === 'CURRENCY_MISMATCH' && error?.statusCode === 409
