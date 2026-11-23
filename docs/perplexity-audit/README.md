@@ -21,3 +21,19 @@ The documents in this directory are additive and do not modify application sourc
 - Preserve transactional integrity and event/idempotency guarantees.
 - Do not create duplicate canonical authorities for inventory, fulfillment, payment, scheduling, capacity, or provider execution.
 - Make backend refactors incrementally, with existing regression gates passing after each slice.
+
+
+## Current-main audit refresh (2026-11-23)
+
+The current source-derived audit artifacts are maintained in `docs/audit/`:
+
+- `architecture-map.md`
+- `capability-investment-matrix.md`
+- `wave0-baseline.md`
+- `remediation-roadmap.md`
+- `route-characterization.md` / `.json`
+- `sqlite-dependency-map.md` / `.json`
+- `test-command-map.md` / `.json`
+- `capacity-scheduling-boundary.md`
+
+The earlier Perplexity audit documents and run evidence remain historical records; current-state changes are additive and do not rewrite their recorded branch SHAs or CI results.
