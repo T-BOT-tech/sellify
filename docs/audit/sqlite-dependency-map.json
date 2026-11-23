@@ -26,7 +26,8 @@
     "tablesWithoutExportedFunctionConsumers": 8,
     "internalHelperSqlSites": 731,
     "exportedFunctionSqlSites": 950,
-    "sqlLexicalFragments": 43
+    "sqlLexicalFragments": 43,
+    "crossDomainInvariantClusters": 10
   },
   "functions": [
     {
