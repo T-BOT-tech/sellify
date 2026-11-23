@@ -37,6 +37,7 @@ async function tenant(prefix, name) {
 }
 
 const buyer = await tenant('buyer', 'Trust Visibility Buyer');
+const outsider = await tenant('outsider', 'Trust Visibility Outsider');
 const supplier = await tenant('supplier', 'Trust Visibility Supplier');
 await setProcurementSupplierParticipation(supplier.chatId, {
   status: 'ACTIVE',
@@ -116,6 +117,23 @@ assert.equal(afterPrivacyChange.some(item => item.sourceEntityId === byVisibilit
   'an immutable network trust row must not bypass a later source-qualification privacy restriction');
 assert.equal(await getSupplierNetworkTrustEvidence(buyer.chatId, publicEvidence.id, buyer.actor), null,
   'single-item trust reads must enforce current source qualification visibility too');
+
+// A source visibility increase must not widen an older immutable RELATIONSHIP trust row.
+await upsertSupplierNetworkQualification(supplier.chatId, {
+  id: byVisibility.RELATIONSHIP.id,
+  qualificationType: byVisibility.RELATIONSHIP.qualificationType,
+  title: byVisibility.RELATIONSHIP.title,
+  issuer: byVisibility.RELATIONSHIP.issuer,
+  referenceNumber: byVisibility.RELATIONSHIP.referenceNumber,
+  evidence: byVisibility.RELATIONSHIP.evidence,
+  validFrom: byVisibility.RELATIONSHIP.validFrom,
+  validUntil: byVisibility.RELATIONSHIP.validUntil,
+  visibility: 'NETWORK',
+}, supplier.actor);
+assert.equal(await getSupplierNetworkTrustEvidence(outsider.chatId,
+  buyerQualificationEvidence.find(item => item.sourceEntityId === byVisibility.RELATIONSHIP.id).id,
+  outsider.actor), null,
+  'a later source visibility increase must not widen an immutable RELATIONSHIP trust row for unrelated buyers');
 
 // Revoked qualifications must not continue to appear as current VERIFIED trust evidence.
 await transitionSupplierNetworkQualification(supplier.chatId, byVisibility.NETWORK.id, 'REVOKED', supplier.actor);
