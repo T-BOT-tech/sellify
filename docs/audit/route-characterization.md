@@ -12,6 +12,10 @@ Baseline `e216db18ade2a5ffa66aff9dc3096e207251a918`; source `backend/server.js` 
 - The earlier heuristic's 35 unclassified entries were not broken handlers: 30 real routes needed better classification and five were intentional inline/static handlers.
 - **166** entries are method-conditional. **153** route entries use handlers registered for multiple methods. The JSON now separates registered route methods from explicit `req.method` branches and fallback methods; dependency and validation evidence remains handler-wide unless a branch is isolated.
 
+## Perplexity inventory cross-check
+
+The current-main `Perplexity audit inventory` workflow (run `45254875666`, Node 24, on this baseline) passed its route and store inventory regression steps. Its scripts are useful independent coverage checks, but their limits matter: `perplexity-server-route-inventory.mjs` deduplicates method/pattern keys inside `addRoute()` before the classification script calculates `duplicateCount`. Therefore that workflow's zero duplicate count cannot detect duplicate source entries that were discarded. This route map independently counts all 247 explicit source entries and found zero duplicate keys. The Perplexity route gate also checks handler binding, not authentication, authorization, scope, transactions or side effects.
+
 ## Route-to-store dependency map
 
 - **873** direct route-to-store references across **196** distinct exported store functions.
