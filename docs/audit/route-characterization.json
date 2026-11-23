@@ -3057,17 +3057,17 @@
       "handlerFunction": "handlePayments",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "payments:view enforced by HTTP handler",
+        "tenantOrganizationLocationResourceScope": "Tenant selected by route chatId; reads list/get by tenant chatId",
+        "validation": "Optional state, order_id, limit query parameters; defaults state=all and limit=100",
+        "errorBehavior": "404 unknown tenant; 401 missing session; 403 missing permission; 200 list",
+        "idempotency": "Read-only",
+        "transactionBoundary": "No write transaction",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,listPayments/getPayment",
+        "sideEffects": "None",
+        "regressionCoverage": "gap-pf-1L-payment-frontend-http-sqlite-e2e-regression.mjs (HTTP/SQLite flow; source reviewed, not run here)"
       }
     },
     {
@@ -3080,17 +3080,17 @@
       "handlerFunction": "handlePayments",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "payments:accept enforced at HTTP handler and PaymentCore",
+        "tenantOrganizationLocationResourceScope": "Tenant organizationId and actor session passed into PaymentCore",
+        "validation": "Idempotency-Key required; PaymentCore rejects client-supplied state other than UNPAID; provider routing resolved internally if absent",
+        "errorBehavior": "404 unknown tenant; 401 missing session; 403 unauthorized; 400 missing key; 409 invalid client state/no eligible route; 201 result",
+        "idempotency": "Required idempotency key forwarded to canonical createPaymentWithIntent",
+        "transactionBoundary": "Store owns canonical payment+intent persistence boundary",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,paymentCore.createPayment -> store.createPaymentWithIntent",
+        "sideEffects": "Creates canonical payment and payment intent; no client-controlled verified state",
+        "regressionCoverage": "gap-1-payment-core-foundation-regression.mjs; gap-1.18AB-payment-security-boundary-regression.mjs; gap-pf-1L-payment-frontend-http-sqlite-e2e-regression.mjs"
       }
     },
     {
@@ -3103,17 +3103,17 @@
       "handlerFunction": "handlePayments",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "payments:view enforced by HTTP handler",
+        "tenantOrganizationLocationResourceScope": "Payment fetched using tenant chatId and paymentId",
+        "validation": "paymentId from route",
+        "errorBehavior": "404 unknown tenant/payment; 401/403; 200 payment",
+        "idempotency": "Read-only",
+        "transactionBoundary": "None",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,getPayment",
+        "sideEffects": "None",
+        "regressionCoverage": "gap-pf-1L-payment-frontend-http-sqlite-e2e-regression.mjs"
       }
     },
     {
@@ -3126,17 +3126,17 @@
       "handlerFunction": "handlePayments",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "PaymentCore enforces payments:manage for CANCELLED/REVERSED, otherwise payments:accept; route rejects VERIFIED/RECONCILED targets and requires idempotency key",
+        "tenantOrganizationLocationResourceScope": "Tenant organizationId, paymentId, actor",
+        "validation": "targetState required; VERIFIED/RECONCILED must use canonical verification/reconciliation commands; idempotency key required",
+        "errorBehavior": "400 invalid command/key; 403 unauthorized; PaymentCore/store state-transition errors propagate",
+        "idempotency": "Required idempotency key",
+        "transactionBoundary": "Canonical commitPaymentDecision path",
+        "storeCalls": "getTenant,requireSession,paymentCore.transitionLifecycle -> store.getPayment/commitPaymentDecision",
+        "sideEffects": "Changes payment lifecycle only through PaymentCore decision path",
+        "regressionCoverage": "gap-1.13-payment-lifecycle-regression.mjs; gap-1.18AB-payment-security-boundary-regression.mjs"
       }
     },
     {
@@ -3149,17 +3149,17 @@
       "handlerFunction": "handlePaymentEvidenceList",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "payments:view at HTTP handler and PaymentCore",
+        "tenantOrganizationLocationResourceScope": "Tenant organizationId and paymentId",
+        "validation": "Route paymentId",
+        "errorBehavior": "404 unknown tenant; 401/403; 200 evidence result",
+        "idempotency": "Read-only",
+        "transactionBoundary": "None",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,paymentCore.listEvidence",
+        "sideEffects": "None",
+        "regressionCoverage": "gap-1.18AB-payment-security-boundary-regression.mjs; payment evidence authority regressions"
       }
     },
     {
@@ -3172,17 +3172,17 @@
       "handlerFunction": "handleManualPaymentEvidenceReview",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "payments:accept at HTTP handler and PaymentCore",
+        "tenantOrganizationLocationResourceScope": "Tenant organizationId, paymentId, evidenceId, actor",
+        "validation": "Manual review requires outcome/reason/idempotency key and explicit attestation fields validated by PaymentCore",
+        "errorBehavior": "200 finalized or 202 pending; 400 invalid context; 403 unauthorized",
+        "idempotency": "Durable request-hash idempotency in PaymentCore",
+        "transactionBoundary": "PaymentCore uses canonical verification/decision/commit path; store owns atomic persistence",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,paymentCore.reviewManualEvidence",
+        "sideEffects": "Manual attestation can initiate canonical verification/decision; untrusted evidence itself does not authorize state change",
+        "regressionCoverage": "gap-1.18AB-payment-security-boundary-regression.mjs; gap-1.18O-audit-lineage-regression.mjs"
       }
     },
     {
@@ -3195,17 +3195,17 @@
       "handlerFunction": "handlePaymentLedger",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "payments:view at HTTP handler",
+        "tenantOrganizationLocationResourceScope": "Tenant chatId and paymentId",
+        "validation": "Route paymentId",
+        "errorBehavior": "404 unknown tenant/payment; 401/403; 200 ledger",
+        "idempotency": "Read-only",
+        "transactionBoundary": "None",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,listPaymentLedger",
+        "sideEffects": "None; ledger is read-only append-only history",
+        "regressionCoverage": "gap-1.19-payment-adversarial-certification-regression.mjs; payment ledger regressions"
       }
     },
     {
@@ -3218,17 +3218,17 @@
       "handlerFunction": "handlePaymentLifecycle",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "PaymentCore dynamically requires payments:manage for CANCELLED/REVERSED, otherwise payments:accept; no separate route requireAuthorization call",
+        "tenantOrganizationLocationResourceScope": "Tenant organizationId, paymentId, actor",
+        "validation": "PaymentCore validates allowed target states, expected state, reason, late-success flags and decision inputs",
+        "errorBehavior": "400/403/404/409 from PaymentCore/store",
+        "idempotency": "Command idempotency key forwarded to commitPaymentDecision; route itself does not require it",
+        "transactionBoundary": "Canonical commitPaymentDecision path",
+        "storeCalls": "getTenant,requireSession,paymentCore.transitionLifecycle -> store.getPayment/commitPaymentDecision",
+        "sideEffects": "Payment lifecycle transition and ledger decision under PaymentCore",
+        "regressionCoverage": "gap-1.13-payment-lifecycle-regression.mjs; gap-1.18AB-payment-security-boundary-regression.mjs"
       }
     },
     {
@@ -3356,17 +3356,17 @@
       "handlerFunction": "handlePaymentReconciliationHistory",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "payments:reconcile at HTTP handler",
+        "tenantOrganizationLocationResourceScope": "Tenant chatId and paymentId",
+        "validation": "Route paymentId",
+        "errorBehavior": "404 unknown tenant/payment; 401/403; 200 reconciliation history",
+        "idempotency": "Read-only",
+        "transactionBoundary": "None",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,listPaymentReconciliations",
+        "sideEffects": "Read-only evidence projection; does not mutate payment state",
+        "regressionCoverage": "gap-1.12-payment-reconciliation-regression.mjs"
       }
     },
     {
@@ -3379,17 +3379,17 @@
       "handlerFunction": "handlePaymentCoreReconciliation",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "payments:reconcile at HTTP handler and PaymentCore",
+        "tenantOrganizationLocationResourceScope": "Tenant organizationId, paymentId, actor",
+        "validation": "PaymentCore validates payment/provider reconciliation context and records normalized result",
+        "errorBehavior": "400/403/404/409 as applicable; 200 result",
+        "idempotency": "Reconciliation fingerprint/idempotency is handled by PaymentCore/store",
+        "transactionBoundary": "PaymentCore records reconciliation separately from payment decision; decision path remains canonical",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,paymentCore.reconcile",
+        "sideEffects": "Records reconciliation finding; does not directly mutate payment state",
+        "regressionCoverage": "gap-1.12-payment-reconciliation-regression.mjs; gap-1.19-payment-adversarial-certification-regression.mjs"
       }
     },
     {
@@ -3402,17 +3402,17 @@
       "handlerFunction": "handlePaymentRefundHistory",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "payments:view enforced inside PaymentCore; route has no separate requireAuthorization",
+        "tenantOrganizationLocationResourceScope": "Tenant organizationId and paymentId",
+        "validation": "Route paymentId",
+        "errorBehavior": "200 refund list; 401/403/404 as applicable",
+        "idempotency": "Read-only",
+        "transactionBoundary": "None",
+        "storeCalls": "getTenant,requireSession,paymentCore.listRefunds -> store.getPaymentRefunds",
+        "sideEffects": "None",
+        "regressionCoverage": "gap-1.14-payment-refund-regression.mjs"
       }
     },
     {
@@ -3425,17 +3425,17 @@
       "handlerFunction": "handlePaymentRefund",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "payments:manage enforced inside PaymentCore; route has no separate requireAuthorization",
+        "tenantOrganizationLocationResourceScope": "Tenant organizationId, paymentId and actor",
+        "validation": "PaymentCore requires idempotency key, VERIFIED/RECONCILED payment, positive integer amount, registered provider; store enforces refund amount bounds",
+        "errorBehavior": "400/403/404/409; provider unknown/unavailable can result UNKNOWN",
+        "idempotency": "Required idempotency key; canonical request record and duplicate lookup",
+        "transactionBoundary": "Store owns refund request/finalization persistence; provider I/O occurs between request and finalization",
+        "storeCalls": "getTenant,requireSession,paymentCore.refund -> store.getPaymentRefundByIdempotencyKey/getPayment/createPaymentRefundRequest/finalizePaymentRefund",
+        "sideEffects": "May invoke provider refund; financialEffect true only for normalized SUCCEEDED result",
+        "regressionCoverage": "gap-1.14-payment-refund-regression.mjs; gap-1.19-payment-adversarial-certification-regression.mjs"
       }
     },
     {
@@ -3448,17 +3448,17 @@
       "handlerFunction": "handlePaymentSettlementHistory",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "payments:settlement:view enforced inside PaymentCore; route has no separate requireAuthorization",
+        "tenantOrganizationLocationResourceScope": "Tenant organizationId and paymentId",
+        "validation": "Route paymentId",
+        "errorBehavior": "200 settlement list; 401/403/404 as applicable",
+        "idempotency": "Read-only",
+        "transactionBoundary": "None",
+        "storeCalls": "getTenant,requireSession,paymentCore.listSettlements -> store.listPaymentSettlements",
+        "sideEffects": "None",
+        "regressionCoverage": "gap-1.15-payment-settlement-regression.mjs"
       }
     },
     {
@@ -3471,17 +3471,17 @@
       "handlerFunction": "handlePaymentSettlement",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "payments:settlement:allocate enforced inside PaymentCore; route has no separate requireAuthorization",
+        "tenantOrganizationLocationResourceScope": "Tenant organizationId, paymentId and actor",
+        "validation": "PaymentCore requires idempotency key and existing payment",
+        "errorBehavior": "400/403/404/409; 200 duplicate or created result",
+        "idempotency": "Required idempotency key with duplicate lookup",
+        "transactionBoundary": "Store owns settlement record persistence; result declares financialEffect false",
+        "storeCalls": "getTenant,requireSession,paymentCore.createSettlement -> store.getPaymentSettlementByIdempotencyKey/getPayment/createPaymentSettlement",
+        "sideEffects": "Creates settlement obligation; does not mutate payment state or financial ledger",
+        "regressionCoverage": "gap-1.15-payment-settlement-regression.mjs"
       }
     },
     {
@@ -3494,17 +3494,17 @@
       "handlerFunction": "handlePaymentSettlementFinalize",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "payments:settlement:allocate enforced inside PaymentCore; route has no separate requireAuthorization",
+        "tenantOrganizationLocationResourceScope": "Tenant organizationId, settlementId and actor",
+        "validation": "PaymentCore requires settlementId; store validates canonical settlement",
+        "errorBehavior": "400/403/404/409; 200 result",
+        "idempotency": "Finalization idempotency is enforced by store settlement state",
+        "transactionBoundary": "Store owns settlement finalization; result declares financialEffect false and paymentStateMutated false",
+        "storeCalls": "getTenant,requireSession,paymentCore.finalizeSettlement -> store.finalizePaymentSettlement",
+        "sideEffects": "Finalizes settlement obligation only; does not mutate payment state",
+        "regressionCoverage": "gap-1.15-payment-settlement-regression.mjs"
       }
     },
     {
@@ -3517,17 +3517,17 @@
       "handlerFunction": "handlePaymentStatusQuery",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "payments:accept at HTTP handler and PaymentCore",
+        "tenantOrganizationLocationResourceScope": "Tenant organizationId, paymentId and actor",
+        "validation": "Idempotency-Key required; PaymentCore controls provider status query and decision pipeline",
+        "errorBehavior": "400 missing key; 403 unauthorized; 404/409 provider/payment state failures; 200 result",
+        "idempotency": "Required idempotency key; durable status-query command claim/recovery",
+        "transactionBoundary": "Store claim/lease state and canonical decision transaction are separate boundaries",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,paymentCore.queryStatus",
+        "sideEffects": "Provider status observation can lead to canonical verification/decision only through PaymentCore",
+        "regressionCoverage": "gap-1.11-payment-provider-status-regression.mjs; gap-1.18AB-payment-security-boundary-regression.mjs; gap-1.19-payment-adversarial-certification-regression.mjs"
       }
     },
     {
@@ -3586,17 +3586,17 @@
       "handlerFunction": "handlePaymentConfirmationFinalization",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "payments:accept at HTTP handler and PaymentCore",
+        "tenantOrganizationLocationResourceScope": "Tenant organizationId, confirmationAttemptId and actor",
+        "validation": "PaymentCore validates attempt, provider, account binding, provider transaction and observation status",
+        "errorBehavior": "200 finalized or 202 pending; 400/403/404/409",
+        "idempotency": "Confirmation attempt state/update governs repeat behavior; dedicated finalization tests cover idempotency",
+        "transactionBoundary": "Store owns confirmation attempt update and any downstream decision path",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,paymentCore.finalizeProviderConfirmation",
+        "sideEffects": "Finalizes provider confirmation through canonical PaymentCore, not direct payment row update",
+        "regressionCoverage": "gap-1-provider-confirmation-finalization-regression.mjs; gap-1.18AB-payment-security-boundary-regression.mjs"
       }
     },
     {
@@ -3609,17 +3609,17 @@
       "handlerFunction": "handlePaymentEvidenceSubmission",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "payments:accept at HTTP handler and PaymentCore",
+        "tenantOrganizationLocationResourceScope": "Tenant organizationId and actor; evidence/payment-intent linkage checked by canonical authority",
+        "validation": "PaymentCore rejects caller-supplied authority fields; validates untrusted evidence shape",
+        "errorBehavior": "202 accepted; 200 duplicate; 400/409 invalid evidence",
+        "idempotency": "Duplicate detection by canonical evidence identity; duplicate returns 200",
+        "transactionBoundary": "Store evidence insert boundary; no payment state transition",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,paymentCore.submitEvidence -> store.insertPaymentEvidence",
+        "sideEffects": "Persists received evidence only; response explicitly says verificationStatus NOT_PERFORMED and paymentStateMutated false",
+        "regressionCoverage": "gap-1-payment-core-foundation-regression.mjs; gap-1.18AB-payment-security-boundary-regression.mjs"
       }
     },
     {
@@ -6158,7 +6158,7 @@
     "Only the Customer and B2B Pricing route handlers are manually characterized in this revision; all other route records remain inventory-only.",
     "The six Telegram buyer storefront routes related to service bookings/fulfillment remain a separate channel-specific characterization batch."
   ],
-  "characterizedRouteCount": 45,
+  "characterizedRouteCount": 63,
   "characterizationBatches": [
     {
       "name": "Customer and B2B Pricing",
@@ -6213,9 +6213,34 @@
         "phase0/fux28-cross-channel-consistency-regression.mjs"
       ],
       "note": "Read-only projections; existing Sellify domains remain canonical."
+    },
+    {
+      "name": "Payment Core interactive command, evidence, lifecycle, refund and settlement routes",
+      "routes": [
+        "GET /tenants/:param/payments",
+        "POST /tenants/:param/payments",
+        "GET /tenants/:param/payments/:param",
+        "PATCH /tenants/:param/payments/:param",
+        "GET /tenants/:param/payments/:param/evidence",
+        "POST /tenants/:param/payments/:param/evidence/:param/review",
+        "GET /tenants/:param/payments/:param/ledger",
+        "POST /tenants/:param/payments/:param/lifecycle",
+        "POST /tenants/:param/payments/evidence",
+        "GET /tenants/:param/payments/:param/reconciliation",
+        "POST /tenants/:param/payments/:param/reconciliation",
+        "POST /tenants/:param/payments/:param/refund",
+        "GET /tenants/:param/payments/:param/refund",
+        "POST /tenants/:param/payments/:param/settlement",
+        "GET /tenants/:param/payments/:param/settlement",
+        "POST /tenants/:param/payments/:param/settlement/finalize",
+        "POST /tenants/:param/payments/:param/status",
+        "POST /tenants/:param/payments/confirmation-attempts/:param/finalize"
+      ],
+      "status": "handler-and-core-source-characterized",
+      "note": "Reviewed backend/server.js handlers, production PaymentCore construction, PaymentCore permission checks, and selected existing regression source files. Regression files were not executed in this audit."
     }
   ],
-  "pendingRouteCount": 208,
+  "pendingRouteCount": 190,
   "fullyCharacterizedRouteCount": 41,
   "defectCandidateRouteCount": 4
 }
