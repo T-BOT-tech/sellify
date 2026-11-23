@@ -402,6 +402,13 @@ try {
   const unauthenticatedPricingRead = await request(pricingBase);
   assert.equal(unauthenticatedPricingRead.response.status, 401,
     'B2B pricing reads must require an authenticated tenant session');
+  const nullPricingBody = await request(pricingBase, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify(null),
+  });
+  assert.equal(nullPricingBody.response.status, 400,
+    'a null B2B pricing request body must be rejected as invalid input, not a server error');
   const staffPricingRead = await request(pricingBase, {
     headers: auth(staffSession.token),
   });
