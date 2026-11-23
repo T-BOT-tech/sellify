@@ -7468,9 +7468,10 @@ function upsertCustomerSync(chatId, input = {}, actor = null) {
   ensureDatabase();
   const tenant = getTenantByChatId(chatId);
   if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
-  const value = normalizeCustomerInput(input);
-  const hasInputField = (...keys) => keys.some(key => Object.hasOwn(input, key));
-  const existing = input.id ? db.prepare('SELECT * FROM customers WHERE id = ? AND organization_id = ?').get(String(input.id), tenant.organizationId) : findCustomerByNaturalKey(tenant.organizationId, value.phone, value.name);
+  const payload = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const value = normalizeCustomerInput(payload);
+  const hasInputField = (...keys) => keys.some(key => Object.hasOwn(payload, key));
+  const existing = payload.id ? db.prepare('SELECT * FROM customers WHERE id = ? AND organization_id = ?').get(String(payload.id), tenant.organizationId) : findCustomerByNaturalKey(tenant.organizationId, value.phone, value.name);
   const now = nowIso();
   if (existing) {
     const current = customerFromRow(existing);
@@ -7512,15 +7513,15 @@ function upsertCustomerSync(chatId, input = {}, actor = null) {
     const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(String(value.defaultLocationId), tenant.organizationId);
     if (!location) throw Object.assign(new Error('Customer location does not belong to this organization'), { statusCode: 400 });
   }
-  if (input.id) {
-    const conflictingId = db.prepare('SELECT 1 FROM customers WHERE id = ?').get(String(input.id));
+  if (payload.id) {
+    const conflictingId = db.prepare('SELECT 1 FROM customers WHERE id = ?').get(String(payload.id));
     if (conflictingId) {
       throw Object.assign(new Error('Customer ID is already in use'), {
         statusCode: 409, code: 'CUSTOMER_ID_CONFLICT',
       });
     }
   }
-  const id = String(input.id || crypto.randomUUID());
+  const id = String(payload.id || crypto.randomUUID());
   db.prepare(`INSERT INTO customers (id, organization_id, default_location_id, customer_type, name, phone, email, address, tax_id, notes, status, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, tenant.organizationId, value.defaultLocationId || null, value.customerType, value.name, value.phone, value.email, value.address, value.taxId, value.notes, value.status, value.source, now, now);
   audit(String(chatId), 'customer.created', 'customer', id, { source: value.source }, {
