@@ -137,6 +137,16 @@ jobs:
         run: npm run test:outbox-tenant-scope
       - name: Order sync idempotency regression
         run: npm run test:order-sync-idempotency
+      - name: B2B canonical customer pricing regression
+        run: npm run phase11.3:b2b-test
+      - name: B2B quote pricing and lifecycle regression
+        run: npm run phase11.3:quotes-test
+      - name: B2B purchase order creation and approval regression
+        run: npm run phase11.3:po-test
+      - name: B2B credit terms regression
+        run: npm run phase11.3:credit-test
+      - name: B2B accounts receivable and payment allocation regression
+        run: npm run phase11.3:ar-test
       - name: B2B invoice transition concurrency regression
         run: npm run phase11.3:invoice-test
       - name: Authorization location capability projection regression
