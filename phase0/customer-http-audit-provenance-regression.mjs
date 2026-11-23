@@ -202,6 +202,22 @@ try {
   const customerId = created.json.customer?.id;
   assert.ok(customerId, 'customer creation returns the canonical customer');
 
+  const staffCustomerRead = await request(`${base}/${encodeURIComponent(customerId)}`, {
+    headers: auth(staffSession.token),
+  });
+  assert.equal(staffCustomerRead.response.status, 200,
+    'staff with customers:view may read an individual customer');
+
+  const deniedStaffPatch = await request(`${base}/${encodeURIComponent(customerId)}`, {
+    method: 'PATCH',
+    headers: jsonAuth(staffSession.token),
+    body: JSON.stringify({ notes: 'Staff must not modify customer details' }),
+  });
+  assert.equal(deniedStaffPatch.response.status, 403,
+    'staff with customers:view but without customers:manage cannot update a customer');
+  assert.equal((await store.getCustomer(tenant.chatId, customerId)).notes, '',
+    'a denied customer PATCH must not mutate the canonical customer');
+
   const updated = await request(`${base}/${encodeURIComponent(customerId)}`, {
     method: 'PATCH',
     headers: jsonAuth(ownerSession.token),
