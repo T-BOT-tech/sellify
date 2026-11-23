@@ -4693,7 +4693,7 @@ export async function discoverSupplierNetwork(chatId, input={}, actor=null){
     const profile={displayName:supplier.display_name,description:supplier.description||'',businessCategories:parseJSON(supplier.business_categories_json,[]),serviceSummary:supplier.service_summary||'',visibility:supplier.profile_visibility};
     const searchBlob=[supplier.organization_name,profile.displayName,profile.description,profile.serviceSummary,...profile.businessCategories].join(' ').toLowerCase();
     if(q && !searchBlob.includes(q)) continue;
-    const catalog=db.prepare(`SELECT l.*,p.product_json FROM supplier_network_catalog_listings l LEFT JOIN catalog_products p ON p.product_id=l.product_id WHERE l.organization_id=? AND l.status='ACTIVE'`).all(sid).filter(r=>visible(r.visibility));
+    const catalog=db.prepare(`SELECT l.*,p.product_json FROM supplier_network_catalog_listings l LEFT JOIN catalog_products p ON p.chat_id=(SELECT t.chat_id FROM tenants t WHERE t.organization_id=l.organization_id ORDER BY t.chat_id LIMIT 1) AND p.product_id=l.product_id WHERE l.organization_id=? AND l.status='ACTIVE'`).all(sid).filter(r=>visible(r.visibility));
     const capabilities=db.prepare(`SELECT * FROM supplier_network_capabilities WHERE organization_id=? AND status='ACTIVE'`).all(sid).filter(r=>visible(r.visibility));
     const areas=db.prepare(`SELECT * FROM supplier_network_service_areas WHERE organization_id=? AND status='ACTIVE'`).all(sid).filter(r=>visible(r.visibility));
     const capacities=db.prepare(`SELECT * FROM supplier_network_capacity_signals WHERE organization_id=? AND status='ACTIVE'`).all(sid).filter(r=>visible(r.visibility));
