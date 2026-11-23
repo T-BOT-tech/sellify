@@ -55,6 +55,32 @@ await assert.rejects(() => store.createInvoice(chatId, { receivableId: ar.id }, 
 const db = store.getDatabaseForTests();
 assert.equal(db.prepare('SELECT version FROM schema_migrations WHERE version = 19').get()?.version, 19);
 assert.equal(db.prepare('SELECT COUNT(*) AS n FROM invoices').get().n, 2);
+
+// A failed mandatory creation audit must roll back the invoice and its items.
+const auditOrder = await store.saveQueuedOrders(chatId, [{
+  id: `invoice-audit-failure-${Date.now()}`,
+  customer_id: customer.id, currency: 'ETB',
+  items: [{ id: 'p1', name: 'Invoice Product', price: 250, qty: 2 }], total: 500,
+}]);
+assert.equal(auditOrder[0].status, 'synced');
+const auditReceivable = await store.createReceivable(chatId, { sourceType: 'order', sourceId: auditOrder[0].order_id }, { userId: user.id });
+db.exec(`
+  CREATE TRIGGER fail_b2b_invoice_audit_insert
+  BEFORE INSERT ON audit_events
+  WHEN NEW.entity_type = 'invoices'
+  BEGIN SELECT RAISE(ABORT, 'forced invoice audit failure'); END;
+`);
+try {
+  await assert.rejects(
+    () => store.createInvoice(chatId, { receivableId: auditReceivable.id }, { userId: user.id }),
+    /forced invoice audit failure/
+  );
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM invoices WHERE receivable_id = ?').get(auditReceivable.id).n, 0,
+    'failed invoice creation audit must roll back the invoice');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM invoice_items WHERE invoice_id IN (SELECT id FROM invoices WHERE receivable_id = ?)').get(auditReceivable.id).n, 0);
+} finally {
+  db.exec('DROP TRIGGER IF EXISTS fail_b2b_invoice_audit_insert');
+}
 assert.equal(authz.authorize({ userId: 'buyer', role: 'buyer', organizationId: tenant.organizationId }, tenant.organizationId, null, 'b2b_invoices', 'b2b:invoice:view'), authz.AUTHZ.DENY);
 const manager = { userId: 'manager', role: 'manager', organizationId: tenant.organizationId };
 assert.equal(authz.authorize(manager, tenant.organizationId, null, 'b2b_invoices', 'b2b:invoice:view'), authz.AUTHZ.ALLOW);
