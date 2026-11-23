@@ -84,15 +84,18 @@ These findings constrain extraction. Keep the affected functions and their audit
 
 ## Cross-domain invariants that constrain extraction
 
-1. Payment decision/ledger changes with Marketplace allocations and settlements.
-2. Payment refund finalization with Marketplace refund/allocation/settlement consequences and audit provenance.
-3. Marketplace checkout with catalog reads, Inventory reservations, Payment allocations, settlement and fulfillment records.
-4. Marketplace seller-order status with Inventory, refund, settlement and fulfillment consequences.
-5. Procurement receipt posting with canonical Inventory movements.
-6. Courier assignment and delivery/fulfillment lifecycle with membership, role and location scope.
-7. Service resources, availability, commitments and bookings.
-8. Supplier Network trust/performance derived evidence over Procurement source facts.
-9. Identity memberships, contextual roles, sessions, devices, invites and tenant scope.
+The source map records **10 keep-together invariant clusters**. Function lists below are source-linked call-path candidates, not a promise that every function is invoked synchronously by every route; use the exact call sites and transaction evidence before changing a boundary.
+
+1. **Payment decision / Marketplace allocation:** `commitPaymentDecision`, `transitionPayment`; tables include `payments`, `payment_decisions`, `payment_ledger_entries`, `payment_idempotency_keys`, `marketplace_payment_allocations`, `marketplace_settlements` and `marketplace_seller_orders`.
+2. **Payment refund / Marketplace consequences:** `finalizePaymentRefund`, `updateMarketplaceOrderStatus`; tables include `payment_refunds`, `payment_ledger_entries`, `payments`, `marketplace_refunds`, `marketplace_payment_allocations` and `marketplace_settlements`.
+3. **Marketplace checkout orchestration:** `createMarketplaceOrder`; coordinates Catalog, Inventory reservation, Payment allocation/settlement and Fulfillment records under one idempotent checkout command.
+4. **Marketplace seller-order lifecycle:** `updateMarketplaceOrderStatus`; coordinates Inventory reservations, Payment/refund, settlement and Fulfillment consequences.
+5. **Procurement receipt / Inventory posting:** `createProcurementReceipt`, `appendInventoryMovement`; receipt and canonical Inventory movement must become one atomic multi-line operation.
+6. **Fulfillment / Delivery assignment:** `assignDeliveryCourier`, `transitionDeliveryAssignment`, `transitionOrderFulfillment`; preserve membership, role, tenant/location scope and command idempotency.
+7. **Service resource commitments:** `createServiceResource`, `updateServiceResource`, `setServiceResourceAvailability`, `createServiceBooking`, `transitionServiceBooking`; prevent time-slot oversell and keep feasibility separate from commitment/execution.
+8. **Supplier Network derived evidence:** `refreshSupplierNetworkTrustEvidence`, `recalculateSupplierNetworkPerformance`, `discoverSupplierNetwork`; trust/performance are derived views over Procurement source facts, not a second Procurement authority.
+9. **Identity tenant scope:** `createSession`, `authenticateSessionToken`, `assignMembershipContextualRole`, `revokeMembershipContextualRole`, `changeMembershipRole`, `revokeDevice`, `consumeInvite`; keep the full authorization chain in one authority.
+10. **Payment refund/settlement audit provenance:** `createPaymentSettlement`, `createPaymentRefundRequest`, `updatePaymentSettlementStatus`, `updatePaymentRefundResult`; child-record identity, actor/organization lineage and audit event integrity must remain one boundary.
 
 The cross-domain candidate list is a review queue, not a violation list. Keep each invariant cluster inside one transaction owner and preserve existing canonical authorities. Supplier Network performance/trust remains derived evidence; Procurement remains source-fact authority; Inventory remains stock/movement authority.
 
