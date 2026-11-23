@@ -45,10 +45,10 @@ assert.ok(!adminSession.contextualRoles.some(r => r.role === 'supplier_network_s
 
 
 assert.equal(authorize(adminSession, row.organization_id, null, 'supplier_network_profile', 'supplier-network:view'), 'ALLOW');
-assert.equal(authorize(admin, row.organization_id, null, 'supplier_network_profile', 'supplier-network:publish'), 'ALLOW');
-assert.equal(authorize(admin, row.organization_id, null, 'supplier_network_capacity', 'supplier-network:capacity:manage'), 'ALLOW');
-assert.equal(authorize(admin, row.organization_id, null, 'supplier_network_qualification', 'supplier-network:qualification:document'), 'ALLOW');
-assert.equal(authorize(admin, row.organization_id, null, 'supplier_network_qualification', 'supplier-network:qualification:verify'), 'DENY');
+assert.equal(authorize(adminSession, row.organization_id, null, 'supplier_network_profile', 'supplier-network:publish'), 'ALLOW');
+assert.equal(authorize(adminSession, row.organization_id, null, 'supplier_network_capacity', 'supplier-network:capacity:manage'), 'ALLOW');
+assert.equal(authorize(adminSession, row.organization_id, null, 'supplier_network_qualification', 'supplier-network:qualification:document'), 'ALLOW');
+assert.equal(authorize(adminSession, row.organization_id, null, 'supplier_network_qualification', 'supplier-network:qualification:verify'), 'DENY');
 
 // Restore owner authority only for the test fixture's role-management API,
 // then assign the staff role and authenticate a fresh staff-only session.
@@ -64,12 +64,12 @@ assert.ok(staffSession.contextualRoles.some(r => r.role === 'supplier_network_st
 assert.ok(!staffSession.contextualRoles.some(r => r.role === 'supplier_network_admin'));
 
 assert.equal(authorize(staffSession, row.organization_id, null, 'supplier_network_profile', 'supplier-network:manage'), 'ALLOW');
-assert.equal(authorize(staff, row.organization_id, null, 'supplier_network_capacity', 'supplier-network:capacity:manage'), 'ALLOW');
-assert.equal(authorize(staff, row.organization_id, null, 'supplier_network_qualification', 'supplier-network:qualification:document'), 'ALLOW');
-assert.equal(authorize(staff, row.organization_id, null, 'supplier_network_profile', 'supplier-network:publish'), 'DENY');
-assert.equal(authorize(staff, row.organization_id, null, 'supplier_network_profile', 'supplier-network:suspend'), 'DENY');
-assert.equal(authorize(staff, row.organization_id, null, 'supplier_network_qualification', 'supplier-network:qualification:verify'), 'DENY');
-assert.equal(authorize(staff, row.organization_id, null, 'payments:manage'), 'DENY');
-assert.equal(authorize(staff, row.organization_id, null, 'inventory:edit'), 'DENY');
+assert.equal(authorize(staffSession, row.organization_id, null, 'supplier_network_capacity', 'supplier-network:capacity:manage'), 'ALLOW');
+assert.equal(authorize(staffSession, row.organization_id, null, 'supplier_network_qualification', 'supplier-network:qualification:document'), 'ALLOW');
+assert.equal(authorize(staffSession, row.organization_id, null, 'supplier_network_profile', 'supplier-network:publish'), 'DENY');
+assert.equal(authorize(staffSession, row.organization_id, null, 'supplier_network_profile', 'supplier-network:suspend'), 'DENY');
+assert.equal(authorize(staffSession, row.organization_id, null, 'supplier_network_qualification', 'supplier-network:qualification:verify'), 'DENY');
+assert.equal(authorize(staffSession, row.organization_id, null, 'payments:manage'), 'DENY');
+assert.equal(authorize(staffSession, row.organization_id, null, 'inventory:edit'), 'DENY');
 
 console.log('FUX-6 Supplier Network contextual role regression: PASS');
