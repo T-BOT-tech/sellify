@@ -39,24 +39,27 @@ await setProcurementSupplierParticipation(supplier.chatId, {
   discoverable: true,
 }, supplier.actor);
 
-const privateRows = await recalculateSupplierNetworkPerformance(
+await recalculateSupplierNetworkPerformance(
   supplier.chatId,
   supplier.organizationId,
   { days: 30, visibility: 'PRIVATE' },
   supplier.actor,
 );
-const relationshipRows = await recalculateSupplierNetworkPerformance(
+const privateRows = db.prepare("SELECT id FROM supplier_network_performance_observations WHERE supplier_organization_id=? AND visibility='PRIVATE'").all(supplier.organizationId);
+await recalculateSupplierNetworkPerformance(
   supplier.chatId,
   supplier.organizationId,
   { days: 30, visibility: 'RELATIONSHIP' },
   supplier.actor,
 );
-const networkRows = await recalculateSupplierNetworkPerformance(
+const relationshipRows = db.prepare("SELECT id FROM supplier_network_performance_observations WHERE supplier_organization_id=? AND visibility='RELATIONSHIP'").all(supplier.organizationId);
+await recalculateSupplierNetworkPerformance(
   supplier.chatId,
   supplier.organizationId,
   { days: 30, visibility: 'NETWORK' },
   supplier.actor,
 );
+const networkRows = db.prepare("SELECT id FROM supplier_network_performance_observations WHERE supplier_organization_id=? AND visibility='NETWORK'").all(supplier.organizationId);
 assert.equal(privateRows.length, 5);
 assert.equal(relationshipRows.length, 5);
 assert.equal(networkRows.length, 5);
