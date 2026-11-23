@@ -143,7 +143,7 @@ test('GAP-1.14 partial refunds are durable and full refund is only reached at th
 
   const db = store.getDatabaseForTests();
   const refundRequestedAudit = db.prepare(`
-    SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json
+    SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json, lineage_type, lineage_id
     FROM audit_events WHERE action = 'payment.refund.requested' AND entity_id = ?
     ORDER BY id DESC LIMIT 1
   `).get(first.refund.id);
@@ -152,6 +152,8 @@ test('GAP-1.14 partial refunds are durable and full refund is only reached at th
     'refund request audit must use the canonical refund entity type');
   assert.equal(refundRequestedAudit.entity_id, first.refund.id,
     'refund request audit must reference the canonical refund ID');
+  assert.equal(refundRequestedAudit.lineage_type, 'payment_refund');
+  assert.equal(refundRequestedAudit.lineage_id, first.refund.id);
   assert.equal(refundRequestedAudit.actor_id, refundActor.userId,
     'refund request audit must retain the authenticated actor');
   assert.equal(refundRequestedAudit.device_id, refundActor.deviceId,
@@ -159,13 +161,15 @@ test('GAP-1.14 partial refunds are durable and full refund is only reached at th
   assert.equal(JSON.parse(refundRequestedAudit.metadata_json).refundId, first.refund.id);
 
   const refundSucceededAudit = db.prepare(`
-    SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json
+    SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json, lineage_type, lineage_id
     FROM audit_events WHERE action = 'payment.refund.succeeded' AND entity_id = ?
     ORDER BY id DESC LIMIT 1
   `).get(first.refund.id);
   assert.ok(refundSucceededAudit, 'successful refund must emit an audit event');
   assert.equal(refundSucceededAudit.entity_type, 'payment_refund');
   assert.equal(refundSucceededAudit.entity_id, first.refund.id);
+  assert.equal(refundSucceededAudit.lineage_type, 'payment_refund');
+  assert.equal(refundSucceededAudit.lineage_id, first.refund.id);
   assert.equal(refundSucceededAudit.actor_id, refundActor.userId);
   assert.equal(refundSucceededAudit.device_id, refundActor.deviceId);
   assert.equal(JSON.parse(refundSucceededAudit.metadata_json).refundId, first.refund.id);
