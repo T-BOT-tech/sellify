@@ -347,6 +347,56 @@ try {
   const organizationId = String(db.prepare(
     'SELECT organization_id FROM tenants WHERE chat_id = ?'
   ).get(tenant.chatId).organization_id);
+
+  // The customer boundary's existing CI gate also exercises the canonical
+  // B2B customer-pricing relation and repeated-save identity behavior.
+  const pricingCustomer = await store.upsertCustomer(tenant.chatId, {
+    id: `b2b-pricing-customer-${suffix}`,
+    customerType: 'business',
+    name: 'B2B Pricing Customer',
+    source: 'http-regression',
+  }, { userId: owner.id, deviceId: ownerSession.deviceId });
+  await store.saveCatalog(tenant.chatId, [{
+    id: `b2b-pricing-product-${suffix}`,
+    name: 'Cement',
+    price: 12500,
+    currency: 'ETB',
+    stock: 100,
+  }]);
+  const pricingProductId = `b2b-pricing-product-${suffix}`;
+  const firstPricingRule = await store.upsertCustomerPricing(tenant.chatId, {
+    customerId: pricingCustomer.id,
+    productId: pricingProductId,
+    priceMinor: 11000,
+    currency: 'ETB',
+    reason: 'Initial contract price',
+  }, { userId: owner.id });
+  assert.ok(firstPricingRule?.id, 'B2B pricing create must return its canonical row');
+  const repeatedPricingRule = await store.upsertCustomerPricing(tenant.chatId, {
+    customerId: pricingCustomer.id,
+    productId: pricingProductId,
+    priceMinor: 10500,
+    currency: 'ETB',
+    reason: 'Renewed contract price',
+  }, { userId: owner.id });
+  assert.ok(repeatedPricingRule,
+    'repeated B2B pricing upsert must return the persisted rule');
+  assert.equal(repeatedPricingRule.id, firstPricingRule.id,
+    'repeated B2B pricing upsert must retain and return the original row ID');
+  assert.equal(repeatedPricingRule.priceMinor, 10500,
+    'repeated B2B pricing upsert must persist the updated price');
+  const repeatedPricingRows = await store.listCustomerPricing(
+    tenant.chatId, pricingCustomer.id, pricingProductId
+  );
+  assert.equal(repeatedPricingRows.length, 1,
+    'repeated B2B pricing upsert must not create duplicate rules');
+  const pricingAudit = db.prepare(`
+    SELECT entity_id FROM audit_events
+    WHERE entity_type = 'customer_pricing_rule'
+    ORDER BY id DESC LIMIT 1
+  `).get();
+  assert.equal(pricingAudit?.entity_id, firstPricingRule.id,
+    'B2B pricing audit provenance must reference the canonical persisted row ID');
   const auditRows = db.prepare(`
     SELECT action, entity_id, actor_id, device_id, organization_id, chat_id
     FROM audit_events
