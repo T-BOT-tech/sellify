@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {supplierNetworkDiscoveryContract} from '../app/src/supplier-network/discovery-contract.js';
-import {getDatabaseForTests,getOrCreateUserByTelegram,createTenantForUser,setProcurementSupplierParticipation,upsertSupplierNetworkProfile,upsertSupplierNetworkCapability,upsertSupplierNetworkCapacity,discoverSupplierNetwork} from '../backend/lib/store-sqlite.js';
+import {getDatabaseForTests,getOrCreateUserByTelegram,createTenantForUser,setProcurementSupplierParticipation,upsertSupplierNetworkProfile,upsertSupplierNetworkCapability,upsertSupplierNetworkCapacity,upsertSupplierNetworkCatalogListing,discoverSupplierNetwork} from '../backend/lib/store-sqlite.js';
 
 const c=supplierNetworkDiscoveryContract();
 assert.equal(c.version,'1.0');
@@ -23,9 +23,19 @@ await setProcurementSupplierParticipation(supplier.chat_id,{status:'ACTIVE',disc
 await upsertSupplierNetworkProfile(supplier.chat_id,{displayName:'Kaffa Supply '+x,description:'Wholesale agricultural inputs',businessCategories:['AGRICULTURE','WHOLESALE'],serviceSummary:'Seeds and fertilizer',visibility:'PUBLIC',status:'PUBLISHED'},supplierActor);
 const capability=await upsertSupplierNetworkCapability(supplier.chat_id,{code:'WHOLESALE',name:'Wholesale supply',category:'distribution',visibility:'PUBLIC'},supplierActor);
 await upsertSupplierNetworkCapacity(supplier.chat_id,{subjectType:'CAPABILITY',subjectId:capability.id,quantity:500,unit:'kg',periodType:'RANGE',periodStart:'2026-12-01T00:00:00.000Z',periodEnd:'2026-12-31T23:59:59.999Z',availability:'AVAILABLE',visibility:'PUBLIC'},supplierActor);
+// Reuse a product ID across two tenants. Discovery must resolve the supplier's
+// canonical product row only, never the buyer tenant's same-ID product metadata.
+const sharedProductId='shared_'+x;
+const now=new Date().toISOString();
+db.prepare('INSERT INTO catalog_products(chat_id,product_id,product_json,price_minor,stock,marketplace_listed,updated_at,stock_revision,currency) VALUES(?,?,?,?,?,?,?,?,?)').run(buyer.chat_id,sharedProductId,JSON.stringify({id:sharedProductId,name:'BUYER PRIVATE PRODUCT'}),100,1,0,now,0,'ETB');
+db.prepare('INSERT INTO catalog_products(chat_id,product_id,product_json,price_minor,stock,marketplace_listed,updated_at,stock_revision,currency) VALUES(?,?,?,?,?,?,?,?,?)').run(supplier.chat_id,sharedProductId,JSON.stringify({id:sharedProductId,name:'Supplier Canonical Product'}),200,2,0,now,0,'ETB');
+await upsertSupplierNetworkCatalogListing(supplier.chat_id,{productId:sharedProductId,description:'Supplier-owned listing',visibility:'PUBLIC',status:'ACTIVE'},supplierActor);
+
 let results=await discoverSupplierNetwork(buyer.chat_id,{search:'Kaffa Supply '+x,limit:10},buyerActor);
 assert.equal(results.length,1);
 assert.equal(results[0].organizationId,supplier.organization_id);
+assert.equal(results[0].catalog.length,1,'discovery must join one canonical catalog row for the supplier tenant');
+assert.equal(results[0].catalog[0].productName,'Supplier Canonical Product','discovery must not expose another tenant product metadata when IDs collide');
 assert.equal(results[0].deterministic,undefined);
 assert.ok(results[0].matchReasons.some(r=>r.dimension==='CAPACITY')===true);
 let capacityResults=await discoverSupplierNetwork(buyer.chat_id,{search:'Kaffa Supply '+x,capabilityCode:'WHOLESALE',minimumQuantity:100,limit:10},buyerActor);
