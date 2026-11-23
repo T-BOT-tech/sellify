@@ -4,7 +4,7 @@ Baseline `e216db18ade2a5ffa66aff9dc3096e207251a918`; source `backend/server.js` 
 
 ## Inventory totals
 
-- **253** route entries: **247** explicit `ROUTES` entries plus **6** pre-dispatch inline/static entries.
+- **253** route entries: **247** explicit `ROUTES` entries, **5** intentional inline/static handlers, and the separate `/health` infrastructure endpoint.
 - **137** distinct named handler functions across the explicit route table.
 - Handler source spans resolved for all 247 named route handlers; inline handlers are separately identified.
 - Classification: 229 domain-capability entries, 13 mixed/channel-boundary entries, 6 infrastructure entries, and 5 inline/static entries.
