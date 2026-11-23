@@ -42,11 +42,19 @@
       "delegatedPaymentCoreMethods": 28,
       "routeEntriesWithPermissionKeys": 205,
       "routeEntriesWithHandlerAuthorizationCalls": 201,
-      "needsReviewRouteEntries": 4
+      "needsReviewRouteEntries": 3
     },
     "routeKeyDuplicates": 0,
     "unresolvedHandlerReferences": 0,
-    "sharedHandlerMethodEntries": 153
+    "sharedHandlerMethodEntries": 153,
+    "securityReviewCounts": {
+      "identity-or-provider-auth": 16,
+      "public-or-token-scoped": 7,
+      "policy-evidence-found": 218,
+      "self-service-session-scoped": 3,
+      "needs-review": 3,
+      "public-static": 6
+    }
   },
   "routes": [
     {
@@ -81365,6 +81373,93 @@
       "securityReview": {
         "status": "needs-review",
         "reason": "Session authentication only. The handler directly calls listPaymentRoutingPolicies/upsertPaymentRoutingPolicy; these store functions scope by organization but have no action-level authorization. PaymentCore.resolveRouting separately checks payments:route but this handler bypasses it."
+      },
+      "methodSpecificStoreFunctions": [
+        "getTenant",
+        "listPaymentRoutingPolicies"
+      ],
+      "methodSpecificStoreDependencies": [
+        {
+          "function": "getTenant",
+          "sourceLine": 7275,
+          "tables": [
+            "tenants"
+          ],
+          "transactionEvidence": [],
+          "calledExportedFunctions": [],
+          "resolution": "matched exported SQLite function",
+          "storeAuthorizationEvidence": [],
+          "storePermissionKeys": [],
+          "idempotencyEvidence": [],
+          "storeScopeEvidence": [],
+          "sqlOperations": [
+            "SELECT"
+          ],
+          "sqlStatementCount": 1,
+          "internalHelperCalls": [
+            "ensureDatabase",
+            "tenantFromRow",
+            "tenantCurrency"
+          ],
+          "internalHelperSqlCandidates": [
+            "locations",
+            "tenants",
+            "organizations"
+          ],
+          "transactionAssessment": "no direct marker in this function body; may delegate or be read-only",
+          "candidateArea": "tenant-organization"
+        },
+        {
+          "function": "listPaymentRoutingPolicies",
+          "sourceLine": 9717,
+          "tables": [
+            "payment_routing_policies"
+          ],
+          "transactionEvidence": [],
+          "calledExportedFunctions": [],
+          "resolution": "matched exported SQLite function",
+          "storeAuthorizationEvidence": [],
+          "storePermissionKeys": [],
+          "idempotencyEvidence": [],
+          "storeScopeEvidence": [],
+          "sqlOperations": [
+            "SELECT"
+          ],
+          "sqlStatementCount": 1,
+          "internalHelperCalls": [
+            "ensureDatabase",
+            "getTenantByChatId",
+            "parseJSON"
+          ],
+          "internalHelperSqlCandidates": [
+            "locations",
+            "tenants"
+          ],
+          "transactionAssessment": "no direct marker in this function body; may delegate or be read-only",
+          "candidateArea": "payment"
+        }
+      ],
+      "methodSpecificStoreTables": [
+        "payment_routing_policies",
+        "tenants"
+      ],
+      "methodSpecificSqlOperations": [
+        "SELECT"
+      ],
+      "methodSpecificSideEffects": [
+        "read routing policy projection"
+      ],
+      "methodSpecificAuthorization": "No action-level permission check found in this method branch.",
+      "methodSpecificIdempotency": "Read-only; no command idempotency applies",
+      "methodSpecificBranchEvidence": {
+        "GET": {
+          "sourceLine": 2404,
+          "branch": "explicit req.method === 'GET' branch"
+        },
+        "POST": {
+          "sourceLine": 2409,
+          "branch": "fallback branch after GET; POST is registered and handled by this path"
+        }
       }
     },
     {
@@ -81603,6 +81698,100 @@
       "securityReview": {
         "status": "needs-review",
         "reason": "Session authentication only. The handler directly calls listPaymentRoutingPolicies/upsertPaymentRoutingPolicy; these store functions scope by organization but have no action-level authorization. PaymentCore.resolveRouting separately checks payments:route but this handler bypasses it."
+      },
+      "methodSpecificStoreFunctions": [
+        "getTenant",
+        "upsertPaymentRoutingPolicy"
+      ],
+      "methodSpecificStoreDependencies": [
+        {
+          "function": "getTenant",
+          "sourceLine": 7275,
+          "tables": [
+            "tenants"
+          ],
+          "transactionEvidence": [],
+          "calledExportedFunctions": [],
+          "resolution": "matched exported SQLite function",
+          "storeAuthorizationEvidence": [],
+          "storePermissionKeys": [],
+          "idempotencyEvidence": [],
+          "storeScopeEvidence": [],
+          "sqlOperations": [
+            "SELECT"
+          ],
+          "sqlStatementCount": 1,
+          "internalHelperCalls": [
+            "ensureDatabase",
+            "tenantFromRow",
+            "tenantCurrency"
+          ],
+          "internalHelperSqlCandidates": [
+            "locations",
+            "tenants",
+            "organizations"
+          ],
+          "transactionAssessment": "no direct marker in this function body; may delegate or be read-only",
+          "candidateArea": "tenant-organization"
+        },
+        {
+          "function": "upsertPaymentRoutingPolicy",
+          "sourceLine": 9735,
+          "tables": [
+            "payment_routing_policies"
+          ],
+          "transactionEvidence": [],
+          "calledExportedFunctions": [
+            "listPaymentRoutingPolicies"
+          ],
+          "resolution": "matched exported SQLite function",
+          "storeAuthorizationEvidence": [],
+          "storePermissionKeys": [],
+          "idempotencyEvidence": [],
+          "storeScopeEvidence": [],
+          "sqlOperations": [
+            "SELECT",
+            "INSERT",
+            "UPDATE"
+          ],
+          "sqlStatementCount": 3,
+          "internalHelperCalls": [
+            "ensureDatabase",
+            "getTenantByChatId",
+            "nowIso",
+            "json"
+          ],
+          "internalHelperSqlCandidates": [
+            "locations",
+            "tenants"
+          ],
+          "transactionAssessment": "no direct marker in this function body; may delegate or be read-only",
+          "candidateArea": "payment"
+        }
+      ],
+      "methodSpecificStoreTables": [
+        "payment_routing_policies",
+        "tenants"
+      ],
+      "methodSpecificSqlOperations": [
+        "SELECT",
+        "INSERT",
+        "UPDATE"
+      ],
+      "methodSpecificSideEffects": [
+        "insert/update payment routing policy"
+      ],
+      "methodSpecificAuthorization": "No action-level permission check found in this method branch.",
+      "methodSpecificIdempotency": "Upsert by organization/channel/provider/location natural key; no request idempotency key",
+      "methodSpecificBranchEvidence": {
+        "GET": {
+          "sourceLine": 2404,
+          "branch": "explicit req.method === 'GET' branch"
+        },
+        "POST": {
+          "sourceLine": 2409,
+          "branch": "fallback branch after GET; POST is registered and handled by this path"
+        }
       }
     },
     {
@@ -96556,8 +96745,8 @@
       },
       "methodSpecificity": "single registered method or no shared handler",
       "securityReview": {
-        "status": "needs-review",
-        "reason": "No explicit authorization helper or permission key found in the handler/delegated/store scan; manual contract review required."
+        "status": "public-static",
+        "reason": "Intentional pre-dispatch health response; no authentication or business authorization is expected."
       }
     },
     {
