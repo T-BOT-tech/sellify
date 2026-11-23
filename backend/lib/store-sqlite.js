@@ -4553,8 +4553,8 @@ function supplierNetworkTrustCanAccessEvidence(org,supplierId,visibility,evidenc
       const validUntil=Date.parse(source.valid_until);
       if(!Number.isFinite(validUntil)||validUntil<Date.now()) return false;
     }
-    if(source.visibility==='PUBLIC'||source.visibility==='NETWORK') return true;
-    if(source.visibility==='RELATIONSHIP') return Boolean(db.prepare("SELECT 1 FROM procurement_supplier_relationships WHERE buyer_organization_id=? AND supplier_organization_id=? AND status='ACTIVE'").get(String(org),String(supplierId)));
+    if(source.visibility==='PUBLIC'||source.visibility==='NETWORK') return visibility==='NETWORK';
+    if(source.visibility==='RELATIONSHIP') return visibility==='RELATIONSHIP' && Boolean(db.prepare("SELECT 1 FROM procurement_supplier_relationships WHERE buyer_organization_id=? AND supplier_organization_id=? AND status='ACTIVE'").get(String(org),String(supplierId)));
     return false;
   }
   if(visibility==='NETWORK') return true;
