@@ -5251,14 +5251,13 @@ export async function createQuote(chatId, input = {}, actor = null) {
     const product = assertCatalogProductForOrganization(chatId, productId, organizationId);
     const productCurrency = normaliseCurrency(product.currency, currency);
     if (productCurrency !== currency) throw Object.assign(new Error('Quote item currency must match tenant currency'), { statusCode: 409, code: 'CURRENCY_MISMATCH' });
-    let unitPriceMinor = Number(raw.unitPriceMinor ?? raw.unit_price_minor);
-    let pricingRuleId = null;
-    if (!Number.isInteger(unitPriceMinor) || unitPriceMinor < 0) {
-      const rule = db.prepare(`SELECT * FROM customer_pricing_rules WHERE organization_id = ? AND customer_id = ? AND product_id = ? AND status = 'active' LIMIT 1`).get(organizationId, customerId, productId);
-      unitPriceMinor = rule ? Number(rule.price_minor) : Number(product.price_minor);
-      pricingRuleId = rule?.id || null;
-    }
-    if (!Number.isInteger(unitPriceMinor) || unitPriceMinor < 0) throw Object.assign(new Error('Quote unit price must be a non-negative integer minor amount'), { statusCode: 400, code: 'INVALID_QUOTE_PRICE' });
+    // Quote prices are resolved from canonical server-side pricing only.
+    // Client-supplied unitPriceMinor/unit_price_minor values are untrusted and
+    // must never override a customer pricing rule or the catalog price.
+    const rule = db.prepare(`SELECT * FROM customer_pricing_rules WHERE organization_id = ? AND customer_id = ? AND product_id = ? AND status = 'active' LIMIT 1`).get(organizationId, customerId, productId);
+    const unitPriceMinor = rule ? Number(rule.price_minor) : Number(product.price_minor);
+    const pricingRuleId = rule?.id || null;
+    if (!Number.isInteger(unitPriceMinor) || unitPriceMinor < 0) throw Object.assign(new Error('Canonical quote unit price must be a non-negative integer minor amount'), { statusCode: 409, code: 'INVALID_CANONICAL_QUOTE_PRICE' });
     items.push({ id: crypto.randomUUID(), productId, description: String(raw.description ?? parseJSON(product.product_json, {}).name ?? productId), quantity, unitPriceMinor, currency, lineTotalMinor: quantity * unitPriceMinor, pricingRuleId });
   }
   const subtotalMinor = items.reduce((sum, item) => sum + item.lineTotalMinor, 0);
