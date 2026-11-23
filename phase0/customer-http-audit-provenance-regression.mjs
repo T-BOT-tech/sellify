@@ -278,7 +278,7 @@ try {
   const exactSyncReplay = await request(`/events/${encodeURIComponent(tenant.chatId)}`, {
     method: 'POST',
     headers: jsonAuth(ownerSession.token),
-    body: JSON.stringify({ events: [syncEvent.json ? {
+    body: JSON.stringify({ events: [{
       eventId: syncEventId,
       eventType: 'customer.upsert',
       aggregateType: 'customer',
