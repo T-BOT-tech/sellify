@@ -193,6 +193,14 @@ try {
   assert.equal(await store.getCustomer(tenant.chatId, staffSyncCustomerId), null,
     'unauthorized customer.upsert must not reach the canonical customer store');
 
+  const invalidCustomerBody = await request(base, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify(null),
+  });
+  assert.equal(invalidCustomerBody.response.status, 400,
+    'a null customer request body must be rejected as invalid input rather than causing a server error');
+
   const created = await request(base, {
     method: 'POST',
     headers: jsonAuth(ownerSession.token),
