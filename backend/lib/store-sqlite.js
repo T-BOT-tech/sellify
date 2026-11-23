@@ -7469,15 +7469,36 @@ function upsertCustomerSync(chatId, input = {}, actor = null) {
   const tenant = getTenantByChatId(chatId);
   if (!tenant?.organizationId) throw Object.assign(new Error('Unknown organization'), { statusCode: 404 });
   const value = normalizeCustomerInput(input);
-  if (!value.name && !value.phone) throw Object.assign(new Error('Customer name or phone is required'), { statusCode: 400 });
-  if (value.defaultLocationId) {
-    const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(String(value.defaultLocationId), tenant.organizationId);
-    if (!location) throw Object.assign(new Error('Customer location does not belong to this organization'), { statusCode: 400 });
-  }
+  const hasInputField = (...keys) => keys.some(key => Object.hasOwn(input, key));
   const existing = input.id ? db.prepare('SELECT * FROM customers WHERE id = ? AND organization_id = ?').get(String(input.id), tenant.organizationId) : findCustomerByNaturalKey(tenant.organizationId, value.phone, value.name);
   const now = nowIso();
   if (existing) {
-    const next = { ...customerFromRow(existing), ...value, id: existing.id, organizationId: tenant.organizationId, createdAt: existing.created_at, updatedAt: now };
+    const current = customerFromRow(existing);
+    // Sync upserts may be sparse (for example, an order carrying only a
+    // customer ID/name). Preserve omitted fields, while an explicitly
+    // supplied empty value remains an intentional clear.
+    const next = {
+      ...current,
+      name: hasInputField('name', 'customer_name') ? value.name : current.name,
+      phone: hasInputField('phone', 'customer_phone') ? value.phone : current.phone,
+      email: hasInputField('email') ? value.email : current.email,
+      address: hasInputField('address') ? value.address : current.address,
+      taxId: hasInputField('taxId', 'tax_id') ? value.taxId : current.taxId,
+      notes: hasInputField('notes') ? value.notes : current.notes,
+      customerType: hasInputField('customerType', 'customer_type') ? value.customerType : current.customerType,
+      status: hasInputField('status') ? value.status : current.status,
+      defaultLocationId: hasInputField('defaultLocationId', 'default_location_id') ? value.defaultLocationId : current.defaultLocationId,
+      source: hasInputField('source') ? value.source : current.source,
+      id: existing.id,
+      organizationId: tenant.organizationId,
+      createdAt: existing.created_at,
+      updatedAt: now,
+    };
+    if (!next.name && !next.phone) throw Object.assign(new Error('Customer name or phone is required'), { statusCode: 400 });
+    if (next.defaultLocationId) {
+      const location = db.prepare('SELECT id FROM locations WHERE id = ? AND organization_id = ?').get(String(next.defaultLocationId), tenant.organizationId);
+      if (!location) throw Object.assign(new Error('Customer location does not belong to this organization'), { statusCode: 400 });
+    }
     db.prepare(`UPDATE customers SET default_location_id = ?, customer_type = ?, name = ?, phone = ?, email = ?, address = ?, tax_id = ?, notes = ?, status = ?, source = ?, updated_at = ? WHERE id = ? AND organization_id = ?`).run(
       next.defaultLocationId || null, next.customerType, next.name, next.phone, next.email, next.address, next.taxId, next.notes, next.status, next.source, now, existing.id, tenant.organizationId
     );
