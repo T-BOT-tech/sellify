@@ -320,10 +320,10 @@ try {
     SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json
     FROM audit_events WHERE action = 'payment.settlement.requested' AND entity_id = ?
     ORDER BY id DESC LIMIT 1
-  `).get(payment.id);
+  `).get(settlementBody.settlement.id);
   assert.ok(settlementRequestedAudit, 'marketplace settlement creation must emit payment audit provenance');
-  assert.equal(settlementRequestedAudit.entity_type, 'payment');
-  assert.equal(settlementRequestedAudit.entity_id, payment.id);
+  assert.equal(settlementRequestedAudit.entity_type, 'payment_settlement');
+  assert.equal(settlementRequestedAudit.entity_id, settlementBody.settlement.id);
   assert.equal(settlementRequestedAudit.actor_id, user.id);
   assert.equal(settlementRequestedAudit.device_id, session.deviceId);
   assert.equal(JSON.parse(settlementRequestedAudit.metadata_json).settlementId, settlementBody.settlement.id);
@@ -371,10 +371,10 @@ try {
     SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json
     FROM audit_events WHERE action = 'payment.settlement.settled' AND entity_id = ?
     ORDER BY id DESC LIMIT 1
-  `).get(payment.id);
+  `).get(settlementBody.settlement.id);
   assert.ok(settlementFinalizedAudit, 'marketplace settlement finalization must emit payment audit provenance');
-  assert.equal(settlementFinalizedAudit.entity_type, 'payment');
-  assert.equal(settlementFinalizedAudit.entity_id, payment.id);
+  assert.equal(settlementFinalizedAudit.entity_type, 'payment_settlement');
+  assert.equal(settlementFinalizedAudit.entity_id, settlementBody.settlement.id);
   assert.equal(settlementFinalizedAudit.actor_id, user.id);
   assert.equal(settlementFinalizedAudit.device_id, session.deviceId);
   assert.equal(JSON.parse(settlementFinalizedAudit.metadata_json).settlementId, settlementBody.settlement.id);
@@ -423,10 +423,10 @@ try {
     SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json
     FROM audit_events WHERE action = 'payment.refund.requested' AND entity_id = ?
     ORDER BY id ASC
-  `).all(payment.id).find(row => JSON.parse(row.metadata_json).refundId === refundBody.refund.id);
+  `).all(refundBody.refund.id).find(row => JSON.parse(row.metadata_json).refundId === refundBody.refund.id);
   assert.ok(refundRequestedAudit, 'marketplace refund request must emit payment audit provenance');
-  assert.equal(refundRequestedAudit.entity_type, 'payment');
-  assert.equal(refundRequestedAudit.entity_id, payment.id);
+  assert.equal(refundRequestedAudit.entity_type, 'payment_refund');
+  assert.equal(refundRequestedAudit.entity_id, refundBody.refund.id);
   assert.equal(refundRequestedAudit.actor_id, user.id);
   assert.equal(refundRequestedAudit.device_id, session.deviceId);
 
@@ -441,10 +441,10 @@ try {
     SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json
     FROM audit_events WHERE action = 'payment.refund.result' AND entity_id = ?
     ORDER BY id DESC LIMIT 1
-  `).get(payment.id);
+  `).get(refundBody.refund.id);
   assert.ok(refundResultAudit, 'marketplace refund result must emit payment audit provenance');
-  assert.equal(refundResultAudit.entity_type, 'payment');
-  assert.equal(refundResultAudit.entity_id, payment.id);
+  assert.equal(refundResultAudit.entity_type, 'payment_refund');
+  assert.equal(refundResultAudit.entity_id, refundBody.refund.id);
   assert.equal(refundResultAudit.actor_id, user.id);
   assert.equal(refundResultAudit.device_id, session.deviceId);
   assert.equal(JSON.parse(refundResultAudit.metadata_json).refundId, refundBody.refund.id);
@@ -484,10 +484,10 @@ try {
     SELECT action, entity_type, entity_id, actor_id, organization_id, metadata_json
     FROM audit_events WHERE action = 'payment.refund.requested' AND entity_id = ?
     ORDER BY id DESC
-  `).all(payment.id).find(row => JSON.parse(row.metadata_json).refundId === cancellationRefund.id);
+  `).all(cancellationRefund.id).find(row => JSON.parse(row.metadata_json).refundId === cancellationRefund.id);
   assert.ok(cancellationRefundAudit, 'marketplace cancellation refund must emit canonical payment audit provenance');
-  assert.equal(cancellationRefundAudit.entity_type, 'payment');
-  assert.equal(cancellationRefundAudit.entity_id, payment.id);
+  assert.equal(cancellationRefundAudit.entity_type, 'payment_refund');
+  assert.equal(cancellationRefundAudit.entity_id, cancellationRefund.id);
   assert.equal(cancellationRefundAudit.actor_id, null,
     'system-generated cancellation refund audit must not invent a user actor');
   assert.equal(cancellationRefundAudit.organization_id, String(session.organizationId));
