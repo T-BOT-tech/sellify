@@ -1,0 +1,25 @@
+name: Supplier Network discovery HTTP authorization regression
+
+on:
+  push:
+    branches:
+      - audit/supplier-network-discovery-http-auth-20261123
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  supplier_network_discovery_http:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install root dependencies
+        run: npm install --ignore-scripts
+      - name: Supplier Network discovery HTTP authorization regression
+        run: node phase0/supplier-network-discovery-http-authorization-regression.mjs

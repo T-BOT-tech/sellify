@@ -2960,7 +2960,7 @@ async function handleUnifiedDiscovery(req, res) {
     if (!chatId) return sendJSON(res, 400, { error: { message: 'chatId is required when supplier-network federation is included', status: 400 } }, req);
     tenant = await getTenant(chatId);
     if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
-    const session = await requireSession(req, tenant);
+    const session = await requireSession(req, tenant.chatId);
     await requireAuthorization(session, tenant, 'supplier_network_discovery', 'supplier-network:discovery:discover', { deniedMessage: 'Supplier network discovery permission required' });
     actor = session;
     input.chatId = tenant.chatId;
