@@ -17,7 +17,16 @@
     "safeReadCandidates": 74,
     "transactionFunctionCount": 64,
     "sqlStatementSites": 1681,
-    "confirmedHighSeverityBoundaryFindings": 3
+    "confirmedHighSeverityBoundaryFindings": 3,
+    "triggerDeclarations": 38,
+    "migrationsWithTriggerChanges": 16,
+    "migrationsWithDetectedDdl": 85,
+    "migrationsWithoutDetectedDdl": 0,
+    "duplicateTableDeclarationNames": 2,
+    "tablesWithoutExportedFunctionConsumers": 8,
+    "internalHelperSqlSites": 731,
+    "exportedFunctionSqlSites": 950,
+    "sqlLexicalFragments": 43
   },
   "functions": [
     {
@@ -17347,7 +17356,8 @@
         "idx_orders_marketplace",
         "idx_audit_tenant_created"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 2,
@@ -17369,7 +17379,8 @@
         "idx_sessions_device",
         "idx_pairing_challenges_tenant"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 3,
@@ -17381,7 +17392,8 @@
       "createdIndexes": [
         "idx_pairing_challenges_tenant"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 4,
@@ -17393,7 +17405,8 @@
       "createdIndexes": [
         "idx_invites_tenant"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 5,
@@ -17403,7 +17416,8 @@
         "catalog_products"
       ],
       "createdIndexes": [],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 6,
@@ -17423,7 +17437,8 @@
         "idx_tenants_organization",
         "idx_audit_organization_created"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 7,
@@ -17434,7 +17449,8 @@
         "idx_locations_org_code",
         "idx_locations_org_type"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 8,
@@ -17451,7 +17467,8 @@
         "idx_customers_org_name",
         "idx_orders_customer"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 9,
@@ -17465,7 +17482,8 @@
         "idx_inventory_movements_location_product_time",
         "idx_inventory_movements_reference"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 10,
@@ -17478,7 +17496,8 @@
         "idx_sync_events_org_time",
         "idx_sync_events_org_type"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 11,
@@ -17497,7 +17516,19 @@
         "idx_compliance_requests_org_status",
         "idx_compliance_requests_subject"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": [
+        {
+          "name": "audit_events_no_update",
+          "table": "audit_events",
+          "sourceLine": 676
+        },
+        {
+          "name": "audit_events_no_delete",
+          "table": "audit_events",
+          "sourceLine": 676
+        }
+      ]
     },
     {
       "version": 12,
@@ -17511,7 +17542,8 @@
         "idx_catalog_currency",
         "idx_orders_currency"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 13,
@@ -17532,7 +17564,19 @@
         "idx_payment_ledger_payment",
         "idx_payment_reconciliation_org"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": [
+        {
+          "name": "trg_payment_ledger_no_update",
+          "table": "payment_ledger_entries",
+          "sourceLine": 775
+        },
+        {
+          "name": "trg_payment_ledger_no_delete",
+          "table": "payment_ledger_entries",
+          "sourceLine": 775
+        }
+      ]
     },
     {
       "version": 14,
@@ -17545,7 +17589,8 @@
         "idx_customer_pricing_org_customer",
         "idx_customer_pricing_org_product"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 15,
@@ -17560,7 +17605,8 @@
         "idx_quotes_org_status",
         "idx_quote_items_quote"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 16,
@@ -17575,7 +17621,14 @@
         "idx_purchase_orders_org_status",
         "idx_purchase_order_items_order"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": [
+        {
+          "name": "trg_purchase_order_items_no_update_after_approval",
+          "table": "purchase_order_items",
+          "sourceLine": 949
+        }
+      ]
     },
     {
       "version": 17,
@@ -17588,7 +17641,8 @@
         "idx_credit_terms_org_status",
         "idx_credit_terms_org_customer"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 18,
@@ -17605,7 +17659,19 @@
         "idx_ar_ledger_receivable",
         "idx_ar_alloc_payment"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": [
+        {
+          "name": "trg_ar_ledger_no_update",
+          "table": "ar_ledger_entries",
+          "sourceLine": 1042
+        },
+        {
+          "name": "trg_ar_ledger_no_delete",
+          "table": "ar_ledger_entries",
+          "sourceLine": 1042
+        }
+      ]
     },
     {
       "version": 19,
@@ -17620,7 +17686,8 @@
         "idx_invoices_org_customer",
         "idx_invoice_items_invoice"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 20,
@@ -17648,7 +17715,8 @@
         "idx_marketplace_refunds_order",
         "idx_marketplace_checkout_idem_buyer"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 21,
@@ -17665,7 +17733,24 @@
         "idx_procurement_demand_items_demand",
         "idx_procurement_demand_items_product"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": [
+        {
+          "name": "procurement_demands_no_core_update_after_submit",
+          "table": "procureme",
+          "sourceLine": 1287
+        },
+        {
+          "name": "procurement_demand_items_no_update_after_submit",
+          "table": "procurement_demand_items",
+          "sourceLine": 1287
+        },
+        {
+          "name": "procurement_demand_items_no_delete_after_submit",
+          "table": "procurement_demand_items",
+          "sourceLine": 1287
+        }
+      ]
     },
     {
       "version": 22,
@@ -17680,7 +17765,8 @@
         "idx_procurement_supplier_relationships_buyer",
         "idx_procurement_supplier_relationships_supplier"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 23,
@@ -17702,7 +17788,29 @@
         "idx_procurement_rfq_responses_supplier",
         "idx_procurement_rfq_response_items_response"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": [
+        {
+          "name": "procurement_rfq_no_item_update_after_send",
+          "table": "procurement_rfq_items",
+          "sourceLine": 1403
+        },
+        {
+          "name": "procurement_rfq_no_supplier_update_after_send",
+          "table": "procurement_rfq_suppliers",
+          "sourceLine": 1403
+        },
+        {
+          "name": "procurement_rfq_response_items_no_update_after_submit",
+          "table": "procurement_rfq_response_items",
+          "sourceLine": 1403
+        },
+        {
+          "name": "procurement_rfq_response_items_no_delete_after_submit",
+          "table": "procurement_rfq_response_items",
+          "sourceLine": 1403
+        }
+      ]
     },
     {
       "version": 24,
@@ -17718,7 +17826,8 @@
         "idx_procurement_comparison_suppliers_rank",
         "idx_procurement_comparison_lines_comparison"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 25,
@@ -17733,7 +17842,24 @@
         "idx_procurement_awards_demand",
         "idx_procurement_award_lines_award"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": [
+        {
+          "name": "procurement_award_lines_no_update_after_confirm",
+          "table": "procurement_award_lines",
+          "sourceLine": 1585
+        },
+        {
+          "name": "procurement_award_lines_no_delete_after_confirm",
+          "table": "procurement_award_lines",
+          "sourceLine": 1585
+        },
+        {
+          "name": "procurement_awards_no_core_update_after_confirm",
+          "table": "procurement_awards",
+          "sourceLine": 1585
+        }
+      ]
     },
     {
       "version": 26,
@@ -17751,7 +17877,19 @@
         "idx_purchase_orders_org_source",
         "idx_purchase_order_items_order"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": [
+        {
+          "name": "trg_purchase_order_items_no_update_after_approval",
+          "table": "purchase_order_items",
+          "sourceLine": 1655
+        },
+        {
+          "name": "purchase_orders_phase17_6_source_immutable",
+          "table": "purchase_orders",
+          "sourceLine": 1655
+        }
+      ]
     },
     {
       "version": 27,
@@ -17765,7 +17903,24 @@
         "idx_procurement_receipts_po",
         "idx_procurement_receipt_lines_receipt"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": [
+        {
+          "name": "procurement_receipt_lines_no_update",
+          "table": "procurement_receipt_lines",
+          "sourceLine": 1721
+        },
+        {
+          "name": "procurement_receipt_lines_no_delete_after_posted",
+          "table": "procurement_receipt_lines",
+          "sourceLine": 1721
+        },
+        {
+          "name": "procurement_receipts_no_core_update_after_posted",
+          "table": "procurement_re",
+          "sourceLine": 1721
+        }
+      ]
     },
     {
       "version": 28,
@@ -17779,7 +17934,14 @@
         "idx_payment_outbound_po",
         "idx_payment_outbound_counterparty"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": [
+        {
+          "name": "payment_outbound_no_core_update_after_submit",
+          "table": "p",
+          "sourceLine": 1776
+        }
+      ]
     },
     {
       "version": 29,
@@ -17794,7 +17956,24 @@
         "idx_payment_procurement_settlement_allocations_settlement",
         "idx_payment_procurement_settlement_allocations_intent"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": [
+        {
+          "name": "payment_procurement_settlement_allocations_no_update",
+          "table": "payment_procurement_settlement_allocations",
+          "sourceLine": 1810
+        },
+        {
+          "name": "payment_procurement_settlement_allocations_no_delete",
+          "table": "payment_procurement_settlement_allocations",
+          "sourceLine": 1810
+        },
+        {
+          "name": "payment_procurement_settlements_no_core_update_after_allocation",
+          "table": "payment_procurement_settlements",
+          "sourceLine": 1810
+        }
+      ]
     },
     {
       "version": 30,
@@ -17806,7 +17985,8 @@
       "createdIndexes": [
         "idx_supplier_network_profiles_visibility_status"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 32,
@@ -17819,7 +17999,8 @@
         "idx_supplier_network_catalog_org_status",
         "idx_supplier_network_catalog_product"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 34,
@@ -17832,7 +18013,8 @@
         "idx_supplier_network_capacity_org_status",
         "idx_supplier_network_capacity_discovery"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 35,
@@ -17846,7 +18028,8 @@
         "idx_supplier_network_commercial_discovery",
         "uq_supplier_network_commercial_network"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 36,
@@ -17860,7 +18043,8 @@
         "idx_supplier_network_qualification_discovery",
         "uq_supplier_network_qualification_reference"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 37,
@@ -17873,7 +18057,19 @@
         "idx_supplier_network_performance_supplier_metric",
         "idx_supplier_network_performance_visibility"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": [
+        {
+          "name": "supplier_network_performance_observations_no_update",
+          "table": "supplier_network_performance_observations",
+          "sourceLine": 2031
+        },
+        {
+          "name": "supplier_network_performance_observations_no_delete",
+          "table": "supplier_network_performance_observations",
+          "sourceLine": 2031
+        }
+      ]
     },
     {
       "version": 38,
@@ -17887,7 +18083,19 @@
         "idx_supplier_network_trust_visibility",
         "uq_supplier_network_trust_source"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": [
+        {
+          "name": "supplier_network_trust_evidence_no_update",
+          "table": "supplier_network_trust_evidence",
+          "sourceLine": 2065
+        },
+        {
+          "name": "supplier_network_trust_evidence_no_delete",
+          "table": "supplier_network_trust_evidence",
+          "sourceLine": 2065
+        }
+      ]
     },
     {
       "version": 60,
@@ -17901,7 +18109,8 @@
       "createdIndexes": [
         "idx_marketplace_payment_allocations_order"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 39,
@@ -17913,7 +18122,8 @@
       "createdIndexes": [
         "idx_telegram_storefront_status"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 40,
@@ -17926,7 +18136,8 @@
         "idx_pack_lifecycle_org_state",
         "idx_pack_lifecycle_pack"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 42,
@@ -17939,7 +18150,8 @@
         "idx_fulfillments_org_status",
         "idx_fulfillments_location_status"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 43,
@@ -17952,7 +18164,8 @@
         "idx_delivery_assignments_courier",
         "idx_delivery_assignments_org"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 44,
@@ -17968,7 +18181,8 @@
         "idx_delivery_assignments_org",
         "idx_delivery_assignments_active_fulfillment"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 45,
@@ -18001,7 +18215,8 @@
         "idx_payment_decisions_org_created",
         "idx_payment_idempotency_expiry"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 61,
@@ -18011,7 +18226,8 @@
         "payment_evidence"
       ],
       "createdIndexes": [],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 62,
@@ -18026,7 +18242,8 @@
         "idx_payment_confirmation_attempts_intent",
         "uq_payment_confirmation_attempts_provider_tx"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 64,
@@ -18038,7 +18255,8 @@
       "createdIndexes": [
         "idx_payment_status_query_commands_payment"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 65,
@@ -18046,7 +18264,24 @@
       "createdTables": [],
       "alteredTables": [],
       "createdIndexes": [],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": [
+        {
+          "name": "payment_evidence_no_update",
+          "table": "payment_evidence",
+          "sourceLine": 2474
+        },
+        {
+          "name": "payment_verifications_no_update",
+          "table": "payment_verifications",
+          "sourceLine": 2474
+        },
+        {
+          "name": "payment_decisions_no_update",
+          "table": "payment_decisions",
+          "sourceLine": 2474
+        }
+      ]
     },
     {
       "version": 66,
@@ -18054,7 +18289,24 @@
       "createdTables": [],
       "alteredTables": [],
       "createdIndexes": [],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": [
+        {
+          "name": "payment_evidence_no_delete",
+          "table": "payment_evidence",
+          "sourceLine": 2501
+        },
+        {
+          "name": "payment_verifications_no_delete",
+          "table": "payment_verifications",
+          "sourceLine": 2501
+        },
+        {
+          "name": "payment_decisions_no_delete",
+          "table": "payment_decisions",
+          "sourceLine": 2501
+        }
+      ]
     },
     {
       "version": 68,
@@ -18066,7 +18318,8 @@
       "createdIndexes": [
         "idx_payment_ledger_decision"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 69,
@@ -18076,7 +18329,8 @@
         "fulfillments"
       ],
       "createdIndexes": [],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 70,
@@ -18088,7 +18342,8 @@
       "createdIndexes": [
         "idx_fulfillment_commands_order"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 71,
@@ -18100,7 +18355,8 @@
       "createdIndexes": [
         "idx_delivery_assignment_commands_order"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 72,
@@ -18112,7 +18368,8 @@
       "createdIndexes": [
         "idx_service_delivery_assessment_commands_order"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 73,
@@ -18126,7 +18383,8 @@
         "idx_service_bookings_order",
         "idx_service_booking_commands_booking"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 74,
@@ -18136,7 +18394,8 @@
         "service_bookings"
       ],
       "createdIndexes": [],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 75,
@@ -18146,7 +18405,8 @@
         "service_bookings"
       ],
       "createdIndexes": [],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 67,
@@ -18156,7 +18416,8 @@
         "payment_status_query_commands"
       ],
       "createdIndexes": [],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 63,
@@ -18169,7 +18430,8 @@
         "uq_payment_evidence_notification",
         "idx_payment_evidence_auth_reference"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 46,
@@ -18181,7 +18443,8 @@
       "createdIndexes": [
         "idx_payments_payment_intent"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 51,
@@ -18193,7 +18456,8 @@
       "createdIndexes": [
         "idx_payment_routing_policy_match"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 52,
@@ -18207,7 +18471,8 @@
         "idx_payment_operational_payment",
         "idx_payment_operational_status"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 55,
@@ -18219,7 +18484,8 @@
       "createdIndexes": [
         "idx_payment_production_certifications"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 53,
@@ -18231,7 +18497,8 @@
       "createdIndexes": [
         "idx_payment_provider_capability_certification"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 54,
@@ -18241,7 +18508,8 @@
       "createdIndexes": [
         "idx_payment_verifications_evidence_verifier"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 56,
@@ -18251,7 +18519,8 @@
         "payment_verifications"
       ],
       "createdIndexes": [],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 57,
@@ -18263,7 +18532,8 @@
       "createdIndexes": [
         "idx_audit_lineage"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 59,
@@ -18274,7 +18544,8 @@
         "uq_payment_verifications_provider_transaction",
         "idx_payment_verifications_provider_transaction"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 50,
@@ -18288,7 +18559,8 @@
         "idx_payment_settlements_org_status",
         "idx_payment_settlements_provider_reference"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 49,
@@ -18302,7 +18574,8 @@
         "idx_payment_refunds_org_status",
         "idx_payment_refunds_provider"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 48,
@@ -18323,7 +18596,19 @@
         "uq_payments_external_reference",
         "idx_payment_ledger_payment"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": [
+        {
+          "name": "trg_payment_ledger_no_update",
+          "table": "payment_ledger_entries",
+          "sourceLine": 3029
+        },
+        {
+          "name": "trg_payment_ledger_no_delete",
+          "table": "payment_ledger_entries",
+          "sourceLine": 3029
+        }
+      ]
     },
     {
       "version": 47,
@@ -18336,7 +18621,8 @@
         "idx_payment_reconciliation_payment_created",
         "idx_payment_reconciliation_fingerprint"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 41,
@@ -18349,7 +18635,8 @@
         "idx_membership_roles_membership",
         "idx_membership_roles_scope"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 33,
@@ -18362,7 +18649,8 @@
         "idx_supplier_network_service_areas_org_status",
         "idx_supplier_network_service_areas_discovery"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 31,
@@ -18375,7 +18663,8 @@
         "idx_supplier_network_capabilities_org_status",
         "idx_supplier_network_capabilities_discovery"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 58,
@@ -18390,7 +18679,8 @@
         "idx_logistics_scheduling_order",
         "idx_logistics_scheduling_fulfillment"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 76,
@@ -18400,7 +18690,8 @@
       ],
       "alteredTables": [],
       "createdIndexes": [],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 77,
@@ -18412,7 +18703,8 @@
       "createdIndexes": [
         "idx_tenant_creation_requests_user"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 78,
@@ -18427,7 +18719,8 @@
         "idx_service_resources_service",
         "idx_service_resource_commands_resource"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 79,
@@ -18440,7 +18733,8 @@
       "createdIndexes": [
         "idx_service_resource_availability_org"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 80,
@@ -18454,7 +18748,8 @@
       "createdIndexes": [
         "idx_service_resource_commitments_overlap"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 81,
@@ -18469,7 +18764,8 @@
         "idx_service_resource_commitments_overlap",
         "idx_service_bookings_resource_window"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 82,
@@ -18479,7 +18775,8 @@
         "locations"
       ],
       "createdIndexes": [],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 83,
@@ -18492,7 +18789,8 @@
         "idx_restaurant_recipes_org_status",
         "idx_restaurant_recipes_chat_updated"
       ],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 84,
@@ -18502,7 +18800,8 @@
         "supplier_network_capacity_signals"
       ],
       "createdIndexes": [],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     },
     {
       "version": 85,
@@ -18513,7 +18812,8 @@
         "locations"
       ],
       "createdIndexes": [],
-      "dependsOnPriorAppliedMigrations": true
+      "dependsOnPriorAppliedMigrations": true,
+      "createdTriggers": []
     }
   ],
   "indexes": [
@@ -51768,6 +52068,292 @@
       "invariant": "Financial request persistence and required audit evidence should commit or roll back together; caller-owned transaction behavior must be preserved.",
       "relatedOpenWork": "PR #306 proposes atomic audit coupling; its stale branch must be replayed against current main before review.",
       "action": "Test audit failure rollback for standalone refund and settlement creation."
+    }
+  ],
+  "triggerDeclarations": [
+    {
+      "name": "audit_events_no_update",
+      "table": "audit_events",
+      "sourceLine": 676,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "audit_events_no_delete",
+      "table": "audit_events",
+      "sourceLine": 676,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "trg_payment_ledger_no_update",
+      "table": "payment_ledger_entries",
+      "sourceLine": 775,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "trg_payment_ledger_no_delete",
+      "table": "payment_ledger_entries",
+      "sourceLine": 775,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "trg_purchase_order_items_no_update_after_approval",
+      "table": "purchase_order_items",
+      "sourceLine": 949,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "trg_ar_ledger_no_update",
+      "table": "ar_ledger_entries",
+      "sourceLine": 1042,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "trg_ar_ledger_no_delete",
+      "table": "ar_ledger_entries",
+      "sourceLine": 1042,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "procurement_demands_no_core_update_after_submit",
+      "table": "procureme",
+      "sourceLine": 1287,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "procurement_demand_items_no_update_after_submit",
+      "table": "procurement_demand_items",
+      "sourceLine": 1287,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "procurement_demand_items_no_delete_after_submit",
+      "table": "procurement_demand_items",
+      "sourceLine": 1287,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "procurement_rfq_no_item_update_after_send",
+      "table": "procurement_rfq_items",
+      "sourceLine": 1403,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "procurement_rfq_no_supplier_update_after_send",
+      "table": "procurement_rfq_suppliers",
+      "sourceLine": 1403,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "procurement_rfq_response_items_no_update_after_submit",
+      "table": "procurement_rfq_response_items",
+      "sourceLine": 1403,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "procurement_rfq_response_items_no_delete_after_submit",
+      "table": "procurement_rfq_response_items",
+      "sourceLine": 1403,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "procurement_award_lines_no_update_after_confirm",
+      "table": "procurement_award_lines",
+      "sourceLine": 1585,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "procurement_award_lines_no_delete_after_confirm",
+      "table": "procurement_award_lines",
+      "sourceLine": 1585,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "procurement_awards_no_core_update_after_confirm",
+      "table": "procurement_awards",
+      "sourceLine": 1585,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "trg_purchase_order_items_no_update_after_approval",
+      "table": "purchase_order_items",
+      "sourceLine": 1655,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "purchase_orders_phase17_6_source_immutable",
+      "table": "purchase_orders",
+      "sourceLine": 1655,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "procurement_receipt_lines_no_update",
+      "table": "procurement_receipt_lines",
+      "sourceLine": 1721,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "procurement_receipt_lines_no_delete_after_posted",
+      "table": "procurement_receipt_lines",
+      "sourceLine": 1721,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "procurement_receipts_no_core_update_after_posted",
+      "table": "procurement_re",
+      "sourceLine": 1721,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "payment_outbound_no_core_update_after_submit",
+      "table": "p",
+      "sourceLine": 1776,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "payment_procurement_settlement_allocations_no_update",
+      "table": "payment_procurement_settlement_allocations",
+      "sourceLine": 1810,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "payment_procurement_settlement_allocations_no_delete",
+      "table": "payment_procurement_settlement_allocations",
+      "sourceLine": 1810,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "payment_procurement_settlements_no_core_update_after_allocation",
+      "table": "payment_procurement_settlements",
+      "sourceLine": 1810,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "supplier_network_performance_observations_no_update",
+      "table": "supplier_network_performance_observations",
+      "sourceLine": 2031,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "supplier_network_performance_observations_no_delete",
+      "table": "supplier_network_performance_observations",
+      "sourceLine": 2031,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "supplier_network_trust_evidence_no_update",
+      "table": "supplier_network_trust_evidence",
+      "sourceLine": 2065,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "supplier_network_trust_evidence_no_delete",
+      "table": "supplier_network_trust_evidence",
+      "sourceLine": 2065,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "payment_evidence_no_update",
+      "table": "payment_evidence",
+      "sourceLine": 2474,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "payment_verifications_no_update",
+      "table": "payment_verifications",
+      "sourceLine": 2474,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "payment_decisions_no_update",
+      "table": "payment_decisions",
+      "sourceLine": 2474,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "payment_evidence_no_delete",
+      "table": "payment_evidence",
+      "sourceLine": 2501,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "payment_verifications_no_delete",
+      "table": "payment_verifications",
+      "sourceLine": 2501,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "payment_decisions_no_delete",
+      "table": "payment_decisions",
+      "sourceLine": 2501,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "trg_payment_ledger_no_update",
+      "table": "payment_ledger_entries",
+      "sourceLine": 3029,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    },
+    {
+      "name": "trg_payment_ledger_no_delete",
+      "table": "payment_ledger_entries",
+      "sourceLine": 3029,
+      "ownerFunction": "runMigrations",
+      "ownerKind": "internal helper (nearest declaration; approximate)"
+    }
+  ],
+  "tableDeclarationDuplicates": [
+    {
+      "table": "pairing_challenges",
+      "declarations": [
+        417,
+        433
+      ],
+      "note": "Repeated identical CREATE TABLE IF NOT EXISTS declaration in migration 2 and 3; one physical table, preserve historical migration sequence."
+    },
+    {
+      "table": "service_resource_commitments",
+      "declarations": [
+        3394,
+        3440
+      ],
+      "note": "Repeated CREATE TABLE IF NOT EXISTS declaration in migrations 80 and 81; migration 81 also performs compatibility/backfill work and the declared CHECK shape differs, so retain migration compatibility evidence and do not treat as two tables."
     }
   ]
 }
