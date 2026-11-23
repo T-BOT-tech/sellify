@@ -5451,7 +5451,9 @@
       "methodSpecificity": "single registered method or no shared handler",
       "securityReview": {
         "status": "needs-review",
-        "reason": "Session authentication only. saveQueuedOrders mutates canonical orders and ensures canonical Payment state, but receives no actor and has no role-permission check. The central role policy contains orders:create and sync:manual; confirm intended device-role access and enforce the applicable server permission if restricted."
+        "severity": "high",
+        "findingStatus": "confirmed role-permission bypass",
+        "reason": "The handler requires only a tenant session and calls saveQueuedOrders, which accepts no actor and has no action-permission check. The central role policy grants orders:create to owner/manager/cashier but not generic staff, and sync:manual is manager-scoped; an active staff session can therefore submit queued order writes without the permission the role policy withholds."
       }
     },
     {
@@ -81375,7 +81377,9 @@
       "methodSpecificity": "shared handler; branch-specific behavior must be read from methodBranchCoverage; dependency/validation fields are handler-wide",
       "securityReview": {
         "status": "needs-review",
-        "reason": "Session authentication only. The explicit GET branch calls listPaymentRoutingPolicies; the store function scopes by organization but has no action-level authorization. The role policy exposes payments:view, but this route does not evaluate it."
+        "severity": "medium",
+        "findingStatus": "confirmed read-permission bypass",
+        "reason": "The GET branch requires only a tenant session and directly calls listPaymentRoutingPolicies. The role policy exposes payments:view for cashier/manager/owner but not generic staff; this route does not evaluate payments:view, so an active staff session can read routing-policy configuration."
       },
       "methodSpecificStoreFunctions": [
         "getTenant",
@@ -81724,7 +81728,9 @@
       "methodSpecificity": "shared handler; branch-specific behavior must be read from methodBranchCoverage; dependency/validation fields are handler-wide",
       "securityReview": {
         "status": "needs-review",
-        "reason": "Session authentication only. The POST fallback calls upsertPaymentRoutingPolicy; the store function scopes by organization but has no action-level authorization. The role policy exposes payments:route, but this route does not evaluate it. PaymentCore.resolveRouting checks payments:route, but this handler bypasses it."
+        "severity": "high",
+        "findingStatus": "confirmed manage-permission bypass",
+        "reason": "The POST fallback requires only a tenant session and directly calls upsertPaymentRoutingPolicy. The role policy grants payments:route to manager/owner but not cashier; an active cashier session can mutate routing-policy configuration without payments:route. PaymentCore.resolveRouting checks payments:route, but this HTTP handler bypasses it."
       },
       "methodSpecificStoreFunctions": [
         "getTenant",
