@@ -7431,11 +7431,11 @@ function findCustomerByNaturalKey(organizationId, phone, name) {
   const cleanPhone = String(phone || '').trim();
   const cleanName = String(name || '').trim();
   if (cleanPhone) {
-    const row = db.prepare(`SELECT * FROM customers WHERE organization_id = ? AND phone = ? ORDER BY updated_at DESC LIMIT 1`).get(String(organizationId), cleanPhone);
+    const row = db.prepare(`SELECT * FROM customers WHERE organization_id = ? AND phone = ? AND status = 'active' ORDER BY updated_at DESC LIMIT 1`).get(String(organizationId), cleanPhone);
     if (row) return row;
   }
   if (cleanName) {
-    return db.prepare(`SELECT * FROM customers WHERE organization_id = ? AND phone = '' AND lower(name) = lower(?) ORDER BY updated_at DESC LIMIT 1`).get(String(organizationId), cleanName);
+    return db.prepare(`SELECT * FROM customers WHERE organization_id = ? AND phone = '' AND status = 'active' AND lower(name) = lower(?) ORDER BY updated_at DESC LIMIT 1`).get(String(organizationId), cleanName);
   }
   return null;
 }
