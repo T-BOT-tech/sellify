@@ -146,12 +146,12 @@ test('GAP-1.14 partial refunds are durable and full refund is only reached at th
     SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json
     FROM audit_events WHERE action = 'payment.refund.requested' AND entity_id = ?
     ORDER BY id DESC LIMIT 1
-  `).get(base.paymentId);
+  `).get(first.refund.id);
   assert.ok(refundRequestedAudit, 'refund request must emit an audit event');
-  assert.equal(refundRequestedAudit.entity_type, 'payment',
-    'refund request audit must use the canonical payment aggregate type');
-  assert.equal(refundRequestedAudit.entity_id, base.paymentId,
-    'refund request audit must reference the canonical payment ID');
+  assert.equal(refundRequestedAudit.entity_type, 'payment_refund',
+    'refund request audit must use the canonical refund entity type');
+  assert.equal(refundRequestedAudit.entity_id, first.refund.id,
+    'refund request audit must reference the canonical refund ID');
   assert.equal(refundRequestedAudit.actor_id, refundActor.userId,
     'refund request audit must retain the authenticated actor');
   assert.equal(refundRequestedAudit.device_id, refundActor.deviceId,
@@ -162,10 +162,10 @@ test('GAP-1.14 partial refunds are durable and full refund is only reached at th
     SELECT action, entity_type, entity_id, actor_id, device_id, organization_id, metadata_json
     FROM audit_events WHERE action = 'payment.refund.succeeded' AND entity_id = ?
     ORDER BY id DESC LIMIT 1
-  `).get(base.paymentId);
+  `).get(first.refund.id);
   assert.ok(refundSucceededAudit, 'successful refund must emit an audit event');
-  assert.equal(refundSucceededAudit.entity_type, 'payment');
-  assert.equal(refundSucceededAudit.entity_id, base.paymentId);
+  assert.equal(refundSucceededAudit.entity_type, 'payment_refund');
+  assert.equal(refundSucceededAudit.entity_id, first.refund.id);
   assert.equal(refundSucceededAudit.actor_id, refundActor.userId);
   assert.equal(refundSucceededAudit.device_id, refundActor.deviceId);
   assert.equal(JSON.parse(refundSucceededAudit.metadata_json).refundId, first.refund.id);
