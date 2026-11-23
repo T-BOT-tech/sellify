@@ -75,12 +75,12 @@
       "handler": "handleTelegramAuth",
       "handlerSourceLine": 901,
       "domainGroup": "Identity and access",
-      "classification": "needs-review",
-      "authentication": "no standard session helper detected; handler-specific authentication review required",
+      "classification": "infrastructure",
+      "authentication": "Telegram signed initData HMAC and auth_date freshness validation; tenant-scoped session only when exactly one membership exists, otherwise short-lived challenge.",
       "authorization": {
         "calls": [],
         "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "serverPolicy": "special credential/identity proof; no tenant-role permission"
       },
       "scope": {
         "tenant": "no tenant path; token/public identity/provider context",
@@ -122,7 +122,7 @@
         "phase0/phase15.2-kenya-country-identity-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against handler; identity/secret boundary identified"
     },
     {
       "method": "POST",
@@ -133,12 +133,12 @@
       "handler": "handleLegacyMigration",
       "handlerSourceLine": 887,
       "domainGroup": "Identity and access",
-      "classification": "needs-review",
-      "authentication": "no standard session helper detected; handler-specific authentication review required",
+      "classification": "infrastructure",
+      "authentication": "Telegram signed initData plus legacy tenant API key; then owner membership/session migration. Legacy API key is a privileged credential.",
       "authorization": {
         "calls": [],
         "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "serverPolicy": "special credential/identity proof; no tenant-role permission"
       },
       "scope": {
         "tenant": "no tenant path; token/public identity/provider context",
@@ -181,7 +181,7 @@
         "phase0/phase15.2-kenya-country-identity-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against handler; identity/secret boundary identified"
     },
     {
       "method": "GET",
@@ -515,12 +515,12 @@
       "handler": "handlePairDevice",
       "handlerSourceLine": 1024,
       "domainGroup": "Identity and access",
-      "classification": "needs-review",
-      "authentication": "no standard session helper detected; handler-specific authentication review required",
+      "classification": "infrastructure",
+      "authentication": "one-time owner-created pairing challenge token is consumed before issuing a tenant-scoped session.",
       "authorization": {
         "calls": [],
         "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "serverPolicy": "special credential/identity proof; no tenant-role permission"
       },
       "scope": {
         "tenant": "no tenant path; token/public identity/provider context",
@@ -561,7 +561,7 @@
         "phase0/phase15.2-kenya-country-identity-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against handler; identity/secret boundary identified"
     },
     {
       "method": "GET",
@@ -1098,12 +1098,12 @@
       "handler": "handleAcceptInvite",
       "handlerSourceLine": 1154,
       "domainGroup": "Identity and access",
-      "classification": "needs-review",
-      "authentication": "no standard session helper detected; handler-specific authentication review required",
+      "classification": "infrastructure",
+      "authentication": "Telegram signed initData plus one-time invite token consumption before issuing tenant-scoped session.",
       "authorization": {
         "calls": [],
         "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "serverPolicy": "special credential/identity proof; no tenant-role permission"
       },
       "scope": {
         "tenant": "no tenant path; token/public identity/provider context",
@@ -1146,7 +1146,7 @@
         "phase0/phase15.2-kenya-country-identity-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against handler; identity/secret boundary identified"
     },
     {
       "method": "GET",
@@ -1160,9 +1160,16 @@
       "classification": "needs-review",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "requireOwnerRole",
+            "permission": "administration:settings:configure"
+          }
+        ],
+        "permissionKeys": [
+          "administration:settings:configure"
+        ],
+        "serverPolicy": "central authorize() via requireOwnerRole"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -1197,7 +1204,7 @@
         "phase0/phase15.2-kenya-country-identity-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against requireOwnerRole helper"
     },
     {
       "method": "GET",
@@ -1211,9 +1218,16 @@
       "classification": "needs-review",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "requireOwnerRole",
+            "permission": "administration:settings:configure"
+          }
+        ],
+        "permissionKeys": [
+          "administration:settings:configure"
+        ],
+        "serverPolicy": "central authorize() via requireOwnerRole"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -1248,7 +1262,7 @@
         "phase0/phase15.2-kenya-country-identity-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against requireOwnerRole helper"
     },
     {
       "method": "POST",
@@ -2360,12 +2374,20 @@
       "handler": "handleServiceDeliveryAssessment",
       "handlerSourceLine": 3766,
       "domainGroup": "Service",
-      "classification": "needs-review",
+      "classification": "mixed",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "assertLogisticsSchedulingAuthorization",
+            "permission": "logistics:scheduling:request",
+            "enforcement": "inside SQLite transaction after durable idempotent replay lookup"
+          }
+        ],
+        "permissionKeys": [
+          "logistics:scheduling:request"
+        ],
+        "serverPolicy": "store-level server authorization with organization/location scope"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -2408,7 +2430,7 @@
         "phase0/phase18.4-supplier-network-service-area-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against transactional store enforcement"
     },
     {
       "method": "GET",
@@ -11928,12 +11950,20 @@
       "handler": "handleBusinessTemplateConfig",
       "handlerSourceLine": 2145,
       "domainGroup": "Business Template",
-      "classification": "needs-review",
+      "classification": "infrastructure",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "requireOwnerRole",
+            "permission": "administration:settings:configure",
+            "appliesTo": "writes; GET is authenticated tenant-member read"
+          }
+        ],
+        "permissionKeys": [
+          "administration:settings:configure"
+        ],
+        "serverPolicy": "central authorize() via requireOwnerRole"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -11969,7 +11999,7 @@
         "phase0/r2-golden-business-journeys-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed; method-specific read/write boundary"
     },
     {
       "method": "PUT",
@@ -11980,12 +12010,20 @@
       "handler": "handleBusinessTemplateConfig",
       "handlerSourceLine": 2145,
       "domainGroup": "Business Template",
-      "classification": "needs-review",
+      "classification": "infrastructure",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "requireOwnerRole",
+            "permission": "administration:settings:configure",
+            "appliesTo": "writes; GET is authenticated tenant-member read"
+          }
+        ],
+        "permissionKeys": [
+          "administration:settings:configure"
+        ],
+        "serverPolicy": "central authorize() via requireOwnerRole"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -12021,7 +12059,7 @@
         "phase0/r2-golden-business-journeys-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed; method-specific read/write boundary"
     },
     {
       "method": "PATCH",
@@ -12032,12 +12070,20 @@
       "handler": "handleBusinessTemplateConfig",
       "handlerSourceLine": 2145,
       "domainGroup": "Business Template",
-      "classification": "needs-review",
+      "classification": "infrastructure",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "requireOwnerRole",
+            "permission": "administration:settings:configure",
+            "appliesTo": "writes; GET is authenticated tenant-member read"
+          }
+        ],
+        "permissionKeys": [
+          "administration:settings:configure"
+        ],
+        "serverPolicy": "central authorize() via requireOwnerRole"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -12073,7 +12119,7 @@
         "phase0/r2-golden-business-journeys-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed; method-specific read/write boundary"
     },
     {
       "method": "GET",
@@ -12084,12 +12130,20 @@
       "handler": "handleTenantPatch",
       "handlerSourceLine": 2164,
       "domainGroup": "Tenant administration",
-      "classification": "needs-review",
+      "classification": "infrastructure",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "requireOwnerRole",
+            "permission": "administration:settings:configure",
+            "appliesTo": "writes; GET is authenticated tenant-member read"
+          }
+        ],
+        "permissionKeys": [
+          "administration:settings:configure"
+        ],
+        "serverPolicy": "central authorize() via requireOwnerRole"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -12128,7 +12182,7 @@
         "phase0/phase16.9-tenant-country-vertical-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed; method-specific read/write boundary"
     },
     {
       "method": "PATCH",
@@ -12139,12 +12193,20 @@
       "handler": "handleTenantPatch",
       "handlerSourceLine": 2164,
       "domainGroup": "Tenant administration",
-      "classification": "needs-review",
+      "classification": "infrastructure",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "requireOwnerRole",
+            "permission": "administration:settings:configure",
+            "appliesTo": "writes; GET is authenticated tenant-member read"
+          }
+        ],
+        "permissionKeys": [
+          "administration:settings:configure"
+        ],
+        "serverPolicy": "central authorize() via requireOwnerRole"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -12183,7 +12245,7 @@
         "phase0/phase16.9-tenant-country-vertical-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed; method-specific read/write boundary"
     },
     {
       "method": "GET",
@@ -13513,12 +13575,21 @@
       "handler": "handlePaymentLifecycle",
       "handlerSourceLine": 2646,
       "domainGroup": "Payments",
-      "classification": "needs-review",
+      "classification": "domain capability",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "PaymentCore.#authorize",
+            "permission": "payments:manage OR payments:accept",
+            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+          }
+        ],
+        "permissionKeys": [
+          "payments:manage",
+          "payments:accept"
+        ],
+        "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -13554,7 +13625,21 @@
         "phase0/gap-1.13-payment-lifecycle-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "paymentCoreMethods": [
+        {
+          "method": "transitionLifecycle",
+          "permission": "dynamic permission",
+          "storeFunctions": [
+            "getPayment",
+            "commitPaymentDecision"
+          ]
+        }
+      ],
+      "delegatedStoreFunctions": [
+        "getPayment",
+        "commitPaymentDecision"
+      ]
     },
     {
       "method": "POST",
@@ -13565,12 +13650,20 @@
       "handler": "handlePaymentRefund",
       "handlerSourceLine": 2530,
       "domainGroup": "Payments",
-      "classification": "needs-review",
+      "classification": "domain capability",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "PaymentCore.#authorize",
+            "permission": "payments:manage",
+            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+          }
+        ],
+        "permissionKeys": [
+          "payments:manage"
+        ],
+        "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -13599,7 +13692,29 @@
         "phase0/gap-1.14-payment-refund-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "paymentCoreMethods": [
+        {
+          "method": "refund",
+          "permission": "payments:manage",
+          "storeFunctions": [
+            "getPaymentRefundByIdempotencyKey",
+            "getPayment",
+            "createPaymentRefundRequest",
+            "finalizePaymentRefund",
+            "getPaymentIntent",
+            "listPaymentAccounts"
+          ]
+        }
+      ],
+      "delegatedStoreFunctions": [
+        "getPaymentRefundByIdempotencyKey",
+        "getPayment",
+        "createPaymentRefundRequest",
+        "finalizePaymentRefund",
+        "getPaymentIntent",
+        "listPaymentAccounts"
+      ]
     },
     {
       "method": "GET",
@@ -13610,12 +13725,21 @@
       "handler": "handlePaymentProviderCertification",
       "handlerSourceLine": 2411,
       "domainGroup": "Payments",
-      "classification": "needs-review",
+      "classification": "domain capability",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "PaymentCore.#authorize",
+            "permission": "payments:view OR payments:manage",
+            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+          }
+        ],
+        "permissionKeys": [
+          "payments:view",
+          "payments:manage"
+        ],
+        "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -13652,7 +13776,35 @@
         "phase0/gap-2-delivery-end-to-end-certification-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "paymentCoreMethods": [
+        {
+          "method": "certifyProviderCapabilities",
+          "permission": "payments:view",
+          "storeFunctions": [
+            "listPaymentProviderCapabilityEvidence"
+          ]
+        },
+        {
+          "method": "certifyAllProviders",
+          "permission": "payments:view",
+          "storeFunctions": [
+            "listPaymentProviderCapabilityEvidence"
+          ]
+        },
+        {
+          "method": "certifyProviderCapability",
+          "permission": "payments:manage",
+          "storeFunctions": [
+            "listPaymentProviderCapabilityEvidence",
+            "certifyPaymentProviderCapability"
+          ]
+        }
+      ],
+      "delegatedStoreFunctions": [
+        "listPaymentProviderCapabilityEvidence",
+        "certifyPaymentProviderCapability"
+      ]
     },
     {
       "method": "POST",
@@ -13663,12 +13815,20 @@
       "handler": "handlePaymentProviderCapabilityProbe",
       "handlerSourceLine": 2425,
       "domainGroup": "Payments",
-      "classification": "needs-review",
+      "classification": "domain capability",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "PaymentCore.#authorize",
+            "permission": "payments:manage",
+            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+          }
+        ],
+        "permissionKeys": [
+          "payments:manage"
+        ],
+        "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -13696,7 +13856,19 @@
       "sideEffects": [],
       "testCandidates": [],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "paymentCoreMethods": [
+        {
+          "method": "probeProviderCapability",
+          "permission": "payments:manage",
+          "storeFunctions": [
+            "recordPaymentProviderCapabilityEvidence"
+          ]
+        }
+      ],
+      "delegatedStoreFunctions": [
+        "recordPaymentProviderCapabilityEvidence"
+      ]
     },
     {
       "method": "GET",
@@ -13707,12 +13879,21 @@
       "handler": "handlePaymentProviderCapabilityEvidence",
       "handlerSourceLine": 2432,
       "domainGroup": "Payments",
-      "classification": "needs-review",
+      "classification": "domain capability",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "PaymentCore.#authorize",
+            "permission": "payments:view OR payments:manage",
+            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+          }
+        ],
+        "permissionKeys": [
+          "payments:view",
+          "payments:manage"
+        ],
+        "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -13740,7 +13921,27 @@
       "sideEffects": [],
       "testCandidates": [],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "paymentCoreMethods": [
+        {
+          "method": "listProviderCapabilityEvidence",
+          "permission": "payments:view",
+          "storeFunctions": [
+            "listPaymentProviderCapabilityEvidence"
+          ]
+        },
+        {
+          "method": "recordProviderCapabilityEvidence",
+          "permission": "payments:manage",
+          "storeFunctions": [
+            "recordPaymentProviderCapabilityEvidence"
+          ]
+        }
+      ],
+      "delegatedStoreFunctions": [
+        "listPaymentProviderCapabilityEvidence",
+        "recordPaymentProviderCapabilityEvidence"
+      ]
     },
     {
       "method": "POST",
@@ -13751,12 +13952,21 @@
       "handler": "handlePaymentProviderCapabilityEvidence",
       "handlerSourceLine": 2432,
       "domainGroup": "Payments",
-      "classification": "needs-review",
+      "classification": "domain capability",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "PaymentCore.#authorize",
+            "permission": "payments:view OR payments:manage",
+            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+          }
+        ],
+        "permissionKeys": [
+          "payments:view",
+          "payments:manage"
+        ],
+        "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -13784,7 +13994,27 @@
       "sideEffects": [],
       "testCandidates": [],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "paymentCoreMethods": [
+        {
+          "method": "listProviderCapabilityEvidence",
+          "permission": "payments:view",
+          "storeFunctions": [
+            "listPaymentProviderCapabilityEvidence"
+          ]
+        },
+        {
+          "method": "recordProviderCapabilityEvidence",
+          "permission": "payments:manage",
+          "storeFunctions": [
+            "recordPaymentProviderCapabilityEvidence"
+          ]
+        }
+      ],
+      "delegatedStoreFunctions": [
+        "listPaymentProviderCapabilityEvidence",
+        "recordPaymentProviderCapabilityEvidence"
+      ]
     },
     {
       "method": "GET",
@@ -13795,12 +14025,21 @@
       "handler": "handlePaymentProductionCertification",
       "handlerSourceLine": 2452,
       "domainGroup": "Payments",
-      "classification": "needs-review",
+      "classification": "domain capability",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "PaymentCore.#authorize",
+            "permission": "payments:view OR payments:manage",
+            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+          }
+        ],
+        "permissionKeys": [
+          "payments:view",
+          "payments:manage"
+        ],
+        "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -13828,7 +14067,29 @@
       "sideEffects": [],
       "testCandidates": [],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "paymentCoreMethods": [
+        {
+          "method": "listProductionCertifications",
+          "permission": "payments:view",
+          "storeFunctions": [
+            "listPaymentProductionCertifications"
+          ]
+        },
+        {
+          "method": "certifyProductionReadiness",
+          "permission": "payments:manage",
+          "storeFunctions": [
+            "listPaymentProviderCapabilityEvidence",
+            "recordPaymentProductionCertification"
+          ]
+        }
+      ],
+      "delegatedStoreFunctions": [
+        "listPaymentProductionCertifications",
+        "listPaymentProviderCapabilityEvidence",
+        "recordPaymentProductionCertification"
+      ]
     },
     {
       "method": "POST",
@@ -13839,12 +14100,21 @@
       "handler": "handlePaymentProductionCertification",
       "handlerSourceLine": 2452,
       "domainGroup": "Payments",
-      "classification": "needs-review",
+      "classification": "domain capability",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "PaymentCore.#authorize",
+            "permission": "payments:view OR payments:manage",
+            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+          }
+        ],
+        "permissionKeys": [
+          "payments:view",
+          "payments:manage"
+        ],
+        "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -13872,7 +14142,29 @@
       "sideEffects": [],
       "testCandidates": [],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "paymentCoreMethods": [
+        {
+          "method": "listProductionCertifications",
+          "permission": "payments:view",
+          "storeFunctions": [
+            "listPaymentProductionCertifications"
+          ]
+        },
+        {
+          "method": "certifyProductionReadiness",
+          "permission": "payments:manage",
+          "storeFunctions": [
+            "listPaymentProviderCapabilityEvidence",
+            "recordPaymentProductionCertification"
+          ]
+        }
+      ],
+      "delegatedStoreFunctions": [
+        "listPaymentProductionCertifications",
+        "listPaymentProviderCapabilityEvidence",
+        "recordPaymentProductionCertification"
+      ]
     },
     {
       "method": "GET",
@@ -13883,12 +14175,21 @@
       "handler": "handlePaymentOperationalActions",
       "handlerSourceLine": 2483,
       "domainGroup": "Payments",
-      "classification": "needs-review",
+      "classification": "domain capability",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "PaymentCore.#authorize",
+            "permission": "payments:view OR payments:manage",
+            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+          }
+        ],
+        "permissionKeys": [
+          "payments:view",
+          "payments:manage"
+        ],
+        "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -13918,7 +14219,27 @@
         "phase0/gap-1.17-payment-operations-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "paymentCoreMethods": [
+        {
+          "method": "listOperationalActions",
+          "permission": "payments:view",
+          "storeFunctions": [
+            "listPaymentOperationalActions"
+          ]
+        },
+        {
+          "method": "recordOperationalAction",
+          "permission": "dynamic permission",
+          "storeFunctions": [
+            "createPaymentOperationalAction"
+          ]
+        }
+      ],
+      "delegatedStoreFunctions": [
+        "listPaymentOperationalActions",
+        "createPaymentOperationalAction"
+      ]
     },
     {
       "method": "POST",
@@ -13929,12 +14250,21 @@
       "handler": "handlePaymentOperationalActions",
       "handlerSourceLine": 2483,
       "domainGroup": "Payments",
-      "classification": "needs-review",
+      "classification": "domain capability",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "PaymentCore.#authorize",
+            "permission": "payments:view OR payments:manage",
+            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+          }
+        ],
+        "permissionKeys": [
+          "payments:view",
+          "payments:manage"
+        ],
+        "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -13964,7 +14294,27 @@
         "phase0/gap-1.17-payment-operations-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "paymentCoreMethods": [
+        {
+          "method": "listOperationalActions",
+          "permission": "payments:view",
+          "storeFunctions": [
+            "listPaymentOperationalActions"
+          ]
+        },
+        {
+          "method": "recordOperationalAction",
+          "permission": "dynamic permission",
+          "storeFunctions": [
+            "createPaymentOperationalAction"
+          ]
+        }
+      ],
+      "delegatedStoreFunctions": [
+        "listPaymentOperationalActions",
+        "createPaymentOperationalAction"
+      ]
     },
     {
       "method": "POST",
@@ -13975,12 +14325,20 @@
       "handler": "handlePaymentOperationalRetry",
       "handlerSourceLine": 2490,
       "domainGroup": "Payments",
-      "classification": "needs-review",
+      "classification": "domain capability",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "PaymentCore.#authorize",
+            "permission": "payments:manage",
+            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+          }
+        ],
+        "permissionKeys": [
+          "payments:manage"
+        ],
+        "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -14010,7 +14368,21 @@
         "phase0/gap-1.23-migration-retry-runtime-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "paymentCoreMethods": [
+        {
+          "method": "retryOperationalAction",
+          "permission": "payments:manage",
+          "storeFunctions": [
+            "createPaymentOperationalAction",
+            "updatePaymentOperationalAction"
+          ]
+        }
+      ],
+      "delegatedStoreFunctions": [
+        "createPaymentOperationalAction",
+        "updatePaymentOperationalAction"
+      ]
     },
     {
       "method": "POST",
@@ -14021,12 +14393,20 @@
       "handler": "handlePaymentManualReview",
       "handlerSourceLine": 2495,
       "domainGroup": "Payments",
-      "classification": "needs-review",
+      "classification": "domain capability",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "PaymentCore.#authorize",
+            "permission": "payments:manage",
+            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+          }
+        ],
+        "permissionKeys": [
+          "payments:manage"
+        ],
+        "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -14055,7 +14435,19 @@
         "phase0/gap-1.17-payment-operations-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "paymentCoreMethods": [
+        {
+          "method": "resolveManualReview",
+          "permission": "payments:manage",
+          "storeFunctions": [
+            "updatePaymentOperationalAction"
+          ]
+        }
+      ],
+      "delegatedStoreFunctions": [
+        "updatePaymentOperationalAction"
+      ]
     },
     {
       "method": "POST",
@@ -14066,12 +14458,20 @@
       "handler": "handlePaymentSettlement",
       "handlerSourceLine": 2501,
       "domainGroup": "Payments",
-      "classification": "needs-review",
+      "classification": "domain capability",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "PaymentCore.#authorize",
+            "permission": "payments:settlement:allocate",
+            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+          }
+        ],
+        "permissionKeys": [
+          "payments:settlement:allocate"
+        ],
+        "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -14102,7 +14502,23 @@
         "phase0/phase17.9-procurement-settlement-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "paymentCoreMethods": [
+        {
+          "method": "createSettlement",
+          "permission": "payments:settlement:allocate",
+          "storeFunctions": [
+            "getPaymentSettlementByIdempotencyKey",
+            "getPayment",
+            "createPaymentSettlement"
+          ]
+        }
+      ],
+      "delegatedStoreFunctions": [
+        "getPaymentSettlementByIdempotencyKey",
+        "getPayment",
+        "createPaymentSettlement"
+      ]
     },
     {
       "method": "POST",
@@ -14171,7 +14587,7 @@
       "authorization": {
         "calls": [],
         "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "serverPolicy": "GAP: handler requires a tenant session only. It bypasses requireAuthorization and PaymentCore.#authorize; upsertPaymentRoutingPolicy does not authorize actor."
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -14193,7 +14609,6 @@
       "idempotency": "no explicit idempotency signal found",
       "transactionBoundary": "delegated to store functions; see SQLite dependency map",
       "storeFunctions": [
-        "getTenant",
         "listPaymentRoutingPolicies",
         "upsertPaymentRoutingPolicy"
       ],
@@ -14204,7 +14619,18 @@
         "phase0/gap-1.16-payment-routing-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed; confirmed missing route permission enforcement",
+      "securityFindings": [
+        {
+          "severity": "medium",
+          "finding": "Authenticated tenant member can read provider routing configuration without the payments:view permission used by the explicit routing endpoint.",
+          "evidence": [
+            "backend/server.js handler calls requireSession but no requireAuthorization for GET",
+            "GET lists active tenant-scoped policies"
+          ],
+          "testGap": "No dedicated route-level authorization regression found."
+        }
+      ]
     },
     {
       "method": "POST",
@@ -14220,7 +14646,7 @@
       "authorization": {
         "calls": [],
         "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "serverPolicy": "GAP: handler requires a tenant session only. It bypasses requireAuthorization and PaymentCore.#authorize; upsertPaymentRoutingPolicy does not authorize actor."
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -14242,7 +14668,6 @@
       "idempotency": "no explicit idempotency signal found",
       "transactionBoundary": "delegated to store functions; see SQLite dependency map",
       "storeFunctions": [
-        "getTenant",
         "listPaymentRoutingPolicies",
         "upsertPaymentRoutingPolicy"
       ],
@@ -14253,7 +14678,19 @@
         "phase0/gap-1.16-payment-routing-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed; confirmed missing route permission enforcement",
+      "securityFindings": [
+        {
+          "severity": "high",
+          "finding": "Authenticated tenant member can change payment provider routing policies without a permission check.",
+          "evidence": [
+            "backend/server.js handlePaymentRoutingPolicies only calls requireSession",
+            "backend/lib/store-sqlite.js upsertPaymentRoutingPolicy validates tenant and payload but does not authorize actor",
+            "PaymentCore exposes central payments:route/management permissions but this handler bypasses PaymentCore"
+          ],
+          "testGap": "No dedicated route-level authorization regression found; existing routing regression covers routing/core behavior rather than this HTTP permission boundary."
+        }
+      ]
     },
     {
       "method": "POST",
@@ -14264,12 +14701,20 @@
       "handler": "handlePaymentSettlementFinalize",
       "handlerSourceLine": 2511,
       "domainGroup": "Payments",
-      "classification": "needs-review",
+      "classification": "domain capability",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "PaymentCore.#authorize",
+            "permission": "payments:settlement:allocate",
+            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+          }
+        ],
+        "permissionKeys": [
+          "payments:settlement:allocate"
+        ],
+        "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -14300,7 +14745,19 @@
         "phase0/phase17.9-procurement-settlement-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "paymentCoreMethods": [
+        {
+          "method": "finalizeSettlement",
+          "permission": "payments:settlement:allocate",
+          "storeFunctions": [
+            "finalizePaymentSettlement"
+          ]
+        }
+      ],
+      "delegatedStoreFunctions": [
+        "finalizePaymentSettlement"
+      ]
     },
     {
       "method": "GET",
@@ -14311,12 +14768,20 @@
       "handler": "handlePaymentSettlementHistory",
       "handlerSourceLine": 2521,
       "domainGroup": "Payments",
-      "classification": "needs-review",
+      "classification": "domain capability",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "PaymentCore.#authorize",
+            "permission": "payments:settlement:view",
+            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+          }
+        ],
+        "permissionKeys": [
+          "payments:settlement:view"
+        ],
+        "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -14347,7 +14812,19 @@
         "phase0/phase17.9-procurement-settlement-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "paymentCoreMethods": [
+        {
+          "method": "listSettlements",
+          "permission": "payments:settlement:view",
+          "storeFunctions": [
+            "listPaymentSettlements"
+          ]
+        }
+      ],
+      "delegatedStoreFunctions": [
+        "listPaymentSettlements"
+      ]
     },
     {
       "method": "GET",
@@ -14358,12 +14835,20 @@
       "handler": "handlePaymentRefundHistory",
       "handlerSourceLine": 2545,
       "domainGroup": "Payments",
-      "classification": "needs-review",
+      "classification": "domain capability",
       "authentication": "tenant-scoped session required",
       "authorization": {
-        "calls": [],
-        "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "calls": [
+          {
+            "helper": "PaymentCore.#authorize",
+            "permission": "payments:view",
+            "enforcement": "server injects authorize(actor, organizationId, locationId, 'payments', permission)"
+          }
+        ],
+        "permissionKeys": [
+          "payments:view"
+        ],
+        "serverPolicy": "central authorize() enforced inside PaymentCore"
       },
       "scope": {
         "tenant": "tenant identifier supplied in route and resolved by handler",
@@ -14392,7 +14877,19 @@
         "phase0/gap-1.14-payment-refund-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against PaymentCore methods and server authorization injection",
+      "paymentCoreMethods": [
+        {
+          "method": "listRefunds",
+          "permission": "payments:view",
+          "storeFunctions": [
+            "getPaymentRefunds"
+          ]
+        }
+      ],
+      "delegatedStoreFunctions": [
+        "getPaymentRefunds"
+      ]
     },
     {
       "method": "GET",
@@ -15929,12 +16426,12 @@
       "handler": "handleAdminBackup",
       "handlerSourceLine": 2869,
       "domainGroup": "Administration",
-      "classification": "needs-review",
-      "authentication": "no standard session helper detected; handler-specific authentication review required",
+      "classification": "infrastructure",
+      "authentication": "dedicated SELLIFY_BACKUP_TOKEN bearer secret checked with constant-time key comparison; no tenant session.",
       "authorization": {
         "calls": [],
         "permissionKeys": [],
-        "serverPolicy": "requireAuthorization delegates to central authorize(); permission literals are source signals, not UI controls"
+        "serverPolicy": "special credential/identity proof; no tenant-role permission"
       },
       "scope": {
         "tenant": "no tenant path; token/public identity/provider context",
@@ -15965,7 +16462,7 @@
         "phase0/database-backup-restore-regression.mjs"
       ],
       "testEvidence": "filename/domain candidate only; exact route assertion not yet proven",
-      "reviewStatus": "static handler scan; detailed manual request and regression assertion review remains"
+      "reviewStatus": "manually reviewed against handler; identity/secret boundary identified"
     },
     {
       "method": "GET",
@@ -16988,5 +17485,48 @@
       "testEvidence": "inline branch; exact regression linkage pending",
       "reviewStatus": "dispatch branch identified; branch-specific test assertions pending"
     }
-  ]
+  ],
+  "summary": {
+    "confirmedSecurityFindings": [
+      {
+        "method": "GET",
+        "path": "/tenants/:param/payments/routing/policies",
+        "severity": "medium",
+        "finding": "Authenticated tenant member can read provider routing configuration without the payments:view permission used by the explicit routing endpoint."
+      },
+      {
+        "method": "POST",
+        "path": "/tenants/:param/payments/routing/policies",
+        "severity": "high",
+        "finding": "Authenticated tenant member can change payment provider routing policies without a permission check."
+      }
+    ],
+    "manuallyReviewedHandlers": [
+      "handleTelegramAuth",
+      "handleLegacyMigration",
+      "handlePairDevice",
+      "handleAcceptInvite",
+      "handleAdminBackup",
+      "handleListInvites",
+      "handleListDevices",
+      "handleBusinessTemplateConfig",
+      "handleTenantPatch",
+      "handleServiceDeliveryAssessment",
+      "handlePaymentLifecycle",
+      "handlePaymentRefund",
+      "handlePaymentProviderCertification",
+      "handlePaymentProviderCapabilityProbe",
+      "handlePaymentProviderCapabilityEvidence",
+      "handlePaymentProductionCertification",
+      "handlePaymentOperationalActions",
+      "handlePaymentOperationalRetry",
+      "handlePaymentManualReview",
+      "handlePaymentSettlement",
+      "handlePaymentSettlementFinalize",
+      "handlePaymentSettlementHistory",
+      "handlePaymentRefundHistory"
+    ],
+    "manuallyReviewedHandlersCount": 23,
+    "authorizationGapCount": 2
+  }
 }
