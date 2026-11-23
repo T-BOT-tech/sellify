@@ -69,3 +69,12 @@ https://github.com/T-BOT-tech/sellify/actions/runs/45070742870
 Repository Security Checks #3364 also passed at this commit, and the inventory workflow #72 passed.
 
 A passing inventory workflow does not imply that the full CI, certification, or release gates passed.
+
+
+---
+
+## Current-main refresh (2026-11-23)
+
+The baseline above is preserved as historical evidence for the earlier audit branch and workflow run. The current source snapshot is `e216db18ade2a5ffa66aff9dc3096e207251a918` on `main`; the updated counts and source-level maps are in `docs/audit/wave0-baseline.md`, `docs/audit/route-characterization.md`, and `docs/audit/sqlite-dependency-map.md`.
+
+Current route counts remain 247 explicit entries plus six inline branches (253 total), 137 named handlers and zero duplicate route keys. The SQLite map now records 253 exported functions, 947 literal SQL statements, 110 unique tables, 286 foreign-key declarations, 206 index declarations and 85 migration guards. Migration guard source order is not monotonically ascending. The route and SQLite maps are static evidence, not runtime certification.
