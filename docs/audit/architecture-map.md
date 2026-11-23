@@ -20,7 +20,7 @@ app/src UI + channel adapters + experience contracts
 backend/server.js
   - HTTP/CORS/rate limiting
   - 247 explicit route-table entries
-  - 6 pre-dispatch inline/static entries
+  - 5 intentional inline/static handlers plus the separate `/health` infrastructure endpoint
   - 137 distinct named route handlers
         |
         +--> authentication/session resolution
