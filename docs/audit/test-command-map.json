@@ -9912,6 +9912,68 @@
     "Suite tags are keyword-based triage labels and overlap; they do not prove semantic coverage.",
     "310 root script names are not reachable from direct CI script references; this does not prove they are unused.",
     "Workflow command extraction records single-line run entries; multiline shell blocks are described separately in the workflow documentation.",
-    "Source-hash manifest pin list is a verified sample of 12 manifests, not an exhaustive count of all 189 .sha256 files."
-  ]
+    "Source-hash manifest pin list is a verified sample of 12 manifests, not an exhaustive count of all 189 .sha256 files.",
+    "Perplexity inventory workflow is a minimum-coverage/static count gate; generator deduplication weakens its duplicate checks and name/path groupings are not ownership proof.",
+    "The route authorization and legacy Supplier Network discovery gaps listed in auditEvidence require dedicated HTTP regressions; existing nearby core/store tests are not substitutes."
+  ],
+  "auditEvidence": {
+    "baselineCommit": "e216db18ade2a5ffa66aff9dc3096e207251a918",
+    "perplexityWorkflow": {
+      "name": "Perplexity audit inventory",
+      "path": ".github/workflows/perplexity-audit.yml",
+      "runId": 45254875666,
+      "headSha": "e216db18ade2a5ffa66aff9dc3096e207251a918",
+      "conclusion": "success",
+      "runtime": "Node 24",
+      "steps": [
+        "Route inventory regression",
+        "SQLite store inventory regression"
+      ],
+      "limitations": [
+        "Route inventory generator deduplicates method/pattern keys before the classification duplicate check.",
+        "SQLite store inventory generator deduplicates table names before its unique-name assertion; declarationCount and declarationLines retain repeated declarations.",
+        "Classification and proposed extraction slices are name/path heuristics, not canonical ownership or extraction approval.",
+        "Neither gate verifies route authorization, handler side effects, transaction atomicity, or table-to-domain ownership."
+      ]
+    },
+    "routeAuthorizationCoverageGaps": [
+      {
+        "route": "POST /sync/:chatId",
+        "risk": "session-authenticated order writes do not evaluate orders:create or sync:manual",
+        "existingTests": [
+          "order-sync-idempotency"
+        ],
+        "gap": "Existing idempotency coverage does not assert role authorization at the HTTP boundary."
+      },
+      {
+        "route": "GET /tenants/:chatId/payments/routing/policies",
+        "risk": "session-only policy read bypasses payments:view",
+        "existingTests": [
+          "gap-1.16-payment-routing-regression",
+          "gap-1.18AB-payment-security-boundary-regression"
+        ],
+        "gap": "Existing tests exercise PaymentCore or routing logic directly, not this HTTP route's read permission."
+      },
+      {
+        "route": "POST /tenants/:chatId/payments/routing/policies",
+        "risk": "session-only policy mutation bypasses payments:route",
+        "existingTests": [
+          "gap-1.16-payment-routing-regression",
+          "marketplace-order-payment-bootstrap-regression"
+        ],
+        "gap": "Existing tests exercise PaymentCore or direct store bootstrap, not this HTTP route's manage permission."
+      }
+    ],
+    "capacityDiscoveryCoverageGaps": [
+      {
+        "route": "GET/POST /tenants/:chatId/supplier-network/discovery",
+        "risk": "direct legacy quantity filter ignores unit, availability, period, validity, observation time and quality",
+        "existingTests": [
+          "phase18.10-supplier-network-discovery-regression",
+          "phase19.7-deterministic-matching-regression"
+        ],
+        "gap": "Phase 18.10 tests direct store quantity/capability behavior; Phase 19.7 tests bounded matcher behavior. Neither proves the direct HTTP route's unit/availability/temporal semantics."
+      }
+    ]
+  }
 }
