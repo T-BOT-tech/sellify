@@ -31,7 +31,7 @@
 ## Audit artifacts
 
 - `route-characterization.md` and `.json`: all 253 route/dispatch entries, handler/source locations, auth and permission evidence, scope signals, direct store dependencies, errors/idempotency signals, and known gaps.
-- `sqlite-dependency-map.md` and `.json`: 253 exported functions, SQL statements, table access, local call edges, transactions, schema relationships, indexes, migrations and cross-domain invariants.
+- `sqlite-dependency-map.md` and `.json`: 253 exported functions, 1,321 SQL API calls (1,318 literal + 3 dynamic), 110 tables, direct local call edges, transactions, schema relationships, indexes, migrations and cross-domain invariants; `sqlite-sql-statements.json` contains all 1,639 normalized statements.
 - `test-command-map.md` and `.json`: 482 scripts, duplicate command aliases, CI job invocations, source-hash manifests and additive wrapper proposal.
 - `capacity-scheduling-boundary.md`: current unified Discovery, legacy discovery, RFQ snapshot and request-only scheduling boundaries.
 
