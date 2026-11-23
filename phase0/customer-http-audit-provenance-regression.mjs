@@ -276,6 +276,69 @@ try {
   assert.notEqual(phoneIdentityB.json.customer.id, phoneIdentityA.json.customer.id,
     'same-name customers with distinct phone numbers must not be merged by the name-only fallback');
 
+  // Sparse customer.upsert payloads (such as those emitted by order sync)
+  // must not erase fields omitted from the event. Explicit empty values still
+  // clear the corresponding field.
+  const sparseCustomerId = `sparse-sync-customer-${suffix}`;
+  await store.upsertCustomer(tenant.chatId, {
+    id: sparseCustomerId,
+    name: 'Customer With Complete Details',
+    phone: '+251911000004',
+    email: 'preserve@example.test',
+    address: 'Preserved customer address',
+    taxId: 'ET-TAX-004',
+    notes: 'Preserved customer notes',
+    customerType: 'business',
+    status: 'inactive',
+    source: 'http-regression',
+  });
+  const sparseSyncEventId = `sparse-customer-event-${suffix}`;
+  const sparseSync = await request(`/events/${encodeURIComponent(tenant.chatId)}`, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ events: [{
+      eventId: sparseSyncEventId,
+      eventType: 'customer.upsert',
+      aggregateType: 'customer',
+      aggregateId: sparseCustomerId,
+      occurredAt: new Date().toISOString(),
+      payload: { id: sparseCustomerId, name: 'Customer Name Updated By Sparse Sync', source: 'order' },
+    }] }),
+  });
+  assert.equal(sparseSync.json.results?.[0]?.status, 'processed');
+  const sparseAfterUpdate = await store.getCustomer(tenant.chatId, sparseCustomerId);
+  assert.equal(sparseAfterUpdate.name, 'Customer Name Updated By Sparse Sync');
+  assert.equal(sparseAfterUpdate.phone, '+251911000004');
+  assert.equal(sparseAfterUpdate.email, 'preserve@example.test',
+    'sparse sync must preserve omitted email');
+  assert.equal(sparseAfterUpdate.address, 'Preserved customer address',
+    'sparse sync must preserve omitted address');
+  assert.equal(sparseAfterUpdate.taxId, 'ET-TAX-004',
+    'sparse sync must preserve omitted tax ID');
+  assert.equal(sparseAfterUpdate.notes, 'Preserved customer notes',
+    'sparse sync must preserve omitted notes');
+  assert.equal(sparseAfterUpdate.customerType, 'business');
+  assert.equal(sparseAfterUpdate.status, 'inactive');
+
+  const explicitClearEvent = await request(`/events/${encodeURIComponent(tenant.chatId)}`, {
+    method: 'POST',
+    headers: jsonAuth(ownerSession.token),
+    body: JSON.stringify({ events: [{
+      eventId: `sparse-customer-clear-event-${suffix}`,
+      eventType: 'customer.upsert',
+      aggregateType: 'customer',
+      aggregateId: sparseCustomerId,
+      occurredAt: new Date().toISOString(),
+      payload: { id: sparseCustomerId, name: 'Customer Name Updated By Sparse Sync', email: '', source: 'order' },
+    }] }),
+  });
+  assert.equal(explicitClearEvent.json.results?.[0]?.status, 'processed');
+  const sparseAfterClear = await store.getCustomer(tenant.chatId, sparseCustomerId);
+  assert.equal(sparseAfterClear.email, '',
+    'an explicitly supplied empty email must clear the stored value');
+  assert.equal(sparseAfterClear.address, 'Preserved customer address',
+    'clearing one field must not clear other omitted fields');
+
   const syncCustomerId = `sync-customer-${suffix}`;
   const syncEventId = `customer-sync-event-${suffix}`;
   const syncEvent = await request(`/events/${encodeURIComponent(tenant.chatId)}`, {
