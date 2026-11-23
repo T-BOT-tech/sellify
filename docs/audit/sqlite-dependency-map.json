@@ -17521,12 +17521,16 @@
         {
           "name": "audit_events_no_update",
           "table": "audit_events",
-          "sourceLine": 676
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 722,
+          "migrationVersion": 11
         },
         {
           "name": "audit_events_no_delete",
           "table": "audit_events",
-          "sourceLine": 676
+          "operation": "BEFORE DELETE",
+          "sourceLine": 728,
+          "migrationVersion": 11
         }
       ]
     },
@@ -17569,12 +17573,16 @@
         {
           "name": "trg_payment_ledger_no_update",
           "table": "payment_ledger_entries",
-          "sourceLine": 775
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 857,
+          "migrationVersion": 13
         },
         {
           "name": "trg_payment_ledger_no_delete",
           "table": "payment_ledger_entries",
-          "sourceLine": 775
+          "operation": "BEFORE DELETE",
+          "sourceLine": 860,
+          "migrationVersion": 13
         }
       ]
     },
@@ -17626,7 +17634,9 @@
         {
           "name": "trg_purchase_order_items_no_update_after_approval",
           "table": "purchase_order_items",
-          "sourceLine": 949
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 993,
+          "migrationVersion": 16
         }
       ]
     },
@@ -17664,12 +17674,16 @@
         {
           "name": "trg_ar_ledger_no_update",
           "table": "ar_ledger_entries",
-          "sourceLine": 1042
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 1099,
+          "migrationVersion": 18
         },
         {
           "name": "trg_ar_ledger_no_delete",
           "table": "ar_ledger_entries",
-          "sourceLine": 1042
+          "operation": "BEFORE DELETE",
+          "sourceLine": 1102,
+          "migrationVersion": 18
         }
       ]
     },
@@ -17737,18 +17751,24 @@
       "createdTriggers": [
         {
           "name": "procurement_demands_no_core_update_after_submit",
-          "table": "procureme",
-          "sourceLine": 1287
+          "table": "procurement_demands",
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 1341,
+          "migrationVersion": 21
         },
         {
           "name": "procurement_demand_items_no_update_after_submit",
           "table": "procurement_demand_items",
-          "sourceLine": 1287
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 1349,
+          "migrationVersion": 21
         },
         {
           "name": "procurement_demand_items_no_delete_after_submit",
           "table": "procurement_demand_items",
-          "sourceLine": 1287
+          "operation": "BEFORE DELETE",
+          "sourceLine": 1356,
+          "migrationVersion": 21
         }
       ]
     },
@@ -17793,22 +17813,30 @@
         {
           "name": "procurement_rfq_no_item_update_after_send",
           "table": "procurement_rfq_items",
-          "sourceLine": 1403
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 1498,
+          "migrationVersion": 23
         },
         {
           "name": "procurement_rfq_no_supplier_update_after_send",
           "table": "procurement_rfq_suppliers",
-          "sourceLine": 1403
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 1502,
+          "migrationVersion": 23
         },
         {
           "name": "procurement_rfq_response_items_no_update_after_submit",
           "table": "procurement_rfq_response_items",
-          "sourceLine": 1403
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 1506,
+          "migrationVersion": 23
         },
         {
           "name": "procurement_rfq_response_items_no_delete_after_submit",
           "table": "procurement_rfq_response_items",
-          "sourceLine": 1403
+          "operation": "BEFORE DELETE",
+          "sourceLine": 1510,
+          "migrationVersion": 23
         }
       ]
     },
@@ -17847,17 +17875,23 @@
         {
           "name": "procurement_award_lines_no_update_after_confirm",
           "table": "procurement_award_lines",
-          "sourceLine": 1585
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 1631,
+          "migrationVersion": 25
         },
         {
           "name": "procurement_award_lines_no_delete_after_confirm",
           "table": "procurement_award_lines",
-          "sourceLine": 1585
+          "operation": "BEFORE DELETE",
+          "sourceLine": 1635,
+          "migrationVersion": 25
         },
         {
           "name": "procurement_awards_no_core_update_after_confirm",
           "table": "procurement_awards",
-          "sourceLine": 1585
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 1639,
+          "migrationVersion": 25
         }
       ]
     },
@@ -17882,12 +17916,16 @@
         {
           "name": "trg_purchase_order_items_no_update_after_approval",
           "table": "purchase_order_items",
-          "sourceLine": 1655
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 1701,
+          "migrationVersion": 26
         },
         {
           "name": "purchase_orders_phase17_6_source_immutable",
           "table": "purchase_orders",
-          "sourceLine": 1655
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 1705,
+          "migrationVersion": 26
         }
       ]
     },
@@ -17908,17 +17946,23 @@
         {
           "name": "procurement_receipt_lines_no_update",
           "table": "procurement_receipt_lines",
-          "sourceLine": 1721
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 1755,
+          "migrationVersion": 27
         },
         {
           "name": "procurement_receipt_lines_no_delete_after_posted",
           "table": "procurement_receipt_lines",
-          "sourceLine": 1721
+          "operation": "BEFORE DELETE",
+          "sourceLine": 1758,
+          "migrationVersion": 27
         },
         {
           "name": "procurement_receipts_no_core_update_after_posted",
-          "table": "procurement_re",
-          "sourceLine": 1721
+          "table": "procurement_receipts",
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 1762,
+          "migrationVersion": 27
         }
       ]
     },
@@ -17938,8 +17982,10 @@
       "createdTriggers": [
         {
           "name": "payment_outbound_no_core_update_after_submit",
-          "table": "p",
-          "sourceLine": 1776
+          "table": "payment_outbound_intents",
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 1795,
+          "migrationVersion": 28
         }
       ]
     },
@@ -17961,17 +18007,23 @@
         {
           "name": "payment_procurement_settlement_allocations_no_update",
           "table": "payment_procurement_settlement_allocations",
-          "sourceLine": 1810
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 1841,
+          "migrationVersion": 29
         },
         {
           "name": "payment_procurement_settlement_allocations_no_delete",
           "table": "payment_procurement_settlement_allocations",
-          "sourceLine": 1810
+          "operation": "BEFORE DELETE",
+          "sourceLine": 1844,
+          "migrationVersion": 29
         },
         {
           "name": "payment_procurement_settlements_no_core_update_after_allocation",
           "table": "payment_procurement_settlements",
-          "sourceLine": 1810
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 1847,
+          "migrationVersion": 29
         }
       ]
     },
@@ -18062,12 +18114,16 @@
         {
           "name": "supplier_network_performance_observations_no_update",
           "table": "supplier_network_performance_observations",
-          "sourceLine": 2031
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 2052,
+          "migrationVersion": 37
         },
         {
           "name": "supplier_network_performance_observations_no_delete",
           "table": "supplier_network_performance_observations",
-          "sourceLine": 2031
+          "operation": "BEFORE DELETE",
+          "sourceLine": 2055,
+          "migrationVersion": 37
         }
       ]
     },
@@ -18088,12 +18144,16 @@
         {
           "name": "supplier_network_trust_evidence_no_update",
           "table": "supplier_network_trust_evidence",
-          "sourceLine": 2065
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 2088,
+          "migrationVersion": 38
         },
         {
           "name": "supplier_network_trust_evidence_no_delete",
           "table": "supplier_network_trust_evidence",
-          "sourceLine": 2065
+          "operation": "BEFORE DELETE",
+          "sourceLine": 2091,
+          "migrationVersion": 38
         }
       ]
     },
@@ -18269,17 +18329,23 @@
         {
           "name": "payment_evidence_no_update",
           "table": "payment_evidence",
-          "sourceLine": 2474
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 2475,
+          "migrationVersion": 65
         },
         {
           "name": "payment_verifications_no_update",
           "table": "payment_verifications",
-          "sourceLine": 2474
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 2481,
+          "migrationVersion": 65
         },
         {
           "name": "payment_decisions_no_update",
           "table": "payment_decisions",
-          "sourceLine": 2474
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 2487,
+          "migrationVersion": 65
         }
       ]
     },
@@ -18294,17 +18360,23 @@
         {
           "name": "payment_evidence_no_delete",
           "table": "payment_evidence",
-          "sourceLine": 2501
+          "operation": "BEFORE DELETE",
+          "sourceLine": 2502,
+          "migrationVersion": 66
         },
         {
           "name": "payment_verifications_no_delete",
           "table": "payment_verifications",
-          "sourceLine": 2501
+          "operation": "BEFORE DELETE",
+          "sourceLine": 2508,
+          "migrationVersion": 66
         },
         {
           "name": "payment_decisions_no_delete",
           "table": "payment_decisions",
-          "sourceLine": 2501
+          "operation": "BEFORE DELETE",
+          "sourceLine": 2514,
+          "migrationVersion": 66
         }
       ]
     },
@@ -18601,12 +18673,16 @@
         {
           "name": "trg_payment_ledger_no_update",
           "table": "payment_ledger_entries",
-          "sourceLine": 3029
+          "operation": "BEFORE UPDATE",
+          "sourceLine": 3097,
+          "migrationVersion": 48
         },
         {
           "name": "trg_payment_ledger_no_delete",
           "table": "payment_ledger_entries",
-          "sourceLine": 3029
+          "operation": "BEFORE DELETE",
+          "sourceLine": 3100,
+          "migrationVersion": 48
         }
       ]
     },
@@ -52074,268 +52150,268 @@
     {
       "name": "audit_events_no_update",
       "table": "audit_events",
-      "sourceLine": 676,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 722,
+      "migrationVersion": 11
     },
     {
       "name": "audit_events_no_delete",
       "table": "audit_events",
-      "sourceLine": 676,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE DELETE",
+      "sourceLine": 728,
+      "migrationVersion": 11
     },
     {
       "name": "trg_payment_ledger_no_update",
       "table": "payment_ledger_entries",
-      "sourceLine": 775,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 857,
+      "migrationVersion": 13
     },
     {
       "name": "trg_payment_ledger_no_delete",
       "table": "payment_ledger_entries",
-      "sourceLine": 775,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE DELETE",
+      "sourceLine": 860,
+      "migrationVersion": 13
     },
     {
       "name": "trg_purchase_order_items_no_update_after_approval",
       "table": "purchase_order_items",
-      "sourceLine": 949,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 993,
+      "migrationVersion": 16
     },
     {
       "name": "trg_ar_ledger_no_update",
       "table": "ar_ledger_entries",
-      "sourceLine": 1042,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 1099,
+      "migrationVersion": 18
     },
     {
       "name": "trg_ar_ledger_no_delete",
       "table": "ar_ledger_entries",
-      "sourceLine": 1042,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE DELETE",
+      "sourceLine": 1102,
+      "migrationVersion": 18
     },
     {
       "name": "procurement_demands_no_core_update_after_submit",
-      "table": "procureme",
-      "sourceLine": 1287,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "table": "procurement_demands",
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 1341,
+      "migrationVersion": 21
     },
     {
       "name": "procurement_demand_items_no_update_after_submit",
       "table": "procurement_demand_items",
-      "sourceLine": 1287,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 1349,
+      "migrationVersion": 21
     },
     {
       "name": "procurement_demand_items_no_delete_after_submit",
       "table": "procurement_demand_items",
-      "sourceLine": 1287,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE DELETE",
+      "sourceLine": 1356,
+      "migrationVersion": 21
     },
     {
       "name": "procurement_rfq_no_item_update_after_send",
       "table": "procurement_rfq_items",
-      "sourceLine": 1403,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 1498,
+      "migrationVersion": 23
     },
     {
       "name": "procurement_rfq_no_supplier_update_after_send",
       "table": "procurement_rfq_suppliers",
-      "sourceLine": 1403,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 1502,
+      "migrationVersion": 23
     },
     {
       "name": "procurement_rfq_response_items_no_update_after_submit",
       "table": "procurement_rfq_response_items",
-      "sourceLine": 1403,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 1506,
+      "migrationVersion": 23
     },
     {
       "name": "procurement_rfq_response_items_no_delete_after_submit",
       "table": "procurement_rfq_response_items",
-      "sourceLine": 1403,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE DELETE",
+      "sourceLine": 1510,
+      "migrationVersion": 23
     },
     {
       "name": "procurement_award_lines_no_update_after_confirm",
       "table": "procurement_award_lines",
-      "sourceLine": 1585,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 1631,
+      "migrationVersion": 25
     },
     {
       "name": "procurement_award_lines_no_delete_after_confirm",
       "table": "procurement_award_lines",
-      "sourceLine": 1585,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE DELETE",
+      "sourceLine": 1635,
+      "migrationVersion": 25
     },
     {
       "name": "procurement_awards_no_core_update_after_confirm",
       "table": "procurement_awards",
-      "sourceLine": 1585,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 1639,
+      "migrationVersion": 25
     },
     {
       "name": "trg_purchase_order_items_no_update_after_approval",
       "table": "purchase_order_items",
-      "sourceLine": 1655,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 1701,
+      "migrationVersion": 26
     },
     {
       "name": "purchase_orders_phase17_6_source_immutable",
       "table": "purchase_orders",
-      "sourceLine": 1655,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 1705,
+      "migrationVersion": 26
     },
     {
       "name": "procurement_receipt_lines_no_update",
       "table": "procurement_receipt_lines",
-      "sourceLine": 1721,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 1755,
+      "migrationVersion": 27
     },
     {
       "name": "procurement_receipt_lines_no_delete_after_posted",
       "table": "procurement_receipt_lines",
-      "sourceLine": 1721,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE DELETE",
+      "sourceLine": 1758,
+      "migrationVersion": 27
     },
     {
       "name": "procurement_receipts_no_core_update_after_posted",
-      "table": "procurement_re",
-      "sourceLine": 1721,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "table": "procurement_receipts",
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 1762,
+      "migrationVersion": 27
     },
     {
       "name": "payment_outbound_no_core_update_after_submit",
-      "table": "p",
-      "sourceLine": 1776,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "table": "payment_outbound_intents",
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 1795,
+      "migrationVersion": 28
     },
     {
       "name": "payment_procurement_settlement_allocations_no_update",
       "table": "payment_procurement_settlement_allocations",
-      "sourceLine": 1810,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 1841,
+      "migrationVersion": 29
     },
     {
       "name": "payment_procurement_settlement_allocations_no_delete",
       "table": "payment_procurement_settlement_allocations",
-      "sourceLine": 1810,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE DELETE",
+      "sourceLine": 1844,
+      "migrationVersion": 29
     },
     {
       "name": "payment_procurement_settlements_no_core_update_after_allocation",
       "table": "payment_procurement_settlements",
-      "sourceLine": 1810,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 1847,
+      "migrationVersion": 29
     },
     {
       "name": "supplier_network_performance_observations_no_update",
       "table": "supplier_network_performance_observations",
-      "sourceLine": 2031,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 2052,
+      "migrationVersion": 37
     },
     {
       "name": "supplier_network_performance_observations_no_delete",
       "table": "supplier_network_performance_observations",
-      "sourceLine": 2031,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE DELETE",
+      "sourceLine": 2055,
+      "migrationVersion": 37
     },
     {
       "name": "supplier_network_trust_evidence_no_update",
       "table": "supplier_network_trust_evidence",
-      "sourceLine": 2065,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 2088,
+      "migrationVersion": 38
     },
     {
       "name": "supplier_network_trust_evidence_no_delete",
       "table": "supplier_network_trust_evidence",
-      "sourceLine": 2065,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE DELETE",
+      "sourceLine": 2091,
+      "migrationVersion": 38
     },
     {
       "name": "payment_evidence_no_update",
       "table": "payment_evidence",
-      "sourceLine": 2474,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 2475,
+      "migrationVersion": 65
     },
     {
       "name": "payment_verifications_no_update",
       "table": "payment_verifications",
-      "sourceLine": 2474,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 2481,
+      "migrationVersion": 65
     },
     {
       "name": "payment_decisions_no_update",
       "table": "payment_decisions",
-      "sourceLine": 2474,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 2487,
+      "migrationVersion": 65
     },
     {
       "name": "payment_evidence_no_delete",
       "table": "payment_evidence",
-      "sourceLine": 2501,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE DELETE",
+      "sourceLine": 2502,
+      "migrationVersion": 66
     },
     {
       "name": "payment_verifications_no_delete",
       "table": "payment_verifications",
-      "sourceLine": 2501,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE DELETE",
+      "sourceLine": 2508,
+      "migrationVersion": 66
     },
     {
       "name": "payment_decisions_no_delete",
       "table": "payment_decisions",
-      "sourceLine": 2501,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE DELETE",
+      "sourceLine": 2514,
+      "migrationVersion": 66
     },
     {
       "name": "trg_payment_ledger_no_update",
       "table": "payment_ledger_entries",
-      "sourceLine": 3029,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE UPDATE",
+      "sourceLine": 3097,
+      "migrationVersion": 48
     },
     {
       "name": "trg_payment_ledger_no_delete",
       "table": "payment_ledger_entries",
-      "sourceLine": 3029,
-      "ownerFunction": "runMigrations",
-      "ownerKind": "internal helper (nearest declaration; approximate)"
+      "operation": "BEFORE DELETE",
+      "sourceLine": 3100,
+      "migrationVersion": 48
     }
   ],
   "tableDeclarationDuplicates": [
