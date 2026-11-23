@@ -5822,16 +5822,12 @@ export async function createReceivable(chatId, input = {}, actor = null) {
   const open = db.prepare(`SELECT COALESCE(SUM(outstanding_minor),0) AS outstanding FROM accounts_receivable WHERE organization_id = ? AND customer_id = ? AND status IN ('OPEN','PARTIAL','OVERDUE')`).get(organizationId, customerId);
   if (Number(open.outstanding) + amountMinor > Number(creditTerms.credit_limit_minor)) throw Object.assign(new Error('Receivable would exceed the customer credit limit'), { statusCode: 409, code: 'CREDIT_LIMIT_EXCEEDED' });
   const now = nowIso(); const id = crypto.randomUUID(); const dueAt = input.dueAt || input.due_at || addDaysIso(now, Number(creditTerms.payment_due_days));
-  db.exec('BEGIN IMMEDIATE');
-  try {
-    db.prepare(`INSERT INTO accounts_receivable (id, organization_id, location_id, customer_id, credit_terms_id, source_type, source_id, currency, amount_minor, outstanding_minor, due_at, status, notes, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?)`).run(
-      id, organizationId, locationId, customerId, creditTerms.id, sourceType, sourceId, currency, amountMinor, amountMinor, String(dueAt), String(input.notes || ''), actor?.userId || null, now, now
-    );
-    db.prepare(`INSERT INTO ar_ledger_entries (id, receivable_id, organization_id, entry_type, amount_minor, currency, from_status, to_status, payment_id, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, 'CHARGE', ?, ?, NULL, 'OPEN', NULL, ?, ?, ?, ?)`).run(
-      crypto.randomUUID(), id, organizationId, amountMinor, currency, actor?.userId || null, String(input.reason || ''), json({ sourceType, sourceId }), now
-    );
-    db.exec('COMMIT');
-  } catch (e) { db.exec('ROLLBACK'); throw e; }
+  db.prepare(`INSERT INTO accounts_receivable (id, organization_id, location_id, customer_id, credit_terms_id, source_type, source_id, currency, amount_minor, outstanding_minor, due_at, status, notes, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?)`).run(
+    id, organizationId, locationId, customerId, creditTerms.id, sourceType, sourceId, currency, amountMinor, amountMinor, String(dueAt), String(input.notes || ''), actor?.userId || null, now, now
+  );
+  db.prepare(`INSERT INTO ar_ledger_entries (id, receivable_id, organization_id, entry_type, amount_minor, currency, from_status, to_status, payment_id, actor_id, reason, metadata_json, created_at) VALUES (?, ?, ?, 'CHARGE', ?, ?, NULL, 'OPEN', NULL, ?, ?, ?, ?)`).run(
+    crypto.randomUUID(), id, organizationId, amountMinor, currency, actor?.userId || null, String(input.reason || ''), json({ sourceType, sourceId }), now
+  );
   audit(String(chatId), 'b2b.receivable.created', 'accounts_receivable', id, { sourceType, sourceId, customerId, amountMinor, currency, dueAt }, { organizationId, actorId: actor?.userId || null, reason: input.reason || '' });
   if (ownsTransaction) db.exec('COMMIT');
   return getReceivable(chatId, id);
