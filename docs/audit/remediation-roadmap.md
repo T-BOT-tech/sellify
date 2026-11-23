@@ -23,6 +23,10 @@ Related open PRs #306 and #298 contain proposed work but are stale relative to c
 
 ## P1 — close route, authorization and capacity evidence gaps
 
+| Item | Verified finding | Required outcome | Safe acceptance evidence |
+|---|---|---|---|
+| R1.8 Legacy Supplier Network discovery semantics | `GET/POST /tenants/:chatId/supplier-network/discovery` calls `discoverSupplierNetwork` directly, bypassing `discoverUnified`. The `minimumQuantity` filter compares raw numbers, excludes suppliers without a matching signal, and ignores unit, availability, period, validity, observation time and quality. The store only prefilters ACTIVE and buyer-visible signals; `UNAVAILABLE`/`ON_REQUEST` can still pass. | Define this route as an explicitly non-authoritative discovery hint or route it through the bounded Discovery matcher; apply consistent subject, unit, availability and temporal evidence semantics without creating a new capacity authority. | HTTP regression covers wrong unit, UNAVAILABLE/ON_REQUEST, expired validity, non-overlapping period, missing subject binding and no operational mutation. Preserve supplier visibility and authorization. |
+
 1. Complete manual method-by-method review of the 247 explicit routes, especially handlers reused across GET/POST/PATCH/DELETE. The route map records 166 method-conditional entries; do not treat a handler-wide permission list as applying to every method.
 2. Verify the seven public/token-scoped surfaces individually and retain only the documented public data or explicit bearer/challenge boundary.
 3. Inspect the 43 route entries without filename-based test candidates. Candidate filename matches elsewhere are not test coverage proof.
