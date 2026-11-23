@@ -360,6 +360,44 @@ try {
   assert.notEqual(phoneIdentityB.json.customer.id, phoneIdentityA.json.customer.id,
     'same-name customers with distinct phone numbers must not be merged by the name-only fallback');
 
+  // Inactive customers are not eligible for natural-key reuse. This keeps
+  // backend order/customer sync consistent with the local checkout lookup.
+  const inactivePhoneId = `inactive-phone-customer-${suffix}`;
+  await store.upsertCustomer(tenant.chatId, {
+    id: inactivePhoneId,
+    name: 'Inactive Phone Match Customer',
+    phone: '+251911000005',
+    status: 'inactive',
+    source: 'http-regression',
+  });
+  const activePhoneReplacement = await store.upsertCustomer(tenant.chatId, {
+    name: 'Replacement Phone Match Customer',
+    phone: '+251911000005',
+    source: 'order',
+  });
+  assert.notEqual(activePhoneReplacement.id, inactivePhoneId,
+    'phone natural-key matching must not reuse an inactive customer');
+  assert.equal(activePhoneReplacement.status, 'active');
+  assert.equal((await store.getCustomer(tenant.chatId, inactivePhoneId)).status, 'inactive',
+    'natural-key replacement must not reactivate or mutate the inactive customer');
+
+  const inactiveNameId = `inactive-name-customer-${suffix}`;
+  await store.upsertCustomer(tenant.chatId, {
+    id: inactiveNameId,
+    name: 'Inactive Name Only Match',
+    phone: '',
+    status: 'inactive',
+    source: 'http-regression',
+  });
+  const activeNameReplacement = await store.upsertCustomer(tenant.chatId, {
+    name: 'Inactive Name Only Match',
+    phone: '',
+    source: 'order',
+  });
+  assert.notEqual(activeNameReplacement.id, inactiveNameId,
+    'name-only natural-key matching must not reuse an inactive customer');
+  assert.equal(activeNameReplacement.status, 'active');
+
   // Sparse customer.upsert payloads (such as those emitted by order sync)
   // must not erase fields omitted from the event. Explicit empty values still
   // clear the corresponding field.
