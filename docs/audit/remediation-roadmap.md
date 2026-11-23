@@ -14,6 +14,9 @@ This roadmap is deliberately limited to evidence found in the route, SQLite, tes
 
 Related open PRs #306 and #298 contain proposed work but are stale relative to current main and are not merged. Do not merge them as-is. Replay/reconcile their intent on a branch from current main and preserve intervening changes.
 
+| R0.4 Payment routing-policy authorization | `GET` and `POST /tenants/:chatId/payments/routing/policies` require only a tenant session, then call the SQLite list/upsert functions directly. Those functions enforce tenant/organization lookup but not `payments:view` or `payments:route`; `PaymentCore.resolveRouting` checks `payments:route` but is bypassed by this HTTP handler. | Enforce read/manage permission at the server boundary and preserve tenant/location scope. | HTTP regression: unauthorized staff/buyer denied; cashier read allowed only under `payments:view`; manager/owner policy mutation allowed under `payments:route`; cross-tenant/location access denied. |
+| R0.5 Sync write authorization | `POST /sync/:chatId` requires a tenant session and calls `saveQueuedOrders`; that store function accepts no actor and performs no role-permission check. The role policy grants `orders:create` to cashier/manager roles but not generic staff; `sync:manual` is manager-scoped. | Make the intended sync-write role contract explicit and enforce it server-side before persisting orders/ensuring Payment state. | HTTP regression: staff without `orders:create` denied; permitted roles succeed; idempotent replay and offline queue semantics remain unchanged. |
+
 ## P1 — close route, authorization and capacity evidence gaps
 
 1. Complete manual method-by-method review of the 247 explicit routes, especially handlers reused across GET/POST/PATCH/DELETE. The route map records 166 method-conditional entries; do not treat a handler-wide permission list as applying to every method.
