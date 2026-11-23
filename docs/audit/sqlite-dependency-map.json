@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "sourceCommit": "15737ee0c83e057113baa3881638186542ed6999",
+  "sourceCommit": "07985fcc841e3f16fd5b6f4f46f1bb5101443085",
   "source": "backend/lib/store-sqlite.js",
-  "generatedFrom": "Static lexical source analysis; SQL execution paths and ownership not inferred. Source metadata advanced to current main; authentication persistence characterization is in companion Markdown.",
+  "generatedFrom": "Static lexical inventory counts remain anchored to the original 07985fcc baseline; selected function dependencies and transaction boundaries were manually re-characterized against current main 15737ee0c83e057113baa3881638186542ed6999.",
   "counts": {
     "exportedFunctions": 253,
     "uniqueTables": 110,
@@ -1747,15 +1747,14 @@
           "audit_events"
         ]
       },
-      "callGraph": [
-        "tenantOrganizationId",
-        "assertBusinessCustomer",
-        "assertCatalogProductForOrganization",
-        "audit",
-        "getCustomerPricing"
-      ],
-      "transactionBoundary": "No explicit transaction around pricing upsert and audit append in inspected function.",
-      "proposedOwnership": "Customer/B2B Pricing boundary candidate; canonical ownership still to be cross-checked against domain contracts.",
+      "callGraph": {
+        "directExportedFunctionCalls": [
+          "getCustomerPricing"
+        ],
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "PR #305 transaction wraps canonical-key upsert and audit; returns persisted row by organization/customer/product key",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
       "invariants": [
         "Customer must be a business customer in the same organization.",
         "Product must belong to tenant chatId and organization.",
@@ -1765,19 +1764,20 @@
         "Defect candidate: on unique-key conflict with generated ID, conflict preserves existing row ID but follow-up lookup uses new generated ID and can return null."
       ],
       "staticSqlScan": {
-        "reads": [],
+        "reads": [
+          "tenants",
+          "customers",
+          "catalog_products"
+        ],
         "writes": [
-          "customer_pricing_rules"
+          "customer_pricing_rules",
+          "audit_events"
         ],
         "directExportedFunctionCalls": [
           "getCustomerPricing"
         ],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
@@ -1795,31 +1795,35 @@
           "audit_events"
         ]
       },
-      "callGraph": [
-        "getCustomerPricing",
-        "upsertCustomerPricing",
-        "assertBusinessCustomer",
-        "assertCatalogProductForOrganization",
-        "audit"
-      ],
-      "transactionBoundary": "Read/upsert/audit path has no explicit transaction wrapper in inspected functions.",
-      "proposedOwnership": "Customer/B2B Pricing boundary candidate; canonical ownership still to be cross-checked against domain contracts.",
-      "invariants": [
-        "Existing pricing row is fetched within organization before update; customer and product validation is repeated by upsert."
-      ],
-      "staticSqlScan": {
-        "reads": [],
-        "writes": [],
+      "callGraph": {
         "directExportedFunctionCalls": [
           "getCustomerPricing",
           "upsertCustomerPricing"
         ],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "reads existing rule then delegates to atomic canonical upsert",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
+      "invariants": [
+        "Existing pricing row is fetched within organization before update; customer and product validation is repeated by upsert."
+      ],
+      "staticSqlScan": {
+        "reads": [
+          "tenants",
+          "customer_pricing_rules",
+          "customers",
+          "catalog_products"
+        ],
+        "writes": [
+          "customer_pricing_rules",
+          "audit_events"
+        ],
+        "directExportedFunctionCalls": [
+          "getCustomerPricing",
+          "upsertCustomerPricing"
+        ],
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
@@ -3006,22 +3010,26 @@
     {
       "name": "getTenantByApiKey",
       "line": 7275,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
+      "sqlReadWriteDependencies": {
+        "reads": [
+          "tenants"
+        ],
+        "writes": []
+      },
+      "callGraph": {
+        "directExportedFunctionCalls": [],
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "read-only legacy tenant lookup",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
       "staticSqlScan": {
         "reads": [
           "tenants"
         ],
         "writes": [],
         "directExportedFunctionCalls": [],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
@@ -3202,14 +3210,12 @@
           "audit_events"
         ]
       },
-      "callGraph": [
-        "upsertCustomerSync",
-        "getTenantByChatId",
-        "findCustomerByNaturalKey",
-        "audit"
-      ],
-      "transactionBoundary": "No explicit transaction around customer mutation and audit append in inspected path.",
-      "proposedOwnership": "Customer/B2B Pricing boundary candidate; canonical ownership still to be cross-checked against domain contracts.",
+      "callGraph": {
+        "directExportedFunctionCalls": [],
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "PR #304 transaction wraps standalone customer mutation and audit; caller-owned transaction preserved",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
       "invariants": [
         "Tenant chatId resolves organizationId.",
         "Optional default_location_id must belong to same organization.",
@@ -3218,15 +3224,18 @@
         "Explicit customer ID collision across organizations is rejected."
       ],
       "staticSqlScan": {
-        "reads": [],
-        "writes": [],
+        "reads": [
+          "tenants",
+          "customers",
+          "locations"
+        ],
+        "writes": [
+          "customers",
+          "audit_events"
+        ],
         "directExportedFunctionCalls": [],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
@@ -3243,31 +3252,35 @@
           "audit_events"
         ]
       },
-      "callGraph": [
-        "getCustomer",
-        "upsertCustomer",
-        "upsertCustomerSync",
-        "audit"
-      ],
-      "transactionBoundary": "Read/merge/write/audit path has no explicit transaction wrapper in inspected functions.",
-      "proposedOwnership": "Customer/B2B Pricing boundary candidate; canonical ownership still to be cross-checked against domain contracts.",
+      "callGraph": {
+        "directExportedFunctionCalls": [
+          "getCustomer",
+          "upsertCustomer"
+        ],
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "read/merge/upsert; atomicity delegated to upsertCustomer and caller-owned transaction",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
       "invariants": [
         "PATCH aliases are applied only when canonical key is absent.",
         "Existing customer is loaded within the organization before merge."
       ],
       "staticSqlScan": {
-        "reads": [],
-        "writes": [],
+        "reads": [
+          "tenants",
+          "customers",
+          "locations"
+        ],
+        "writes": [
+          "customers",
+          "audit_events"
+        ],
         "directExportedFunctionCalls": [
           "getCustomer",
           "upsertCustomer"
         ],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
@@ -5268,10 +5281,19 @@
     {
       "name": "listUserMemberships",
       "line": 13268,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
+      "sqlReadWriteDependencies": {
+        "reads": [
+          "memberships",
+          "tenants"
+        ],
+        "writes": []
+      },
+      "callGraph": {
+        "directExportedFunctionCalls": [],
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "read-only active membership query",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
       "staticSqlScan": {
         "reads": [
           "memberships",
@@ -5279,87 +5301,117 @@
         ],
         "writes": [],
         "directExportedFunctionCalls": [],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
       "name": "assignMembershipContextualRole",
       "line": 13336,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
-      "staticSqlScan": {
+      "sqlReadWriteDependencies": {
         "reads": [
+          "tenants",
           "locations",
-          "membership_roles",
-          "memberships",
           "service_resources",
-          "tenants"
+          "memberships",
+          "membership_roles",
+          "pack_lifecycle"
         ],
         "writes": [
-          "membership_roles"
+          "membership_roles",
+          "audit_events"
+        ]
+      },
+      "callGraph": {
+        "directExportedFunctionCalls": [],
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "scope and service-provider constraints; no explicit transaction",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
+      "staticSqlScan": {
+        "reads": [
+          "tenants",
+          "locations",
+          "service_resources",
+          "memberships",
+          "membership_roles",
+          "pack_lifecycle"
+        ],
+        "writes": [
+          "membership_roles",
+          "audit_events"
         ],
         "directExportedFunctionCalls": [],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
       "name": "revokeMembershipContextualRole",
       "line": 13429,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
-      "staticSqlScan": {
+      "sqlReadWriteDependencies": {
         "reads": [
-          "membership_roles",
-          "memberships"
-        ],
-        "writes": [
+          "memberships",
           "membership_roles"
         ],
+        "writes": [
+          "membership_roles",
+          "audit_events"
+        ]
+      },
+      "callGraph": {
         "directExportedFunctionCalls": [],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "owner/manager and membership checks; no explicit transaction",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
+      "staticSqlScan": {
+        "reads": [
+          "memberships",
+          "membership_roles"
+        ],
+        "writes": [
+          "membership_roles",
+          "audit_events"
+        ],
+        "directExportedFunctionCalls": [],
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
       "name": "changeMembershipRole",
       "line": 13490,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
-      "staticSqlScan": {
+      "sqlReadWriteDependencies": {
         "reads": [
-          "memberships"
+          "memberships",
+          "membership_roles"
         ],
         "writes": [
+          "memberships",
           "membership_roles",
-          "memberships"
+          "audit_events"
+        ]
+      },
+      "callGraph": {
+        "directExportedFunctionCalls": [],
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "role hierarchy/self-change/last-owner invariants; no explicit transaction",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
+      "staticSqlScan": {
+        "reads": [
+          "memberships",
+          "membership_roles"
+        ],
+        "writes": [
+          "memberships",
+          "membership_roles",
+          "audit_events"
         ],
         "directExportedFunctionCalls": [],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
@@ -5410,57 +5462,81 @@
     {
       "name": "createSession",
       "line": 13629,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
-      "staticSqlScan": {
+      "sqlReadWriteDependencies": {
         "reads": [
+          "memberships",
+          "tenants",
           "locations",
           "membership_roles",
-          "memberships",
-          "pack_lifecycle",
-          "tenants"
+          "pack_lifecycle"
         ],
         "writes": [
+          "devices",
+          "sessions"
+        ]
+      },
+      "callGraph": {
+        "directExportedFunctionCalls": [],
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "no explicit transaction; membership checked before device/session inserts",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
+      "staticSqlScan": {
+        "reads": [
+          "memberships",
+          "tenants",
+          "locations",
+          "membership_roles",
+          "pack_lifecycle"
+        ],
+        "writes": [
+          "devices",
           "sessions"
         ],
         "directExportedFunctionCalls": [],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
       "name": "authenticateSessionToken",
       "line": 13664,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
-      "staticSqlScan": {
+      "sqlReadWriteDependencies": {
         "reads": [
+          "sessions",
           "devices",
+          "memberships",
+          "tenants",
           "locations",
           "membership_roles",
-          "memberships",
-          "pack_lifecycle",
+          "pack_lifecycle"
+        ],
+        "writes": [
+          "devices"
+        ]
+      },
+      "callGraph": {
+        "directExportedFunctionCalls": [],
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "validates token/device/membership/expiry; updates last_seen_at",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
+      "staticSqlScan": {
+        "reads": [
           "sessions",
-          "tenants"
+          "devices",
+          "memberships",
+          "tenants",
+          "locations",
+          "membership_roles",
+          "pack_lifecycle"
         ],
         "writes": [
           "devices"
         ],
         "directExportedFunctionCalls": [],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
@@ -5700,47 +5776,61 @@
     {
       "name": "revokeDevice",
       "line": 14108,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
-      "staticSqlScan": {
+      "sqlReadWriteDependencies": {
         "reads": [
-          "devices",
-          "memberships"
+          "memberships",
+          "devices"
         ],
         "writes": [
           "devices",
-          "sessions"
+          "sessions",
+          "audit_events"
+        ]
+      },
+      "callGraph": {
+        "directExportedFunctionCalls": [],
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "store repeats self-vs-other authorization; no explicit transaction",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
+      "staticSqlScan": {
+        "reads": [
+          "memberships",
+          "devices"
+        ],
+        "writes": [
+          "devices",
+          "sessions",
+          "audit_events"
         ],
         "directExportedFunctionCalls": [],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
       "name": "createAuthChallenge",
       "line": 14124,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
+      "sqlReadWriteDependencies": {
+        "reads": [],
+        "writes": [
+          "auth_challenges"
+        ]
+      },
+      "callGraph": {
+        "directExportedFunctionCalls": [],
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "single insert; no explicit transaction",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
       "staticSqlScan": {
         "reads": [],
         "writes": [
           "auth_challenges"
         ],
         "directExportedFunctionCalls": [],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
@@ -5768,10 +5858,20 @@
     {
       "name": "consumeAuthChallenge",
       "line": 14146,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
+      "sqlReadWriteDependencies": {
+        "reads": [
+          "auth_challenges"
+        ],
+        "writes": [
+          "auth_challenges"
+        ]
+      },
+      "callGraph": {
+        "directExportedFunctionCalls": [],
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "read then used_at update; no explicit transaction or conditional claim",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
       "staticSqlScan": {
         "reads": [
           "auth_challenges"
@@ -5780,82 +5880,111 @@
           "auth_challenges"
         ],
         "directExportedFunctionCalls": [],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
       "name": "createPairingChallenge",
       "line": 14155,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
+      "sqlReadWriteDependencies": {
+        "reads": [
+          "memberships"
+        ],
+        "writes": [
+          "pairing_challenges",
+          "audit_events"
+        ]
+      },
+      "callGraph": {
+        "directExportedFunctionCalls": [],
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "store owner/manager checks; challenge and audit not explicitly atomic",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
       "staticSqlScan": {
         "reads": [
           "memberships"
         ],
         "writes": [
-          "pairing_challenges"
+          "pairing_challenges",
+          "audit_events"
         ],
         "directExportedFunctionCalls": [],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
       "name": "consumePairingChallenge",
       "line": 14170,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
+      "sqlReadWriteDependencies": {
+        "reads": [
+          "pairing_challenges"
+        ],
+        "writes": [
+          "users",
+          "memberships",
+          "membership_roles",
+          "pairing_challenges",
+          "audit_events"
+        ]
+      },
+      "callGraph": {
+        "directExportedFunctionCalls": [
+          "ensureMembershipSync"
+        ],
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "explicit BEGIN IMMEDIATE/COMMIT/ROLLBACK around identity, membership, token use and audit",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
       "staticSqlScan": {
         "reads": [
           "pairing_challenges"
         ],
         "writes": [
+          "users",
+          "memberships",
+          "membership_roles",
           "pairing_challenges",
-          "users"
+          "audit_events"
         ],
-        "directExportedFunctionCalls": [],
-        "transactionTokens": {
-          "begin": 1,
-          "commit": 1,
-          "rollback": 1
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "directExportedFunctionCalls": [
+          "ensureMembershipSync"
+        ],
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
       "name": "createInvite",
       "line": 14198,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
+      "sqlReadWriteDependencies": {
+        "reads": [
+          "memberships"
+        ],
+        "writes": [
+          "invites",
+          "audit_events"
+        ]
+      },
+      "callGraph": {
+        "directExportedFunctionCalls": [],
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "store owner/manager checks; invite and audit not explicitly atomic",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
       "staticSqlScan": {
         "reads": [
           "memberships"
         ],
         "writes": [
-          "invites"
+          "invites",
+          "audit_events"
         ],
         "directExportedFunctionCalls": [],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
@@ -5883,51 +6012,75 @@
     {
       "name": "revokeInvite",
       "line": 14233,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
-      "staticSqlScan": {
+      "sqlReadWriteDependencies": {
         "reads": [
-          "invites",
-          "memberships"
-        ],
-        "writes": [
+          "memberships",
           "invites"
         ],
+        "writes": [
+          "invites",
+          "audit_events"
+        ]
+      },
+      "callGraph": {
         "directExportedFunctionCalls": [],
-        "transactionTokens": {
-          "begin": 0,
-          "commit": 0,
-          "rollback": 0
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "store repeats owner/manager and tenant checks; no explicit transaction",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
+      "staticSqlScan": {
+        "reads": [
+          "memberships",
+          "invites"
+        ],
+        "writes": [
+          "invites",
+          "audit_events"
+        ],
+        "directExportedFunctionCalls": [],
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
       "name": "consumeInvite",
       "line": 14252,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
-      "staticSqlScan": {
+      "sqlReadWriteDependencies": {
         "reads": [
-          "invites",
-          "memberships",
-          "tenants"
-        ],
-        "writes": [
           "invites",
           "memberships"
         ],
-        "directExportedFunctionCalls": [],
-        "transactionTokens": {
-          "begin": 1,
-          "commit": 1,
-          "rollback": 1
-        },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "writes": [
+          "memberships",
+          "membership_roles",
+          "invites",
+          "audit_events"
+        ]
+      },
+      "callGraph": {
+        "directExportedFunctionCalls": [
+          "ensureMembershipSync"
+        ],
+        "status": "manual direct-call characterization"
+      },
+      "transactionBoundary": "explicit transaction around membership grant/upgrade, invite consumption and audit",
+      "proposedOwnership": "existing identity/customer/pricing store authority; no extraction proposed",
+      "staticSqlScan": {
+        "reads": [
+          "invites",
+          "memberships"
+        ],
+        "writes": [
+          "memberships",
+          "membership_roles",
+          "invites",
+          "audit_events"
+        ],
+        "directExportedFunctionCalls": [
+          "ensureMembershipSync"
+        ],
+        "transactionTokens": {},
+        "method": "manual source inspection against current main; helper-mediated SQL and runtime paths may still require verification"
       }
     },
     {
@@ -10979,7 +11132,7 @@
     "Do not use this inventory to approve persistence extraction.",
     "Only the Customer and B2B Pricing function group has manually verified SQL read/write dependencies in this revision; remaining exported functions stay pending."
   ],
-  "characterizedFunctionCount": 19,
+  "characterizedFunctionCount": 20,
   "characterizationBatches": [
     {
       "name": "Customer and B2B Pricing persistence",
@@ -12738,5 +12891,6 @@
       "previousLine": 3170,
       "nextLine": 3202
     }
-  ]
+  ],
+  "characterizedAgainstCommit": "15737ee0c83e057113baa3881638186542ed6999"
 }
