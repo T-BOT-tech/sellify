@@ -16,7 +16,8 @@
     "crossDomainSqlEdges": 287,
     "safeReadCandidates": 74,
     "transactionFunctionCount": 64,
-    "sqlStatementSites": 1681
+    "sqlStatementSites": 1681,
+    "confirmedHighSeverityBoundaryFindings": 3
   },
   "functions": [
     {
@@ -28748,6 +28749,22 @@
         "locations"
       ],
       "invariant": "Identity, membership, contextual roles, sessions and device lifecycle form one tenant authorization boundary; never split enforcement across duplicate authorities."
+    },
+    {
+      "id": "payment-refund-settlement-audit",
+      "functions": [
+        "createPaymentSettlement",
+        "createPaymentRefundRequest",
+        "updatePaymentSettlementStatus",
+        "updatePaymentRefundResult"
+      ],
+      "tables": [
+        "payment_settlements",
+        "payment_refunds",
+        "payments",
+        "audit_events"
+      ],
+      "invariant": "Financial child records and audit provenance are one integrity boundary; preserve canonical child IDs and actor/organization lineage atomically."
     }
   ],
   "safeExtractionCandidates": [
@@ -51664,5 +51681,93 @@
       "internal helper (nearest declaration; approximate)": 731,
       "exported function source span": 950
     }
-  }
+  },
+  "confirmedBoundaryFindings": [
+    {
+      "id": "SQLITE-BOUNDARY-001",
+      "severity": "high",
+      "status": "confirmed on main",
+      "title": "Procurement receipt persistence and Inventory posting are not one atomic transaction",
+      "source": [
+        {
+          "file": "backend/lib/store-sqlite.js",
+          "line": 5579,
+          "detail": "createProcurementReceipt validates and persists a PENDING receipt and lines in BEGIN IMMEDIATE, then COMMITs."
+        },
+        {
+          "file": "backend/lib/store-sqlite.js",
+          "line": 5657,
+          "detail": "Each Inventory movement is appended sequentially after the receipt transaction has committed."
+        }
+      ],
+      "behavior": "If a later line fails, earlier Inventory movements may already be committed while the receipt remains PENDING; audit records inventory_pending. Deterministic per-line event IDs help retries avoid duplicate movements but do not make the whole multi-line receipt atomic.",
+      "invariant": "Receipt status, receipt lines and all canonical Inventory movement consequences must either commit together or remain safely retryable without partial stock posting.",
+      "relatedOpenWork": "PR #298 contains a proposed transaction/serialization fix but is not merged into this main baseline.",
+      "action": "Prioritize current-base transaction redesign and fail-after-first-line regression before persistence extraction."
+    },
+    {
+      "id": "SQLITE-BOUNDARY-002",
+      "severity": "high",
+      "status": "confirmed on main",
+      "title": "Payment refund and settlement audit calls use the wrong positional arguments",
+      "source": [
+        {
+          "file": "backend/lib/store-sqlite.js",
+          "line": 239,
+          "detail": "audit(chatId, action, entityType, entityId, metadata = {}, context = {})"
+        },
+        {
+          "file": "backend/lib/store-sqlite.js",
+          "line": 9834,
+          "detail": "Settlement requested event passes payment.id as entityType and actor user id as entityId."
+        },
+        {
+          "file": "backend/lib/store-sqlite.js",
+          "line": 9991,
+          "detail": "Refund requested event uses the same shifted argument order."
+        },
+        {
+          "file": "backend/lib/store-sqlite.js",
+          "line": 10031,
+          "detail": "Refund result event uses the same shifted argument order."
+        },
+        {
+          "file": "backend/lib/store-sqlite.js",
+          "line": 10082,
+          "detail": "Refund succeeded event uses the same shifted argument order."
+        },
+        {
+          "file": "backend/lib/store-sqlite.js",
+          "line": 12814,
+          "detail": "Marketplace cancellation refund path also uses the shifted argument order."
+        }
+      ],
+      "behavior": "Audit entity_type is populated with a payment ID, entity_id with the actor ID (or null), and the audit context is omitted; actor/device/location lineage is not correctly recorded for these events.",
+      "invariant": "Refund/settlement audit must identify canonical child entity type and child record ID, with actor and organization context in the audit context—not in entity ID.",
+      "relatedOpenWork": "PR #306 proposes the provenance correction and atomic audit handling but is not merged into this main baseline.",
+      "action": "Prioritize a current-base Payment audit provenance fix and regression assertions for entity_type, entity_id, actor, organization and lineage."
+    },
+    {
+      "id": "SQLITE-BOUNDARY-003",
+      "severity": "high",
+      "status": "confirmed on main",
+      "title": "Refund and settlement request rows are inserted before their audit event without a shared transaction",
+      "source": [
+        {
+          "file": "backend/lib/store-sqlite.js",
+          "line": 9772,
+          "detail": "createPaymentSettlement inserts payment_settlements and then calls audit without BEGIN/COMMIT around both."
+        },
+        {
+          "file": "backend/lib/store-sqlite.js",
+          "line": 9936,
+          "detail": "createPaymentRefundRequest inserts payment_refunds and then calls audit without a shared transaction."
+        }
+      ],
+      "behavior": "An audit-write failure can leave a refund/settlement request row persisted without its corresponding audit event.",
+      "invariant": "Financial request persistence and required audit evidence should commit or roll back together; caller-owned transaction behavior must be preserved.",
+      "relatedOpenWork": "PR #306 proposes atomic audit coupling; its stale branch must be replayed against current main before review.",
+      "action": "Test audit failure rollback for standalone refund and settlement creation."
+    }
+  ]
 }
