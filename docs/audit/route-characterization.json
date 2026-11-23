@@ -81453,13 +81453,36 @@
       "methodSpecificIdempotency": "Read-only; no command idempotency applies",
       "methodSpecificBranchEvidence": {
         "GET": {
-          "sourceLine": 2404,
-          "branch": "explicit req.method === 'GET' branch"
+          "sourceLine": 2401,
+          "branch": "explicit req.method === 'GET' branch",
+          "inputValidation": [
+            "channel query parameter",
+            "locationId query parameter"
+          ],
+          "permissionExpected": "payments:view",
+          "sideEffect": "read-only policy projection",
+          "testCoverage": "No focused HTTP authorization regression found; PaymentCore unit tests do not exercise this route."
         },
         "POST": {
-          "sourceLine": 2409,
-          "branch": "fallback branch after GET; POST is registered and handled by this path"
+          "sourceLine": 2410,
+          "branch": "fallback branch after GET; POST is registered and handled by this path",
+          "inputValidation": [
+            "JSON request body"
+          ],
+          "permissionExpected": "payments:route",
+          "sideEffect": "insert/update routing policy",
+          "testCoverage": "No focused HTTP authorization regression found; store bootstrap test calls upsertPaymentRoutingPolicy directly."
         }
+      },
+      "methodSpecificTransitiveStoreFunctions": [],
+      "methodSpecificErrorBehavior": {
+        "authentication": [
+          "401 invalid/expired session",
+          "403 session tenant mismatch"
+        ],
+        "tenantLookup": "404 unknown store",
+        "success": 200,
+        "dispatcher": "handler exception mapped to e.statusCode || 500"
       }
     },
     {
@@ -81785,13 +81808,38 @@
       "methodSpecificIdempotency": "Upsert by organization/channel/provider/location natural key; no request idempotency key",
       "methodSpecificBranchEvidence": {
         "GET": {
-          "sourceLine": 2404,
-          "branch": "explicit req.method === 'GET' branch"
+          "sourceLine": 2401,
+          "branch": "explicit req.method === 'GET' branch",
+          "inputValidation": [
+            "channel query parameter",
+            "locationId query parameter"
+          ],
+          "permissionExpected": "payments:view",
+          "sideEffect": "read-only policy projection",
+          "testCoverage": "No focused HTTP authorization regression found; PaymentCore unit tests do not exercise this route."
         },
         "POST": {
-          "sourceLine": 2409,
-          "branch": "fallback branch after GET; POST is registered and handled by this path"
+          "sourceLine": 2410,
+          "branch": "fallback branch after GET; POST is registered and handled by this path",
+          "inputValidation": [
+            "JSON request body"
+          ],
+          "permissionExpected": "payments:route",
+          "sideEffect": "insert/update routing policy",
+          "testCoverage": "No focused HTTP authorization regression found; store bootstrap test calls upsertPaymentRoutingPolicy directly."
         }
+      },
+      "methodSpecificTransitiveStoreFunctions": [
+        "listPaymentRoutingPolicies"
+      ],
+      "methodSpecificErrorBehavior": {
+        "authentication": [
+          "401 invalid/expired session",
+          "403 session tenant mismatch"
+        ],
+        "tenantLookup": "404 unknown store",
+        "success": 200,
+        "dispatcher": "handler exception mapped to e.statusCode || 500"
       }
     },
     {
