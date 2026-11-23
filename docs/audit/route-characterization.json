@@ -4180,17 +4180,17 @@
       "handlerFunction": "handleProcurementDemands",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "procurement:demand:view",
+        "tenantOrganizationLocationResourceScope": "Route chatId resolves tenant organization; list is constrained by organization_id; optional requester_id narrows requester",
+        "validation": "Optional status/requester_id/limit; store validates status and clamps limit to 1..500",
+        "errorBehavior": "404 unknown tenant; 401/403; 400 invalid status; 200 list",
+        "idempotency": "Read-only",
+        "transactionBoundary": "None",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,listProcurementDemands -> procurement_demands and procurement_demand_items",
+        "sideEffects": "Read-only projection",
+        "regressionCoverage": "phase17.1-procurement-demand-regression.mjs"
       }
     },
     {
@@ -4203,17 +4203,17 @@
       "handlerFunction": "handleProcurementDemands",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "procurement:demand:create",
+        "tenantOrganizationLocationResourceScope": "Tenant organization; store requires actor to be active member of that organization; optional delivery location must be active and same organization",
+        "validation": "At least one item; positive quantity; unit required; product item must resolve to tenant catalog product; description required without product; currency must match product; optional idempotency key max 200 chars",
+        "errorBehavior": "400 invalid payload; 401/403; 404 invalid location/product; 409 currency/idempotency/duplicate conflict; 201",
+        "idempotency": "Optional idempotency key plus request hash; same key/same payload returns existing demand; changed payload returns IDEMPOTENCY_KEY_REUSED",
+        "transactionBoundary": "BEGIN IMMEDIATE wraps demand header, items and audit event",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,createProcurementDemand -> tenantOrganizationId,assertProcurementActor,assertProcurementLocation,assertCatalogProductForOrganization,audit",
+        "sideEffects": "Creates DRAFT demand and item rows; audit procurement.demand.created",
+        "regressionCoverage": "phase17.1-procurement-demand-regression.mjs; phase17.1-procurement-demand-contract-regression.mjs"
       }
     },
     {
@@ -4226,17 +4226,17 @@
       "handlerFunction": "handleProcurementDemands",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "procurement:demand:view",
+        "tenantOrganizationLocationResourceScope": "Demand ID lookup constrained by tenant organization_id",
+        "validation": "Demand ID from route",
+        "errorBehavior": "404 unknown tenant/demand; 401/403; 200 demand",
+        "idempotency": "Read-only",
+        "transactionBoundary": "None",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,getProcurementDemand -> procurement_demands/items",
+        "sideEffects": "Read-only",
+        "regressionCoverage": "phase17.1-procurement-demand-regression.mjs"
       }
     },
     {
@@ -4249,17 +4249,17 @@
       "handlerFunction": "handleProcurementDemands",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "procurement:demand:manage",
+        "tenantOrganizationLocationResourceScope": "Demand ID constrained by tenant organization; actor must be active org member",
+        "validation": "Only DRAFT demands editable; normalized merged fields/items revalidated",
+        "errorBehavior": "404 demand; 401/403; 409 non-DRAFT; 400 invalid items/location/currency",
+        "idempotency": "No request idempotency key; version increments",
+        "transactionBoundary": "BEGIN IMMEDIATE wraps demand update, item delete/reinsert and audit",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,updateProcurementDemand -> tenantOrganizationId,assertProcurementActor,procurementDemandInput,assertProcurementLocation,audit",
+        "sideEffects": "Updates DRAFT demand and replaces item rows atomically with audit",
+        "regressionCoverage": "phase17.1-procurement-demand-regression.mjs"
       }
     },
     {
@@ -4272,17 +4272,17 @@
       "handlerFunction": "handleProcurementDemands",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "procurement:demand:cancel",
+        "tenantOrganizationLocationResourceScope": "Demand ID constrained by tenant organization; actor must be active org member",
+        "validation": "Target CANCELLED must be permitted from current demand state by PROCUREMENT_DEMAND_STATES",
+        "errorBehavior": "404 demand; 401/403; 400 invalid target; 409 illegal transition",
+        "idempotency": "No request idempotency key; state machine rejects illegal repeat",
+        "transactionBoundary": "BEGIN IMMEDIATE wraps status update and audit",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,transitionProcurementDemand",
+        "sideEffects": "Moves demand to CANCELLED and writes audit event",
+        "regressionCoverage": "phase17.1-procurement-demand-regression.mjs; phase17.1-procurement-demand-contract-regression.mjs"
       }
     },
     {
@@ -4295,17 +4295,17 @@
       "handlerFunction": "handleProcurementDemands",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "procurement:demand:sourcing",
+        "tenantOrganizationLocationResourceScope": "Demand ID constrained by tenant organization; actor must be active org member",
+        "validation": "Target SOURCING must be permitted from current state",
+        "errorBehavior": "404 demand; 401/403; 409 illegal transition",
+        "idempotency": "No request idempotency key; state machine governs repeat",
+        "transactionBoundary": "BEGIN IMMEDIATE wraps status update and audit",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,transitionProcurementDemand",
+        "sideEffects": "Moves demand to SOURCING and writes sourcing_started audit",
+        "regressionCoverage": "phase17.1-procurement-demand-regression.mjs; phase17.1-procurement-demand-contract-regression.mjs"
       }
     },
     {
@@ -4318,17 +4318,17 @@
       "handlerFunction": "handleProcurementDemands",
       "handlerResolution": "local declaration",
       "characterization": {
-        "status": "inventory-only",
-        "authentication": "not-yet-characterized",
-        "authorization": "not-yet-characterized",
-        "tenantOrganizationLocationResourceScope": "not-yet-characterized",
-        "validation": "not-yet-characterized",
-        "errorBehavior": "not-yet-characterized",
-        "idempotency": "not-yet-characterized",
-        "transactionBoundary": "not-yet-characterized",
-        "storeCalls": "not-yet-characterized",
-        "sideEffects": "not-yet-characterized",
-        "regressionCoverage": "not-yet-mapped"
+        "status": "characterized",
+        "authentication": "Tenant session",
+        "authorization": "procurement:demand:submit",
+        "tenantOrganizationLocationResourceScope": "Demand ID constrained by tenant organization; actor must be active org member",
+        "validation": "Target SUBMITTED must be permitted from current state",
+        "errorBehavior": "404 demand; 401/403; 409 illegal transition",
+        "idempotency": "No request idempotency key; state machine governs repeat",
+        "transactionBoundary": "BEGIN IMMEDIATE wraps status update and audit",
+        "storeCalls": "getTenant,requireSession,requireAuthorization,transitionProcurementDemand",
+        "sideEffects": "Moves demand to SUBMITTED and writes audit",
+        "regressionCoverage": "phase17.1-procurement-demand-regression.mjs; phase17.1-procurement-demand-contract-regression.mjs"
       }
     },
     {
@@ -6154,7 +6154,7 @@
     "Only the Customer and B2B Pricing route handlers are manually characterized in this revision; all other route records remain inventory-only.",
     "The six Telegram buyer storefront routes related to service bookings/fulfillment remain a separate channel-specific characterization batch."
   ],
-  "characterizedRouteCount": 63,
+  "characterizedRouteCount": 70,
   "characterizationBatches": [
     {
       "name": "Customer and B2B Pricing",
@@ -6234,9 +6234,23 @@
       ],
       "status": "handler-and-core-source-characterized",
       "note": "Reviewed backend/server.js handlers, production PaymentCore construction, PaymentCore permission checks, and selected existing regression source files. Regression files were not executed in this audit."
+    },
+    {
+      "name": "Procurement demand preparation and lifecycle routes",
+      "routes": [
+        "GET /tenants/:param/procurement/demands",
+        "POST /tenants/:param/procurement/demands",
+        "GET /tenants/:param/procurement/demands/:param",
+        "PATCH /tenants/:param/procurement/demands/:param",
+        "POST /tenants/:param/procurement/demands/:param/cancel",
+        "POST /tenants/:param/procurement/demands/:param/start-sourcing",
+        "POST /tenants/:param/procurement/demands/:param/submit"
+      ],
+      "status": "handler-and-store-source-characterized",
+      "note": "Reviewed handler permissions, store organization membership checks, input validation, state transitions, transaction and audit boundaries, and existing regression source. Tests not executed in this audit."
     }
   ],
-  "pendingRouteCount": 190,
+  "pendingRouteCount": 183,
   "fullyCharacterizedRouteCount": 41,
   "defectCandidateRouteCount": 4
 }
