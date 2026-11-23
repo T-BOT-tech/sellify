@@ -2,394 +2,396 @@
 
 - Source commit: `e216db18ade2a5ffa66aff9dc3096e207251a918`
 - Source: `backend/lib/store-sqlite.js`
-- Exported functions: **253**
-- Literal SQL statements in exported functions: **947**
-- Dynamic `db.prepare/db.exec` calls not captured as literal SQL: **3**
-- Unique tables: **110** (112 declarations)
-- Foreign-key declarations: **286** (280 deduplicated edges)
-- Index declarations: **206** (192 unique names)
+- Exported store functions: **253**
+- Literal SQL API call sites in the full file: **1321** (950 inside exported function bodies)
+- Split literal SQL statements: **1677**
+- Dynamic SQL call sites: **3**
+- Unique tables: **110** (112 table declarations)
+- Foreign-key declarations / deduplicated edges: **286 / 280**
+- Index declarations / unique names: **206 / 192**
 - Migration guards: **85**
 
 ## Method and limitations
 
-- Exported functions are parsed from source; each record includes source line, literal SQL statements, read/write table access, direct named local calls, and transaction markers.
-- The SQL statement scan sees literal `db.prepare()` and `db.exec()` arguments. Three dynamic call sites are listed separately; helper-generated SQL and indirect calls remain a manual-review limitation.
-- A direct call graph is not a complete runtime call graph. Callback references, imports from other modules, and dynamic dispatch are not inferred.
-- Transaction flags distinguish explicit local `BEGIN`/`COMMIT`/`ROLLBACK`, caller-owned transaction support, and serialized write slots. Absence of local markers is not proof of autocommit.
-- Logical table owners are provisional, based on schema shape, observed reads/writes, and existing domain contracts—not names alone.
+- Every literal `db.prepare()` / `db.exec()` call in the file is recorded in `sqlCalls`; each literal SQL block is split into individual statements in `sqlStatements` (including multiple DDL statements inside one `db.exec`).
+- Each statement records its operation, source line, SQL text, referenced tables, read/write/schema access and nearest function scope plus enclosing exported function.
+- Exported-function records include their statement/call counts, DML table reads/writes, direct named local calls and transaction markers.
+- Three dynamic SQL call sites remain separately identified; dynamic table names, arrow-function indirection and imported calls require manual review.
+- Transaction markers are syntactic evidence. Absence of a local `BEGIN` does not prove that a function is outside a caller-owned transaction.
+- Table owners are provisional, based on schema shape, observed DML and domain contracts—not names alone.
 
 ## Exported function dependency map
 
-| Exported function / line | Tables accessed | SQL operations | Direct local function calls | Transaction evidence |
-|---|---|---|---|---|
-| `transitionPackLifecycle` (L3646) | pack_lifecycle | SELECT, BEGIN, INSERT, UPDATE, COMMIT, ROLLBACK | assertProcurementActor, audit, ensureDatabase, nowIso, packLifecycleFromRow, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `getPackLifecycle` (L3727) | pack_lifecycle | SELECT | ensureDatabase | no explicit transaction boundary detected in function body |
-| `getTelegramStorefrontConfig` (L3769) | telegram_storefront_configs, tenants | SELECT | ensureDatabase, parseJSON | no explicit transaction boundary detected in function body |
-| `upsertTelegramStorefrontConfig` (L3789) | telegram_storefront_configs | BEGIN, UPDATE, INSERT, COMMIT, ROLLBACK | assertTelegramStorefrontTransition, audit, ensureDatabase, getTelegramStorefrontConfig, getTenant, json, nowIso | explicit local transaction with commit/rollback |
-| `verifyTelegramStorefront` (L3845) | telegram_storefront_configs | BEGIN, UPDATE, COMMIT, ROLLBACK | audit, ensureDatabase, getTelegramStorefrontConfig, getTenant, nowIso | explicit local transaction with commit/rollback |
-| `listSupplierNetworkQualifications` (L3880) | supplier_network_qualifications | SELECT | ensureDatabase, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getSupplierNetworkQualification` (L3881) | no literal SQL table found | none detected | ensureDatabase, supplierNetworkQualificationFromRow, supplierNetworkQualificationRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `upsertSupplierNetworkQualification` (L3882) | supplier_network_qualifications | BEGIN, UPDATE, INSERT, COMMIT, ROLLBACK, SELECT | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, json, normalizeSupplierNetworkQualificationInput, nowIso, supplierNetworkQualificationFromRow, supplierNetworkQualificationRow, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `transitionSupplierNetworkQualification` (L3883) | supplier_network_qualifications | UPDATE | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, nowIso, supplierNetworkQualificationFromRow, supplierNetworkQualificationRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listSupplierNetworkCommercialTerms` (L3891) | supplier_network_commercial_terms | SELECT | ensureDatabase, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getSupplierNetworkCommercialTerms` (L3892) | no literal SQL table found | none detected | ensureDatabase, supplierNetworkCommercialTermsFromRow, supplierNetworkCommercialTermsRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `upsertSupplierNetworkCommercialTerms` (L3893) | catalog_products, supplier_network_capabilities, supplier_network_commercial_terms | SELECT, BEGIN, UPDATE, INSERT, COMMIT, ROLLBACK | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, json, normalizeSupplierNetworkCommercialTermsInput, nowIso, supplierNetworkCommercialTermsFromRow, supplierNetworkCommercialTermsRow, supplierTenantForOrganization, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `transitionSupplierNetworkCommercialTerms` (L3894) | supplier_network_commercial_terms | UPDATE | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, nowIso, supplierNetworkCommercialTermsFromRow, supplierNetworkCommercialTermsRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listSupplierNetworkCapacities` (L3950) | supplier_network_capacity_signals | SELECT | ensureDatabase, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getSupplierNetworkCapacity` (L3951) | no literal SQL table found | none detected | ensureDatabase, supplierNetworkCapacityFromRow, supplierNetworkCapacityRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `upsertSupplierNetworkCapacity` (L3952) | supplier_network_capacity_signals | SELECT, BEGIN, UPDATE, INSERT, COMMIT, ROLLBACK | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, json, normalizeSupplierNetworkCapacityInput, nowIso, supplierNetworkCapacityFromRow, supplierNetworkCapacityRow, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `transitionSupplierNetworkCapacity` (L3996) | supplier_network_capacity_signals | UPDATE | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, nowIso, supplierNetworkCapacityFromRow, supplierNetworkCapacityRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listSupplierNetworkServiceAreas` (L3998) | supplier_network_service_areas | SELECT | ensureDatabase, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getSupplierNetworkServiceArea` (L3999) | no literal SQL table found | none detected | ensureDatabase, supplierNetworkServiceAreaFromRow, supplierNetworkServiceAreaRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `upsertSupplierNetworkServiceArea` (L4000) | supplier_network_service_areas | SELECT, BEGIN, UPDATE, INSERT, COMMIT, ROLLBACK | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, json, normalizeSupplierNetworkServiceAreaInput, nowIso, supplierNetworkServiceAreaFromRow, supplierNetworkServiceAreaRow, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `transitionSupplierNetworkServiceArea` (L4001) | supplier_network_service_areas | UPDATE | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, nowIso, supplierNetworkServiceAreaFromRow, supplierNetworkServiceAreaRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listSupplierNetworkCatalogListings` (L4010) | supplier_network_catalog_listings | SELECT | ensureDatabase, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getSupplierNetworkCatalogListing` (L4011) | no literal SQL table found | none detected | ensureDatabase, supplierNetworkCatalogFromRow, supplierNetworkCatalogRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `upsertSupplierNetworkCatalogListing` (L4012) | catalog_products, supplier_network_catalog_listings | SELECT, BEGIN, UPDATE, INSERT, COMMIT, ROLLBACK | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, json, normalizeSupplierNetworkCatalogInput, nowIso, supplierNetworkCatalogFromRow, supplierNetworkCatalogRow, supplierTenantForOrganization, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `transitionSupplierNetworkCatalogListing` (L4013) | supplier_network_catalog_listings | UPDATE | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, nowIso, supplierNetworkCatalogFromRow, supplierNetworkCatalogRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listSupplierNetworkCapabilities` (L4021) | supplier_network_capabilities | SELECT | ensureDatabase, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getSupplierNetworkCapability` (L4022) | no literal SQL table found | none detected | ensureDatabase, supplierNetworkCapabilityFromRow, supplierNetworkCapabilityRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `upsertSupplierNetworkCapability` (L4023) | supplier_network_capabilities | SELECT, BEGIN, UPDATE, INSERT, COMMIT, ROLLBACK | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, json, normalizeSupplierNetworkCapabilityInput, nowIso, supplierNetworkCapabilityFromRow, supplierNetworkCapabilityRow, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `transitionSupplierNetworkCapability` (L4024) | supplier_network_capabilities | UPDATE | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, nowIso, supplierNetworkCapabilityFromRow, supplierNetworkCapabilityRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getSupplierNetworkProfile` (L4036) | no literal SQL table found | none detected | ensureDatabase, supplierNetworkProfileFromRow, supplierNetworkProfileRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `upsertSupplierNetworkProfile` (L4037) | organizations, supplier_network_profiles | SELECT, BEGIN, INSERT, UPDATE, COMMIT, ROLLBACK | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, json, normalizeSupplierProfileInput, nowIso, supplierNetworkProfileFromRow, supplierNetworkProfileRow, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `transitionSupplierNetworkProfile` (L4038) | supplier_network_profiles | UPDATE | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, nowIso, supplierNetworkProfileFromRow, supplierNetworkProfileRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listPaymentOutboundIntents` (L4045) | payment_outbound_intents | SELECT | ensureDatabase, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getPaymentOutboundIntent` (L4046) | payment_outbound_intents | SELECT | ensureDatabase, paymentOutboundFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `createPaymentOutboundIntent` (L4047) | payment_outbound_intents, purchase_orders | SELECT, INSERT | audit, ensureDatabase, json, normaliseCurrency, nowIso, paymentOutboundFromRow, tenantCurrency, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `transitionPaymentOutboundIntent` (L4048) | payment_outbound_intents | SELECT, UPDATE | audit, ensureDatabase, nowIso, paymentOutboundFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `createProcurementPaymentIntent` (L4049) | purchase_orders | SELECT | createPaymentOutboundIntent, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getProcurementSettlement` (L4068) | payment_procurement_settlement_allocations, payment_procurement_settlements | SELECT | ensureDatabase, paymentProcurementSettlementFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listProcurementSettlements` (L4069) | payment_procurement_settlement_allocations, payment_procurement_settlements | SELECT | ensureDatabase, paymentProcurementSettlementFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listProcurementSettlementAllocations` (L4070) | payment_outbound_intents, payment_procurement_settlement_allocations, payment_procurement_settlements | SELECT | ensureDatabase, normaliseCurrency, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `allocateConfirmedOutboundPaymentToProcurementSettlement` (L4071) | payment_outbound_intents, payment_procurement_settlement_allocations, payment_procurement_settlements | SELECT, BEGIN, INSERT, UPDATE, COMMIT, ROLLBACK | audit, ensureDatabase, getOrCreateProcurementSettlement, getProcurementSettlement, normaliseCurrency, nowIso, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `createProcurementDemand` (L4248) | procurement_demand_items, procurement_demands | SELECT, BEGIN, INSERT, COMMIT, ROLLBACK | assertProcurementActor, assertProcurementLocation, audit, ensureDatabase, generateProcurementRequestNumber, getProcurementDemand, nowIso, procurementDemandHash, procurementDemandInput, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `getProcurementDemand` (L4292) | procurement_demand_items, procurement_demands | SELECT | ensureDatabase, procurementDemandFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listProcurementDemands` (L4301) | no literal SQL table found | none detected | ensureDatabase, procurementDemandRows, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `updateProcurementDemand` (L4314) | procurement_demand_items, procurement_demands | SELECT, BEGIN, UPDATE, DELETE, INSERT, COMMIT, ROLLBACK | assertProcurementActor, assertProcurementLocation, audit, ensureDatabase, getProcurementDemand, nowIso, procurementDemandHash, procurementDemandInput, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `transitionProcurementDemand` (L4349) | procurement_demands | SELECT, BEGIN, UPDATE, COMMIT, ROLLBACK | assertProcurementActor, audit, ensureDatabase, getProcurementDemand, nowIso, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `getProcurementSupplierParticipation` (L4379) | no literal SQL table found | none detected | ensureDatabase, supplierParticipantFromRow, supplierParticipantRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `setProcurementSupplierParticipation` (L4380) | procurement_supplier_participants | INSERT, UPDATE | assertSupplierMember, audit, ensureDatabase, getProcurementSupplierParticipation, nowIso, supplierParticipantRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `discoverProcurementSuppliers` (L4381) | organizations, procurement_supplier_participants | SELECT | assertSupplierMember, ensureDatabase, normaliseCurrency, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listProcurementSupplierRelationships` (L4382) | organizations, procurement_supplier_relationships | SELECT | assertSupplierMember, ensureDatabase, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `createProcurementSupplierRelationship` (L4383) | organizations, procurement_supplier_relationships | SELECT, INSERT | activeDiscoverableSupplier, assertSupplierMember, audit, ensureDatabase, nowIso, supplierRelationshipFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `transitionProcurementSupplierRelationship` (L4384) | organizations, procurement_supplier_relationships | SELECT, UPDATE | assertSupplierMember, audit, ensureDatabase, nowIso, supplierRelationshipFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `createProcurementRfq` (L4441) | procurement_demand_items, procurement_rfq_items, procurement_rfq_suppliers, procurement_rfqs | SELECT, BEGIN, INSERT, COMMIT, ROLLBACK | assertActiveSupplierRelationship, assertProcurementActor, audit, ensureDatabase, getProcurementDemand, json, nowIso, procurementCapacityEvidenceSnapshotForSupplier, procurementRfqHash, procurementRfqInput, rfqRows, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `listProcurementRfqs` (L4443) | procurement_rfqs | SELECT | assertProcurementActor, ensureDatabase, rfqRows, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `transitionProcurementRfq` (L4444) | procurement_rfq_suppliers, procurement_rfqs | SELECT, BEGIN, UPDATE, COMMIT, ROLLBACK | assertProcurementActor, audit, ensureDatabase, nowIso, rfqRows, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `createProcurementRfqResponse` (L4446) | organizations, procurement_rfq_items, procurement_rfq_response_items, procurement_rfq_responses, procurement_rfqs | SELECT, BEGIN, UPDATE, DELETE, INSERT, COMMIT, ROLLBACK | assertProcurementActor, assertRfqRecipient, audit, ensureDatabase, normaliseCurrency, nowIso, procurementRfqHash, procurementRfqResponseFromRow, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `transitionProcurementRfqResponse` (L4448) | organizations, procurement_rfq_response_items, procurement_rfq_responses, procurement_rfq_suppliers, procurement_rfqs | SELECT, BEGIN, UPDATE, COMMIT, ROLLBACK | assertProcurementActor, audit, ensureDatabase, nowIso, procurementRfqResponseFromRow, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `listSupplierNetworkTrustEvidence` (L4574) | supplier_network_trust_evidence | SELECT | assertProcurementActor, ensureDatabase, nowIso, supplierNetworkTrustCanAccessEvidence, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getSupplierNetworkTrustEvidence` (L4617) | supplier_network_trust_evidence | SELECT | assertProcurementActor, ensureDatabase, supplierNetworkTrustCanAccessEvidence, supplierNetworkTrustEvidenceFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `refreshSupplierNetworkTrustEvidence` (L4625) | procurement_supplier_participants, procurement_supplier_relationships, supplier_network_performance_observations, supplier_network_qualifications, supplier_network_trust_evidence | SELECT, BEGIN, INSERT, COMMIT, ROLLBACK | assertProcurementActor, audit, ensureDatabase, json, listSupplierNetworkTrustEvidence, nowIso, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `listSupplierNetworkPerformance` (L4659) | procurement_supplier_relationships, supplier_network_performance_observations | SELECT | assertProcurementActor, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getSupplierNetworkPerformance` (L4673) | procurement_supplier_relationships, supplier_network_performance_observations | SELECT | assertProcurementActor, supplierNetworkPerformanceFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `recalculateSupplierNetworkPerformance` (L4686) | procurement_receipt_lines, procurement_receipts, procurement_rfq_responses, procurement_rfq_suppliers, procurement_rfqs, procurement_supplier_participants, purchase_order_items, purchase_orders, supplier_network_performance_observations | SELECT, BEGIN, INSERT, COMMIT, ROLLBACK | assertProcurementActor, audit, json, listSupplierNetworkPerformance, nowIso, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `getSupplierNetworkMarketplaceIntegration` (L4739) | catalog_products, organizations, supplier_network_catalog_listings, supplier_network_profiles, tenants | SELECT | assertProcurementActor, audit, ensureDatabase, marketplaceIntegrationVisible, marketplacePresenceForOrganization, supplierParticipantRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `discoverSupplierNetwork` (L4741) | catalog_products, organizations, procurement_supplier_participants, procurement_supplier_relationships, supplier_network_capabilities, supplier_network_capacity_signals, supplier_network_catalog_listings, supplier_network_commercial_terms, supplier_network_profiles, supplier_network_qualifications, supplier_network_service_areas, supplier_network_trust_evidence, tenants | SELECT | assertProcurementActor, audit, ensureDatabase, marketplacePresenceForOrganization, normaliseCurrency, parseJSON, supplierNetworkDiscoveryVisible, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getProcurementComparison` (L4819) | no literal SQL table found | none detected | assertProcurementActor, comparisonRows, ensureDatabase, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listProcurementComparisons` (L4826) | procurement_comparisons | SELECT | assertProcurementActor, comparisonRows, ensureDatabase, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `createProcurementComparison` (L4838) | organizations, procurement_comparison_line_offers, procurement_comparison_suppliers, procurement_comparisons, procurement_rfq_items, procurement_rfq_response_items, procurement_rfq_responses, procurement_rfqs | SELECT, BEGIN, INSERT, COMMIT, ROLLBACK | assertProcurementActor, audit, comparisonLeadSort, comparisonRows, comparisonValiditySort, comparisonValidityTimestamp, ensureDatabase, normaliseCurrency, nowIso, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `getProcurementAward` (L4969) | no literal SQL table found | none detected | assertProcurementActor, ensureDatabase, getProcurementAwardById, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listProcurementAwards` (L4976) | procurement_awards | SELECT | assertProcurementActor, ensureDatabase, getProcurementAwardById, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `createProcurementAward` (L4994) | procurement_award_lines, procurement_awards, procurement_comparison_line_offers, procurement_comparisons, procurement_demands, procurement_rfq_items, procurement_rfq_responses, procurement_rfqs | SELECT, BEGIN, INSERT, COMMIT, ROLLBACK | assertProcurementActor, audit, ensureDatabase, getProcurementAwardById, normaliseCurrency, nowIso, procurementAwardHash, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `transitionProcurementAward` (L5053) | procurement_award_lines, procurement_awards, procurement_demands | SELECT, BEGIN, UPDATE, COMMIT, ROLLBACK | assertProcurementActor, audit, ensureDatabase, getProcurementAwardById, nowIso, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `listCustomerPricing` (L5106) | customer_pricing_rules | SELECT | tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getCustomerPricing` (L5118) | customer_pricing_rules | SELECT | customerPricingFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `upsertCustomerPricing` (L5123) | customer_pricing_rules | BEGIN, INSERT, SELECT, COMMIT, ROLLBACK | assertBusinessCustomer, assertCatalogProductForOrganization, audit, customerPricingFromRow, normaliseCurrency, nowIso, tenantCurrency, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `updateCustomerPricing` (L5184) | no literal SQL table found | none detected | getCustomerPricing, upsertCustomerPricing | no explicit transaction boundary detected in function body |
-| `getQuote` (L5218) | no literal SQL table found | none detected | getQuoteByIdSync, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listQuotes` (L5223) | quotes | SELECT | quoteFromRow, quoteItemsFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `createQuote` (L5238) | customer_pricing_rules, quote_items, quotes | SELECT, BEGIN, INSERT, COMMIT, ROLLBACK | assertCatalogProductForOrganization, assertQuoteCustomer, audit, getQuoteByIdSync, nextQuoteNumber, normaliseCurrency, nowIso, parseJSON, tenantCurrency, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `transitionQuote` (L5284) | quotes | UPDATE | audit, getQuoteByIdSync, nowIso, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getCreditTerms` (L5379) | customer_credit_terms | SELECT | creditTermsFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listCreditTerms` (L5385) | customer_credit_terms | SELECT | tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `createCreditTerms` (L5395) | customer_credit_terms | SELECT, INSERT | assertBusinessCustomerForCredit, audit, getCreditTerms, normaliseCurrency, nowIso, tenantCurrency, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `transitionCreditTerms` (L5430) | customer_credit_terms | UPDATE | audit, getCreditTerms, nowIso, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `updateCreditTerms` (L5448) | customer_credit_terms | UPDATE | audit, getCreditTerms, normaliseCurrency, nowIso, tenantCurrency, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getPurchaseOrder` (L5467) | no literal SQL table found | none detected | getPurchaseOrderByIdSync, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listPurchaseOrders` (L5472) | purchase_orders | SELECT | purchaseOrderFromRow, purchaseOrderItemsFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `createPurchaseOrder` (L5482) | purchase_order_items, purchase_orders | SELECT, BEGIN, INSERT, COMMIT, ROLLBACK | audit, createPurchaseOrderFromProcurementAward, getPurchaseOrderByIdSync, getQuoteByIdSync, nextPurchaseOrderNumber, nowIso, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `getProcurementReceipt` (L5562) | no literal SQL table found | none detected | assertProcurementActor, getProcurementReceiptByIdSync, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listProcurementReceipts` (L5568) | procurement_receipts | SELECT | assertProcurementActor, getProcurementReceiptByIdSync, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `createProcurementReceipt` (L5579) | catalog_products, locations, procurement_receipt_lines, procurement_receipts, purchase_order_items, purchase_orders | SELECT, BEGIN, INSERT, COMMIT, ROLLBACK, UPDATE | appendInventoryMovement, assertProcurementActor, audit, getProcurementReceiptByIdSync, nextProcurementReceiptNumber, nowIso, parseJSON, procurementReceiptHash, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `createPurchaseOrderFromProcurementAward` (L5680) | procurement_award_lines, procurement_awards, procurement_rfq_items, purchase_order_items, purchase_orders | SELECT, BEGIN, INSERT, COMMIT, ROLLBACK | assertProcurementActor, audit, getPurchaseOrderByIdSync, nextPurchaseOrderNumber, normaliseCurrency, nowIso, tenantCurrency, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `transitionPurchaseOrder` (L5732) | purchase_orders | UPDATE | audit, getPurchaseOrderByIdSync, nowIso, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getReceivable` (L5775) | accounts_receivable | SELECT | ensureDatabase, receivableFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listReceivables` (L5781) | accounts_receivable | SELECT | ensureDatabase, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `createReceivable` (L5791) | accounts_receivable, ar_ledger_entries, customer_credit_terms, orders | SELECT, BEGIN, INSERT, COMMIT, ROLLBACK | addDaysIso, assertBusinessCustomerForReceivable, audit, ensureDatabase, getPurchaseOrderByIdSync, getReceivable, json, normaliseCurrency, nowIso, parseJSON, tenantCurrency, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `transitionReceivable` (L5843) | accounts_receivable, ar_ledger_entries | UPDATE, INSERT | audit, getReceivable, json, nowIso | no explicit transaction boundary detected in function body |
-| `allocatePaymentToReceivable` (L5857) | accounts_receivable, ar_ledger_entries, ar_payment_allocations | SELECT, BEGIN, INSERT, UPDATE, COMMIT, ROLLBACK | audit, getPayment, getReceivable, json, nowIso | explicit local transaction with commit/rollback |
-| `listReceivableLedger` (L5884) | ar_ledger_entries | SELECT | getReceivable, normaliseCurrency, parseJSON | no explicit transaction boundary detected in function body |
-| `getInvoice` (L5908) | invoices | SELECT | ensureDatabase, invoiceFromRow, invoiceItems, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `listInvoices` (L5915) | invoices | SELECT | ensureDatabase, invoiceFromRow, invoiceItems, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `createInvoice` (L5940) | invoice_items, invoices | SELECT, BEGIN, INSERT, COMMIT, ROLLBACK | audit, ensureDatabase, getInvoice, getReceivable, nextInvoiceNumber, nowIso, sourceItemsForInvoice, tenantCurrency, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `transitionInvoice` (L5969) | invoices | BEGIN, SELECT, UPDATE, COMMIT, ROLLBACK | audit, ensureDatabase, getInvoice, invoiceFromRow, invoiceItems, nowIso, tenantOrganizationId | explicit local transaction with commit/rollback |
-| `listOrganizationLocations` (L6176) | locations | SELECT | ensureCanonicalIdentityForTenant, ensureDatabase | no explicit transaction boundary detected in function body |
-| `getOrganizationLocation` (L6189) | locations | SELECT | ensureCanonicalIdentityForTenant, ensureDatabase, organizationLocationFromRow | no explicit transaction boundary detected in function body |
-| `createOrganizationLocation` (L6197) | locations | INSERT, SELECT | audit, ensureCanonicalIdentityForTenant, ensureDatabase, normaliseLocationStatus, normaliseLocationTimeZone, normaliseLocationType, nowIso, organizationLocationFromRow | no explicit transaction boundary detected in function body |
-| `updateOrganizationLocation` (L6219) | locations | SELECT, UPDATE | audit, ensureCanonicalIdentityForTenant, ensureDatabase, normaliseLocationStatus, normaliseLocationTimeZone, normaliseLocationType, organizationLocationFromRow | no explicit transaction boundary detected in function body |
-| `getIdentityForTenant` (L6245) | channel_identities, locations, organizations | SELECT | ensureCanonicalIdentityForTenant, ensureDatabase, parseJSON | no explicit transaction boundary detected in function body |
-| `listServiceResources` (L6544) | service_resources | SELECT | ensureCanonicalIdentityForTenant, ensureDatabase | no explicit transaction boundary detected in function body |
-| `createServiceResource` (L6557) | service_resource_commands, service_resources, tenants | BEGIN, SELECT, COMMIT, INSERT, ROLLBACK | audit, ensureCanonicalIdentityForTenant, ensureDatabase, json, nowIso, serviceResourceFromRow, serviceResourceInput, validateServiceResourceReferences | explicit local transaction with commit/rollback |
-| `updateServiceResource` (L6602) | service_resource_commands, service_resource_commitments, service_resources, tenants | BEGIN, SELECT, COMMIT, UPDATE, INSERT, ROLLBACK | audit, ensureCanonicalIdentityForTenant, ensureDatabase, json, nowIso, serviceResourceFromRow, serviceResourceInput, validateServiceResourceReferences | explicit local transaction with commit/rollback |
-| `getServiceResourceAvailability` (L6691) | locations, organizations, service_resource_availability, service_resources | SELECT | ensureCanonicalIdentityForTenant, ensureDatabase, serviceResourceAvailabilityFromRow | no explicit transaction boundary detected in function body |
-| `setServiceResourceAvailability` (L6725) | locations, organizations, service_resource_availability, service_resource_availability_commands, service_resource_commitments, service_resources, tenants | BEGIN, SELECT, COMMIT, INSERT, ROLLBACK | audit, ensureCanonicalIdentityForTenant, ensureDatabase, json, nowIso, parseJSON, serviceResourceAvailabilityFromRow | explicit local transaction with commit/rollback |
-| `createServiceBooking` (L6817) | orders, service_booking_commands, service_bookings, tenants | BEGIN, SELECT, COMMIT, INSERT, ROLLBACK | assertServiceBookingAuthorityBoundary, assertTelegramBuyerOwnsCanonicalServiceOrder, audit, bookingRequiredText, bookingTimestamp, ensureDatabase, getTenant, nowIso, orderFromRow, serviceBookingFromRow | explicit local transaction with commit/rollback |
-| `transitionServiceBooking` (L6867) | locations, orders, organizations, service_booking_commands, service_bookings, service_resource_availability, service_resource_commitments, service_resources, tenants | BEGIN, SELECT, COMMIT, UPDATE, INSERT, ROLLBACK | assertServiceBookingAuthorityBoundary, assertTelegramBuyerOwnsCanonicalServiceOrder, audit, bookingRequiredText, ensureDatabase, getTenant, nowIso, orderFromRow, parseJSON, serviceBookingFromRow | explicit local transaction with commit/rollback |
-| `listServiceProviderBookings` (L6998) | service_bookings, service_resource_commitments, service_resources | SELECT | ensureDatabase, getTenant, serviceBookingFromRow | no explicit transaction boundary detected in function body |
-| `listServiceBookings` (L7028) | service_bookings | SELECT | ensureDatabase, getTenant | no explicit transaction boundary detected in function body |
-| `recordServiceDeliveryAssessment` (L7036) | orders, service_delivery_assessment_commands, tenants | BEGIN, SELECT, COMMIT, UPDATE, INSERT, ROLLBACK | assertLogisticsSchedulingAuthorization, audit, ensureDatabase, getCoreFulfillmentOrder, getTenant, json, nowIso, orderFromRow | explicit local transaction with commit/rollback |
-| `getOrCreateTenant` (L7255) | tenants | SELECT, INSERT | audit, ensureCanonicalIdentityForTenant, ensureDatabase, nowIso, tenantFromRow | no explicit transaction boundary detected in function body |
-| `getTenant` (L7275) | tenants | SELECT | ensureDatabase, tenantCurrency, tenantFromRow | no explicit transaction boundary detected in function body |
-| `getBusinessTemplateConfig` (L7287) | tenant_business_templates | SELECT | ensureDatabase, getTenant, parseJSON | no explicit transaction boundary detected in function body |
-| `saveBusinessTemplateConfig` (L7301) | tenant_business_templates | BEGIN, INSERT, COMMIT, ROLLBACK | audit, ensureDatabase, getTenant, json, nowIso | explicit local transaction with commit/rollback |
-| `getTenantByApiKey` (L7368) | tenants | SELECT | ensureDatabase, tenantFromRow | no explicit transaction boundary detected in function body |
-| `updateTenant` (L7374) | catalog_products, orders, organizations, tenants | SELECT, UPDATE | audit, ensureDatabase, getTenant, json, normaliseCurrency, tenantCurrency | no explicit transaction boundary detected in function body |
-| `listTenants` (L7416) | tenants | SELECT | ensureDatabase | no explicit transaction boundary detected in function body |
-| `getCatalog` (L7421) | catalog_products | SELECT | ensureDatabase | no explicit transaction boundary detected in function body |
-| `saveCatalog` (L7428) | catalog_products, inventory_movements, orders, tenants | BEGIN, SELECT, DELETE, COMMIT, ROLLBACK | audit, ensureDatabase, ensureInventoryOpeningBalances, insertProduct, parseJSON, tenantCurrency | explicit local transaction with commit/rollback |
-| `listCustomers` (L7536) | customers | SELECT | ensureDatabase, getTenant | no explicit transaction boundary detected in function body |
-| `getCustomer` (L7553) | customers | SELECT | customerFromRow, ensureDatabase, getTenant | no explicit transaction boundary detected in function body |
-| `upsertCustomer` (L7647) | no literal SQL table found | none detected | upsertCustomerSync | no explicit transaction boundary detected in function body |
-| `updateCustomer` (L7651) | no literal SQL table found | none detected | getCustomer, upsertCustomer | no explicit transaction boundary detected in function body |
-| `listInventoryMovements` (L7686) | inventory_movements | SELECT | ensureDatabase, getTenant | no explicit transaction boundary detected in function body |
-| `getInventoryBalances` (L7700) | inventory_movements | SELECT | ensureDatabase, getTenant | no explicit transaction boundary detected in function body |
-| `appendInventoryMovement` (L7837) | no literal SQL table found | BEGIN, COMMIT, ROLLBACK | appendInventoryMovementInTransaction, ensureDatabase, getTenant, waitForInventoryTransactionSlot | explicit local transaction with commit/rollback |
-| `appendInventoryMovementBatch` (L7872) | inventory_movements | BEGIN, SELECT, COMMIT, ROLLBACK | appendInventoryMovementInTransaction, canonicalizeInventoryCommandValue, ensureDatabase, getTenant, waitForInventoryTransactionSlot | explicit local transaction with commit/rollback |
-| `processSyncEvent` (L7999) | sync_events | BEGIN, SELECT, COMMIT, INSERT, ROLLBACK | appendInventoryMovementInTransaction, ensureDatabase, getTenant, json, nowIso, upsertCustomerSync | explicit local transaction with commit/rollback |
-| `createPaymentWithIntent` (L8161) | customers, orders, payment_accounts, payment_idempotency_keys, payment_intents, payment_ledger_entries, payment_refunds, payments | SELECT, BEGIN, COMMIT, INSERT, ROLLBACK | audit, ensureDatabase, hashPaymentRequest, json, normaliseCurrency, nowIso, parseJSON, paymentFromRow, paymentIntentFromRow, resolvePaymentContext, syncMarketplacePaymentAllocation, tenantCurrency | explicit local transaction with commit/rollback |
-| `getPaymentIntent` (L8266) | payment_intents | SELECT | ensureDatabase, paymentIntentFromRow, resolvePaymentContext | no explicit transaction boundary detected in function body |
-| `insertPaymentIntent` (L8271) | orders, payment_accounts, payment_intents | SELECT, INSERT | ensureDatabase, json, normaliseCurrency, nowIso, paymentIntentFromRow, resolvePaymentContext, tenantCurrency | no explicit transaction boundary detected in function body |
-| `getPaymentAccountForProviderNotification` (L8303) | payment_accounts, tenants | SELECT | ensureDatabase, parseJSON | no explicit transaction boundary detected in function body |
-| `resolvePaymentIntentForProviderEvidence` (L8328) | payment_evidence, payment_intents | SELECT | ensureDatabase, getPaymentAccountForProviderNotification, nowIso, paymentEvidenceFromRow, paymentIntentFromRow | no explicit transaction boundary detected in function body |
-| `insertProviderNotificationEvidence` (L8425) | payment_accounts, payment_evidence | SELECT, INSERT | audit, classifyProviderNotificationIdentity, ensureDatabase, json, nowIso, paymentEvidenceFromRow, resolvePaymentIntentForProviderEvidence | no explicit transaction boundary detected in function body |
-| `createPaymentConfirmationAttempt` (L8610) | payment_confirmation_attempts, payment_evidence, payment_intents, payments | SELECT, INSERT | audit, ensureDatabase, nowIso, paymentConfirmationAttemptFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `updatePaymentConfirmationAttempt` (L8646) | payment_confirmation_attempts | SELECT, UPDATE | audit, ensureDatabase, json, nowIso, parseJSON, paymentConfirmationAttemptFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getPaymentConfirmationAttempt` (L8679) | payment_confirmation_attempts | SELECT | ensureDatabase, paymentConfirmationAttemptFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `getPaymentConfirmationAttemptByProviderTransaction` (L8687) | payment_confirmation_attempts, payment_evidence | SELECT | ensureDatabase, paymentConfirmationAttemptFromRow, tenantOrganizationId | no explicit transaction boundary detected in function body |
-| `insertPaymentEvidence` (L8710) | payment_evidence, payment_intents, payments | SELECT, INSERT | audit, ensureDatabase, hashPaymentRequest, json, nowIso, paymentEvidenceFromRow, resolvePaymentContext | no explicit transaction boundary detected in function body |
-| `listPaymentEvidence` (L8781) | payment_evidence | SELECT | ensureDatabase, getPayment | no explicit transaction boundary detected in function body |
-| `insertPaymentVerification` (L8787) | payment_evidence, payment_intents, payment_verifications, payments | SELECT, INSERT | audit, ensureDatabase, json, nowIso, paymentVerificationFromRow, resolvePaymentContext | no explicit transaction boundary detected in function body |
-| `listPaymentVerifications` (L8917) | payment_verifications | SELECT | ensureDatabase, getPayment | no explicit transaction boundary detected in function body |
-| `insertPaymentDecision` (L8923) | payment_decisions, payment_verifications, payments | SELECT, INSERT | ensureDatabase, json, nowIso, paymentDecisionFromRow, resolvePaymentContext | no explicit transaction boundary detected in function body |
-| `listPaymentDecisions` (L8970) | payment_decisions | SELECT | ensureDatabase, getPayment | no explicit transaction boundary detected in function body |
-| `getPaymentIdempotency` (L8976) | payment_idempotency_keys | SELECT | ensureDatabase, resolvePaymentContext | no explicit transaction boundary detected in function body |
-| `insertPaymentIdempotency` (L8981) | payment_idempotency_keys | INSERT | ensureDatabase, getPaymentIdempotency, nowIso, resolvePaymentContext | no explicit transaction boundary detected in function body |
-| `updatePaymentIdempotencyProgress` (L8993) | payment_idempotency_keys | UPDATE | ensureDatabase, getPaymentIdempotency, resolvePaymentContext | no explicit transaction boundary detected in function body |
-| `completePaymentIdempotency` (L9015) | payment_idempotency_keys | UPDATE | ensureDatabase, getPaymentIdempotency, resolvePaymentContext | no explicit transaction boundary detected in function body |
-| `beginPaymentStatusQuery` (L9040) | payment_status_query_commands, payments | BEGIN, SELECT, UPDATE, COMMIT, INSERT, ROLLBACK | ensureDatabase, nowIso, resolvePaymentContext | explicit local transaction with commit/rollback |
-| `markPaymentStatusQueryProviderStarted` (L9137) | payment_status_query_commands | UPDATE | ensureDatabase, nowIso, resolvePaymentContext | no explicit transaction boundary detected in function body |
-| `completePaymentStatusQuery` (L9164) | payment_status_query_commands | UPDATE, SELECT | ensureDatabase, json, nowIso, resolvePaymentContext | no explicit transaction boundary detected in function body |
-| `commitPaymentDecision` (L9205) | marketplace_payment_allocations, marketplace_seller_orders, marketplace_settlements, payment_accounts, payment_decisions, payment_evidence, payment_idempotency_keys, payment_intents, payment_ledger_entries, payment_status_query_commands, payment_verifications, payments | BEGIN, SELECT, COMMIT, INSERT, UPDATE, ROLLBACK | audit, ensureDatabase, json, normaliseCurrency, nowIso, paymentFromRow, paymentVerificationFromRow, resolvePaymentContext | explicit local transaction with commit/rollback |
-| `listPaymentAccounts` (L9633) | payment_accounts | SELECT | ensureDatabase, parseJSON, resolvePaymentContext | no explicit transaction boundary detected in function body |
-| `createPaymentAccount` (L9644) | payment_accounts | INSERT | audit, ensureDatabase, json, listPaymentAccounts, nowIso, resolvePaymentContext | no explicit transaction boundary detected in function body |
-| `createPayment` (L9661) | customers, orders, payment_accounts, payment_ledger_entries, payments | SELECT, BEGIN, INSERT, COMMIT, ROLLBACK | audit, ensureDatabase, json, normaliseCurrency, nowIso, parseJSON, paymentFromRow, resolvePaymentContext, syncMarketplacePaymentAllocation, tenantCurrency | explicit local transaction with commit/rollback |
-| `listPaymentRoutingPolicies` (L9717) | payment_routing_policies | SELECT | ensureDatabase, getTenantByChatId, parseJSON | no explicit transaction boundary detected in function body |
-| `upsertPaymentRoutingPolicy` (L9735) | payment_routing_policies | SELECT, UPDATE, INSERT | ensureDatabase, getTenantByChatId, json, listPaymentRoutingPolicies, nowIso | no explicit transaction boundary detected in function body |
-| `getPaymentSettlementByIdempotencyKey` (L9764) | payment_settlements | SELECT | ensureDatabase, getTenantByChatId, normalizePaymentSettlement | no explicit transaction boundary detected in function body |
-| `createPaymentSettlement` (L9772) | payment_settlements, payments | SELECT, INSERT | audit, ensureDatabase, getTenantByChatId, json, normaliseCurrency, normalizePaymentSettlement, nowIso | no explicit transaction boundary detected in function body |
-| `finalizePaymentSettlement` (L9841) | payment_settlements | BEGIN, SELECT, COMMIT, UPDATE, ROLLBACK | audit, ensureDatabase, getTenantByChatId, json, normalizePaymentSettlement, nowIso | explicit local transaction with commit/rollback |
-| `listPaymentSettlements` (L9883) | payment_settlements | SELECT | ensureDatabase, getTenantByChatId | no explicit transaction boundary detected in function body |
-| `getPaymentRefunds` (L9918) | payment_refunds | SELECT | ensureDatabase, getTenantByChatId | no explicit transaction boundary detected in function body |
-| `getPaymentRefundByIdempotencyKey` (L9928) | payment_refunds | SELECT | ensureDatabase, getTenantByChatId, normalizePaymentRefund | no explicit transaction boundary detected in function body |
-| `createPaymentRefundRequest` (L9936) | payment_refunds, payments | SELECT, INSERT | audit, ensureDatabase, getTenantByChatId, normaliseCurrency, normalizePaymentRefund, nowIso | no explicit transaction boundary detected in function body |
-| `finalizePaymentRefund` (L9997) | marketplace_payment_allocations, marketplace_refunds, marketplace_settlements, payment_ledger_entries, payment_refunds, payments | BEGIN, SELECT, COMMIT, UPDATE, INSERT, ROLLBACK | audit, ensureDatabase, getTenantByChatId, json, normalizePaymentRefund, nowIso | explicit local transaction with commit/rollback |
-| `getPayment` (L10117) | payments | SELECT | ensureDatabase, paymentFromRow, resolvePaymentContext | no explicit transaction boundary detected in function body |
-| `getOrderPaymentSummary` (L10123) | orders, payment_refunds, payments | SELECT | ensureDatabase, normaliseCurrency, resolvePaymentContext | no explicit transaction boundary detected in function body |
-| `listPayments` (L10174) | payments | SELECT | ensureDatabase, resolvePaymentContext | no explicit transaction boundary detected in function body |
-| `transitionPayment` (L10185) | marketplace_payment_allocations, marketplace_seller_orders, marketplace_settlements, payment_ledger_entries, payments | SELECT, BEGIN, UPDATE, INSERT, COMMIT, ROLLBACK | audit, ensureDatabase, json, normaliseCurrency, nowIso, paymentFromRow, paymentStateTimestampColumn, resolvePaymentContext | explicit local transaction with commit/rollback |
-| `listPaymentLedger` (L10228) | payment_ledger_entries | SELECT | ensureDatabase, getPayment, normaliseCurrency, parseJSON | no explicit transaction boundary detected in function body |
-| `recordPaymentReconciliation` (L10238) | payment_reconciliations | SELECT, INSERT | ensureDatabase, getPayment, json, normaliseCurrency, nowIso | no explicit transaction boundary detected in function body |
-| `listPaymentReconciliations` (L10283) | payment_reconciliations | SELECT | ensureDatabase, getPayment | no explicit transaction boundary detected in function body |
-| `reconcilePayment` (L10292) | payment_reconciliations | INSERT, SELECT | ensureDatabase, getPayment, normaliseCurrency, nowIso, transitionPayment | no explicit transaction boundary detected in function body |
-| `getOrderFulfillment` (L10411) | fulfillments | SELECT | ensureDatabase, fulfillmentFromRow, getCoreFulfillmentOrder | no explicit transaction boundary detected in function body |
-| `selectDeliveryCourier` (L10487) | delivery_assignments, membership_roles, memberships | SELECT | ensureDatabase | no explicit transaction boundary detected in function body |
-| `assignDeliveryCourier` (L10521) | delivery_assignment_commands, delivery_assignments, fulfillments, membership_roles, memberships, orders, tenants | SELECT, BEGIN, COMMIT, INSERT, ROLLBACK | assertLogisticsSchedulingAuthorization, assertServiceDeliveryReadyForExecution, audit, ensureDatabase, getCoreFulfillmentOrder, getTenant, hasCourierLocationGrant, json, normalizeCoreFulfillmentType, nowIso, orderFromRow, selectDeliveryCourier | explicit local transaction with commit/rollback |
-| `listDeliveryAssignments` (L10683) | delivery_assignments, fulfillments, locations, membership_roles, memberships, users | SELECT | ensureDatabase, getTenant, parseJSON | no explicit transaction boundary detected in function body |
-| `getDeliveryAssignment` (L10784) | delivery_assignments, fulfillments, locations, membership_roles, memberships | SELECT | ensureDatabase, getTenant, hasCourierLocationGrant, parseJSON | no explicit transaction boundary detected in function body |
-| `assertCourierOwnsDelivery` (L10846) | membership_roles, memberships | SELECT | ensureDatabase, getDeliveryAssignment, getTenant, hasCourierLocationGrant | no explicit transaction boundary detected in function body |
-| `createLogisticsSchedulingActivity` (L11105) | logistics_scheduling_activities | BEGIN, SELECT, COMMIT, INSERT, ROLLBACK | assertLogisticsSchedulingAuthorization, assertSchedulingLocation, assertSchedulingReferences, audit, ensureDatabase, getCanonicalSchedulingTimeZone, getTenant, json, logisticsSchedulingRow, nowIso, parseJSON, schedulingRequestHash | explicit local transaction with commit/rollback |
-| `getLogisticsSchedulingTimeZone` (L11237) | no literal SQL table found | none detected | ensureDatabase, getCanonicalSchedulingTimeZone, getTenant | no explicit transaction boundary detected in function body |
-| `getLogisticsSchedulingActivity` (L11244) | logistics_scheduling_activities | SELECT | ensureDatabase, getTenant, logisticsSchedulingRow | no explicit transaction boundary detected in function body |
-| `listLogisticsSchedulingActivities` (L11254) | logistics_scheduling_activities | SELECT | assertSchedulingLocation, ensureDatabase, getTenant | no explicit transaction boundary detected in function body |
-| `evaluateLogisticsSchedulingActivity` (L11289) | logistics_scheduling_activities | SELECT | assertLogisticsSchedulingAuthorization, assertSchedulingLocation, ensureDatabase, getCanonicalSchedulingTimeZone, getTenant, parseJSON | no explicit transaction boundary detected in function body |
-| `transitionLogisticsSchedulingActivity` (L11362) | logistics_scheduling_activities | BEGIN, SELECT, COMMIT, UPDATE, ROLLBACK | assertLogisticsSchedulingAuthorization, assertSchedulingLocation, audit, ensureDatabase, getCanonicalSchedulingTimeZone, getTenant, logisticsSchedulingRow, nowIso, parseJSON | explicit local transaction with commit/rollback |
-| `transitionDeliveryAssignment` (L11650) | delivery_assignment_commands, delivery_assignments, fulfillments, locations, membership_roles, memberships, orders, tenants | BEGIN, SELECT, COMMIT, UPDATE, INSERT, ROLLBACK | applyCoreFulfillmentInventoryConsequence, assertDeliveryProofInput, audit, deliveryProofReference, ensureDatabase, getCoreFulfillmentOrder, getTenant, hasCourierLocationGrant, isCanonicalMarketplaceOrderRow, json, normalizeCoreFulfillmentStatus, nowIso, orderFromRow, parseJSON, resolveDeliveryProof | explicit local transaction with commit/rollback |
-| `transitionOrderFulfillment` (L11912) | delivery_assignments, fulfillment_commands, fulfillments, locations, orders, tenants, users | SELECT, BEGIN, COMMIT, INSERT, UPDATE, ROLLBACK | applyCoreFulfillmentInventoryConsequence, assertDeliveryProofInput, assertServiceDeliveryReadyForExecution, audit, ensureDatabase, fulfillmentFromRow, getCoreFulfillmentOrder, isCanonicalMarketplaceOrderRow, json, normalizeCoreFulfillmentStatus, normalizeCoreFulfillmentType, nowIso, orderFromRow, parseJSON, resolveDeliveryProof | explicit local transaction with commit/rollback |
-| `coreFulfillmentContract` (L12144) | no literal SQL table found | none detected | none detected | no explicit transaction boundary detected in function body |
-| `getOrders` (L12164) | orders | SELECT | ensureDatabase, orderFromRow | no explicit transaction boundary detected in function body |
-| `saveQueuedOrders` (L12172) | customers, orders, payments, tenants | BEGIN, SELECT, COMMIT, ROLLBACK | audit, ensureCanonicalPaymentForOrder, ensureDatabase, insertOrder, normaliseCurrency, nowIso, parseJSON, queuedOrderIdentityHash, tenantCurrency, upsertCustomerSync, validateAndTotalOrderItems | explicit local transaction with commit/rollback |
-| `pullNewOrders` (L12272) | orders | BEGIN, SELECT, UPDATE, COMMIT, ROLLBACK | audit, ensureDatabase, orderFromRow | explicit local transaction with commit/rollback |
-| `searchMarketplaceListings` (L12299) | catalog_products, tenants | SELECT | defaultVendorCode, ensureDatabase, normaliseCurrency, parseJSON, productFromRow | no explicit transaction boundary detected in function body |
-| `createMarketplaceOrder` (L12327) | catalog_products, inventory_movements, locations, marketplace_checkout_idempotency, marketplace_fulfillments, marketplace_inventory_reservations, marketplace_orders, marketplace_payment_allocations, marketplace_seller_orders, marketplace_settlements, tenants | SELECT, BEGIN, COMMIT, INSERT, UPDATE, ROLLBACK | appendInventoryMovementInTransaction, audit, defaultVendorCode, ensureDatabase, hashToken, insertOrder, insertProduct, json, normaliseCurrency, nowIso, parseJSON, productFromRow | explicit local transaction with commit/rollback |
-| `updateMarketplaceOrderStatus` (L12701) | catalog_products, inventory_movements, locations, marketplace_fulfillments, marketplace_inventory_reservations, marketplace_orders, marketplace_payment_allocations, marketplace_refunds, marketplace_seller_orders, marketplace_settlements, orders, payment_refunds, payments, tenants | BEGIN, SELECT, COMMIT, UPDATE, INSERT, ROLLBACK | appendInventoryMovementInTransaction, audit, ensureDatabase, insertProduct, json, nowIso, orderFromRow, parseJSON, productFromRow | explicit local transaction with commit/rollback |
-| `getMarketplaceOrderTracking` (L12904) | orders, tenants | SELECT | ensureDatabase, getTenant, hashToken, normaliseCurrency, orderFromRow, parseJSON | no explicit transaction boundary detected in function body |
-| `getTelegramBuyerFulfillmentExperience` (L12929) | fulfillments, marketplace_fulfillments, marketplace_orders, marketplace_seller_orders, orders | SELECT | ensureDatabase, getTenant, parseJSON | no explicit transaction boundary detected in function body |
-| `listTelegramBuyerOrders` (L12983) | marketplace_orders, marketplace_seller_orders | SELECT | ensureDatabase, getTenant | no explicit transaction boundary detected in function body |
-| `getTelegramBuyerServiceBookings` (L13017) | marketplace_orders, marketplace_seller_orders, orders, service_bookings, service_resource_commitments, service_resources | SELECT | ensureDatabase, getTenant, orderFromRow | no explicit transaction boundary detected in function body |
-| `assessTelegramBuyerServiceFeasibility` (L13079) | locations, membership_roles, memberships, organizations, service_bookings, service_resource_availability, service_resource_commitments, service_resources | SELECT | bookingRequiredText, bookingTimestamp, ensureDatabase, getTelegramBuyerServiceBookings, getTenant, parseJSON | no explicit transaction boundary detected in function body |
-| `listAuditEvents` (L13217) | audit_events | SELECT | ensureDatabase, getTenant, parseJSON | no explicit transaction boundary detected in function body |
-| `verifyAuditEventChain` (L13252) | audit_events | SELECT | ensureDatabase, getTenant, json | no explicit transaction boundary detected in function body |
-| `createDatabaseBackup` (L13323) | no literal SQL table found | OTHER | ensureDatabase, sqlString | no explicit transaction boundary detected in function body |
-| `getOrCreateUserByTelegram` (L13346) | users | SELECT, UPDATE, INSERT | ensureDatabase, nowIso | no explicit transaction boundary detected in function body |
-| `listTenantMemberships` (L13360) | membership_roles, memberships, users | SELECT | ensureDatabase | no explicit transaction boundary detected in function body |
-| `listUserMemberships` (L13380) | memberships, tenants | SELECT | ensureDatabase, parseJSON | no explicit transaction boundary detected in function body |
-| `assignMembershipContextualRole` (L13448) | locations, membership_roles, memberships, service_resources, tenants | SELECT, INSERT | assertContextualRoleAssignable, audit, ensureDatabase, nowIso | no explicit transaction boundary detected in function body |
-| `revokeMembershipContextualRole` (L13541) | membership_roles, memberships | SELECT, UPDATE | audit, ensureDatabase, nowIso | no explicit transaction boundary detected in function body |
-| `changeMembershipRole` (L13602) | membership_roles, memberships | SELECT, UPDATE, INSERT | audit, ensureDatabase, nowIso | no explicit transaction boundary detected in function body |
-| `ensureMembership` (L13657) | no literal SQL table found | none detected | ensureMembershipSync | no explicit transaction boundary detected in function body |
-| `createTenantForUser` (L13661) | auth_challenges, tenant_creation_requests, tenants | BEGIN, SELECT, COMMIT, INSERT, UPDATE, ROLLBACK | audit, ensureCanonicalIdentityForTenant, ensureDatabase, ensureMembershipSync, hashToken, json, normaliseCurrency, nowIso, parseJSON | explicit local transaction with commit/rollback |
-| `createSession` (L13741) | locations, membership_roles, memberships, pack_lifecycle, sessions, tenants | SELECT, INSERT | createDeviceRow, ensureDatabase, hashToken | no explicit transaction boundary detected in function body |
-| `authenticateSessionToken` (L13776) | devices, locations, membership_roles, memberships, pack_lifecycle, sessions, tenants | SELECT, UPDATE | ensureDatabase, hashToken, nowIso, parseJSON | no explicit transaction boundary detected in function body |
-| `recordAuditEvent` (L13906) | no literal SQL table found | none detected | audit, ensureDatabase | no explicit transaction boundary detected in function body |
-| `getAuditRetentionPolicy` (L13925) | audit_retention_policies | SELECT | ensureDatabase, getTenant | no explicit transaction boundary detected in function body |
-| `setAuditRetentionPolicy` (L13938) | audit_retention_policies | INSERT | audit, ensureDatabase, getAuditRetentionPolicy, getTenant, nowIso | no explicit transaction boundary detected in function body |
-| `createComplianceRequest` (L13965) | compliance_requests, customers, locations | SELECT, INSERT | audit, ensureDatabase, getComplianceRequest, getTenant, nowIso | no explicit transaction boundary detected in function body |
-| `getComplianceRequest` (L14010) | compliance_requests | SELECT | ensureDatabase, getTenant | no explicit transaction boundary detected in function body |
-| `listComplianceRequests` (L14023) | compliance_requests | SELECT | ensureDatabase, getTenant | no explicit transaction boundary detected in function body |
-| `resolveComplianceRequest` (L14040) | compliance_requests | UPDATE | audit, ensureDatabase, getComplianceRequest, getTenant, nowIso | no explicit transaction boundary detected in function body |
-| `buildComplianceExport` (L14073) | audit_events, customers, locations, orders | SELECT | customerFromRow, ensureDatabase, getAuditRetentionPolicy, getTenant, listComplianceRequests, nowIso, parseJSON | no explicit transaction boundary detected in function body |
-| `revokeSession` (L14157) | sessions | UPDATE | ensureDatabase, nowIso | no explicit transaction boundary detected in function body |
-| `listDevices` (L14169) | devices, sessions | SELECT | ensureDatabase | no explicit transaction boundary detected in function body |
-| `revokeDevice` (L14220) | devices, memberships, sessions | SELECT, UPDATE | audit, ensureDatabase, nowIso | no explicit transaction boundary detected in function body |
-| `createAuthChallenge` (L14236) | auth_challenges | INSERT | ensureDatabase, hashToken | no explicit transaction boundary detected in function body |
-| `getAuthChallengeForTenantCreation` (L14245) | auth_challenges, tenant_creation_requests | SELECT | ensureDatabase, hashToken | no explicit transaction boundary detected in function body |
-| `consumeAuthChallenge` (L14258) | auth_challenges | SELECT, UPDATE | ensureDatabase, hashToken, nowIso | no explicit transaction boundary detected in function body |
-| `createPairingChallenge` (L14267) | memberships, pairing_challenges | SELECT, INSERT | audit, ensureDatabase, hashToken | no explicit transaction boundary detected in function body |
-| `consumePairingChallenge` (L14282) | pairing_challenges, users | SELECT, BEGIN, INSERT, UPDATE, COMMIT, ROLLBACK | audit, ensureDatabase, ensureMembershipSync, hashToken, nowIso | explicit local transaction with commit/rollback |
-| `createInvite` (L14310) | invites, memberships | SELECT, INSERT | audit, ensureDatabase, hashToken | no explicit transaction boundary detected in function body |
-| `listInvites` (L14328) | invites, users | SELECT | ensureDatabase | no explicit transaction boundary detected in function body |
-| `revokeInvite` (L14345) | invites, memberships | SELECT, UPDATE | audit, ensureDatabase, hashToken, nowIso | no explicit transaction boundary detected in function body |
-| `consumeInvite` (L14364) | invites, memberships, tenants | SELECT, BEGIN, UPDATE, COMMIT, ROLLBACK | audit, ensureDatabase, ensureMembershipSync, hashToken, nowIso, roleRank | explicit local transaction with commit/rollback |
-| `createPaymentOperationalAction` (L14401) | payment_operational_actions | SELECT, INSERT | audit, ensureDatabase, getPayment, normalizePaymentOperationalAction, nowIso | no explicit transaction boundary detected in function body |
-| `updatePaymentOperationalAction` (L14428) | payment_operational_actions, payments, tenants | SELECT, UPDATE | audit, ensureDatabase, json, normalizePaymentOperationalAction, nowIso | no explicit transaction boundary detected in function body |
-| `listPaymentOperationalActions` (L14450) | no literal SQL table found | none detected | ensureDatabase, getPayment | no explicit transaction boundary detected in function body |
-| `recordPaymentProviderCapabilityEvidence` (L14465) | payment_provider_capability_certifications | SELECT, INSERT | audit, ensureDatabase, getTenantByChatId, json, normalizePaymentProviderCapabilityCertification, nowIso | no explicit transaction boundary detected in function body |
-| `certifyPaymentProviderCapability` (L14521) | payment_provider_capability_certifications | SELECT, INSERT | audit, ensureDatabase, getTenantByChatId, json, normalizePaymentProviderCapabilityCertification, nowIso | no explicit transaction boundary detected in function body |
-| `listPaymentProviderCapabilityEvidence` (L14591) | payment_provider_capability_certifications | SELECT | ensureDatabase, getTenantByChatId | no explicit transaction boundary detected in function body |
-| `recordPaymentProductionCertification` (L14626) | payment_production_certifications | SELECT, INSERT | audit, ensureDatabase, getTenantByChatId, json, normalizePaymentProductionCertification, nowIso | no explicit transaction boundary detected in function body |
-| `listPaymentProductionCertifications` (L14674) | payment_production_certifications | SELECT | ensureDatabase, getTenantByChatId | no explicit transaction boundary detected in function body |
-| `getDatabasePath` (L14704) | no literal SQL table found | none detected | none detected | no explicit transaction boundary detected in function body |
-| `getDatabaseForTests` (L14709) | no literal SQL table found | none detected | ensureDatabase | no explicit transaction boundary detected in function body |
-| `listRestaurantRecipes` (L14776) | restaurant_recipes | SELECT | ensureDatabase, getTenant | no explicit transaction boundary detected in function body |
-| `createRestaurantRecipe` (L14786) | restaurant_recipes | BEGIN, SELECT, COMMIT, INSERT, ROLLBACK | audit, ensureDatabase, getTenant, json, normalizeRestaurantRecipeInput, nowIso, restaurantRecipeFromRow, waitForInventoryTransactionSlot | explicit local transaction with commit/rollback |
-| `updateRestaurantRecipe` (L14825) | restaurant_recipes | BEGIN, SELECT, UPDATE, COMMIT, ROLLBACK | audit, ensureDatabase, getTenant, json, normalizeRestaurantRecipeInput, nowIso, parseJSON, restaurantRecipeFromRow, waitForInventoryTransactionSlot | explicit local transaction with commit/rollback |
+| Function / line | SQL calls | SQL statements | Read tables | Write tables | Direct local calls | Transaction evidence |
+|---|---:|---:|---|---|---|---|
+| `transitionPackLifecycle` (L3646) | 7 | 7 | pack_lifecycle | pack_lifecycle | assertProcurementActor, audit, ensureDatabase, nowIso, packLifecycleFromRow, tenantOrganizationId | explicit local transaction |
+| `getPackLifecycle` (L3727) | 1 | 1 | pack_lifecycle | — | ensureDatabase | no explicit local transaction detected |
+| `getTelegramStorefrontConfig` (L3769) | 2 | 2 | telegram_storefront_configs, tenants | — | ensureDatabase, parseJSON | no explicit local transaction detected |
+| `upsertTelegramStorefrontConfig` (L3789) | 5 | 5 | — | telegram_storefront_configs | assertTelegramStorefrontTransition, audit, ensureDatabase, getTelegramStorefrontConfig, getTenant, json, nowIso | explicit local transaction |
+| `verifyTelegramStorefront` (L3845) | 4 | 4 | — | telegram_storefront_configs | audit, ensureDatabase, getTelegramStorefrontConfig, getTenant, nowIso | explicit local transaction |
+| `listSupplierNetworkQualifications` (L3880) | 1 | 1 | supplier_network_qualifications | — | ensureDatabase, tenantOrganizationId | no explicit local transaction detected |
+| `getSupplierNetworkQualification` (L3881) | 0 | 0 | — | — | ensureDatabase, supplierNetworkQualificationFromRow, supplierNetworkQualificationRow, tenantOrganizationId | no explicit local transaction detected |
+| `upsertSupplierNetworkQualification` (L3882) | 6 | 6 | supplier_network_qualifications | supplier_network_qualifications | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, json, normalizeSupplierNetworkQualificationInput, nowIso, supplierNetworkQualificationFromRow, supplierNetworkQualificationRow, tenantOrganizationId | explicit local transaction |
+| `transitionSupplierNetworkQualification` (L3883) | 1 | 1 | — | supplier_network_qualifications | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, nowIso, supplierNetworkQualificationFromRow, supplierNetworkQualificationRow, tenantOrganizationId | no explicit local transaction detected |
+| `listSupplierNetworkCommercialTerms` (L3891) | 1 | 1 | supplier_network_commercial_terms | — | ensureDatabase, tenantOrganizationId | no explicit local transaction detected |
+| `getSupplierNetworkCommercialTerms` (L3892) | 0 | 0 | — | — | ensureDatabase, supplierNetworkCommercialTermsFromRow, supplierNetworkCommercialTermsRow, tenantOrganizationId | no explicit local transaction detected |
+| `upsertSupplierNetworkCommercialTerms` (L3893) | 9 | 9 | catalog_products, supplier_network_capabilities, supplier_network_commercial_terms | supplier_network_commercial_terms | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, json, normalizeSupplierNetworkCommercialTermsInput, nowIso, supplierNetworkCommercialTermsFromRow, supplierNetworkCommercialTermsRow, supplierTenantForOrganization, tenantOrganizationId | explicit local transaction |
+| `transitionSupplierNetworkCommercialTerms` (L3894) | 1 | 1 | — | supplier_network_commercial_terms | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, nowIso, supplierNetworkCommercialTermsFromRow, supplierNetworkCommercialTermsRow, tenantOrganizationId | no explicit local transaction detected |
+| `listSupplierNetworkCapacities` (L3950) | 1 | 1 | supplier_network_capacity_signals | — | ensureDatabase, tenantOrganizationId | no explicit local transaction detected |
+| `getSupplierNetworkCapacity` (L3951) | 0 | 0 | — | — | ensureDatabase, supplierNetworkCapacityFromRow, supplierNetworkCapacityRow, tenantOrganizationId | no explicit local transaction detected |
+| `upsertSupplierNetworkCapacity` (L3952) | 7 | 7 | supplier_network_capacity_signals | supplier_network_capacity_signals | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, json, normalizeSupplierNetworkCapacityInput, nowIso, supplierNetworkCapacityFromRow, supplierNetworkCapacityRow, tenantOrganizationId | explicit local transaction |
+| `transitionSupplierNetworkCapacity` (L3996) | 1 | 1 | — | supplier_network_capacity_signals | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, nowIso, supplierNetworkCapacityFromRow, supplierNetworkCapacityRow, tenantOrganizationId | no explicit local transaction detected |
+| `listSupplierNetworkServiceAreas` (L3998) | 1 | 1 | supplier_network_service_areas | — | ensureDatabase, tenantOrganizationId | no explicit local transaction detected |
+| `getSupplierNetworkServiceArea` (L3999) | 0 | 0 | — | — | ensureDatabase, supplierNetworkServiceAreaFromRow, supplierNetworkServiceAreaRow, tenantOrganizationId | no explicit local transaction detected |
+| `upsertSupplierNetworkServiceArea` (L4000) | 7 | 7 | supplier_network_service_areas | supplier_network_service_areas | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, json, normalizeSupplierNetworkServiceAreaInput, nowIso, supplierNetworkServiceAreaFromRow, supplierNetworkServiceAreaRow, tenantOrganizationId | explicit local transaction |
+| `transitionSupplierNetworkServiceArea` (L4001) | 1 | 1 | — | supplier_network_service_areas | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, nowIso, supplierNetworkServiceAreaFromRow, supplierNetworkServiceAreaRow, tenantOrganizationId | no explicit local transaction detected |
+| `listSupplierNetworkCatalogListings` (L4010) | 1 | 1 | supplier_network_catalog_listings | — | ensureDatabase, tenantOrganizationId | no explicit local transaction detected |
+| `getSupplierNetworkCatalogListing` (L4011) | 0 | 0 | — | — | ensureDatabase, supplierNetworkCatalogFromRow, supplierNetworkCatalogRow, tenantOrganizationId | no explicit local transaction detected |
+| `upsertSupplierNetworkCatalogListing` (L4012) | 8 | 8 | catalog_products, supplier_network_catalog_listings | supplier_network_catalog_listings | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, json, normalizeSupplierNetworkCatalogInput, nowIso, supplierNetworkCatalogFromRow, supplierNetworkCatalogRow, supplierTenantForOrganization, tenantOrganizationId | explicit local transaction |
+| `transitionSupplierNetworkCatalogListing` (L4013) | 1 | 1 | — | supplier_network_catalog_listings | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, nowIso, supplierNetworkCatalogFromRow, supplierNetworkCatalogRow, tenantOrganizationId | no explicit local transaction detected |
+| `listSupplierNetworkCapabilities` (L4021) | 1 | 1 | supplier_network_capabilities | — | ensureDatabase, tenantOrganizationId | no explicit local transaction detected |
+| `getSupplierNetworkCapability` (L4022) | 0 | 0 | — | — | ensureDatabase, supplierNetworkCapabilityFromRow, supplierNetworkCapabilityRow, tenantOrganizationId | no explicit local transaction detected |
+| `upsertSupplierNetworkCapability` (L4023) | 7 | 7 | supplier_network_capabilities | supplier_network_capabilities | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, json, normalizeSupplierNetworkCapabilityInput, nowIso, supplierNetworkCapabilityFromRow, supplierNetworkCapabilityRow, tenantOrganizationId | explicit local transaction |
+| `transitionSupplierNetworkCapability` (L4024) | 1 | 1 | — | supplier_network_capabilities | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, nowIso, supplierNetworkCapabilityFromRow, supplierNetworkCapabilityRow, tenantOrganizationId | no explicit local transaction detected |
+| `getSupplierNetworkProfile` (L4036) | 0 | 0 | — | — | ensureDatabase, supplierNetworkProfileFromRow, supplierNetworkProfileRow, tenantOrganizationId | no explicit local transaction detected |
+| `upsertSupplierNetworkProfile` (L4037) | 6 | 6 | organizations | supplier_network_profiles | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, json, normalizeSupplierProfileInput, nowIso, supplierNetworkProfileFromRow, supplierNetworkProfileRow, tenantOrganizationId | explicit local transaction |
+| `transitionSupplierNetworkProfile` (L4038) | 1 | 1 | — | supplier_network_profiles | assertProcurementActor, assertSupplierNetworkParticipant, audit, ensureDatabase, nowIso, supplierNetworkProfileFromRow, supplierNetworkProfileRow, tenantOrganizationId | no explicit local transaction detected |
+| `listPaymentOutboundIntents` (L4045) | 1 | 1 | payment_outbound_intents | — | ensureDatabase, tenantOrganizationId | no explicit local transaction detected |
+| `getPaymentOutboundIntent` (L4046) | 1 | 1 | payment_outbound_intents | — | ensureDatabase, paymentOutboundFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `createPaymentOutboundIntent` (L4047) | 4 | 4 | payment_outbound_intents, purchase_orders | payment_outbound_intents | audit, ensureDatabase, json, normaliseCurrency, nowIso, paymentOutboundFromRow, tenantCurrency, tenantOrganizationId | no explicit local transaction detected |
+| `transitionPaymentOutboundIntent` (L4048) | 3 | 3 | payment_outbound_intents | payment_outbound_intents | audit, ensureDatabase, nowIso, paymentOutboundFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `createProcurementPaymentIntent` (L4049) | 1 | 1 | purchase_orders | — | createPaymentOutboundIntent, tenantOrganizationId | no explicit local transaction detected |
+| `getProcurementSettlement` (L4068) | 2 | 2 | payment_procurement_settlement_allocations, payment_procurement_settlements | — | ensureDatabase, paymentProcurementSettlementFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `listProcurementSettlements` (L4069) | 2 | 2 | payment_procurement_settlement_allocations, payment_procurement_settlements | — | ensureDatabase, paymentProcurementSettlementFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `listProcurementSettlementAllocations` (L4070) | 2 | 2 | payment_outbound_intents, payment_procurement_settlement_allocations, payment_procurement_settlements | — | ensureDatabase, normaliseCurrency, tenantOrganizationId | no explicit local transaction detected |
+| `allocateConfirmedOutboundPaymentToProcurementSettlement` (L4071) | 8 | 8 | payment_outbound_intents, payment_procurement_settlement_allocations | payment_procurement_settlement_allocations, payment_procurement_settlements | audit, ensureDatabase, getOrCreateProcurementSettlement, getProcurementSettlement, normaliseCurrency, nowIso, tenantOrganizationId | explicit local transaction |
+| `createProcurementDemand` (L4248) | 6 | 6 | procurement_demands | procurement_demand_items, procurement_demands | assertProcurementActor, assertProcurementLocation, audit, ensureDatabase, generateProcurementRequestNumber, getProcurementDemand, nowIso, procurementDemandHash, procurementDemandInput, tenantOrganizationId | explicit local transaction |
+| `getProcurementDemand` (L4292) | 2 | 2 | procurement_demand_items, procurement_demands | — | ensureDatabase, procurementDemandFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `listProcurementDemands` (L4301) | 0 | 0 | — | — | ensureDatabase, procurementDemandRows, tenantOrganizationId | no explicit local transaction detected |
+| `updateProcurementDemand` (L4314) | 8 | 8 | procurement_demand_items, procurement_demands | procurement_demand_items, procurement_demands | assertProcurementActor, assertProcurementLocation, audit, ensureDatabase, getProcurementDemand, nowIso, procurementDemandHash, procurementDemandInput, tenantOrganizationId | explicit local transaction |
+| `transitionProcurementDemand` (L4349) | 5 | 5 | procurement_demands | procurement_demands | assertProcurementActor, audit, ensureDatabase, getProcurementDemand, nowIso, tenantOrganizationId | explicit local transaction |
+| `getProcurementSupplierParticipation` (L4379) | 0 | 0 | — | — | ensureDatabase, supplierParticipantFromRow, supplierParticipantRow, tenantOrganizationId | no explicit local transaction detected |
+| `setProcurementSupplierParticipation` (L4380) | 2 | 2 | — | procurement_supplier_participants | assertSupplierMember, audit, ensureDatabase, getProcurementSupplierParticipation, nowIso, supplierParticipantRow, tenantOrganizationId | no explicit local transaction detected |
+| `discoverProcurementSuppliers` (L4381) | 1 | 1 | organizations, procurement_supplier_participants | — | assertSupplierMember, ensureDatabase, normaliseCurrency, tenantOrganizationId | no explicit local transaction detected |
+| `listProcurementSupplierRelationships` (L4382) | 1 | 1 | organizations, procurement_supplier_relationships | — | assertSupplierMember, ensureDatabase, tenantOrganizationId | no explicit local transaction detected |
+| `createProcurementSupplierRelationship` (L4383) | 5 | 5 | organizations, procurement_supplier_relationships | procurement_supplier_relationships | activeDiscoverableSupplier, assertSupplierMember, audit, ensureDatabase, nowIso, supplierRelationshipFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `transitionProcurementSupplierRelationship` (L4384) | 3 | 3 | organizations, procurement_supplier_relationships | procurement_supplier_relationships | assertSupplierMember, audit, ensureDatabase, nowIso, supplierRelationshipFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `createProcurementRfq` (L4441) | 8 | 8 | procurement_demand_items, procurement_rfqs | procurement_rfq_items, procurement_rfq_suppliers, procurement_rfqs | assertActiveSupplierRelationship, assertProcurementActor, audit, ensureDatabase, getProcurementDemand, json, nowIso, procurementCapacityEvidenceSnapshotForSupplier, procurementRfqHash, procurementRfqInput, rfqRows, tenantOrganizationId | explicit local transaction |
+| `listProcurementRfqs` (L4443) | 1 | 1 | procurement_rfqs | — | assertProcurementActor, ensureDatabase, rfqRows, tenantOrganizationId | no explicit local transaction detected |
+| `transitionProcurementRfq` (L4444) | 6 | 6 | procurement_rfq_suppliers, procurement_rfqs | procurement_rfqs | assertProcurementActor, audit, ensureDatabase, nowIso, rfqRows, tenantOrganizationId | explicit local transaction |
+| `createProcurementRfqResponse` (L4446) | 14 | 14 | organizations, procurement_rfq_items, procurement_rfq_response_items, procurement_rfq_responses, procurement_rfqs | procurement_rfq_response_items, procurement_rfq_responses | assertProcurementActor, assertRfqRecipient, audit, ensureDatabase, normaliseCurrency, nowIso, procurementRfqHash, procurementRfqResponseFromRow, tenantOrganizationId | explicit local transaction |
+| `transitionProcurementRfqResponse` (L4448) | 9 | 9 | organizations, procurement_rfq_response_items, procurement_rfq_responses, procurement_rfqs | procurement_rfq_responses, procurement_rfq_suppliers | assertProcurementActor, audit, ensureDatabase, nowIso, procurementRfqResponseFromRow, tenantOrganizationId | explicit local transaction |
+| `listSupplierNetworkTrustEvidence` (L4574) | 1 | 1 | supplier_network_trust_evidence | — | assertProcurementActor, ensureDatabase, nowIso, supplierNetworkTrustCanAccessEvidence, tenantOrganizationId | no explicit local transaction detected |
+| `getSupplierNetworkTrustEvidence` (L4617) | 1 | 1 | supplier_network_trust_evidence | — | assertProcurementActor, ensureDatabase, supplierNetworkTrustCanAccessEvidence, supplierNetworkTrustEvidenceFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `refreshSupplierNetworkTrustEvidence` (L4625) | 10 | 10 | procurement_supplier_participants, procurement_supplier_relationships, supplier_network_performance_observations, supplier_network_qualifications | supplier_network_trust_evidence | assertProcurementActor, audit, ensureDatabase, json, listSupplierNetworkTrustEvidence, nowIso, tenantOrganizationId | explicit local transaction |
+| `listSupplierNetworkPerformance` (L4659) | 2 | 2 | procurement_supplier_relationships, supplier_network_performance_observations | — | assertProcurementActor, tenantOrganizationId | no explicit local transaction detected |
+| `getSupplierNetworkPerformance` (L4673) | 2 | 2 | procurement_supplier_relationships, supplier_network_performance_observations | — | assertProcurementActor, supplierNetworkPerformanceFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `recalculateSupplierNetworkPerformance` (L4686) | 9 | 9 | procurement_receipt_lines, procurement_receipts, procurement_rfq_responses, procurement_rfq_suppliers, procurement_rfqs, procurement_supplier_participants, purchase_order_items, purchase_orders | supplier_network_performance_observations | assertProcurementActor, audit, json, listSupplierNetworkPerformance, nowIso, tenantOrganizationId | explicit local transaction |
+| `getSupplierNetworkMarketplaceIntegration` (L4739) | 3 | 3 | catalog_products, organizations, supplier_network_catalog_listings, supplier_network_profiles, tenants | — | assertProcurementActor, audit, ensureDatabase, marketplaceIntegrationVisible, marketplacePresenceForOrganization, supplierParticipantRow, tenantOrganizationId | no explicit local transaction detected |
+| `discoverSupplierNetwork` (L4741) | 9 | 9 | catalog_products, organizations, procurement_supplier_participants, procurement_supplier_relationships, supplier_network_capabilities, supplier_network_capacity_signals, supplier_network_catalog_listings, supplier_network_commercial_terms, supplier_network_profiles, supplier_network_qualifications, supplier_network_service_areas, supplier_network_trust_evidence, tenants | — | assertProcurementActor, audit, ensureDatabase, marketplacePresenceForOrganization, normaliseCurrency, parseJSON, supplierNetworkDiscoveryVisible, tenantOrganizationId | no explicit local transaction detected |
+| `getProcurementComparison` (L4819) | 0 | 0 | — | — | assertProcurementActor, comparisonRows, ensureDatabase, tenantOrganizationId | no explicit local transaction detected |
+| `listProcurementComparisons` (L4826) | 1 | 1 | procurement_comparisons | — | assertProcurementActor, comparisonRows, ensureDatabase, tenantOrganizationId | no explicit local transaction detected |
+| `createProcurementComparison` (L4838) | 11 | 11 | organizations, procurement_comparisons, procurement_rfq_items, procurement_rfq_response_items, procurement_rfq_responses, procurement_rfqs | procurement_comparison_line_offers, procurement_comparison_suppliers, procurement_comparisons | assertProcurementActor, audit, comparisonLeadSort, comparisonRows, comparisonValiditySort, comparisonValidityTimestamp, ensureDatabase, normaliseCurrency, nowIso, tenantOrganizationId | explicit local transaction |
+| `getProcurementAward` (L4969) | 0 | 0 | — | — | assertProcurementActor, ensureDatabase, getProcurementAwardById, tenantOrganizationId | no explicit local transaction detected |
+| `listProcurementAwards` (L4976) | 1 | 1 | procurement_awards | — | assertProcurementActor, ensureDatabase, getProcurementAwardById, tenantOrganizationId | no explicit local transaction detected |
+| `createProcurementAward` (L4994) | 12 | 12 | procurement_awards, procurement_comparison_line_offers, procurement_comparisons, procurement_demands, procurement_rfq_items, procurement_rfq_responses, procurement_rfqs | procurement_award_lines, procurement_awards | assertProcurementActor, audit, ensureDatabase, getProcurementAwardById, normaliseCurrency, nowIso, procurementAwardHash, tenantOrganizationId | explicit local transaction |
+| `transitionProcurementAward` (L5053) | 7 | 7 | procurement_award_lines, procurement_awards | procurement_awards, procurement_demands | assertProcurementActor, audit, ensureDatabase, getProcurementAwardById, nowIso, tenantOrganizationId | explicit local transaction |
+| `listCustomerPricing` (L5106) | 1 | 1 | customer_pricing_rules | — | tenantOrganizationId | no explicit local transaction detected |
+| `getCustomerPricing` (L5118) | 1 | 1 | customer_pricing_rules | — | customerPricingFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `upsertCustomerPricing` (L5123) | 5 | 5 | customer_pricing_rules | customer_pricing_rules | assertBusinessCustomer, assertCatalogProductForOrganization, audit, customerPricingFromRow, normaliseCurrency, nowIso, tenantCurrency, tenantOrganizationId | explicit local transaction |
+| `updateCustomerPricing` (L5184) | 0 | 0 | — | — | getCustomerPricing, upsertCustomerPricing | no explicit local transaction detected |
+| `getQuote` (L5218) | 0 | 0 | — | — | getQuoteByIdSync, tenantOrganizationId | no explicit local transaction detected |
+| `listQuotes` (L5223) | 1 | 1 | quotes | — | quoteFromRow, quoteItemsFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `createQuote` (L5238) | 6 | 6 | customer_pricing_rules | quote_items, quotes | assertCatalogProductForOrganization, assertQuoteCustomer, audit, getQuoteByIdSync, nextQuoteNumber, normaliseCurrency, nowIso, parseJSON, tenantCurrency, tenantOrganizationId | explicit local transaction |
+| `transitionQuote` (L5284) | 1 | 1 | — | quotes | audit, getQuoteByIdSync, nowIso, tenantOrganizationId | no explicit local transaction detected |
+| `getCreditTerms` (L5379) | 1 | 1 | customer_credit_terms | — | creditTermsFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `listCreditTerms` (L5385) | 1 | 1 | customer_credit_terms | — | tenantOrganizationId | no explicit local transaction detected |
+| `createCreditTerms` (L5395) | 2 | 2 | customer_credit_terms | customer_credit_terms | assertBusinessCustomerForCredit, audit, getCreditTerms, normaliseCurrency, nowIso, tenantCurrency, tenantOrganizationId | no explicit local transaction detected |
+| `transitionCreditTerms` (L5430) | 1 | 1 | — | customer_credit_terms | audit, getCreditTerms, nowIso, tenantOrganizationId | no explicit local transaction detected |
+| `updateCreditTerms` (L5448) | 1 | 1 | — | customer_credit_terms | audit, getCreditTerms, normaliseCurrency, nowIso, tenantCurrency, tenantOrganizationId | no explicit local transaction detected |
+| `getPurchaseOrder` (L5467) | 0 | 0 | — | — | getPurchaseOrderByIdSync, tenantOrganizationId | no explicit local transaction detected |
+| `listPurchaseOrders` (L5472) | 1 | 1 | purchase_orders | — | purchaseOrderFromRow, purchaseOrderItemsFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `createPurchaseOrder` (L5482) | 6 | 6 | purchase_orders | purchase_order_items, purchase_orders | audit, createPurchaseOrderFromProcurementAward, getPurchaseOrderByIdSync, getQuoteByIdSync, nextPurchaseOrderNumber, nowIso, tenantOrganizationId | explicit local transaction |
+| `getProcurementReceipt` (L5562) | 0 | 0 | — | — | assertProcurementActor, getProcurementReceiptByIdSync, tenantOrganizationId | no explicit local transaction detected |
+| `listProcurementReceipts` (L5568) | 1 | 1 | procurement_receipts | — | assertProcurementActor, getProcurementReceiptByIdSync, tenantOrganizationId | no explicit local transaction detected |
+| `createProcurementReceipt` (L5579) | 12 | 12 | catalog_products, locations, procurement_receipt_lines, procurement_receipts, purchase_order_items, purchase_orders | procurement_receipt_lines, procurement_receipts | appendInventoryMovement, assertProcurementActor, audit, getProcurementReceiptByIdSync, nextProcurementReceiptNumber, nowIso, parseJSON, procurementReceiptHash, tenantOrganizationId | explicit local transaction |
+| `createPurchaseOrderFromProcurementAward` (L5680) | 8 | 8 | procurement_award_lines, procurement_awards, procurement_rfq_items, purchase_orders | purchase_order_items, purchase_orders | assertProcurementActor, audit, getPurchaseOrderByIdSync, nextPurchaseOrderNumber, normaliseCurrency, nowIso, tenantCurrency, tenantOrganizationId | explicit local transaction |
+| `transitionPurchaseOrder` (L5732) | 1 | 1 | — | purchase_orders | audit, getPurchaseOrderByIdSync, nowIso, tenantOrganizationId | no explicit local transaction detected |
+| `getReceivable` (L5775) | 1 | 1 | accounts_receivable | — | ensureDatabase, receivableFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `listReceivables` (L5781) | 1 | 1 | accounts_receivable | — | ensureDatabase, tenantOrganizationId | no explicit local transaction detected |
+| `createReceivable` (L5791) | 10 | 10 | accounts_receivable, customer_credit_terms, orders | accounts_receivable, ar_ledger_entries | addDaysIso, assertBusinessCustomerForReceivable, audit, ensureDatabase, getPurchaseOrderByIdSync, getReceivable, json, normaliseCurrency, nowIso, parseJSON, tenantCurrency, tenantOrganizationId | explicit local transaction |
+| `transitionReceivable` (L5843) | 2 | 2 | — | accounts_receivable, ar_ledger_entries | audit, getReceivable, json, nowIso | no explicit local transaction detected |
+| `allocatePaymentToReceivable` (L5857) | 7 | 7 | ar_payment_allocations | accounts_receivable, ar_ledger_entries, ar_payment_allocations | audit, getPayment, getReceivable, json, nowIso | explicit local transaction |
+| `listReceivableLedger` (L5884) | 1 | 1 | ar_ledger_entries | — | getReceivable, normaliseCurrency, parseJSON | no explicit local transaction detected |
+| `getInvoice` (L5908) | 1 | 1 | invoices | — | ensureDatabase, invoiceFromRow, invoiceItems, tenantOrganizationId | no explicit local transaction detected |
+| `listInvoices` (L5915) | 1 | 1 | invoices | — | ensureDatabase, invoiceFromRow, invoiceItems, tenantOrganizationId | no explicit local transaction detected |
+| `createInvoice` (L5940) | 6 | 6 | invoices | invoice_items, invoices | audit, ensureDatabase, getInvoice, getReceivable, nextInvoiceNumber, nowIso, sourceItemsForInvoice, tenantCurrency, tenantOrganizationId | explicit local transaction |
+| `transitionInvoice` (L5969) | 5 | 5 | invoices | invoices | audit, ensureDatabase, getInvoice, invoiceFromRow, invoiceItems, nowIso, tenantOrganizationId | explicit local transaction |
+| `listOrganizationLocations` (L6176) | 1 | 1 | locations | — | ensureCanonicalIdentityForTenant, ensureDatabase | no explicit local transaction detected |
+| `getOrganizationLocation` (L6189) | 1 | 1 | locations | — | ensureCanonicalIdentityForTenant, ensureDatabase, organizationLocationFromRow | no explicit local transaction detected |
+| `createOrganizationLocation` (L6197) | 2 | 2 | locations | locations | audit, ensureCanonicalIdentityForTenant, ensureDatabase, normaliseLocationStatus, normaliseLocationTimeZone, normaliseLocationType, nowIso, organizationLocationFromRow | no explicit local transaction detected |
+| `updateOrganizationLocation` (L6219) | 3 | 3 | locations | locations | audit, ensureCanonicalIdentityForTenant, ensureDatabase, normaliseLocationStatus, normaliseLocationTimeZone, normaliseLocationType, organizationLocationFromRow | no explicit local transaction detected |
+| `getIdentityForTenant` (L6245) | 3 | 3 | channel_identities, locations, organizations | — | ensureCanonicalIdentityForTenant, ensureDatabase, parseJSON | no explicit local transaction detected |
+| `listServiceResources` (L6544) | 1 | 1 | service_resources | — | ensureCanonicalIdentityForTenant, ensureDatabase | no explicit local transaction detected |
+| `createServiceResource` (L6557) | 10 | 10 | service_resource_commands, service_resources, tenants | service_resource_commands, service_resources | audit, ensureCanonicalIdentityForTenant, ensureDatabase, json, nowIso, serviceResourceFromRow, serviceResourceInput, validateServiceResourceReferences | explicit local transaction |
+| `updateServiceResource` (L6602) | 11 | 11 | service_resource_commands, service_resource_commitments, service_resources, tenants | service_resource_commands, service_resources | audit, ensureCanonicalIdentityForTenant, ensureDatabase, json, nowIso, serviceResourceFromRow, serviceResourceInput, validateServiceResourceReferences | explicit local transaction |
+| `getServiceResourceAvailability` (L6691) | 2 | 2 | locations, organizations, service_resource_availability, service_resources | — | ensureCanonicalIdentityForTenant, ensureDatabase, serviceResourceAvailabilityFromRow | no explicit local transaction detected |
+| `setServiceResourceAvailability` (L6725) | 14 | 14 | locations, organizations, service_resource_availability, service_resource_availability_commands, service_resource_commitments, service_resources, tenants | service_resource_availability, service_resource_availability_commands | audit, ensureCanonicalIdentityForTenant, ensureDatabase, json, nowIso, parseJSON, serviceResourceAvailabilityFromRow | explicit local transaction |
+| `createServiceBooking` (L6817) | 11 | 11 | orders, service_booking_commands, service_bookings, tenants | service_booking_commands, service_bookings | assertServiceBookingAuthorityBoundary, assertTelegramBuyerOwnsCanonicalServiceOrder, audit, bookingRequiredText, bookingTimestamp, ensureDatabase, getTenant, nowIso, orderFromRow, serviceBookingFromRow | explicit local transaction |
+| `transitionServiceBooking` (L6867) | 18 | 18 | locations, orders, organizations, service_booking_commands, service_bookings, service_resource_availability, service_resource_commitments, service_resources, tenants | service_booking_commands, service_bookings, service_resource_commitments | assertServiceBookingAuthorityBoundary, assertTelegramBuyerOwnsCanonicalServiceOrder, audit, bookingRequiredText, ensureDatabase, getTenant, nowIso, orderFromRow, parseJSON, serviceBookingFromRow | explicit local transaction |
+| `listServiceProviderBookings` (L6998) | 1 | 1 | service_bookings, service_resource_commitments, service_resources | — | ensureDatabase, getTenant, serviceBookingFromRow | no explicit local transaction detected |
+| `listServiceBookings` (L7028) | 1 | 1 | service_bookings | — | ensureDatabase, getTenant | no explicit local transaction detected |
+| `recordServiceDeliveryAssessment` (L7036) | 10 | 10 | orders, service_delivery_assessment_commands, tenants | orders, service_delivery_assessment_commands | assertLogisticsSchedulingAuthorization, audit, ensureDatabase, getCoreFulfillmentOrder, getTenant, json, nowIso, orderFromRow | explicit local transaction |
+| `getOrCreateTenant` (L7255) | 3 | 3 | tenants | tenants | audit, ensureCanonicalIdentityForTenant, ensureDatabase, nowIso, tenantFromRow | no explicit local transaction detected |
+| `getTenant` (L7275) | 1 | 1 | tenants | — | ensureDatabase, tenantCurrency, tenantFromRow | no explicit local transaction detected |
+| `getBusinessTemplateConfig` (L7287) | 1 | 1 | tenant_business_templates | — | ensureDatabase, getTenant, parseJSON | no explicit local transaction detected |
+| `saveBusinessTemplateConfig` (L7301) | 4 | 4 | — | tenant_business_templates | audit, ensureDatabase, getTenant, json, nowIso | explicit local transaction |
+| `getTenantByApiKey` (L7368) | 1 | 1 | tenants | — | ensureDatabase, tenantFromRow | no explicit local transaction detected |
+| `updateTenant` (L7374) | 3 | 3 | catalog_products, orders | organizations, tenants | audit, ensureDatabase, getTenant, json, normaliseCurrency, tenantCurrency | no explicit local transaction detected |
+| `listTenants` (L7416) | 1 | 1 | tenants | — | ensureDatabase | no explicit local transaction detected |
+| `getCatalog` (L7421) | 1 | 1 | catalog_products | — | ensureDatabase | no explicit local transaction detected |
+| `saveCatalog` (L7428) | 8 | 8 | catalog_products, inventory_movements, orders, tenants | catalog_products | audit, ensureDatabase, ensureInventoryOpeningBalances, insertProduct, parseJSON, tenantCurrency | explicit local transaction |
+| `listCustomers` (L7536) | 1 | 1 | customers | — | ensureDatabase, getTenant | no explicit local transaction detected |
+| `getCustomer` (L7553) | 1 | 1 | customers | — | customerFromRow, ensureDatabase, getTenant | no explicit local transaction detected |
+| `upsertCustomer` (L7647) | 0 | 0 | — | — | upsertCustomerSync | no explicit local transaction detected |
+| `updateCustomer` (L7651) | 0 | 0 | — | — | getCustomer, upsertCustomer | no explicit local transaction detected |
+| `listInventoryMovements` (L7686) | 1 | 1 | inventory_movements | — | ensureDatabase, getTenant | no explicit local transaction detected |
+| `getInventoryBalances` (L7700) | 1 | 1 | inventory_movements | — | ensureDatabase, getTenant | no explicit local transaction detected |
+| `appendInventoryMovement` (L7837) | 3 | 3 | — | — | appendInventoryMovementInTransaction, ensureDatabase, getTenant, waitForInventoryTransactionSlot | explicit local transaction |
+| `appendInventoryMovementBatch` (L7872) | 4 | 4 | inventory_movements | — | appendInventoryMovementInTransaction, canonicalizeInventoryCommandValue, ensureDatabase, getTenant, waitForInventoryTransactionSlot | explicit local transaction |
+| `processSyncEvent` (L7999) | 6 | 6 | sync_events | sync_events | appendInventoryMovementInTransaction, ensureDatabase, getTenant, json, nowIso, upsertCustomerSync | explicit local transaction |
+| `createPaymentWithIntent` (L8161) | 18 | 18 | customers, orders, payment_accounts, payment_idempotency_keys, payment_intents, payment_refunds, payments | payment_idempotency_keys, payment_intents, payment_ledger_entries, payments | audit, ensureDatabase, hashPaymentRequest, json, normaliseCurrency, nowIso, parseJSON, paymentFromRow, paymentIntentFromRow, resolvePaymentContext, syncMarketplacePaymentAllocation, tenantCurrency | explicit local transaction |
+| `getPaymentIntent` (L8266) | 1 | 1 | payment_intents | — | ensureDatabase, paymentIntentFromRow, resolvePaymentContext | no explicit local transaction detected |
+| `insertPaymentIntent` (L8271) | 4 | 4 | orders, payment_accounts, payment_intents | payment_intents | ensureDatabase, json, normaliseCurrency, nowIso, paymentIntentFromRow, resolvePaymentContext, tenantCurrency | no explicit local transaction detected |
+| `getPaymentAccountForProviderNotification` (L8303) | 1 | 1 | payment_accounts, tenants | — | ensureDatabase, parseJSON | no explicit local transaction detected |
+| `resolvePaymentIntentForProviderEvidence` (L8328) | 4 | 2 | payment_evidence, payment_intents | — | ensureDatabase, getPaymentAccountForProviderNotification, nowIso, paymentEvidenceFromRow, paymentIntentFromRow | no explicit local transaction detected |
+| `insertProviderNotificationEvidence` (L8425) | 8 | 8 | payment_accounts, payment_evidence | payment_evidence | audit, classifyProviderNotificationIdentity, ensureDatabase, json, nowIso, paymentEvidenceFromRow, resolvePaymentIntentForProviderEvidence | no explicit local transaction detected |
+| `createPaymentConfirmationAttempt` (L8610) | 7 | 7 | payment_confirmation_attempts, payment_evidence, payment_intents, payments | payment_confirmation_attempts | audit, ensureDatabase, nowIso, paymentConfirmationAttemptFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `updatePaymentConfirmationAttempt` (L8646) | 3 | 3 | payment_confirmation_attempts | payment_confirmation_attempts | audit, ensureDatabase, json, nowIso, parseJSON, paymentConfirmationAttemptFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `getPaymentConfirmationAttempt` (L8679) | 1 | 1 | payment_confirmation_attempts | — | ensureDatabase, paymentConfirmationAttemptFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `getPaymentConfirmationAttemptByProviderTransaction` (L8687) | 1 | 1 | payment_confirmation_attempts, payment_evidence | — | ensureDatabase, paymentConfirmationAttemptFromRow, tenantOrganizationId | no explicit local transaction detected |
+| `insertPaymentEvidence` (L8710) | 6 | 6 | payment_evidence, payment_intents, payments | payment_evidence | audit, ensureDatabase, hashPaymentRequest, json, nowIso, paymentEvidenceFromRow, resolvePaymentContext | no explicit local transaction detected |
+| `listPaymentEvidence` (L8781) | 1 | 1 | payment_evidence | — | ensureDatabase, getPayment | no explicit local transaction detected |
+| `insertPaymentVerification` (L8787) | 9 | 9 | payment_evidence, payment_intents, payment_verifications, payments | payment_verifications | audit, ensureDatabase, json, nowIso, paymentVerificationFromRow, resolvePaymentContext | no explicit local transaction detected |
+| `listPaymentVerifications` (L8917) | 1 | 1 | payment_verifications | — | ensureDatabase, getPayment | no explicit local transaction detected |
+| `insertPaymentDecision` (L8923) | 5 | 5 | payment_decisions, payment_verifications, payments | payment_decisions | ensureDatabase, json, nowIso, paymentDecisionFromRow, resolvePaymentContext | no explicit local transaction detected |
+| `listPaymentDecisions` (L8970) | 1 | 1 | payment_decisions | — | ensureDatabase, getPayment | no explicit local transaction detected |
+| `getPaymentIdempotency` (L8976) | 1 | 1 | payment_idempotency_keys | — | ensureDatabase, resolvePaymentContext | no explicit local transaction detected |
+| `insertPaymentIdempotency` (L8981) | 1 | 1 | — | payment_idempotency_keys | ensureDatabase, getPaymentIdempotency, nowIso, resolvePaymentContext | no explicit local transaction detected |
+| `updatePaymentIdempotencyProgress` (L8993) | 1 | 1 | — | payment_idempotency_keys | ensureDatabase, getPaymentIdempotency, resolvePaymentContext | no explicit local transaction detected |
+| `completePaymentIdempotency` (L9015) | 1 | 1 | — | payment_idempotency_keys | ensureDatabase, getPaymentIdempotency, resolvePaymentContext | no explicit local transaction detected |
+| `beginPaymentStatusQuery` (L9040) | 11 | 11 | payment_status_query_commands, payments | payment_status_query_commands | ensureDatabase, nowIso, resolvePaymentContext | explicit local transaction |
+| `markPaymentStatusQueryProviderStarted` (L9137) | 1 | 1 | — | payment_status_query_commands | ensureDatabase, nowIso, resolvePaymentContext | no explicit local transaction detected |
+| `completePaymentStatusQuery` (L9164) | 3 | 3 | payment_status_query_commands | payment_status_query_commands | ensureDatabase, json, nowIso, resolvePaymentContext | no explicit local transaction detected |
+| `commitPaymentDecision` (L9205) | 26 | 26 | marketplace_payment_allocations, marketplace_seller_orders, payment_accounts, payment_evidence, payment_idempotency_keys, payment_intents, payment_status_query_commands, payment_verifications, payments | marketplace_payment_allocations, marketplace_settlements, payment_decisions, payment_idempotency_keys, payment_ledger_entries, payments | audit, ensureDatabase, json, normaliseCurrency, nowIso, paymentFromRow, paymentVerificationFromRow, resolvePaymentContext | explicit local transaction |
+| `listPaymentAccounts` (L9633) | 1 | 1 | payment_accounts | — | ensureDatabase, parseJSON, resolvePaymentContext | no explicit local transaction detected |
+| `createPaymentAccount` (L9644) | 1 | 1 | — | payment_accounts | audit, ensureDatabase, json, listPaymentAccounts, nowIso, resolvePaymentContext | no explicit local transaction detected |
+| `createPayment` (L9661) | 9 | 9 | customers, orders, payment_accounts, payments | payment_ledger_entries, payments | audit, ensureDatabase, json, normaliseCurrency, nowIso, parseJSON, paymentFromRow, resolvePaymentContext, syncMarketplacePaymentAllocation, tenantCurrency | explicit local transaction |
+| `listPaymentRoutingPolicies` (L9717) | 1 | 1 | payment_routing_policies | — | ensureDatabase, getTenantByChatId, parseJSON | no explicit local transaction detected |
+| `upsertPaymentRoutingPolicy` (L9735) | 3 | 3 | payment_routing_policies | payment_routing_policies | ensureDatabase, getTenantByChatId, json, listPaymentRoutingPolicies, nowIso | no explicit local transaction detected |
+| `getPaymentSettlementByIdempotencyKey` (L9764) | 1 | 1 | payment_settlements | — | ensureDatabase, getTenantByChatId, normalizePaymentSettlement | no explicit local transaction detected |
+| `createPaymentSettlement` (L9772) | 3 | 3 | payment_settlements, payments | payment_settlements | audit, ensureDatabase, getTenantByChatId, json, normaliseCurrency, normalizePaymentSettlement, nowIso | no explicit local transaction detected |
+| `finalizePaymentSettlement` (L9841) | 7 | 7 | payment_settlements | payment_settlements | audit, ensureDatabase, getTenantByChatId, json, normalizePaymentSettlement, nowIso | explicit local transaction |
+| `listPaymentSettlements` (L9883) | 1 | 1 | payment_settlements | — | ensureDatabase, getTenantByChatId | no explicit local transaction detected |
+| `getPaymentRefunds` (L9918) | 1 | 1 | payment_refunds | — | ensureDatabase, getTenantByChatId | no explicit local transaction detected |
+| `getPaymentRefundByIdempotencyKey` (L9928) | 1 | 1 | payment_refunds | — | ensureDatabase, getTenantByChatId, normalizePaymentRefund | no explicit local transaction detected |
+| `createPaymentRefundRequest` (L9936) | 4 | 4 | payment_refunds, payments | payment_refunds | audit, ensureDatabase, getTenantByChatId, normaliseCurrency, normalizePaymentRefund, nowIso | no explicit local transaction detected |
+| `finalizePaymentRefund` (L9997) | 24 | 24 | marketplace_payment_allocations, marketplace_refunds, payment_refunds, payments | marketplace_payment_allocations, marketplace_refunds, marketplace_settlements, payment_ledger_entries, payment_refunds, payments | audit, ensureDatabase, getTenantByChatId, json, normalizePaymentRefund, nowIso | explicit local transaction |
+| `getPayment` (L10117) | 1 | 1 | payments | — | ensureDatabase, paymentFromRow, resolvePaymentContext | no explicit local transaction detected |
+| `getOrderPaymentSummary` (L10123) | 2 | 2 | orders, payment_refunds, payments | — | ensureDatabase, normaliseCurrency, resolvePaymentContext | no explicit local transaction detected |
+| `listPayments` (L10174) | 1 | 1 | payments | — | ensureDatabase, resolvePaymentContext | no explicit local transaction detected |
+| `transitionPayment` (L10185) | 12 | 12 | marketplace_payment_allocations, marketplace_seller_orders, payments | marketplace_payment_allocations, marketplace_settlements, payment_ledger_entries, payments | audit, ensureDatabase, json, normaliseCurrency, nowIso, paymentFromRow, paymentStateTimestampColumn, resolvePaymentContext | explicit local transaction |
+| `listPaymentLedger` (L10228) | 1 | 1 | payment_ledger_entries | — | ensureDatabase, getPayment, normaliseCurrency, parseJSON | no explicit local transaction detected |
+| `recordPaymentReconciliation` (L10238) | 3 | 3 | payment_reconciliations | payment_reconciliations | ensureDatabase, getPayment, json, normaliseCurrency, nowIso | no explicit local transaction detected |
+| `listPaymentReconciliations` (L10283) | 1 | 1 | payment_reconciliations | — | ensureDatabase, getPayment | no explicit local transaction detected |
+| `reconcilePayment` (L10292) | 2 | 2 | payment_reconciliations | payment_reconciliations | ensureDatabase, getPayment, normaliseCurrency, nowIso, transitionPayment | no explicit local transaction detected |
+| `getOrderFulfillment` (L10411) | 1 | 1 | fulfillments | — | ensureDatabase, fulfillmentFromRow, getCoreFulfillmentOrder | no explicit local transaction detected |
+| `selectDeliveryCourier` (L10487) | 1 | 1 | delivery_assignments, membership_roles, memberships | — | ensureDatabase | no explicit local transaction detected |
+| `assignDeliveryCourier` (L10521) | 19 | 19 | delivery_assignment_commands, delivery_assignments, fulfillments, membership_roles, memberships, orders, tenants | delivery_assignment_commands, delivery_assignments, fulfillments | assertLogisticsSchedulingAuthorization, assertServiceDeliveryReadyForExecution, audit, ensureDatabase, getCoreFulfillmentOrder, getTenant, hasCourierLocationGrant, json, normalizeCoreFulfillmentType, nowIso, orderFromRow, selectDeliveryCourier | explicit local transaction |
+| `listDeliveryAssignments` (L10683) | 3 | 3 | delivery_assignments, fulfillments, locations, membership_roles, memberships, users | — | ensureDatabase, getTenant, parseJSON | no explicit local transaction detected |
+| `getDeliveryAssignment` (L10784) | 2 | 2 | delivery_assignments, fulfillments, locations, membership_roles, memberships | — | ensureDatabase, getTenant, hasCourierLocationGrant, parseJSON | no explicit local transaction detected |
+| `assertCourierOwnsDelivery` (L10846) | 1 | 1 | membership_roles, memberships | — | ensureDatabase, getDeliveryAssignment, getTenant, hasCourierLocationGrant | no explicit local transaction detected |
+| `createLogisticsSchedulingActivity` (L11105) | 7 | 7 | logistics_scheduling_activities | logistics_scheduling_activities | assertLogisticsSchedulingAuthorization, assertSchedulingLocation, assertSchedulingReferences, audit, ensureDatabase, getCanonicalSchedulingTimeZone, getTenant, json, logisticsSchedulingRow, nowIso, parseJSON, schedulingRequestHash | explicit local transaction |
+| `getLogisticsSchedulingTimeZone` (L11237) | 0 | 0 | — | — | ensureDatabase, getCanonicalSchedulingTimeZone, getTenant | no explicit local transaction detected |
+| `getLogisticsSchedulingActivity` (L11244) | 1 | 1 | logistics_scheduling_activities | — | ensureDatabase, getTenant, logisticsSchedulingRow | no explicit local transaction detected |
+| `listLogisticsSchedulingActivities` (L11254) | 1 | 1 | logistics_scheduling_activities | — | assertSchedulingLocation, ensureDatabase, getTenant | no explicit local transaction detected |
+| `evaluateLogisticsSchedulingActivity` (L11289) | 2 | 2 | logistics_scheduling_activities | — | assertLogisticsSchedulingAuthorization, assertSchedulingLocation, ensureDatabase, getCanonicalSchedulingTimeZone, getTenant, parseJSON | no explicit local transaction detected |
+| `transitionLogisticsSchedulingActivity` (L11362) | 9 | 9 | logistics_scheduling_activities | logistics_scheduling_activities | assertLogisticsSchedulingAuthorization, assertSchedulingLocation, audit, ensureDatabase, getCanonicalSchedulingTimeZone, getTenant, logisticsSchedulingRow, nowIso, parseJSON | explicit local transaction |
+| `transitionDeliveryAssignment` (L11650) | 36 | 36 | delivery_assignment_commands, delivery_assignments, fulfillments, locations, membership_roles, memberships, orders, tenants | delivery_assignment_commands, delivery_assignments, fulfillments | applyCoreFulfillmentInventoryConsequence, assertDeliveryProofInput, audit, deliveryProofReference, ensureDatabase, getCoreFulfillmentOrder, getTenant, hasCourierLocationGrant, isCanonicalMarketplaceOrderRow, json, normalizeCoreFulfillmentStatus, nowIso, orderFromRow, parseJSON, resolveDeliveryProof | explicit local transaction |
+| `transitionOrderFulfillment` (L11912) | 17 | 17 | delivery_assignments, fulfillment_commands, fulfillments, locations, orders, tenants, users | fulfillment_commands, fulfillments | applyCoreFulfillmentInventoryConsequence, assertDeliveryProofInput, assertServiceDeliveryReadyForExecution, audit, ensureDatabase, fulfillmentFromRow, getCoreFulfillmentOrder, isCanonicalMarketplaceOrderRow, json, normalizeCoreFulfillmentStatus, normalizeCoreFulfillmentType, nowIso, orderFromRow, parseJSON, resolveDeliveryProof | explicit local transaction |
+| `coreFulfillmentContract` (L12144) | 0 | 0 | — | — | — | no explicit local transaction detected |
+| `getOrders` (L12164) | 1 | 1 | orders | — | ensureDatabase, orderFromRow | no explicit local transaction detected |
+| `saveQueuedOrders` (L12172) | 6 | 6 | customers, orders, payments, tenants | — | audit, ensureCanonicalPaymentForOrder, ensureDatabase, insertOrder, normaliseCurrency, nowIso, parseJSON, queuedOrderIdentityHash, tenantCurrency, upsertCustomerSync, validateAndTotalOrderItems | explicit local transaction |
+| `pullNewOrders` (L12272) | 5 | 5 | orders | orders | audit, ensureDatabase, orderFromRow | explicit local transaction |
+| `searchMarketplaceListings` (L12299) | 1 | 1 | catalog_products, tenants | — | defaultVendorCode, ensureDatabase, normaliseCurrency, parseJSON, productFromRow | no explicit local transaction detected |
+| `createMarketplaceOrder` (L12327) | 19 | 19 | catalog_products, inventory_movements, locations, marketplace_checkout_idempotency, marketplace_orders, tenants | marketplace_checkout_idempotency, marketplace_fulfillments, marketplace_inventory_reservations, marketplace_orders, marketplace_payment_allocations, marketplace_seller_orders, marketplace_settlements | appendInventoryMovementInTransaction, audit, defaultVendorCode, ensureDatabase, hashToken, insertOrder, insertProduct, json, normaliseCurrency, nowIso, parseJSON, productFromRow | explicit local transaction |
+| `updateMarketplaceOrderStatus` (L12701) | 24 | 24 | catalog_products, inventory_movements, locations, marketplace_payment_allocations, marketplace_seller_orders, orders, payment_refunds, payments, tenants | marketplace_fulfillments, marketplace_inventory_reservations, marketplace_orders, marketplace_payment_allocations, marketplace_refunds, marketplace_seller_orders, marketplace_settlements, orders, payment_refunds | appendInventoryMovementInTransaction, audit, ensureDatabase, insertProduct, json, nowIso, orderFromRow, parseJSON, productFromRow | explicit local transaction |
+| `getMarketplaceOrderTracking` (L12904) | 2 | 2 | orders, tenants | — | ensureDatabase, getTenant, hashToken, normaliseCurrency, orderFromRow, parseJSON | no explicit local transaction detected |
+| `getTelegramBuyerFulfillmentExperience` (L12929) | 1 | 1 | fulfillments, marketplace_fulfillments, marketplace_orders, marketplace_seller_orders, orders | — | ensureDatabase, getTenant, parseJSON | no explicit local transaction detected |
+| `listTelegramBuyerOrders` (L12983) | 1 | 1 | marketplace_orders, marketplace_seller_orders | — | ensureDatabase, getTenant | no explicit local transaction detected |
+| `getTelegramBuyerServiceBookings` (L13017) | 2 | 2 | marketplace_orders, marketplace_seller_orders, orders, service_bookings, service_resource_commitments, service_resources | — | ensureDatabase, getTenant, orderFromRow | no explicit local transaction detected |
+| `assessTelegramBuyerServiceFeasibility` (L13079) | 4 | 4 | locations, membership_roles, memberships, organizations, service_bookings, service_resource_availability, service_resource_commitments, service_resources | — | bookingRequiredText, bookingTimestamp, ensureDatabase, getTelegramBuyerServiceBookings, getTenant, parseJSON | no explicit local transaction detected |
+| `listAuditEvents` (L13217) | 1 | 1 | audit_events | — | ensureDatabase, getTenant, parseJSON | no explicit local transaction detected |
+| `verifyAuditEventChain` (L13252) | 1 | 1 | audit_events | — | ensureDatabase, getTenant, json | no explicit local transaction detected |
+| `createDatabaseBackup` (L13323) | 1 | 1 | — | — | ensureDatabase, sqlString | no explicit local transaction detected |
+| `getOrCreateUserByTelegram` (L13346) | 4 | 4 | users | users | ensureDatabase, nowIso | no explicit local transaction detected |
+| `listTenantMemberships` (L13360) | 2 | 2 | membership_roles, memberships, users | — | ensureDatabase | no explicit local transaction detected |
+| `listUserMemberships` (L13380) | 1 | 1 | memberships, tenants | — | ensureDatabase, parseJSON | no explicit local transaction detected |
+| `assignMembershipContextualRole` (L13448) | 8 | 8 | locations, membership_roles, memberships, service_resources, tenants | membership_roles | assertContextualRoleAssignable, audit, ensureDatabase, nowIso | no explicit local transaction detected |
+| `revokeMembershipContextualRole` (L13541) | 4 | 4 | membership_roles, memberships | membership_roles | audit, ensureDatabase, nowIso | no explicit local transaction detected |
+| `changeMembershipRole` (L13602) | 6 | 6 | memberships | membership_roles, memberships | audit, ensureDatabase, nowIso | no explicit local transaction detected |
+| `ensureMembership` (L13657) | 0 | 0 | — | — | ensureMembershipSync | no explicit local transaction detected |
+| `createTenantForUser` (L13661) | 10 | 10 | auth_challenges, tenant_creation_requests | auth_challenges, tenant_creation_requests, tenants | audit, ensureCanonicalIdentityForTenant, ensureDatabase, ensureMembershipSync, hashToken, json, normaliseCurrency, nowIso, parseJSON | explicit local transaction |
+| `createSession` (L13741) | 4 | 4 | locations, membership_roles, memberships, pack_lifecycle, tenants | sessions | createDeviceRow, ensureDatabase, hashToken | no explicit local transaction detected |
+| `authenticateSessionToken` (L13776) | 2 | 2 | devices, locations, membership_roles, memberships, pack_lifecycle, sessions, tenants | devices | ensureDatabase, hashToken, nowIso, parseJSON | no explicit local transaction detected |
+| `recordAuditEvent` (L13906) | 0 | 0 | — | — | audit, ensureDatabase | no explicit local transaction detected |
+| `getAuditRetentionPolicy` (L13925) | 1 | 1 | audit_retention_policies | — | ensureDatabase, getTenant | no explicit local transaction detected |
+| `setAuditRetentionPolicy` (L13938) | 1 | 1 | — | audit_retention_policies | audit, ensureDatabase, getAuditRetentionPolicy, getTenant, nowIso | no explicit local transaction detected |
+| `createComplianceRequest` (L13965) | 3 | 3 | customers, locations | compliance_requests | audit, ensureDatabase, getComplianceRequest, getTenant, nowIso | no explicit local transaction detected |
+| `getComplianceRequest` (L14010) | 1 | 1 | compliance_requests | — | ensureDatabase, getTenant | no explicit local transaction detected |
+| `listComplianceRequests` (L14023) | 1 | 1 | compliance_requests | — | ensureDatabase, getTenant | no explicit local transaction detected |
+| `resolveComplianceRequest` (L14040) | 1 | 1 | — | compliance_requests | audit, ensureDatabase, getComplianceRequest, getTenant, nowIso | no explicit local transaction detected |
+| `buildComplianceExport` (L14073) | 7 | 7 | audit_events, customers, locations, orders | — | customerFromRow, ensureDatabase, getAuditRetentionPolicy, getTenant, listComplianceRequests, nowIso, parseJSON | no explicit local transaction detected |
+| `revokeSession` (L14157) | 1 | 1 | — | sessions | ensureDatabase, nowIso | no explicit local transaction detected |
+| `listDevices` (L14169) | 1 | 1 | devices, sessions | — | ensureDatabase | no explicit local transaction detected |
+| `revokeDevice` (L14220) | 4 | 4 | devices, memberships | devices, sessions | audit, ensureDatabase, nowIso | no explicit local transaction detected |
+| `createAuthChallenge` (L14236) | 1 | 1 | — | auth_challenges | ensureDatabase, hashToken | no explicit local transaction detected |
+| `getAuthChallengeForTenantCreation` (L14245) | 2 | 2 | auth_challenges, tenant_creation_requests | — | ensureDatabase, hashToken | no explicit local transaction detected |
+| `consumeAuthChallenge` (L14258) | 2 | 2 | auth_challenges | auth_challenges | ensureDatabase, hashToken, nowIso | no explicit local transaction detected |
+| `createPairingChallenge` (L14267) | 2 | 2 | memberships | pairing_challenges | audit, ensureDatabase, hashToken | no explicit local transaction detected |
+| `consumePairingChallenge` (L14282) | 6 | 6 | pairing_challenges | pairing_challenges, users | audit, ensureDatabase, ensureMembershipSync, hashToken, nowIso | explicit local transaction |
+| `createInvite` (L14310) | 2 | 2 | memberships | invites | audit, ensureDatabase, hashToken | no explicit local transaction detected |
+| `listInvites` (L14328) | 1 | 1 | invites, users | — | ensureDatabase | no explicit local transaction detected |
+| `revokeInvite` (L14345) | 3 | 3 | invites, memberships | invites | audit, ensureDatabase, hashToken, nowIso | no explicit local transaction detected |
+| `consumeInvite` (L14364) | 9 | 9 | invites, memberships, tenants | invites, memberships | audit, ensureDatabase, ensureMembershipSync, hashToken, nowIso, roleRank | explicit local transaction |
+| `createPaymentOperationalAction` (L14401) | 3 | 3 | payment_operational_actions | payment_operational_actions | audit, ensureDatabase, getPayment, normalizePaymentOperationalAction, nowIso | no explicit local transaction detected |
+| `updatePaymentOperationalAction` (L14428) | 3 | 3 | payment_operational_actions, payments, tenants | payment_operational_actions | audit, ensureDatabase, json, normalizePaymentOperationalAction, nowIso | no explicit local transaction detected |
+| `listPaymentOperationalActions` (L14450) | 1 | 0 | — | — | ensureDatabase, getPayment | no explicit local transaction detected |
+| `recordPaymentProviderCapabilityEvidence` (L14465) | 3 | 3 | payment_provider_capability_certifications | payment_provider_capability_certifications | audit, ensureDatabase, getTenantByChatId, json, normalizePaymentProviderCapabilityCertification, nowIso | no explicit local transaction detected |
+| `certifyPaymentProviderCapability` (L14521) | 4 | 4 | payment_provider_capability_certifications | payment_provider_capability_certifications | audit, ensureDatabase, getTenantByChatId, json, normalizePaymentProviderCapabilityCertification, nowIso | no explicit local transaction detected |
+| `listPaymentProviderCapabilityEvidence` (L14591) | 1 | 1 | payment_provider_capability_certifications | — | ensureDatabase, getTenantByChatId | no explicit local transaction detected |
+| `recordPaymentProductionCertification` (L14626) | 3 | 3 | payment_production_certifications | payment_production_certifications | audit, ensureDatabase, getTenantByChatId, json, normalizePaymentProductionCertification, nowIso | no explicit local transaction detected |
+| `listPaymentProductionCertifications` (L14674) | 2 | 2 | payment_production_certifications | — | ensureDatabase, getTenantByChatId | no explicit local transaction detected |
+| `getDatabasePath` (L14704) | 0 | 0 | — | — | — | no explicit local transaction detected |
+| `getDatabaseForTests` (L14709) | 0 | 0 | — | — | ensureDatabase | no explicit local transaction detected |
+| `listRestaurantRecipes` (L14776) | 2 | 2 | restaurant_recipes | — | ensureDatabase, getTenant | no explicit local transaction detected |
+| `createRestaurantRecipe` (L14786) | 7 | 7 | restaurant_recipes | restaurant_recipes | audit, ensureDatabase, getTenant, json, normalizeRestaurantRecipeInput, nowIso, restaurantRecipeFromRow, waitForInventoryTransactionSlot | explicit local transaction |
+| `updateRestaurantRecipe` (L14825) | 6 | 6 | restaurant_recipes | restaurant_recipes | audit, ensureDatabase, getTenant, json, normalizeRestaurantRecipeInput, nowIso, parseJSON, restaurantRecipeFromRow, waitForInventoryTransactionSlot | explicit local transaction |
 
 ## Table ownership and dependency map
 
-| Table | Provisional logical owner | Read/write function counts | DDL source lines | FK edges touching table | Indexes |
-|---|---|---:|---|---:|---:|
-| `accounts_receivable` | B2B commerce | 3/3 | 1043 | 7 | 2 |
-| `ar_ledger_entries` | B2B commerce | 1/3 | 1067 | 3 | 1 |
-| `ar_payment_allocations` | B2B commerce | 1/1 | 1085 | 3 | 1 |
-| `audit_events` | Audit | 3/0 | 355 | 0 | 6 |
-| `audit_retention_policies` | Audit | 1/1 | 690 | 1 | 0 |
-| `auth_challenges` | Identity and access | 3/3 | 410 | 2 | 0 |
-| `catalog_products` | Catalog | 11/0 | 316 | 1 | 2 |
-| `channel_identities` | Channel and integration configuration | 1/0 | 497 | 1 | 1 |
-| `compliance_requests` | Compliance | 2/2 | 697 | 2 | 2 |
-| `customer_credit_terms` | B2B commerce | 4/3 | 1008 | 3 | 2 |
-| `customer_pricing_rules` | B2B commerce | 4/1 | 873 | 2 | 2 |
-| `customers` | Commerce / customer | 7/0 | 585 | 9 | 3 |
-| `delivery_assignment_commands` | Fulfillment and Logistics | 2/2 | 2588 | 1 | 1 |
-| `delivery_assignments` | Fulfillment and Logistics | 6/2 | 2224 | 5 | 5 |
-| `delivery_assignments_v44` | Fulfillment and Logistics | 0/0 | 2254 | 5 | 0 |
-| `devices` | Identity and access | 3/2 | 390 | 3 | 1 |
-| `fulfillment_commands` | Fulfillment and Logistics | 1/1 | 2551 | 2 | 1 |
-| `fulfillments` | Fulfillment and Logistics | 7/3 | 2195 | 8 | 2 |
-| `inventory_movements` | Inventory | 6/0 | 622 | 2 | 3 |
-| `invites` | Identity and access | 3/3 | 449 | 3 | 1 |
-| `invoice_items` | B2B commerce | 0/1 | 1133 | 1 | 1 |
-| `invoices` | B2B commerce | 4/2 | 1111 | 5 | 2 |
-| `locations` | Tenant and organization core | 21/2 | 485 | 17 | 3 |
-| `logistics_scheduling_activities` | Logistics Scheduling request coordination | 5/2 | 3236 | 6 | 4 |
-| `marketplace_checkout_idempotency` | Marketplace | 1/1 | 1267 | 1 | 1 |
-| `marketplace_fulfillments` | Marketplace | 1/2 | 1192 | 1 | 1 |
-| `marketplace_inventory_reservations` | Marketplace | 0/2 | 1205 | 3 | 1 |
-| `marketplace_orders` | Marketplace | 4/2 | 1154 | 7 | 3 |
-| `marketplace_payment_allocations` | Marketplace | 4/5 | 1220 | 4 | 2 |
-| `marketplace_payment_allocations_v40` | Marketplace | 0/0 | 2106 | 4 | 0 |
-| `marketplace_refunds` | Marketplace | 1/2 | 1251 | 4 | 1 |
-| `marketplace_seller_orders` | Marketplace | 6/2 | 1175 | 9 | 1 |
-| `marketplace_settlements` | Marketplace | 0/5 | 1236 | 3 | 1 |
-| `membership_roles` | Identity and access | 12/3 | 3136 | 1 | 2 |
-| `memberships` | Identity and access | 19/2 | 379 | 3 | 2 |
-| `metadata` | Persistence infrastructure | 0/0 | 297 | 0 | 0 |
-| `orders` | Commerce / customer | 21/3 | 329 | 3 | 5 |
-| `organizations` | Tenant and organization core | 15/1 | 476 | 83 | 0 |
-| `pack_lifecycle` | Pack and business-template configuration | 4/1 | 2161 | 3 | 2 |
-| `pairing_challenges` | Identity and access | 1/2 | 417, 433 | 2 | 2 |
-| `payment_accounts` | Payments | 7/1 | 776 | 5 | 1 |
-| `payment_confirmation_attempts` | Payments | 4/2 | 2420 | 5 | 4 |
-| `payment_decisions` | Payments | 2/2 | 2368 | 7 | 4 |
-| `payment_evidence` | Payments | 8/2 | 2312 | 8 | 8 |
-| `payment_idempotency_keys` | Payments | 3/5 | 2388 | 1 | 1 |
-| `payment_intents` | Payments | 8/2 | 2290 | 10 | 3 |
-| `payment_ledger_entries` | Payments | 1/5 | 824 | 2 | 3 |
-| `payment_ledger_entries_gap113` | Payments | 0/0 | 3071 | 3 | 0 |
-| `payment_operational_actions` | Payments | 2/2 | 2807 | 3 | 3 |
-| `payment_outbound_intents` | Payments | 6/2 | 1777 | 5 | 3 |
-| `payment_procurement_settlement_allocations` | Payments | 4/1 | 1827 | 3 | 2 |
-| `payment_procurement_settlements` | Payments | 3/1 | 1811 | 5 | 1 |
-| `payment_production_certifications` | Payments | 2/1 | 2841 | 2 | 1 |
-| `payment_provider_capability_certifications` | Payments | 3/2 | 2871 | 2 | 1 |
-| `payment_reconciliations` | Payments | 3/2 | 841 | 2 | 3 |
-| `payment_refunds` | Payments | 7/3 | 2988 | 3 | 3 |
-| `payment_routing_policies` | Payments | 2/1 | 2782 | 2 | 1 |
-| `payment_settlements` | Payments | 4/2 | 2949 | 2 | 3 |
-| `payment_status_query_commands` | Payments | 3/3 | 2452 | 2 | 1 |
-| `payment_verifications` | Payments | 4/1 | 2341 | 5 | 7 |
-| `payments` | Payments | 18/5 | 790 | 19 | 10 |
-| `payments_gap113` | Payments | 0/0 | 3030 | 4 | 0 |
-| `phone_routing` | Channel and integration configuration | 0/0 | 349 | 1 | 0 |
-| `procurement_award_lines` | Procurement | 2/1 | 1612 | 5 | 1 |
-| `procurement_awards` | Procurement | 4/2 | 1586 | 8 | 2 |
-| `procurement_comparison_line_offers` | Procurement | 1/1 | 1557 | 5 | 1 |
-| `procurement_comparison_suppliers` | Procurement | 0/1 | 1536 | 3 | 1 |
-| `procurement_comparisons` | Procurement | 3/1 | 1523 | 6 | 1 |
-| `procurement_demand_items` | Procurement | 3/2 | 1321 | 2 | 2 |
-| `procurement_demands` | Procurement | 5/4 | 1288 | 8 | 3 |
-| `procurement_receipt_lines` | Procurement | 2/1 | 1742 | 2 | 1 |
-| `procurement_receipts` | Procurement | 3/1 | 1722 | 5 | 1 |
-| `procurement_rfq_items` | Procurement | 4/1 | 1430 | 5 | 1 |
-| `procurement_rfq_response_items` | Procurement | 3/1 | 1483 | 2 | 1 |
-| `procurement_rfq_responses` | Procurement | 5/2 | 1459 | 8 | 2 |
-| `procurement_rfq_suppliers` | Procurement | 2/2 | 1447 | 2 | 1 |
-| `procurement_rfqs` | Procurement | 8/2 | 1404 | 9 | 2 |
-| `procurement_supplier_participants` | Procurement | 4/1 | 1369 | 3 | 1 |
-| `procurement_supplier_relationships` | Procurement | 7/2 | 1379 | 4 | 2 |
-| `purchase_order_items` | Procurement | 2/2 | 974 | 2 | 2 |
-| `purchase_orders` | Procurement | 7/3 | 950 | 7 | 6 |
-| `purchase_orders_phase17_6_new` | Needs manual ownership review | 0/0 | 1656 | 5 | 0 |
-| `quote_items` | B2B commerce | 0/1 | 923 | 1 | 1 |
-| `quotes` | B2B commerce | 1/2 | 902 | 5 | 2 |
-| `restaurant_recipes` | Restaurant capability | 3/2 | 3558 | 2 | 2 |
-| `schema_migrations` | Persistence infrastructure | 0/0 | 293 | 0 | 0 |
-| `service_booking_commands` | Service capability | 2/2 | 2668 | 2 | 1 |
-| `service_bookings` | Service capability | 6/2 | 2652 | 4 | 2 |
-| `service_delivery_assessment_commands` | Service capability | 1/1 | 2606 | 1 | 1 |
-| `service_resource_availability` | Service capability | 4/1 | 3358 | 3 | 1 |
-| `service_resource_availability_commands` | Service capability | 1/1 | 3371 | 2 | 0 |
-| `service_resource_commands` | Service capability | 2/2 | 3340 | 2 | 1 |
-| `service_resource_commitments` | Service capability | 6/1 | 3394, 3440 | 4 | 2 |
-| `service_resources` | Service capability | 10/2 | 3319 | 6 | 2 |
-| `sessions` | Identity and access | 2/3 | 400 | 1 | 2 |
-| `supplier_network_capabilities` | Supplier Network | 4/2 | 3204 | 3 | 2 |
-| `supplier_network_capacity_signals` | Supplier Network | 3/2 | 1924 | 3 | 2 |
-| `supplier_network_catalog_listings` | Supplier Network | 4/2 | 1890 | 3 | 2 |
-| `supplier_network_commercial_terms` | Supplier Network | 3/2 | 1959 | 3 | 3 |
-| `supplier_network_performance_observations` | Supplier Network | 3/1 | 2032 | 2 | 2 |
-| `supplier_network_profiles` | Supplier Network | 2/2 | 1860 | 3 | 1 |
-| `supplier_network_qualifications` | Supplier Network | 4/2 | 1996 | 4 | 3 |
-| `supplier_network_service_areas` | Supplier Network | 3/2 | 3172 | 3 | 2 |
-| `supplier_network_trust_evidence` | Supplier Network | 3/1 | 2066 | 2 | 3 |
-| `sync_events` | Event and synchronization infrastructure | 1/1 | 650 | 0 | 2 |
-| `telegram_storefront_configs` | Channel and integration configuration | 1/2 | 2132 | 3 | 1 |
-| `tenant_business_templates` | Pack and business-template configuration | 1/1 | 3285 | 2 | 0 |
-| `tenant_creation_requests` | Identity and access | 2/1 | 3301 | 3 | 1 |
-| `tenants` | Tenant and organization core | 30/3 | 306 | 16 | 1 |
-| `users` | Identity and access | 5/2 | 372 | 62 | 0 |
+| Table | Provisional logical owner | Read/write scopes | DDL source lines |
+|---|---|---:|---|
+| `accounts_receivable` | B2B commerce | 3/3 | 1043 |
+| `ar_ledger_entries` | B2B commerce | 1/3 | 1067 |
+| `ar_payment_allocations` | B2B commerce | 1/1 | 1085 |
+| `audit_events` | Audit | 4/2 | 355 |
+| `audit_retention_policies` | Audit | 1/1 | 690 |
+| `auth_challenges` | Identity and access | 3/3 | 410 |
+| `catalog_products` | Catalog | 18/3 | 316 |
+| `channel_identities` | Channel and integration configuration | 3/2 | 497 |
+| `compliance_requests` | Compliance | 2/2 | 697 |
+| `customer_credit_terms` | B2B commerce | 4/3 | 1008 |
+| `customer_pricing_rules` | B2B commerce | 4/1 | 873 |
+| `customers` | Commerce / customer | 12/1 | 585 |
+| `delivery_assignment_commands` | Fulfillment and Logistics | 2/2 | 2588 |
+| `delivery_assignments` | Fulfillment and Logistics | 6/2 | 2224 |
+| `delivery_assignments_v44` | Fulfillment and Logistics | 0/1 | 2254 |
+| `devices` | Identity and access | 4/3 | 390 |
+| `fulfillment_commands` | Fulfillment and Logistics | 1/2 | 2551 |
+| `fulfillments` | Fulfillment and Logistics | 9/3 | 2195 |
+| `inventory_movements` | Inventory | 10/3 | 622 |
+| `invites` | Identity and access | 3/3 | 449 |
+| `invoice_items` | B2B commerce | 1/1 | 1133 |
+| `invoices` | B2B commerce | 5/2 | 1111 |
+| `locations` | Tenant and organization core | 33/4 | 485 |
+| `logistics_scheduling_activities` | Logistics Scheduling request coordination | 5/2 | 3236 |
+| `marketplace_checkout_idempotency` | Marketplace | 1/1 | 1267 |
+| `marketplace_fulfillments` | Marketplace | 1/2 | 1192 |
+| `marketplace_inventory_reservations` | Marketplace | 0/2 | 1205 |
+| `marketplace_orders` | Marketplace | 5/2 | 1154 |
+| `marketplace_payment_allocations` | Marketplace | 5/6 | 1220 |
+| `marketplace_payment_allocations_v40` | Marketplace | 0/1 | 2106 |
+| `marketplace_refunds` | Marketplace | 1/2 | 1251 |
+| `marketplace_seller_orders` | Marketplace | 8/2 | 1175 |
+| `marketplace_settlements` | Marketplace | 0/6 | 1236 |
+| `membership_roles` | Identity and access | 12/5 | 3136 |
+| `memberships` | Identity and access | 21/3 | 379 |
+| `metadata` | Persistence infrastructure | 1/1 | 297 |
+| `orders` | Commerce / customer | 28/5 | 329 |
+| `organizations` | Tenant and organization core | 20/3 | 476 |
+| `pack_lifecycle` | Pack and business-template configuration | 5/1 | 2161 |
+| `pairing_challenges` | Identity and access | 1/2 | 417, 433 |
+| `payment_accounts` | Payments | 7/1 | 776 |
+| `payment_confirmation_attempts` | Payments | 4/2 | 2420 |
+| `payment_decisions` | Payments | 2/2 | 2368 |
+| `payment_evidence` | Payments | 8/2 | 2312 |
+| `payment_idempotency_keys` | Payments | 3/5 | 2388 |
+| `payment_intents` | Payments | 8/2 | 2290 |
+| `payment_ledger_entries` | Payments | 1/5 | 824 |
+| `payment_ledger_entries_gap113` | Payments | 0/1 | 3071 |
+| `payment_operational_actions` | Payments | 2/2 | 2807 |
+| `payment_outbound_intents` | Payments | 6/2 | 1777 |
+| `payment_procurement_settlement_allocations` | Payments | 5/1 | 1827 |
+| `payment_procurement_settlements` | Payments | 4/2 | 1811 |
+| `payment_production_certifications` | Payments | 2/1 | 2841 |
+| `payment_provider_capability_certifications` | Payments | 3/2 | 2871 |
+| `payment_reconciliations` | Payments | 3/2 | 841 |
+| `payment_refunds` | Payments | 7/3 | 2988 |
+| `payment_routing_policies` | Payments | 2/1 | 2782 |
+| `payment_settlements` | Payments | 4/2 | 2949 |
+| `payment_status_query_commands` | Payments | 3/4 | 2452 |
+| `payment_verifications` | Payments | 4/1 | 2341 |
+| `payments` | Payments | 20/6 | 790 |
+| `payments_gap113` | Payments | 0/1 | 3030 |
+| `phone_routing` | Channel and integration configuration | 0/1 | 349 |
+| `procurement_award_lines` | Procurement | 3/1 | 1612 |
+| `procurement_awards` | Procurement | 5/2 | 1586 |
+| `procurement_comparison_line_offers` | Procurement | 2/1 | 1557 |
+| `procurement_comparison_suppliers` | Procurement | 1/1 | 1536 |
+| `procurement_comparisons` | Procurement | 4/1 | 1523 |
+| `procurement_demand_items` | Procurement | 4/2 | 1321 |
+| `procurement_demands` | Procurement | 6/4 | 1288 |
+| `procurement_receipt_lines` | Procurement | 3/1 | 1742 |
+| `procurement_receipts` | Procurement | 5/1 | 1722 |
+| `procurement_rfq_items` | Procurement | 5/1 | 1430 |
+| `procurement_rfq_response_items` | Procurement | 4/1 | 1483 |
+| `procurement_rfq_responses` | Procurement | 6/2 | 1459 |
+| `procurement_rfq_suppliers` | Procurement | 4/2 | 1447 |
+| `procurement_rfqs` | Procurement | 9/2 | 1404 |
+| `procurement_supplier_participants` | Procurement | 6/1 | 1369 |
+| `procurement_supplier_relationships` | Procurement | 10/2 | 1379 |
+| `purchase_order_items` | Procurement | 3/2 | 974 |
+| `purchase_orders` | Procurement | 10/3 | 950 |
+| `purchase_orders_phase17_6_new` | Procurement | 0/1 | 1656 |
+| `quote_items` | B2B commerce | 1/1 | 923 |
+| `quotes` | B2B commerce | 3/2 | 902 |
+| `restaurant_recipes` | Restaurant capability | 3/2 | 3558 |
+| `schema_migrations` | Persistence infrastructure | 1/1 | 293 |
+| `service_booking_commands` | Service capability | 2/2 | 2668 |
+| `service_bookings` | Service capability | 6/3 | 2652 |
+| `service_delivery_assessment_commands` | Service capability | 1/2 | 2606 |
+| `service_resource_availability` | Service capability | 4/1 | 3358 |
+| `service_resource_availability_commands` | Service capability | 1/1 | 3371 |
+| `service_resource_commands` | Service capability | 2/2 | 3340 |
+| `service_resource_commitments` | Service capability | 6/2 | 3394, 3440 |
+| `service_resources` | Service capability | 10/2 | 3319 |
+| `sessions` | Identity and access | 2/3 | 400 |
+| `supplier_network_capabilities` | Supplier Network | 5/2 | 3204 |
+| `supplier_network_capacity_signals` | Supplier Network | 5/2 | 1924 |
+| `supplier_network_catalog_listings` | Supplier Network | 5/2 | 1890 |
+| `supplier_network_commercial_terms` | Supplier Network | 4/2 | 1959 |
+| `supplier_network_performance_observations` | Supplier Network | 3/1 | 2032 |
+| `supplier_network_profiles` | Supplier Network | 3/2 | 1860 |
+| `supplier_network_qualifications` | Supplier Network | 6/2 | 1996 |
+| `supplier_network_service_areas` | Supplier Network | 4/2 | 3172 |
+| `supplier_network_trust_evidence` | Supplier Network | 3/1 | 2066 |
+| `sync_events` | Event and synchronization infrastructure | 1/1 | 650 |
+| `telegram_storefront_configs` | Channel and integration configuration | 1/2 | 2132 |
+| `tenant_business_templates` | Pack and business-template configuration | 1/1 | 3285 |
+| `tenant_creation_requests` | Identity and access | 2/1 | 3301 |
+| `tenants` | Tenant and organization core | 47/7 | 306 |
+| `users` | Identity and access | 5/2 | 372 |
 
 ## Foreign-key relationships
 
@@ -932,7 +934,7 @@
 | 40 | 39 | L2159 | CREATE TABLE, CREATE INDEX, INSERT | pack_lifecycle, schema_migrations |
 | 42 | 40 | L2193 | CREATE TABLE, CREATE INDEX, INSERT | fulfillments, schema_migrations |
 | 43 | 41 | L2222 | CREATE TABLE, CREATE INDEX, INSERT | delivery_assignments, schema_migrations |
-| 44 | 42 | L2249 | CREATE TABLE, ALTER TABLE, CREATE INDEX, DROP TABLE, DROP INDEX, INSERT | delivery_assignments_v44, delivery_assignments, schema_migrations |
+| 44 | 42 | L2249 | CREATE TABLE, ALTER TABLE, CREATE INDEX, DROP TABLE, INSERT | delivery_assignments_v44, delivery_assignments, schema_migrations |
 | 45 | 43 | L2288 | CREATE TABLE, CREATE INDEX, INSERT | payment_intents, payment_evidence, payment_verifications, payment_decisions, payment_idempotency_keys, schema_migrations |
 | 61 | 44 | L2408 | ALTER TABLE, INSERT | payment_evidence, schema_migrations |
 | 62 | 45 | L2418 | CREATE TABLE, CREATE INDEX, INSERT | payment_confirmation_attempts, schema_migrations |
@@ -977,7 +979,7 @@
 | 84 | 84 | L3587 | ALTER TABLE, INSERT | supplier_network_capacity_signals, schema_migrations |
 | 85 | 85 | L3596 | ALTER TABLE, INSERT, UPDATE, DELETE | procurement_rfq_suppliers, locations, schema_migrations, pack_lifecycle, telegram_storefront_configs, supplier_network_qualifications, supplier_network_commercial_terms, supplier_network_capacity_signals, supplier_network_service_areas, supplier_network_catalog_listings, supplier_network_capabilities, supplier_network_profiles, payment_outbound_intents, payment_procurement_settlements, payment_procurement_settlement_allocations, procurement_demands, procurement_demand_items, procurement_supplier_participants, procurement_supplier_relationships, procurement_rfqs, procurement_rfq_items, procurement_rfq_responses, procurement_rfq_response_items, supplier_network_trust_evidence, supplier_network_performance_observations, procurement_comparisons, procurement_comparison_suppliers, procurement_comparison_line_offers, procurement_awards, procurement_award_lines, customer_pricing_rules, quotes, quote_items, customer_credit_terms, purchase_orders, purchase_order_items, procurement_receipts, procurement_receipt_lines, accounts_receivable, ar_ledger_entries, ar_payment_allocations, invoices, invoice_items, tenants, phone_routing, metadata, organizations, channel_identities, inventory_movements, service_resources, service_resource_commands, service_resource_availability, service_resource_availability_commands, service_bookings, service_booking_commands, service_resource_commitments, service_delivery_assessment_commands, catalog_products, orders, tenant_business_templates, customers, sync_events, payment_intents, payments, payment_ledger_entries, payment_idempotency_keys, payment_evidence, payment_confirmation_attempts, payment_verifications, payment_decisions, payment_status_query_commands, marketplace_payment_allocations, payment_accounts, payment_routing_policies, payment_settlements, payment_refunds, payment_reconciliations, fulfillments, delivery_assignment_commands, delivery_assignments, logistics_scheduling_activities, fulfillment_commands, marketplace_orders, marketplace_seller_orders, marketplace_fulfillments, marketplace_inventory_reservations, marketplace_settlements, marketplace_checkout_idempotency, marketplace_refunds, users, membership_roles, memberships, tenant_creation_requests, devices, sessions, audit_retention_policies, compliance_requests, auth_challenges, pairing_challenges, invites, payment_operational_actions, payment_provider_capability_certifications, payment_production_certifications, restaurant_recipes |
 
-**Migration ordering observation:** source order is not numerically ascending. The guards cover versions 1–85, but the source code places later-numbered guards before earlier-numbered ones in several places. Preserve actual source order and dependency behavior; do not sort or rewrite migration history based on version number alone.
+**Migration ordering:** source order is not numerically ascending. The 85 guards cover historical migrations, but later-numbered guards occur before some earlier-numbered guards. Preserve actual source order and inspect dependencies; do not sort or rewrite migration history.
 
 ## Cross-domain transactional invariants
 
@@ -985,64 +987,64 @@
 
 - Functions: `createMarketplaceOrder`
 - Tables: `marketplace_orders`, `marketplace_seller_orders`, `marketplace_fulfillments`, `marketplace_inventory_reservations`, `marketplace_payment_allocations`, `marketplace_settlements`, `marketplace_checkout_idempotency`, `catalog_products`, `inventory_movements`
-- Invariant: Checkout creates canonical marketplace/seller order, fulfillment/reservation/payment allocation/settlement and idempotency records while applying inventory consequences in one SQLite transaction; preserve single commit/replay boundary.
-- Authority boundary: Marketplace command coordinates canonical Inventory and Payment records; it must not become a second Inventory or Payment authority.
+- Invariant: Checkout creates canonical marketplace/seller order, fulfillment/reservation/payment allocation/settlement and idempotency records while applying inventory consequences in one SQLite transaction.
+- Authority boundary: Marketplace orchestrates; Inventory and Payment remain canonical authorities.
 ### Marketplace cancellation compensation
 
 - Functions: `updateMarketplaceOrderStatus`
 - Tables: `orders`, `marketplace_seller_orders`, `marketplace_inventory_reservations`, `inventory_movements`, `marketplace_payment_allocations`, `payment_refunds`, `marketplace_refunds`, `marketplace_settlements`, `marketplace_fulfillments`, `payments`
 - Invariant: Cancellation releases reserved stock once and creates canonical Payment refund identity while updating Marketplace projections and lifecycle rows atomically.
-- Authority boundary: Marketplace may orchestrate compensation but Payment refund and Inventory movement remain canonical authorities.
+- Authority boundary: Marketplace orchestrates; Payment refund and Inventory movement remain canonical.
 ### Payment financial decision and ledger
 
 - Functions: `commitPaymentDecision`, `createPayment`, `transitionPayment`, `finalizePaymentRefund`, `finalizePaymentSettlement`
 - Tables: `payments`, `payment_decisions`, `payment_ledger_entries`, `payment_idempotency_keys`, `payment_verifications`, `payment_evidence`, `payment_intents`, `marketplace_payment_allocations`, `marketplace_settlements`
 - Invariant: Financial state, evidence/verification binding, ledger entries, idempotency and marketplace settlement consequences are transactionally coordinated.
-- Authority boundary: Payment Core remains sole financial decision/ledger authority; do not split transaction steps by route.
+- Authority boundary: Payment Core remains sole financial decision and ledger authority.
 ### Fulfillment and delivery command lifecycle
 
 - Functions: `transitionOrderFulfillment`, `transitionDeliveryAssignment`, `assignDeliveryCourier`
 - Tables: `orders`, `fulfillments`, `delivery_assignments`, `fulfillment_commands`, `delivery_assignment_commands`, `inventory_movements`, `locations`, `memberships`, `membership_roles`
-- Invariant: Fulfillment/delivery commands validate tenant/org/location/courier scope, durable command replay, proof/lifecycle transitions and existing Inventory consequences within their transaction boundaries.
-- Authority boundary: Keep the frozen Order → Fulfillment → Delivery Assignment → Delivery Lifecycle → Proof/Exception → Inventory consequence chain; Payment/Settlement stay outside Logistics.
+- Invariant: Commands validate tenant/org/location/courier scope, durable replay, proof/lifecycle transitions and existing Inventory consequences within transaction boundaries.
+- Authority boundary: Preserve frozen Order → Fulfillment → Delivery Assignment → Delivery Lifecycle → Proof/Exception → Inventory consequence chain; Payment/Settlement remain outside Logistics.
 ### Procurement receipt and Inventory posting
 
 - Functions: `createProcurementReceipt`, `appendInventoryMovement`
 - Tables: `purchase_orders`, `purchase_order_items`, `procurement_receipts`, `procurement_receipt_lines`, `catalog_products`, `locations`, `inventory_movements`, `audit_events`
-- Invariant: Receipt validation binds to approved procurement-origin PO lines and organization location; receipt lines and canonical inventory movements must commit or roll back together, with deterministic event IDs and replay-safe pending state.
-- Authority boundary: Procurement owns receipt intent; Inventory owns stock movement. Their transaction contract must be retained as one unit.
+- Invariant: Receipt intent binds to approved procurement-origin PO lines and organization location; receipt and canonical inventory movement posting must remain transactionally coherent and replay-safe.
+- Authority boundary: Procurement owns receipt intent; Inventory owns stock movement.
 ### Procurement RFQ-time capacity snapshot
 
 - Functions: `createProcurementRfq`
-- Tables: `procurement_rfqs`, `procurement_rfq_items`, `procurement_rfq_suppliers`, `supplier_network_capacity_signals`, `supplier_network_profiles`, `supplier_network_qualifications`
-- Invariant: Supplier capacity evidence is snapshotted at RFQ creation for each invited supplier and persisted with capture time; later evidence changes must not mutate the historical RFQ snapshot.
-- Authority boundary: Supplier Network owns source evidence; Procurement owns immutable RFQ-time snapshot. Neither snapshot nor discovery matching authorizes operational scheduling.
-### Service booking/resource commitment
+- Tables: `procurement_rfqs`, `procurement_rfq_items`, `procurement_rfq_suppliers`, `supplier_network_capacity_signals`
+- Invariant: Capacity evidence is snapshotted per invited supplier at RFQ creation with capture time; later evidence changes must not rewrite historical RFQ snapshot.
+- Authority boundary: Supplier Network owns source evidence; Procurement owns immutable RFQ snapshot. Neither authorizes operational scheduling.
+### Service resource and booking commitment
 
 - Functions: `createServiceBooking`, `transitionServiceBooking`, `createServiceResource`, `updateServiceResource`, `setServiceResourceAvailability`
 - Tables: `service_resources`, `service_resource_availability`, `service_resource_commitments`, `service_bookings`, `service_booking_commands`, `service_resource_commands`, `service_resource_availability_commands`, `orders`, `locations`
-- Invariant: Booking/resource/availability/commitment state shares resource/location scope and idempotent command records; avoid extracting handlers separately from their persistence and scheduling invariant.
-- Authority boundary: Service capability owns booking/resource commitments; it does not become a second Logistics Scheduling authority.
+- Invariant: Booking/resource/availability/commitment state shares resource/location scope and idempotent command records.
+- Authority boundary: Service capability owns booking/resource commitments; no second Logistics Scheduling authority.
 
 ## Cohesive units that must remain together
 
-- **Marketplace checkout and cancellation:** `createMarketplaceOrder`, `updateMarketplaceOrderStatus`. Shared Marketplace lifecycle, inventory reservations/movements, Payment allocation/refund, settlement and idempotency effects.
-- **Payment decision/refund/settlement core:** `commitPaymentDecision`, `createPayment`, `transitionPayment`, `createPaymentRefundRequest`, `finalizePaymentRefund`, `createPaymentSettlement`, `finalizePaymentSettlement`. Financial decision, ledger, evidence, idempotency, and Marketplace allocation effects are transactionally coupled.
-- **Inventory movement primitive and consumers:** `appendInventoryMovement`, `appendInventoryMovementBatch`, `createProcurementReceipt`, `createMarketplaceOrder`, `updateMarketplaceOrderStatus`, `transitionOrderFulfillment`, `transitionDeliveryAssignment`. Canonical Inventory ledger is consumed by Procurement, Marketplace and Fulfillment; keep the existing transaction/replay primitive authoritative.
-- **Fulfillment and delivery lifecycle:** `assignDeliveryCourier`, `transitionDeliveryAssignment`, `transitionOrderFulfillment`. Command idempotency, tenant/location/courier scope, proof and Inventory consequence share invariants.
-- **Service resource and booking lifecycle:** `createServiceResource`, `updateServiceResource`, `setServiceResourceAvailability`, `createServiceBooking`, `transitionServiceBooking`. Resource availability, commitments, bookings and location-scoped authorization are coupled.
-- **Identity/session/membership lifecycle:** `createTenantForUser`, `ensureMembership`, `createSession`, `authenticateSessionToken`, `consumeInvite`, `consumePairingChallenge`, `changeMembershipRole`, `assignMembershipContextualRole`, `revokeMembershipContextualRole`. Membership, contextual roles, device/session identity and tenant scope must remain coherent.
+- **Marketplace checkout and cancellation:** `createMarketplaceOrder`, `updateMarketplaceOrderStatus`. Shared lifecycle, inventory reservations/movements, Payment allocation/refund, settlement and idempotency.
+- **Payment decision/refund/settlement core:** `commitPaymentDecision`, `createPayment`, `transitionPayment`, `createPaymentRefundRequest`, `finalizePaymentRefund`, `createPaymentSettlement`, `finalizePaymentSettlement`. Financial decision, ledger, evidence, idempotency and Marketplace allocation effects.
+- **Inventory movement primitive and consumers:** `appendInventoryMovement`, `appendInventoryMovementBatch`, `createProcurementReceipt`, `createMarketplaceOrder`, `updateMarketplaceOrderStatus`, `transitionOrderFulfillment`, `transitionDeliveryAssignment`. Canonical Inventory ledger is consumed by Procurement, Marketplace and Fulfillment.
+- **Fulfillment and delivery lifecycle:** `assignDeliveryCourier`, `transitionDeliveryAssignment`, `transitionOrderFulfillment`. Command idempotency, tenant/location/courier scope, proof and Inventory consequence.
+- **Service resource and booking lifecycle:** `createServiceResource`, `updateServiceResource`, `setServiceResourceAvailability`, `createServiceBooking`, `transitionServiceBooking`. Resource availability, commitments, bookings and location-scoped authorization.
+- **Identity/session/membership lifecycle:** `createTenantForUser`, `ensureMembership`, `createSession`, `authenticateSessionToken`, `consumeInvite`, `consumePairingChallenge`, `changeMembershipRole`, `assignMembershipContextualRole`, `revokeMembershipContextualRole`. Membership, contextual roles, device/session identity and tenant scope.
 
 ## Potentially bounded extraction candidates (not approved)
 
-| Candidate | Functions | Reason / dependencies | Risk | Status |
+| Candidate | Functions | Tables | Risk | Status / dependency |
 |---|---|---|---|---|
-| `restaurant_recipes` | `listRestaurantRecipes`, `createRestaurantRecipe`, `updateRestaurantRecipe` | Small, single-domain persistence cluster with a dedicated table; creation/update still write audit events and serialize through the shared Inventory transaction slot. | low-to-medium | candidate for a later proof slice only; not approved |
-| `tenant_business_templates` | `getBusinessTemplateConfig`, `saveBusinessTemplateConfig` | Small tenant configuration cluster; must retain tenant lookup, owner authorization at route boundary, fixed template-key allowlist and audit. | low-to-medium | candidate for later proof only; route/store behavior and migration coupling need test |
-| `pack_lifecycle` | `getPackLifecycle`, `transitionPackLifecycle` | Cohesive lifecycle record but transition calls Pack readiness preconditions, role/actor checks and shared audit. | medium | candidate for later proof only; not approved |
+| `restaurant_recipes` | `listRestaurantRecipes`, `createRestaurantRecipe`, `updateRestaurantRecipe` | `restaurant_recipes` | low-to-medium | candidate for proof only; not approved; Audit writes and shared Inventory transaction-slot serialization still apply. |
+| `tenant_business_templates` | `getBusinessTemplateConfig`, `saveBusinessTemplateConfig` | `tenant_business_templates` | low-to-medium | candidate for proof only; not approved; Tenant lookup, owner authorization at HTTP boundary, allowlisted keys and audit. |
+| `pack_lifecycle` | `getPackLifecycle`, `transitionPackLifecycle` | `pack_lifecycle` | medium | candidate for proof only; not approved; Pack readiness preconditions, actor checks and shared audit. |
 
 ## Decision
 
-**No extraction from `store-sqlite.js` is approved by this audit pass.** The immediate next step is to validate the SQL/call graph against tests and inspect the cross-domain transactions above. A domain-shaped table prefix or function-name cluster is not a safe persistence boundary.
+**No extraction from `store-sqlite.js` is approved by this audit pass.** Validate the SQL and caller graph against tests before considering any bounded slice. A domain-shaped table prefix or function-name cluster is not proof of a safe persistence boundary.
 
-Machine-readable statement/function/table/index/FK/migration records: `sqlite-dependency-map.json`.
+Machine-readable full SQL call/statement/function/table/index/FK/migration records: `sqlite-dependency-map.json`.
