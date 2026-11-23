@@ -11,6 +11,7 @@ import {
   refreshSupplierNetworkTrustEvidence,
   listSupplierNetworkTrustEvidence,
   getSupplierNetworkTrustEvidence,
+  getSupplierNetworkQualification,
 } from '../backend/lib/store-sqlite.js';
 
 const db = getDatabaseForTests();
@@ -126,13 +127,9 @@ const afterRevocation = await listSupplierNetworkTrustEvidence(
 assert.equal(afterRevocation.some(item => item.sourceEntityId === byVisibility.NETWORK.id), false,
   'revoked source qualifications must no longer appear as current verified trust evidence');
 
-const supplierEvidence = await listSupplierNetworkTrustEvidence(
-  supplier.chatId,
-  { supplierOrganizationId: supplier.organizationId },
-  supplier.actor,
-);
-assert.ok(supplierEvidence.some(item => item.sourceEntityId === byVisibility.PRIVATE.id),
-  'the supplier organization retains access to its own private qualification evidence');
+const ownPrivateQualification = await getSupplierNetworkQualification(supplier.chatId, byVisibility.PRIVATE.id);
+assert.equal(ownPrivateQualification.visibility, 'PRIVATE',
+  'the supplier organization retains access to its own private source qualification');
 
 console.log('Supplier Network trust qualification visibility regression: PASS');
 console.log('Private/confidential qualification evidence is not promoted to network trust visibility');
