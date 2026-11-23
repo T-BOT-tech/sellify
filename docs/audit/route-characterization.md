@@ -1,31 +1,59 @@
 # Route characterization
 
-Baseline `e216db18ade2a5ffa66aff9dc3096e207251a918`; source `backend/server.js` at blob `a4a5abdcaae344252fba26c600406829c4e98bce`.
+Baseline `e216db18ade2a5ffa66aff9dc3096e207251a918`; source `backend/server.js` blob `a4a5abdcaae344252fba26c600406829c4e98bce`.
 
 ## Inventory totals
 
-- **253** route entries: **247** explicit `ROUTES` entries, **5** intentional inline/static handlers, and the separate `/health` infrastructure endpoint.
-- **137** distinct named handler functions across the explicit route table.
-- Handler source spans resolved for all 247 named route handlers; inline handlers are separately identified.
-- Classification: 229 domain-capability entries, 13 mixed/channel-boundary entries, 6 infrastructure entries, and 5 inline/static entries.
-- Direct imported SQLite store dependencies mapped for 243 entries, with 873 direct store-function call references.
+- **253** route entries: **247** explicit `ROUTES` entries and **6** pre-dispatch entries (five intentional inline/static handlers plus `/health` infrastructure).
+- **137** distinct named handlers; **0** unresolved handler references and **0** duplicate explicit method/pattern keys.
+- Named handler source spans resolve; `/health` is intentionally inline.
+- Classification: **229** domain-capability, **13** mixed, **6** infrastructure and **5** inline/static.
+- Methods: GET 120, POST 102, PATCH 28, PUT 2, ANY 1.
+- The earlier heuristic's 35 unclassified entries were not broken handlers: 30 real routes needed better classification and five were intentional inline/static handlers.
+- **166** entries are method-conditional. **153** route entries use handlers registered for multiple methods. The JSON now separates registered route methods from explicit `req.method` branches and fallback methods; dependency and validation evidence remains handler-wide unless a branch is isolated.
 
-## Authentication and authorization evidence
+## Route-to-store dependency map
 
-The dispatcher rate-limits before route dispatch (POST/PATCH write budget; other methods read budget), but does **not** apply universal session/auth middleware. Handler or delegated boundaries establish trust. Source extraction found: 224 route entries using tenant-scoped sessions; 187 using central authorization; 12 signed Telegram identity paths; 4 bearer-credential paths; 3 one-time challenge/invite paths; and 7 explicitly public or token-scoped buyer/read surfaces. These categories overlap and are not additive.
+- **873** direct route-to-store references across **196** distinct exported store functions.
+- **790** references join to SQL table/operation evidence; **83** have no SQL in their exported function span and may be wrappers, helper delegates or pure projections.
+- **90** distinct tables are reached through direct exported store functions. Transitive exported functions, internal-helper SQL candidates and PaymentCore-delegated store calls are represented separately.
+- Each matched store dependency now includes tables, operation types, SQL statement count, transaction markers, called exported functions, internal helper names and provisional area hints. Empty direct SQL tables do not mean the function has no persistence effect; inspect the separate helper/delegation fields.
+- PaymentCore routes include the delegated method, its permission expression, called store functions, SQL tables, operations and transaction markers. This closes the previous gap where PaymentCore-mediated persistence was invisible in the HTTP route map.
 
-Literal `requireAuthorization` permission keys were captured for 166 route entries. Another 17 entries expose helper-based policies such as `requireOwnerRole`, invite-role restrictions, device self-revocation, or logistics assignment checks. **166 entries are method-conditional**: a shared handler may apply different policy by HTTP method. The JSON therefore records handler method branches and does not imply every key applies to every method.
+## Authentication and authorization
 
-The seven public/token-scoped surfaces are country-pack options, public catalog read, published Telegram storefront metadata, marketplace search, discovery products, discovery organizations, and marketplace order tracking (tracking-token scoped). Payment provider notifications are a separate provider-authentication path: PaymentCore invokes the provider adapter's `authenticateNotification`; the generic adapters currently declare this capability false and fail closed rather than accepting a caller-provided authentication assertion.
+The dispatcher rate-limits before dispatch but does **not** provide universal session/auth middleware. Authentication and authorization are established at handler, delegated capability, store or public/token boundary.
 
-## Validation, errors, idempotency, transactions and tests
+The JSON records:
+- `requireAuthorization` and `requireOwnerRole` calls with source line and arguments;
+- courier ownership, location and event-tenant scope helpers;
+- explicit permission literals and locally resolvable permission expressions;
+- PaymentCore `#authorize` checks and delegated store functions;
+- store-level action/scope helpers, distinguishing membership validation from an action permission.
 
-Per route, the JSON captures input-validation source lines, explicit status/error codes, success status codes, idempotency references, direct store functions, store-level idempotency evidence, transaction markers, side-effect hints and test filename candidates. 70 route entries have direct store dependencies with idempotency/command identity evidence. 46 have explicit handler error codes. 210 have filename-based test candidates; 43 do not. **These candidate matches are not proof of coverage**; tests must be opened and mapped to the actual route contract before certification.
+The categories overlap. Public projections, signed identity flows, provider notifications, one-time challenges, admin bearer routes and self-service session operations are not expected to carry a tenant business permission in the same way as an organization mutation.
 
-The dispatcher maps thrown handler errors to `e.statusCode || 500`; unmatched GET may fall through to static serving, and unmatched non-GET returns 404. Store transaction boundaries are linked per route through the SQLite dependency inventory; the route handler's lack of a transaction marker does not mean no transaction exists.
+### Security review queue
+
+**Three route entries need explicit policy clarification or remediation review:**
+
+1. `POST /sync/:chatId` — session authentication only, then `saveQueuedOrders` writes canonical orders and ensures canonical Payment state. The store function accepts no actor and has no role-permission check. The central role policy contains `orders:create` and `sync:manual`; confirm intended device-role access and enforce the applicable permission if restricted. Source: `backend/server.js:1221-1243`, `backend/lib/store-sqlite.js:12172-12270`.
+2. `GET /tenants/:chatId/payments/routing/policies` — session authentication only; direct store list function is tenant/organization scoped but has no action-level authorization evidence.
+3. `POST /tenants/:chatId/payments/routing/policies` — session authentication only; direct store upsert function persists routing policy without action-level authorization. `PaymentCore.resolveRouting` separately checks `payments:route`, but this HTTP handler bypasses it. Source: `backend/server.js:2397-2411`, `backend/lib/store-sqlite.js:9717-9762`, `backend/lib/payments/payment-core.js:25-29`.
+
+The membership-list and logout endpoints are self-service and session-scoped. Public/token-scoped projections and provider/identity-authenticated routes are separately classified; missing tenant permission keys on those routes are not automatically defects.
+
+## Validation, errors, idempotency and transactions
+
+For each route entry, the JSON records handler source span, validation excerpts and line evidence where resolved, explicit status/error codes, idempotency references, direct and delegated store functions, SQL tables/operations, transaction markers, side-effect hints and test filename candidates.
+
+- Thrown handler errors are mapped by the dispatcher to `e.statusCode || 500`; unmatched GET may fall through to static serving, while unmatched non-GET returns 404.
+- A handler without a transaction marker may call a transactional store function; direct and delegated transaction evidence is listed separately.
+- A shared handler's store/validation/error evidence is a union of the handler body. Use `methodBranchCoverage` before attributing a side effect to one HTTP method.
+- Filename-based test candidates are search leads, not proof. Open each test and confirm route, method, auth, scope, idempotency, failure and side-effect assertions.
 
 ## Classification and extraction decision
 
-Classification distinguishes domain capability from mixed channel/cross-domain boundaries, infrastructure and intentional inline/static handlers. It is not a canonical ownership assignment. The prior heuristic's 35 unknowns were not broken routes: the manual baseline identified 30 real entries needing better classification and five intentional inline/static handlers. This map now records those entries rather than treating the heuristic as a defect detector.
+Classification distinguishes domain capability, mixed cross-domain/channel boundary, infrastructure and inline/static. It is not a canonical ownership assignment. URL prefixes, Pack names and handler names are not safe extraction boundaries.
 
-**No route extraction is approved.** Keep cross-domain/channel handlers and their called store functions together until transaction, authorization, and invariant edges are fully verified. URL prefixes alone are not a safe modularization boundary.
+**No route extraction is approved.** Complete method-specific authorization and branch behavior review first; preserve existing transaction owners and canonical authorities.
