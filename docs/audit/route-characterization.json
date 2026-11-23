@@ -1,0 +1,1990 @@
+{
+  "baseCommit": "e216db18ade2a5ffa66aff9dc3096e207251a918",
+  "sourceBlob": "a4a5abdcaae344252fba26c600406829c4e98bce",
+  "stats": {
+    "explicit": 247,
+    "distinctHandlers": 137
+  },
+  "routes": [
+    {
+      "id": 1,
+      "method": "POST",
+      "pattern": "^\\/integrations\\/payments\\/([^/]+)\\/notifications$",
+      "path": "/integrations/payments/([^/]+)/notifications",
+      "handler": "handlePaymentProviderNotification",
+      "routeLine": 3841
+    },
+    {
+      "id": 2,
+      "method": "POST",
+      "pattern": "^\\/auth\\/telegram$",
+      "path": "/auth/telegram",
+      "handler": "handleTelegramAuth",
+      "routeLine": 3842
+    },
+    {
+      "id": 3,
+      "method": "POST",
+      "pattern": "^\\/auth\\/migrate-legacy$",
+      "path": "/auth/migrate-legacy",
+      "handler": "handleLegacyMigration",
+      "routeLine": 3843
+    },
+    {
+      "id": 4,
+      "method": "GET",
+      "pattern": "^\\/auth\\/country-packs$",
+      "path": "/auth/country-packs",
+      "handler": "handleOnboardingCountryOptions",
+      "routeLine": 3844
+    },
+    {
+      "id": 5,
+      "method": "POST",
+      "pattern": "^\\/auth\\/tenants$",
+      "path": "/auth/tenants",
+      "handler": "handleCreateTenant",
+      "routeLine": 3845
+    },
+    {
+      "id": 6,
+      "method": "GET",
+      "pattern": "^\\/auth\\/tenants$",
+      "path": "/auth/tenants",
+      "handler": "handleMyTenants",
+      "routeLine": 3846
+    },
+    {
+      "id": 7,
+      "method": "POST",
+      "pattern": "^\\/auth\\/select-tenant$",
+      "path": "/auth/select-tenant",
+      "handler": "handleSelectTenant",
+      "routeLine": 3847
+    },
+    {
+      "id": 8,
+      "method": "POST",
+      "pattern": "^\\/auth\\/logout$",
+      "path": "/auth/logout",
+      "handler": "handleLogout",
+      "routeLine": 3848
+    },
+    {
+      "id": 9,
+      "method": "POST",
+      "pattern": "^\\/auth\\/pairing$",
+      "path": "/auth/pairing",
+      "handler": "handleCreatePairing",
+      "routeLine": 3849
+    },
+    {
+      "id": 10,
+      "method": "POST",
+      "pattern": "^\\/auth\\/pair$",
+      "path": "/auth/pair",
+      "handler": "handlePairDevice",
+      "routeLine": 3850
+    },
+    {
+      "id": 11,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/memberships$",
+      "path": "/tenants/([^/]+)/memberships",
+      "handler": "handleListTenantMemberships",
+      "routeLine": 3851
+    },
+    {
+      "id": 12,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/packs\\/([^/]+)\\/lifecycle$",
+      "path": "/tenants/([^/]+)/packs/([^/]+)/lifecycle",
+      "handler": "handlePackLifecycle",
+      "routeLine": 3852
+    },
+    {
+      "id": 13,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/packs\\/([^/]+)\\/lifecycle$",
+      "path": "/tenants/([^/]+)/packs/([^/]+)/lifecycle",
+      "handler": "handlePackLifecycle",
+      "routeLine": 3853
+    },
+    {
+      "id": 14,
+      "method": "POST",
+      "pattern": "^\\/auth\\/membership-role$",
+      "path": "/auth/membership-role",
+      "handler": "handleChangeMembershipRole",
+      "routeLine": 3854
+    },
+    {
+      "id": 15,
+      "method": "POST",
+      "pattern": "^\\/auth\\/membership-contextual-role$",
+      "path": "/auth/membership-contextual-role",
+      "handler": "handleAssignMembershipContextualRole",
+      "routeLine": 3855
+    },
+    {
+      "id": 16,
+      "method": "POST",
+      "pattern": "^\\/auth\\/membership-contextual-role\\/revoke$",
+      "path": "/auth/membership-contextual-role/revoke",
+      "handler": "handleRevokeMembershipContextualRole",
+      "routeLine": 3856
+    },
+    {
+      "id": 17,
+      "method": "POST",
+      "pattern": "^\\/auth\\/invites$",
+      "path": "/auth/invites",
+      "handler": "handleCreateInvite",
+      "routeLine": 3857
+    },
+    {
+      "id": 18,
+      "method": "POST",
+      "pattern": "^\\/auth\\/invites\\/revoke$",
+      "path": "/auth/invites/revoke",
+      "handler": "handleRevokeInvite",
+      "routeLine": 3858
+    },
+    {
+      "id": 19,
+      "method": "POST",
+      "pattern": "^\\/auth\\/accept-invite$",
+      "path": "/auth/accept-invite",
+      "handler": "handleAcceptInvite",
+      "routeLine": 3859
+    },
+    {
+      "id": 20,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/invites$",
+      "path": "/tenants/([^/]+)/invites",
+      "handler": "handleListInvites",
+      "routeLine": 3860
+    },
+    {
+      "id": 21,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/devices$",
+      "path": "/tenants/([^/]+)/devices",
+      "handler": "handleListDevices",
+      "routeLine": 3861
+    },
+    {
+      "id": 22,
+      "method": "POST",
+      "pattern": "^\\/auth\\/devices\\/revoke$",
+      "path": "/auth/devices/revoke",
+      "handler": "handleRevokeDevice",
+      "routeLine": 3862
+    },
+    {
+      "id": 23,
+      "method": "POST",
+      "pattern": "^\\/sync\\/([^/]+)$",
+      "path": "/sync/([^/]+)",
+      "handler": "handleSync",
+      "routeLine": 3863
+    },
+    {
+      "id": 24,
+      "method": "POST",
+      "pattern": "^\\/events\\/([^/]+)$",
+      "path": "/events/([^/]+)",
+      "handler": "handleSyncEvents",
+      "routeLine": 3864
+    },
+    {
+      "id": 25,
+      "method": "GET",
+      "pattern": "^\\/sync\\/([^/]+)$",
+      "path": "/sync/([^/]+)",
+      "handler": "handleSyncPull",
+      "routeLine": 3865
+    },
+    {
+      "id": 26,
+      "method": "GET",
+      "pattern": "^\\/orders\\/([^/]+)$",
+      "path": "/orders/([^/]+)",
+      "handler": "handleOrdersFeed",
+      "routeLine": 3866
+    },
+    {
+      "id": 27,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/service-provider\\/resources$",
+      "path": "/tenants/([^/]+)/service-provider/resources",
+      "handler": "handleServiceProviderResources",
+      "routeLine": 3867
+    },
+    {
+      "id": 28,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/service-provider\\/bookings$",
+      "path": "/tenants/([^/]+)/service-provider/bookings",
+      "handler": "handleServiceProviderBookings",
+      "routeLine": 3868
+    },
+    {
+      "id": 29,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/service-resources$",
+      "path": "/tenants/([^/]+)/service-resources",
+      "handler": "handleServiceResources",
+      "routeLine": 3869
+    },
+    {
+      "id": 30,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/service-resources$",
+      "path": "/tenants/([^/]+)/service-resources",
+      "handler": "handleServiceResources",
+      "routeLine": 3870
+    },
+    {
+      "id": 31,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/service-resources\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/service-resources/([^/]+)",
+      "handler": "handleServiceResources",
+      "routeLine": 3871
+    },
+    {
+      "id": 32,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/service-resources\\/([^/]+)\\/availability$",
+      "path": "/tenants/([^/]+)/service-resources/([^/]+)/availability",
+      "handler": "handleServiceResourceAvailability",
+      "routeLine": 3872
+    },
+    {
+      "id": 33,
+      "method": "PUT",
+      "pattern": "^\\/tenants\\/([^/]+)\\/service-resources\\/([^/]+)\\/availability$",
+      "path": "/tenants/([^/]+)/service-resources/([^/]+)/availability",
+      "handler": "handleServiceResourceAvailability",
+      "routeLine": 3873
+    },
+    {
+      "id": 34,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/service-bookings$",
+      "path": "/tenants/([^/]+)/orders/([^/]+)/service-bookings",
+      "handler": "handleServiceBookings",
+      "routeLine": 3874
+    },
+    {
+      "id": 35,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/service-bookings$",
+      "path": "/tenants/([^/]+)/orders/([^/]+)/service-bookings",
+      "handler": "handleServiceBookings",
+      "routeLine": 3875
+    },
+    {
+      "id": 36,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/service-bookings\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/orders/([^/]+)/service-bookings/([^/]+)",
+      "handler": "handleServiceBookings",
+      "routeLine": 3876
+    },
+    {
+      "id": 37,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/service-delivery-assessment$",
+      "path": "/tenants/([^/]+)/orders/([^/]+)/service-delivery-assessment",
+      "handler": "handleServiceDeliveryAssessment",
+      "routeLine": 3877
+    },
+    {
+      "id": 38,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/fulfillment$",
+      "path": "/tenants/([^/]+)/orders/([^/]+)/fulfillment",
+      "handler": "handleOrderFulfillment",
+      "routeLine": 3878
+    },
+    {
+      "id": 39,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/delivery-assignment$",
+      "path": "/tenants/([^/]+)/orders/([^/]+)/delivery-assignment",
+      "handler": "handleDeliveryAssignment",
+      "routeLine": 3879
+    },
+    {
+      "id": 40,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/delivery-assignment$",
+      "path": "/tenants/([^/]+)/orders/([^/]+)/delivery-assignment",
+      "handler": "handleDeliveryAssignment",
+      "routeLine": 3880
+    },
+    {
+      "id": 41,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/logistics\\/scheduling$",
+      "path": "/tenants/([^/]+)/logistics/scheduling",
+      "handler": "handleLogisticsScheduling",
+      "routeLine": 3881
+    },
+    {
+      "id": 42,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/logistics\\/scheduling$",
+      "path": "/tenants/([^/]+)/logistics/scheduling",
+      "handler": "handleLogisticsScheduling",
+      "routeLine": 3882
+    },
+    {
+      "id": 43,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/logistics\\/scheduling\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/logistics/scheduling/([^/]+)",
+      "handler": "handleLogisticsScheduling",
+      "routeLine": 3883
+    },
+    {
+      "id": 44,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/logistics\\/scheduling\\/([^/]+)\\/evaluate$",
+      "path": "/tenants/([^/]+)/logistics/scheduling/([^/]+)/evaluate",
+      "handler": "handleLogisticsScheduling",
+      "routeLine": 3884
+    },
+    {
+      "id": 45,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/logistics\\/scheduling\\/([^/]+)\\/transition$",
+      "path": "/tenants/([^/]+)/logistics/scheduling/([^/]+)/transition",
+      "handler": "handleLogisticsScheduling",
+      "routeLine": 3885
+    },
+    {
+      "id": 46,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/delivery-assignments$",
+      "path": "/tenants/([^/]+)/delivery-assignments",
+      "handler": "handleDeliveryAssignmentsList",
+      "routeLine": 3886
+    },
+    {
+      "id": 47,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/delivery-assignment$",
+      "path": "/tenants/([^/]+)/orders/([^/]+)/delivery-assignment",
+      "handler": "handleDeliveryAssignment",
+      "routeLine": 3887
+    },
+    {
+      "id": 48,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/fulfillment$",
+      "path": "/tenants/([^/]+)/orders/([^/]+)/fulfillment",
+      "handler": "handleOrderFulfillment",
+      "routeLine": 3888
+    },
+    {
+      "id": 49,
+      "method": "GET",
+      "pattern": "^\\/catalog\\/([^/]+)$",
+      "path": "/catalog/([^/]+)",
+      "handler": "handleCatalogGet",
+      "routeLine": 3889
+    },
+    {
+      "id": 50,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/storefront-channels$",
+      "path": "/tenants/([^/]+)/storefront-channels",
+      "handler": "handleSellerStorefrontChannelsGet",
+      "routeLine": 3890
+    },
+    {
+      "id": 51,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/storefront-consistency$",
+      "path": "/tenants/([^/]+)/storefront-consistency",
+      "handler": "handleCrossChannelConsistencyGet",
+      "routeLine": 3891
+    },
+    {
+      "id": 52,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/telegram-storefront$",
+      "path": "/tenants/([^/]+)/telegram-storefront",
+      "handler": "handleTelegramStorefrontGet",
+      "routeLine": 3892
+    },
+    {
+      "id": 53,
+      "method": "GET",
+      "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)$",
+      "path": "/api/telegram-storefront/([^/]+)",
+      "handler": "handleTelegramStorefrontPublicGet",
+      "routeLine": 3893
+    },
+    {
+      "id": 54,
+      "method": "POST",
+      "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)\\/buyer-session$",
+      "path": "/api/telegram-storefront/([^/]+)/buyer-session",
+      "handler": "handleTelegramStorefrontBuyerSession",
+      "routeLine": 3894
+    },
+    {
+      "id": 55,
+      "method": "GET",
+      "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)\\/orders\\/([^/]+)\\/service-bookings$",
+      "path": "/api/telegram-storefront/([^/]+)/orders/([^/]+)/service-bookings",
+      "handler": "handleTelegramStorefrontServiceBookings",
+      "routeLine": 3895
+    },
+    {
+      "id": 56,
+      "method": "POST",
+      "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)\\/orders\\/([^/]+)\\/service-bookings$",
+      "path": "/api/telegram-storefront/([^/]+)/orders/([^/]+)/service-bookings",
+      "handler": "handleTelegramStorefrontServiceBookings",
+      "routeLine": 3896
+    },
+    {
+      "id": 57,
+      "method": "GET",
+      "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)\\/orders\\/([^/]+)\\/service-feasibility$",
+      "path": "/api/telegram-storefront/([^/]+)/orders/([^/]+)/service-feasibility",
+      "handler": "handleTelegramStorefrontServiceFeasibility",
+      "routeLine": 3897
+    },
+    {
+      "id": 58,
+      "method": "POST",
+      "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)\\/orders\\/([^/]+)\\/service-bookings\\/([^/]+)\\/cancel$",
+      "path": "/api/telegram-storefront/([^/]+)/orders/([^/]+)/service-bookings/([^/]+)/cancel",
+      "handler": "handleTelegramStorefrontServiceBookingCancel",
+      "routeLine": 3898
+    },
+    {
+      "id": 59,
+      "method": "GET",
+      "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)\\/orders\\/([^/]+)\\/fulfillment$",
+      "path": "/api/telegram-storefront/([^/]+)/orders/([^/]+)/fulfillment",
+      "handler": "handleTelegramStorefrontFulfillment",
+      "routeLine": 3899
+    },
+    {
+      "id": 60,
+      "method": "GET",
+      "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)\\/orders\\/([^/]+)$",
+      "path": "/api/telegram-storefront/([^/]+)/orders/([^/]+)",
+      "handler": "handleTelegramStorefrontOrder",
+      "routeLine": 3900
+    },
+    {
+      "id": 61,
+      "method": "GET",
+      "pattern": "^\\/api\\/telegram-storefront\\/([^/]+)\\/orders$",
+      "path": "/api/telegram-storefront/([^/]+)/orders",
+      "handler": "handleTelegramStorefrontOrderHistory",
+      "routeLine": 3901
+    },
+    {
+      "id": 62,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/telegram-storefront\\/verify$",
+      "path": "/tenants/([^/]+)/telegram-storefront/verify",
+      "handler": "handleTelegramStorefrontVerify",
+      "routeLine": 3902
+    },
+    {
+      "id": 63,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/telegram-storefront$",
+      "path": "/tenants/([^/]+)/telegram-storefront",
+      "handler": "handleTelegramStorefrontPatch",
+      "routeLine": 3903
+    },
+    {
+      "id": 64,
+      "method": "POST",
+      "pattern": "^\\/catalog\\/([^/]+)$",
+      "path": "/catalog/([^/]+)",
+      "handler": "handleCatalogPost",
+      "routeLine": 3904
+    },
+    {
+      "id": 65,
+      "method": "GET",
+      "pattern": "^\\/tenants$",
+      "path": "/tenants",
+      "handler": "handleTenantsList",
+      "routeLine": 3905
+    },
+    {
+      "id": 66,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/customers$",
+      "path": "/tenants/([^/]+)/customers",
+      "handler": "handleCustomersList",
+      "routeLine": 3906
+    },
+    {
+      "id": 67,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/customers$",
+      "path": "/tenants/([^/]+)/customers",
+      "handler": "handleCustomerCreate",
+      "routeLine": 3907
+    },
+    {
+      "id": 68,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/customers\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/customers/([^/]+)",
+      "handler": "handleCustomerGet",
+      "routeLine": 3908
+    },
+    {
+      "id": 69,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/customers\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/customers/([^/]+)",
+      "handler": "handleCustomerPatch",
+      "routeLine": 3909
+    },
+    {
+      "id": 70,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/pricing$",
+      "path": "/tenants/([^/]+)/b2b/pricing",
+      "handler": "handleCustomerPricing",
+      "routeLine": 3910
+    },
+    {
+      "id": 71,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/pricing$",
+      "path": "/tenants/([^/]+)/b2b/pricing",
+      "handler": "handleCustomerPricing",
+      "routeLine": 3911
+    },
+    {
+      "id": 72,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/pricing\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/b2b/pricing/([^/]+)",
+      "handler": "handleCustomerPricing",
+      "routeLine": 3912
+    },
+    {
+      "id": 73,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/pricing\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/b2b/pricing/([^/]+)",
+      "handler": "handleCustomerPricing",
+      "routeLine": 3913
+    },
+    {
+      "id": 74,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capabilities$",
+      "path": "/tenants/([^/]+)/supplier-network/capabilities",
+      "handler": "handleSupplierNetworkCapabilities",
+      "routeLine": 3914
+    },
+    {
+      "id": 75,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capabilities$",
+      "path": "/tenants/([^/]+)/supplier-network/capabilities",
+      "handler": "handleSupplierNetworkCapabilities",
+      "routeLine": 3915
+    },
+    {
+      "id": 76,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capabilities\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/supplier-network/capabilities/([^/]+)",
+      "handler": "handleSupplierNetworkCapabilities",
+      "routeLine": 3916
+    },
+    {
+      "id": 77,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capabilities\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/supplier-network/capabilities/([^/]+)",
+      "handler": "handleSupplierNetworkCapabilities",
+      "routeLine": 3917
+    },
+    {
+      "id": 78,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capabilities\\/([^/]+)\\/(activate|deactivate)$",
+      "path": "/tenants/([^/]+)/supplier-network/capabilities/([^/]+)/(activate|deactivate)",
+      "handler": "handleSupplierNetworkCapabilities",
+      "routeLine": 3918
+    },
+    {
+      "id": 79,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/catalog$",
+      "path": "/tenants/([^/]+)/supplier-network/catalog",
+      "handler": "handleSupplierNetworkCatalog",
+      "routeLine": 3919
+    },
+    {
+      "id": 80,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/catalog$",
+      "path": "/tenants/([^/]+)/supplier-network/catalog",
+      "handler": "handleSupplierNetworkCatalog",
+      "routeLine": 3920
+    },
+    {
+      "id": 81,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/catalog\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/supplier-network/catalog/([^/]+)",
+      "handler": "handleSupplierNetworkCatalog",
+      "routeLine": 3921
+    },
+    {
+      "id": 82,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/catalog\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/supplier-network/catalog/([^/]+)",
+      "handler": "handleSupplierNetworkCatalog",
+      "routeLine": 3922
+    },
+    {
+      "id": 83,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/catalog\\/([^/]+)\\/(activate|deactivate)$",
+      "path": "/tenants/([^/]+)/supplier-network/catalog/([^/]+)/(activate|deactivate)",
+      "handler": "handleSupplierNetworkCatalog",
+      "routeLine": 3923
+    },
+    {
+      "id": 84,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/qualifications$",
+      "path": "/tenants/([^/]+)/supplier-network/qualifications",
+      "handler": "handleSupplierNetworkQualifications",
+      "routeLine": 3924
+    },
+    {
+      "id": 85,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/qualifications$",
+      "path": "/tenants/([^/]+)/supplier-network/qualifications",
+      "handler": "handleSupplierNetworkQualifications",
+      "routeLine": 3925
+    },
+    {
+      "id": 86,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/qualifications\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/supplier-network/qualifications/([^/]+)",
+      "handler": "handleSupplierNetworkQualifications",
+      "routeLine": 3926
+    },
+    {
+      "id": 87,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/qualifications\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/supplier-network/qualifications/([^/]+)",
+      "handler": "handleSupplierNetworkQualifications",
+      "routeLine": 3927
+    },
+    {
+      "id": 88,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/qualifications\\/([^/]+)\\/(verify|document|revoke)$",
+      "path": "/tenants/([^/]+)/supplier-network/qualifications/([^/]+)/(verify|document|revoke)",
+      "handler": "handleSupplierNetworkQualifications",
+      "routeLine": 3928
+    },
+    {
+      "id": 89,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/commercial-terms$",
+      "path": "/tenants/([^/]+)/supplier-network/commercial-terms",
+      "handler": "handleSupplierNetworkCommercialTerms",
+      "routeLine": 3929
+    },
+    {
+      "id": 90,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/commercial-terms$",
+      "path": "/tenants/([^/]+)/supplier-network/commercial-terms",
+      "handler": "handleSupplierNetworkCommercialTerms",
+      "routeLine": 3930
+    },
+    {
+      "id": 91,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/commercial-terms\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/supplier-network/commercial-terms/([^/]+)",
+      "handler": "handleSupplierNetworkCommercialTerms",
+      "routeLine": 3931
+    },
+    {
+      "id": 92,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/commercial-terms\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/supplier-network/commercial-terms/([^/]+)",
+      "handler": "handleSupplierNetworkCommercialTerms",
+      "routeLine": 3932
+    },
+    {
+      "id": 93,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/commercial-terms\\/([^/]+)\\/(activate|deactivate)$",
+      "path": "/tenants/([^/]+)/supplier-network/commercial-terms/([^/]+)/(activate|deactivate)",
+      "handler": "handleSupplierNetworkCommercialTerms",
+      "routeLine": 3933
+    },
+    {
+      "id": 94,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capacities$",
+      "path": "/tenants/([^/]+)/supplier-network/capacities",
+      "handler": "handleSupplierNetworkCapacities",
+      "routeLine": 3934
+    },
+    {
+      "id": 95,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capacities$",
+      "path": "/tenants/([^/]+)/supplier-network/capacities",
+      "handler": "handleSupplierNetworkCapacities",
+      "routeLine": 3935
+    },
+    {
+      "id": 96,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capacities\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/supplier-network/capacities/([^/]+)",
+      "handler": "handleSupplierNetworkCapacities",
+      "routeLine": 3936
+    },
+    {
+      "id": 97,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capacities\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/supplier-network/capacities/([^/]+)",
+      "handler": "handleSupplierNetworkCapacities",
+      "routeLine": 3937
+    },
+    {
+      "id": 98,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/capacities\\/([^/]+)\\/(activate|deactivate)$",
+      "path": "/tenants/([^/]+)/supplier-network/capacities/([^/]+)/(activate|deactivate)",
+      "handler": "handleSupplierNetworkCapacities",
+      "routeLine": 3938
+    },
+    {
+      "id": 99,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/service-areas$",
+      "path": "/tenants/([^/]+)/supplier-network/service-areas",
+      "handler": "handleSupplierNetworkServiceAreas",
+      "routeLine": 3939
+    },
+    {
+      "id": 100,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/service-areas$",
+      "path": "/tenants/([^/]+)/supplier-network/service-areas",
+      "handler": "handleSupplierNetworkServiceAreas",
+      "routeLine": 3940
+    },
+    {
+      "id": 101,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/service-areas\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/supplier-network/service-areas/([^/]+)",
+      "handler": "handleSupplierNetworkServiceAreas",
+      "routeLine": 3941
+    },
+    {
+      "id": 102,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/service-areas\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/supplier-network/service-areas/([^/]+)",
+      "handler": "handleSupplierNetworkServiceAreas",
+      "routeLine": 3942
+    },
+    {
+      "id": 103,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/service-areas\\/([^/]+)\\/(activate|deactivate)$",
+      "path": "/tenants/([^/]+)/supplier-network/service-areas/([^/]+)/(activate|deactivate)",
+      "handler": "handleSupplierNetworkServiceAreas",
+      "routeLine": 3943
+    },
+    {
+      "id": 104,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/trust$",
+      "path": "/tenants/([^/]+)/supplier-network/trust",
+      "handler": "handleSupplierNetworkTrust",
+      "routeLine": 3944
+    },
+    {
+      "id": 105,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/marketplace-integration(?:\\/([^/]+))?$",
+      "path": "/tenants/([^/]+)/supplier-network/marketplace-integration(?:/([^/]+))?",
+      "handler": "handleSupplierNetworkMarketplaceIntegration",
+      "routeLine": 3945
+    },
+    {
+      "id": 106,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/discovery$",
+      "path": "/tenants/([^/]+)/supplier-network/discovery",
+      "handler": "handleSupplierNetworkDiscovery",
+      "routeLine": 3946
+    },
+    {
+      "id": 107,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/discovery$",
+      "path": "/tenants/([^/]+)/supplier-network/discovery",
+      "handler": "handleSupplierNetworkDiscovery",
+      "routeLine": 3947
+    },
+    {
+      "id": 108,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/trust\\/([^/]+)\\/refresh$",
+      "path": "/tenants/([^/]+)/supplier-network/trust/([^/]+)/refresh",
+      "handler": "handleSupplierNetworkTrust",
+      "routeLine": 3948
+    },
+    {
+      "id": 109,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/trust\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/supplier-network/trust/([^/]+)",
+      "handler": "handleSupplierNetworkTrust",
+      "routeLine": 3949
+    },
+    {
+      "id": 110,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/performance$",
+      "path": "/tenants/([^/]+)/supplier-network/performance",
+      "handler": "handleSupplierNetworkPerformance",
+      "routeLine": 3950
+    },
+    {
+      "id": 111,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/performance\\/([^/]+)\\/recalculate$",
+      "path": "/tenants/([^/]+)/supplier-network/performance/([^/]+)/recalculate",
+      "handler": "handleSupplierNetworkPerformance",
+      "routeLine": 3951
+    },
+    {
+      "id": 112,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/performance\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/supplier-network/performance/([^/]+)",
+      "handler": "handleSupplierNetworkPerformance",
+      "routeLine": 3952
+    },
+    {
+      "id": 113,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/profile$",
+      "path": "/tenants/([^/]+)/supplier-network/profile",
+      "handler": "handleSupplierNetworkProfile",
+      "routeLine": 3953
+    },
+    {
+      "id": 114,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/profile$",
+      "path": "/tenants/([^/]+)/supplier-network/profile",
+      "handler": "handleSupplierNetworkProfile",
+      "routeLine": 3954
+    },
+    {
+      "id": 115,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/profile$",
+      "path": "/tenants/([^/]+)/supplier-network/profile",
+      "handler": "handleSupplierNetworkProfile",
+      "routeLine": 3955
+    },
+    {
+      "id": 116,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/supplier-network\\/profile\\/(publish|suspend|draft)$",
+      "path": "/tenants/([^/]+)/supplier-network/profile/(publish|suspend|draft)",
+      "handler": "handleSupplierNetworkProfile",
+      "routeLine": 3956
+    },
+    {
+      "id": 117,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/supplier-relationships$",
+      "path": "/tenants/([^/]+)/procurement/supplier-relationships",
+      "handler": "handleProcurementSupplierRelationships",
+      "routeLine": 3957
+    },
+    {
+      "id": 118,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/supplier-relationships$",
+      "path": "/tenants/([^/]+)/procurement/supplier-relationships",
+      "handler": "handleProcurementSupplierRelationships",
+      "routeLine": 3958
+    },
+    {
+      "id": 119,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/supplier-relationships\\/([^/]+)\\/(active|declined|blocked|suspended)$",
+      "path": "/tenants/([^/]+)/procurement/supplier-relationships/([^/]+)/(active|declined|blocked|suspended)",
+      "handler": "handleProcurementSupplierRelationships",
+      "routeLine": 3959
+    },
+    {
+      "id": 120,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/rfqs$",
+      "path": "/tenants/([^/]+)/procurement/rfqs",
+      "handler": "handleProcurementRfqs",
+      "routeLine": 3960
+    },
+    {
+      "id": 121,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/rfqs$",
+      "path": "/tenants/([^/]+)/procurement/rfqs",
+      "handler": "handleProcurementRfqs",
+      "routeLine": 3961
+    },
+    {
+      "id": 122,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/rfqs\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/procurement/rfqs/([^/]+)",
+      "handler": "handleProcurementRfqs",
+      "routeLine": 3962
+    },
+    {
+      "id": 123,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/rfqs\\/([^/]+)\\/(send|close|cancel)$",
+      "path": "/tenants/([^/]+)/procurement/rfqs/([^/]+)/(send|close|cancel)",
+      "handler": "handleProcurementRfqs",
+      "routeLine": 3963
+    },
+    {
+      "id": 124,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/rfqs\\/([^/]+)\\/responses$",
+      "path": "/tenants/([^/]+)/procurement/rfqs/([^/]+)/responses",
+      "handler": "handleProcurementRfqResponses",
+      "routeLine": 3964
+    },
+    {
+      "id": 125,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/rfqs\\/([^/]+)\\/responses\\/([^/]+)\\/submit$",
+      "path": "/tenants/([^/]+)/procurement/rfqs/([^/]+)/responses/([^/]+)/submit",
+      "handler": "handleProcurementRfqResponses",
+      "routeLine": 3965
+    },
+    {
+      "id": 126,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/awards$",
+      "path": "/tenants/([^/]+)/procurement/awards",
+      "handler": "handleProcurementAwards",
+      "routeLine": 3966
+    },
+    {
+      "id": 127,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/awards$",
+      "path": "/tenants/([^/]+)/procurement/awards",
+      "handler": "handleProcurementAwards",
+      "routeLine": 3967
+    },
+    {
+      "id": 128,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/awards\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/procurement/awards/([^/]+)",
+      "handler": "handleProcurementAwards",
+      "routeLine": 3968
+    },
+    {
+      "id": 129,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/awards\\/([^/]+)\\/(confirm|cancel)$",
+      "path": "/tenants/([^/]+)/procurement/awards/([^/]+)/(confirm|cancel)",
+      "handler": "handleProcurementAwards",
+      "routeLine": 3969
+    },
+    {
+      "id": 130,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/comparisons$",
+      "path": "/tenants/([^/]+)/procurement/comparisons",
+      "handler": "handleProcurementComparisons",
+      "routeLine": 3970
+    },
+    {
+      "id": 131,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/comparisons$",
+      "path": "/tenants/([^/]+)/procurement/comparisons",
+      "handler": "handleProcurementComparisons",
+      "routeLine": 3971
+    },
+    {
+      "id": 132,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/comparisons\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/procurement/comparisons/([^/]+)",
+      "handler": "handleProcurementComparisons",
+      "routeLine": 3972
+    },
+    {
+      "id": 133,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/demands$",
+      "path": "/tenants/([^/]+)/procurement/demands",
+      "handler": "handleProcurementDemands",
+      "routeLine": 3973
+    },
+    {
+      "id": 134,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/demands$",
+      "path": "/tenants/([^/]+)/procurement/demands",
+      "handler": "handleProcurementDemands",
+      "routeLine": 3974
+    },
+    {
+      "id": 135,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/demands\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/procurement/demands/([^/]+)",
+      "handler": "handleProcurementDemands",
+      "routeLine": 3975
+    },
+    {
+      "id": 136,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/demands\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/procurement/demands/([^/]+)",
+      "handler": "handleProcurementDemands",
+      "routeLine": 3976
+    },
+    {
+      "id": 137,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/demands\\/([^/]+)\\/submit$",
+      "path": "/tenants/([^/]+)/procurement/demands/([^/]+)/submit",
+      "handler": "handleProcurementDemands",
+      "routeLine": 3977
+    },
+    {
+      "id": 138,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/demands\\/([^/]+)\\/cancel$",
+      "path": "/tenants/([^/]+)/procurement/demands/([^/]+)/cancel",
+      "handler": "handleProcurementDemands",
+      "routeLine": 3978
+    },
+    {
+      "id": 139,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/demands\\/([^/]+)\\/start-sourcing$",
+      "path": "/tenants/([^/]+)/procurement/demands/([^/]+)/start-sourcing",
+      "handler": "handleProcurementDemands",
+      "routeLine": 3979
+    },
+    {
+      "id": 140,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/quotes$",
+      "path": "/tenants/([^/]+)/b2b/quotes",
+      "handler": "handleB2BQuotes",
+      "routeLine": 3980
+    },
+    {
+      "id": 141,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/quotes$",
+      "path": "/tenants/([^/]+)/b2b/quotes",
+      "handler": "handleB2BQuotes",
+      "routeLine": 3981
+    },
+    {
+      "id": 142,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/quotes\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/b2b/quotes/([^/]+)",
+      "handler": "handleB2BQuotes",
+      "routeLine": 3982
+    },
+    {
+      "id": 143,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/quotes\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/b2b/quotes/([^/]+)",
+      "handler": "handleB2BQuotes",
+      "routeLine": 3983
+    },
+    {
+      "id": 144,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/receipts$",
+      "path": "/tenants/([^/]+)/procurement/receipts",
+      "handler": "handleProcurementReceipts",
+      "routeLine": 3984
+    },
+    {
+      "id": 145,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/receipts\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/procurement/receipts/([^/]+)",
+      "handler": "handleProcurementReceipts",
+      "routeLine": 3985
+    },
+    {
+      "id": 146,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/purchase-orders\\/([^/]+)\\/receipts$",
+      "path": "/tenants/([^/]+)/procurement/purchase-orders/([^/]+)/receipts",
+      "handler": "handleProcurementReceipts",
+      "routeLine": 3986
+    },
+    {
+      "id": 147,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/purchase-orders\\/([^/]+)\\/receipts$",
+      "path": "/tenants/([^/]+)/procurement/purchase-orders/([^/]+)/receipts",
+      "handler": "handleProcurementReceipts",
+      "routeLine": 3987
+    },
+    {
+      "id": 148,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/purchase-orders$",
+      "path": "/tenants/([^/]+)/b2b/purchase-orders",
+      "handler": "handleB2BPurchaseOrders",
+      "routeLine": 3988
+    },
+    {
+      "id": 149,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/purchase-orders$",
+      "path": "/tenants/([^/]+)/b2b/purchase-orders",
+      "handler": "handleB2BPurchaseOrders",
+      "routeLine": 3989
+    },
+    {
+      "id": 150,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/purchase-orders\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/b2b/purchase-orders/([^/]+)",
+      "handler": "handleB2BPurchaseOrders",
+      "routeLine": 3990
+    },
+    {
+      "id": 151,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/purchase-orders\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/b2b/purchase-orders/([^/]+)",
+      "handler": "handleB2BPurchaseOrders",
+      "routeLine": 3991
+    },
+    {
+      "id": 152,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/credit-terms$",
+      "path": "/tenants/([^/]+)/b2b/credit-terms",
+      "handler": "handleB2BCreditTerms",
+      "routeLine": 3992
+    },
+    {
+      "id": 153,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/credit-terms$",
+      "path": "/tenants/([^/]+)/b2b/credit-terms",
+      "handler": "handleB2BCreditTerms",
+      "routeLine": 3993
+    },
+    {
+      "id": 154,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/credit-terms\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/b2b/credit-terms/([^/]+)",
+      "handler": "handleB2BCreditTerms",
+      "routeLine": 3994
+    },
+    {
+      "id": 155,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/credit-terms\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/b2b/credit-terms/([^/]+)",
+      "handler": "handleB2BCreditTerms",
+      "routeLine": 3995
+    },
+    {
+      "id": 156,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/inventory\\/movements$",
+      "path": "/tenants/([^/]+)/inventory/movements",
+      "handler": "handleInventoryMovementsList",
+      "routeLine": 3996
+    },
+    {
+      "id": 157,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/inventory\\/balances$",
+      "path": "/tenants/([^/]+)/inventory/balances",
+      "handler": "handleInventoryBalances",
+      "routeLine": 3997
+    },
+    {
+      "id": 158,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/inventory\\/movements\\/batch$",
+      "path": "/tenants/([^/]+)/inventory/movements/batch",
+      "handler": "handleInventoryMovementBatchCreate",
+      "routeLine": 3998
+    },
+    {
+      "id": 159,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/inventory\\/movements$",
+      "path": "/tenants/([^/]+)/inventory/movements",
+      "handler": "handleInventoryMovementCreate",
+      "routeLine": 3999
+    },
+    {
+      "id": 160,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/locations$",
+      "path": "/tenants/([^/]+)/locations",
+      "handler": "handleLocationsList",
+      "routeLine": 4000
+    },
+    {
+      "id": 161,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/locations$",
+      "path": "/tenants/([^/]+)/locations",
+      "handler": "handleLocationCreate",
+      "routeLine": 4001
+    },
+    {
+      "id": 162,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/locations\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/locations/([^/]+)",
+      "handler": "handleLocationPatch",
+      "routeLine": 4002
+    },
+    {
+      "id": 163,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/authorization\\/scope-context$",
+      "path": "/tenants/([^/]+)/authorization/scope-context",
+      "handler": "handleAuthorizationScopeContext",
+      "routeLine": 4003
+    },
+    {
+      "id": 164,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/authorization\\/conditions-contract$",
+      "path": "/tenants/([^/]+)/authorization/conditions-contract",
+      "handler": "handleAuthorizationConditionsContract",
+      "routeLine": 4004
+    },
+    {
+      "id": 165,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/authorization\\/role-matrix$",
+      "path": "/tenants/([^/]+)/authorization/role-matrix",
+      "handler": "handleAuthorizationRoleMatrix",
+      "routeLine": 4005
+    },
+    {
+      "id": 166,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/authorization\\/iam-certification$",
+      "path": "/tenants/([^/]+)/authorization/iam-certification",
+      "handler": "handleAuthorizationIamCertification",
+      "routeLine": 4006
+    },
+    {
+      "id": 167,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/business-template$",
+      "path": "/tenants/([^/]+)/business-template",
+      "handler": "handleBusinessTemplateConfig",
+      "routeLine": 4007
+    },
+    {
+      "id": 168,
+      "method": "PUT",
+      "pattern": "^\\/tenants\\/([^/]+)\\/business-template$",
+      "path": "/tenants/([^/]+)/business-template",
+      "handler": "handleBusinessTemplateConfig",
+      "routeLine": 4008
+    },
+    {
+      "id": 169,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/business-template$",
+      "path": "/tenants/([^/]+)/business-template",
+      "handler": "handleBusinessTemplateConfig",
+      "routeLine": 4009
+    },
+    {
+      "id": 170,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)$",
+      "path": "/tenants/([^/]+)",
+      "handler": "handleTenantPatch",
+      "routeLine": 4010
+    },
+    {
+      "id": 171,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)$",
+      "path": "/tenants/([^/]+)",
+      "handler": "handleTenantPatch",
+      "routeLine": 4011
+    },
+    {
+      "id": 172,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/evidence$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/evidence",
+      "handler": "handlePaymentEvidenceList",
+      "routeLine": 4012
+    },
+    {
+      "id": 173,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/evidence\\/([^/]+)\\/review$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/evidence/([^/]+)/review",
+      "handler": "handleManualPaymentEvidenceReview",
+      "routeLine": 4013
+    },
+    {
+      "id": 174,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/evidence$",
+      "path": "/tenants/([^/]+)/payments/evidence",
+      "handler": "handlePaymentEvidenceSubmission",
+      "routeLine": 4014
+    },
+    {
+      "id": 175,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/providers$",
+      "path": "/tenants/([^/]+)/payments/providers",
+      "handler": "handlePaymentProviderMetadata",
+      "routeLine": 4015
+    },
+    {
+      "id": 176,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/accounts$",
+      "path": "/tenants/([^/]+)/payments/accounts",
+      "handler": "handlePaymentAccounts",
+      "routeLine": 4016
+    },
+    {
+      "id": 177,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/accounts$",
+      "path": "/tenants/([^/]+)/payments/accounts",
+      "handler": "handlePaymentAccounts",
+      "routeLine": 4017
+    },
+    {
+      "id": 178,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/outbound$",
+      "path": "/tenants/([^/]+)/payments/outbound",
+      "handler": "handlePaymentOutbound",
+      "routeLine": 4018
+    },
+    {
+      "id": 179,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/outbound$",
+      "path": "/tenants/([^/]+)/payments/outbound",
+      "handler": "handlePaymentOutbound",
+      "routeLine": 4019
+    },
+    {
+      "id": 180,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/outbound\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/payments/outbound/([^/]+)",
+      "handler": "handlePaymentOutbound",
+      "routeLine": 4020
+    },
+    {
+      "id": 181,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/outbound\\/([^/]+)\\/(submit|confirm|fail|cancel)$",
+      "path": "/tenants/([^/]+)/payments/outbound/([^/]+)/(submit|confirm|fail|cancel)",
+      "handler": "handlePaymentOutbound",
+      "routeLine": 4021
+    },
+    {
+      "id": 182,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/procurement\\/purchase-orders\\/([^/]+)\\/payment$",
+      "path": "/tenants/([^/]+)/procurement/purchase-orders/([^/]+)/payment",
+      "handler": "handleProcurementPayment",
+      "routeLine": 4022
+    },
+    {
+      "id": 183,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/procurement-settlements$",
+      "path": "/tenants/([^/]+)/payments/procurement-settlements",
+      "handler": "handleProcurementSettlement",
+      "routeLine": 4023
+    },
+    {
+      "id": 184,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/procurement-settlements\\/purchase-orders\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/payments/procurement-settlements/purchase-orders/([^/]+)",
+      "handler": "handleProcurementSettlement",
+      "routeLine": 4024
+    },
+    {
+      "id": 185,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/procurement-settlements\\/purchase-orders\\/([^/]+)\\/allocate$",
+      "path": "/tenants/([^/]+)/payments/procurement-settlements/purchase-orders/([^/]+)/allocate",
+      "handler": "handleProcurementSettlement",
+      "routeLine": 4025
+    },
+    {
+      "id": 186,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/orders\\/([^/]+)\\/payments\\/summary$",
+      "path": "/tenants/([^/]+)/orders/([^/]+)/payments/summary",
+      "handler": "handleOrderPaymentSummary",
+      "routeLine": 4026
+    },
+    {
+      "id": 187,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/ledger$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/ledger",
+      "handler": "handlePaymentLedger",
+      "routeLine": 4027
+    },
+    {
+      "id": 188,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/reconcile$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/reconcile",
+      "handler": "handlePaymentReconciliation",
+      "routeLine": 4028
+    },
+    {
+      "id": 189,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/reconciliation$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/reconciliation",
+      "handler": "handlePaymentCoreReconciliation",
+      "routeLine": 4029
+    },
+    {
+      "id": 190,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/reconciliation$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/reconciliation",
+      "handler": "handlePaymentReconciliationHistory",
+      "routeLine": 4030
+    },
+    {
+      "id": 191,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/confirmation-attempts\\/([^/]+)\\/finalize$",
+      "path": "/tenants/([^/]+)/payments/confirmation-attempts/([^/]+)/finalize",
+      "handler": "handlePaymentConfirmationFinalization",
+      "routeLine": 4031
+    },
+    {
+      "id": 192,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/status$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/status",
+      "handler": "handlePaymentStatusQuery",
+      "routeLine": 4032
+    },
+    {
+      "id": 193,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/lifecycle$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/lifecycle",
+      "handler": "handlePaymentLifecycle",
+      "routeLine": 4033
+    },
+    {
+      "id": 194,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/refund$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/refund",
+      "handler": "handlePaymentRefund",
+      "routeLine": 4034
+    },
+    {
+      "id": 195,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/providers\\/certification$",
+      "path": "/tenants/([^/]+)/payments/providers/certification",
+      "handler": "handlePaymentProviderCertification",
+      "routeLine": 4035
+    },
+    {
+      "id": 196,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/providers\\/capability-probe$",
+      "path": "/tenants/([^/]+)/payments/providers/capability-probe",
+      "handler": "handlePaymentProviderCapabilityProbe",
+      "routeLine": 4036
+    },
+    {
+      "id": 197,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/providers\\/capability-evidence$",
+      "path": "/tenants/([^/]+)/payments/providers/capability-evidence",
+      "handler": "handlePaymentProviderCapabilityEvidence",
+      "routeLine": 4037
+    },
+    {
+      "id": 198,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/providers\\/capability-evidence$",
+      "path": "/tenants/([^/]+)/payments/providers/capability-evidence",
+      "handler": "handlePaymentProviderCapabilityEvidence",
+      "routeLine": 4038
+    },
+    {
+      "id": 199,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/production-certification$",
+      "path": "/tenants/([^/]+)/payments/production-certification",
+      "handler": "handlePaymentProductionCertification",
+      "routeLine": 4039
+    },
+    {
+      "id": 200,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/production-certification$",
+      "path": "/tenants/([^/]+)/payments/production-certification",
+      "handler": "handlePaymentProductionCertification",
+      "routeLine": 4040
+    },
+    {
+      "id": 201,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/operations$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/operations",
+      "handler": "handlePaymentOperationalActions",
+      "routeLine": 4041
+    },
+    {
+      "id": 202,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/operations$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/operations",
+      "handler": "handlePaymentOperationalActions",
+      "routeLine": 4042
+    },
+    {
+      "id": 203,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/operations\\/retry$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/operations/retry",
+      "handler": "handlePaymentOperationalRetry",
+      "routeLine": 4043
+    },
+    {
+      "id": 204,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/operations\\/manual-review$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/operations/manual-review",
+      "handler": "handlePaymentManualReview",
+      "routeLine": 4044
+    },
+    {
+      "id": 205,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/settlement$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/settlement",
+      "handler": "handlePaymentSettlement",
+      "routeLine": 4045
+    },
+    {
+      "id": 206,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/routing\\/resolve$",
+      "path": "/tenants/([^/]+)/payments/routing/resolve",
+      "handler": "handlePaymentRoutingResolve",
+      "routeLine": 4046
+    },
+    {
+      "id": 207,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/routing\\/policies$",
+      "path": "/tenants/([^/]+)/payments/routing/policies",
+      "handler": "handlePaymentRoutingPolicies",
+      "routeLine": 4047
+    },
+    {
+      "id": 208,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/routing\\/policies$",
+      "path": "/tenants/([^/]+)/payments/routing/policies",
+      "handler": "handlePaymentRoutingPolicies",
+      "routeLine": 4048
+    },
+    {
+      "id": 209,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/settlement\\/finalize$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/settlement/finalize",
+      "handler": "handlePaymentSettlementFinalize",
+      "routeLine": 4049
+    },
+    {
+      "id": 210,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/settlement$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/settlement",
+      "handler": "handlePaymentSettlementHistory",
+      "routeLine": 4050
+    },
+    {
+      "id": 211,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)\\/refund$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)/refund",
+      "handler": "handlePaymentRefundHistory",
+      "routeLine": 4051
+    },
+    {
+      "id": 212,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)",
+      "handler": "handlePayments",
+      "routeLine": 4052
+    },
+    {
+      "id": 213,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments$",
+      "path": "/tenants/([^/]+)/payments",
+      "handler": "handlePayments",
+      "routeLine": 4053
+    },
+    {
+      "id": 214,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments$",
+      "path": "/tenants/([^/]+)/payments",
+      "handler": "handlePayments",
+      "routeLine": 4054
+    },
+    {
+      "id": 215,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/payments\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/payments/([^/]+)",
+      "handler": "handlePayments",
+      "routeLine": 4055
+    },
+    {
+      "id": 216,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/receivables$",
+      "path": "/tenants/([^/]+)/b2b/receivables",
+      "handler": "handleB2BReceivables",
+      "routeLine": 4056
+    },
+    {
+      "id": 217,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/receivables$",
+      "path": "/tenants/([^/]+)/b2b/receivables",
+      "handler": "handleB2BReceivables",
+      "routeLine": 4057
+    },
+    {
+      "id": 218,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/receivables\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/b2b/receivables/([^/]+)",
+      "handler": "handleB2BReceivables",
+      "routeLine": 4058
+    },
+    {
+      "id": 219,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/receivables\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/b2b/receivables/([^/]+)",
+      "handler": "handleB2BReceivables",
+      "routeLine": 4059
+    },
+    {
+      "id": 220,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/receivables\\/([^/]+)\\/ledger$",
+      "path": "/tenants/([^/]+)/b2b/receivables/([^/]+)/ledger",
+      "handler": "handleB2BReceivables",
+      "routeLine": 4060
+    },
+    {
+      "id": 221,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/invoices$",
+      "path": "/tenants/([^/]+)/b2b/invoices",
+      "handler": "handleB2BInvoices",
+      "routeLine": 4061
+    },
+    {
+      "id": 222,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/invoices$",
+      "path": "/tenants/([^/]+)/b2b/invoices",
+      "handler": "handleB2BInvoices",
+      "routeLine": 4062
+    },
+    {
+      "id": 223,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/invoices\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/b2b/invoices/([^/]+)",
+      "handler": "handleB2BInvoices",
+      "routeLine": 4063
+    },
+    {
+      "id": 224,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/invoices\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/b2b/invoices/([^/]+)",
+      "handler": "handleB2BInvoices",
+      "routeLine": 4064
+    },
+    {
+      "id": 225,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/b2b\\/receivables\\/([^/]+)\\/allocate$",
+      "path": "/tenants/([^/]+)/b2b/receivables/([^/]+)/allocate",
+      "handler": "handleB2BReceivables",
+      "routeLine": 4065
+    },
+    {
+      "id": 226,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/audit$",
+      "path": "/tenants/([^/]+)/audit",
+      "handler": "handleTenantAudit",
+      "routeLine": 4066
+    },
+    {
+      "id": 227,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/compliance\\/retention$",
+      "path": "/tenants/([^/]+)/compliance/retention",
+      "handler": "handleAuditRetention",
+      "routeLine": 4067
+    },
+    {
+      "id": 228,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/compliance\\/retention$",
+      "path": "/tenants/([^/]+)/compliance/retention",
+      "handler": "handleAuditRetention",
+      "routeLine": 4068
+    },
+    {
+      "id": 229,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/compliance\\/requests$",
+      "path": "/tenants/([^/]+)/compliance/requests",
+      "handler": "handleComplianceRequests",
+      "routeLine": 4069
+    },
+    {
+      "id": 230,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/compliance\\/requests$",
+      "path": "/tenants/([^/]+)/compliance/requests",
+      "handler": "handleComplianceRequests",
+      "routeLine": 4070
+    },
+    {
+      "id": 231,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/compliance\\/requests$",
+      "path": "/tenants/([^/]+)/compliance/requests",
+      "handler": "handleComplianceRequests",
+      "routeLine": 4071
+    },
+    {
+      "id": 232,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/compliance\\/export\\/([^/]+)\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/compliance/export/([^/]+)/([^/]+)",
+      "handler": "handleComplianceExport",
+      "routeLine": 4072
+    },
+    {
+      "id": 233,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/compliance\\/export\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/compliance/export/([^/]+)",
+      "handler": "handleComplianceExport",
+      "routeLine": 4073
+    },
+    {
+      "id": 234,
+      "method": "POST",
+      "pattern": "^\\/admin\\/backup$",
+      "path": "/admin/backup",
+      "handler": "handleAdminBackup",
+      "routeLine": 4074
+    },
+    {
+      "id": 235,
+      "method": "GET",
+      "pattern": "^\\/api\\/marketplace\\/search$",
+      "path": "/api/marketplace/search",
+      "handler": "handleMarketplaceSearch",
+      "routeLine": 4075
+    },
+    {
+      "id": 236,
+      "method": "GET",
+      "pattern": "^\\/api\\/discovery\\/products$",
+      "path": "/api/discovery/products",
+      "handler": "handleDiscoveryProducts",
+      "routeLine": 4076
+    },
+    {
+      "id": 237,
+      "method": "GET",
+      "pattern": "^\\/api\\/discovery\\/suppliers\\/([^/]+)$",
+      "path": "/api/discovery/suppliers/([^/]+)",
+      "handler": "handleDiscoverySuppliers",
+      "routeLine": 4077
+    },
+    {
+      "id": 238,
+      "method": "POST",
+      "pattern": "^\\/api\\/discovery\\/suppliers\\/([^/]+)$",
+      "path": "/api/discovery/suppliers/([^/]+)",
+      "handler": "handleDiscoverySuppliers",
+      "routeLine": 4078
+    },
+    {
+      "id": 239,
+      "method": "GET",
+      "pattern": "^\\/api\\/discovery\\/organizations$",
+      "path": "/api/discovery/organizations",
+      "handler": "handleDiscoveryOrganizations",
+      "routeLine": 4079
+    },
+    {
+      "id": 240,
+      "method": "GET",
+      "pattern": "^\\/api\\/discovery$",
+      "path": "/api/discovery",
+      "handler": "handleUnifiedDiscovery",
+      "routeLine": 4080
+    },
+    {
+      "id": 241,
+      "method": "POST",
+      "pattern": "^\\/api\\/discovery$",
+      "path": "/api/discovery",
+      "handler": "handleUnifiedDiscovery",
+      "routeLine": 4081
+    },
+    {
+      "id": 242,
+      "method": "POST",
+      "pattern": "^\\/api\\/marketplace\\/checkout$",
+      "path": "/api/marketplace/checkout",
+      "handler": "handleMarketplaceCheckout",
+      "routeLine": 4082
+    },
+    {
+      "id": 243,
+      "method": "GET",
+      "pattern": "^\\/api\\/marketplace\\/orders\\/([^/]+)$",
+      "path": "/api/marketplace/orders/([^/]+)",
+      "handler": "handleMarketplaceOrderTracking",
+      "routeLine": 4083
+    },
+    {
+      "id": 244,
+      "method": "PATCH",
+      "pattern": "^\\/api\\/marketplace\\/orders\\/status\\/([^/]+)$",
+      "path": "/api/marketplace/orders/status/([^/]+)",
+      "handler": "handleMarketplaceOrderStatus",
+      "routeLine": 4084
+    },
+    {
+      "id": 245,
+      "method": "GET",
+      "pattern": "^\\/tenants\\/([^/]+)\\/restaurant\\/recipes$",
+      "path": "/tenants/([^/]+)/restaurant/recipes",
+      "handler": "handleRestaurantRecipes",
+      "routeLine": 4085
+    },
+    {
+      "id": 246,
+      "method": "POST",
+      "pattern": "^\\/tenants\\/([^/]+)\\/restaurant\\/recipes$",
+      "path": "/tenants/([^/]+)/restaurant/recipes",
+      "handler": "handleRestaurantRecipes",
+      "routeLine": 4086
+    },
+    {
+      "id": 247,
+      "method": "PATCH",
+      "pattern": "^\\/tenants\\/([^/]+)\\/restaurant\\/recipes\\/([^/]+)$",
+      "path": "/tenants/([^/]+)/restaurant/recipes/([^/]+)",
+      "handler": "handleRestaurantRecipes",
+      "routeLine": 4087
+    }
+  ],
+  "limitations": [
+    "Static route table extraction only; route-level auth, permission, tenant/resource scope, validation, idempotency, transaction, store calls, side effects and test coverage require per-handler review.",
+    "The route dispatcher does not supply a universal session middleware; handlers establish their own trust boundaries."
+  ]
+}
