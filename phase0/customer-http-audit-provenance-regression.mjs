@@ -69,9 +69,9 @@ assert.equal(locallyCleared.address, 'Local preserved address',
 // Tenant switches can overlap in-flight Customer requests. Exercise the real
 // exported sync/load functions and prove stale responses cannot contaminate the
 // next tenant's shared local Customer cache.
-const syncSource = customerModuleSource.match(/export async function syncCustomer\(customer\) \{[\\s\\S]*?^\}/m)?.[0]
+const syncSource = customerModuleSource.match(/export async function syncCustomer\(customer\) \{[\s\S]*?^\}/m)?.[0]
   ?.replace('export async function', 'async function');
-const loadSource = customerModuleSource.match(/export async function loadCustomers\(\{ query = '' \} = \{\}\) \{[\\s\\S]*?^\}/m)?.[0]
+const loadSource = customerModuleSource.match(/export async function loadCustomers\(\{ query = '' \} = \{\}\) \{[\s\S]*?^\}/m)?.[0]
   ?.replace('export async function', 'async function');
 assert.ok(syncSource && loadSource, 'Customer sync and load functions must remain inspectable');
 let resolveCustomerSync;
@@ -88,7 +88,7 @@ const tenantRaceSandbox = {
   console: { warn: () => {} },
 };
 const customerAsyncFunctions = vm.runInNewContext(
-  `${syncSource}\\n${loadSource}\\n({ syncCustomer, loadCustomers })`,
+  `${syncSource}\n${loadSource}\n({ syncCustomer, loadCustomers })`,
   tenantRaceSandbox
 );
 const staleSync = customerAsyncFunctions.syncCustomer({
