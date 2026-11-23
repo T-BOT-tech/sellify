@@ -923,120 +923,185 @@
     {
       "name": "createProcurementDemand",
       "line": 4248,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
-      "staticSqlScan": {
+      "sqlReadWriteDependencies": {
         "reads": [
+          "tenants",
+          "memberships",
+          "locations",
+          "catalog_products",
           "procurement_demands"
         ],
         "writes": [
+          "procurement_demands",
           "procurement_demand_items",
+          "audit_events"
+        ]
+      },
+      "callGraph": "direct helper/export calls manually reviewed",
+      "transactionBoundary": "BEGIN IMMEDIATE: demand header + items + audit",
+      "proposedOwnership": "Procurement demand preparation persistence; preserve as existing procurement authority",
+      "staticSqlScan": {
+        "reads": [
+          "tenants",
+          "memberships",
+          "locations",
+          "catalog_products",
           "procurement_demands"
+        ],
+        "writes": [
+          "procurement_demands",
+          "procurement_demand_items",
+          "audit_events"
         ],
         "directExportedFunctionCalls": [
           "getProcurementDemand"
         ],
         "transactionTokens": {
-          "begin": 1,
+          "beginImmediate": 1,
           "commit": 1,
           "rollback": 1
         },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "method": "manual source inspection against current main; helper-mediated reads include organization/member/product/location checks"
       }
     },
     {
       "name": "getProcurementDemand",
       "line": 4292,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
+      "sqlReadWriteDependencies": {
+        "reads": [
+          "procurement_demands",
+          "procurement_demand_items"
+        ],
+        "writes": []
+      },
+      "callGraph": "direct helper/export calls manually reviewed",
+      "transactionBoundary": "read-only",
+      "proposedOwnership": "Procurement demand preparation persistence; preserve as existing procurement authority",
       "staticSqlScan": {
         "reads": [
-          "procurement_demand_items",
-          "procurement_demands"
+          "procurement_demands",
+          "procurement_demand_items"
         ],
         "writes": [],
         "directExportedFunctionCalls": [],
         "transactionTokens": {
-          "begin": 0,
+          "beginImmediate": 0,
           "commit": 0,
           "rollback": 0
         },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "method": "manual source inspection against current main; helper-mediated reads include organization/member/product/location checks"
       }
     },
     {
       "name": "listProcurementDemands",
       "line": 4301,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
+      "sqlReadWriteDependencies": {
+        "reads": [
+          "procurement_demands",
+          "procurement_demand_items"
+        ],
+        "writes": []
+      },
+      "callGraph": "direct helper/export calls manually reviewed",
+      "transactionBoundary": "read-only",
+      "proposedOwnership": "Procurement demand preparation persistence; preserve as existing procurement authority",
       "staticSqlScan": {
-        "reads": [],
+        "reads": [
+          "procurement_demands",
+          "procurement_demand_items"
+        ],
         "writes": [],
         "directExportedFunctionCalls": [],
         "transactionTokens": {
-          "begin": 0,
+          "beginImmediate": 0,
           "commit": 0,
           "rollback": 0
         },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "method": "manual source inspection against current main; helper-mediated reads include organization/member/product/location checks"
       }
     },
     {
       "name": "updateProcurementDemand",
       "line": 4314,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
-      "staticSqlScan": {
+      "sqlReadWriteDependencies": {
         "reads": [
-          "procurement_demand_items",
-          "procurement_demands"
+          "tenants",
+          "memberships",
+          "locations",
+          "catalog_products",
+          "procurement_demands",
+          "procurement_demand_items"
         ],
         "writes": [
+          "procurement_demands",
           "procurement_demand_items",
-          "procurement_demands"
+          "audit_events"
+        ]
+      },
+      "callGraph": "direct helper/export calls manually reviewed",
+      "transactionBoundary": "BEGIN IMMEDIATE: demand update + item replacement + audit",
+      "proposedOwnership": "Procurement demand preparation persistence; preserve as existing procurement authority",
+      "staticSqlScan": {
+        "reads": [
+          "tenants",
+          "memberships",
+          "locations",
+          "catalog_products",
+          "procurement_demands",
+          "procurement_demand_items"
+        ],
+        "writes": [
+          "procurement_demands",
+          "procurement_demand_items",
+          "audit_events"
         ],
         "directExportedFunctionCalls": [
           "getProcurementDemand"
         ],
         "transactionTokens": {
-          "begin": 1,
+          "beginImmediate": 1,
           "commit": 1,
           "rollback": 1
         },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "method": "manual source inspection against current main; helper-mediated reads include organization/member/product/location checks"
       }
     },
     {
       "name": "transitionProcurementDemand",
       "line": 4349,
-      "sqlReadWriteDependencies": "not-yet-characterized",
-      "callGraph": "not-yet-characterized",
-      "transactionBoundary": "not-yet-characterized",
-      "proposedOwnership": "unverified",
-      "staticSqlScan": {
+      "sqlReadWriteDependencies": {
         "reads": [
+          "tenants",
+          "memberships",
           "procurement_demands"
         ],
         "writes": [
+          "procurement_demands",
+          "audit_events"
+        ]
+      },
+      "callGraph": "direct helper/export calls manually reviewed",
+      "transactionBoundary": "BEGIN IMMEDIATE: status transition + audit",
+      "proposedOwnership": "Procurement demand preparation persistence; preserve as existing procurement authority",
+      "staticSqlScan": {
+        "reads": [
+          "tenants",
+          "memberships",
           "procurement_demands"
+        ],
+        "writes": [
+          "procurement_demands",
+          "audit_events"
         ],
         "directExportedFunctionCalls": [
           "getProcurementDemand"
         ],
         "transactionTokens": {
-          "begin": 1,
+          "beginImmediate": 1,
           "commit": 1,
           "rollback": 1
         },
-        "method": "lexical scan of function body; dynamic/helper-mediated SQL may be missed"
+        "method": "manual source inspection against current main; helper-mediated reads include organization/member/product/location checks"
       }
     },
     {
@@ -11132,7 +11197,7 @@
     "Do not use this inventory to approve persistence extraction.",
     "Only the Customer and B2B Pricing function group has manually verified SQL read/write dependencies in this revision; remaining exported functions stay pending."
   ],
-  "characterizedFunctionCount": 35,
+  "characterizedFunctionCount": 40,
   "characterizationBatches": [
     {
       "name": "Customer and B2B Pricing persistence",
@@ -11212,6 +11277,27 @@
         "audit_events"
       ],
       "note": "Read/write tables and transaction boundaries were reviewed from current store source. ensureMembershipSync is an internal helper called by pairing/invite consumers, not counted as an exported function. No production change made."
+    },
+    {
+      "name": "Procurement demand persistence",
+      "functions": [
+        "createProcurementDemand",
+        "getProcurementDemand",
+        "listProcurementDemands",
+        "updateProcurementDemand",
+        "transitionProcurementDemand"
+      ],
+      "status": "source-characterized",
+      "tables": [
+        "procurement_demands",
+        "procurement_demand_items",
+        "memberships",
+        "tenants",
+        "locations",
+        "catalog_products",
+        "audit_events"
+      ],
+      "note": "Creation, draft edit and state transition transactions include audit writes; read functions remain organization-scoped projections. No production change made."
     }
   ],
   "staticSqlScan": {
