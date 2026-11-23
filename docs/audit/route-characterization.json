@@ -438,7 +438,7 @@
         "405",
         "409"
       ],
-      "classification": "mixed: pack-lifecycle + identity-tenant-infrastructure",
+      "classification": "domain capability: pack-lifecycle",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -491,7 +491,7 @@
         "405",
         "409"
       ],
-      "classification": "mixed: pack-lifecycle + identity-tenant-infrastructure",
+      "classification": "domain capability: pack-lifecycle",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -849,7 +849,7 @@
         "200",
         "404"
       ],
-      "classification": "domain capability: commerce-orders",
+      "classification": "domain capability: event-infrastructure",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -932,7 +932,7 @@
         "200",
         "404"
       ],
-      "classification": "domain capability: commerce-orders",
+      "classification": "domain capability: event-infrastructure",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1014,7 +1014,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: service-booking + identity-tenant-infrastructure",
+      "classification": "domain capability: service-booking",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1057,7 +1057,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: service-booking + identity-tenant-infrastructure",
+      "classification": "domain capability: service-booking",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1111,7 +1111,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: service-booking + identity-tenant-infrastructure",
+      "classification": "domain capability: service-booking",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1165,7 +1165,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: service-booking + identity-tenant-infrastructure",
+      "classification": "domain capability: service-booking",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1219,7 +1219,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: service-booking + identity-tenant-infrastructure",
+      "classification": "domain capability: service-booking",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1267,7 +1267,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: service-booking + identity-tenant-infrastructure",
+      "classification": "domain capability: service-booking",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1315,7 +1315,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: service-booking + identity-tenant-infrastructure",
+      "classification": "domain capability: service-booking",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1367,7 +1367,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: service-booking + commerce-orders + identity-tenant-infrastructure",
+      "classification": "domain capability: service-booking",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1419,7 +1419,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: service-booking + commerce-orders + identity-tenant-infrastructure",
+      "classification": "domain capability: service-booking",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1471,7 +1471,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: service-booking + commerce-orders + identity-tenant-infrastructure",
+      "classification": "domain capability: service-booking",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1513,7 +1513,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: logistics + service-booking + commerce-orders + identity-tenant-infrastructure",
+      "classification": "domain capability: service-booking",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1560,7 +1560,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: fulfillment + commerce-orders + identity-tenant-infrastructure",
+      "classification": "domain capability: fulfillment",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1609,7 +1609,7 @@
         "400",
         "404"
       ],
-      "classification": "mixed: logistics + commerce-orders + identity-tenant-infrastructure",
+      "classification": "domain capability: logistics",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1658,7 +1658,7 @@
         "400",
         "404"
       ],
-      "classification": "mixed: logistics + commerce-orders + identity-tenant-infrastructure",
+      "classification": "domain capability: logistics",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1716,7 +1716,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: logistics + identity-tenant-infrastructure",
+      "classification": "domain capability: logistics",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1774,7 +1774,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: logistics + identity-tenant-infrastructure",
+      "classification": "domain capability: logistics",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1832,7 +1832,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: logistics + identity-tenant-infrastructure",
+      "classification": "domain capability: logistics",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1890,7 +1890,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: logistics + identity-tenant-infrastructure",
+      "classification": "domain capability: logistics",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1948,7 +1948,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: logistics + identity-tenant-infrastructure",
+      "classification": "domain capability: logistics",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -1986,7 +1986,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: logistics + identity-tenant-infrastructure",
+      "classification": "domain capability: logistics",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2035,7 +2035,7 @@
         "400",
         "404"
       ],
-      "classification": "mixed: logistics + commerce-orders + identity-tenant-infrastructure",
+      "classification": "domain capability: logistics",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2083,7 +2083,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: fulfillment + commerce-orders + identity-tenant-infrastructure",
+      "classification": "domain capability: fulfillment",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2154,7 +2154,7 @@
       "statusCodes": [
         "200"
       ],
-      "classification": "domain capability: identity-tenant-infrastructure",
+      "classification": "needs-review",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2191,7 +2191,7 @@
       "statusCodes": [
         "200"
       ],
-      "classification": "domain capability: identity-tenant-infrastructure",
+      "classification": "needs-review",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2228,7 +2228,7 @@
       "statusCodes": [
         "200"
       ],
-      "classification": "mixed: telegram-channel + identity-tenant-infrastructure",
+      "classification": "domain capability: telegram-channel",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2351,7 +2351,7 @@
         "405",
         "409"
       ],
-      "classification": "mixed: service-booking + telegram-channel + commerce-orders",
+      "classification": "mixed: service-booking + telegram-channel",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2400,7 +2400,7 @@
         "405",
         "409"
       ],
-      "classification": "mixed: service-booking + telegram-channel + commerce-orders",
+      "classification": "mixed: service-booking + telegram-channel",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2440,7 +2440,7 @@
         "403",
         "404"
       ],
-      "classification": "mixed: service-booking + telegram-channel + commerce-orders",
+      "classification": "mixed: service-booking + telegram-channel",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2488,7 +2488,7 @@
         "403",
         "404"
       ],
-      "classification": "mixed: service-booking + telegram-channel + commerce-orders",
+      "classification": "mixed: service-booking + telegram-channel",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2529,7 +2529,7 @@
         "403",
         "404"
       ],
-      "classification": "mixed: telegram-channel + fulfillment + commerce-orders",
+      "classification": "mixed: fulfillment + telegram-channel",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2568,7 +2568,7 @@
         "403",
         "404"
       ],
-      "classification": "mixed: telegram-channel + commerce-orders",
+      "classification": "domain capability: telegram-channel",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2609,7 +2609,7 @@
         "403",
         "404"
       ],
-      "classification": "mixed: telegram-channel + commerce-orders",
+      "classification": "domain capability: telegram-channel",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2646,7 +2646,7 @@
       "statusCodes": [
         "200"
       ],
-      "classification": "mixed: telegram-channel + identity-tenant-infrastructure",
+      "classification": "domain capability: telegram-channel",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2688,7 +2688,7 @@
         "200",
         "400"
       ],
-      "classification": "mixed: telegram-channel + identity-tenant-infrastructure",
+      "classification": "domain capability: telegram-channel",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2799,7 +2799,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: customers + identity-tenant-infrastructure",
+      "classification": "domain capability: customers",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2837,7 +2837,7 @@
         "201",
         "404"
       ],
-      "classification": "mixed: customers + identity-tenant-infrastructure",
+      "classification": "domain capability: customers",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2875,7 +2875,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: customers + identity-tenant-infrastructure",
+      "classification": "domain capability: customers",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2913,7 +2913,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: customers + identity-tenant-infrastructure",
+      "classification": "domain capability: customers",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2956,7 +2956,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: customers + identity-tenant-infrastructure",
+      "classification": "domain capability: customers",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -2999,7 +2999,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: customers + identity-tenant-infrastructure",
+      "classification": "domain capability: customers",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3042,7 +3042,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: customers + identity-tenant-infrastructure",
+      "classification": "domain capability: customers",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3085,7 +3085,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: customers + identity-tenant-infrastructure",
+      "classification": "domain capability: customers",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3131,7 +3131,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3177,7 +3177,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3223,7 +3223,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3269,7 +3269,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3315,7 +3315,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3361,7 +3361,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + catalog + identity-tenant-infrastructure",
+      "classification": "mixed: supplier-network + catalog",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3407,7 +3407,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + catalog + identity-tenant-infrastructure",
+      "classification": "mixed: supplier-network + catalog",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3453,7 +3453,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + catalog + identity-tenant-infrastructure",
+      "classification": "mixed: supplier-network + catalog",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3499,7 +3499,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + catalog + identity-tenant-infrastructure",
+      "classification": "mixed: supplier-network + catalog",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3545,7 +3545,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + catalog + identity-tenant-infrastructure",
+      "classification": "mixed: supplier-network + catalog",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3591,7 +3591,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3637,7 +3637,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3683,7 +3683,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3729,7 +3729,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3775,7 +3775,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3821,7 +3821,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3867,7 +3867,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3913,7 +3913,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -3959,7 +3959,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4005,7 +4005,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4051,7 +4051,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4097,7 +4097,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4143,7 +4143,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4189,7 +4189,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4235,7 +4235,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4281,7 +4281,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4327,7 +4327,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4373,7 +4373,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4419,7 +4419,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4465,7 +4465,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4509,7 +4509,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4548,7 +4548,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + marketplace + identity-tenant-infrastructure",
+      "classification": "mixed: supplier-network + marketplace",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4587,7 +4587,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + discovery + identity-tenant-infrastructure",
+      "classification": "mixed: supplier-network + discovery",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4626,7 +4626,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + discovery + identity-tenant-infrastructure",
+      "classification": "mixed: supplier-network + discovery",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4670,7 +4670,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4714,7 +4714,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4759,7 +4759,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4804,7 +4804,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4849,7 +4849,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4894,7 +4894,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4939,7 +4939,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -4984,7 +4984,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5029,7 +5029,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + identity-tenant-infrastructure",
+      "classification": "domain capability: supplier-network",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5073,7 +5073,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5117,7 +5117,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5161,7 +5161,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5209,7 +5209,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5257,7 +5257,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5305,7 +5305,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5353,7 +5353,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5398,7 +5398,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5443,7 +5443,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5492,7 +5492,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5541,7 +5541,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5590,7 +5590,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5639,7 +5639,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5684,7 +5684,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5729,7 +5729,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5774,7 +5774,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5826,7 +5826,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5878,7 +5878,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5930,7 +5930,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -5982,7 +5982,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6034,7 +6034,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6086,7 +6086,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6138,7 +6138,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6183,7 +6183,7 @@
         "400",
         "404"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6228,7 +6228,7 @@
         "400",
         "404"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6273,7 +6273,7 @@
         "400",
         "404"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6318,7 +6318,7 @@
         "400",
         "404"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6363,7 +6363,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6408,7 +6408,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6453,7 +6453,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + commerce-orders + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6498,7 +6498,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + commerce-orders + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6546,7 +6546,7 @@
         "400",
         "404"
       ],
-      "classification": "mixed: procurement + commerce-orders + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6594,7 +6594,7 @@
         "400",
         "404"
       ],
-      "classification": "mixed: procurement + commerce-orders + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6642,7 +6642,7 @@
         "400",
         "404"
       ],
-      "classification": "mixed: procurement + commerce-orders + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6690,7 +6690,7 @@
         "400",
         "404"
       ],
-      "classification": "mixed: procurement + commerce-orders + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6735,7 +6735,7 @@
         "400",
         "404"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6780,7 +6780,7 @@
         "400",
         "404"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6825,7 +6825,7 @@
         "400",
         "404"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6870,7 +6870,7 @@
         "400",
         "404"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6912,7 +6912,7 @@
         "403",
         "404"
       ],
-      "classification": "mixed: inventory + identity-tenant-infrastructure",
+      "classification": "domain capability: inventory",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6954,7 +6954,7 @@
         "403",
         "404"
       ],
-      "classification": "mixed: inventory + identity-tenant-infrastructure",
+      "classification": "domain capability: inventory",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -6999,7 +6999,7 @@
         "403",
         "404"
       ],
-      "classification": "mixed: inventory + identity-tenant-infrastructure",
+      "classification": "domain capability: inventory",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7043,7 +7043,7 @@
         "403",
         "404"
       ],
-      "classification": "mixed: inventory + identity-tenant-infrastructure",
+      "classification": "domain capability: inventory",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7081,7 +7081,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: organization-location + identity-tenant-infrastructure",
+      "classification": "domain capability: organization-location",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7119,7 +7119,7 @@
         "201",
         "404"
       ],
-      "classification": "mixed: organization-location + identity-tenant-infrastructure",
+      "classification": "domain capability: organization-location",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7157,7 +7157,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: organization-location + identity-tenant-infrastructure",
+      "classification": "domain capability: organization-location",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7196,7 +7196,7 @@
         "404",
         "405"
       ],
-      "classification": "domain capability: identity-tenant-infrastructure",
+      "classification": "needs-review",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7234,7 +7234,7 @@
         "404",
         "405"
       ],
-      "classification": "domain capability: identity-tenant-infrastructure",
+      "classification": "needs-review",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7272,7 +7272,7 @@
         "404",
         "405"
       ],
-      "classification": "domain capability: identity-tenant-infrastructure",
+      "classification": "needs-review",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7310,7 +7310,7 @@
         "404",
         "405"
       ],
-      "classification": "domain capability: identity-tenant-infrastructure",
+      "classification": "needs-review",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7350,7 +7350,7 @@
         "404",
         "405"
       ],
-      "classification": "domain capability: identity-tenant-infrastructure",
+      "classification": "needs-review",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7389,7 +7389,7 @@
         "404",
         "405"
       ],
-      "classification": "domain capability: identity-tenant-infrastructure",
+      "classification": "needs-review",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7428,7 +7428,7 @@
         "404",
         "405"
       ],
-      "classification": "domain capability: identity-tenant-infrastructure",
+      "classification": "needs-review",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7467,7 +7467,7 @@
         "404",
         "405"
       ],
-      "classification": "domain capability: identity-tenant-infrastructure",
+      "classification": "needs-review",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7506,7 +7506,7 @@
         "404",
         "405"
       ],
-      "classification": "domain capability: identity-tenant-infrastructure",
+      "classification": "needs-review",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7542,7 +7542,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7578,7 +7578,7 @@
       "statusCodes": [
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7614,7 +7614,7 @@
       "statusCodes": [
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7651,7 +7651,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7692,7 +7692,7 @@
         "201",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7733,7 +7733,7 @@
         "201",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7778,7 +7778,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7823,7 +7823,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7868,7 +7868,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7913,7 +7913,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7952,7 +7952,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + procurement + commerce-orders + identity-tenant-infrastructure",
+      "classification": "mixed: payments + procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -7998,7 +7998,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + procurement + identity-tenant-infrastructure",
+      "classification": "mixed: payments + procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8044,7 +8044,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + procurement + commerce-orders + identity-tenant-infrastructure",
+      "classification": "mixed: payments + procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8090,7 +8090,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + procurement + commerce-orders + identity-tenant-infrastructure",
+      "classification": "mixed: payments + procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8128,7 +8128,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + commerce-orders + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8166,7 +8166,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8203,7 +8203,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8240,7 +8240,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8278,7 +8278,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8314,7 +8314,7 @@
       "statusCodes": [
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8354,7 +8354,7 @@
         "400",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8389,7 +8389,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8423,7 +8423,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8458,7 +8458,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8493,7 +8493,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8528,7 +8528,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8563,7 +8563,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8598,7 +8598,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8633,7 +8633,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8668,7 +8668,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8703,7 +8703,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8737,7 +8737,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8771,7 +8771,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8805,7 +8805,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8841,7 +8841,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8878,7 +8878,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8914,7 +8914,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8948,7 +8948,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -8982,7 +8982,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9016,7 +9016,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9065,7 +9065,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9115,7 +9115,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9165,7 +9165,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9215,7 +9215,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: payments + identity-tenant-infrastructure",
+      "classification": "domain capability: payments",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9266,7 +9266,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9317,7 +9317,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9368,7 +9368,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9419,7 +9419,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9470,7 +9470,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9516,7 +9516,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9562,7 +9562,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9608,7 +9608,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9654,7 +9654,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9705,7 +9705,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: procurement + identity-tenant-infrastructure",
+      "classification": "domain capability: procurement",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9744,7 +9744,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: identity-tenant-infrastructure + audit-infrastructure",
+      "classification": "domain capability: audit-infrastructure",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9783,7 +9783,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: compliance + identity-tenant-infrastructure",
+      "classification": "domain capability: compliance",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9822,7 +9822,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: compliance + identity-tenant-infrastructure",
+      "classification": "domain capability: compliance",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9863,7 +9863,7 @@
         "201",
         "404"
       ],
-      "classification": "mixed: compliance + identity-tenant-infrastructure",
+      "classification": "domain capability: compliance",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9904,7 +9904,7 @@
         "201",
         "404"
       ],
-      "classification": "mixed: compliance + identity-tenant-infrastructure",
+      "classification": "domain capability: compliance",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9945,7 +9945,7 @@
         "201",
         "404"
       ],
-      "classification": "mixed: compliance + identity-tenant-infrastructure",
+      "classification": "domain capability: compliance",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -9984,7 +9984,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: compliance + identity-tenant-infrastructure",
+      "classification": "domain capability: compliance",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -10023,7 +10023,7 @@
         "200",
         "404"
       ],
-      "classification": "mixed: compliance + identity-tenant-infrastructure",
+      "classification": "domain capability: compliance",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -10155,7 +10155,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + discovery",
+      "classification": "domain capability: discovery",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -10193,7 +10193,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: supplier-network + discovery",
+      "classification": "domain capability: discovery",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -10347,7 +10347,7 @@
         "403",
         "404"
       ],
-      "classification": "domain capability: marketplace",
+      "classification": "mixed: marketplace + commerce-orders",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -10462,7 +10462,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: restaurant + identity-tenant-infrastructure",
+      "classification": "domain capability: restaurant",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -10507,7 +10507,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: restaurant + identity-tenant-infrastructure",
+      "classification": "domain capability: restaurant",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -10552,7 +10552,7 @@
         "404",
         "405"
       ],
-      "classification": "mixed: restaurant + identity-tenant-infrastructure",
+      "classification": "domain capability: restaurant",
       "coverage": "not yet test-assertion mapped",
       "evidence": {
         "handlerBodyPatterns": [
@@ -10691,46 +10691,34 @@
     "Classification is path-derived and is a logical capability label only; it does not assert sole data ownership or authorize module extraction."
   ],
   "classificationCounts": {
-    "domain capability: payments": 1,
-    "domain capability: identity-tenant-infrastructure": 31,
-    "mixed: pack-lifecycle + identity-tenant-infrastructure": 2,
-    "domain capability: commerce-orders": 3,
-    "domain capability: event-infrastructure": 1,
-    "mixed: service-booking + identity-tenant-infrastructure": 7,
-    "mixed: service-booking + commerce-orders + identity-tenant-infrastructure": 3,
-    "mixed: logistics + service-booking + commerce-orders + identity-tenant-infrastructure": 1,
-    "mixed: fulfillment + commerce-orders + identity-tenant-infrastructure": 2,
-    "mixed: logistics + commerce-orders + identity-tenant-infrastructure": 3,
-    "mixed: logistics + identity-tenant-infrastructure": 6,
+    "domain capability: payments": 41,
+    "domain capability: identity-tenant-infrastructure": 20,
+    "domain capability: pack-lifecycle": 2,
+    "domain capability: event-infrastructure": 3,
+    "domain capability: commerce-orders": 1,
+    "domain capability: service-booking": 11,
+    "domain capability: fulfillment": 2,
+    "domain capability: logistics": 9,
     "domain capability: catalog": 2,
-    "mixed: telegram-channel + identity-tenant-infrastructure": 3,
-    "domain capability: telegram-channel": 2,
-    "mixed: service-booking + telegram-channel + commerce-orders": 4,
-    "mixed: telegram-channel + fulfillment + commerce-orders": 1,
-    "mixed: telegram-channel + commerce-orders": 2,
-    "mixed: customers + identity-tenant-infrastructure": 8,
-    "mixed: supplier-network + identity-tenant-infrastructure": 35,
-    "mixed: supplier-network + catalog + identity-tenant-infrastructure": 5,
-    "mixed: supplier-network + marketplace + identity-tenant-infrastructure": 1,
-    "mixed: supplier-network + discovery + identity-tenant-infrastructure": 2,
-    "mixed: supplier-network + procurement + identity-tenant-infrastructure": 3,
-    "mixed: procurement + identity-tenant-infrastructure": 40,
-    "mixed: procurement + commerce-orders + identity-tenant-infrastructure": 6,
-    "mixed: inventory + identity-tenant-infrastructure": 4,
-    "mixed: organization-location + identity-tenant-infrastructure": 3,
-    "mixed: payments + identity-tenant-infrastructure": 39,
-    "mixed: payments + procurement + commerce-orders + identity-tenant-infrastructure": 3,
-    "mixed: payments + procurement + identity-tenant-infrastructure": 1,
-    "mixed: payments + commerce-orders + identity-tenant-infrastructure": 1,
-    "mixed: identity-tenant-infrastructure + audit-infrastructure": 1,
-    "mixed: compliance + identity-tenant-infrastructure": 7,
-    "needs-review": 1,
-    "mixed: marketplace + discovery": 1,
-    "domain capability: discovery": 4,
+    "needs-review": 12,
+    "domain capability: telegram-channel": 7,
+    "mixed: service-booking + telegram-channel": 4,
+    "mixed: fulfillment + telegram-channel": 1,
+    "domain capability: customers": 8,
+    "domain capability: supplier-network": 35,
+    "mixed: supplier-network + catalog": 5,
+    "mixed: supplier-network + marketplace": 1,
     "mixed: supplier-network + discovery": 2,
-    "domain capability: marketplace": 1,
-    "mixed: marketplace + commerce-orders": 2,
-    "mixed: restaurant + identity-tenant-infrastructure": 3,
+    "domain capability: procurement": 49,
+    "domain capability: inventory": 4,
+    "domain capability: organization-location": 3,
+    "mixed: payments + procurement": 4,
+    "domain capability: audit-infrastructure": 1,
+    "domain capability: compliance": 7,
+    "mixed: marketplace + discovery": 1,
+    "domain capability: discovery": 6,
+    "mixed: marketplace + commerce-orders": 3,
+    "domain capability: restaurant": 3,
     "inline/static": 6
   }
 }
