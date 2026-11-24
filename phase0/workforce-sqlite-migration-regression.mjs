@@ -10,6 +10,8 @@ import {
   WORKFORCE_SERVICE_BOOKING_MIGRATION_VERSION,
   runWorkforceExternalMemberMigration,
   WORKFORCE_EXTERNAL_MEMBER_MIGRATION_VERSION,
+  runWorkforceEmployeeNumberMigration,
+  WORKFORCE_EMPLOYEE_NUMBER_MIGRATION_VERSION,
 } from '../backend/lib/workforce-sqlite-migrations.js';
 
 const directory = mkdtempSync(path.join(os.tmpdir(), 'sellify-workforce-migration-'));
@@ -164,6 +166,14 @@ try {
     VALUES ('member-external', 'org-a', 'tenant-a', 'chat-a', 'CONTRACTOR', 'DRAFT', '2026-01-02', '2026-01-02')
   `).run();
   assert.equal(db.prepare('SELECT user_id FROM workforce_members WHERE id = ?').get('member-external').user_id, null);
+  const employeeNumberMigration = runWorkforceEmployeeNumberMigration(db);
+  const employeeNumberReplay = runWorkforceEmployeeNumberMigration(db);
+  assert.deepEqual(employeeNumberMigration, { applied: true, version: WORKFORCE_EMPLOYEE_NUMBER_MIGRATION_VERSION });
+  assert.deepEqual(employeeNumberReplay, { applied: false, version: WORKFORCE_EMPLOYEE_NUMBER_MIGRATION_VERSION });
+  assert.ok(db.prepare('PRAGMA table_info(workforce_members)').all().some(column => column.name === 'employee_number'));
+  db.prepare('UPDATE workforce_members SET employee_number = ? WHERE id = ?').run('EMP-001', 'member-a');
+  db.prepare('UPDATE workforce_members SET employee_number = ? WHERE id = ?').run('EMP-001', 'member-b');
+  assert.throws(() => db.prepare('UPDATE workforce_members SET employee_number = ? WHERE id = ?').run('emp-001', 'member-external'));
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
   const preservedMemberIndexes = new Set(db.prepare('PRAGMA index_list(workforce_members)').all().map(index => index.name));
   for (const name of ['idx_workforce_members_org_status','idx_workforce_members_tenant_status','idx_workforce_members_user','idx_workforce_members_location']) {
@@ -174,8 +184,10 @@ try {
     .get(WORKFORCE_SQLITE_MIGRATION_VERSION).count, 1);
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = ?')
     .get(WORKFORCE_EXTERNAL_MEMBER_MIGRATION_VERSION).count, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = ?')
+    .get(WORKFORCE_EMPLOYEE_NUMBER_MIGRATION_VERSION).count, 1);
 
-  console.log('PASS Workforce SQLite migrations 86-88: external professionals, all dependent records, Service Booking references, indexes, idempotency, and foreign-key integrity');
+  console.log('PASS Workforce SQLite migrations 86-89: external professionals, employee numbers, all dependent records, Service Booking references, rollback, idempotency, and foreign-key integrity');
 } finally {
   db.close();
   rmSync(directory, { recursive: true, force: true });
