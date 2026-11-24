@@ -59,6 +59,8 @@ jobs:
           profiles="[\"$profile\"]"
           backend_sha="$head_sha"
           frontend_sha="$head_sha"
+          backend_changed=false
+          frontend_changed=false
 
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             git cat-file -e "${base_sha}^{commit}"
@@ -97,7 +99,22 @@ jobs:
             esac
             node phase0/sellify-preview-profile-regression.mjs
           fi
-          if [[ "$EVENT_NAME" != "push" ]]; then profiles="[\"$profile\"]"; fi
+          if [[ "$EVENT_NAME" != "push" ]]; then
+            case "$profile" in
+              migration)
+                if [[ "$backend_changed" == true && "$frontend_changed" == true ]]; then
+                  profiles='["migration","full-stack"]'
+                elif [[ "$backend_changed" == true ]]; then
+                  profiles='["migration","backend-only"]'
+                elif [[ "$frontend_changed" == true ]]; then
+                  profiles='["migration","frontend-only"]'
+                else
+                  profiles='["migration"]'
+                fi
+                ;;
+              *) profiles="[\\"$profile\\"]" ;;
+            esac
+          fi
           {
             echo "profile=$profile"
             echo "profiles=$profiles"
@@ -107,6 +124,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           echo "Selected profile: $profile"
+          echo "Selected profiles: $profiles"
           echo "Backend revision: $backend_sha"
           echo "Frontend revision: $frontend_sha"
           echo "Base revision: $base_sha"
