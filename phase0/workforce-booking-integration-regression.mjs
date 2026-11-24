@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { validateWorkforceRecurrenceRule, workforceAvailabilityCoversBooking } from '../backend/lib/workforce-recurrence-contract.js';
 import {
   WORKFORCE_BOOKING_INTEGRATION_VERSION,
   workforceBookingIntegrationContract,
@@ -7,6 +8,51 @@ import {
   canCreateWorkforceCommitment,
   workforceBookingIntegrationDecision,
 } from '../backend/lib/workforce-booking-integration.js';
+
+const validWeeklyRule = validateWorkforceRecurrenceRule('FREQ=WEEKLY;BYDAY=TH;COUNT=4');
+assert.equal(validWeeklyRule.valid, true);
+assert.equal(validWeeklyRule.parsed.frequency, 'WEEKLY');
+assert.equal(validateWorkforceRecurrenceRule('FREQ=MONTHLY').valid, false);
+assert.equal(validateWorkforceRecurrenceRule('FREQ=WEEKLY;BYDAY=MO,MO').valid, false);
+assert.equal(validateWorkforceRecurrenceRule('FREQ=WEEKLY;COUNT=2;UNTIL=20261231').valid, false);
+
+const recurringAvailability = {
+  starts_at: '2026-11-19T06:00:00.000Z',
+  ends_at: '2026-11-19T15:00:00.000Z',
+  timezone: 'Africa/Addis_Ababa',
+  effective_from: '2026-11-19',
+  recurrence_rule: 'FREQ=WEEKLY;BYDAY=TH;COUNT=4',
+};
+assert.equal(workforceAvailabilityCoversBooking(recurringAvailability, {
+  requested_start: '2026-11-26T07:00:00.000Z',
+  requested_end: '2026-11-26T08:00:00.000Z',
+}), true, 'a Thursday occurrence must cover a booking in the recurring local-time window');
+assert.equal(workforceAvailabilityCoversBooking(recurringAvailability, {
+  requested_start: '2026-11-27T07:00:00.000Z',
+  requested_end: '2026-11-27T08:00:00.000Z',
+}), false, 'a non-matching weekday must not be treated as available');
+assert.equal(workforceAvailabilityCoversBooking(recurringAvailability, {
+  requested_start: '2026-12-17T07:00:00.000Z',
+  requested_end: '2026-12-17T08:00:00.000Z',
+}), false, 'COUNT must bound the final recurrence occurrence');
+assert.equal(workforceAvailabilityCoversBooking({
+  ...recurringAvailability, recurrence_rule: 'FREQ=MONTHLY',
+}, {
+  requested_start: '2026-11-26T07:00:00.000Z',
+  requested_end: '2026-11-26T08:00:00.000Z',
+}), false, 'unsupported recurrence features must fail closed');
+
+const dstAvailability = {
+  starts_at: '2026-03-01T14:00:00.000Z',
+  ends_at: '2026-03-01T22:00:00.000Z',
+  timezone: 'America/New_York',
+  effective_from: '2026-03-01',
+  recurrence_rule: 'FREQ=WEEKLY;BYDAY=SU;COUNT=2',
+};
+assert.equal(workforceAvailabilityCoversBooking(dstAvailability, {
+  requested_start: '2026-03-08T13:30:00.000Z',
+  requested_end: '2026-03-08T14:30:00.000Z',
+}), true, 'recurrence must preserve local wall-clock time across daylight-saving changes');
 
 const contract = workforceBookingIntegrationContract();
 
