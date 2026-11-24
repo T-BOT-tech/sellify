@@ -17,7 +17,7 @@ import { renderWorkforce } from '../workforce/ui.js';
 // ---------- Tabs ----------
 export function switchTab(tab) {
   const allTabs = ['home', 'order', 'marketplace', 'queue', 'catalog', 'customers', 'tables', 'kitchen', 'accounts', 'warehouse', 'logistics', 'appointments', 'sourcing', 'workforce'];
-  const overflowTabs = ['queue', 'marketplace', 'tables', 'kitchen', 'accounts', 'warehouse', 'logistics', 'appointments', 'sourcing'];
+  const overflowTabs = ['queue', 'marketplace', 'tables', 'kitchen', 'accounts', 'warehouse', 'logistics', 'appointments', 'sourcing', 'workforce'];
   allTabs.forEach(t => {
     const el = document.getElementById('tab-' + t);
     const nav = document.getElementById('nav' + capitalize(t));
