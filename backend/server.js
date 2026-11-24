@@ -3877,10 +3877,10 @@ function workforceApiBody(body, entity, operation) {
       ? [...WORKFORCE_API_FIELDS[entity], 'expected_version']
       : ['expected_version']);
   const unknown = Object.keys(body).filter(key => !allowed.has(key));
-  if (unknown.length) throw Object.assign(new Error(\`Unsupported Workforce fields: \${unknown.join(', ')}\`), { statusCode: 400, code: 'WORKFORCE_FIELDS_INVALID' });
+  if (unknown.length) throw Object.assign(new Error(`Unsupported Workforce fields: ${unknown.join(', ')}`), { statusCode: 400, code: 'WORKFORCE_FIELDS_INVALID' });
   if (operation === 'create') {
     const missing = WORKFORCE_CREATE_REQUIRED[entity].filter(field => body[field] === undefined || body[field] === null || body[field] === '');
-    if (missing.length) throw Object.assign(new Error(\`Missing required Workforce fields: \${missing.join(', ')}\`), { statusCode: 400, code: 'WORKFORCE_FIELDS_REQUIRED' });
+    if (missing.length) throw Object.assign(new Error(`Missing required Workforce fields: ${missing.join(', ')}`), { statusCode: 400, code: 'WORKFORCE_FIELDS_REQUIRED' });
     if (entity === 'utilization' && body.status !== 'PLANNED') throw Object.assign(new Error('Utilization events must be created in PLANNED state'), { statusCode: 400, code: 'WORKFORCE_UTILIZATION_INITIAL_STATE_INVALID' });
   } else if (!Number.isInteger(Number(body.expected_version)) || Number(body.expected_version) < 1) {
     throw Object.assign(new Error('expected_version must be a positive integer'), { statusCode: 400, code: 'WORKFORCE_EXPECTED_VERSION_REQUIRED' });
@@ -3926,7 +3926,7 @@ async function handleWorkforce(req, res, chatId, entityName, recordId = null, ac
     ...(session.locationId ? { location_id: String(session.locationId) } : {}),
   }));
   if (req.method === 'GET' && !recordId) {
-    const url = new URL(req.url, \`http://\${req.headers.host}\`);
+    const url = new URL(req.url, `http://${req.headers.host}`);
     const filters = {};
     for (const key of ['member_id','resource_id','location_id','booking_id','operational_task_id','calendar_id','status','state','availability']) {
       const value = url.searchParams.get(key); if (value) filters[key] = value;
