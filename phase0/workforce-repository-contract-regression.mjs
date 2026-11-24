@@ -3,6 +3,7 @@ import {
   WORKFORCE_REPOSITORY_CONTRACT_VERSION,
   WORKFORCE_REPOSITORY_ENTITIES,
   WORKFORCE_REPOSITORY_OPERATIONS,
+  WORKFORCE_REPOSITORY_ENTITY_OPERATIONS,
   workforceRepositoryContract,
   validateWorkforceRepositoryContext,
   validateWorkforceRepositoryOperation,
@@ -21,6 +22,14 @@ assert.equal(contract.reuses_existing_organization_authority, true);
 assert.equal(contract.creates_duplicate_user_identity, false);
 assert.deepEqual(contract.entities, WORKFORCE_REPOSITORY_ENTITIES);
 assert.deepEqual(contract.operations, WORKFORCE_REPOSITORY_OPERATIONS);
+assert.deepEqual(contract.entity_operations, WORKFORCE_REPOSITORY_ENTITY_OPERATIONS);
+assert.equal(contract.entity_specific_lifecycle, true);
+assert.ok(contract.entities.includes('calendar_exception'));
+assert.ok(contract.entity_operations.shift.includes('confirm'));
+assert.ok(contract.entity_operations.shift.includes('complete'));
+assert.ok(contract.entity_operations.allocation.includes('approve'));
+assert.ok(contract.entity_operations.allocation.includes('release'));
+assert.ok(contract.entity_operations.engagement.includes('end'));
 
 const validContext = validateWorkforceRepositoryContext({
   organization_id: 'org-1',
@@ -65,6 +74,28 @@ const invalidUpdate = validateWorkforceRepositoryOperation('member', 'update', {
 assert.equal(invalidUpdate.valid, false);
 assert.ok(invalidUpdate.errors.includes('expected_version must be a positive integer'));
 
+const invalidLifecycleForEntity = validateWorkforceRepositoryOperation('shift', 'activate', {
+  organization_id: 'org-1',
+  tenant_id: 'tenant-1',
+  expected_version: 1,
+});
+assert.equal(invalidLifecycleForEntity.valid, false);
+assert.ok(invalidLifecycleForEntity.errors.includes('Operation activate is not supported for entity: shift'));
+
+const validShiftConfirm = validateWorkforceRepositoryOperation('shift', 'confirm', {
+  organization_id: 'org-1',
+  tenant_id: 'tenant-1',
+  expected_version: 2,
+});
+assert.equal(validShiftConfirm.valid, true);
+
+const validAllocationApprove = validateWorkforceRepositoryOperation('allocation', 'approve', {
+  organization_id: 'org-1',
+  tenant_id: 'tenant-1',
+  expected_version: 2,
+});
+assert.equal(validAllocationApprove.valid, true);
+
 const invalidEntity = validateWorkforceRepositoryOperation('team', 'create', {
   organization_id: 'org-1',
   tenant_id: 'tenant-1',
@@ -83,6 +114,8 @@ assert.ok(invalidOperation.errors.includes('Invalid operation: archive'));
 
 const capability = workforceRepositoryCapability();
 assert.equal(capability.supports_organization_scope, true);
+assert.equal(capability.supports_resource_scope, true);
+assert.equal(capability.supports_entity_specific_lifecycle, true);
 assert.equal(capability.supports_tenant_scope, true);
 assert.equal(capability.supports_idempotency, true);
 assert.equal(capability.supports_optimistic_concurrency, true);
