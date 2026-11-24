@@ -161,6 +161,7 @@ jobs:
           case "$PREVIEW_PROFILE" in
             backend-only)
               run_test npm run phase0:baseline
+              run_test npm run phase11.3:po-test
               run_test npm run test:workforce-api-http
               run_test npm run test:inventory-sync-event-authorization-http
               run_test npm run test:logistics-scheduling-http
@@ -173,6 +174,7 @@ jobs:
               ;;
             full-stack)
               run_test npm run phase0:baseline
+              run_test npm run phase11.3:po-test
               run_test npm run phase0:test
               run_test npm run test:service-catalog-frontend-sync
               run_test npm run test:browser-module-serving-browser
