@@ -212,19 +212,19 @@ export function workforceAvailabilityCoversBooking(availability, booking) {
 
   const ruleResult = validateWorkforceRecurrenceRule(availability.recurrence_rule);
   if (!ruleResult.valid) return false;
-  const timeZone = String(availability.timezone || '').trim();
-  const anchor = localParts(availability.starts_at, timeZone);
-  const availabilityEnd = localParts(availability.ends_at, timeZone);
-  const requestedStart = localParts(booking.requested_start, timeZone);
-  const requestedEnd = localParts(booking.requested_end, timeZone);
-  if (!anchor || !availabilityEnd || !requestedStart || !requestedEnd) return false;
-
   if (!ruleResult.parsed) {
     const availabilityStartMs = Date.parse(availability.starts_at);
     const availabilityEndMs = Date.parse(availability.ends_at);
     return Number.isFinite(availabilityStartMs) && Number.isFinite(availabilityEndMs)
       && availabilityStartMs <= startMs && availabilityEndMs >= endMs;
   }
+
+  const timeZone = String(availability.timezone || '').trim();
+  const anchor = localParts(availability.starts_at, timeZone);
+  const availabilityEnd = localParts(availability.ends_at, timeZone);
+  const requestedStart = localParts(booking.requested_start, timeZone);
+  const requestedEnd = localParts(booking.requested_end, timeZone);
+  if (!anchor || !availabilityEnd || !requestedStart || !requestedEnd) return false;
 
   if (requestedStart.date !== requestedEnd.date) return false;
   if (anchor.date !== availabilityEnd.date) return false;
