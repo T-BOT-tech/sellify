@@ -28,16 +28,22 @@ jobs:
       - name: Install dependencies
         run: npm install --ignore-scripts
 
-      - name: Existing Workforce contract regressions
-        run: |
-          node phase0/workforce-contract-regression.mjs
-          node phase0/workforce-member-contract-regression.mjs
-          node phase0/workforce-profile-engagement-regression.mjs
-          node phase0/workforce-calendar-availability-regression.mjs
-          node phase0/workforce-assignment-shift-regression.mjs
-          node phase0/workforce-allocation-utilization-regression.mjs
-          node phase0/workforce-booking-integration-regression.mjs
-          node phase0/workforce-authorization-service-regression.mjs
+      - name: workforce-contract-regression
+        run: node phase0/workforce-contract-regression.mjs
+      - name: workforce-member-contract-regression
+        run: node phase0/workforce-member-contract-regression.mjs
+      - name: workforce-profile-engagement-regression
+        run: node phase0/workforce-profile-engagement-regression.mjs
+      - name: workforce-calendar-availability-regression
+        run: node phase0/workforce-calendar-availability-regression.mjs
+      - name: workforce-assignment-shift-regression
+        run: node phase0/workforce-assignment-shift-regression.mjs
+      - name: workforce-allocation-utilization-regression
+        run: node phase0/workforce-allocation-utilization-regression.mjs
+      - name: workforce-booking-integration-regression
+        run: node phase0/workforce-booking-integration-regression.mjs
+      - name: workforce-authorization-service-regression
+        run: node phase0/workforce-authorization-service-regression.mjs
 
       - name: Repository contract and SQLite persistence
         run: |
