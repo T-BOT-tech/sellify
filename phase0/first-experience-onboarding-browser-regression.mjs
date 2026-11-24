@@ -520,6 +520,12 @@ try {
   await page.locator('#productList').getByText('Browser First Product', { exact: true })
     .waitFor({ state: 'visible', timeout: 15000 });
 
+  if (process.env.PREVIEW_SCREENSHOT_PATH) {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: process.env.PREVIEW_SCREENSHOT_PATH, fullPage: true });
+    console.log('Mobile preview screenshot: PASS (390 × 844)');
+  }
+
   assert.deepEqual(pageErrors, [], 'onboarding, reload, and multi-tenant switching must not throw uncaught errors');
   console.log('First Experience browser onboarding → first catalog item → reload: PASS');
   console.log('Real Settings tenant switching, session exchange, and tenant isolation: PASS');
