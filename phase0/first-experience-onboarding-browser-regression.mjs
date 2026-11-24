@@ -600,6 +600,158 @@ try {
   await page.locator('#productList').getByText('Browser First Product', { exact: true })
     .waitFor({ state: 'visible', timeout: 15000 });
 
+  // Create a separate synthetic Restaurant business and exercise its real
+  // Tables → menu order → Kitchen workflow without changing the Retail tenant.
+  const restaurantCreateResponse = await fetch(baseUrl + '/auth/tenants', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + firstRestoredConfig.sessionToken,
+    },
+    body: JSON.stringify({
+      sellerName: 'Browser Restaurant Regression',
+      businessType: 'restaurant',
+      country: 'ET',
+      timezone: 'Africa/Addis_Ababa',
+      deviceName: 'Restaurant browser regression',
+    }),
+  });
+  assert.equal(restaurantCreateResponse.status, 201,
+    'the authenticated owner must be able to create an isolated Restaurant test tenant');
+  const restaurantCreateBody = await restaurantCreateResponse.json();
+  const restaurantChatId = String(restaurantCreateBody.membership?.chatId || restaurantCreateBody.session?.chatId || '');
+  const restaurantSessionToken = String(restaurantCreateBody.session?.token || '');
+  assert.ok(restaurantChatId && restaurantChatId !== firstChatId,
+    'Restaurant regression must use a distinct canonical tenant');
+  assert.ok(restaurantSessionToken, 'Restaurant tenant creation must issue its own session');
+  const restaurantTemplateResponse = await fetch(
+    baseUrl + '/tenants/' + encodeURIComponent(restaurantChatId) + '/business-template',
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + restaurantSessionToken,
+      },
+      body: JSON.stringify({ templateKey: 'restaurant' }),
+    },
+  );
+  assert.equal(restaurantTemplateResponse.status, 200,
+    'Restaurant template must be persisted for the synthetic Restaurant tenant');
+
+  await page.locator('#gearSettingsBtn').click();
+  await page.locator('#tenantSwitcherControls').waitFor({ state: 'visible', timeout: 15000 });
+  await page.locator('#tenantSwitcherSelect').selectOption(restaurantChatId);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }),
+    page.locator('#tenantSwitcherControls button').click(),
+  ]);
+  const restaurantActiveConfig = await readPersistedBrowserConfig(page);
+  assert.equal(String(restaurantActiveConfig.chatId), restaurantChatId,
+    'Restaurant workflow must run under its own server-issued tenant session');
+  await page.locator('#gearSettingsBtn').click();
+  await page.locator('#settingsModal.open').waitFor({ state: 'visible', timeout: 10000 });
+  await page.locator('#setBusinessModel').selectOption('restaurant');
+  await page.locator('#settingsModal button.btn-primary').filter({ hasText: 'Save' }).last().click();
+  await page.locator('#navTables').waitFor({ state: 'visible', timeout: 10000 });
+  assert.equal(await page.locator('#navTables').isVisible(), true,
+    'Restaurant mode must expose the real Tables navigation');
+  assert.equal(await page.locator('#navKitchen').isVisible(), true,
+    'Restaurant mode must expose the real Kitchen navigation');
+
+  // Add a real menu product through the catalog UI.
+  await page.evaluate(() => window.switchTab('catalog'));
+  await page.locator('#newProdName').fill('Browser Restaurant Meal');
+  await page.locator('#newProdPrice').fill('18');
+  await page.locator('#addProdBtn').click();
+  await page.locator('#catalogList').getByText('Browser Restaurant Meal', { exact: true })
+    .waitFor({ state: 'visible', timeout: 10000 });
+  const restaurantCatalogResponse = await fetch(
+    baseUrl + '/catalog/' + encodeURIComponent(restaurantChatId),
+    { headers: { Authorization: 'Bearer ' + restaurantActiveConfig.sessionToken } },
+  );
+  assert.equal(restaurantCatalogResponse.status, 200,
+    'Restaurant menu item must be readable from its canonical tenant catalog');
+  const restaurantCatalog = await restaurantCatalogResponse.json();
+  const restaurantMenuItem = (restaurantCatalog.products || []).find(product => product.name === 'Browser Restaurant Meal');
+  assert.ok(restaurantMenuItem, 'Restaurant menu item must be persisted canonically');
+
+  // Create a table using the actual Tables tab and modal controls.
+  await page.evaluate(() => window.switchTab('tables'));
+  await page.locator('#tablesList').getByText('No tables yet').waitFor({ state: 'visible', timeout: 10000 });
+  await page.locator('#tab-tables button').filter({ hasText: 'Add table' }).click();
+  await page.locator('#tableEditModal').waitFor({ state: 'visible', timeout: 5000 });
+  await page.locator('#tableEditNumber').fill('7');
+  await page.locator('#tableEditCapacity').fill('4');
+  await page.locator('#tableEditNotes').fill('Synthetic browser test table');
+  await page.locator('#tableEditModal button').filter({ hasText: 'Save' }).click();
+  await page.locator('#tablesList .table-card').filter({ hasText: 'Table 7' }).waitFor({
+    state: 'visible', timeout: 10000,
+  });
+
+  // Take the order through the actual Order UI, assigning table and course.
+  await page.evaluate(() => window.switchTab('order'));
+  await page.locator('#orderTableSelect').waitFor({ state: 'visible', timeout: 10000 });
+  const tableOption = await page.locator('#orderTableSelect option').filter({ hasText: 'Table 7' }).getAttribute('value');
+  assert.ok(tableOption, 'Restaurant order form must offer the newly created table');
+  await page.locator('#orderTableSelect').selectOption(tableOption);
+  await page.locator('#orderCourseSelect').selectOption({ index: 1 });
+  const restaurantProductRow = page.locator('#productList .product-row').filter({ hasText: 'Browser Restaurant Meal' });
+  await restaurantProductRow.locator('button[onclick^="changeQty"]').last().click();
+  await page.locator('#orderSummary').waitFor({ state: 'visible', timeout: 5000 });
+  await page.locator('#saveOrderBtn').click();
+  await page.locator('#paymentProofModal').waitFor({ state: 'visible', timeout: 5000 });
+  assert.ok(await page.locator('#orderPayMethod option:enabled').count() > 0,
+    'Restaurant checkout must use an enabled configured payment method');
+  await page.locator('#checkoutSaveOrderButton').click();
+  await page.locator('#paymentProofModal').waitFor({ state: 'hidden', timeout: 10000 });
+
+  // Kitchen is a Restaurant view of the existing Core order, not a second
+  // order authority. Verify its table context and transition through the UI.
+  await page.evaluate(() => window.switchTab('kitchen'));
+  const kitchenTicket = page.locator('#kitchenList .kitchen-order').filter({ hasText: 'Browser Restaurant Meal' });
+  await kitchenTicket.waitFor({ state: 'visible', timeout: 10000 });
+  await assert.doesNotReject(async () => {
+    assert.match(await kitchenTicket.innerText(), /Table 7/,
+      'Kitchen ticket must retain the table assigned at checkout');
+  });
+  await kitchenTicket.getByRole('button', { name: /Start prep/ }).click();
+  await kitchenTicket.waitFor({ state: 'visible', timeout: 5000 });
+  await assert.doesNotReject(async () => {
+    assert.match(await kitchenTicket.getAttribute('class'), /preparing/,
+      'Kitchen ticket must transition from pending to preparing through the UI');
+  });
+
+  // Synchronize the same order via the Queue UI and verify canonical Commerce
+  // order identity and item data; kitchen state remains a vertical projection.
+  await page.evaluate(() => window.switchTab('queue'));
+  const restaurantSyncResponsePromise = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return response.request().method() === 'POST'
+      && url.pathname === `/sync/${encodeURIComponent(restaurantChatId)}`;
+  }, { timeout: 10000 });
+  await page.locator('#syncNowBtn').click();
+  const restaurantSyncResponse = await restaurantSyncResponsePromise;
+  assert.equal(restaurantSyncResponse.status(), 200,
+    'Restaurant Queue Sync now must receive a successful canonical sync acknowledgement');
+  const restaurantSyncBody = await restaurantSyncResponse.json();
+  const restaurantAck = (restaurantSyncBody.results || []).find(result =>
+    String(result.local_id || '') && result.status === 'synced');
+  assert.ok(restaurantAck, 'Restaurant order must be accepted by canonical sync');
+  const restaurantOrdersResponse = await fetch(
+    baseUrl + '/orders/' + encodeURIComponent(restaurantChatId) + '?limit=200',
+    { headers: { Authorization: 'Bearer ' + restaurantActiveConfig.sessionToken } },
+  );
+  assert.equal(restaurantOrdersResponse.status, 200,
+    'Restaurant canonical Commerce order feed must be readable');
+  const restaurantOrdersBody = await restaurantOrdersResponse.json();
+  const canonicalRestaurantOrder = (restaurantOrdersBody.orders || []).find(order =>
+    (order.items || []).some(item => item.name === 'Browser Restaurant Meal'));
+  assert.ok(canonicalRestaurantOrder,
+    'Restaurant browser checkout must create the canonical Commerce order');
+  assert.equal((canonicalRestaurantOrder.items || []).find(item => item.name === 'Browser Restaurant Meal')?.qty, 1,
+    'canonical Restaurant order must preserve the menu item quantity');
+  console.log('Restaurant browser Tables → menu order → Kitchen preparation → canonical Commerce order: PASS');
+
   if (process.env.PREVIEW_SCREENSHOT_PATH) {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: process.env.PREVIEW_SCREENSHOT_PATH, fullPage: true });
