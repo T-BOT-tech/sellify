@@ -492,7 +492,8 @@
     "test:workforce-repository-contract": "node phase0/workforce-repository-contract-regression.mjs",
     "test:workforce-authorization-adapter": "node phase0/workforce-authorization-adapter-regression.mjs",
     "test:workforce-api": "node phase0/workforce-api-regression.mjs",
-    "test:workforce-service-booking": "node phase0/workforce-service-booking-integration-regression.mjs"
+    "test:workforce-service-booking": "node phase0/workforce-service-booking-integration-regression.mjs",
+    "test:workforce-route-inventory": "node scripts/perplexity-server-route-inventory.mjs && node phase0/workforce-route-inventory-regression.mjs"
   },
   "engines": {
     "node": ">=24"
