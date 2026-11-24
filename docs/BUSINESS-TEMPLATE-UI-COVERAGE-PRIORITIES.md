@@ -16,9 +16,19 @@ The existing `test:first-experience-onboarding-browser` is the first real browse
 - Creation of a second business, Settings-based tenant switching, server-issued session exchange, tenant data isolation, and switching back to restore the Retail catalog/template.
 - Optional 390 × 844 screenshot evidence.
 
-This is meaningful Retail onboarding and tenant-continuity coverage, but it is not yet a complete Retail transaction journey. It does not yet prove a browser-driven cart → checkout/payment state → queued order → canonical order read → stock/order follow-up. Existing payment and order regressions cover important backend contracts, but must not be described as a complete Retail browser journey.
+This is meaningful Retail onboarding and tenant-continuity coverage. The browser journey now also proves a cart → checkout → queued order → real Queue sync → canonical order read. It verifies that choosing a payment method does not confirm receipt and reads `UNPAID` from the sync acknowledgement. Inventory deduction is intentionally not inferred from order creation; stock remains governed by the existing fulfillment/Inventory authority boundary.
 
-### Retail next increment (do first)
+### Retail browser transaction coverage (implemented)
+
+The browser test now exercises the real product row and quantity stepper, optional customer details, checkout modal, truthful unconfirmed-payment hint, Queue ticket, Queue Sync now action, sync acknowledgement, and authenticated canonical order feed. It asserts one canonical order with the expected item, quantity, amount, ETB currency, and unpaid payment state from the correct acknowledgement source. This runs with a temporary SQLite database and synthetic tenant.
+
+### Restaurant browser journey (implemented)
+
+The same browser regression creates a separate synthetic Restaurant tenant, switches it through the real Settings tenant switcher, enables Restaurant mode through Settings, creates a menu item through Catalog and synchronizes it through Queue, creates a table through the Tables modal, assigns table and course in the Order UI, saves the order through checkout, verifies the Kitchen ticket retains the table context, advances it from pending to preparing, then synchronizes and verifies the canonical Commerce order and menu-item quantity. Kitchen remains a projection over the existing Core order; the test does not create a parallel order, payment, or inventory authority.
+
+Verified on commit `71d87ac08bfcbf5dcde2acabd4e754d58e0a7188`: all four preview profiles and Workforce verification passed.
+
+### Retail next increment
 
 Extend the existing synthetic Retail browser fixture, or add a focused companion browser test, to exercise the real UI through:
 
@@ -38,8 +48,8 @@ The nine onboarding choices are not nine equally mature vertical applications. T
 
 | Priority | Template(s) | Existing implementation evidence | Recommended coverage |
 |---|---|---|---|
-| P0 — first | `retail-shop` | Real onboarding browser journey, catalog sync, order workspace, queue, checkout/payment UI, canonical orders and inventory contracts | Complete the Retail browser transaction journey before broadening |
-| P1 — next distinct vertical | `restaurant` | Dedicated Tables and Kitchen UI, restaurant table integration, recipe/preparation and restaurant↔Inventory handoff regressions, restaurant order/payment and commerce integration suites | Add a restaurant browser journey for menu item → table/order → kitchen state → canonical order; test stock handoff only through Inventory authority |
+| Complete | `retail-shop` | Real onboarding, catalog sync, checkout, queue, canonical order read, tenant switching and isolation | Browser transaction journey verified; keep stock/fulfillment assertions at canonical Inventory boundaries |
+| Complete | `restaurant` | Dedicated Tables and Kitchen UI, table/kitchen/recipe/inventory contracts, plus the new browser journey | Browser journey verified: menu item → table/course → checkout → Kitchen preparing → canonical Commerce order; Inventory handoff remains contract-covered and authority-bound |
 | P1 — B2B workflow | `wholesale` | Dedicated B2B workspace surfaces (quotes, purchase orders, credit terms, receivables, invoices), plus backend pricing/quote/PO/credit/AR/invoice/procurement suites | Add a focused browser journey for business customer → customer-specific pricing/quote → accepted quote or existing PO flow. Do not force it through the retail cash-checkout journey |
 | P2 — service-led | `barbershop`, `consultation` | Service item type and starter suggestions; service-booking status/transition contract; appointments UI and customer appointment browser regression; service provider/resource foundations | Reuse one service-booking browser harness, first prove appointment request → acceptance/confirmation → completion and tenant-scoped visibility; vary service offerings and labels for each template. Do not assert inventory consumption |
 | P2 — mixed repair workflow | `repair` | Product and service starter suggestions, service resource/provider scope, booking/scheduling boundaries, spare-part and diagnostics offering contracts | After the shared service journey, add a repair-specific browser path only if the UI exposes a real work/booking workflow: diagnostics or repair service plus spare part. Keep parts in Inventory and service booking in its own authority |
