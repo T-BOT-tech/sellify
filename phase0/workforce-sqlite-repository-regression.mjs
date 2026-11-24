@@ -230,6 +230,17 @@ try {
     expected_version: 1, availability: 'UNAVAILABLE',
   }, scopeA);
   assert.equal(unavailable.availability, 'UNAVAILABLE');
+  assert.throws(() => repository.create('availability', {
+    idempotency_key: 'availability-invalid-recurrence-a',
+    member_id: created.record.id,
+    availability: 'AVAILABLE',
+    starts_at: '2026-11-25T06:00:00.000Z',
+    ends_at: '2026-11-25T15:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+    recurrence_rule: 'FREQ=MONTHLY',
+    effective_from: '2026-11-25',
+  }, scopeA), error => error?.code === 'WORKFORCE_RECURRENCE_RULE_INVALID');
+
 
   const shift = repository.create('shift', {
     idempotency_key: 'shift-create-a',
