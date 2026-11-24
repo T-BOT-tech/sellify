@@ -203,9 +203,9 @@ try {
   // Exercise the remaining authenticated entity routes through the same live HTTP server.
   // These records use synthetic data and stay inside the isolated test tenant.
   const entityFixtures = [
-    ['profiles', { member_id: memberId, skills: ['HTTP regression skill'], visibility: 'ORGANIZATION' }],
+    ['profiles', { member_id: memberId, effective_from: '2026-11-24T00:00:00.000Z', skills: ['HTTP regression skill'], visibility: 'ORGANIZATION' }],
     ['engagements', {
-      member_id: memberId, engagement_type: 'CONTRACT',
+      member_id: memberId, engagement_type: 'EMPLOYMENT',
       starts_at: '2026-11-26T08:00:00.000Z', ends_at: '2026-12-26T08:00:00.000Z',
     }],
     ['calendars', {
@@ -234,7 +234,7 @@ try {
     ['availability', {
       member_id: memberId, availability: 'AVAILABLE',
       starts_at: '2026-11-26T06:00:00.000Z', ends_at: '2026-11-26T14:00:00.000Z',
-      timezone: 'Africa/Addis_Ababa',
+      timezone: 'Africa/Addis_Ababa', effective_from: '2026-11-24T00:00:00.000Z',
     }],
     ['assignments', {
       member_id: memberId, assignment_type: 'RESOURCE',
@@ -253,7 +253,7 @@ try {
       member_id: memberId,
       planned_starts_at: '2026-11-26T06:00:00.000Z',
       planned_ends_at: '2026-11-26T07:00:00.000Z',
-      evidence_source: 'HTTP_REGRESSION',
+      status: 'PLANNED', evidence_source: 'HTTP_REGRESSION',
     }],
   ];
   for (const [plural, body] of additionalFixtures) {
