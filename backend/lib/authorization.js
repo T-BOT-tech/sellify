@@ -44,6 +44,14 @@ const ROLE_PERMISSIONS = Object.freeze({
     'service:service_booking:view',
     'service:service_booking:request', 'service:service_booking:manage',
     'service:service_booking:confirm', 'service:service_booking:cancel',
+    'workforce:member:view', 'workforce:member:manage', 'workforce:member:activate', 'workforce:member:suspend',
+    'workforce:profile:view', 'workforce:profile:manage',
+    'workforce:engagement:view', 'workforce:engagement:manage',
+    'workforce:calendar:view', 'workforce:calendar:manage',
+    'workforce:availability:view', 'workforce:availability:manage',
+    'workforce:assignment:view', 'workforce:assignment:manage',
+    'workforce:allocation:view', 'workforce:allocation:manage', 'workforce:allocation:release',
+    'workforce:utilization:view', 'workforce:utilization:manage',
     'logistics:scheduling:view', 'logistics:scheduling:request',
     'logistics:scheduling:manage', 'logistics:scheduling:confirm', 'logistics:scheduling:cancel',
   ]),
@@ -63,6 +71,11 @@ const ROLE_PERMISSIONS = Object.freeze({
     'service:service_resource:view',
     'service:resource_availability:view', 'service:resource_availability:manage',
     'service:service_booking:view',
+    // Providers receive read-only Workforce access; repository scope must bind
+    // every request to their own member and assigned Service Resource.
+    'workforce:member:view', 'workforce:profile:view',
+    'workforce:calendar:view', 'workforce:availability:view',
+    'workforce:assignment:view',
   ]),
   // FUX-6 Restaurant contextual roles. These are executable only when the
   // Restaurant Pack is active; assignment is handled through membership_roles.
