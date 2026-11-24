@@ -48,6 +48,12 @@ export function validateWorkforceApiPayload(entity, operation, input = {}) {
     if (end !== undefined && end !== null && Number.isNaN(Date.parse(end))) {
       errors.push(`${endField} must be a valid date/time`);
     }
+    for (const [field, value] of [[startField, start], [endField, end]]) {
+      if (value && !['effective_from','effective_until'].includes(field)
+        && (typeof value !== 'string' || !/(Z|[+-]\\d{2}:?\\d{2})$/i.test(value))) {
+        errors.push(`${field} must include an explicit timezone`);
+      }
+    }
     if (start && end && Date.parse(start) >= Date.parse(end)) {
       errors.push(`${startField} must be before ${endField}`);
     }
