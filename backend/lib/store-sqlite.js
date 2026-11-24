@@ -39,7 +39,7 @@ import { decideLogisticsSchedulingFailure } from '../../app/src/verticals/logist
 import { decideLogisticsSchedulingTerminal } from '../../app/src/verticals/logistics/scheduling-terminal-contract.js';
 
 
-import { runWorkforceSqliteMigrations } from './workforce-sqlite-migrations.js';
+import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration } from './workforce-sqlite-migrations.js';
 import { WorkforceSqliteRepository } from './workforce-sqlite-repository.js';
 import { authorizeWorkforceRepositoryAccess } from './workforce-authorization-adapter.js';
 
@@ -3612,6 +3612,7 @@ if (!applied.includes(39)) {
 
   // Workforce migration 86 is isolated in its own additive migration module.
   runWorkforceSqliteMigrations(db, nowIso);
+  runWorkforceServiceBookingMigration(db, nowIso);
 }
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({
