@@ -31,6 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       profile: ${{ steps.classify.outputs.profile }}
+      profiles: ${{ steps.classify.outputs.profiles }}
       backend_sha: ${{ steps.classify.outputs.backend_sha }}
       frontend_sha: ${{ steps.classify.outputs.frontend_sha }}
       base_sha: ${{ steps.classify.outputs.base_sha }}
@@ -55,6 +56,7 @@ jobs:
           base_sha="$PR_BASE_SHA"
           head_sha="$PR_HEAD_SHA"
           profile="$REQUESTED_PROFILE"
+          profiles="[\"$profile\"]"
           backend_sha="$head_sha"
           frontend_sha="$head_sha"
 
@@ -86,6 +88,7 @@ jobs:
             fi
           elif [[ "$EVENT_NAME" == "push" ]]; then
             profile=full-stack
+            profiles='["backend-only","frontend-only","full-stack","migration"]'
             node phase0/sellify-preview-profile-regression.mjs
           else
             case "$profile" in
@@ -111,6 +114,11 @@ jobs:
     needs: classify
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        profile: ${{ fromJSON(needs.classify.outputs.profiles) }}
     permissions:
       contents: read
     steps:
@@ -122,12 +130,12 @@ jobs:
       - name: Setup shared Sellify toolchain
         uses: ./.github/actions/setup-sellify
         with:
-          install-playwright: ${{ needs.classify.outputs.profile != 'backend-only' }}
+          install-playwright: ${{ matrix.profile != 'backend-only' }}
 
       - name: Run isolated synthetic preview profile
         shell: bash
         env:
-          PREVIEW_PROFILE: ${{ needs.classify.outputs.profile }}
+          PREVIEW_PROFILE: ${{ matrix.profile }}
           BACKEND_SHA: ${{ needs.classify.outputs.backend_sha }}
           FRONTEND_SHA: ${{ needs.classify.outputs.frontend_sha }}
           BASE_SHA: ${{ needs.classify.outputs.base_sha }}
@@ -196,7 +204,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sellify-pr-preview-${{ github.event.pull_request.number || 'manual' }}-${{ github.run_id }}-${{ needs.classify.outputs.profile }}
+          name: sellify-pr-preview-${{ github.event.pull_request.number || 'manual' }}-${{ github.run_id }}-${{ matrix.profile }}
           path: |
             preview-manifest.json
             preview-test.log
