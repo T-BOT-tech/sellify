@@ -3728,6 +3728,32 @@ async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId 
   }
 
   if (req.method === 'GET') {
+    const providerResourceIds = workforceProviderResourceIds(session);
+    if (providerResourceIds.length) {
+      const resources = (await listServiceResources(chatId, { includeInactive: false }))
+        .filter(resource => providerResourceIds.includes(String(resource.id)));
+      if (!resources.length) throw Object.assign(new Error('An active resource-scoped Service Provider assignment is required'), {
+        statusCode: 403, code: 'SERVICE_PROVIDER_ASSIGNMENT_REQUIRED',
+      });
+      for (const resource of resources) {
+        const location = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
+        if (resource.locationId && !location) throw Object.assign(new Error('Assigned Service Resource location is unavailable in tenant scope'), {
+          statusCode: 403, code: 'LOCATION_SCOPE_DENIED',
+        });
+        await requireAuthorization(session, tenant, 'service_resource', 'service:service_booking:view', {
+          location,
+          resourceContext: { resourceType: 'service_resource', resourceId: resource.id,
+            organizationId: resource.organizationId, locationId: resource.locationId },
+          deniedMessage: 'Assigned Service Provider booking view permission required',
+        });
+      }
+      const providerBookings = await listServiceProviderBookings(
+        chatId, resources.map(resource => resource.id), session.userId,
+      );
+      const bookings = providerBookings.filter(booking => String(booking.order_id) === String(serverOrderId));
+      return sendJSON(res, 200, { order_id: String(serverOrderId), bookings,
+        scope: 'OWN_WORKFORCE_MEMBER_AND_ASSIGNED_RESOURCES' }, req);
+    }
     await requireAuthorization(session, tenant, 'service_booking', 'service:service_booking:view', {
       location: authorizationLocation, deniedMessage: 'Service booking view permission required',
     });
