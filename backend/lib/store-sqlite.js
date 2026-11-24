@@ -6446,6 +6446,14 @@ function assertWorkforceMemberBookingEligibility({
       statusCode: 409, code: 'SERVICE_BOOKING_WORKFORCE_MEMBER_INELIGIBLE',
     });
   }
+  const activeMembership = db.prepare(
+    "SELECT 1 FROM memberships WHERE user_id = ? AND chat_id = ? AND status = 'active' LIMIT 1"
+  ).get(String(member.user_id), String(chatId));
+  if (!activeMembership) {
+    throw Object.assign(new Error('Workforce member must retain an active canonical tenant membership'), {
+      statusCode: 409, code: 'SERVICE_BOOKING_WORKFORCE_MEMBER_INELIGIBLE',
+    });
+  }
   const assignments = db.prepare(`
     SELECT * FROM workforce_assignments
     WHERE organization_id = ? AND tenant_id = ? AND chat_id = ?
