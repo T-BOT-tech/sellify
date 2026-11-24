@@ -30,6 +30,8 @@ assert.ok(contract.entity_operations.shift.includes('complete'));
 assert.ok(contract.entity_operations.allocation.includes('approve'));
 assert.ok(contract.entity_operations.allocation.includes('release'));
 assert.ok(contract.entity_operations.engagement.includes('end'));
+assert.ok(contract.entity_operations.member.includes('link_account'));
+assert.ok(contract.entity_operations.member.includes('unlink_account'));
 
 const validContext = validateWorkforceRepositoryContext({
   organization_id: 'org-1',
@@ -81,6 +83,15 @@ const invalidLifecycleForEntity = validateWorkforceRepositoryOperation('shift', 
 });
 assert.equal(invalidLifecycleForEntity.valid, false);
 assert.ok(invalidLifecycleForEntity.errors.includes('Operation activate is not supported for entity: shift'));
+
+const validAccountLink = validateWorkforceRepositoryOperation('member', 'link_account', {
+  organization_id: 'org-1', tenant_id: 'tenant-1', expected_version: 1,
+});
+assert.equal(validAccountLink.valid, true);
+const validAccountUnlink = validateWorkforceRepositoryOperation('member', 'unlink_account', {
+  organization_id: 'org-1', tenant_id: 'tenant-1', expected_version: 2,
+});
+assert.equal(validAccountUnlink.valid, true);
 
 const validShiftConfirm = validateWorkforceRepositoryOperation('shift', 'confirm', {
   organization_id: 'org-1',
