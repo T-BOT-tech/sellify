@@ -99,7 +99,8 @@ The Node 24 Workforce verification workflow runs only for this branch. It does n
 
 - backend/lib/workforce-api-validation.js
 - backend/lib/workforce-booking-integration.js
-- backend/server.js
+- backend/lib/workforce-recurrence-contract.js
+- backend/lib/server.js
 
 ## API route surface
 
@@ -193,14 +194,17 @@ The route inventory script is scripts/perplexity-server-route-inventory.mjs. The
 
 The existing eight contract regressions are also run directly by the Workforce capability workflow.
 
+## Completed follow-on increments
+
+- Authenticated HTTP-level API regression — verified on Node 24. It covers session enforcement, member create/list/get/update, idempotency replay, entity lifecycle, optimistic concurrency, and cross-tenant read/write denial. Broader per-entity HTTP coverage can be added as the API surface evolves.
+- Bounded availability recurrence evaluation — verified on Node 24 through both contract and production SQLite Service Booking integration tests. DAILY/WEEKLY rules, interval, BYDAY, COUNT, UNTIL, effective dates, local wall-clock time, and daylight-saving transitions are covered; unsupported rules fail closed.
+
 ## Remaining work
 
-1. Authenticated HTTP-level API regression — implemented and verified on Node 24. It covers session enforcement, member create/list/get/update, idempotency replay, entity lifecycle, optimistic concurrency, and cross-tenant read/write denial. Broader per-entity HTTP coverage can be added as the API surface evolves.
-2. Bounded availability recurrence evaluation — implemented and verified. DAILY/WEEKLY rules, interval, BYDAY, COUNT, UNTIL, effective dates, local wall-clock time, and daylight-saving transitions are covered; unsupported rules fail closed.
-3. Add utilization reporting and planned-versus-actual analytics.
-4. Define whether and when a Workforce member allocation should be created alongside a booking without duplicating Service Resource Commitment authority.
-5. Add operator-facing Workforce UI only after the API and authorization behavior is accepted.
-6. Reconcile the in-memory repository files described in the initial handoff: they were not present in the inspected branch, so the SQLite repository is the current persistence implementation.
+1. Add utilization reporting and planned-versus-actual analytics.
+2. Define whether and when a Workforce member allocation should be created alongside a booking without duplicating Service Resource Commitment authority.
+3. Add operator-facing Workforce UI only after the API and authorization behavior is accepted.
+4. Reconcile the in-memory repository files described in the initial handoff: they were not present in the inspected branch, so the SQLite repository is the current persistence implementation.
 
 ## Known limitations
 
