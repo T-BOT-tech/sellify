@@ -36,6 +36,7 @@ let stderr = '';
 child.stderr.setEncoding('utf8');
 child.stderr.on('data', chunk => { stderr += chunk; });
 let browser;
+const browserDiagnostics = { consoleErrors: [], failedRequests: [], badResponses: [] };
 
 try {
   await waitForServer(baseUrl, child);
@@ -44,6 +45,13 @@ try {
   const page = await context.newPage();
   const pageErrors = [];
   const apiCalls = [];
+  page.on('console', message => { if (message.type() === 'error') browserDiagnostics.consoleErrors.push(message.text()); });
+  page.on('requestfailed', request => browserDiagnostics.failedRequests.push({
+    url: request.url(), error: request.failure()?.errorText || 'unknown',
+  }));
+  page.on('response', response => {
+    if (response.status() >= 400) browserDiagnostics.badResponses.push({ url: response.url(), status: response.status() });
+  });
   let member = {
     id: 'member-synthetic-1', display_name: 'Synthetic Workforce Member',
     member_type: 'PROVIDER', status: 'ACTIVE', version: 1,
