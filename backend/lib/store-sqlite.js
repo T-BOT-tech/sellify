@@ -7096,7 +7096,7 @@ export async function listServiceProviderBookings(chatId, resourceIds = [], prov
           AND wm.organization_id = b.organization_id
           AND wm.chat_id = b.chat_id
           AND wm.user_id = ?
-      ))`
+      )`
     : '';
   const parameters = [String(organizationId), String(chatId), ...ids];
   if (providerUserId) parameters.push(String(providerUserId));
