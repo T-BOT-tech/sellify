@@ -494,7 +494,8 @@
     "test:workforce-api": "node phase0/workforce-api-regression.mjs",
     "test:workforce-service-booking": "node phase0/workforce-service-booking-integration-regression.mjs",
     "test:workforce-route-inventory": "node scripts/perplexity-server-route-inventory.mjs && node phase0/workforce-route-inventory-regression.mjs",
-    "test:workforce-api-http": "node phase0/workforce-api-http-regression.mjs"
+    "test:workforce-api-http": "node phase0/workforce-api-http-regression.mjs",
+    "test:workforce-operator-workspace": "node phase0/workforce-operator-workspace-regression.mjs"
   },
   "engines": {
     "node": ">=24"
