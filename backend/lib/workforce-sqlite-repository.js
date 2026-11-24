@@ -430,7 +430,8 @@ export class WorkforceSqliteRepository {
           AND julianday(actual_ends_at) > julianday(actual_starts_at)
           THEN (julianday(actual_ends_at) - julianday(actual_starts_at)) * 1440 ELSE 0 END) AS actual_minutes,
         SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed_events,
-        SUM(CASE WHEN status IN ('PLANNED','IN_PROGRESS') THEN 1 ELSE 0 END) AS open_events,\n        SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) AS cancelled_events,
+        SUM(CASE WHEN status IN ('PLANNED','IN_PROGRESS') THEN 1 ELSE 0 END) AS open_events,
+        SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) AS cancelled_events,
         SUM(CASE WHEN status = 'COMPLETED'
           AND (actual_starts_at IS NULL OR actual_ends_at IS NULL
             OR julianday(actual_ends_at) <= julianday(actual_starts_at))
