@@ -6471,7 +6471,7 @@ function assertWorkforceMemberBookingEligibility({
       AND member_id = ? AND availability = 'AVAILABLE' AND status = 'ACTIVE'
       AND (resource_id IS NULL OR resource_id = ?)
       AND (location_id IS NULL OR location_id = ?)
-      AND starts_at <= ? AND ends_at >= ?
+      AND (recurrence_rule IS NOT NULL OR (starts_at <= ? AND ends_at >= ?))
     ORDER BY starts_at, id
   `).all(String(organizationId), String(tenantId), String(chatId), String(memberId),
     String(resource.id), resource.location_id == null ? null : String(resource.location_id),
