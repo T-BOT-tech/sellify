@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { WORKFORCE_MEMBER_OPTIONAL_FIELDS } from '../backend/lib/workforce-member-contract.js';
 import {
   WORKFORCE_MEMBER_CONTRACT_VERSION,
   WORKFORCE_MEMBER_PERMISSIONS,
@@ -43,6 +44,9 @@ const validExternalCreate = validateWorkforceMemberCreate({
   idempotency_key: 'member-create-external-1',
 });
 assert.equal(validExternalCreate.valid, true, 'external professionals do not require a Sellify user');
+assert.ok(WORKFORCE_MEMBER_OPTIONAL_FIELDS.includes('employee_number'));
+assert.equal(validateWorkforceMemberCreate({ organization_id: 'org-1', chat_id: 'chat-1', member_type: 'EMPLOYEE', idempotency_key: 'm2', employee_number: 'EMP-1' }).valid, true);
+assert.equal(validateWorkforceMemberCreate({ organization_id: 'org-1', chat_id: 'chat-1', member_type: 'EMPLOYEE', idempotency_key: 'm3', employee_number: 123 }).valid, false);
 assert.deepEqual(validExternalCreate.errors, []);
 
 const validCreate = validateWorkforceMemberCreate({
