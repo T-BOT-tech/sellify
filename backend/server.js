@@ -3945,7 +3945,7 @@ function workforceApiBody(body, entity, operation) {
 }
 function mergeWorkforceUtilizationSummaries(summaries = []) {
   const fields = [
-    'event_count','completed_events','open_events','completed_missing_actual_events',
+    'event_count','completed_events','open_events','cancelled_events','completed_missing_actual_events',
     'planned_minutes','measured_planned_minutes','actual_minutes',
   ];
   const totals = Object.fromEntries(fields.map(field => [
