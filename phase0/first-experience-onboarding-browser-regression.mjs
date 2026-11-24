@@ -898,10 +898,33 @@ try {
   // Create a quote, send it, and accept it through the visible B2B action
   // buttons. Re-read each resulting state from the canonical quote endpoint.
   await page.evaluate(() => window.switchTab('accounts'));
+  let quoteCustomerOptionsResponse = null;
+  const captureQuoteCustomerOptions = response => {
+    const url = new URL(response.url());
+    if (url.pathname.endsWith('/customers') && url.searchParams.get('status') === 'active') {
+      quoteCustomerOptionsResponse = response;
+    }
+  };
+  page.on('response', captureQuoteCustomerOptions);
   await page.locator('#b2bQuoteRefresh').click();
-  await page.locator('#b2bQuoteCustomer option[value="' + wholesaleCustomer.id + '"]').waitFor({
-    state: 'attached', timeout: 10000,
-  });
+  try {
+    await page.locator('#b2bQuoteCustomer option[value="' + wholesaleCustomer.id + '"]').waitFor({
+      state: 'attached', timeout: 10000,
+    });
+  } catch (error) {
+    const uiState = await page.evaluate(() => ({
+      customerOptions: document.getElementById('b2bQuoteCustomer')?.innerHTML || '',
+      productOptions: document.getElementById('b2bQuoteProduct')?.innerHTML || '',
+      quoteMessage: document.getElementById('b2bQuotesList')?.innerText || '',
+    }));
+    const responseDetails = quoteCustomerOptionsResponse
+      ? { status: quoteCustomerOptionsResponse.status(), url: quoteCustomerOptionsResponse.url() }
+      : null;
+    throw new Error('Wholesale quote customer selector did not refresh. ' +
+      JSON.stringify({ responseDetails, uiState }) + '\\n' + (error.stack || error.message));
+  } finally {
+    page.off('response', captureQuoteCustomerOptions);
+  }
   await page.locator('#b2bQuoteProduct option[value="' + wholesaleProduct.id + '"]').waitFor({
     state: 'attached', timeout: 10000,
   });
