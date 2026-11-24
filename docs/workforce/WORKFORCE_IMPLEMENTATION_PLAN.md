@@ -100,7 +100,7 @@ The Node 24 Workforce verification workflow runs only for this branch. It does n
 - backend/lib/workforce-api-validation.js
 - backend/lib/workforce-booking-integration.js
 - backend/lib/workforce-recurrence-contract.js
-- backend/lib/server.js
+- backend/server.js
 
 ## API route surface
 
