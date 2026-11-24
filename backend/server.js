@@ -3758,6 +3758,19 @@ async function handleServiceBookings(req, res, chatId, serverOrderId, bookingId 
       : 'Service booking lifecycle permission required',
   });
 
+  const workforceMemberId = String(body.workforce_member_id || body.workforceMemberId || '').trim();
+  if (workforceMemberId) {
+    if (req.method !== 'PATCH' || authorizationAction !== 'service:service_booking:confirm') {
+      throw Object.assign(new Error('Workforce member linkage is only valid during booking confirmation'), {
+        statusCode: 400, code: 'SERVICE_BOOKING_WORKFORCE_MEMBER_CONFIRM_ONLY',
+      });
+    }
+    await requireAuthorization(session, tenant, 'workforce', 'workforce:assignment:manage', {
+      location: authorizationLocation,
+      deniedMessage: 'Workforce assignment management permission is required to assign a member to this booking',
+    });
+  }
+
   if (req.method === 'POST') {
     const result = await createServiceBooking(chatId, serverOrderId, { ...body, idempotencyKey }, session);
     return sendJSON(res, result.replayed ? 200 : 201, { order_id: String(serverOrderId), booking: result.booking, replayed: result.replayed }, req);
