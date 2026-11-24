@@ -48,9 +48,9 @@ try {
     INSERT INTO organizations(id) VALUES ('org-a'), ('org-b');
     INSERT INTO tenants(chat_id, tenant_id, organization_id)
       VALUES ('chat-a','tenant-a','org-a'), ('chat-b','tenant-b','org-b');
-    INSERT INTO users(id) VALUES ('user-a'), ('user-b'), ('user-c');
+    INSERT INTO users(id) VALUES ('user-a'), ('user-b'), ('user-c'), ('user-d');
     INSERT INTO memberships(id,user_id,chat_id,status)
-      VALUES ('membership-a','user-a','chat-a','active'), ('membership-b','user-b','chat-b','active'), ('membership-c','user-c','chat-a','active');
+      VALUES ('membership-a','user-a','chat-a','active'), ('membership-b','user-b','chat-b','active'), ('membership-c','user-c','chat-a','active'), ('membership-d','user-d','chat-a','inactive');
     INSERT INTO locations(id,organization_id) VALUES ('location-a','org-a'), ('location-b','org-b');
     INSERT INTO service_resources(id,organization_id,chat_id)
       VALUES ('resource-a','org-a','chat-a'), ('resource-b','org-b','chat-b');
@@ -79,12 +79,20 @@ try {
   assert.equal(repository.get('member', externalMember.record.id, scopeA).user_id, null);
   assert.deepEqual(repository.list('member', { ...scopeA, provider_user_id: 'user-a' }).map(record => record.id), [created.record.id],
     'provider-scoped reads must not expose unlinked external professionals');
+  assert.throws(() => repository.get('member', externalMember.record.id, {
+    ...scopeA, provider_user_id: 'user-a',
+  }), error => error.code === 'WORKFORCE_SCOPE_NOT_FOUND',
+  'an unlinked external professional must not be readable as an authenticated provider');
   assert.throws(() => repository.linkAccount('member', externalMember.record.id, {
     expected_version: 1, user_id: 'user-a',
   }, scopeA), error => error.code === 'WORKFORCE_USER_ALREADY_LINKED');
   assert.throws(() => repository.linkAccount('member', externalMember.record.id, {
     expected_version: 1, user_id: 'user-b',
   }, scopeA), error => error.code === 'WORKFORCE_USER_MEMBERSHIP_REQUIRED');
+  assert.throws(() => repository.linkAccount('member', externalMember.record.id, {
+    expected_version: 1, user_id: 'user-d',
+  }, scopeA), error => error.code === 'WORKFORCE_USER_MEMBERSHIP_REQUIRED',
+  'inactive tenant membership cannot authorize an account link');
   const linkedExternal = repository.linkAccount('member', externalMember.record.id, {
     expected_version: 1, user_id: 'user-c',
   }, scopeA);
@@ -98,6 +106,19 @@ try {
   assert.throws(() => repository.unlinkAccount('member', externalMember.record.id, {
     expected_version: 3,
   }, scopeA), error => error.code === 'WORKFORCE_ACCOUNT_NOT_LINKED');
+  const accountAuditActions = db.prepare(`
+    SELECT action FROM audit_events WHERE entity_id = ? AND action IN ('workforce.member.account_linked','workforce.member.account_unlinked')
+    ORDER BY id
+  `).all(externalMember.record.id).map(row => row.action);
+  assert.deepEqual(accountAuditActions, ['workforce.member.account_linked','workforce.member.account_unlinked'],
+    'account link and unlink must be auditable');
+  const deniedAccountLinkRepository = new WorkforceSqliteRepository({
+    db, authorize: request => request.operation !== 'link_account',
+  });
+  assert.throws(() => deniedAccountLinkRepository.linkAccount('member', externalMember.record.id, {
+    expected_version: 3, user_id: 'user-c',
+  }, scopeA), error => error.code === 'WORKFORCE_FORBIDDEN',
+  'account linking requires Workforce management authorization');
 
   const duplicate = repository.create('member', {
     idempotency_key: 'member-create-a',
