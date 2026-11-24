@@ -391,7 +391,7 @@ export class WorkforceSqliteRepository {
     const to = filters.to == null || filters.to === '' ? null : String(filters.to);
     for (const [field, value] of [['from', from], ['to', to]]) {
       if (value !== null && (!Number.isFinite(Date.parse(value))
-        || !/(Z|[+-]\\d{2}:?\\d{2})$/i.test(value))) {
+        || !/(Z|[+-]\d{2}:?\d{2})$/i.test(value))) {
         throw fail('WORKFORCE_ANALYTICS_RANGE_INVALID', `${field} must be ISO-8601 with an explicit timezone`);
       }
     }
@@ -430,7 +430,7 @@ export class WorkforceSqliteRepository {
           AND julianday(actual_ends_at) > julianday(actual_starts_at)
           THEN (julianday(actual_ends_at) - julianday(actual_starts_at)) * 1440 ELSE 0 END) AS actual_minutes,
         SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed_events,
-        SUM(CASE WHEN status <> 'COMPLETED' THEN 1 ELSE 0 END) AS open_events,
+        SUM(CASE WHEN status IN ('PLANNED','IN_PROGRESS') THEN 1 ELSE 0 END) AS open_events,\n        SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) AS cancelled_events,
         SUM(CASE WHEN status = 'COMPLETED'
           AND (actual_starts_at IS NULL OR actual_ends_at IS NULL
             OR julianday(actual_ends_at) <= julianday(actual_starts_at))
@@ -442,7 +442,7 @@ export class WorkforceSqliteRepository {
     `).all(...values);
 
     const metricFields = [
-      'event_count','completed_events','open_events','completed_missing_actual_events',
+      'event_count','completed_events','open_events','cancelled_events','completed_missing_actual_events',
       'planned_minutes','measured_planned_minutes','actual_minutes',
     ];
     const normalizeRow = row => {
@@ -482,11 +482,9 @@ export class WorkforceSqliteRepository {
       }));
     };
 
+    const totals = aggregate(normalized);
     return Object.freeze({
-      ...aggregate(normalized),
-      planned_minutes: Math.round(aggregate(normalized).planned_minutes * 100) / 100,
-      measured_planned_minutes: Math.round(aggregate(normalized).measured_planned_minutes * 100) / 100,
-      actual_minutes: Math.round(aggregate(normalized).actual_minutes * 100) / 100,
+      ...totals,
       by_member: groupBy('member_id'),
       by_resource: groupBy('resource_id'),
       range: Object.freeze({ from, to, basis: 'planned_starts_at' }),
