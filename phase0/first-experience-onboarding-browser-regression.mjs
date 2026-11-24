@@ -395,7 +395,21 @@ try {
     'the browser checkout must create a queued local order, not claim server confirmation');
 
   // Use the actual Queue Sync now button, not a test-only backend write.
+  // Payment state is returned by the sync acknowledgement; the canonical
+  // order feed intentionally does not duplicate Payment Core state.
+  const syncResponsePromise = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return response.request().method() === 'POST'
+      && url.pathname === `/sync/${encodeURIComponent(config.chatId)}`;
+  }, { timeout: 10000 });
   await page.locator('#syncNowBtn').click();
+  const syncResponse = await syncResponsePromise;
+  assert.equal(syncResponse.status(), 200, 'Queue Sync now must receive a successful canonical sync acknowledgement');
+  const syncBody = await syncResponse.json();
+  const syncAcknowledgement = (syncBody.results || []).find(result => String(result.local_id) === localRetailOrderId);
+  assert.equal(syncAcknowledgement?.status, 'synced', 'the canonical sync acknowledgement must accept the Retail order');
+  assert.equal(String(syncAcknowledgement?.payment_state || '').toUpperCase(), 'UNPAID',
+    'sync acknowledgement must keep the canonical payment state unpaid until Payment Core confirms receipt');
   let canonicalRetailOrder;
   for (let attempt = 0; attempt < 60; attempt += 1) {
     const response = await fetch(baseUrl + '/orders/' + encodeURIComponent(config.chatId) + '?limit=200', {
@@ -415,8 +429,6 @@ try {
   assert.equal(Number(canonicalRetailOrder.items[0].price), 2500);
   assert.equal(Number(canonicalRetailOrder.total), 2500);
   assert.equal(canonicalRetailOrder.currency || 'ETB', 'ETB');
-  assert.equal(String(canonicalRetailOrder.payment_state || '').toUpperCase(), 'UNPAID',
-    'a selected payment method or checkout action must not manufacture a confirmed payment');
   const canonicalOrderCountBeforeReload = (await (await fetch(
     baseUrl + '/orders/' + encodeURIComponent(config.chatId) + '?limit=200',
     { headers: { Authorization: 'Bearer ' + restoredConfig.sessionToken } },
