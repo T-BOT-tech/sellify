@@ -6,6 +6,8 @@ import { DatabaseSync } from 'node:sqlite';
 import {
   runWorkforceSqliteMigrations,
   WORKFORCE_SQLITE_MIGRATION_VERSION,
+  runWorkforceServiceBookingMigration,
+  WORKFORCE_SERVICE_BOOKING_MIGRATION_VERSION,
 } from '../backend/lib/workforce-sqlite-migrations.js';
 
 const directory = mkdtempSync(path.join(os.tmpdir(), 'sellify-workforce-migration-'));
@@ -20,7 +22,7 @@ try {
     CREATE TABLE users (id TEXT PRIMARY KEY);
     CREATE TABLE locations (id TEXT PRIMARY KEY);
     CREATE TABLE service_resources (id TEXT PRIMARY KEY);
-    CREATE TABLE service_bookings (id TEXT PRIMARY KEY);
+    CREATE TABLE service_bookings (id TEXT PRIMARY KEY, organization_id TEXT, chat_id TEXT);
     INSERT INTO organizations(id) VALUES ('org-a');
     INSERT INTO tenants(chat_id, tenant_id) VALUES ('chat-a', 'tenant-a'), ('chat-b', 'tenant-b');
     INSERT INTO users(id) VALUES ('user-a');
@@ -29,7 +31,13 @@ try {
   const first = runWorkforceSqliteMigrations(db);
   assert.deepEqual(first, { applied: true, version: WORKFORCE_SQLITE_MIGRATION_VERSION });
   const second = runWorkforceSqliteMigrations(db);
+  const bookingMigration = runWorkforceServiceBookingMigration(db);
+  const bookingMigrationReplay = runWorkforceServiceBookingMigration(db);
   assert.deepEqual(second, { applied: false, version: WORKFORCE_SQLITE_MIGRATION_VERSION });
+  assert.deepEqual(bookingMigration, { applied: true, version: WORKFORCE_SERVICE_BOOKING_MIGRATION_VERSION });
+  assert.deepEqual(bookingMigrationReplay, { applied: false, version: WORKFORCE_SERVICE_BOOKING_MIGRATION_VERSION });
+  assert.ok(db.prepare('PRAGMA table_info(service_bookings)').all().some(column => column.name === 'workforce_member_id'));
+  assert.ok(db.prepare('PRAGMA index_list(service_bookings)').all().some(index => index.name === 'idx_service_bookings_workforce_member'));
 
   const expectedTables = [
     'workforce_members',
@@ -68,7 +76,7 @@ try {
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = ?')
     .get(WORKFORCE_SQLITE_MIGRATION_VERSION).count, 1);
 
-  console.log('PASS Workforce SQLite migration 86: additive tables, indexes, idempotent guard, and scoped member foreign keys');
+  console.log('PASS Workforce SQLite migrations 86-87: additive tables, Service Booking member reference, indexes, idempotent guards, and scoped member foreign keys');
 } finally {
   db.close();
   rmSync(directory, { recursive: true, force: true });
