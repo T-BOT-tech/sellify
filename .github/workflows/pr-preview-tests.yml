@@ -1,6 +1,9 @@
 name: Sellify PR preview tests
 
 on:
+  push:
+    branches:
+      - feature/workforce-capability-20261124
   pull_request:
     types: [opened, reopened, synchronize, closed]
   workflow_dispatch:
@@ -83,6 +86,7 @@ jobs:
 
             if [[ "$PR_BRANCH" == migration/* || "$migration_changed" == true ]]; then
               profile=migration
+              if [[ "$frontend_changed" == false ]]; then frontend_sha="$base_sha"; fi
             elif [[ "$backend_changed" == true && "$frontend_changed" == false ]]; then
               profile=backend-only
               frontend_sha="$base_sha"
@@ -102,6 +106,8 @@ jobs:
               echo "Frontend differs from base but classifier selected base frontend." >&2
               exit 1
             fi
+          elif [[ "$EVENT_NAME" == "push" ]]; then
+            profile=full-stack
           else
             case "$profile" in
               backend-only|frontend-only|full-stack|migration) ;;
