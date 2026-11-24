@@ -48,9 +48,9 @@ try {
     INSERT INTO organizations(id) VALUES ('org-a'), ('org-b');
     INSERT INTO tenants(chat_id, tenant_id, organization_id)
       VALUES ('chat-a','tenant-a','org-a'), ('chat-b','tenant-b','org-b');
-    INSERT INTO users(id) VALUES ('user-a'), ('user-b');
+    INSERT INTO users(id) VALUES ('user-a'), ('user-b'), ('user-c');
     INSERT INTO memberships(id,user_id,chat_id,status)
-      VALUES ('membership-a','user-a','chat-a','active'), ('membership-b','user-b','chat-b','active');
+      VALUES ('membership-a','user-a','chat-a','active'), ('membership-b','user-b','chat-b','active'), ('membership-c','user-c','chat-a','active');
     INSERT INTO locations(id,organization_id) VALUES ('location-a','org-a'), ('location-b','org-b');
     INSERT INTO service_resources(id,organization_id,chat_id)
       VALUES ('resource-a','org-a','chat-a'), ('resource-b','org-b','chat-b');
@@ -79,6 +79,25 @@ try {
   assert.equal(repository.get('member', externalMember.record.id, scopeA).user_id, null);
   assert.deepEqual(repository.list('member', { ...scopeA, provider_user_id: 'user-a' }).map(record => record.id), [created.record.id],
     'provider-scoped reads must not expose unlinked external professionals');
+  assert.throws(() => repository.linkAccount('member', externalMember.record.id, {
+    expected_version: 1, user_id: 'user-a',
+  }, scopeA), error => error.code === 'WORKFORCE_USER_ALREADY_LINKED');
+  assert.throws(() => repository.linkAccount('member', externalMember.record.id, {
+    expected_version: 1, user_id: 'user-b',
+  }, scopeA), error => error.code === 'WORKFORCE_USER_MEMBERSHIP_REQUIRED');
+  const linkedExternal = repository.linkAccount('member', externalMember.record.id, {
+    expected_version: 1, user_id: 'user-c',
+  }, scopeA);
+  assert.equal(linkedExternal.user_id, 'user-c');
+  assert.equal(linkedExternal.version, 2);
+  const unlinkedExternal = repository.unlinkAccount('member', externalMember.record.id, {
+    expected_version: 2,
+  }, scopeA);
+  assert.equal(unlinkedExternal.user_id, null);
+  assert.equal(unlinkedExternal.version, 3);
+  assert.throws(() => repository.unlinkAccount('member', externalMember.record.id, {
+    expected_version: 3,
+  }, scopeA), error => error.code === 'WORKFORCE_ACCOUNT_NOT_LINKED');
 
   const duplicate = repository.create('member', {
     idempotency_key: 'member-create-a',
