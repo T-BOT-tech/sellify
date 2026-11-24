@@ -39,6 +39,8 @@ import { decideLogisticsSchedulingFailure } from '../../app/src/verticals/logist
 import { decideLogisticsSchedulingTerminal } from '../../app/src/verticals/logistics/scheduling-terminal-contract.js';
 
 
+import { runWorkforceSqliteMigrations } from './workforce-sqlite-migrations.js';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.SELLIFY_DATA_DIR
   ? path.resolve(process.env.SELLIFY_DATA_DIR)
@@ -3605,6 +3607,9 @@ if (!applied.includes(39)) {
     }
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(85, nowIso());
   }
+
+  // Workforce migration 86 is isolated in its own additive migration module.
+  runWorkforceSqliteMigrations(db, nowIso);
 }
 
 const PACK_LIFECYCLE_TRANSITIONS = Object.freeze({
