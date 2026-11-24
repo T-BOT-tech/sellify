@@ -174,6 +174,7 @@ New regressions:
 - phase0/workforce-sqlite-repository-regression.mjs
 - phase0/workforce-authorization-adapter-regression.mjs
 - phase0/workforce-api-regression.mjs
+- phase0/workforce-api-http-regression.mjs — authenticated HTTP coverage for session enforcement, member CRUD, idempotency replay, lifecycle transitions, optimistic concurrency, and cross-tenant isolation.
 - phase0/workforce-service-booking-integration-regression.mjs
 - phase0/workforce-route-inventory-regression.mjs
 
@@ -186,6 +187,7 @@ The route inventory script is scripts/perplexity-server-route-inventory.mjs. The
 - npm run test:workforce-sqlite-repository
 - npm run test:workforce-authorization-adapter
 - npm run test:workforce-api
+- npm run test:workforce-api-http
 - npm run test:workforce-service-booking
 - npm run test:workforce-route-inventory
 
@@ -193,7 +195,7 @@ The existing eight contract regressions are also run directly by the Workforce c
 
 ## Remaining work
 
-1. Add full HTTP-level API tests using authenticated sessions; the current API regression verifies payload validation, route registration, and error-boundary wiring.
+1. Authenticated HTTP-level API regression — implemented and verified on Node 24. It covers session enforcement, member create/list/get/update, idempotency replay, entity lifecycle, optimistic concurrency, and cross-tenant read/write denial. Broader per-entity HTTP coverage can be added as the API surface evolves.
 2. Evaluate recurrence rules against concrete appointment windows before using recurring availability for booking eligibility.
 3. Add utilization reporting and planned-versus-actual analytics.
 4. Define whether and when a Workforce member allocation should be created alongside a booking without duplicating Service Resource Commitment authority.
