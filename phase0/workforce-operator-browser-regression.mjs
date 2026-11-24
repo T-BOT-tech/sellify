@@ -43,7 +43,8 @@ const apiCalls = [];
 try {
   await waitForServer(baseUrl, child);
   browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  // Keep browser requests under Playwright routing; the app's service worker can otherwise bypass page.route().
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
   const page = await context.newPage();
   pageErrors.length = 0;
   apiCalls.length = 0;
