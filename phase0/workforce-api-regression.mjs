@@ -36,6 +36,16 @@ const invalidProfile = validateWorkforceApiPayload('profile', 'create', {
 });
 assert.equal(invalidProfile.valid, false);
 
+const invalidRecurrence = validateWorkforceApiPayload('availability', 'create', {
+  availability: 'AVAILABLE',
+  starts_at: '2026-11-26T06:00:00.000Z',
+  ends_at: '2026-11-26T15:00:00.000Z',
+  timezone: 'Africa/Addis_Ababa',
+  recurrence_rule: 'FREQ=MONTHLY',
+});
+assert.equal(invalidRecurrence.valid, false);
+assert.ok(invalidRecurrence.errors.some((error) => error.includes('FREQ must be DAILY or WEEKLY')));
+
 const invalidUtilization = validateWorkforceApiPayload('utilization', 'create', {
   status: 'COMPLETED',
 });
