@@ -53,19 +53,28 @@ export function validateWorkforceApiPayload(entity, operation, input = {}) {
     }
   }
 
-  for (const field of ['skills','qualifications','languages','service_capabilities','weekly_schedule','holiday_calendar','break_rules']) {
+  for (const field of ['skills','qualifications','languages','service_capabilities']) {
     if (input[field] !== undefined &&
       (!Array.isArray(input[field]) || input[field].some((value) => typeof value !== 'string'))) {
       errors.push(`${field} must be an array of strings`);
+    }
+  }
+  for (const field of ['weekly_schedule','holiday_calendar','break_rules']) {
+    if (input[field] !== undefined && !Array.isArray(input[field])) {
+      errors.push(`${field} must be an array`);
     }
   }
 
   if (input.all_day !== undefined && typeof input.all_day !== 'boolean') {
     errors.push('all_day must be a boolean');
   }
-  if (input.timezone !== undefined &&
-    (typeof input.timezone !== 'string' || !input.timezone.trim())) {
-    errors.push('timezone must be a non-empty IANA timezone string');
+  if (input.timezone !== undefined) {
+    try {
+      if (typeof input.timezone !== 'string' || !input.timezone.trim()) throw new Error('empty timezone');
+      new Intl.DateTimeFormat('en-US', { timeZone: input.timezone });
+    } catch {
+      errors.push('timezone must be a valid IANA timezone');
+    }
   }
   if (input.expected_version !== undefined &&
     (!Number.isInteger(Number(input.expected_version)) || Number(input.expected_version) < 1)) {
