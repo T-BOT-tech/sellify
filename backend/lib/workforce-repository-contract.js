@@ -30,7 +30,7 @@ export const WORKFORCE_REPOSITORY_BASE_OPERATIONS = Object.freeze([
 export const WORKFORCE_REPOSITORY_ENTITY_OPERATIONS = Object.freeze({
   member: Object.freeze(['create', 'get', 'list', 'update', 'activate', 'suspend', 'deactivate']),
   profile: Object.freeze(['create', 'get', 'list', 'update']),
-  engagement: Object.freeze(['create', 'get', 'list', 'update', 'approve', 'activate', 'suspend', 'end', 'cancel']),
+  engagement: Object.freeze(['create', 'get', 'list', 'update', 'submit', 'activate', 'suspend', 'end', 'cancel']),
   calendar: Object.freeze(['create', 'get', 'list', 'update', 'deactivate']),
   calendar_exception: Object.freeze(['create', 'get', 'list', 'update', 'cancel']),
   availability: Object.freeze(['create', 'get', 'list', 'update', 'activate', 'deactivate', 'cancel']),
