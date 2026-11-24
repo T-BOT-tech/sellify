@@ -45,6 +45,34 @@ const availability = {
 
 assert.equal(isEligibleWorkforceMemberForBooking(member, assignment, availability), true);
 
+const scopedMember = {
+  ...member, organization_id: 'org-1', tenant_id: 'tenant-1', chat_id: 'chat-1',
+};
+const scopedAssignment = {
+  ...assignment, organization_id: 'org-1', tenant_id: 'tenant-1', chat_id: 'chat-1',
+  starts_at: '2026-11-26T06:00:00.000Z', ends_at: '2026-11-26T15:00:00.000Z',
+};
+const scopedAvailability = {
+  ...availability, organization_id: 'org-1', tenant_id: 'tenant-1', chat_id: 'chat-1',
+  status: 'ACTIVE', starts_at: '2026-11-26T07:00:00.000Z', ends_at: '2026-11-26T14:00:00.000Z',
+};
+const bookingWindow = {
+  organization_id: 'org-1', chat_id: 'chat-1',
+  requested_start: '2026-11-26T08:00:00.000Z',
+  requested_end: '2026-11-26T09:00:00.000Z',
+  service_resource_id: 'resource-1', resource_location_id: 'location-1',
+};
+assert.equal(isEligibleWorkforceMemberForBooking(scopedMember, scopedAssignment, scopedAvailability, bookingWindow), true);
+assert.equal(isEligibleWorkforceMemberForBooking(scopedMember, {
+  ...scopedAssignment, ends_at: '2026-11-26T08:30:00.000Z',
+}, scopedAvailability, bookingWindow), false, 'assignment must cover the complete booking interval');
+assert.equal(isEligibleWorkforceMemberForBooking(scopedMember, scopedAssignment, {
+  ...scopedAvailability, starts_at: '2026-11-26T08:30:00.000Z',
+}, bookingWindow), false, 'availability must cover the complete booking interval');
+assert.equal(isEligibleWorkforceMemberForBooking(scopedMember, scopedAssignment, scopedAvailability, {
+  ...bookingWindow, organization_id: 'org-2',
+}), false, 'cross-organization booking linkage must be denied');
+
 const inactiveMember = { ...member, status: 'SUSPENDED' };
 assert.equal(isEligibleWorkforceMemberForBooking(inactiveMember, assignment, availability), false);
 
