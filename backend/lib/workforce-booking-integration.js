@@ -75,22 +75,11 @@ export function isEligibleWorkforceMemberForBooking(member, assignment, availabi
 
 export function validateWorkforceBookingLinkage(input = {}) {
   const errors = [];
-
-  if (!input.organization_id) errors.push('Missing required field: organization_id');
-  if (!input.chat_id) errors.push('Missing required field: chat_id');
-  if (!input.member_id) errors.push('Missing required field: member_id');
-  if (!input.booking_id) errors.push('Missing required field: booking_id');
-  if (!input.commitment_id) errors.push('Missing required field: commitment_id');
-
-  if (input.organization_id && input.chat_id && input.member_id && input.booking_id && input.commitment_id) {
-    if (typeof input.booking_id !== 'string' || input.booking_id.trim() === '') {
-      errors.push('booking_id must be a non-empty string');
-    }
-    if (typeof input.commitment_id !== 'string' || input.commitment_id.trim() === '') {
-      errors.push('commitment_id must be a non-empty string');
+  for (const field of ['organization_id','chat_id','member_id','booking_id','commitment_id']) {
+    if (typeof input[field] !== 'string' || input[field].trim() === '') {
+      errors.push(`${field} must be a non-empty string`);
     }
   }
-
   return Object.freeze({ valid: errors.length === 0, errors });
 }
 
