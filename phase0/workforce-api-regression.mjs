@@ -60,17 +60,12 @@ for (const token of [
 assert.equal(handler.includes('createServiceBooking('), false);
 assert.equal(handler.includes('createLogisticsSchedulingActivity('), false);
 
-for (const route of [
-  '/workforce/members',
-  '/workforce/profiles',
-  '/workforce/engagements',
-  '/workforce/calendars',
-  '/workforce/calendar-exceptions',
-  '/workforce/availability',
-  '/workforce/assignments',
-  '/workforce/shifts',
-  '/workforce/allocations',
-  '/workforce/utilization',
-]) assert.ok(server.includes(route.slice(0, -1)) || server.includes(route), `missing route family: ${route}`);
+assert.ok(server.includes('\\/workforce\\/([a-z-]+)'));
+for (const routeKey of [
+  "members: 'member'", "profiles: 'profile'", "engagements: 'engagement'",
+  "calendars: 'calendar'", "'calendar-exceptions': 'calendar_exception'",
+  "availability: 'availability'", "assignments: 'assignment'", "shifts: 'shift'",
+  "allocations: 'allocation'", "utilization: 'utilization'",
+]) assert.ok(server.includes(routeKey), `missing route entity: ${routeKey}`);
 
 console.log('PASS Workforce API validation and route-boundary regression');
