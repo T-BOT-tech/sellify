@@ -73,7 +73,7 @@ The existing Service Pack remains the implementation authority; this increment a
 - Consultation customer journey: the existing customer Appointments browser regression exercises service selection, advisory feasibility, request submission, refresh, and mobile layout.
 - Barbershop operator journey: the operator browser regression now uses a canonical-style **Haircut** service offering and exercises manager visibility, inline lifecycle actions, resource selection, and version-conflict recovery.
 - Backend ownership and isolation: the buyer-appointment persistence regression and Telegram appointments HTTP regression cover buyer/order ownership, tenant isolation, resource commitments, and lifecycle enforcement.
-- Preview workflow integration: backend-only now invokes the buyer ownership and Telegram HTTP regressions; full-stack invokes both customer and operator appointment browser regressions.
+- Preview workflow integration: backend-only and full-stack invoke the buyer ownership and Telegram HTTP regressions; full-stack also invokes both customer and operator appointment browser regressions.
 
 These are complementary layers, not a single browser session spanning customer and operator against one live backend. Keep the service-led templates at P2 / partially verified until that combined journey or equivalent manual cross-role evidence is available. Preserve the distinction between advisory feasibility and an authorized CONFIRMED resource commitment.
 
