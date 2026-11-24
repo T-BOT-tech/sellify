@@ -63,6 +63,10 @@ export function isEligibleWorkforceMemberForBooking(member, assignment, availabi
     if (booking.chat_id && String(booking.chat_id) !== String(member.chat_id)) return false;
     if (booking.service_resource_id && assignment.resource_id
       && String(booking.service_resource_id) !== String(assignment.resource_id)) return false;
+    if (booking.resource_location_id && assignment.location_id
+      && String(booking.resource_location_id) !== String(assignment.location_id)) return false;
+    if (booking.resource_location_id && availability.location_id
+      && String(booking.resource_location_id) !== String(availability.location_id)) return false;
     if (availability.resource_id && booking.service_resource_id
       && String(availability.resource_id) !== String(booking.service_resource_id)) return false;
   }
