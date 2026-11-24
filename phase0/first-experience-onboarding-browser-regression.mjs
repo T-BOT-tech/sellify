@@ -920,6 +920,9 @@ try {
     state: 'visible', timeout: 10000,
   });
   await page.locator('#b2bQuotesList [data-quote-action="ACCEPTED"]').click();
+  await page.locator('#b2bQuotesList').getByText('ACCEPTED', { exact: false }).waitFor({
+    state: 'visible', timeout: 10000,
+  });
   wholesaleQuote = (await readWholesaleQuotes()).find(quote => quote.id === wholesaleQuote.id);
   assert.equal(wholesaleQuote?.status, 'ACCEPTED',
     'the visible quote action must transition the canonical quote to ACCEPTED');
@@ -956,6 +959,9 @@ try {
   assert.equal(wholesalePo.quoteId, wholesaleQuote.id,
     'canonical PO must retain the accepted quote linkage');
   await page.locator('#b2bPurchaseOrdersList [data-po-action="submit"]').click();
+  await page.locator('#b2bPurchaseOrdersList').getByText('SUBMITTED', { exact: false }).waitFor({
+    state: 'visible', timeout: 10000,
+  });
   wholesalePo = (await readWholesalePos()).find(po => po.id === wholesalePo.id);
   assert.equal(wholesalePo?.status, 'SUBMITTED',
     'the visible Submit action must transition the canonical PO from DRAFT to SUBMITTED');
