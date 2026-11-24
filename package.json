@@ -489,7 +489,8 @@
     "test:p1-14": "node phase0/p1-14-pack-recovery-regression.mjs",
     "test:workforce-sqlite-migration": "node phase0/workforce-sqlite-migration-regression.mjs",
     "test:workforce-sqlite-repository": "node phase0/workforce-sqlite-repository-regression.mjs",
-    "test:workforce-repository-contract": "node phase0/workforce-repository-contract-regression.mjs"
+    "test:workforce-repository-contract": "node phase0/workforce-repository-contract-regression.mjs",
+    "test:workforce-authorization-adapter": "node phase0/workforce-authorization-adapter-regression.mjs"
   },
   "engines": {
     "node": ">=24"
