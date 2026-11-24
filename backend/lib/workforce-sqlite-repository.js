@@ -119,6 +119,24 @@ const TRANSITIONS = Object.freeze({
 });
 
 const RESOURCE_SCOPED_ENTITIES = new Set(['availability','assignment','shift','allocation','utilization']);
+const TIMESTAMP_FIELDS = new Set([
+  'starts_at','ends_at','planned_starts_at','planned_ends_at','actual_starts_at','actual_ends_at',
+]);
+
+function normalizeRepositoryValue(field, value) {
+  if (TIMESTAMP_FIELDS.has(field) && value != null) {
+    const parsed = Date.parse(value);
+    if (typeof value !== 'string' || !Number.isFinite(parsed)) {
+      throw fail('WORKFORCE_TIMESTAMP_INVALID', `${field} must be a valid ISO-8601 timestamp`);
+    }
+    if (!/(Z|[+-]\\d{2}:?\\d{2})$/i.test(value)) {
+      throw fail('WORKFORCE_TIMESTAMP_TIMEZONE_REQUIRED', `${field} must include an explicit timezone`);
+    }
+    return new Date(parsed).toISOString();
+  }
+  return value;
+}
+
 const FILTER_COLUMNS = new Set([
   'member_id','resource_id','location_id','booking_id','operational_task_id',
   'calendar_id','status','state','availability','exception_type','assignment_type',
@@ -351,7 +369,7 @@ export class WorkforceSqliteRepository {
     });
     if (!validation.valid) throw fail('WORKFORCE_CREATE_INVALID', validation.errors.join('; '));
     const data = {};
-    for (const field of spec.fields) if (Object.hasOwn(payload, field)) data[databaseColumn(field, spec.json)] = payload[field];
+    for (const field of spec.fields) if (Object.hasOwn(payload, field)) data[databaseColumn(field, spec.json)] = normalizeRepositoryValue(databaseColumn(field, spec.json), payload[field]);
     this.assertReferences(entity, data, scope);
     const requestHash = fingerprint({ entity, data });
     const existing = this.db.prepare(`
@@ -429,7 +447,7 @@ export class WorkforceSqliteRepository {
     const existing = this.getForMutation(entity, id, scope, context, 'update');
     if (Number(existing.version) !== expected) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
     const data = {};
-    for (const field of spec.fields) if (Object.hasOwn(input, field)) data[databaseColumn(field, spec.json)] = input[field];
+    for (const field of spec.fields) if (Object.hasOwn(input, field)) data[databaseColumn(field, spec.json)] = normalizeRepositoryValue(databaseColumn(field, spec.json), input[field]);
     if (Object.keys(data).length === 0) throw fail('WORKFORCE_UPDATE_EMPTY', 'At least one mutable Workforce field is required');
     this.assertReferences(entity, data, scope);
     const now = this.clock();
