@@ -7,52 +7,62 @@ import {
 const TABLES = Object.freeze({
   member: {
     table: 'workforce_members', id: 'id', state: 'status',
-    fields: ['user_id','member_type','primary_location_id','timezone','display_name'],
+    fields: ['member_type','primary_location_id','timezone','display_name'],
+    createOnlyFields: ['user_id'],
     json: [],
   },
   profile: {
     table: 'workforce_profiles', id: 'id',
-    fields: ['member_id','skills','qualifications','languages','service_capabilities','visibility','notes','effective_from','effective_until'],
+    fields: ['skills','qualifications','languages','service_capabilities','visibility','notes','effective_from','effective_until'],
+    createOnlyFields: ['member_id'],
     json: ['skills_json','qualifications_json','languages_json','service_capabilities_json'],
   },
   engagement: {
     table: 'workforce_engagements', id: 'id', state: 'status',
-    fields: ['member_id','engagement_type','starts_at','ends_at','approver_user_id','terms_reference'],
+    fields: ['engagement_type','starts_at','ends_at','approver_user_id','terms_reference'],
+    createOnlyFields: ['member_id'],
     json: [],
   },
   calendar: {
     table: 'workforce_calendars', id: 'id', state: 'status',
-    fields: ['member_id','location_id','timezone','weekly_schedule','holiday_calendar','effective_from','effective_until'],
+    fields: ['location_id','timezone','weekly_schedule','holiday_calendar','effective_from','effective_until'],
+    createOnlyFields: ['member_id'],
     json: ['weekly_schedule_json','holiday_calendar_json'],
   },
   calendar_exception: {
     table: 'workforce_calendar_exceptions', id: 'id', state: 'status',
-    fields: ['calendar_id','exception_type','starts_at','ends_at','all_day','reason'],
+    fields: ['exception_type','starts_at','ends_at','all_day','reason'],
+    createOnlyFields: ['calendar_id'],
     json: [],
   },
   availability: {
     table: 'workforce_availability_windows', id: 'id', state: 'status',
-    fields: ['member_id','resource_id','location_id','availability','starts_at','ends_at','timezone','recurrence_rule','effective_from','effective_until'],
+    fields: ['resource_id','location_id','availability','starts_at','ends_at','timezone','recurrence_rule','effective_from','effective_until'],
+    createOnlyFields: ['member_id'],
     json: [],
   },
   assignment: {
     table: 'workforce_assignments', id: 'id', state: 'status',
-    fields: ['member_id','resource_id','location_id','assignment_type','starts_at','ends_at','booking_id','operational_task_id'],
+    fields: ['resource_id','location_id','assignment_type','starts_at','ends_at'],
+    createOnlyFields: ['member_id','booking_id','operational_task_id'],
     json: [],
   },
   shift: {
     table: 'workforce_shifts', id: 'id', state: 'status',
-    fields: ['member_id','resource_id','location_id','starts_at','ends_at','timezone','break_rules','recurrence_source_id','assignment_source_id'],
+    fields: ['resource_id','location_id','starts_at','ends_at','timezone','break_rules'],
+    createOnlyFields: ['member_id','recurrence_source_id','assignment_source_id'],
     json: ['break_rules_json'],
   },
   allocation: {
     table: 'workforce_allocations', id: 'id', state: 'state',
-    fields: ['member_id','resource_id','booking_id','operational_task_id','starts_at','ends_at'],
+    fields: ['resource_id','starts_at','ends_at'],
+    createOnlyFields: ['member_id','booking_id','operational_task_id'],
     json: [],
   },
   utilization: {
     table: 'workforce_utilization_events', id: 'id', state: 'status',
-    fields: ['member_id','resource_id','booking_id','operational_task_id','planned_starts_at','planned_ends_at','actual_starts_at','actual_ends_at','evidence_source'],
+    fields: ['resource_id','planned_starts_at','planned_ends_at','actual_starts_at','actual_ends_at','evidence_source'],
+    createOnlyFields: ['member_id','booking_id','operational_task_id'],
     json: [],
   },
 });
@@ -359,7 +369,7 @@ export class WorkforceSqliteRepository {
     });
     if (!validation.valid) throw fail('WORKFORCE_CREATE_INVALID', validation.errors.join('; '));
     const data = {};
-    for (const field of spec.fields) if (Object.hasOwn(payload, field)) data[databaseColumn(field, spec.json)] = normalizeRepositoryValue(databaseColumn(field, spec.json), payload[field]);
+    for (const field of [...(spec.createOnlyFields || []), ...spec.fields]) if (Object.hasOwn(payload, field)) data[databaseColumn(field, spec.json)] = normalizeRepositoryValue(databaseColumn(field, spec.json), payload[field]);
     this.assertReferences(entity, data, scope);
     const requestHash = fingerprint({ entity, data });
     const existing = this.db.prepare(`
