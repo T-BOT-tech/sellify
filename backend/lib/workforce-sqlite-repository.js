@@ -129,7 +129,7 @@ function normalizeRepositoryValue(field, value) {
     if (typeof value !== 'string' || !Number.isFinite(parsed)) {
       throw fail('WORKFORCE_TIMESTAMP_INVALID', `${field} must be a valid ISO-8601 timestamp`);
     }
-    if (!/(Z|[+-]\\d{2}:?\\d{2})$/i.test(value)) {
+    if (!/(Z|[+-]\d{2}:?\d{2})$/i.test(value)) {
       throw fail('WORKFORCE_TIMESTAMP_TIMEZONE_REQUIRED', `${field} must include an explicit timezone`);
     }
     return new Date(parsed).toISOString();
