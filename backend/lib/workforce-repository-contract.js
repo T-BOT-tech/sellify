@@ -1,18 +1,18 @@
 /**
- * Canonical Workforce persistence-ready repository contract.
+ * Canonical Workforce persistence repository contract.
  *
- * This contract defines the repository interface for Workforce entities.
- * It is persistence-ready but does not implement SQLite, migrations, APIs,
- * or production runtime behavior.
+ * The contract deliberately describes entity-specific lifecycle operations.
+ * A single generic lifecycle is unsafe because shifts, allocations,
+ * engagements, and members have different approval and terminal states.
  */
-
-export const WORKFORCE_REPOSITORY_CONTRACT_VERSION = '1.0';
+export const WORKFORCE_REPOSITORY_CONTRACT_VERSION = '1.1';
 
 export const WORKFORCE_REPOSITORY_ENTITIES = Object.freeze([
   'member',
   'profile',
   'engagement',
   'calendar',
+  'calendar_exception',
   'availability',
   'assignment',
   'shift',
@@ -20,16 +20,28 @@ export const WORKFORCE_REPOSITORY_ENTITIES = Object.freeze([
   'utilization',
 ]);
 
-export const WORKFORCE_REPOSITORY_OPERATIONS = Object.freeze([
+export const WORKFORCE_REPOSITORY_BASE_OPERATIONS = Object.freeze([
   'create',
   'get',
   'list',
   'update',
-  'activate',
-  'suspend',
-  'deactivate',
-  'release',
-  'cancel',
+]);
+
+export const WORKFORCE_REPOSITORY_ENTITY_OPERATIONS = Object.freeze({
+  member: Object.freeze(['create', 'get', 'list', 'update', 'activate', 'suspend', 'deactivate']),
+  profile: Object.freeze(['create', 'get', 'list', 'update']),
+  engagement: Object.freeze(['create', 'get', 'list', 'update', 'approve', 'activate', 'suspend', 'end', 'cancel']),
+  calendar: Object.freeze(['create', 'get', 'list', 'update', 'deactivate']),
+  calendar_exception: Object.freeze(['create', 'get', 'list', 'update', 'cancel']),
+  availability: Object.freeze(['create', 'get', 'list', 'update', 'activate', 'deactivate', 'cancel']),
+  assignment: Object.freeze(['create', 'get', 'list', 'update', 'activate', 'suspend', 'end', 'cancel']),
+  shift: Object.freeze(['create', 'get', 'list', 'update', 'confirm', 'start', 'complete', 'cancel']),
+  allocation: Object.freeze(['create', 'get', 'list', 'update', 'submit', 'approve', 'release', 'cancel']),
+  utilization: Object.freeze(['create', 'get', 'list', 'update', 'start', 'complete', 'cancel']),
+});
+
+export const WORKFORCE_REPOSITORY_OPERATIONS = Object.freeze([
+  ...new Set(Object.values(WORKFORCE_REPOSITORY_ENTITY_OPERATIONS).flat()),
 ]);
 
 export const WORKFORCE_REPOSITORY_REQUIRED_CONTEXT = Object.freeze([
@@ -37,18 +49,11 @@ export const WORKFORCE_REPOSITORY_REQUIRED_CONTEXT = Object.freeze([
   'tenant_id',
 ]);
 
-export const WORKFORCE_REPOSITORY_IDEMPOTENT_OPERATIONS = Object.freeze([
-  'create',
-]);
+export const WORKFORCE_REPOSITORY_IDEMPOTENT_OPERATIONS = Object.freeze(['create']);
 
-export const WORKFORCE_REPOSITORY_VERSIONED_OPERATIONS = Object.freeze([
-  'update',
-  'activate',
-  'suspend',
-  'deactivate',
-  'release',
-  'cancel',
-]);
+export const WORKFORCE_REPOSITORY_VERSIONED_OPERATIONS = Object.freeze(
+  WORKFORCE_REPOSITORY_OPERATIONS.filter((operation) => !['create', 'get', 'list'].includes(operation)),
+);
 
 export function workforceRepositoryContract() {
   return Object.freeze({
@@ -57,11 +62,14 @@ export function workforceRepositoryContract() {
     persistence_ready: true,
     organization_scoped: true,
     tenant_scoped: true,
+    resource_scoped_assignments: true,
+    entity_specific_lifecycle: true,
     reuses_existing_user_identity: true,
     reuses_existing_organization_authority: true,
     creates_duplicate_user_identity: false,
     entities: WORKFORCE_REPOSITORY_ENTITIES,
     operations: WORKFORCE_REPOSITORY_OPERATIONS,
+    entity_operations: WORKFORCE_REPOSITORY_ENTITY_OPERATIONS,
     required_context: WORKFORCE_REPOSITORY_REQUIRED_CONTEXT,
     idempotent_operations: WORKFORCE_REPOSITORY_IDEMPOTENT_OPERATIONS,
     versioned_operations: WORKFORCE_REPOSITORY_VERSIONED_OPERATIONS,
@@ -70,13 +78,11 @@ export function workforceRepositoryContract() {
 
 export function validateWorkforceRepositoryContext(context = {}) {
   const errors = [];
-
   for (const field of WORKFORCE_REPOSITORY_REQUIRED_CONTEXT) {
-    if (!context[field]) {
+    if (typeof context[field] !== 'string' || context[field].trim() === '') {
       errors.push(`Missing required context: ${field}`);
     }
   }
-
   return Object.freeze({ valid: errors.length === 0, errors });
 }
 
@@ -89,17 +95,23 @@ export function validateWorkforceRepositoryOperation(entity, operation, input = 
 
   if (!WORKFORCE_REPOSITORY_OPERATIONS.includes(operation)) {
     errors.push(`Invalid operation: ${operation}`);
+  } else if (
+    WORKFORCE_REPOSITORY_ENTITY_OPERATIONS[entity] &&
+    !WORKFORCE_REPOSITORY_ENTITY_OPERATIONS[entity].includes(operation)
+  ) {
+    errors.push(`Operation ${operation} is not supported for entity: ${entity}`);
   }
 
-  const context = validateWorkforceRepositoryContext(input);
-  errors.push(...context.errors);
+  errors.push(...validateWorkforceRepositoryContext(input).errors);
 
-  if (WORKFORCE_REPOSITORY_IDEMPOTENT_OPERATIONS.includes(operation) && !input.idempotency_key) {
-    errors.push(`Missing required idempotency_key for ${operation}`);
+  if (WORKFORCE_REPOSITORY_IDEMPOTENT_OPERATIONS.includes(operation)) {
+    if (typeof input.idempotency_key !== 'string' || input.idempotency_key.trim() === '') {
+      errors.push(`Missing required idempotency_key for ${operation}`);
+    }
   }
 
   if (WORKFORCE_REPOSITORY_VERSIONED_OPERATIONS.includes(operation)) {
-    if (!input.expected_version) {
+    if (input.expected_version === undefined || input.expected_version === null) {
       errors.push(`Missing required expected_version for ${operation}`);
     } else if (!Number.isInteger(input.expected_version) || input.expected_version < 1) {
       errors.push('expected_version must be a positive integer');
@@ -113,6 +125,8 @@ export function workforceRepositoryCapability() {
   return Object.freeze({
     supports_organization_scope: true,
     supports_tenant_scope: true,
+    supports_resource_scope: true,
+    supports_entity_specific_lifecycle: true,
     supports_idempotency: true,
     supports_optimistic_concurrency: true,
     supports_authorization: true,
