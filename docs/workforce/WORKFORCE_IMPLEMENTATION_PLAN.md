@@ -2,7 +2,7 @@
 
 ## Status
 
-Persistence, repository, central authorization, API registration, Service Booking linkage, and the first regression suite are implemented on feature/workforce-capability-20261124.
+Persistence, repository, central authorization, API registration, Service Booking linkage, authenticated operator workspace, and regression coverage are implemented on feature/workforce-capability-20261124.
 
 The Node 24 Workforce verification workflow runs only for this branch. It does not merge or deploy the capability.
 
@@ -176,7 +176,7 @@ New regressions:
 - phase0/workforce-sqlite-repository-regression.mjs
 - phase0/workforce-authorization-adapter-regression.mjs
 - phase0/workforce-api-regression.mjs
-- phase0/workforce-api-http-regression.mjs — authenticated HTTP coverage for session enforcement, member CRUD, idempotency replay, lifecycle transitions, optimistic concurrency, and cross-tenant isolation.
+- phase0/workforce-api-http-regression.mjs — authenticated HTTP coverage for session enforcement, all ten entity collection create/read/list routes, entity-specific lifecycle transitions, idempotency replay, optimistic concurrency, and cross-tenant isolation.
 - phase0/workforce-service-booking-integration-regression.mjs
 - phase0/workforce-route-inventory-regression.mjs
 
@@ -197,7 +197,7 @@ The existing eight contract regressions are also run directly by the Workforce c
 
 ## Completed follow-on increments
 
-- Authenticated HTTP-level API regression — verified on Node 24. It covers session enforcement, member create/list/get/update, idempotency replay, entity lifecycle, optimistic concurrency, and cross-tenant read/write denial. Broader per-entity HTTP coverage can be added as the API surface evolves.
+- Authenticated HTTP-level API regression — verified on Node 24. It covers all ten entity collection create/read/list routes, entity-specific lifecycle transitions, idempotency replay, optimistic concurrency, and cross-tenant read/write denial.
 - Bounded availability recurrence evaluation — verified on Node 24 through both contract and production SQLite Service Booking integration tests. DAILY/WEEKLY rules, interval, BYDAY, COUNT, UNTIL, effective dates, local wall-clock time, and daylight-saving transitions are covered; unsupported rules fail closed.
 - Utilization analytics — implemented and verified in the SQLite repository and authenticated HTTP API. Read-only summaries include planned, measured-planned, actual, variance, completed/open/cancelled/missing-actual counts, member/resource grouping, scoped filters, range validation, and tenant/provider isolation.
 - Booking/allocation boundary decision — resolved. Service Booking confirmation does not create a Workforce allocation. A Workforce allocation is created only for separately planned workforce work; Service Resource Commitment remains the canonical booking/resource commitment authority.
@@ -211,5 +211,5 @@ The existing eight contract regressions are also run directly by the Workforce c
 - Legacy provider appointments without workforce_member_id are hidden from provider queues until member ownership is established.
 - Recurrence supports a bounded DAILY/WEEKLY subset; unsupported rules and overnight recurring windows fail closed.
 - Service Booking confirmation creates the canonical Service Resource Commitment; it does not create a second Workforce allocation.
-- Authenticated HTTP regression covers member lifecycle and utilization-summary access, including authentication, invalid range, and cross-tenant denial; broader per-entity HTTP coverage remains future expansion.
+- Operator workspace browser behavior has not yet been visually smoke-tested on a real mobile device; API and source-level integration are covered by CI.
 - No payroll, HRIS, supplier-capacity, inventory, payment, fulfillment, catalog, or logistics-task authority is introduced.
