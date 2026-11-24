@@ -70,6 +70,16 @@ try {
   assert.equal(created.record.status, 'DRAFT');
   assert.equal(created.record.version, 1);
 
+  const externalMember = repository.create('member', {
+    idempotency_key: 'member-create-external-a',
+    member_type: 'CONTRACTOR',
+    display_name: 'External Contractor A',
+  }, scopeA);
+  assert.equal(externalMember.record.user_id, null, 'external professionals are not required to have a Sellify account');
+  assert.equal(repository.get('member', externalMember.record.id, scopeA).user_id, null);
+  assert.deepEqual(repository.list('member', { ...scopeA, provider_user_id: 'user-a' }).map(record => record.id), [created.record.id],
+    'provider-scoped reads must not expose unlinked external professionals');
+
   const duplicate = repository.create('member', {
     idempotency_key: 'member-create-a',
     user_id: 'user-a',
