@@ -69,6 +69,12 @@ assert.ok(bookingHandler.includes('listServiceProviderBookings('));
 assert.ok(bookingHandler.includes('session.userId'));
 assert.ok(bookingHandler.includes('booking.order_id'));
 
+const routeErrorBoundary = server.slice(server.indexOf('for (const route of ROUTES)'), server.indexOf('// No API route matched'));
+assert.ok(routeErrorBoundary.includes('const status = e.statusCode || 500'));
+assert.ok(routeErrorBoundary.includes('sendError(res, status, e, req)'));
+assert.ok(server.includes('WORKFORCE_VALIDATION_FAILED'));
+assert.ok(server.includes('IDEMPOTENCY_KEY_REQUIRED'));
+
 assert.ok(server.includes('\\/workforce\\/([a-z-]+)'));
 for (const routeKey of [
   "members: 'member'", "profiles: 'profile'", "engagements: 'engagement'",
