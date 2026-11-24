@@ -94,7 +94,7 @@ export function workforceWorkspaceShell() {
     + '<h4>Declare availability</h4><label>Availability<select name="availability" required><option value="AVAILABLE">Available</option>'
     + '<option value="UNAVAILABLE">Unavailable</option><option value="TENTATIVE">Tentative</option><option value="BLACKOUT">Blackout</option></select></label>'
     + '<label>Start<input name="starts_at" type="datetime-local" required></label><label>End<input name="ends_at" type="datetime-local" required></label>'
-    + '<label>Timezone<input name="timezone" value="' + escapeAttr(zone) + '" required></label>'
+    + '<label>Timezone<input name="timezone" value="' + escapeAttr(zone) + '" readonly required></label>'
     + '<button type="submit" class="btn-primary">Save availability</button><p class="logistics-meta workforce-form-status" role="status"></p></form></section></section>';
 }
 
