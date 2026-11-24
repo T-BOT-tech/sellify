@@ -5,7 +5,7 @@
  * A single generic lifecycle is unsafe because shifts, allocations,
  * engagements, and members have different approval and terminal states.
  */
-export const WORKFORCE_REPOSITORY_CONTRACT_VERSION = '1.1';
+export const WORKFORCE_REPOSITORY_CONTRACT_VERSION = '1.2';
 
 export const WORKFORCE_REPOSITORY_ENTITIES = Object.freeze([
   'member',
@@ -28,7 +28,7 @@ export const WORKFORCE_REPOSITORY_BASE_OPERATIONS = Object.freeze([
 ]);
 
 export const WORKFORCE_REPOSITORY_ENTITY_OPERATIONS = Object.freeze({
-  member: Object.freeze(['create', 'get', 'list', 'update', 'activate', 'suspend', 'deactivate']),
+  member: Object.freeze(['create', 'get', 'list', 'update', 'activate', 'suspend', 'deactivate', 'link_account', 'unlink_account']),
   profile: Object.freeze(['create', 'get', 'list', 'update']),
   engagement: Object.freeze(['create', 'get', 'list', 'update', 'submit', 'activate', 'suspend', 'end']),
   calendar: Object.freeze(['create', 'get', 'list', 'update']),
@@ -65,6 +65,8 @@ export function workforceRepositoryContract() {
     resource_scoped_assignments: true,
     entity_specific_lifecycle: true,
     reuses_existing_user_identity: true,
+    supports_optional_identity_link: true,
+    supports_account_linking: true,
     reuses_existing_organization_authority: true,
     creates_duplicate_user_identity: false,
     entities: WORKFORCE_REPOSITORY_ENTITIES,
