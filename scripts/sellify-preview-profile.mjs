@@ -1,3 +1,6 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 const SHARED_CONTRACT_PATHS = [
   /^app\/browser-backend-modules\.mjs$/,
   /^app\/src\/[^/]+-contract\.js$/,
@@ -33,7 +36,7 @@ export function classifySellifyPreviewProfile({ branchName = '', changedPaths = 
   };
 }
 
-if (import.meta.url === new URL(process.argv[1] || '', 'file:').href) {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [branchName = '', ...changedPaths] = process.argv.slice(2);
   console.log(JSON.stringify(classifySellifyPreviewProfile({ branchName, changedPaths })));
 }
