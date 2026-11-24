@@ -72,6 +72,11 @@ export function validateWorkforceApiPayload(entity, operation, input = {}) {
     }
   }
 
+  if (input.employee_number !== undefined && input.employee_number !== null &&
+    (typeof input.employee_number !== 'string' || input.employee_number.trim().length > 80)) {
+    errors.push('employee_number must be a string of at most 80 characters');
+  }
+
   if (input.all_day !== undefined && typeof input.all_day !== 'boolean') {
     errors.push('all_day must be a boolean');
   }
