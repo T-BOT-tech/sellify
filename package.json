@@ -487,7 +487,9 @@
     "test:service-availability-contract": "node phase0/service-availability-contract-regression.mjs",
     "test:service-availability-api": "node phase0/service-availability-api-regression.mjs",
     "test:p1-14": "node phase0/p1-14-pack-recovery-regression.mjs",
-    "test:workforce-sqlite-migration": "node phase0/workforce-sqlite-migration-regression.mjs"
+    "test:workforce-sqlite-migration": "node phase0/workforce-sqlite-migration-regression.mjs",
+    "test:workforce-sqlite-repository": "node phase0/workforce-sqlite-repository-regression.mjs",
+    "test:workforce-repository-contract": "node phase0/workforce-repository-contract-regression.mjs"
   },
   "engines": {
     "node": ">=24"
