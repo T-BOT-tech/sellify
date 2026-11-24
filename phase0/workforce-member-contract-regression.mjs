@@ -36,6 +36,15 @@ assert.equal(canTransitionWorkforceMemberStatus('ACTIVE', 'DRAFT'), false);
 assert.equal(canTransitionWorkforceMemberStatus('UNKNOWN', 'ACTIVE'), false);
 assert.equal(canTransitionWorkforceMemberStatus('ACTIVE', 'UNKNOWN'), false);
 
+const validExternalCreate = validateWorkforceMemberCreate({
+  organization_id: 'org-1',
+  chat_id: 'chat-1',
+  member_type: 'CONTRACTOR',
+  idempotency_key: 'member-create-external-1',
+});
+assert.equal(validExternalCreate.valid, true, 'external professionals do not require a Sellify user');
+assert.deepEqual(validExternalCreate.errors, []);
+
 const validCreate = validateWorkforceMemberCreate({
   organization_id: 'org-1',
   chat_id: 'chat-1',
@@ -52,7 +61,6 @@ const invalidCreate = validateWorkforceMemberCreate({
   member_type: 'MANAGER',
 });
 assert.equal(invalidCreate.valid, false);
-assert.ok(invalidCreate.errors.includes('Missing required field: user_id'));
 assert.ok(invalidCreate.errors.includes('Missing required field: idempotency_key'));
 assert.ok(invalidCreate.errors.includes('Invalid member_type: MANAGER'));
 
