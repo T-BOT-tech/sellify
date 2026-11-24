@@ -54,6 +54,18 @@ async function jsonRequest(baseUrl, pathname, { token, method = 'GET', body, hea
   return { response, payload };
 }
 
+async function createWorkforceRecord(baseUrl, token, collection, key, body) {
+  const result = await jsonRequest(baseUrl, collection, {
+    token,
+    method: 'POST',
+    headers: { 'Idempotency-Key': key },
+    body,
+  });
+  assert.equal(result.response.status, 201, collection + ': ' + JSON.stringify(result.payload));
+  assert.ok(result.payload.record?.id, collection + ' must return a canonical record id');
+  return result.payload.record;
+}
+
 try {
   const store = await import('../backend/lib/store-sqlite.js');
   const suffix = String(Date.now());
@@ -188,6 +200,109 @@ try {
   assert.equal(invalidLifecycle.response.status, 400,
     'an operation not defined for the member entity must be rejected');
 
+  // Exercise the remaining authenticated entity routes through the same live HTTP server.
+  // These records use synthetic data and stay inside the isolated test tenant.
+  const entityFixtures = [
+    ['profiles', { member_id: memberId, skills: ['HTTP regression skill'], visibility: 'ORGANIZATION' }],
+    ['engagements', {
+      member_id: memberId, engagement_type: 'CONTRACT',
+      starts_at: '2026-11-26T08:00:00.000Z', ends_at: '2026-12-26T08:00:00.000Z',
+    }],
+    ['calendars', {
+      member_id: memberId, timezone: 'Africa/Addis_Ababa',
+      effective_from: '2026-11-24T00:00:00.000Z',
+      weekly_schedule: [{ day: 'THURSDAY', intervals: [{ start: '09:00', end: '17:00' }] }],
+    }],
+  ];
+  const createdEntities = {};
+  for (const [plural, body] of entityFixtures) {
+    createdEntities[plural] = await createWorkforceRecord(
+      baseUrl, ownerSession.token,
+      '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/' + plural,
+      'workforce-http-' + plural + '-' + suffix,
+      body,
+    );
+  }
+
+  const calendarId = createdEntities.calendars.id;
+  const additionalFixtures = [
+    ['calendar-exceptions', {
+      calendar_id: calendarId, exception_type: 'HOLIDAY',
+      starts_at: '2026-12-01T00:00:00.000Z', ends_at: '2026-12-02T00:00:00.000Z',
+      all_day: true, reason: 'HTTP regression fixture',
+    }],
+    ['availability', {
+      member_id: memberId, availability: 'AVAILABLE',
+      starts_at: '2026-11-26T06:00:00.000Z', ends_at: '2026-11-26T14:00:00.000Z',
+      timezone: 'Africa/Addis_Ababa',
+    }],
+    ['assignments', {
+      member_id: memberId, assignment_type: 'RESOURCE',
+      starts_at: '2026-11-26T06:00:00.000Z', ends_at: '2026-11-26T14:00:00.000Z',
+    }],
+    ['shifts', {
+      member_id: memberId,
+      starts_at: '2026-11-26T06:00:00.000Z', ends_at: '2026-11-26T14:00:00.000Z',
+      timezone: 'Africa/Addis_Ababa', break_rules: [],
+    }],
+    ['allocations', {
+      member_id: memberId,
+      starts_at: '2026-11-26T06:00:00.000Z', ends_at: '2026-11-26T07:00:00.000Z',
+    }],
+    ['utilization', {
+      member_id: memberId,
+      planned_starts_at: '2026-11-26T06:00:00.000Z',
+      planned_ends_at: '2026-11-26T07:00:00.000Z',
+      evidence_source: 'HTTP_REGRESSION',
+    }],
+  ];
+  for (const [plural, body] of additionalFixtures) {
+    createdEntities[plural] = await createWorkforceRecord(
+      baseUrl, ownerSession.token,
+      '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/' + plural,
+      'workforce-http-' + plural + '-' + suffix,
+      body,
+    );
+  }
+
+  for (const [plural, record] of Object.entries(createdEntities)) {
+    const collectionPath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/' + plural;
+    const read = await jsonRequest(baseUrl, collectionPath + '/' + encodeURIComponent(record.id), {
+      token: ownerSession.token,
+    });
+    assert.equal(read.response.status, 200, plural + ' item read: ' + JSON.stringify(read.payload));
+    assert.equal(read.payload.record?.id, record.id);
+    const list = await jsonRequest(baseUrl, collectionPath, { token: ownerSession.token });
+    assert.equal(list.response.status, 200, plural + ' collection read: ' + JSON.stringify(list.payload));
+    assert.ok(list.payload.records?.some(item => item.id === record.id), plural + ' collection must include its created record');
+  }
+
+  async function lifecycle(plural, record, action, expectedVersion, expectedState, stateField = 'status') {
+    const result = await jsonRequest(
+      baseUrl,
+      '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/' + plural + '/' +
+        encodeURIComponent(record.id) + '/' + action,
+      { token: ownerSession.token, method: 'POST', body: { expected_version: expectedVersion } },
+    );
+    assert.equal(result.response.status, 200, plural + '/' + action + ': ' + JSON.stringify(result.payload));
+    assert.equal(result.payload.record?.[stateField], expectedState);
+    assert.equal(result.payload.record?.version, expectedVersion + 1);
+    return result.payload.record;
+  }
+
+  let engagement = await lifecycle('engagements', createdEntities.engagements, 'submit', 1, 'PENDING_APPROVAL');
+  await lifecycle('engagements', engagement, 'activate', 2, 'ACTIVE');
+  await lifecycle('calendar-exceptions', createdEntities['calendar-exceptions'], 'cancel', 1, 'CANCELLED');
+  await lifecycle('assignments', createdEntities.assignments, 'activate', 1, 'ACTIVE');
+  let shift = await lifecycle('shifts', createdEntities.shifts, 'confirm', 1, 'CONFIRMED');
+  shift = await lifecycle('shifts', shift, 'start', 2, 'IN_PROGRESS');
+  await lifecycle('shifts', shift, 'complete', 3, 'COMPLETED');
+  let allocation = await lifecycle('allocations', createdEntities.allocations, 'submit', 1, 'PENDING_APPROVAL', 'state');
+  allocation = await lifecycle('allocations', allocation, 'approve', 2, 'COMMITTED', 'state');
+  await lifecycle('allocations', allocation, 'release', 3, 'RELEASED', 'state');
+  let utilization = await lifecycle('utilization', createdEntities.utilization, 'start', 1, 'IN_PROGRESS');
+  await lifecycle('utilization', utilization, 'complete', 2, 'COMPLETED');
+
   const crossTenantRead = await jsonRequest(
     baseUrl,
     '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/members',
@@ -210,7 +325,7 @@ try {
     'a session from another tenant must not create Workforce records');
 
   console.log('Workforce authenticated HTTP API regression: PASS');
-  console.log('Session authentication, idempotency, CRUD, lifecycle, optimistic concurrency, and tenant isolation: VERIFIED');
+  console.log('Session authentication, all Workforce entity CRUD routes, entity-specific lifecycle, idempotency, optimistic concurrency, and tenant isolation: VERIFIED');
 } catch (error) {
   console.error(error);
   if (output) console.error('Backend output:\n' + output);
