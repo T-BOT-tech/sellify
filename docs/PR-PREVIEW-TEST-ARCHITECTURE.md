@@ -1,6 +1,6 @@
 # Sellify PR Preview and Test Environments
 
-Status: proposed implementation baseline  
+Status: implemented on `feature/workforce-capability-20261124`; awaiting profile-matrix verification and explicit review  
 Scope: GitHub Actions CI and synthetic test environments only  
 Non-goals: production deployment, production data access, persistent preview hosting, or paid preview services
 
@@ -36,7 +36,7 @@ When classification is ambiguous, choose full-stack. Never silently compose inco
 ## Synthetic database and isolation rules
 
 1. Every job uses a new GitHub-hosted runner and a unique temporary directory.
-2. Set `NODE_ENV=test`, `SELLIFY_DATA_DIR`, `SELLIFY_DB_PATH`, and `SELLIFY_BACKUP_DIR` to job-local temporary paths for server/browser tests.
+2. Set `NODE_ENV=test`, `SELLIFY_DATA_DIR`, and `SELLIFY_BACKUP_DIR` to job-local temporary paths. Let each regression own `SELLIFY_DB_PATH` when it explicitly provisions a database; do not globally override test-specific database paths.
 3. Never connect to production, staging, or a user-owned database.
 4. Never use real Telegram credentials, payment credentials, provider secrets, customer data, or production API endpoints.
 5. Migration tests must cover a fresh database and supported legacy schema shapes, then verify replay/idempotency and foreign-key/integrity constraints.
