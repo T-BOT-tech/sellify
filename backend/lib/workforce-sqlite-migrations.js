@@ -361,3 +361,40 @@ export function runWorkforceSqliteMigrations(db, now = () => new Date().toISOStr
     throw error;
   }
 }
+
+
+/**
+ * Add the single optional Workforce reference to the canonical Service
+ * Booking record. Service Booking and Service Resource Commitment remain
+ * authoritative; Workforce never creates or transitions bookings here.
+ */
+export const WORKFORCE_SERVICE_BOOKING_MIGRATION_VERSION = 87;
+
+export function runWorkforceServiceBookingMigration(db, now = () => new Date().toISOString()) {
+  if (!db || typeof db.prepare !== 'function' || typeof db.exec !== 'function') {
+    throw new TypeError('A live SQLite DatabaseSync connection is required');
+  }
+  const applied = db.prepare('SELECT version FROM schema_migrations WHERE version = ?')
+    .get(WORKFORCE_SERVICE_BOOKING_MIGRATION_VERSION);
+  if (applied) return { applied: false, version: WORKFORCE_SERVICE_BOOKING_MIGRATION_VERSION };
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const columns = new Set(db.prepare('PRAGMA table_info(service_bookings)').all()
+      .map((column) => String(column.name)));
+    if (!columns.has('workforce_member_id')) {
+      db.exec('ALTER TABLE service_bookings ADD COLUMN workforce_member_id TEXT REFERENCES workforce_members(id) ON DELETE SET NULL');
+    }
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_service_bookings_workforce_member
+        ON service_bookings(organization_id, chat_id, workforce_member_id, status);
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+      .run(WORKFORCE_SERVICE_BOOKING_MIGRATION_VERSION, now());
+    db.exec('COMMIT');
+    return { applied: true, version: WORKFORCE_SERVICE_BOOKING_MIGRATION_VERSION };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
