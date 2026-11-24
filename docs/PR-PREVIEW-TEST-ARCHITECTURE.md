@@ -64,7 +64,7 @@ Next expansion: a template-driven browser fixture should provision a synthetic t
 
 ## PR lifecycle and cleanup
 
-- On PR opened, reopened or synchronized: classify, run the selected profile, and upload a short-lived evidence artifact containing the exact component SHAs, profile, test output and result.
+- On PR opened, reopened or synchronized: classify, run the selected profile, and upload a short-lived evidence artifact containing the exact component SHAs, profile, test output and result. Frontend and full-stack profiles also capture a synthetic 390 × 844 first-experience browser screenshot.
 - On PR closed: delete artifacts whose names are scoped to that PR.
 - Use a concurrency group per PR and cancel superseded runs, so a new push does not leave obsolete work running.
 - No runner, server, database or test fixture persists after a job. Artifact retention is short (three days); PR-close cleanup removes the PR's artifacts earlier.
@@ -78,7 +78,7 @@ The existing setup action pins Node 24 and installs the root lockfile. The app p
 
 ## Rollout boundaries
 
-1. Add and verify the CI-only profile workflow on a feature branch using `workflow_dispatch`.
+1. Verify all four CI-only profiles on a feature-branch push; use `workflow_dispatch` for an individual profile when available.
 2. Confirm the profile classifier against backend-only, frontend-only, full-stack and migration sample diffs.
 3. Confirm synthetic DB isolation and artifact cleanup.
 4. Only after review and explicit approval, merge the workflow to the default branch so it can govern all PRs. A workflow existing only on a feature branch cannot govern PR events whose base branch is `main`.
