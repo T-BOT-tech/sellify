@@ -144,10 +144,14 @@ try {
   assert.equal(availabilityCall.body.timezone, browserTimezone);
 
   await page.getByRole('button', { name: 'Suspend' }).click();
-  await page.getByText('SUSPENDED', { exact: true }).waitFor({ timeout: 10000 });
+  await page.waitForFunction(() => {
+    const status = document.querySelector('.workforce-member-card .logistics-status');
+    return status?.textContent?.trim() === 'SUSPENDED';
+  }, null, { timeout: 10000 });
   const suspendCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/suspend'));
   assert.ok(suspendCall, 'member lifecycle action must reach the API');
   assert.equal(suspendCall.body.expected_version, 1);
+  assert.equal(suspendCall.authorization, 'Bearer synthetic-session-token');
 
   const card = await page.locator('#workforceWorkspace').boundingBox();
   assert.ok(card && card.width <= 390, 'Workforce workspace must fit the mobile viewport');
