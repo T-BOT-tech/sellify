@@ -47,14 +47,16 @@ try {
     exceptions: [],
   }, { userId: owner.id });
 
+  const canonicalTenant = await store.getTenant(seller.chatId);
+  assert.ok(canonicalTenant?.organizationId && canonicalTenant?.id);
   const repository = store.createWorkforceSqliteRepository();
   const ownerActor = {
-    userId: owner.id, chatId: seller.chatId, organizationId: seller.organizationId,
+    userId: owner.id, chatId: seller.chatId, organizationId: canonicalTenant.organizationId,
     role: 'owner', contextualRoles: [],
   };
   const repositoryContext = {
-    organization_id: seller.organizationId,
-    tenant_id: seller.id,
+    organization_id: canonicalTenant.organizationId,
+    tenant_id: canonicalTenant.id,
     chat_id: seller.chatId,
     actor: ownerActor,
     actor_id: owner.id,
