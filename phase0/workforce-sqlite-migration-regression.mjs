@@ -25,9 +25,9 @@ try {
     CREATE TABLE locations (id TEXT PRIMARY KEY);
     CREATE TABLE service_resources (id TEXT PRIMARY KEY);
     CREATE TABLE service_bookings (id TEXT PRIMARY KEY, organization_id TEXT, chat_id TEXT, status TEXT);
-    INSERT INTO organizations(id) VALUES ('org-a');
+    INSERT INTO organizations(id) VALUES ('org-a'), ('org-b');
     INSERT INTO tenants(chat_id, tenant_id) VALUES ('chat-a', 'tenant-a'), ('chat-b', 'tenant-b');
-    INSERT INTO users(id) VALUES ('user-a');
+    INSERT INTO users(id) VALUES ('user-a'), ('user-b');
   `);
 
   const first = runWorkforceSqliteMigrations(db);
@@ -67,6 +67,12 @@ try {
       (id, organization_id, tenant_id, chat_id, user_id, member_type, status, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run('member-a', 'org-a', 'tenant-a', 'chat-a', 'user-a', 'EMPLOYEE', 'ACTIVE', '2026-01-01', '2026-01-01');
+
+  db.prepare(`
+    INSERT INTO workforce_members
+      (id, organization_id, tenant_id, chat_id, user_id, member_type, status, created_at, updated_at)
+    VALUES ('member-b', 'org-b', 'tenant-b', 'chat-b', 'user-b', 'EMPLOYEE', 'ACTIVE', '2026-01-01', '2026-01-01')
+  `).run();
 
   assert.throws(() => db.prepare(`
     INSERT INTO workforce_profiles
@@ -122,6 +128,23 @@ try {
   db.prepare('INSERT INTO service_bookings (id, workforce_member_id) VALUES (?, ?)')
     .run('booking-workforce-a', 'member-a');
 
+  db.exec('PRAGMA foreign_keys = OFF');
+  db.prepare(`
+    INSERT INTO workforce_profiles
+      (id, organization_id, tenant_id, chat_id, member_id, created_at, updated_at)
+    VALUES ('profile-invalid-member', 'org-a', 'tenant-a', 'chat-a', 'missing-member', '2026-01-01', '2026-01-01')
+  `).run();
+  db.exec('PRAGMA foreign_keys = ON');
+  assert.throws(() => runWorkforceExternalMemberMigration(db),
+    error => error.code === 'WORKFORCE_MEMBER_MIGRATION_FOREIGN_KEY_CHECK_FAILED');
+  const preRollbackUserColumn = db.prepare('PRAGMA table_info(workforce_members)').all()
+    .find(column => column.name === 'user_id');
+  assert.equal(preRollbackUserColumn.notnull, 1, 'failed migration must roll back the table rebuild');
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = ?')
+    .get(WORKFORCE_EXTERNAL_MEMBER_MIGRATION_VERSION).count, 0, 'failed migration must not record its version');
+  assert.equal(db.prepare('SELECT user_id FROM workforce_members WHERE id = ?').get('member-a').user_id, 'user-a');
+  db.prepare('DELETE FROM workforce_profiles WHERE id = ?').run('profile-invalid-member');
+
   const externalMigration = runWorkforceExternalMemberMigration(db);
   const externalMigrationReplay = runWorkforceExternalMemberMigration(db);
   assert.deepEqual(externalMigration, { applied: true, version: WORKFORCE_EXTERNAL_MEMBER_MIGRATION_VERSION });
@@ -130,6 +153,7 @@ try {
     .find(column => column.name === 'user_id');
   assert.equal(userColumn.notnull, 0, 'user_id must be nullable after migration 88');
   assert.equal(db.prepare('SELECT user_id FROM workforce_members WHERE id = ?').get('member-a').user_id, 'user-a');
+  assert.equal(db.prepare('SELECT user_id FROM workforce_members WHERE id = ?').get('member-b').user_id, 'user-b');
   assert.equal(db.prepare('SELECT workforce_member_id FROM service_bookings WHERE id = ?').get('booking-workforce-a').workforce_member_id, 'member-a');
   for (const table of expectedTables.slice(1)) {
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM ' + table).get().count, 1, table + ' child row must survive member table rebuild');
@@ -141,6 +165,10 @@ try {
   `).run();
   assert.equal(db.prepare('SELECT user_id FROM workforce_members WHERE id = ?').get('member-external').user_id, null);
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
+  const preservedMemberIndexes = new Set(db.prepare('PRAGMA index_list(workforce_members)').all().map(index => index.name));
+  for (const name of ['idx_workforce_members_org_status','idx_workforce_members_tenant_status','idx_workforce_members_user','idx_workforce_members_location']) {
+    assert.ok(preservedMemberIndexes.has(name), 'migration must preserve ' + name);
+  }
 
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = ?')
     .get(WORKFORCE_SQLITE_MIGRATION_VERSION).count, 1);
