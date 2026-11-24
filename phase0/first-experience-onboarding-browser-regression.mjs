@@ -828,6 +828,11 @@ try {
   // the onboarding template. Enable it through the real Settings UI.
   await page.locator('#gearSettingsBtn').click();
   await page.locator('#settingsModal.open').waitFor({ state: 'visible', timeout: 10000 });
+  // Wholesale lives inside the collapsed "Payments, pricing & operations"
+  // disclosure in Settings. Open that section before scrolling to its control.
+  const pricingOperationsSection = page.locator('#settingsModal details.settings-advanced-group')
+    .filter({ hasText: 'Payments, pricing & operations' });
+  await pricingOperationsSection.locator('summary').click();
   // Settings is a tall, internally scrollable mobile bottom sheet. Scroll
   // the native checkbox itself into view, then interact with that real input.
   const wholesaleToggle = page.locator('#setWholesaleEnabled');
