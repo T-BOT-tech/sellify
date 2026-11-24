@@ -50,7 +50,7 @@ try {
   };
   page.on('pageerror', error => pageErrors.push(error.stack || error.message));
 
-  await page.route('**/tenants/synthetic-tenant/workforce/**', async route => {
+  await page.route('**/workforce/**', async route => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
@@ -122,6 +122,17 @@ try {
     workspace.mountWorkforceWorkspace(host);
   });
 
+  await page.waitForFunction(() => {
+    const status = document.querySelector('#workforceStatus');
+    return ['READY', 'ERROR', 'DENIED'].includes(status?.dataset.state || '');
+  }, null, { timeout: 10000 });
+  const workspaceStatus = await page.locator('#workforceStatus').textContent();
+  assert.equal(
+    await page.locator('#workforceStatus').getAttribute('data-state'),
+    'READY',
+    'Workforce workspace must load successfully. Status: ' + workspaceStatus
+      + '; intercepted API calls: ' + JSON.stringify(apiCalls),
+  );
   await page.getByText('Synthetic Workforce Member').waitFor({ timeout: 10000 });
   await page.getByText('Planned', { exact: true }).waitFor();
   await page.locator('.workforce-member-card').getByRole('button', { name: 'Open member' }).click();
