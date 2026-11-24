@@ -118,6 +118,7 @@ import {
   createPairingChallenge, consumePairingChallenge,
   createInvite, listInvites, revokeInvite, consumeInvite, changeMembershipRole, assignMembershipContextualRole, revokeMembershipContextualRole,
   listDevices, revokeDevice, updateMarketplaceOrderStatus, getMarketplaceOrderTracking, listTelegramBuyerOrders, getTelegramBuyerFulfillmentExperience, getOrderFulfillment, transitionOrderFulfillment, recordServiceDeliveryAssessment,
+  createWorkforceSqliteRepository,
   createServiceBooking, transitionServiceBooking, listServiceBookings, getTelegramBuyerServiceBookings,
   assessTelegramBuyerServiceFeasibility, listServiceProviderBookings,
   listServiceResources, createServiceResource, updateServiceResource,
@@ -3835,6 +3836,152 @@ async function handleOrderFulfillment(req, res, chatId, serverOrderId) {
   return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
 }
 
+
+const WORKFORCE_API_ENTITIES = Object.freeze({
+  members: 'member', profiles: 'profile', engagements: 'engagement',
+  calendars: 'calendar', 'calendar-exceptions': 'calendar_exception',
+  availability: 'availability', assignments: 'assignment', shifts: 'shift',
+  allocations: 'allocation', utilization: 'utilization',
+});
+const WORKFORCE_API_FIELDS = Object.freeze({
+  member: ['user_id','member_type','primary_location_id','timezone','display_name'],
+  profile: ['member_id','skills','qualifications','languages','service_capabilities','visibility','notes','effective_from','effective_until'],
+  engagement: ['member_id','engagement_type','starts_at','ends_at','approver_user_id','terms_reference'],
+  calendar: ['member_id','location_id','timezone','weekly_schedule','holiday_calendar','effective_from','effective_until'],
+  calendar_exception: ['calendar_id','exception_type','starts_at','ends_at','all_day','reason'],
+  availability: ['member_id','resource_id','location_id','availability','starts_at','ends_at','timezone','recurrence_rule','effective_from','effective_until'],
+  assignment: ['member_id','resource_id','location_id','assignment_type','starts_at','ends_at','booking_id','operational_task_id'],
+  shift: ['member_id','resource_id','location_id','starts_at','ends_at','timezone','break_rules','recurrence_source_id','assignment_source_id'],
+  allocation: ['member_id','resource_id','booking_id','operational_task_id','starts_at','ends_at'],
+  utilization: ['member_id','resource_id','booking_id','operational_task_id','planned_starts_at','planned_ends_at','actual_starts_at','actual_ends_at','evidence_source','status'],
+});
+const WORKFORCE_CREATE_REQUIRED = Object.freeze({
+  member: ['user_id','member_type'],
+  profile: ['member_id','effective_from'],
+  engagement: ['member_id','engagement_type','starts_at'],
+  calendar: ['member_id','timezone','effective_from'],
+  calendar_exception: ['calendar_id','exception_type','starts_at','ends_at'],
+  availability: ['member_id','availability','starts_at','ends_at','timezone','effective_from'],
+  assignment: ['member_id','assignment_type','starts_at','ends_at'],
+  shift: ['member_id','starts_at','ends_at','timezone'],
+  allocation: ['member_id','starts_at','ends_at'],
+  utilization: ['member_id','planned_starts_at','planned_ends_at','status','evidence_source'],
+});
+function workforceApiBody(body, entity, operation) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw Object.assign(new Error('Workforce request body must be a JSON object'), { statusCode: 400, code: 'WORKFORCE_BODY_INVALID' });
+  }
+  const allowed = new Set(operation === 'create'
+    ? [...WORKFORCE_API_FIELDS[entity], 'id', 'idempotency_key']
+    : operation === 'update'
+      ? [...WORKFORCE_API_FIELDS[entity], 'expected_version']
+      : ['expected_version']);
+  const unknown = Object.keys(body).filter(key => !allowed.has(key));
+  if (unknown.length) throw Object.assign(new Error(\`Unsupported Workforce fields: \${unknown.join(', ')}\`), { statusCode: 400, code: 'WORKFORCE_FIELDS_INVALID' });
+  if (operation === 'create') {
+    const missing = WORKFORCE_CREATE_REQUIRED[entity].filter(field => body[field] === undefined || body[field] === null || body[field] === '');
+    if (missing.length) throw Object.assign(new Error(\`Missing required Workforce fields: \${missing.join(', ')}\`), { statusCode: 400, code: 'WORKFORCE_FIELDS_REQUIRED' });
+    if (entity === 'utilization' && body.status !== 'PLANNED') throw Object.assign(new Error('Utilization events must be created in PLANNED state'), { statusCode: 400, code: 'WORKFORCE_UTILIZATION_INITIAL_STATE_INVALID' });
+  } else if (!Number.isInteger(Number(body.expected_version)) || Number(body.expected_version) < 1) {
+    throw Object.assign(new Error('expected_version must be a positive integer'), { statusCode: 400, code: 'WORKFORCE_EXPECTED_VERSION_REQUIRED' });
+  }
+  return body;
+}
+function workforceProviderResourceIds(session) {
+  return [...new Set((Array.isArray(session.contextualRoles) ? session.contextualRoles : [])
+    .filter(item => String(item?.role || '').trim().toLowerCase() === 'service_provider'
+      && String(item?.scopeType || '').trim().toUpperCase() === 'RESOURCE' && item?.scopeId)
+    .map(item => String(item.scopeId)))];
+}
+async function handleWorkforce(req, res, chatId, entityName, recordId = null, action = null) {
+  const tenant = await getTenant(chatId);
+  if (!tenant) return sendJSON(res, 404, { error: { message: 'Unknown store', status: 404 } }, req);
+  const session = await requireSession(req, chatId);
+  const entity = WORKFORCE_API_ENTITIES[entityName];
+  if (!entity) return sendJSON(res, 404, { error: { message: 'Unknown Workforce resource', status: 404 } }, req);
+  const repository = createWorkforceSqliteRepository();
+  const assignedIds = workforceProviderResourceIds(session);
+  const providerScoped = assignedIds.length > 0;
+  let resourceIds = [null];
+  if (providerScoped) {
+    const resources = (await listServiceResources(chatId, { includeInactive: false }))
+      .filter(resource => assignedIds.includes(String(resource.id)));
+    resourceIds = resources.map(resource => String(resource.id));
+    if (!resourceIds.length) throw Object.assign(new Error('An active resource-scoped Service Provider assignment is required'), { statusCode: 403, code: 'SERVICE_PROVIDER_ASSIGNMENT_REQUIRED' });
+    for (const resource of resources) {
+      const location = resource.locationId ? await getOrganizationLocation(chatId, resource.locationId) : null;
+      if (resource.locationId && !location) throw Object.assign(new Error('Assigned Service Resource location is unavailable in tenant scope'), { statusCode: 403, code: 'LOCATION_SCOPE_DENIED' });
+      await requireAuthorization(session, tenant, 'service_resource', 'service:service_resource:view', {
+        location,
+        resourceContext: { resourceType: 'service_resource', resourceId: resource.id, organizationId: resource.organizationId, locationId: resource.locationId },
+        deniedMessage: 'Active assigned Service Resource view permission required',
+      });
+    }
+  }
+  const contexts = resourceIds.map(resourceId => ({
+    organization_id: String(tenant.organizationId), tenant_id: String(tenant.id), chat_id: String(tenant.chatId),
+    actor: session, actor_id: session.userId,
+    provider_user_id: providerScoped ? String(session.userId) : null,
+    ...(resourceId ? { resource_id: resourceId } : {}),
+    ...(session.locationId ? { location_id: String(session.locationId) } : {}),
+  }));
+  if (req.method === 'GET' && !recordId) {
+    const url = new URL(req.url, \`http://\${req.headers.host}\`);
+    const filters = {};
+    for (const key of ['member_id','resource_id','location_id','booking_id','operational_task_id','calendar_id','status','state','availability']) {
+      const value = url.searchParams.get(key); if (value) filters[key] = value;
+    }
+    filters.limit = Number(url.searchParams.get('limit')) || 50;
+    filters.offset = Number(url.searchParams.get('offset')) || 0;
+    const records = [], seen = new Set();
+    for (const context of contexts) for (const record of repository.list(entity, context, filters)) {
+      if (!seen.has(record.id)) { seen.add(record.id); records.push(record); }
+    }
+    return sendJSON(res, 200, { records, count: records.length, authority: 'workforce' }, req);
+  }
+  if (req.method === 'GET' && recordId && !action) {
+    let lastError = null;
+    for (const context of contexts) {
+      try { return sendJSON(res, 200, { record: repository.get(entity, recordId, context), authority: 'workforce' }, req); }
+      catch (error) { if (error.code !== 'WORKFORCE_SCOPE_NOT_FOUND') throw error; lastError = error; }
+    }
+    throw lastError || Object.assign(new Error('Workforce record not found'), { statusCode: 404, code: 'WORKFORCE_SCOPE_NOT_FOUND' });
+  }
+  if (req.method === 'POST' && !recordId && !action) {
+    const body = await readBody(req);
+    const key = String(req.headers['idempotency-key'] || body.idempotency_key || '').trim();
+    if (!key) throw Object.assign(new Error('Idempotency-Key is required'), { statusCode: 400, code: 'IDEMPOTENCY_KEY_REQUIRED' });
+    const payload = workforceApiBody({ ...body, idempotency_key: key }, entity, 'create');
+    const result = repository.create(entity, payload, contexts[0]);
+    return sendJSON(res, result.duplicate ? 200 : 201, { record: result.record, duplicate: result.duplicate, authority: 'workforce' }, req);
+  }
+  if (req.method === 'PATCH' && recordId && !action) {
+    const body = workforceApiBody(await readBody(req), entity, 'update');
+    let lastError = null;
+    for (const context of contexts) {
+      try { return sendJSON(res, 200, { record: repository.update(entity, recordId, body, context), authority: 'workforce' }, req); }
+      catch (error) { if (error.code !== 'WORKFORCE_SCOPE_NOT_FOUND') throw error; lastError = error; }
+    }
+    throw lastError;
+  }
+  if (req.method === 'POST' && recordId && action) {
+    const body = workforceApiBody(await readBody(req), entity, 'lifecycle');
+    if (!['activate','suspend','deactivate','release','cancel','submit','approve','confirm','start','complete','end'].includes(action)) {
+      throw Object.assign(new Error('Unsupported Workforce lifecycle action'), { statusCode: 400, code: 'WORKFORCE_LIFECYCLE_OPERATION_INVALID' });
+    }
+    let lastError = null;
+    for (const context of contexts) {
+      try {
+        const operation = repository[action];
+        if (typeof operation !== 'function') throw Object.assign(new Error('Unsupported Workforce lifecycle action'), { statusCode: 400, code: 'WORKFORCE_LIFECYCLE_OPERATION_INVALID' });
+        return sendJSON(res, 200, { record: operation.call(repository, entity, recordId, body, context), authority: 'workforce' }, req);
+      } catch (error) { if (error.code !== 'WORKFORCE_SCOPE_NOT_FOUND') throw error; lastError = error; }
+    }
+    throw lastError;
+  }
+  return sendJSON(res, 405, { error: { message: 'Method not allowed', status: 405 } }, req);
+}
+
 // ---------- routing ----------
 
 const ROUTES = [
@@ -3874,6 +4021,11 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/service-bookings$/, handler: (req, res, m) => handleServiceBookings(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/service-bookings$/, handler: (req, res, m) => handleServiceBookings(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/service-bookings\/([^/]+)$/, handler: (req, res, m) => handleServiceBookings(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
+  { method: 'GET', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
+  { method: 'PATCH', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3])) },
+  { method: 'POST', pattern: /^\/tenants\/([^/]+)\/workforce\/([a-z-]+)\/([^/]+)\/(activate|suspend|deactivate|release|cancel|submit|approve|confirm|start|complete|end)$/, handler: (req, res, m) => handleWorkforce(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2]), decodeURIComponent(m[3]), m[4]) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/service-delivery-assessment$/, handler: (req, res, m) => handleServiceDeliveryAssessment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'GET', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/fulfillment$/, handler: (req, res, m) => handleOrderFulfillment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { method: 'POST', pattern: /^\/tenants\/([^/]+)\/orders\/([^/]+)\/delivery-assignment$/, handler: (req, res, m) => handleDeliveryAssignment(req, res, decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
