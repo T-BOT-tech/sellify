@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { classifySellifyPreviewProfile } from '../scripts/sellify-preview-profile.mjs';
 
 const cases = [
@@ -51,4 +53,11 @@ for (const testCase of cases) {
   assert.equal(result.profile, testCase.expected, testCase.name);
 }
 
-console.log('Sellify preview profile classifier regression: PASS (7 cases)');
+const cliOutput = execFileSync(process.execPath, [
+  fileURLToPath(new URL('../scripts/sellify-preview-profile.mjs', import.meta.url)),
+  'feature/cli-check',
+  'backend/server.js',
+], { encoding: 'utf8' });
+assert.equal(JSON.parse(cliOutput).profile, 'backend-only', 'classifier CLI must return machine-readable profile JSON');
+
+console.log('Sellify preview profile classifier regression: PASS (7 cases + CLI)');
