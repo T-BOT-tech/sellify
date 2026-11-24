@@ -62,7 +62,7 @@ try {
     actor_id: owner.id,
   };
 
-  async function createActiveMember(userId, label, key) {
+  async function createActiveMember(userId, label, key, recurrenceRule = null) {
     const memberResult = repository.create('member', {
       idempotency_key: `workforce-member-${key}-${suffix}`,
       user_id: userId,
@@ -80,8 +80,8 @@ try {
       resource_id: resource.id,
       location_id: resource.locationId || null,
       assignment_type: 'RESOURCE',
-      starts_at: '2026-11-26T06:00:00.000Z',
-      ends_at: '2026-11-26T15:00:00.000Z',
+      starts_at: '2026-11-19T06:00:00.000Z',
+      ends_at: '2026-12-31T15:00:00.000Z',
     }, repositoryContext);
     repository.activate('assignment', assignmentResult.record.id, {
       expected_version: assignmentResult.record.version,
@@ -92,16 +92,17 @@ try {
       resource_id: resource.id,
       location_id: resource.locationId || null,
       availability: 'AVAILABLE',
-      starts_at: '2026-11-26T06:00:00.000Z',
-      ends_at: '2026-11-26T15:00:00.000Z',
+      starts_at: recurrenceRule ? '2026-11-19T06:00:00.000Z' : '2026-11-26T06:00:00.000Z',
+      ends_at: recurrenceRule ? '2026-11-19T15:00:00.000Z' : '2026-11-26T15:00:00.000Z',
       timezone: 'Africa/Addis_Ababa',
-      effective_from: '2026-11-26T06:00:00.000Z',
+      effective_from: recurrenceRule ? '2026-11-19' : '2026-11-26',
+      ...(recurrenceRule ? { recurrence_rule: recurrenceRule } : {}),
     }, repositoryContext);
     return member;
   }
 
   const memberA = await createActiveMember(owner.id, 'Provider A', 'a');
-  const memberB = await createActiveMember(providerB.id, 'Provider B', 'b');
+  const memberB = await createActiveMember(providerB.id, 'Provider B', 'b', 'FREQ=WEEKLY;BYDAY=TH;COUNT=4');
 
   async function createAcceptedBooking(label, start, end) {
     const created = await store.createServiceBooking(seller.chatId, order.server_order_id, {
@@ -152,6 +153,26 @@ try {
     idempotency_key: `workforce-booking-confirm-b-${suffix}`,
   }, ownerActor);
   assert.equal(confirmedB.booking.workforce_member_id, memberB.id);
+
+  const wrongWeekdayBooking = await createAcceptedBooking('recurrence-wrong-weekday', '2026-11-27T12:00:00+03:00', '2026-11-27T13:00:00+03:00');
+  await assert.rejects(
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, wrongWeekdayBooking.id, {
+      status: 'CONFIRMED', expected_version: wrongWeekdayBooking.version,
+      service_resource_id: resource.id, workforce_member_id: memberB.id,
+      idempotency_key: `workforce-booking-wrong-weekday-${suffix}`,
+    }, ownerActor),
+    error => error?.code === 'SERVICE_BOOKING_WORKFORCE_MEMBER_INELIGIBLE',
+  );
+
+  const beyondCountBooking = await createAcceptedBooking('recurrence-count-exceeded', '2026-12-17T12:00:00+03:00', '2026-12-17T13:00:00+03:00');
+  await assert.rejects(
+    store.transitionServiceBooking(seller.chatId, order.server_order_id, beyondCountBooking.id, {
+      status: 'CONFIRMED', expected_version: beyondCountBooking.version,
+      service_resource_id: resource.id, workforce_member_id: memberB.id,
+      idempotency_key: `workforce-booking-beyond-count-${suffix}`,
+    }, ownerActor),
+    error => error?.code === 'SERVICE_BOOKING_WORKFORCE_MEMBER_INELIGIBLE',
+  );
 
   const providerABookings = await store.listServiceProviderBookings(seller.chatId, [resource.id], owner.id);
   const providerBBookings = await store.listServiceProviderBookings(seller.chatId, [resource.id], providerB.id);
