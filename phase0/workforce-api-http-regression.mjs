@@ -103,6 +103,22 @@ try {
   await waitForHealth(baseUrl);
 
   const collection = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/members';
+  const utilizationSummaryPath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/utilization/summary';
+  const unauthorizedSummary = await jsonRequest(baseUrl, utilizationSummaryPath);
+  assert.equal(unauthorizedSummary.response.status, 401,
+    'utilization summaries require an authenticated tenant session');
+  const ownSummary = await jsonRequest(baseUrl, utilizationSummaryPath, { token: ownerSession.token });
+  assert.equal(ownSummary.response.status, 200, JSON.stringify(ownSummary.payload));
+  assert.equal(ownSummary.payload.summary?.event_count, 0);
+  const invalidSummaryRange = await jsonRequest(baseUrl,
+    utilizationSummaryPath + '?from=2026-11-26T00%3A00%3A00.000Z&to=2026-11-25T00%3A00%3A00.000Z',
+    { token: ownerSession.token });
+  assert.equal(invalidSummaryRange.response.status, 400);
+  assert.equal(invalidSummaryRange.payload.error?.code, 'WORKFORCE_ANALYTICS_RANGE_INVALID');
+  const crossTenantSummary = await jsonRequest(baseUrl, utilizationSummaryPath, { token: otherSession.token });
+  assert.equal(crossTenantSummary.response.status, 403,
+    'a session from another tenant must not read utilization analytics');
+
   const unauthorized = await jsonRequest(baseUrl, collection);
   assert.equal(unauthorized.response.status, 401, 'Workforce reads require an authenticated tenant session');
 
