@@ -1,6 +1,6 @@
 # Sellify PR Preview and Test Environments
 
-Status: implemented on `feature/workforce-capability-20261124`; awaiting profile-matrix verification and explicit review  
+Status: implemented on `feature/workforce-capability-20261124`; all four profile test suites passed on 2026-11-24; PR-close cleanup awaits an actual PR lifecycle event  
 Scope: GitHub Actions CI and synthetic test environments only  
 Non-goals: production deployment, production data access, persistent preview hosting, or paid preview services
 
@@ -78,11 +78,12 @@ The existing setup action pins Node 24 and installs the root lockfile. The app p
 
 ## Rollout boundaries
 
-1. Verify all four CI-only profiles on a feature-branch push; use `workflow_dispatch` for an individual profile when available.
-2. Confirm the profile classifier against backend-only, frontend-only, full-stack and migration sample diffs.
-3. Confirm synthetic DB isolation and artifact cleanup.
-4. Only after review and explicit approval, merge the workflow to the default branch so it can govern all PRs. A workflow existing only on a feature branch cannot govern PR events whose base branch is `main`.
-5. Add full browser journeys for all nine business templates as a separate test expansion.
+1. Verified all four profile test suites in parallel on a feature-branch push; the classifier regression passed seven path cases plus its CLI contract.
+2. Verified fresh synthetic database migrations, backend HTTP tests, frontend/browser tests, and full-stack integration tests. The full-stack onboarding browser test had one transient failure on its first matrix attempt; rerunning that job passed without changing the assertion.
+3. Verified short-lived evidence artifacts for all four profiles. Frontend/full-stack artifacts contain a 390 × 844 synthetic first-order screenshot. Artifacts expire after three days.
+4. PR-close cleanup is configured but not yet end-to-end verified because this feature branch has no preview-enabled PR lifecycle event. A workflow on this feature branch cannot govern PR events whose base branch is `main` until it is merged.
+5. Only after review and explicit approval, merge the workflow to the default branch so it can govern all PRs. No merge or deployment change has been made.
+6. Add full browser journeys for all nine business templates as a separate test expansion.
 
 ## Success criteria
 
