@@ -7082,7 +7082,7 @@ export async function listServiceProviderBookings(chatId, resourceIds = [], prov
   if (!ids.length) return [];
   const placeholders = ids.map(() => '?').join(',');
   const providerFilter = providerUserId
-    ? `AND (b.workforce_member_id IS NULL OR EXISTS (
+    ? `AND b.workforce_member_id IS NOT NULL AND EXISTS (
         SELECT 1 FROM workforce_members wm
         WHERE wm.id = b.workforce_member_id
           AND wm.organization_id = b.organization_id
