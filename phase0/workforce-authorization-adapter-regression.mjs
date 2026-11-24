@@ -19,10 +19,10 @@ const provider = {
   contextualRoles: [{ role: 'service_provider', scopeType: 'RESOURCE', scopeId: 'resource-a' }],
 };
 const providerRead = {
-  organization_id: 'org-a', chat_id: 'chat-a',
+  organization_id: 'org-a', tenant_id: 'tenant-a', chat_id: 'chat-a',
   actor: provider, entity: 'assignment', operation: 'get',
   resource_id: 'resource-a',
-  record: { resource_id: 'resource-a', location_id: 'location-a' },
+  record: { organization_id: 'org-a', tenant_id: 'tenant-a', resource_id: 'resource-a', location_id: 'location-a' },
 };
 assert.equal(authorizeWorkforceRepositoryAccess(providerRead), true);
 assert.equal(authorizeWorkforceRepositoryAccess({
@@ -30,11 +30,11 @@ assert.equal(authorizeWorkforceRepositoryAccess({
 }), false);
 assert.equal(authorizeWorkforceRepositoryAccess({
   ...providerRead, resource_id: 'resource-b',
-  record: { resource_id: 'resource-b', location_id: 'location-a' },
+  record: { organization_id: 'org-a', tenant_id: 'tenant-a', resource_id: 'resource-b', location_id: 'location-a' },
 }), false);
 assert.equal(authorizeWorkforceRepositoryAccess({
   ...providerRead, resource_id: null,
-  record: { resource_id: null, location_id: null },
+  record: { organization_id: 'org-a', tenant_id: 'tenant-a', resource_id: null, location_id: null },
 }), false);
 
 assert.equal(authorizeWorkforceRepositoryAccess({
