@@ -499,3 +499,39 @@ export function runWorkforceExternalMemberMigration(db, now = () => new Date().t
     if (foreignKeysEnabled) db.exec('PRAGMA foreign_keys = ON');
   }
 }
+
+
+/**
+ * Workforce migration 89 — optional employee number with organization uniqueness.
+ * Null/blank values remain allowed for external and non-employee professionals.
+ */
+export const WORKFORCE_EMPLOYEE_NUMBER_MIGRATION_VERSION = 89;
+
+export function runWorkforceEmployeeNumberMigration(db, now = () => new Date().toISOString()) {
+  if (!db || typeof db.prepare !== 'function' || typeof db.exec !== 'function') {
+    throw new TypeError('A live SQLite DatabaseSync connection is required');
+  }
+  const version = WORKFORCE_EMPLOYEE_NUMBER_MIGRATION_VERSION;
+  const applied = db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version);
+  if (applied) return { applied: false, version };
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const columns = new Set(db.prepare('PRAGMA table_info(workforce_members)').all()
+      .map(column => String(column.name)));
+    if (!columns.has('employee_number')) {
+      db.exec('ALTER TABLE workforce_members ADD COLUMN employee_number TEXT');
+    }
+    db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_workforce_members_org_employee_number
+      ON workforce_members(organization_id, employee_number COLLATE NOCASE)
+      WHERE employee_number IS NOT NULL AND length(trim(employee_number)) > 0;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, now());
+    db.exec('COMMIT');
+    return { applied: true, version };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
