@@ -188,6 +188,24 @@ try {
   console.error(error);
   console.error('Browser diagnostics:\n' + JSON.stringify(browserDiagnostics, null, 2));
   if (typeof pageErrors !== 'undefined' && pageErrors.length) console.error('Page errors:\n' + JSON.stringify(pageErrors, null, 2));
+  if (typeof page !== 'undefined' && page) {
+    try {
+      console.error('Workforce UI state:\n' + JSON.stringify(await page.evaluate(() => {
+        const workspace = document.querySelector('#workforceWorkspace');
+        return {
+          status: document.querySelector('#workforceStatus')?.textContent,
+          statusState: document.querySelector('#workforceStatus')?.dataset.state,
+          refreshSequence: workspace?.dataset.refreshSequence,
+          detailSequence: workspace?.dataset.detailSequence,
+          selectedMemberId: workspace?.dataset.selectedMemberId,
+          memberCards: [...document.querySelectorAll('.workforce-member-card')].map(card => ({
+            text: card.querySelector('.logistics-status')?.textContent,
+            actionDisabled: card.querySelector('.workforce-member-action')?.disabled,
+          })),
+        };
+      }), null, 2));
+    } catch (diagnosticError) { console.error('Could not capture Workforce UI state:', diagnosticError.message); }
+  }
   if (typeof apiCalls !== 'undefined' && apiCalls.length) console.error('Intercepted API calls:\n' + JSON.stringify(apiCalls, null, 2));
   if (stderr) console.error('Frontend server stderr:\n' + stderr);
   process.exitCode = 1;
