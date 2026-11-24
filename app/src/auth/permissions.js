@@ -21,11 +21,11 @@ const PERMISSIONS = {
     'orders:create', 'orders:view', 'orders:delete', 'payments:accept',
     'payments:view_proof', 'inventory:add', 'inventory:edit', 'sync:manual',
     'settings:configure', 'paymethods:manage',
-    'tables:manage', 'tables:status', 'kitchen:manage', 'b2b:manage', 'compliance:manage', 'membership:role:manage', 'b2b:quotes:view', 'b2b:quotes:manage', 'devices:manage', 'audit:view'
+    'tables:manage', 'tables:status', 'kitchen:manage', 'b2b:manage', 'compliance:manage', 'membership:role:manage', 'b2b:quotes:view', 'b2b:quotes:manage', 'b2b:po:view', 'b2b:po:approve', 'devices:manage', 'audit:view'
   ],
   cashier: ['orders:create', 'orders:view', 'payments:accept', 'tables:status', 'kitchen:manage'],
   staff: ['locations:view'],
-  buyer: ['orders:create'],
+  buyer: ['orders:create', 'b2b:po:view', 'b2b:po:create'],
   viewer: []
 };
 export function hasPermission(role, action) {
