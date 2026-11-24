@@ -148,6 +148,9 @@ jobs:
           export NODE_ENV=test
           export SELLIFY_DATA_DIR="$preview_data_dir"
           export SELLIFY_BACKUP_DIR="$preview_data_dir/backups"
+          if [[ "$PREVIEW_PROFILE" == frontend-only || "$PREVIEW_PROFILE" == full-stack ]]; then
+            export PREVIEW_SCREENSHOT_PATH="$GITHUB_WORKSPACE/preview-mobile.png"
+          fi
           touch preview-test.log
 
           run_test() {
@@ -210,6 +213,7 @@ jobs:
           path: |
             preview-manifest.json
             preview-test.log
+            preview-mobile.png
           if-no-files-found: ignore
           retention-days: 3
 
