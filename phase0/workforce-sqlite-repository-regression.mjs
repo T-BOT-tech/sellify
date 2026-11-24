@@ -149,10 +149,157 @@ try {
   assert.equal(providerARecords.length, 1);
   assert.equal(providerARecords[0].id, assignment.record.id);
 
+  const assignmentActive = repository.activate('assignment', assignment.record.id, { expected_version: 1 }, scopeA);
+  assert.equal(assignmentActive.status, 'ACTIVE');
+
+  const profile = repository.create('profile', {
+    idempotency_key: 'profile-create-a',
+    member_id: created.record.id,
+    skills: ['consultation','customer-care'],
+    qualifications: ['licensed-provider'],
+    languages: ['en','am'],
+    service_capabilities: ['consultation'],
+    visibility: 'ORGANIZATION',
+    effective_from: '2026-11-24',
+  }, scopeA);
+  assert.deepEqual(profile.record.skills, ['consultation','customer-care']);
+  const profileUpdated = repository.update('profile', profile.record.id, {
+    expected_version: 1, notes: 'Verified profile',
+  }, scopeA);
+  assert.equal(profileUpdated.version, 2);
+  assert.equal(repository.get('profile', profile.record.id, scopeA).notes, 'Verified profile');
+
+  const engagement = repository.create('engagement', {
+    idempotency_key: 'engagement-create-a',
+    member_id: created.record.id,
+    engagement_type: 'CONTRACT',
+    starts_at: '2026-11-25T06:00:00.000Z',
+    ends_at: '2026-12-25T15:00:00.000Z',
+  }, scopeA);
+  const submittedEngagement = repository.submit('engagement', engagement.record.id, { expected_version: 1 }, scopeA);
+  const activeEngagement = repository.activate('engagement', engagement.record.id, { expected_version: 2 }, scopeA);
+  const suspendedEngagement = repository.suspend('engagement', engagement.record.id, { expected_version: 3 }, scopeA);
+  const endedEngagement = repository.end('engagement', engagement.record.id, { expected_version: 4 }, scopeA);
+  assert.equal(submittedEngagement.status, 'PENDING_APPROVAL');
+  assert.equal(activeEngagement.status, 'ACTIVE');
+  assert.equal(suspendedEngagement.status, 'SUSPENDED');
+  assert.equal(endedEngagement.status, 'ENDED');
+
+  const calendar = repository.create('calendar', {
+    idempotency_key: 'calendar-create-a',
+    member_id: created.record.id,
+    timezone: 'Africa/Addis_Ababa',
+    weekly_schedule: [{ day: 'MONDAY', intervals: [{ start: '09:00', end: '17:00' }] }],
+    holiday_calendar: [],
+    effective_from: '2026-11-24',
+  }, scopeA);
+  assert.equal(calendar.record.status, 'ACTIVE');
+  const calendarUpdated = repository.update('calendar', calendar.record.id, {
+    expected_version: 1,
+    weekly_schedule: [{ day: 'TUESDAY', intervals: [{ start: '10:00', end: '16:00' }] }],
+  }, scopeA);
+  assert.equal(calendarUpdated.version, 2);
+
+  const exception = repository.create('calendar_exception', {
+    idempotency_key: 'calendar-exception-create-a',
+    calendar_id: calendar.record.id,
+    exception_type: 'LEAVE',
+    starts_at: '2026-11-27T06:00:00.000Z',
+    ends_at: '2026-11-28T15:00:00.000Z',
+    all_day: true,
+    reason: 'Annual leave',
+  }, scopeA);
+  assert.equal(exception.record.status, 'ACTIVE');
+  assert.equal(repository.list('calendar_exception', { ...scopeA, provider_user_id: 'user-a' }).length, 1);
+  const cancelledException = repository.cancel('calendar_exception', exception.record.id, { expected_version: 1 }, scopeA);
+  assert.equal(cancelledException.status, 'CANCELLED');
+
+  const availability = repository.create('availability', {
+    idempotency_key: 'availability-create-a',
+    member_id: created.record.id,
+    resource_id: 'resource-a',
+    location_id: 'location-a',
+    availability: 'AVAILABLE',
+    starts_at: '2026-11-25T06:00:00.000Z',
+    ends_at: '2026-11-25T15:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+    effective_from: '2026-11-25',
+  }, scopeA);
+  assert.equal(availability.record.availability, 'AVAILABLE');
+  const unavailable = repository.update('availability', availability.record.id, {
+    expected_version: 1, availability: 'UNAVAILABLE',
+  }, scopeA);
+  assert.equal(unavailable.availability, 'UNAVAILABLE');
+
+  const shift = repository.create('shift', {
+    idempotency_key: 'shift-create-a',
+    member_id: created.record.id,
+    resource_id: 'resource-a',
+    location_id: 'location-a',
+    starts_at: '2026-11-25T06:00:00.000Z',
+    ends_at: '2026-11-25T15:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+    break_rules: [{ starts_at: '2026-11-25T10:00:00.000Z', duration_minutes: 30 }],
+  }, scopeA);
+  const confirmedShift = repository.confirm('shift', shift.record.id, { expected_version: 1 }, scopeA);
+  const startedShift = repository.start('shift', shift.record.id, { expected_version: 2 }, scopeA);
+  const completedShift = repository.complete('shift', shift.record.id, { expected_version: 3 }, scopeA);
+  assert.equal(confirmedShift.status, 'CONFIRMED');
+  assert.equal(startedShift.status, 'IN_PROGRESS');
+  assert.equal(completedShift.status, 'COMPLETED');
+
+  const allocation = repository.create('allocation', {
+    idempotency_key: 'allocation-create-a',
+    member_id: created.record.id,
+    resource_id: 'resource-a',
+    booking_id: 'booking-a',
+    starts_at: '2026-11-25T06:00:00.000Z',
+    ends_at: '2026-11-25T15:00:00.000Z',
+  }, scopeA);
+  const submittedAllocation = repository.submit('allocation', allocation.record.id, { expected_version: 1 }, scopeA);
+  const approvedAllocation = repository.approve('allocation', allocation.record.id, { expected_version: 2 }, scopeA);
+  const releasedAllocation = repository.release('allocation', allocation.record.id, { expected_version: 3 }, scopeA);
+  assert.equal(submittedAllocation.state, 'PENDING_APPROVAL');
+  assert.equal(approvedAllocation.state, 'COMMITTED');
+  assert.equal(releasedAllocation.state, 'RELEASED');
+
+  const utilization = repository.create('utilization', {
+    idempotency_key: 'utilization-create-a',
+    member_id: created.record.id,
+    resource_id: 'resource-a',
+    booking_id: 'booking-a',
+    planned_starts_at: '2026-11-25T06:00:00.000Z',
+    planned_ends_at: '2026-11-25T15:00:00.000Z',
+    evidence_source: 'REGRESSION_TEST',
+  }, scopeA);
+  const startedUtilization = repository.start('utilization', utilization.record.id, { expected_version: 1 }, scopeA);
+  const updatedUtilization = repository.update('utilization', utilization.record.id, {
+    expected_version: 2,
+    actual_starts_at: '2026-11-25T06:05:00.000Z',
+  }, scopeA);
+  const completedUtilization = repository.complete('utilization', utilization.record.id, {
+    expected_version: 3,
+  }, scopeA);
+  assert.equal(startedUtilization.status, 'IN_PROGRESS');
+  assert.equal(updatedUtilization.actual_starts_at, '2026-11-25T06:05:00.000Z');
+  assert.equal(completedUtilization.status, 'COMPLETED');
+
+  const deniedRepository = new WorkforceSqliteRepository({ db, authorize: () => false });
+  assert.throws(() => deniedRepository.get('member', created.record.id, scopeA),
+    error => error.code === 'WORKFORCE_FORBIDDEN');
+  assert.throws(() => repository.update('member', created.record.id, {
+    expected_version: 3, user_id: 'user-b',
+  }, scopeA), error => error.code === 'WORKFORCE_UPDATE_EMPTY');
+
+  const suspendedMember = repository.suspend('member', created.record.id, { expected_version: 3 }, scopeA);
+  const deactivatedMember = repository.deactivate('member', created.record.id, { expected_version: 4 }, scopeA);
+  assert.equal(suspendedMember.status, 'SUSPENDED');
+  assert.equal(deactivatedMember.status, 'INACTIVE');
+
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
   assert.ok(db.prepare("SELECT COUNT(*) AS count FROM audit_events WHERE action LIKE 'workforce.%'").get().count >= 4);
 
-  console.log('PASS Workforce SQLite repository: CRUD, idempotency, optimistic concurrency, tenant/organization isolation, resource and provider scoping');
+  console.log('PASS Workforce SQLite repository: all entity CRUD/lifecycle paths, idempotency, optimistic concurrency, authorization, tenant/organization isolation, resource and provider scoping');
 } finally {
   db.close();
   rmSync(directory, { recursive: true, force: true });
