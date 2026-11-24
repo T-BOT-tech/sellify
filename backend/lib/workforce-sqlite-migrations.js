@@ -398,3 +398,104 @@ export function runWorkforceServiceBookingMigration(db, now = () => new Date().t
     throw error;
   }
 }
+
+
+/**
+ * Workforce migration 88 — optional Identity link for external professionals.
+ *
+ * workforce_members is the professional record. A Sellify user is optional;
+ * authentication and organization authorization remain owned by Identity
+ * and Membership. Rebuild only this table, preserving all IDs and references.
+ */
+export const WORKFORCE_EXTERNAL_MEMBER_MIGRATION_VERSION = 88;
+
+export function runWorkforceExternalMemberMigration(db, now = () => new Date().toISOString()) {
+  if (!db || typeof db.prepare !== 'function' || typeof db.exec !== 'function') {
+    throw new TypeError('A live SQLite DatabaseSync connection is required');
+  }
+
+  const version = WORKFORCE_EXTERNAL_MEMBER_MIGRATION_VERSION;
+  const applied = db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version);
+  if (applied) return { applied: false, version };
+
+  const columns = db.prepare('PRAGMA table_info(workforce_members)').all();
+  const userColumn = columns.find(column => String(column.name) === 'user_id');
+  if (!userColumn) {
+    throw Object.assign(new Error('Workforce member schema is missing user_id'), {
+      code: 'WORKFORCE_MEMBER_MIGRATION_SCHEMA_INVALID',
+    });
+  }
+
+  const foreignKeysEnabled = Number(db.prepare('PRAGMA foreign_keys').get()?.foreign_keys || 0) === 1;
+  if (foreignKeysEnabled) db.exec('PRAGMA foreign_keys = OFF');
+
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    if (Number(userColumn.notnull) === 1) {
+      db.exec(`
+        CREATE TABLE workforce_members_v88 (
+          id TEXT PRIMARY KEY,
+          organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+          tenant_id TEXT NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+          chat_id TEXT NOT NULL REFERENCES tenants(chat_id) ON DELETE CASCADE,
+          user_id TEXT REFERENCES users(id) ON DELETE RESTRICT,
+          member_type TEXT NOT NULL CHECK (member_type IN ('EMPLOYEE','CONTRACTOR','PROVIDER','VOLUNTEER')),
+          status TEXT NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT','ACTIVE','SUSPENDED','INACTIVE')),
+          primary_location_id TEXT REFERENCES locations(id) ON DELETE SET NULL,
+          timezone TEXT,
+          display_name TEXT NOT NULL DEFAULT '',
+          idempotency_key TEXT,
+          request_hash TEXT,
+          created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+          updated_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+          UNIQUE (organization_id, tenant_id, id),
+          UNIQUE (organization_id, tenant_id, idempotency_key)
+        );
+
+        INSERT INTO workforce_members_v88 (
+          id, organization_id, tenant_id, chat_id, user_id, member_type, status,
+          primary_location_id, timezone, display_name, idempotency_key, request_hash,
+          created_by, updated_by, created_at, updated_at, version
+        )
+        SELECT
+          id, organization_id, tenant_id, chat_id, user_id, member_type, status,
+          primary_location_id, timezone, display_name, idempotency_key, request_hash,
+          created_by, updated_by, created_at, updated_at, version
+        FROM workforce_members;
+
+        DROP TABLE workforce_members;
+        ALTER TABLE workforce_members_v88 RENAME TO workforce_members;
+      `);
+    }
+
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_workforce_members_org_status
+        ON workforce_members(organization_id, status, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_workforce_members_tenant_status
+        ON workforce_members(tenant_id, status, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_workforce_members_user
+        ON workforce_members(organization_id, tenant_id, user_id);
+      CREATE INDEX IF NOT EXISTS idx_workforce_members_location
+        ON workforce_members(organization_id, tenant_id, primary_location_id);
+    `);
+
+    const violations = db.prepare('PRAGMA foreign_key_check').all();
+    if (violations.length) {
+      throw Object.assign(new Error('Workforce member migration failed foreign_key_check (' + violations.length + ' violations)'), {
+        code: 'WORKFORCE_MEMBER_MIGRATION_FOREIGN_KEY_CHECK_FAILED',
+      });
+    }
+
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, now());
+    db.exec('COMMIT');
+    return { applied: true, version };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  } finally {
+    if (foreignKeysEnabled) db.exec('PRAGMA foreign_keys = ON');
+  }
+}
