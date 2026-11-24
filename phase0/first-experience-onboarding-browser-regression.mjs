@@ -674,6 +674,14 @@ try {
   await page.locator('#addProdBtn').click();
   await page.locator('#catalogList').getByText('Browser Restaurant Meal', { exact: true })
     .waitFor({ state: 'visible', timeout: 10000 });
+  // Catalog edits are local-first; use the real Queue sync boundary before
+  // expecting the authenticated canonical catalog endpoint to contain it.
+  await page.evaluate(() => window.switchTab('queue'));
+  await page.locator('#syncNowBtn').click();
+  const syncedRestaurantMenuItem = await waitForCatalogItem(
+    baseUrl, restaurantChatId, restaurantActiveConfig.sessionToken, 'Browser Restaurant Meal',
+  );
+  assert.ok(syncedRestaurantMenuItem.id, 'synced Restaurant menu item must have a canonical catalog identity');
   const restaurantCatalogResponse = await fetch(
     baseUrl + '/catalog/' + encodeURIComponent(restaurantChatId),
     { headers: { Authorization: 'Bearer ' + restaurantActiveConfig.sessionToken } },
