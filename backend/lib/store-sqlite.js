@@ -40,6 +40,7 @@ import { decideLogisticsSchedulingTerminal } from '../../app/src/verticals/logis
 
 
 import { runWorkforceSqliteMigrations } from './workforce-sqlite-migrations.js';
+import { WorkforceSqliteRepository } from './workforce-sqlite-repository.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.SELLIFY_DATA_DIR
@@ -14704,6 +14705,20 @@ function normalizePaymentProductionCertification(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+/**
+ * Construct a Workforce repository over the canonical SQLite connection.
+ * The caller must supply an authorization adapter backed by authorization.js.
+ */
+export function createWorkforceSqliteRepository({ authorize: authorizeWorkforce, clock, idFactory } = {}) {
+  ensureDatabase();
+  return new WorkforceSqliteRepository({
+    db,
+    authorize: authorizeWorkforce,
+    ...(clock ? { clock } : {}),
+    ...(idFactory ? { idFactory } : {}),
+  });
 }
 
 export function getDatabasePath() {
