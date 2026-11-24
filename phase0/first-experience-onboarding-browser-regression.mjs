@@ -828,9 +828,15 @@ try {
   // the onboarding template. Enable it through the real Settings UI.
   await page.locator('#gearSettingsBtn').click();
   await page.locator('#settingsModal.open').waitFor({ state: 'visible', timeout: 10000 });
+  // Settings is a tall, internally scrollable mobile bottom sheet. Bring
+  // the Wholesale control into its own scroll viewport before interacting.
+  await page.locator('#settingsModal .modal').evaluate(element => {
+    element.scrollTop = element.scrollHeight;
+  });
   const wholesaleToggleLabel = page.locator('#settingsModal label').filter({
     hasText: 'Enable Wholesale / B2B accounts',
   });
+  await wholesaleToggleLabel.waitFor({ state: 'visible', timeout: 10000 });
   await wholesaleToggleLabel.click();
   assert.equal(await page.locator('#setWholesaleEnabled').isChecked(), true,
     'the visible Wholesale setting label must activate the hidden native checkbox');
