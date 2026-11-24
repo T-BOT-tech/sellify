@@ -42,6 +42,55 @@ assert.equal(workforceAvailabilityCoversBooking({
   requested_end: '2026-11-26T08:00:00.000Z',
 }), false, 'unsupported recurrence features must fail closed');
 
+const dailyAvailability = {
+  starts_at: '2026-11-24T06:00:00.000Z',
+  ends_at: '2026-11-24T15:00:00.000Z',
+  timezone: 'Africa/Addis_Ababa',
+  effective_from: '2026-11-24',
+  effective_until: '2026-11-30',
+  recurrence_rule: 'FREQ=DAILY;INTERVAL=2;COUNT=3',
+};
+assert.equal(workforceAvailabilityCoversBooking(dailyAvailability, {
+  requested_start: '2026-11-26T07:00:00.000Z',
+  requested_end: '2026-11-26T08:00:00.000Z',
+}), true, 'DAILY INTERVAL must select every second local date');
+assert.equal(workforceAvailabilityCoversBooking(dailyAvailability, {
+  requested_start: '2026-11-27T07:00:00.000Z',
+  requested_end: '2026-11-27T08:00:00.000Z',
+}), false, 'DAILY INTERVAL must reject intervening dates');
+assert.equal(workforceAvailabilityCoversBooking(dailyAvailability, {
+  requested_start: '2026-12-01T07:00:00.000Z',
+  requested_end: '2026-12-01T08:00:00.000Z',
+}), false, 'effective_until and COUNT must bound recurrence dates');
+
+const untilAvailability = {
+  ...recurringAvailability,
+  recurrence_rule: 'FREQ=WEEKLY;BYDAY=TH;UNTIL=20261203',
+};
+assert.equal(workforceAvailabilityCoversBooking(untilAvailability, {
+  requested_start: '2026-12-03T07:00:00.000Z',
+  requested_end: '2026-12-03T08:00:00.000Z',
+}), true, 'UNTIL date is inclusive');
+assert.equal(workforceAvailabilityCoversBooking(untilAvailability, {
+  requested_start: '2026-12-10T07:00:00.000Z',
+  requested_end: '2026-12-10T08:00:00.000Z',
+}), false, 'occurrences after UNTIL must be rejected');
+
+const effectiveBoundedAvailability = {
+  ...recurringAvailability,
+  effective_from: '2026-11-26',
+  effective_until: '2026-12-03',
+  recurrence_rule: 'FREQ=WEEKLY;BYDAY=TH',
+};
+assert.equal(workforceAvailabilityCoversBooking(effectiveBoundedAvailability, {
+  requested_start: '2026-11-19T07:00:00.000Z',
+  requested_end: '2026-11-19T08:00:00.000Z',
+}), false, 'effective_from excludes earlier recurrence dates');
+assert.equal(workforceAvailabilityCoversBooking(effectiveBoundedAvailability, {
+  requested_start: '2026-12-10T07:00:00.000Z',
+  requested_end: '2026-12-10T08:00:00.000Z',
+}), false, 'effective_until excludes later recurrence dates');
+
 const dstAvailability = {
   starts_at: '2026-03-01T14:00:00.000Z',
   ends_at: '2026-03-01T22:00:00.000Z',
