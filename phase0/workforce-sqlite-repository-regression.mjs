@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration } from '../backend/lib/workforce-sqlite-migrations.js';
+import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration, runWorkforceExternalMemberMigration, runWorkforceEmployeeNumberMigration } from '../backend/lib/workforce-sqlite-migrations.js';
 import { WorkforceSqliteRepository } from '../backend/lib/workforce-sqlite-repository.js';
 
 const directory = mkdtempSync(path.join(os.tmpdir(), 'sellify-workforce-repository-'));
@@ -59,16 +59,27 @@ try {
   `);
   runWorkforceSqliteMigrations(db);
   runWorkforceServiceBookingMigration(db);
+  runWorkforceExternalMemberMigration(db);
+  runWorkforceEmployeeNumberMigration(db);
 
   const created = repository.create('member', {
     idempotency_key: 'member-create-a',
     user_id: 'user-a',
     member_type: 'PROVIDER',
     display_name: 'Provider A',
+    employee_number: ' EMP-001 ',
   }, scopeA);
   assert.equal(created.duplicate, false);
   assert.equal(created.record.status, 'DRAFT');
   assert.equal(created.record.version, 1);
+  assert.equal(created.record.employee_number, 'EMP-001', 'employee number is normalized');
+  const otherOrganizationMember = repository.create('member', {
+    idempotency_key: 'member-create-b', user_id: 'user-b', member_type: 'EMPLOYEE', employee_number: 'EMP-001',
+  }, scopeB);
+  assert.equal(otherOrganizationMember.record.employee_number, 'EMP-001', 'employee numbers may repeat in another organization');
+  assert.throws(() => repository.create('member', {
+    idempotency_key: 'member-create-duplicate-employee-number', member_type: 'EMPLOYEE', employee_number: 'emp-001',
+  }, scopeA), error => error.code === 'WORKFORCE_CONSTRAINT_CONFLICT');
 
   const externalMember = repository.create('member', {
     idempotency_key: 'member-create-external-a',
@@ -125,6 +136,7 @@ try {
     user_id: 'user-a',
     member_type: 'PROVIDER',
     display_name: 'Provider A',
+    employee_number: 'EMP-001',
   }, scopeA);
   assert.equal(duplicate.duplicate, true);
   assert.equal(duplicate.record.id, created.record.id);
