@@ -141,7 +141,7 @@ try {
   assert.equal(availabilityCall.authorization, 'Bearer synthetic-session-token');
   assert.match(availabilityCall.idempotencyKey, /^workforce-ui-/);
 
-  await page.locator('.workforce-member-action').getByRole('button', { name: 'Suspend' }).click();
+  await page.getByRole('button', { name: 'Suspend' }).click();
   await page.getByText('SUSPENDED', { exact: true }).waitFor({ timeout: 10000 });
   const suspendCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/suspend'));
   assert.ok(suspendCall, 'member lifecycle action must reach the API');
