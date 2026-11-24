@@ -40,14 +40,14 @@ The Node 24 Workforce verification workflow runs only for this branch. It does n
 - Submit, activate, suspend, and end lifecycle.
 - Member references are immutable after creation.
 
-## Phase 5: Calendar and availability — implemented; recurrence evaluation remains
+## Phase 5: Calendar and availability — implemented and verified
 
 - Calendar create/get/list/update.
 - Calendar exception create/get/list/update/cancel.
 - Availability window create/get/list/update.
 - IANA timezone validation and explicit timezone requirements for appointment windows.
 - Availability values remain AVAILABLE, UNAVAILABLE, TENTATIVE, or BLACKOUT.
-- Recurrence rules are stored but not expanded by booking eligibility.
+- Bounded DAILY/WEEKLY recurrence rules are evaluated against concrete booking windows in the declared IANA timezone.
 
 ## Phase 6: Assignment and shifts — implemented and verified
 
@@ -196,7 +196,7 @@ The existing eight contract regressions are also run directly by the Workforce c
 ## Remaining work
 
 1. Authenticated HTTP-level API regression — implemented and verified on Node 24. It covers session enforcement, member create/list/get/update, idempotency replay, entity lifecycle, optimistic concurrency, and cross-tenant read/write denial. Broader per-entity HTTP coverage can be added as the API surface evolves.
-2. Evaluate recurrence rules against concrete appointment windows before using recurring availability for booking eligibility.
+2. Bounded availability recurrence evaluation — implemented and verified. DAILY/WEEKLY rules, interval, BYDAY, COUNT, UNTIL, effective dates, local wall-clock time, and daylight-saving transitions are covered; unsupported rules fail closed.
 3. Add utilization reporting and planned-versus-actual analytics.
 4. Define whether and when a Workforce member allocation should be created alongside a booking without duplicating Service Resource Commitment authority.
 5. Add operator-facing Workforce UI only after the API and authorization behavior is accepted.
@@ -205,7 +205,7 @@ The existing eight contract regressions are also run directly by the Workforce c
 ## Known limitations
 
 - Legacy provider appointments without workforce_member_id are hidden from provider queues until member ownership is established.
-- Recurrence rules are persisted but not evaluated by booking eligibility.
+- Recurrence supports a bounded DAILY/WEEKLY subset; unsupported rules and overnight recurring windows fail closed.
 - Service Booking confirmation creates the canonical Service Resource Commitment; it does not create a second Workforce allocation.
-- The current API regression is not a full authenticated HTTP end-to-end test.
+- Authenticated HTTP regression currently exercises the member lifecycle end-to-end; equivalent HTTP coverage for every entity is future expansion.
 - No payroll, HRIS, supplier-capacity, inventory, payment, fulfillment, catalog, or logistics-task authority is introduced.
