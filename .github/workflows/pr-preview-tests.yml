@@ -61,40 +61,18 @@ jobs:
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             git cat-file -e "${base_sha}^{commit}"
             mapfile -t changed < <(git diff --name-only "${base_sha}...${head_sha}")
-            backend_changed=false
-            frontend_changed=false
-            shared_contract_changed=false
-            migration_changed=false
+            node phase0/sellify-preview-profile-regression.mjs
+            classification="$(node scripts/sellify-preview-profile.mjs "$PR_BRANCH" "${changed[@]}")"
+            profile="$(node -e 'console.log(JSON.parse(process.argv[1]).profile)' "$classification")"
+            backend_changed="$(node -e 'console.log(JSON.parse(process.argv[1]).backendChanged)' "$classification")"
+            frontend_changed="$(node -e 'console.log(JSON.parse(process.argv[1]).frontendChanged)' "$classification")"
 
-            for file in "${changed[@]}"; do
-              [[ "$file" == backend/* ]] && backend_changed=true
-              if [[ "$file" == app/* ]]; then
-                frontend_changed=true
-              fi
-              if [[ "$file" == app/browser-backend-modules.mjs ]] ||
-                 [[ "$file" == app/src/*-contract.js ]] ||
-                 [[ "$file" == app/src/platform/*contract.js ]]; then
-                shared_contract_changed=true
-              fi
-              if [[ "$file" == *.sql ]] ||
-                 [[ "$file" == backend/lib/store-sqlite.js ]] ||
-                 [[ "$file" == backend/lib/*migration*.js ]] ||
-                 [[ "$file" == *migration* ]]; then
-                migration_changed=true
-              fi
-            done
-
-            if [[ "$PR_BRANCH" == migration/* || "$migration_changed" == true ]]; then
-              profile=migration
-              if [[ "$frontend_changed" == false ]]; then frontend_sha="$base_sha"; fi
-            elif [[ "$backend_changed" == true && "$frontend_changed" == false ]]; then
-              profile=backend-only
+            if [[ "$profile" == backend-only ]]; then
               frontend_sha="$base_sha"
-            elif [[ "$frontend_changed" == true && "$backend_changed" == false && "$shared_contract_changed" == false ]]; then
-              profile=frontend-only
+            elif [[ "$profile" == frontend-only ]]; then
               backend_sha="$base_sha"
-            else
-              profile=full-stack
+            elif [[ "$profile" == migration && "$frontend_changed" == false ]]; then
+              frontend_sha="$base_sha"
             fi
 
             # Fail closed if a component assigned to the base revision is not unchanged.
@@ -108,13 +86,14 @@ jobs:
             fi
           elif [[ "$EVENT_NAME" == "push" ]]; then
             profile=full-stack
+            node phase0/sellify-preview-profile-regression.mjs
           else
             case "$profile" in
               backend-only|frontend-only|full-stack|migration) ;;
               *) echo "Unsupported workflow_dispatch profile: $profile" >&2; exit 1 ;;
             esac
+            node phase0/sellify-preview-profile-regression.mjs
           fi
-
           {
             echo "profile=$profile"
             echo "backend_sha=$backend_sha"
