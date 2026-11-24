@@ -200,12 +200,11 @@ The existing eight contract regressions are also run directly by the Workforce c
 - Authenticated HTTP-level API regression — verified on Node 24. It covers session enforcement, member create/list/get/update, idempotency replay, entity lifecycle, optimistic concurrency, and cross-tenant read/write denial. Broader per-entity HTTP coverage can be added as the API surface evolves.
 - Bounded availability recurrence evaluation — verified on Node 24 through both contract and production SQLite Service Booking integration tests. DAILY/WEEKLY rules, interval, BYDAY, COUNT, UNTIL, effective dates, local wall-clock time, and daylight-saving transitions are covered; unsupported rules fail closed.
 - Utilization analytics — implemented and verified in the SQLite repository and authenticated HTTP API. Read-only summaries include planned, measured-planned, actual, variance, completed/open/cancelled/missing-actual counts, member/resource grouping, scoped filters, range validation, and tenant/provider isolation.
+- Booking/allocation boundary decision — resolved. Service Booking confirmation does not create a Workforce allocation. A Workforce allocation is created only for separately planned workforce work; Service Resource Commitment remains the canonical booking/resource commitment authority.
 
 ## Remaining work
 
-1. Define whether and when a Workforce member allocation should be created alongside a booking without duplicating Service Resource Commitment authority.
-2. Add operator-facing Workforce UI only after the API and authorization behavior is accepted.
-3. No in-memory repository implementation was present in the inspected branch or required by the current SQLite-backed production store. Do not add a parallel persistence implementation unless a concrete consumer or test requirement is identified.
+1. Add operator-facing Workforce UI only after the API and authorization behavior is accepted. Keep it as a client of the existing authenticated API; do not move authority into the UI.
 
 ## Known limitations
 
