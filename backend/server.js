@@ -3858,16 +3858,28 @@ const WORKFORCE_API_ENTITIES = Object.freeze({
   allocations: 'allocation', utilization: 'utilization',
 });
 const WORKFORCE_API_FIELDS = Object.freeze({
-  member: ['user_id','member_type','primary_location_id','timezone','display_name'],
-  profile: ['member_id','skills','qualifications','languages','service_capabilities','visibility','notes','effective_from','effective_until'],
-  engagement: ['member_id','engagement_type','starts_at','ends_at','approver_user_id','terms_reference'],
-  calendar: ['member_id','location_id','timezone','weekly_schedule','holiday_calendar','effective_from','effective_until'],
-  calendar_exception: ['calendar_id','exception_type','starts_at','ends_at','all_day','reason'],
-  availability: ['member_id','resource_id','location_id','availability','starts_at','ends_at','timezone','recurrence_rule','effective_from','effective_until'],
-  assignment: ['member_id','resource_id','location_id','assignment_type','starts_at','ends_at','booking_id','operational_task_id'],
-  shift: ['member_id','resource_id','location_id','starts_at','ends_at','timezone','break_rules','recurrence_source_id','assignment_source_id'],
-  allocation: ['member_id','resource_id','booking_id','operational_task_id','starts_at','ends_at'],
-  utilization: ['member_id','resource_id','booking_id','operational_task_id','planned_starts_at','planned_ends_at','actual_starts_at','actual_ends_at','evidence_source'],
+  member: ['member_type','primary_location_id','timezone','display_name'],
+  profile: ['skills','qualifications','languages','service_capabilities','visibility','notes','effective_from','effective_until'],
+  engagement: ['engagement_type','starts_at','ends_at','approver_user_id','terms_reference'],
+  calendar: ['location_id','timezone','weekly_schedule','holiday_calendar','effective_from','effective_until'],
+  calendar_exception: ['exception_type','starts_at','ends_at','all_day','reason'],
+  availability: ['resource_id','location_id','availability','starts_at','ends_at','timezone','recurrence_rule','effective_from','effective_until'],
+  assignment: ['resource_id','location_id','assignment_type','starts_at','ends_at'],
+  shift: ['resource_id','location_id','starts_at','ends_at','timezone','break_rules'],
+  allocation: ['resource_id','starts_at','ends_at'],
+  utilization: ['resource_id','planned_starts_at','planned_ends_at','actual_starts_at','actual_ends_at','evidence_source'],
+});
+const WORKFORCE_API_CREATE_ONLY_FIELDS = Object.freeze({
+  member: ['user_id'],
+  profile: ['member_id'],
+  engagement: ['member_id'],
+  calendar: ['member_id'],
+  calendar_exception: ['calendar_id'],
+  availability: ['member_id'],
+  assignment: ['member_id','booking_id','operational_task_id'],
+  shift: ['member_id','recurrence_source_id','assignment_source_id'],
+  allocation: ['member_id','booking_id','operational_task_id'],
+  utilization: ['member_id','booking_id','operational_task_id'],
 });
 const WORKFORCE_CREATE_REQUIRED = Object.freeze({
   member: ['user_id','member_type'],
@@ -3886,7 +3898,7 @@ function workforceApiBody(body, entity, operation) {
     throw Object.assign(new Error('Workforce request body must be a JSON object'), { statusCode: 400, code: 'WORKFORCE_BODY_INVALID' });
   }
   const allowed = new Set(operation === 'create'
-    ? [...WORKFORCE_API_FIELDS[entity], ...(entity === 'utilization' ? ['status'] : []), 'id', 'idempotency_key']
+    ? [...WORKFORCE_API_FIELDS[entity], ...(WORKFORCE_API_CREATE_ONLY_FIELDS[entity] || []), ...(entity === 'utilization' ? ['status'] : []), 'id', 'idempotency_key']
     : operation === 'update'
       ? [...WORKFORCE_API_FIELDS[entity], 'expected_version']
       : ['expected_version']);
