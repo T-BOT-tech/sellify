@@ -111,6 +111,7 @@ Base path: /tenants/:chatId/workforce/:entity
 - GET /tenants/:chatId/workforce/:entity
 - POST /tenants/:chatId/workforce/:entity
 - GET /tenants/:chatId/workforce/:entity/:id
+- GET /tenants/:chatId/workforce/utilization/summary — read-only planned-versus-actual projection using existing utilization events.
 - PATCH /tenants/:chatId/workforce/:entity/:id
 - POST /tenants/:chatId/workforce/:entity/:id/:action
 
@@ -201,9 +202,9 @@ The existing eight contract regressions are also run directly by the Workforce c
 
 ## Remaining work
 
-1. Add utilization reporting and planned-versus-actual analytics.
-2. Define whether and when a Workforce member allocation should be created alongside a booking without duplicating Service Resource Commitment authority.
-3. Add operator-facing Workforce UI only after the API and authorization behavior is accepted.
+1. Define whether and when a Workforce member allocation should be created alongside a booking without duplicating Service Resource Commitment authority.
+2. Add operator-facing Workforce UI only after the API and authorization behavior is accepted.
+3. Reconcile the in-memory repository files described in the initial handoff: they were not present in the inspected branch, so the SQLite repository is the current persistence implementation.
 4. Reconcile the in-memory repository files described in the initial handoff: they were not present in the inspected branch, so the SQLite repository is the current persistence implementation.
 
 ## Known limitations
