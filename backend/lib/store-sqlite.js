@@ -7073,7 +7073,7 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
   } catch(error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
 
-export async function listServiceProviderBookings(chatId, resourceIds = []) {
+export async function listServiceProviderBookings(chatId, resourceIds = [], providerUserId = null) {
   ensureDatabase();
   const tenant = await getTenant(chatId);
   const organizationId = String(tenant?.organization_id || tenant?.organizationId || '');
@@ -7081,6 +7081,17 @@ export async function listServiceProviderBookings(chatId, resourceIds = []) {
   const ids = [...new Set((Array.isArray(resourceIds) ? resourceIds : []).map(value => String(value || '').trim()).filter(Boolean))];
   if (!ids.length) return [];
   const placeholders = ids.map(() => '?').join(',');
+  const providerFilter = providerUserId
+    ? `AND (b.workforce_member_id IS NULL OR EXISTS (
+        SELECT 1 FROM workforce_members wm
+        WHERE wm.id = b.workforce_member_id
+          AND wm.organization_id = b.organization_id
+          AND wm.chat_id = b.chat_id
+          AND wm.user_id = ?
+      ))`
+    : '';
+  const parameters = [String(organizationId), String(chatId), ...ids];
+  if (providerUserId) parameters.push(String(providerUserId));
   return db.prepare(`SELECT b.*, r.name AS service_resource_name,
       c.starts_at AS commitment_starts_at, c.ends_at AS commitment_ends_at
     FROM service_bookings b
@@ -7095,8 +7106,9 @@ export async function listServiceProviderBookings(chatId, resourceIds = []) {
     WHERE b.organization_id = ? AND b.chat_id = ?
       AND b.service_resource_id IN (${placeholders})
       AND b.status IN ('CONFIRMED','IN_PROGRESS')
+      ${providerFilter}
     ORDER BY c.starts_at ASC, b.id ASC`)
-    .all(String(organizationId), String(chatId), ...ids)
+    .all(...parameters)
     .map(row => ({ ...serviceBookingFromRow(row),
       commitment_starts_at: String(row.commitment_starts_at),
       commitment_ends_at: String(row.commitment_ends_at),
