@@ -1,9 +1,11 @@
 /**
  * Canonical Workforce member lifecycle contract.
  *
- * A workforce member is an organization-scoped relationship between an
- * existing user and an organization. This contract does not create a second
- * user, organization, tenant, booking, supplier-network, logistics,
+ * A Workforce member is an organization-scoped professional record. It may
+ * optionally link to an existing Sellify user; external professionals do not
+ * need a login. Identity and Membership remain the authentication and
+ * organization-authorization authorities. This contract does not create a
+ * second user, organization, tenant, booking, supplier-network, logistics,
  * inventory, payment, fulfillment, or catalog authority.
  */
 
@@ -33,7 +35,6 @@ export const WORKFORCE_MEMBER_TRANSITIONS = Object.freeze({
 export const WORKFORCE_MEMBER_CREATE_REQUIRED_FIELDS = Object.freeze([
   'organization_id',
   'chat_id',
-  'user_id',
   'member_type',
   'idempotency_key',
 ]);
@@ -59,6 +60,8 @@ export function workforceMemberContract() {
     entity: 'workforce_member',
     organization_scoped: true,
     reuses_existing_user_identity: true,
+    supports_external_professionals: true,
+    identity_link_is_optional: true,
     reuses_existing_organization_authority: true,
     creates_duplicate_user_identity: false,
     member_types: WORKFORCE_MEMBER_TYPES,
