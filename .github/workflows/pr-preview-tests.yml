@@ -97,8 +97,10 @@ jobs:
             esac
             node phase0/sellify-preview-profile-regression.mjs
           fi
+          if [[ "$EVENT_NAME" != "push" ]]; then profiles="[\"$profile\"]"; fi
           {
             echo "profile=$profile"
+            echo "profiles=$profiles"
             echo "backend_sha=$backend_sha"
             echo "frontend_sha=$frontend_sha"
             echo "base_sha=$base_sha"
