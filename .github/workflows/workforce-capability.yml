@@ -57,6 +57,9 @@ jobs:
           npm run test:workforce-api
           npm run test:workforce-api-http
 
+      - name: Workforce operator workspace integration
+        run: npm run test:workforce-operator-workspace
+
       - name: Service Booking integration and provider isolation
         run: npm run test:workforce-service-booking
 
