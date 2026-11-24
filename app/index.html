@@ -507,6 +507,12 @@
       <button id="b2bPoRefresh" class="btn-secondary" type="button" style="width:auto;margin:0;padding:8px 12px;">Refresh</button>
     </div>
     <div class="sync-note">Approved purchase orders are snapshots of accepted quotes. Approval does not create an Order yet.</div>
+    <div id="b2bPoCreateForm" class="customer-fields" style="margin-bottom:12px;">
+      <select id="b2bPoQuote"><option value="">Select accepted quote…</option></select>
+      <input id="b2bPoBuyerReference" type="text" maxlength="120" placeholder="Buyer PO reference (optional)">
+      <input id="b2bPoNotes" type="text" maxlength="1000" placeholder="Notes (optional)">
+      <button id="b2bPoCreate" class="btn-secondary" type="button" style="width:auto;padding:8px 12px;">Create purchase order</button>
+    </div>
     <div id="b2bPurchaseOrdersList" class="tables-grid"></div>
     <div class="order-header-bar" style="margin-top:18px;">
       <h3 style="margin:0;">Credit Terms</h3>
