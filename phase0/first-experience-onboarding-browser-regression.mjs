@@ -652,11 +652,20 @@ try {
   await page.locator('#settingsModal.open').waitFor({ state: 'visible', timeout: 10000 });
   await page.locator('#setBusinessModel').selectOption('restaurant');
   await page.locator('#settingsModal button.btn-primary').filter({ hasText: 'Save' }).last().click();
-  await page.locator('#navTables').waitFor({ state: 'visible', timeout: 10000 });
-  assert.equal(await page.locator('#navTables').isVisible(), true,
-    'Restaurant mode must expose the real Tables navigation');
-  assert.equal(await page.locator('#navKitchen').isVisible(), true,
-    'Restaurant mode must expose the real Kitchen navigation');
+  const restaurantNavigation = await page.evaluate(() => ({
+    tables: document.getElementById('navTables')?.style.display,
+    kitchen: document.getElementById('navKitchen')?.style.display,
+    tablePicker: getComputedStyle(document.getElementById('orderTableSelect')).display,
+    coursePicker: getComputedStyle(document.getElementById('orderCourseSelect')).display,
+  }));
+  assert.notEqual(restaurantNavigation.tables, 'none',
+    'Restaurant mode must enable the real Tables navigation item');
+  assert.notEqual(restaurantNavigation.kitchen, 'none',
+    'Restaurant mode must enable the real Kitchen navigation item');
+  assert.equal(restaurantNavigation.tablePicker, 'block',
+    'Restaurant mode must expose the table picker in the real order form');
+  assert.equal(restaurantNavigation.coursePicker, 'block',
+    'Restaurant mode must expose the course picker in the real order form');
 
   // Add a real menu product through the catalog UI.
   await page.evaluate(() => window.switchTab('catalog'));
