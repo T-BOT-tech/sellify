@@ -1,0 +1,142 @@
+/**
+ * Canonical Workforce member lifecycle contract.
+ *
+ * A workforce member is an organization-scoped relationship between an
+ * existing user and an organization. This contract does not create a second
+ * user, organization, tenant, booking, supplier-network, logistics,
+ * inventory, payment, fulfillment, or catalog authority.
+ */
+
+import {
+  WORKFORCE_MEMBER_TYPES,
+  WORKFORCE_MEMBER_STATUSES,
+  isValidWorkforceMemberType,
+  isValidWorkforceMemberStatus,
+} from './workforce-contract.js';
+
+export const WORKFORCE_MEMBER_CONTRACT_VERSION = '1.0';
+
+export const WORKFORCE_MEMBER_PERMISSIONS = Object.freeze({
+  view: 'workforce:member:view',
+  manage: 'workforce:member:manage',
+  activate: 'workforce:member:activate',
+  suspend: 'workforce:member:suspend',
+});
+
+export const WORKFORCE_MEMBER_TRANSITIONS = Object.freeze({
+  DRAFT: Object.freeze(['ACTIVE']),
+  ACTIVE: Object.freeze(['SUSPENDED', 'INACTIVE']),
+  SUSPENDED: Object.freeze(['ACTIVE', 'INACTIVE']),
+  INACTIVE: Object.freeze([]),
+});
+
+export const WORKFORCE_MEMBER_CREATE_REQUIRED_FIELDS = Object.freeze([
+  'organization_id',
+  'chat_id',
+  'user_id',
+  'member_type',
+  'idempotency_key',
+]);
+
+export const WORKFORCE_MEMBER_UPDATE_REQUIRED_FIELDS = Object.freeze([
+  'organization_id',
+  'chat_id',
+  'member_id',
+  'expected_version',
+]);
+
+export const WORKFORCE_MEMBER_LIFECYCLE_REQUIRED_FIELDS = Object.freeze([
+  'organization_id',
+  'chat_id',
+  'member_id',
+  'expected_version',
+]);
+
+export function workforceMemberContract() {
+  return Object.freeze({
+    contract_version: WORKFORCE_MEMBER_CONTRACT_VERSION,
+    capability: 'workforce.membership',
+    entity: 'workforce_member',
+    organization_scoped: true,
+    reuses_existing_user_identity: true,
+    reuses_existing_organization_authority: true,
+    creates_duplicate_user_identity: false,
+    member_types: WORKFORCE_MEMBER_TYPES,
+    member_statuses: WORKFORCE_MEMBER_STATUSES,
+    permissions: WORKFORCE_MEMBER_PERMISSIONS,
+    transitions: WORKFORCE_MEMBER_TRANSITIONS,
+    create_required_fields: WORKFORCE_MEMBER_CREATE_REQUIRED_FIELDS,
+    update_required_fields: WORKFORCE_MEMBER_UPDATE_REQUIRED_FIELDS,
+    lifecycle_required_fields: WORKFORCE_MEMBER_LIFECYCLE_REQUIRED_FIELDS,
+  });
+}
+
+export function canTransitionWorkforceMemberStatus(currentStatus, nextStatus) {
+  if (!isValidWorkforceMemberStatus(currentStatus)) return false;
+  if (!isValidWorkforceMemberStatus(nextStatus)) return false;
+  return WORKFORCE_MEMBER_TRANSITIONS[currentStatus].includes(nextStatus);
+}
+
+export function validateWorkforceMemberCreate(input = {}) {
+  const errors = [];
+
+  for (const field of WORKFORCE_MEMBER_CREATE_REQUIRED_FIELDS) {
+    if (input[field] === undefined || input[field] === null || input[field] === '') {
+      errors.push(`Missing required field: ${field}`);
+    }
+  }
+
+  if (input.member_type !== undefined && !isValidWorkforceMemberType(input.member_type)) {
+    errors.push(`Invalid member_type: ${input.member_type}`);
+  }
+
+  return Object.freeze({ valid: errors.length === 0, errors });
+}
+
+export function validateWorkforceMemberUpdate(input = {}) {
+  const errors = [];
+
+  for (const field of WORKFORCE_MEMBER_UPDATE_REQUIRED_FIELDS) {
+    if (input[field] === undefined || input[field] === null || input[field] === '') {
+      errors.push(`Missing required field: ${field}`);
+    }
+  }
+
+  if (input.member_type !== undefined && !isValidWorkforceMemberType(input.member_type)) {
+    errors.push(`Invalid member_type: ${input.member_type}`);
+  }
+
+  if (
+    input.expected_version !== undefined &&
+    (!Number.isInteger(input.expected_version) || input.expected_version < 1)
+  ) {
+    errors.push('expected_version must be a positive integer');
+  }
+
+  return Object.freeze({ valid: errors.length === 0, errors });
+}
+
+export function validateWorkforceMemberLifecycle(input = {}) {
+  const errors = [];
+
+  for (const field of WORKFORCE_MEMBER_LIFECYCLE_REQUIRED_FIELDS) {
+    if (input[field] === undefined || input[field] === null || input[field] === '') {
+      errors.push(`Missing required field: ${field}`);
+    }
+  }
+
+  if (
+    input.expected_version !== undefined &&
+    (!Number.isInteger(input.expected_version) || input.expected_version < 1)
+  ) {
+    errors.push('expected_version must be a positive integer');
+  }
+
+  return Object.freeze({ valid: errors.length === 0, errors });
+}
+
+export function workforceMemberLifecyclePermission(action) {
+  if (action === 'activate') return WORKFORCE_MEMBER_PERMISSIONS.activate;
+  if (action === 'suspend') return WORKFORCE_MEMBER_PERMISSIONS.suspend;
+  return WORKFORCE_MEMBER_PERMISSIONS.manage;
+}
