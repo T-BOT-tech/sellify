@@ -769,6 +769,185 @@ try {
     'canonical Restaurant order must preserve the menu item quantity');
   console.log('Restaurant browser Tables → menu order → Kitchen preparation → canonical Commerce order: PASS');
 
+  // Exercise the implemented Wholesale B2B workflow in its own synthetic tenant.
+  // The customer and catalog product are created through the real UI; quotes and
+  // purchase orders are issued/transited through their canonical backend APIs by
+  // the UI modules, never by test-side database writes.
+  const wholesaleCreateResponse = await fetch(baseUrl + '/auth/tenants', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + firstRestoredConfig.sessionToken,
+    },
+    body: JSON.stringify({
+      sellerName: 'Browser Wholesale Regression',
+      businessType: 'wholesale',
+      country: 'ET',
+      timezone: 'Africa/Addis_Ababa',
+      deviceName: 'Wholesale browser regression',
+    }),
+  });
+  assert.equal(wholesaleCreateResponse.status, 201,
+    'the authenticated owner must be able to create an isolated Wholesale test tenant');
+  const wholesaleCreateBody = await wholesaleCreateResponse.json();
+  const wholesaleChatId = String(wholesaleCreateBody.membership?.chatId || wholesaleCreateBody.session?.chatId || '');
+  const wholesaleSessionToken = String(wholesaleCreateBody.session?.token || '');
+  assert.ok(wholesaleChatId && wholesaleChatId !== firstChatId,
+    'Wholesale regression must use a distinct canonical tenant');
+  assert.ok(wholesaleSessionToken, 'Wholesale tenant creation must issue its own session');
+  const wholesaleTemplateResponse = await fetch(
+    baseUrl + '/tenants/' + encodeURIComponent(wholesaleChatId) + '/business-template',
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + wholesaleSessionToken,
+      },
+      body: JSON.stringify({ templateKey: 'wholesale' }),
+    },
+  );
+  assert.equal(wholesaleTemplateResponse.status, 200,
+    'Wholesale template must persist on its canonical tenant');
+
+  // Switch into Wholesale through Settings so browser storage/session state
+  // follows the same path as a merchant switching businesses.
+  await page.locator('#gearSettingsBtn').click();
+  await page.locator('#tenantSwitcherControls').waitFor({ state: 'visible', timeout: 15000 });
+  await page.locator('#tenantSwitcherSelect').selectOption(wholesaleChatId);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }),
+    page.locator('#tenantSwitcherControls button').click(),
+  ]);
+  const wholesaleActiveConfig = await readPersistedBrowserConfig(page);
+  assert.equal(String(wholesaleActiveConfig.chatId), wholesaleChatId,
+    'Wholesale workflow must run under its own server-issued tenant session');
+  assert.equal(wholesaleActiveConfig.businessTemplate, 'wholesale',
+    'Wholesale tenant switching must hydrate the Wholesale template rather than retain another tenant template');
+
+  // Create a business-type customer from Customers UI. The quote selector
+  // intentionally excludes retail customers, so assert canonical type too.
+  await page.evaluate(() => window.switchTab('customers'));
+  await page.locator('#tab-customers button').filter({ hasText: 'Add customer' }).click();
+  await page.locator('#customerModal').waitFor({ state: 'visible', timeout: 5000 });
+  await page.locator('#customerNameInput').fill('Synthetic Wholesale Buyer');
+  await page.locator('#customerPhoneInput').fill('+251900000777');
+  await page.locator('#customerEmailInput').fill('wholesale-buyer@example.invalid');
+  await page.locator('#customerTypeInput').selectOption('business');
+  await page.locator('#customerNotesInput').fill('Synthetic browser regression customer');
+  await page.locator('#customerModal button').filter({ hasText: 'Save customer' }).click();
+  await page.locator('#customerModal').waitFor({ state: 'hidden', timeout: 10000 });
+  let wholesaleCustomer;
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const response = await fetch(
+      baseUrl + '/tenants/' + encodeURIComponent(wholesaleChatId) + '/customers?status=active&limit=200',
+      { headers: { Authorization: 'Bearer ' + wholesaleActiveConfig.sessionToken } },
+    );
+    assert.equal(response.status, 200, 'canonical Wholesale customer list must be readable');
+    const body = await response.json();
+    wholesaleCustomer = (body.customers || []).find(customer => customer.name === 'Synthetic Wholesale Buyer');
+    if (wholesaleCustomer) break;
+    await new Promise(resolve => setTimeout(resolve, 150));
+  }
+  assert.ok(wholesaleCustomer?.id, 'Customers UI must sync the business customer to the canonical backend');
+  assert.equal(String(wholesaleCustomer.customerType || '').toLowerCase(), 'business',
+    'the canonical customer record must retain business classification');
+
+  // Create and sync a physical catalog product through the UI. Quote pricing
+  // and totals are calculated by the canonical B2B quote service.
+  await page.evaluate(() => window.switchTab('catalog'));
+  await page.locator('#newProdName').fill('Wholesale Regression Carton');
+  await page.locator('#newProdPrice').fill('125');
+  await page.locator('#newProdType').selectOption('product');
+  await page.locator('#addProdBtn').click();
+  await page.locator('#catalogList').getByText('Wholesale Regression Carton', { exact: true })
+    .waitFor({ state: 'visible', timeout: 10000 });
+  await page.evaluate(() => window.switchTab('queue'));
+  await page.locator('#syncNowBtn').click();
+  const wholesaleProduct = await waitForCatalogItem(
+    baseUrl, wholesaleChatId, wholesaleActiveConfig.sessionToken, 'Wholesale Regression Carton',
+  );
+  assert.ok(wholesaleProduct.id, 'Wholesale catalog UI must create a canonical product identity');
+
+  // Create a quote, send it, and accept it through the visible B2B action
+  // buttons. Re-read each resulting state from the canonical quote endpoint.
+  await page.evaluate(() => window.switchTab('accounts'));
+  await page.locator('#b2bQuoteRefresh').click();
+  await page.locator('#b2bQuoteCustomer option[value="' + wholesaleCustomer.id + '"]').waitFor({
+    state: 'attached', timeout: 10000,
+  });
+  await page.locator('#b2bQuoteProduct option[value="' + wholesaleProduct.id + '"]').waitFor({
+    state: 'attached', timeout: 10000,
+  });
+  await page.locator('#b2bQuoteCustomer').selectOption(wholesaleCustomer.id);
+  await page.locator('#b2bQuoteProduct').selectOption(wholesaleProduct.id);
+  await page.locator('#b2bQuoteQuantity').fill('4');
+  await page.locator('#b2bQuoteNotes').fill('Synthetic Wholesale browser quote');
+  await page.locator('#b2bQuoteTerms').fill('ETB; synthetic test only');
+  await page.locator('#b2bQuoteCreate').click();
+  await page.locator('#b2bQuotesList').getByText('DRAFT', { exact: false }).waitFor({
+    state: 'visible', timeout: 10000,
+  });
+  const wholesaleQuotesUrl = baseUrl + '/tenants/' + encodeURIComponent(wholesaleChatId) + '/b2b/quotes?limit=100';
+  const readWholesaleQuotes = async () => {
+    const response = await fetch(wholesaleQuotesUrl, {
+      headers: { Authorization: 'Bearer ' + wholesaleActiveConfig.sessionToken },
+    });
+    assert.equal(response.status, 200, 'canonical Wholesale quote list must be readable');
+    return (await response.json()).quotes || [];
+  };
+  let wholesaleQuote = (await readWholesaleQuotes()).find(quote =>
+    quote.customerId === wholesaleCustomer.id && quote.status === 'DRAFT');
+  assert.ok(wholesaleQuote?.id, 'quote creation UI must create a canonical DRAFT quote');
+  assert.equal(Number(wholesaleQuote.items?.[0]?.quantity), 4,
+    'canonical quote must preserve the requested product quantity');
+  assert.equal(wholesaleQuote.items?.[0]?.productId, wholesaleProduct.id,
+    'canonical quote must reference the selected catalog product');
+  await page.locator('#b2bQuotesList [data-quote-action="SENT"]').click();
+  await page.locator('#b2bQuotesList [data-quote-action="ACCEPTED"]').waitFor({
+    state: 'visible', timeout: 10000,
+  });
+  await page.locator('#b2bQuotesList [data-quote-action="ACCEPTED"]').click();
+  wholesaleQuote = (await readWholesaleQuotes()).find(quote => quote.id === wholesaleQuote.id);
+  assert.equal(wholesaleQuote?.status, 'ACCEPTED',
+    'the visible quote action must transition the canonical quote to ACCEPTED');
+
+  // Only accepted quotes may populate the PO selector. Create a PO from that
+  // quote, verify the backend-owned amount/currency snapshot, then submit it.
+  await page.locator('#b2bPoRefresh').click();
+  await page.locator('#b2bPoQuote option[value="' + wholesaleQuote.id + '"]').waitFor({
+    state: 'attached', timeout: 10000,
+  });
+  await page.locator('#b2bPoQuote').selectOption(wholesaleQuote.id);
+  await page.locator('#b2bPoBuyerReference').fill('SYNTH-WHOLESALE-PO-001');
+  await page.locator('#b2bPoNotes').fill('Synthetic purchase order browser test');
+  await page.locator('#b2bPoCreate').click();
+  await page.locator('#b2bPurchaseOrdersList').getByText('DRAFT', { exact: false }).waitFor({
+    state: 'visible', timeout: 10000,
+  });
+  const wholesalePosUrl = baseUrl + '/tenants/' + encodeURIComponent(wholesaleChatId) + '/b2b/purchase-orders?limit=100';
+  const readWholesalePos = async () => {
+    const response = await fetch(wholesalePosUrl, {
+      headers: { Authorization: 'Bearer ' + wholesaleActiveConfig.sessionToken },
+    });
+    assert.equal(response.status, 200, 'canonical Wholesale purchase-order list must be readable');
+    return (await response.json()).purchaseOrders || [];
+  };
+  let wholesalePo = (await readWholesalePos()).find(po => po.quoteId === wholesaleQuote.id);
+  assert.ok(wholesalePo?.id, 'PO creation UI must create a canonical purchase order');
+  assert.equal(wholesalePo.status, 'DRAFT', 'newly created purchase order must start in DRAFT');
+  assert.equal(wholesalePo.buyerReference, 'SYNTH-WHOLESALE-PO-001');
+  assert.equal(Number(wholesalePo.totalMinor), Number(wholesaleQuote.totalMinor),
+    'PO amount must be snapshotted from the canonical accepted quote, not recalculated in the UI');
+  assert.equal(wholesalePo.currency, wholesaleQuote.currency,
+    'PO currency must be inherited from the accepted quote');
+  assert.equal(wholesalePo.quoteId, wholesaleQuote.id,
+    'canonical PO must retain the accepted quote linkage');
+  await page.locator('#b2bPurchaseOrdersList [data-po-action="submit"]').click();
+  wholesalePo = (await readWholesalePos()).find(po => po.id === wholesalePo.id);
+  assert.equal(wholesalePo?.status, 'SUBMITTED',
+    'the visible Submit action must transition the canonical PO from DRAFT to SUBMITTED');
+  console.log('Wholesale browser business customer → quote → accepted quote → PO draft → submitted: PASS');
+
   if (process.env.PREVIEW_SCREENSHOT_PATH) {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: process.env.PREVIEW_SCREENSHOT_PATH, fullPage: true });
