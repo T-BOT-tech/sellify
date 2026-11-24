@@ -1,0 +1,57 @@
+name: Workforce capability verification
+
+on:
+  push:
+    branches:
+      - feature/workforce-capability-20261124
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  workforce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify runtime
+        run: node --version
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+
+      - name: Existing Workforce contract regressions
+        run: |
+          node phase0/workforce-contract-regression.mjs
+          node phase0/workforce-member-contract-regression.mjs
+          node phase0/workforce-profile-engagement-regression.mjs
+          node phase0/workforce-calendar-availability-regression.mjs
+          node phase0/workforce-assignment-shift-regression.mjs
+          node phase0/workforce-allocation-utilization-regression.mjs
+          node phase0/workforce-booking-integration-regression.mjs
+          node phase0/workforce-authorization-service-regression.mjs
+
+      - name: Repository contract and SQLite persistence
+        run: |
+          npm run test:workforce-repository-contract
+          npm run test:workforce-sqlite-migration
+          npm run test:workforce-sqlite-repository
+
+      - name: Central authorization and API validation
+        run: |
+          npm run test:workforce-authorization-adapter
+          npm run test:workforce-api
+
+      - name: Service Booking integration and provider isolation
+        run: npm run test:workforce-service-booking
+
+      - name: Generate and verify backend route inventory
+        run: npm run test:workforce-route-inventory
