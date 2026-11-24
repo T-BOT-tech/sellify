@@ -60,9 +60,13 @@ try {
   };
   page.on('pageerror', error => pageErrors.push(error.stack || error.message));
 
-  await page.route(/\/tenants\/[^/]+\/workforce\//, async route => {
+  await page.route('**/*', async route => {
     const request = route.request();
     const url = new URL(request.url());
+    if (!/^\/tenants\/[^/]+\/workforce\//.test(url.pathname)) {
+      await route.continue();
+      return;
+    }
     const pathname = url.pathname;
     const method = request.method();
     const body = method !== 'GET' ? (request.postDataJSON?.() || {}) : null;
