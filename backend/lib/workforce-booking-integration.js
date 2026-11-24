@@ -32,16 +32,40 @@ export function workforceBookingIntegrationContract() {
   });
 }
 
-export function isEligibleWorkforceMemberForBooking(member, assignment, availability) {
+export function isEligibleWorkforceMemberForBooking(member, assignment, availability, booking = null) {
   if (!member || !assignment || !availability) return false;
-  if (!isValidWorkforceMemberStatus(member.status)) return false;
-  if (member.status !== 'ACTIVE') return false;
-  if (assignment.status !== 'ACTIVE') return false;
-  if (assignment.member_id !== member.id) return false;
-  if (availability.availability !== 'AVAILABLE') return false;
-  if (availability.member_id !== member.id) return false;
-  if (assignment.resource_id && availability.resource_id && assignment.resource_id !== availability.resource_id) return false;
-  if (assignment.location_id && availability.location_id && assignment.location_id !== availability.location_id) return false;
+  if (!isValidWorkforceMemberStatus(member.status) || member.status !== 'ACTIVE') return false;
+  if (assignment.status !== 'ACTIVE' || assignment.member_id !== member.id) return false;
+  if (availability.availability !== 'AVAILABLE' || availability.status !== 'ACTIVE'
+    || availability.member_id !== member.id) return false;
+  if (String(member.organization_id) !== String(assignment.organization_id)
+    || String(member.tenant_id) !== String(assignment.tenant_id)
+    || String(member.chat_id) !== String(assignment.chat_id)
+    || String(member.organization_id) !== String(availability.organization_id)
+    || String(member.tenant_id) !== String(availability.tenant_id)
+    || String(member.chat_id) !== String(availability.chat_id)) return false;
+  if (assignment.resource_id && availability.resource_id
+    && assignment.resource_id !== availability.resource_id) return false;
+  if (assignment.location_id && availability.location_id
+    && assignment.location_id !== availability.location_id) return false;
+
+  if (booking) {
+    const requestedStart = Date.parse(booking.requested_start);
+    const requestedEnd = Date.parse(booking.requested_end);
+    const assignmentStart = Date.parse(assignment.starts_at);
+    const assignmentEnd = Date.parse(assignment.ends_at);
+    const availabilityStart = Date.parse(availability.starts_at);
+    const availabilityEnd = Date.parse(availability.ends_at);
+    if (![requestedStart,requestedEnd,assignmentStart,assignmentEnd,availabilityStart,availabilityEnd].every(Number.isFinite)) return false;
+    if (requestedStart >= requestedEnd || assignmentStart > requestedStart || assignmentEnd < requestedEnd
+      || availabilityStart > requestedStart || availabilityEnd < requestedEnd) return false;
+    if (booking.organization_id && String(booking.organization_id) !== String(member.organization_id)) return false;
+    if (booking.chat_id && String(booking.chat_id) !== String(member.chat_id)) return false;
+    if (booking.service_resource_id && assignment.resource_id
+      && String(booking.service_resource_id) !== String(assignment.resource_id)) return false;
+    if (availability.resource_id && booking.service_resource_id
+      && String(availability.resource_id) !== String(booking.service_resource_id)) return false;
+  }
   return true;
 }
 
