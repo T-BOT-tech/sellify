@@ -3884,7 +3884,7 @@ const WORKFORCE_API_ENTITIES = Object.freeze({
   allocations: 'allocation', utilization: 'utilization',
 });
 const WORKFORCE_API_FIELDS = Object.freeze({
-  member: ['member_type','primary_location_id','timezone','display_name'],
+  member: ['member_type','primary_location_id','timezone','display_name','employee_number'],
   profile: ['skills','qualifications','languages','service_capabilities','visibility','notes','effective_from','effective_until'],
   engagement: ['engagement_type','starts_at','ends_at','approver_user_id','terms_reference'],
   calendar: ['location_id','timezone','weekly_schedule','holiday_calendar','effective_from','effective_until'],
