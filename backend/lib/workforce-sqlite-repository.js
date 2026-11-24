@@ -80,24 +80,14 @@ const TRANSITIONS = Object.freeze({
     activate: { from: ['PENDING_APPROVAL'], to: 'ACTIVE' },
     suspend: { from: ['ACTIVE'], to: 'SUSPENDED' },
     end: { from: ['DRAFT','PENDING_APPROVAL','ACTIVE','SUSPENDED'], to: 'ENDED' },
-    cancel: { from: ['DRAFT','PENDING_APPROVAL'], to: 'ENDED' },
-  },
-  calendar: {
-    deactivate: { from: ['ACTIVE'], to: 'INACTIVE' },
   },
   calendar_exception: {
     cancel: { from: ['ACTIVE'], to: 'CANCELLED' },
   },
-  availability: {
-    activate: { from: ['INACTIVE'], to: 'ACTIVE' },
-    deactivate: { from: ['ACTIVE'], to: 'INACTIVE' },
-    cancel: { from: ['ACTIVE'], to: 'INACTIVE' },
-  },
   assignment: {
     activate: { from: ['DRAFT','SUSPENDED'], to: 'ACTIVE' },
     suspend: { from: ['ACTIVE'], to: 'SUSPENDED' },
-    end: { from: ['ACTIVE','SUSPENDED','DRAFT'], to: 'ENDED' },
-    cancel: { from: ['DRAFT'], to: 'ENDED' },
+    end: { from: ['DRAFT','ACTIVE','SUSPENDED'], to: 'ENDED' },
   },
   shift: {
     confirm: { from: ['PLANNED'], to: 'CONFIRMED' },
