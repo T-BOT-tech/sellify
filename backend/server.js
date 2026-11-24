@@ -3908,7 +3908,7 @@ const WORKFORCE_API_CREATE_ONLY_FIELDS = Object.freeze({
   utilization: ['member_id','booking_id','operational_task_id'],
 });
 const WORKFORCE_CREATE_REQUIRED = Object.freeze({
-  member: ['user_id','member_type'],
+  member: ['member_type'],
   profile: ['member_id','effective_from'],
   engagement: ['member_id','engagement_type','starts_at'],
   calendar: ['member_id','timezone','effective_from'],
