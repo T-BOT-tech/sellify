@@ -152,6 +152,7 @@ import {
   discoverSupplierNetwork, getSupplierNetworkMarketplaceIntegration, setProcurementSupplierParticipation,
   getPackLifecycle, transitionPackLifecycle, getPaymentSettlementByIdempotencyKey, createPaymentSettlement, finalizePaymentSettlement, listPaymentSettlements, listPaymentRoutingPolicies, upsertPaymentRoutingPolicy, certifyPaymentProviderCapability, listPaymentOperationalActions, createPaymentOperationalAction, updatePaymentOperationalAction, recordPaymentProviderCapabilityEvidence, listPaymentProviderCapabilityEvidence, recordPaymentProductionCertification, listPaymentProductionCertifications,
 } from './lib/store-sqlite.js';
+import { validateWorkforceApiPayload } from './lib/workforce-api-validation.js';
 import { AUTHZ, authorize, hasAuthorization, ROLES, getRolePermissions } from './lib/authorization.js';
 import { assertTenantScope, assertLocationScope } from './lib/tenant-isolation.js';
 import { getPaymentProvider, listPaymentProviders, registerPaymentProvider, requirePaymentProvider, certifyPaymentProviderCapabilities, certifyAllPaymentProviders } from './lib/payments/provider-registry.js';
@@ -3853,7 +3854,7 @@ const WORKFORCE_API_FIELDS = Object.freeze({
   assignment: ['member_id','resource_id','location_id','assignment_type','starts_at','ends_at','booking_id','operational_task_id'],
   shift: ['member_id','resource_id','location_id','starts_at','ends_at','timezone','break_rules','recurrence_source_id','assignment_source_id'],
   allocation: ['member_id','resource_id','booking_id','operational_task_id','starts_at','ends_at'],
-  utilization: ['member_id','resource_id','booking_id','operational_task_id','planned_starts_at','planned_ends_at','actual_starts_at','actual_ends_at','evidence_source','status'],
+  utilization: ['member_id','resource_id','booking_id','operational_task_id','planned_starts_at','planned_ends_at','actual_starts_at','actual_ends_at','evidence_source'],
 });
 const WORKFORCE_CREATE_REQUIRED = Object.freeze({
   member: ['user_id','member_type'],
@@ -3872,7 +3873,7 @@ function workforceApiBody(body, entity, operation) {
     throw Object.assign(new Error('Workforce request body must be a JSON object'), { statusCode: 400, code: 'WORKFORCE_BODY_INVALID' });
   }
   const allowed = new Set(operation === 'create'
-    ? [...WORKFORCE_API_FIELDS[entity], 'id', 'idempotency_key']
+    ? [...WORKFORCE_API_FIELDS[entity], ...(entity === 'utilization' ? ['status'] : []), 'id', 'idempotency_key']
     : operation === 'update'
       ? [...WORKFORCE_API_FIELDS[entity], 'expected_version']
       : ['expected_version']);
@@ -3885,6 +3886,10 @@ function workforceApiBody(body, entity, operation) {
   } else if (!Number.isInteger(Number(body.expected_version)) || Number(body.expected_version) < 1) {
     throw Object.assign(new Error('expected_version must be a positive integer'), { statusCode: 400, code: 'WORKFORCE_EXPECTED_VERSION_REQUIRED' });
   }
+  const validation = validateWorkforceApiPayload(entity, operation, body);
+  if (!validation.valid) throw Object.assign(new Error(validation.errors.join('; ')), {
+    statusCode: 400, code: 'WORKFORCE_VALIDATION_FAILED',
+  });
   return body;
 }
 function workforceProviderResourceIds(session) {
