@@ -287,6 +287,7 @@ try {
   const updatedUtilization = repository.update('utilization', utilization.record.id, {
     expected_version: 2,
     actual_starts_at: '2026-11-25T06:05:00.000Z',
+    actual_ends_at: '2026-11-25T15:10:00.000Z',
   }, scopeA);
   const completedUtilization = repository.complete('utilization', utilization.record.id, {
     expected_version: 3,
@@ -294,9 +295,34 @@ try {
   assert.equal(startedUtilization.status, 'IN_PROGRESS');
   assert.equal(updatedUtilization.actual_starts_at, '2026-11-25T06:05:00.000Z');
   assert.equal(completedUtilization.status, 'COMPLETED');
+  const utilizationSummary = repository.summarizeUtilization(scopeA, {
+    from: '2026-11-25T00:00:00.000Z',
+    to: '2026-11-26T00:00:00.000Z',
+  });
+  assert.equal(utilizationSummary.event_count, 1);
+  assert.equal(utilizationSummary.completed_events, 1);
+  assert.equal(utilizationSummary.open_events, 0);
+  assert.equal(utilizationSummary.planned_minutes, 540);
+  assert.equal(utilizationSummary.measured_planned_minutes, 540);
+  assert.equal(utilizationSummary.actual_minutes, 545);
+  assert.equal(utilizationSummary.variance_minutes, 5);
+  assert.equal(utilizationSummary.by_member[0].member_id, created.record.id);
+  assert.equal(utilizationSummary.by_resource[0].resource_id, 'resource-a');
+  assert.equal(repository.summarizeUtilization(scopeA, {
+    from: '2026-11-26T00:00:00.000Z',
+  }).event_count, 0, 'planned start date filters must be applied');
+  assert.equal(repository.summarizeUtilization(scopeB).event_count, 0,
+    'utilization analytics must remain tenant-scoped');
+  assert.throws(() => repository.summarizeUtilization(scopeA, {
+    from: '2026-11-26T00:00:00.000Z',
+    to: '2026-11-25T00:00:00.000Z',
+  }), error => error?.code === 'WORKFORCE_ANALYTICS_RANGE_INVALID');
+
 
   const deniedRepository = new WorkforceSqliteRepository({ db, authorize: () => false });
   assert.throws(() => deniedRepository.get('member', created.record.id, scopeA),
+    error => error.code === 'WORKFORCE_FORBIDDEN');
+  assert.throws(() => deniedRepository.summarizeUtilization(scopeA),
     error => error.code === 'WORKFORCE_FORBIDDEN');
   assert.throws(() => repository.update('member', created.record.id, {
     expected_version: 3, user_id: 'user-b',
