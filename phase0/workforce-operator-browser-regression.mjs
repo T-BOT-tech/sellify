@@ -37,14 +37,16 @@ child.stderr.setEncoding('utf8');
 child.stderr.on('data', chunk => { stderr += chunk; });
 let browser;
 const browserDiagnostics = { consoleErrors: [], failedRequests: [], badResponses: [] };
+const pageErrors = [];
+const apiCalls = [];
 
 try {
   await waitForServer(baseUrl, child);
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
-  const pageErrors = [];
-  const apiCalls = [];
+  pageErrors.length = 0;
+  apiCalls.length = 0;
   page.on('console', message => { if (message.type() === 'error') browserDiagnostics.consoleErrors.push(message.text()); });
   page.on('requestfailed', request => browserDiagnostics.failedRequests.push({
     url: request.url(), error: request.failure()?.errorText || 'unknown',
