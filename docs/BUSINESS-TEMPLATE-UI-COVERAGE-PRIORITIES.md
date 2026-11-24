@@ -66,6 +66,17 @@ The nine onboarding choices are not nine equally mature vertical applications. T
 | P3 — defer pending domain workflows | `hotel-rooms`, `rental` | Starter suggestions only (room-stay/night and equipment/vehicle rental); no equivalent evidence in the reviewed files of complete room availability/reservation or asset availability/checkout-return lifecycle UI | Keep contract/configuration coverage. Do not create browser journeys that merely add a generic catalog item and label it a hotel/rental flow. Promote only when the corresponding reservation/asset lifecycle is implemented |
 | P3 — generic fallback | `other` | Generic product/service fallback suggestions; no dedicated vertical workflow is implied | Retain generic onboarding/catalog smoke coverage; do not spend a dedicated end-to-end template slot unless a concrete fallback-specific behavior exists |
 
+### Service-led template coverage update — 2026-11-24
+
+The existing Service Pack remains the implementation authority; this increment adds coverage rather than a new booking model.
+
+- Consultation customer journey: the existing customer Appointments browser regression exercises service selection, advisory feasibility, request submission, refresh, and mobile layout.
+- Barbershop operator journey: the operator browser regression now uses a canonical-style **Haircut** service offering and exercises manager visibility, inline lifecycle actions, resource selection, and version-conflict recovery.
+- Backend ownership and isolation: the buyer-appointment persistence regression and Telegram appointments HTTP regression cover buyer/order ownership, tenant isolation, resource commitments, and lifecycle enforcement.
+- Preview workflow integration: backend-only now invokes the buyer ownership and Telegram HTTP regressions; full-stack invokes both customer and operator appointment browser regressions.
+
+These are complementary layers, not a single browser session spanning customer and operator against one live backend. Keep the service-led templates at P2 / partially verified until that combined journey or equivalent manual cross-role evidence is available. Preserve the distinction between advisory feasibility and an authorized CONFIRMED resource commitment.
+
 ## Why this sequence
 
 1. Retail is already the live browser baseline, so finish its most important missing user outcome instead of creating eight shallow template screenshots.
