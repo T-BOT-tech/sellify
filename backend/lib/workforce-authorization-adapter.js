@@ -27,6 +27,7 @@ function permissionFor(entity, operation) {
   if (READ_OPERATIONS.has(operation)) return mapping.view;
   if (entity === 'member' && operation === 'activate') return 'workforce:member:activate';
   if (entity === 'member' && operation === 'suspend') return 'workforce:member:suspend';
+  if (entity === 'member' && ['link_account','unlink_account'].includes(operation)) return mapping.manage;
   if (entity === 'allocation' && operation === 'release') return mapping.release;
   return mapping.manage;
 }
