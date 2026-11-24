@@ -22,7 +22,7 @@ try {
     CREATE TABLE users (id TEXT PRIMARY KEY);
     CREATE TABLE locations (id TEXT PRIMARY KEY);
     CREATE TABLE service_resources (id TEXT PRIMARY KEY);
-    CREATE TABLE service_bookings (id TEXT PRIMARY KEY, organization_id TEXT, chat_id TEXT);
+    CREATE TABLE service_bookings (id TEXT PRIMARY KEY, organization_id TEXT, chat_id TEXT, status TEXT);
     INSERT INTO organizations(id) VALUES ('org-a');
     INSERT INTO tenants(chat_id, tenant_id) VALUES ('chat-a', 'tenant-a'), ('chat-b', 'tenant-b');
     INSERT INTO users(id) VALUES ('user-a');
