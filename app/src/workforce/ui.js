@@ -197,7 +197,7 @@ async function saveAvailability(form, root) {
   }
   const memberId = form.dataset.memberId;
   if (!memberId) return;
-  const submit = form.querySelector('[type="submit]');
+  const submit = form.querySelector('[type="submit"]');
   submit.disabled = true; status.textContent = 'Saving availability…';
   try {
     await request(endpoint('availability'), {
