@@ -366,6 +366,134 @@ export class WorkforceSqliteRepository {
     return records;
   }
 
+  summarizeUtilization(context = {}, filters = {}) {
+    const scope = this.assertContext(context);
+    this.assertAuthorized(context, 'utilization', 'list', null);
+
+    const clauses = ['organization_id = ?', 'tenant_id = ?', 'chat_id = ?'];
+    const values = [scope.organization_id, scope.tenant_id, scope.chat_id];
+    for (const field of ['member_id','resource_id','booking_id','operational_task_id']) {
+      const value = filters[field];
+      if (value !== undefined && value !== null && value !== '') {
+        clauses.push(`${field} = ?`);
+        values.push(String(value));
+      }
+    }
+    if (filters.status !== undefined && filters.status !== null && filters.status !== '') {
+      if (!['PLANNED','IN_PROGRESS','COMPLETED','CANCELLED'].includes(String(filters.status))) {
+        throw fail('WORKFORCE_ANALYTICS_FILTER_INVALID', 'status is not a valid utilization status');
+      }
+      clauses.push('status = ?');
+      values.push(String(filters.status));
+    }
+
+    const from = filters.from == null || filters.from === '' ? null : String(filters.from);
+    const to = filters.to == null || filters.to === '' ? null : String(filters.to);
+    for (const [field, value] of [['from', from], ['to', to]]) {
+      if (value !== null && (!Number.isFinite(Date.parse(value))
+        || !/(Z|[+-]\\d{2}:?\\d{2})$/i.test(value))) {
+        throw fail('WORKFORCE_ANALYTICS_RANGE_INVALID', `${field} must be ISO-8601 with an explicit timezone`);
+      }
+    }
+    if (from && to && Date.parse(from) >= Date.parse(to)) {
+      throw fail('WORKFORCE_ANALYTICS_RANGE_INVALID', 'from must be before to');
+    }
+    if (from) { clauses.push('planned_starts_at >= ?'); values.push(new Date(from).toISOString()); }
+    if (to) { clauses.push('planned_starts_at < ?'); values.push(new Date(to).toISOString()); }
+
+    if (context.resource_id) {
+      clauses.push('resource_id = ?');
+      values.push(String(context.resource_id));
+    }
+    if (context.member_id) {
+      clauses.push('member_id = ?');
+      values.push(String(context.member_id));
+    }
+    if (context.provider_user_id) {
+      clauses.push('member_id IN (SELECT id FROM workforce_members WHERE organization_id = ? AND tenant_id = ? AND user_id = ?)');
+      values.push(scope.organization_id, scope.tenant_id, String(context.provider_user_id));
+    }
+
+    const rows = this.db.prepare(`
+      SELECT
+        member_id,
+        resource_id,
+        COUNT(*) AS event_count,
+        SUM(CASE WHEN julianday(planned_ends_at) > julianday(planned_starts_at)
+          THEN (julianday(planned_ends_at) - julianday(planned_starts_at)) * 1440 ELSE 0 END) AS planned_minutes,
+        SUM(CASE WHEN status = 'COMPLETED'
+          AND actual_starts_at IS NOT NULL AND actual_ends_at IS NOT NULL
+          AND julianday(actual_ends_at) > julianday(actual_starts_at)
+          THEN (julianday(planned_ends_at) - julianday(planned_starts_at)) * 1440 ELSE 0 END) AS measured_planned_minutes,
+        SUM(CASE WHEN status = 'COMPLETED'
+          AND actual_starts_at IS NOT NULL AND actual_ends_at IS NOT NULL
+          AND julianday(actual_ends_at) > julianday(actual_starts_at)
+          THEN (julianday(actual_ends_at) - julianday(actual_starts_at)) * 1440 ELSE 0 END) AS actual_minutes,
+        SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed_events,
+        SUM(CASE WHEN status <> 'COMPLETED' THEN 1 ELSE 0 END) AS open_events,
+        SUM(CASE WHEN status = 'COMPLETED'
+          AND (actual_starts_at IS NULL OR actual_ends_at IS NULL
+            OR julianday(actual_ends_at) <= julianday(actual_starts_at))
+          THEN 1 ELSE 0 END) AS completed_missing_actual_events
+      FROM workforce_utilization_events
+      WHERE ${clauses.join(' AND ')}
+      GROUP BY member_id, resource_id
+      ORDER BY member_id, resource_id
+    `).all(...values);
+
+    const metricFields = [
+      'event_count','completed_events','open_events','completed_missing_actual_events',
+      'planned_minutes','measured_planned_minutes','actual_minutes',
+    ];
+    const normalizeRow = row => {
+      const result = { member_id: row.member_id, resource_id: row.resource_id || null };
+      for (const field of metricFields) result[field] = Number(row[field] || 0);
+      result.variance_minutes = result.actual_minutes - result.measured_planned_minutes;
+      return result;
+    };
+    const normalized = rows.map(normalizeRow);
+    const aggregate = items => {
+      const result = Object.fromEntries(metricFields.map(field => [
+        field, items.reduce((sum, item) => sum + Number(item[field] || 0), 0),
+      ]));
+      result.variance_minutes = result.actual_minutes - result.measured_planned_minutes;
+      for (const field of ['planned_minutes','measured_planned_minutes','actual_minutes','variance_minutes']) {
+        result[field] = Math.round(result[field] * 100) / 100;
+      }
+      return result;
+    };
+    const groupBy = field => {
+      const grouped = new Map();
+      for (const item of normalized) {
+        const key = item[field] == null ? '' : String(item[field]);
+        const current = grouped.get(key) || {
+          [field]: item[field] ?? null,
+          ...Object.fromEntries(metricFields.map(name => [name, 0])),
+        };
+        for (const name of metricFields) current[name] += item[name];
+        grouped.set(key, current);
+      }
+      return [...grouped.values()].map(item => ({
+        ...item,
+        variance_minutes: Math.round((item.actual_minutes - item.measured_planned_minutes) * 100) / 100,
+        planned_minutes: Math.round(item.planned_minutes * 100) / 100,
+        measured_planned_minutes: Math.round(item.measured_planned_minutes * 100) / 100,
+        actual_minutes: Math.round(item.actual_minutes * 100) / 100,
+      }));
+    };
+
+    return Object.freeze({
+      ...aggregate(normalized),
+      planned_minutes: Math.round(aggregate(normalized).planned_minutes * 100) / 100,
+      measured_planned_minutes: Math.round(aggregate(normalized).measured_planned_minutes * 100) / 100,
+      actual_minutes: Math.round(aggregate(normalized).actual_minutes * 100) / 100,
+      by_member: groupBy('member_id'),
+      by_resource: groupBy('resource_id'),
+      range: Object.freeze({ from, to, basis: 'planned_starts_at' }),
+      authority: 'workforce_utilization_events',
+    });
+  }
+
   create(entity, input = {}, context = {}) {
     const spec = TABLES[entity];
     if (!spec) throw fail('WORKFORCE_ENTITY_INVALID', `Unsupported Workforce entity: ${entity}`);
