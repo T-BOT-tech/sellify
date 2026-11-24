@@ -39,6 +39,7 @@ const assignment = {
 const availability = {
   member_id: 'member-1',
   availability: 'AVAILABLE',
+  status: 'ACTIVE',
   resource_id: 'resource-1',
   location_id: 'location-1',
 };
