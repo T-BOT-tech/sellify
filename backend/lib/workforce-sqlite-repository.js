@@ -266,6 +266,11 @@ export class WorkforceSqliteRepository {
         : null;
       if (entity === 'member' && String(row.user_id) !== String(context.provider_user_id)) throw scopedError();
       if (member && String(member.user_id) !== String(context.provider_user_id)) throw scopedError();
+      if (entity === 'calendar_exception') {
+        const owner = this.db.prepare(`SELECT m.user_id FROM workforce_calendars c JOIN workforce_members m ON m.id = c.member_id WHERE c.id = ? AND c.organization_id = ? AND c.tenant_id = ?`)
+          .get(String(row.calendar_id), String(context.organization_id), String(context.tenant_id));
+        if (!owner || String(owner.user_id) !== String(context.provider_user_id)) throw scopedError();
+      }
     }
   }
 
@@ -288,6 +293,7 @@ export class WorkforceSqliteRepository {
     const spec = TABLES[entity];
     if (!spec) throw fail('WORKFORCE_ENTITY_INVALID', `Unsupported Workforce entity: ${entity}`);
     const scope = this.assertContext(context);
+    this.assertAuthorized(context, entity, 'list', null);
     const clauses = ['organization_id = ?', 'tenant_id = ?', 'chat_id = ?'];
     const values = [scope.organization_id, scope.tenant_id, scope.chat_id];
     for (const [key, value] of Object.entries(filters || {})) {
@@ -389,8 +395,11 @@ export class WorkforceSqliteRepository {
       `).get(scope.organization_id, scope.tenant_id, String(payload.idempotency_key));
       if (race) {
         if (race.request_hash !== requestHash) throw fail('WORKFORCE_IDEMPOTENCY_CONFLICT', 'Idempotency key was already used with different Workforce data', 409);
+        const duplicateRecord = fromDatabaseRow(race, spec.json);
+        this.assertResourceVisibility(context, entity, duplicateRecord);
+        this.assertAuthorized(context, entity, 'create', duplicateRecord);
         this.db.exec('COMMIT');
-        return { record: fromDatabaseRow(race, spec.json), duplicate: true };
+        return { record: duplicateRecord, duplicate: true };
       }
       const placeholders = columns.map(() => '?').join(', ');
       this.db.prepare(`INSERT INTO ${spec.table} (${columns.join(', ')}) VALUES (${placeholders})`).run(...values);
