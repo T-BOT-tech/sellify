@@ -3,15 +3,16 @@ import { readFile } from 'node:fs/promises';
 import { validateWorkforceApiPayload } from '../backend/lib/workforce-api-validation.js';
 
 const validMember = validateWorkforceApiPayload('member', 'create', {
-  member_type: 'PROVIDER',
+  member_type: 'PROVIDER', employee_number: 'EMP-001',
 });
 assert.equal(validMember.valid, true);
 
 const invalidMember = validateWorkforceApiPayload('member', 'create', {
-  member_type: 'TEMP_WORKER',
+  member_type: 'TEMP_WORKER', employee_number: 123,
 });
 assert.equal(invalidMember.valid, false);
 assert.ok(invalidMember.errors.some((error) => error.includes('member_type')));
+assert.ok(invalidMember.errors.some((error) => error.includes('employee_number')));
 
 const invalidWindow = validateWorkforceApiPayload('assignment', 'create', {
   starts_at: '2026-11-26T18:00:00.000Z',
