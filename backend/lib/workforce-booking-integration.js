@@ -11,6 +11,7 @@
 import {
   isValidWorkforceMemberStatus,
 } from './workforce-contract.js';
+import { workforceAvailabilityCoversBooking } from './workforce-recurrence-contract.js';
 
 export const WORKFORCE_BOOKING_INTEGRATION_VERSION = '1.0';
 
