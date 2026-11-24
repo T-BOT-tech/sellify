@@ -28,17 +28,12 @@ The same browser regression creates a separate synthetic Restaurant tenant, swit
 
 Verified on commit `71d87ac08bfcbf5dcde2acabd4e754d58e0a7188`: all four preview profiles and Workforce verification passed.
 
-### Retail next increment
+### Remaining Retail follow-up (not a blocker for the transaction journey)
 
-Extend the existing synthetic Retail browser fixture, or add a focused companion browser test, to exercise the real UI through:
+The current browser journey proves the saved order remains canonical and unique before reload; the existing reload assertion currently focuses on the catalog and tenant session. A later Retail increment can add:
 
-1. Add/select a catalog product and verify cart quantity and total.
-2. Enter optional customer details and review the order summary.
-3. Save the order through the real checkout UI using a deterministic synthetic payment method/fixture; do not simulate a successful external provider payment.
-4. Assert the UI's truthful payment state (pending/unconfirmed versus confirmed) and queue representation.
-5. Read the canonical order through the authenticated backend API and verify line items, amount, currency, and tenant scope.
-6. Reload and verify the queued order remains visible without duplicate order creation.
-7. Verify inventory changes only at the existing canonical fulfillment/stock authority boundary; do not assume order creation itself deducts stock.
+1. Reload and verify the queued order remains visible without duplicate order creation.
+2. Verify inventory changes only at the existing canonical fulfillment/stock authority boundary; do not assume order creation itself deducts stock.
 
 Keep the test data synthetic, use a temporary SQLite database, and retain the current multi-tenant isolation assertions. Preserve separate backend payment/order contract tests; the browser journey should prove UI-to-canonical behavior, not duplicate every backend state-machine case.
 
