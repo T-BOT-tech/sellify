@@ -491,7 +491,8 @@
     "test:workforce-sqlite-repository": "node phase0/workforce-sqlite-repository-regression.mjs",
     "test:workforce-repository-contract": "node phase0/workforce-repository-contract-regression.mjs",
     "test:workforce-authorization-adapter": "node phase0/workforce-authorization-adapter-regression.mjs",
-    "test:workforce-api": "node phase0/workforce-api-regression.mjs"
+    "test:workforce-api": "node phase0/workforce-api-regression.mjs",
+    "test:workforce-service-booking": "node phase0/workforce-service-booking-integration-regression.mjs"
   },
   "engines": {
     "node": ">=24"
