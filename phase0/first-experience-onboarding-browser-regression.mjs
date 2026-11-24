@@ -824,6 +824,19 @@ try {
   assert.equal(wholesaleActiveConfig.businessTemplate, 'wholesale',
     'Wholesale tenant switching must hydrate the Wholesale template rather than retain another tenant template');
 
+  // Wholesale is a separate workspace capability toggle, not inferred from
+  // the onboarding template. Enable it through the real Settings UI.
+  await page.locator('#gearSettingsBtn').click();
+  await page.locator('#settingsModal.open').waitFor({ state: 'visible', timeout: 10000 });
+  await page.locator('#setWholesaleEnabled').check();
+  await page.locator('#settingsModal button.btn-primary').filter({ hasText: 'Save' }).last().click();
+  await page.waitForFunction(() => {
+    const button = document.getElementById('navAccounts');
+    return Boolean(button && button.style.display !== 'none');
+  }, null, { timeout: 10000 });
+  assert.notEqual(await page.locator('#navAccounts').evaluate(element => element.style.display), 'none',
+    'enabling Wholesale in Settings must expose the Accounts workspace');
+
   // Create a business-type customer from Customers UI. The quote selector
   // intentionally excludes retail customers, so assert canonical type too.
   await page.evaluate(() => window.switchTab('customers'));
