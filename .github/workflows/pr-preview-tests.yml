@@ -165,6 +165,8 @@ jobs:
               run_test npm run test:workforce-api-http
               run_test npm run test:inventory-sync-event-authorization-http
               run_test npm run test:logistics-scheduling-http
+              run_test node phase0/sc-03.5-buyer-appointment-order-regression.mjs
+              run_test node phase0/sc-03.5-telegram-appointments-http-regression.mjs
               ;;
             frontend-only)
               run_test npm run test:first-product-empty-state
@@ -179,6 +181,8 @@ jobs:
               run_test npm run test:service-catalog-frontend-sync
               run_test npm run test:browser-module-serving-browser
               run_test npm run test:first-experience-onboarding-browser
+              run_test node phase0/sc-03.5-customer-appointments-browser-regression.mjs
+              run_test node phase0/service-booking-operator-browser-regression.mjs
               run_test npm run test:workforce-operator-workspace
               ;;
             migration)
