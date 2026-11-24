@@ -83,7 +83,7 @@ try {
     if (pathname.endsWith('/availability') && method === 'POST') {
       assert.equal(body.member_id, member.id);
       assert.equal(body.availability, 'AVAILABLE');
-      assert.equal(body.timezone, 'Africa/Addis_Ababa');
+      assert.ok(typeof body.timezone === 'string' && body.timezone.length > 0);
       assert.ok(Number.isFinite(Date.parse(body.starts_at)) && Number.isFinite(Date.parse(body.ends_at)));
       assert.ok(Date.parse(body.starts_at) < Date.parse(body.ends_at));
       assert.equal(body.effective_from, body.starts_at);
@@ -132,7 +132,8 @@ try {
   await form.locator('[name="availability"]').selectOption('AVAILABLE');
   await form.locator('[name="starts_at"]').fill('2026-11-26T09:00');
   await form.locator('[name="ends_at"]').fill('2026-11-26T17:00');
-  await form.locator('[name="timezone"]').fill('Africa/Addis_Ababa');
+  const browserTimezone = await form.locator('[name="timezone"]').inputValue();
+  assert.ok(browserTimezone, 'workspace must provide a read-only timezone context');
   await form.getByRole('button', { name: 'Save availability' }).click();
   await page.getByText('Availability saved.').waitFor({ timeout: 10000 });
 
@@ -140,6 +141,7 @@ try {
   assert.ok(availabilityCall, 'browser form must submit availability through the API');
   assert.equal(availabilityCall.authorization, 'Bearer synthetic-session-token');
   assert.match(availabilityCall.idempotencyKey, /^workforce-ui-/);
+  assert.equal(availabilityCall.body.timezone, browserTimezone);
 
   await page.getByRole('button', { name: 'Suspend' }).click();
   await page.getByText('SUSPENDED', { exact: true }).waitFor({ timeout: 10000 });
