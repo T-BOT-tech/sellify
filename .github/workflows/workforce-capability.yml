@@ -21,19 +21,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 24
-        uses: actions/setup-node@v4
+      - name: Setup shared Sellify toolchain
+        uses: ./.github/actions/setup-sellify
         with:
-          node-version: 24
-
-      - name: Verify runtime
-        run: node --version
-
-      - name: Install dependencies
-        run: npm install --ignore-scripts
-
-      - name: Install Chromium for Workforce browser regression
-        run: npx playwright install --with-deps chromium
+          install-playwright: "true"
 
       - name: workforce-contract-regression
         run: node phase0/workforce-contract-regression.mjs
