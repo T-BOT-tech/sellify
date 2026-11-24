@@ -3708,7 +3708,7 @@ async function handleServiceProviderBookings(req, res, chatId) {
       deniedMessage: 'Assigned Service Provider booking view permission required',
     });
   }
-  const bookings = await listServiceProviderBookings(chatId, activeResources.map(resource => resource.id));
+  const bookings = await listServiceProviderBookings(chatId, activeResources.map(resource => resource.id), session.userId);
   return sendJSON(res, 200, { bookings, state: bookings.length ? 'READY' : 'EMPTY',
     authority: 'service_bookings + service_resource_commitments',
     scope: 'ACTIVE_ASSIGNED_RESOURCES', resource_count: activeResources.length }, req);
