@@ -3943,6 +3943,46 @@ function workforceApiBody(body, entity, operation) {
   });
   return body;
 }
+function mergeWorkforceUtilizationSummaries(summaries = []) {
+  const fields = [
+    'event_count','completed_events','open_events','completed_missing_actual_events',
+    'planned_minutes','measured_planned_minutes','actual_minutes',
+  ];
+  const totals = Object.fromEntries(fields.map(field => [
+    field, summaries.reduce((sum, item) => sum + Number(item?.[field] || 0), 0),
+  ]));
+  const group = field => {
+    const values = new Map();
+    for (const summary of summaries) for (const row of summary?.[field === 'member_id' ? 'by_member' : 'by_resource'] || []) {
+      const key = row[field] == null ? '' : String(row[field]);
+      const current = values.get(key) || {
+        [field]: row[field] ?? null,
+        ...Object.fromEntries(fields.map(name => [name, 0])),
+      };
+      for (const name of fields) current[name] += Number(row[name] || 0);
+      values.set(key, current);
+    }
+    return [...values.values()].map(row => ({
+      ...row,
+      variance_minutes: Math.round((row.actual_minutes - row.measured_planned_minutes) * 100) / 100,
+      planned_minutes: Math.round(row.planned_minutes * 100) / 100,
+      measured_planned_minutes: Math.round(row.measured_planned_minutes * 100) / 100,
+      actual_minutes: Math.round(row.actual_minutes * 100) / 100,
+    }));
+  };
+  for (const field of ['planned_minutes','measured_planned_minutes','actual_minutes']) {
+    totals[field] = Math.round(totals[field] * 100) / 100;
+  }
+  totals.variance_minutes = Math.round((totals.actual_minutes - totals.measured_planned_minutes) * 100) / 100;
+  return {
+    ...totals,
+    by_member: group('member_id'),
+    by_resource: group('resource_id'),
+    range: summaries[0]?.range || { from: null, to: null, basis: 'planned_starts_at' },
+    authority: 'workforce_utilization_events',
+  };
+}
+
 function workforceProviderResourceIds(session) {
   return [...new Set((Array.isArray(session.contextualRoles) ? session.contextualRoles : [])
     .filter(item => String(item?.role || '').trim().toLowerCase() === 'service_provider'
@@ -3981,6 +4021,19 @@ async function handleWorkforce(req, res, chatId, entityName, recordId = null, ac
     ...(resourceId ? { resource_id: resourceId } : {}),
     ...(session.locationId ? { location_id: String(session.locationId) } : {}),
   }));
+  if (req.method === 'GET' && entity === 'utilization' && recordId === 'summary' && !action) {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const filters = {};
+    for (const key of ['member_id','resource_id','booking_id','operational_task_id','status','from','to']) {
+      const value = url.searchParams.get(key);
+      if (value) filters[key] = value;
+    }
+    const summaries = contexts.map(context => repository.summarizeUtilization(context, filters));
+    return sendJSON(res, 200, {
+      summary: mergeWorkforceUtilizationSummaries(summaries),
+      authority: 'workforce_utilization_projection',
+    }, req);
+  }
   if (req.method === 'GET' && !recordId) {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const filters = {};
