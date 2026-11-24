@@ -102,6 +102,12 @@ The Node 24 Workforce verification workflow runs only for this branch. It does n
 - backend/lib/workforce-recurrence-contract.js
 - backend/server.js
 
+### Operator workspace
+
+- app/src/workforce/ui.js — authenticated roster, utilization summary, member record views, member activation/suspension actions, and availability declaration. All writes use the existing tenant session and Workforce API.
+- app/src/ui/tabs.js — More-sheet navigation integration.
+- app/index.html — mobile-responsive Workforce screen and navigation entry.
+
 ## API route surface
 
 All routes require the existing tenant session.
@@ -179,6 +185,7 @@ New regressions:
 - phase0/workforce-api-http-regression.mjs — authenticated HTTP coverage for session enforcement, all ten entity collection create/read/list routes, entity-specific lifecycle transitions, idempotency replay, optimistic concurrency, and cross-tenant isolation.
 - phase0/workforce-service-booking-integration-regression.mjs
 - phase0/workforce-route-inventory-regression.mjs
+- phase0/workforce-operator-workspace-regression.mjs — navigation, authenticated API client, tenant/session race protection, and UI/backend authority boundary.
 
 The route inventory script is scripts/perplexity-server-route-inventory.mjs. The workflow runs it and validates the generated JSON inventory.
 
@@ -204,7 +211,7 @@ The existing eight contract regressions are also run directly by the Workforce c
 
 ## Remaining work
 
-1. Add operator-facing Workforce UI only after the API and authorization behavior is accepted. Keep it as a client of the existing authenticated API; do not move authority into the UI.
+1. Perform a manual browser/mobile usability review of the operator workspace against a test tenant. The CI regression verifies the integration contract but does not replace visual and interaction testing on a real browser/device.
 
 ## Known limitations
 
