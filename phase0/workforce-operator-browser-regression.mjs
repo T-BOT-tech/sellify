@@ -60,7 +60,7 @@ try {
   };
   page.on('pageerror', error => pageErrors.push(error.stack || error.message));
 
-  await page.route('**/tenants/*/workforce/**', async route => {
+  await page.route(/\/tenants\/[^/]+\/workforce\//, async route => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
