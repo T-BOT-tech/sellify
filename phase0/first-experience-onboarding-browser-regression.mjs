@@ -363,6 +363,74 @@ try {
   assert.equal(reloadedItem.item_type, 'product');
   assert.equal(Number(reloadedItem.price), 2500);
 
+  // Complete a real Retail browser checkout before exercising multi-tenant
+  // switching. The order is first saved locally, then synchronized through
+  // the visible Queue action; canonical backend state remains authoritative.
+  const retailProductRow = page.locator('#prodRow-' + item.id);
+  await retailProductRow.waitFor({ state: 'visible', timeout: 10000 });
+  await retailProductRow.locator('button[onclick^="changeQty"]').nth(1).click();
+  await page.locator('#custName').fill('Synthetic Retail Buyer');
+  await page.locator('#orderSummary').waitFor({ state: 'visible', timeout: 5000 });
+  await page.locator('#saveOrderBtn').click();
+  await page.locator('#paymentProofModal').waitFor({ state: 'visible', timeout: 5000 });
+  const paymentOptions = await page.locator('#orderPayMethod option').evaluateAll(options =>
+    options.map(option => ({ value: option.value, label: option.textContent.trim() })),
+  );
+  assert.ok(paymentOptions.length > 0 && paymentOptions[0].value,
+    'Retail checkout must offer at least one enabled payment method');
+  assert.match(await page.locator('#checkoutPaymentStateHint').textContent(),
+    /does not confirm that a payment was received/i,
+    'checkout must clearly distinguish saving an order from confirming payment');
+  await page.locator('#checkoutSaveOrderButton').click();
+  await page.locator('#paymentProofModal').waitFor({ state: 'hidden', timeout: 5000 });
+  await page.locator('#tab-queue').waitFor({ state: 'visible', timeout: 5000 });
+  const retailTicket = page.locator('#queueList').locator('.ticket').filter({ hasText: 'Browser First Product' }).first();
+  await retailTicket.waitFor({ state: 'visible', timeout: 10000 });
+  const localRetailOrderId = (await retailTicket.locator('.ticket-id').textContent()).trim();
+  assert.ok(localRetailOrderId, 'saved Retail order must have a local identity');
+  await retailTicket.getByText('Payment tracking: Not yet linked to Payment Core', { exact: true }).waitFor({
+    state: 'visible', timeout: 5000,
+  });
+  assert.equal(await retailTicket.locator('.badge.queued').count(), 1,
+    'the browser checkout must create a queued local order, not claim server confirmation');
+
+  // Use the actual Queue Sync now button, not a test-only backend write.
+  await page.locator('#syncNowBtn').click();
+  let canonicalRetailOrder;
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const response = await fetch(baseUrl + '/orders/' + encodeURIComponent(config.chatId) + '?limit=200', {
+      headers: { Authorization: 'Bearer ' + restoredConfig.sessionToken },
+    });
+    assert.equal(response.status, 200, 'authenticated canonical order feed must remain accessible');
+    const body = await response.json();
+    canonicalRetailOrder = (body.orders || []).find(order => String(order.id) === localRetailOrderId);
+    if (canonicalRetailOrder?.server_order_id) break;
+    await new Promise(resolve => setTimeout(resolve, 150));
+  }
+  assert.ok(canonicalRetailOrder?.server_order_id,
+    'the real browser Sync now action must create and acknowledge a canonical backend order');
+  assert.equal(canonicalRetailOrder.items?.length, 1);
+  assert.equal(canonicalRetailOrder.items[0].name, 'Browser First Product');
+  assert.equal(Number(canonicalRetailOrder.items[0].qty), 1);
+  assert.equal(Number(canonicalRetailOrder.items[0].price), 2500);
+  assert.equal(Number(canonicalRetailOrder.total), 2500);
+  assert.equal(canonicalRetailOrder.currency || 'ETB', 'ETB');
+  assert.equal(String(canonicalRetailOrder.payment_state || '').toUpperCase(), 'UNPAID',
+    'a selected payment method or checkout action must not manufacture a confirmed payment');
+  const canonicalOrderCountBeforeReload = (await (await fetch(
+    baseUrl + '/orders/' + encodeURIComponent(config.chatId) + '?limit=200',
+    { headers: { Authorization: 'Bearer ' + restoredConfig.sessionToken } },
+  )).json()).orders.filter(order => String(order.id) === localRetailOrderId).length;
+  assert.equal(canonicalOrderCountBeforeReload, 1,
+    'the canonical order feed must contain exactly one Retail order');
+
+  // The UI has completed its Retail transaction path; switch back to the
+  // catalog workspace before the existing reload/multi-tenant assertions.
+  await page.evaluate(() => window.switchTab('order'));
+  await page.locator('#productList').getByText('Browser First Product', { exact: true }).waitFor({
+    state: 'visible', timeout: 10000,
+  });
+
   // Create a second business through the authenticated owner API contract.
   // This creates a real membership for the same identity; no test-only
   // membership insertion or direct database mutation is used.
