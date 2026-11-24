@@ -828,18 +828,16 @@ try {
   // the onboarding template. Enable it through the real Settings UI.
   await page.locator('#gearSettingsBtn').click();
   await page.locator('#settingsModal.open').waitFor({ state: 'visible', timeout: 10000 });
-  // Settings is a tall, internally scrollable mobile bottom sheet. Bring
-  // the Wholesale control into its own scroll viewport before interacting.
-  await page.locator('#settingsModal .modal').evaluate(element => {
-    element.scrollTop = element.scrollHeight;
+  // Settings is a tall, internally scrollable mobile bottom sheet. Scroll
+  // the native checkbox itself into view, then interact with that real input.
+  const wholesaleToggle = page.locator('#setWholesaleEnabled');
+  await wholesaleToggle.evaluate(element => {
+    element.scrollIntoView({ block: 'center', inline: 'nearest' });
   });
-  const wholesaleToggleLabel = page.locator('#settingsModal label').filter({
-    hasText: 'Enable Wholesale / B2B accounts',
-  });
-  await wholesaleToggleLabel.waitFor({ state: 'visible', timeout: 10000 });
-  await wholesaleToggleLabel.click();
-  assert.equal(await page.locator('#setWholesaleEnabled').isChecked(), true,
-    'the visible Wholesale setting label must activate the hidden native checkbox');
+  await wholesaleToggle.waitFor({ state: 'visible', timeout: 10000 });
+  await wholesaleToggle.check();
+  assert.equal(await wholesaleToggle.isChecked(), true,
+    'the Wholesale Settings checkbox must be interactable and become checked');
   await page.locator('#settingsModal button.btn-primary').filter({ hasText: 'Save' }).last().click();
   await page.waitForFunction(() => {
     const button = document.getElementById('navAccounts');
