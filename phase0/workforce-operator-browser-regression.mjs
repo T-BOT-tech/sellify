@@ -180,6 +180,9 @@ try {
   console.log('Mobile workspace, authenticated API requests, member detail, availability creation, idempotency, and optimistic member lifecycle: VERIFIED');
 } catch (error) {
   console.error(error);
+  console.error('Browser diagnostics:\n' + JSON.stringify(browserDiagnostics, null, 2));
+  if (typeof pageErrors !== 'undefined' && pageErrors.length) console.error('Page errors:\n' + JSON.stringify(pageErrors, null, 2));
+  if (typeof apiCalls !== 'undefined' && apiCalls.length) console.error('Intercepted API calls:\n' + JSON.stringify(apiCalls, null, 2));
   if (stderr) console.error('Frontend server stderr:\n' + stderr);
   process.exitCode = 1;
 } finally {
