@@ -54,11 +54,9 @@ export function isEligibleWorkforceMemberForBooking(member, assignment, availabi
     const requestedEnd = Date.parse(booking.requested_end);
     const assignmentStart = Date.parse(assignment.starts_at);
     const assignmentEnd = Date.parse(assignment.ends_at);
-    const availabilityStart = Date.parse(availability.starts_at);
-    const availabilityEnd = Date.parse(availability.ends_at);
-    if (![requestedStart,requestedEnd,assignmentStart,assignmentEnd,availabilityStart,availabilityEnd].every(Number.isFinite)) return false;
+    if (![requestedStart,requestedEnd,assignmentStart,assignmentEnd].every(Number.isFinite)) return false;
     if (requestedStart >= requestedEnd || assignmentStart > requestedStart || assignmentEnd < requestedEnd
-      || availabilityStart > requestedStart || availabilityEnd < requestedEnd) return false;
+      || !workforceAvailabilityCoversBooking(availability, booking)) return false;
     if (booking.organization_id && String(booking.organization_id) !== String(member.organization_id)) return false;
     if (booking.chat_id && String(booking.chat_id) !== String(member.chat_id)) return false;
     if (booking.service_resource_id && assignment.resource_id
