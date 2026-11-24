@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { validateWorkforceRecurrenceRule } from './workforce-recurrence-contract.js';
 import {
   WORKFORCE_REPOSITORY_ENTITY_OPERATIONS,
   validateWorkforceRepositoryOperation,
@@ -124,6 +125,12 @@ const TIMESTAMP_FIELDS = new Set([
 ]);
 
 function normalizeRepositoryValue(field, value) {
+  if (field === 'recurrence_rule' && value != null && value !== '') {
+    const result = validateWorkforceRecurrenceRule(value);
+    if (!result.valid) throw fail('WORKFORCE_RECURRENCE_RULE_INVALID', result.errors.join('; '));
+    return String(value).trim().toUpperCase();
+  }
+  if (field === 'recurrence_rule' && value === '') return null;
   if (TIMESTAMP_FIELDS.has(field) && value != null) {
     const parsed = Date.parse(value);
     if (typeof value !== 'string' || !Number.isFinite(parsed)) {
