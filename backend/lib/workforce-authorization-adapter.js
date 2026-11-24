@@ -1,5 +1,10 @@
 import { AUTHZ, authorize } from './authorization.js';
 import { tenantScopeDecision } from './tenant-isolation.js';
+import {
+  canAccessWorkforceResource,
+  canAccessWorkforceAssignment,
+  canAccessProviderAppointment,
+} from './workforce-authorization-service.js';
 
 const PERMISSION_BY_ENTITY = Object.freeze({
   member: { view: 'workforce:member:view', manage: 'workforce:member:manage' },
@@ -59,6 +64,24 @@ export function authorizeWorkforceRepositoryAccess(request = {}) {
     organizationId: String(organization_id),
     locationId,
   } : null;
+
+  const workforceContext = {
+    organization_id: String(organization_id),
+    tenant_id: String(request.tenant_id),
+    resource_id: resourceId,
+    provider_id: request.provider_user_id || null,
+    permissions: [permission],
+  };
+  const workforceResource = record || {
+    organization_id: String(organization_id),
+    tenant_id: String(request.tenant_id),
+    ...(resourceId ? { resource_id: resourceId } : {}),
+  };
+  if (!canAccessWorkforceResource(workforceContext, workforceResource, permission)) return false;
+  if (entity === 'assignment' && record
+    && !canAccessWorkforceAssignment(workforceContext, record, permission)) return false;
+  if (record?.provider_id
+    && !canAccessProviderAppointment(workforceContext, record, permission)) return false;
 
   return authorize(
     actor,
