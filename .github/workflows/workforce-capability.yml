@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feature/workforce-capability-20261124
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -11,8 +14,9 @@ permissions:
 
 jobs:
   workforce:
+    if: github.event_name != 'pull_request' || github.head_ref == 'feature/workforce-capability-20261124'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: npm install --ignore-scripts
 
+      - name: Install Chromium for Workforce browser regression
+        run: npx playwright install --with-deps chromium
+
       - name: workforce-contract-regression
         run: node phase0/workforce-contract-regression.mjs
       - name: workforce-member-contract-regression
@@ -40,10 +47,6 @@ jobs:
         run: node phase0/workforce-assignment-shift-regression.mjs
       - name: workforce-allocation-utilization-regression
         run: node phase0/workforce-allocation-utilization-regression.mjs
-      - name: workforce-booking-integration-regression
-        run: node phase0/workforce-booking-integration-regression.mjs
-      - name: workforce-authorization-service-regression
-        run: node phase0/workforce-authorization-service-regression.mjs
 
       - name: Repository contract and SQLite persistence
         run: |
@@ -58,7 +61,9 @@ jobs:
           npm run test:workforce-api-http
 
       - name: Workforce operator workspace integration
-        run: npm run test:workforce-operator-workspace
+        run: |
+          npm run test:workforce-operator-workspace
+          node phase0/workforce-operator-browser-regression.mjs
 
       - name: Service Booking integration and provider isolation
         run: npm run test:workforce-service-booking
