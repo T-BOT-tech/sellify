@@ -40,6 +40,7 @@ import { decideLogisticsSchedulingTerminal } from '../../app/src/verticals/logis
 
 
 import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration } from './workforce-sqlite-migrations.js';
+import { isEligibleWorkforceMemberForBooking } from './workforce-booking-integration.js';
 import { WorkforceSqliteRepository } from './workforce-sqlite-repository.js';
 import { authorizeWorkforceRepositoryAccess } from './workforce-authorization-adapter.js';
 
@@ -6415,6 +6416,7 @@ function serviceBookingFromRow(row) {
     requested_start: String(row.requested_start), requested_end: String(row.requested_end),
     appointment_mode: String(row.appointment_mode), customer_note: row.customer_note ?? null,
     service_resource_id: row.service_resource_id || null,
+    workforce_member_id: row.workforce_member_id || null,
     service_resource_name: row.service_resource_name ?? null,
     status: String(row.status), version: Number(row.version),
     created_by: row.created_by || null, updated_by: row.updated_by || null,
@@ -6432,6 +6434,58 @@ const SERVICE_BOOKING_TRANSITIONS = Object.freeze({
   IN_PROGRESS: new Set(['COMPLETED','FAILED']),
   COMPLETED: new Set(), REJECTED: new Set(), CANCELLED: new Set(), FAILED: new Set(),
 });
+function assertWorkforceMemberBookingEligibility({
+  memberId, organizationId, tenantId, chatId, booking, resource, bookingId,
+}) {
+  const member = db.prepare(`
+    SELECT * FROM workforce_members
+    WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
+  `).get(String(memberId), String(organizationId), String(tenantId), String(chatId));
+  if (!member || member.status !== 'ACTIVE') {
+    throw Object.assign(new Error('Workforce member must be ACTIVE in this organization and tenant'), {
+      statusCode: 409, code: 'SERVICE_BOOKING_WORKFORCE_MEMBER_INELIGIBLE',
+    });
+  }
+  const assignments = db.prepare(`
+    SELECT * FROM workforce_assignments
+    WHERE organization_id = ? AND tenant_id = ? AND chat_id = ?
+      AND member_id = ? AND resource_id = ? AND status = 'ACTIVE'
+      AND starts_at <= ? AND ends_at >= ?
+      AND (location_id IS NULL OR location_id = ?)
+      AND (assignment_type <> 'BOOKING' OR booking_id = ?)
+    ORDER BY starts_at, id
+  `).all(String(organizationId), String(tenantId), String(chatId), String(memberId),
+    String(resource.id), booking.requested_start, booking.requested_end,
+    resource.location_id == null ? null : String(resource.location_id), String(bookingId));
+  const availabilityWindows = db.prepare(`
+    SELECT * FROM workforce_availability_windows
+    WHERE organization_id = ? AND tenant_id = ? AND chat_id = ?
+      AND member_id = ? AND availability = 'AVAILABLE' AND status = 'ACTIVE'
+      AND (resource_id IS NULL OR resource_id = ?)
+      AND (location_id IS NULL OR location_id = ?)
+      AND starts_at <= ? AND ends_at >= ?
+    ORDER BY starts_at, id
+  `).all(String(organizationId), String(tenantId), String(chatId), String(memberId),
+    String(resource.id), resource.location_id == null ? null : String(resource.location_id),
+    booking.requested_start, booking.requested_end);
+
+  const bookingContext = {
+    ...booking,
+    organization_id: String(organizationId),
+    chat_id: String(chatId),
+    service_resource_id: String(resource.id),
+    resource_location_id: resource.location_id == null ? null : String(resource.location_id),
+  };
+  const eligible = assignments.some((assignment) => availabilityWindows.some((availability) =>
+    isEligibleWorkforceMemberForBooking(member, assignment, availability, bookingContext)));
+  if (!eligible) {
+    throw Object.assign(new Error('Workforce member requires an ACTIVE resource assignment and AVAILABLE window covering the complete booking interval'), {
+      statusCode: 409, code: 'SERVICE_BOOKING_WORKFORCE_MEMBER_INELIGIBLE',
+    });
+  }
+  return member;
+}
+
 function bookingRequiredText(value, field, maxLength = 200) {
   const result = String(value ?? '').trim();
   if (!result || result.length > maxLength) throw Object.assign(new Error(`${field} is required and must be at most ${maxLength} characters`), { statusCode: 400, code: 'SERVICE_BOOKING_INPUT_INVALID' });
@@ -6828,6 +6882,7 @@ export async function createServiceBooking(chatId, serverOrderId, input = {}, ac
   const organizationId = String(tenant?.organization_id || tenant?.organizationId || '');
   if (!organizationId) throw Object.assign(new Error('Order organization is required'), { statusCode: 409, code: 'ORDER_ORGANIZATION_REQUIRED' });
   assertServiceBookingAuthorityBoundary(input);
+  if (input.workforce_member_id || input.workforceMemberId) throw Object.assign(new Error('Workforce member linkage is only accepted during authorized booking confirmation'), { statusCode: 400, code: 'SERVICE_BOOKING_WORKFORCE_MEMBER_CONFIRM_ONLY' });
   const orderId = String(serverOrderId || '').trim();
   const serviceItemId = bookingRequiredText(input.service_item_id ?? input.serviceItemId, 'service_item_id');
   const requestedStart = bookingTimestamp(input.requested_start ?? input.requestedStart, 'requested_start');
@@ -6879,6 +6934,9 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
   assertServiceBookingAuthorityBoundary(input);
   const target=String(input.status||input.next_status||input.nextStatus||'').trim().toUpperCase();
   const resourceId=String(input.service_resource_id||input.serviceResourceId||'').trim()||null;
+  const workforceMemberId=String(input.workforce_member_id||input.workforceMemberId||'').trim()||null;
+  if (workforceMemberId && target !== 'CONFIRMED') throw Object.assign(new Error('Workforce member linkage is only valid during booking confirmation'), { statusCode: 400, code: 'SERVICE_BOOKING_WORKFORCE_MEMBER_CONFIRM_ONLY' });
+  if (workforceMemberId && (actor?.actorType === 'TELEGRAM_BUYER' || !actor?.userId)) throw Object.assign(new Error('An authenticated organization actor must assign the Workforce member'), { statusCode: 403, code: 'SERVICE_BOOKING_WORKFORCE_MEMBER_ASSIGNMENT_FORBIDDEN' });
   if(target!=='CONFIRMED'&&resourceId) throw Object.assign(new Error('A service resource may only be assigned during confirmation'),{statusCode:400,code:'SERVICE_BOOKING_RESOURCE_ASSIGNMENT_INVALID'});
   const commandKey=String(input.idempotencyKey||input.idempotency_key||'').trim();
   if(!commandKey) throw Object.assign(new Error('Idempotency-Key is required'),{statusCode:400,code:'IDEMPOTENCY_KEY_REQUIRED'});
@@ -6892,7 +6950,7 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
   const fingerprint=crypto.createHash('sha256').update(JSON.stringify({booking_id:String(bookingId),order_id:String(serverOrderId),status:target,expected_version:expectedVersion,service_resource_id:resourceId,reason,completion_note:completionNote})).digest('hex');
   db.exec('BEGIN IMMEDIATE');
   try {
-    const freshTenant=db.prepare('SELECT organization_id FROM tenants WHERE chat_id = ?').get(String(chatId));
+    const freshTenant=db.prepare('SELECT organization_id, tenant_id FROM tenants WHERE chat_id = ?').get(String(chatId));
     if(String(freshTenant?.organization_id||'')!==organizationId) throw Object.assign(new Error('Tenant organization changed during booking transition'),{statusCode:409,code:'ORDER_ORGANIZATION_MISMATCH'});
     const row=db.prepare('SELECT * FROM service_bookings WHERE id=? AND organization_id=? AND chat_id=? AND server_order_id=?').get(String(bookingId),organizationId,String(chatId),String(serverOrderId));
     if(!row) throw Object.assign(new Error('Service booking not found'),{statusCode:404,code:'SERVICE_BOOKING_NOT_FOUND'});
@@ -6955,6 +7013,17 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
         start:row.requested_start,end:row.requested_end,
       });
       if(assessment.scheduleAssessment!=='WITHIN_DECLARED_HOURS') throw Object.assign(new Error('Requested appointment is outside declared service hours or schedule is unknown'),{statusCode:409,code:assessment.scheduleAssessment==='OUTSIDE_DECLARED_HOURS'?'SERVICE_BOOKING_OUTSIDE_DECLARED_HOURS':'SERVICE_BOOKING_AVAILABILITY_UNKNOWN',details:{schedule_assessment:assessment.scheduleAssessment,reason:assessment.reason}});
+      if (workforceMemberId) {
+        assertWorkforceMemberBookingEligibility({
+          memberId: workforceMemberId,
+          organizationId,
+          tenantId: String(freshTenant.tenant_id),
+          chatId: String(chatId),
+          booking: { requested_start: row.requested_start, requested_end: row.requested_end },
+          resource,
+          bookingId: String(bookingId),
+        });
+      }
       const conflict=db.prepare(`SELECT id,booking_id,starts_at,ends_at FROM service_resource_commitments
         WHERE organization_id=? AND chat_id=? AND resource_id=? AND state='COMMITTED'
           AND starts_at < ? AND ends_at > ? LIMIT 1`).get(organizationId,String(chatId),resourceId,row.requested_end,row.requested_start);
@@ -6964,6 +7033,7 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
     const now=nowIso(), nextVersion=expectedVersion+1;
     const changed=db.prepare(`UPDATE service_bookings SET
       status=?,version=?,updated_by=?,updated_at=?,service_resource_id=CASE WHEN ?='CONFIRMED' THEN ? ELSE service_resource_id END,
+      workforce_member_id=CASE WHEN ?='CONFIRMED' THEN ? ELSE workforce_member_id END,
       started_at=CASE WHEN ?='IN_PROGRESS' THEN ? ELSE started_at END,
       started_by=CASE WHEN ?='IN_PROGRESS' THEN ? ELSE started_by END,
       completed_at=CASE WHEN ?='COMPLETED' THEN ? ELSE completed_at END,
@@ -6971,7 +7041,7 @@ export async function transitionServiceBooking(chatId, serverOrderId, bookingId,
       completion_note=CASE WHEN ?='COMPLETED' THEN ? ELSE completion_note END,
       status_reason=CASE WHEN ? IN ('REJECTED','FAILED','CANCELLED') THEN ? ELSE status_reason END
       WHERE id=? AND organization_id=? AND version=?`).run(
-        target,nextVersion,actorId,now,target,resourceId,
+        target,nextVersion,actorId,now,target,resourceId,target,workforceMemberId,
         target,now,target,actorId,target,now,target,actorId,target,completionNote,
         target,reason,String(bookingId),organizationId,expectedVersion,
       );
