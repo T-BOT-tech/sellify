@@ -244,13 +244,17 @@ export class WorkforceSqliteRepository {
       `).get(String(data.calendar_id), scope.organization_id, scope.tenant_id, scope.chat_id);
       if (!calendar) throw fail('WORKFORCE_CALENDAR_SCOPE_INVALID', 'Calendar does not belong to the active organization and tenant', 422);
     }
-    if (data.user_id) {
-      const user = this.db.prepare(`
-        SELECT u.id FROM users u
-        JOIN memberships m ON m.user_id = u.id
-        WHERE u.id = ? AND m.chat_id = ? AND m.status = 'active'
-      `).get(String(data.user_id), scope.chat_id);
-      if (!user) throw fail('WORKFORCE_USER_MEMBERSHIP_REQUIRED', 'User must have an active membership in this tenant', 422);
+    if (Object.hasOwn(data, 'user_id')) {
+      const userId = data.user_id == null ? null : String(data.user_id).trim();
+      if (userId === '') throw fail('WORKFORCE_USER_ID_INVALID', 'user_id must be omitted, null, or a valid existing user ID', 422);
+      if (userId) {
+        const user = this.db.prepare(`
+          SELECT u.id FROM users u
+          JOIN memberships m ON m.user_id = u.id
+          WHERE u.id = ? AND m.chat_id = ? AND m.status = 'active'
+        `).get(userId, scope.chat_id);
+        if (!user) throw fail('WORKFORCE_USER_MEMBERSHIP_REQUIRED', 'User must have an active membership in this tenant', 422);
+      }
     }
     if (data.primary_location_id || data.location_id) {
       const locationId = String(data.primary_location_id || data.location_id);
@@ -620,6 +624,113 @@ export class WorkforceSqliteRepository {
     this.assertResourceVisibility(context, entity, record);
     this.assertAuthorized(context, entity, operation, record);
     return record;
+  }
+
+  linkAccount(entity, id, input = {}, context = {}) {
+    if (entity !== 'member') throw fail('WORKFORCE_ENTITY_INVALID', 'Account links are supported only for Workforce members');
+    const scope = this.assertContext(context);
+    const expected = Number(input.expected_version);
+    const validation = validateWorkforceRepositoryOperation('member', 'link_account', {
+      ...scope, expected_version: expected,
+    });
+    if (!validation.valid) throw fail('WORKFORCE_ACCOUNT_LINK_INVALID', validation.errors.join('; '));
+    if (typeof input.user_id !== 'string' || !input.user_id.trim()) {
+      throw fail('WORKFORCE_USER_ID_REQUIRED', 'user_id is required to link an existing account', 400);
+    }
+
+    const userId = input.user_id.trim();
+    const record = this.getForMutation('member', id, scope, context, 'link_account');
+    if (Number(record.version) !== expected) {
+      throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
+    }
+    if (record.user_id) {
+      throw fail('WORKFORCE_ACCOUNT_ALREADY_LINKED', 'Workforce member already has a linked account', 409);
+    }
+
+    const now = this.clock();
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.assertReferences('member', { user_id: userId }, scope);
+      const existingLink = this.db.prepare(`
+        SELECT id FROM workforce_members
+        WHERE organization_id = ? AND tenant_id = ? AND user_id = ? AND id <> ?
+        LIMIT 1
+      `).get(scope.organization_id, scope.tenant_id, userId, String(id));
+      if (existingLink) {
+        throw fail('WORKFORCE_USER_ALREADY_LINKED', 'This Sellify user is already linked to another Workforce member in this organization', 409);
+      }
+
+      const result = this.db.prepare(`
+        UPDATE workforce_members
+        SET user_id = ?, updated_by = ?, updated_at = ?, version = version + 1
+        WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
+          AND version = ? AND user_id IS NULL
+      `).run(userId, context.actor_id || null, now, String(id),
+        scope.organization_id, scope.tenant_id, scope.chat_id, expected);
+      if (Number(result.changes) !== 1) {
+        throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
+      }
+      this.writeAudit(scope, 'member', String(id), 'account_linked', {
+        user_id: userId, version: expected + 1,
+      }, context);
+      const row = this.db.prepare(`
+        SELECT * FROM workforce_members
+        WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
+      `).get(String(id), scope.organization_id, scope.tenant_id, scope.chat_id);
+      this.db.exec('COMMIT');
+      return fromDatabaseRow(row, TABLES.member.json);
+    } catch (error) {
+      if (this.db.isTransaction) this.db.exec('ROLLBACK');
+      if (String(error?.code || '').startsWith('SQLITE_CONSTRAINT')) {
+        throw fail('WORKFORCE_CONSTRAINT_CONFLICT', 'Workforce account link conflicts with an existing scoped record or canonical reference', 409);
+      }
+      throw error;
+    }
+  }
+
+  unlinkAccount(entity, id, input = {}, context = {}) {
+    if (entity !== 'member') throw fail('WORKFORCE_ENTITY_INVALID', 'Account links are supported only for Workforce members');
+    const scope = this.assertContext(context);
+    const expected = Number(input.expected_version);
+    const validation = validateWorkforceRepositoryOperation('member', 'unlink_account', {
+      ...scope, expected_version: expected,
+    });
+    if (!validation.valid) throw fail('WORKFORCE_ACCOUNT_UNLINK_INVALID', validation.errors.join('; '));
+
+    const record = this.getForMutation('member', id, scope, context, 'unlink_account');
+    if (Number(record.version) !== expected) {
+      throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
+    }
+    if (!record.user_id) {
+      throw fail('WORKFORCE_ACCOUNT_NOT_LINKED', 'Workforce member has no linked Sellify account', 409);
+    }
+
+    const now = this.clock();
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const result = this.db.prepare(`
+        UPDATE workforce_members
+        SET user_id = NULL, updated_by = ?, updated_at = ?, version = version + 1
+        WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
+          AND version = ? AND user_id = ?
+      `).run(context.actor_id || null, now, String(id),
+        scope.organization_id, scope.tenant_id, scope.chat_id, expected, String(record.user_id));
+      if (Number(result.changes) !== 1) {
+        throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
+      }
+      this.writeAudit(scope, 'member', String(id), 'account_unlinked', {
+        previous_user_id: record.user_id, version: expected + 1,
+      }, context);
+      const row = this.db.prepare(`
+        SELECT * FROM workforce_members
+        WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
+      `).get(String(id), scope.organization_id, scope.tenant_id, scope.chat_id);
+      this.db.exec('COMMIT');
+      return fromDatabaseRow(row, TABLES.member.json);
+    } catch (error) {
+      if (this.db.isTransaction) this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   transition(entity, operation, id, input = {}, context = {}) {
