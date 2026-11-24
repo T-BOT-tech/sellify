@@ -60,6 +60,15 @@ for (const token of [
 assert.equal(handler.includes('createServiceBooking('), false);
 assert.equal(handler.includes('createLogisticsSchedulingActivity('), false);
 
+const bookingHandlerStart = server.indexOf('async function handleServiceBookings(');
+const bookingHandlerEnd = server.indexOf('async function handleServiceDeliveryAssessment(', bookingHandlerStart);
+assert.ok(bookingHandlerStart >= 0 && bookingHandlerEnd > bookingHandlerStart);
+const bookingHandler = server.slice(bookingHandlerStart, bookingHandlerEnd);
+assert.ok(bookingHandler.includes('workforceProviderResourceIds(session)'));
+assert.ok(bookingHandler.includes('listServiceProviderBookings('));
+assert.ok(bookingHandler.includes('session.userId'));
+assert.ok(bookingHandler.includes('booking.order_id'));
+
 assert.ok(server.includes('\\/workforce\\/([a-z-]+)'));
 for (const routeKey of [
   "members: 'member'", "profiles: 'profile'", "engagements: 'engagement'",
