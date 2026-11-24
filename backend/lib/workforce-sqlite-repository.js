@@ -12,7 +12,7 @@ const TABLES = Object.freeze({
   },
   profile: {
     table: 'workforce_profiles', id: 'id',
-    fields: ['member_id','skills_json','qualifications_json','languages_json','service_capabilities_json','visibility','notes','effective_from','effective_until'],
+    fields: ['member_id','skills','qualifications','languages','service_capabilities','visibility','notes','effective_from','effective_until'],
     json: ['skills_json','qualifications_json','languages_json','service_capabilities_json'],
   },
   engagement: {
@@ -22,7 +22,7 @@ const TABLES = Object.freeze({
   },
   calendar: {
     table: 'workforce_calendars', id: 'id', state: 'status',
-    fields: ['member_id','location_id','timezone','weekly_schedule_json','holiday_calendar_json','effective_from','effective_until'],
+    fields: ['member_id','location_id','timezone','weekly_schedule','holiday_calendar','effective_from','effective_until'],
     json: ['weekly_schedule_json','holiday_calendar_json'],
   },
   calendar_exception: {
@@ -42,7 +42,7 @@ const TABLES = Object.freeze({
   },
   shift: {
     table: 'workforce_shifts', id: 'id', state: 'status',
-    fields: ['member_id','resource_id','location_id','starts_at','ends_at','timezone','break_rules_json','recurrence_source_id','assignment_source_id'],
+    fields: ['member_id','resource_id','location_id','starts_at','ends_at','timezone','break_rules','recurrence_source_id','assignment_source_id'],
     json: ['break_rules_json'],
   },
   allocation: {
@@ -136,6 +136,10 @@ function canonical(value) {
 
 function fingerprint(value) {
   return crypto.createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
+}
+
+function databaseColumn(field, jsonColumns) {
+  return jsonColumns.includes(`${field}_json`) ? `${field}_json` : field;
 }
 
 function toDatabaseValue(value, column, jsonColumns) {
@@ -250,6 +254,11 @@ export class WorkforceSqliteRepository {
       && String(row.resource_id || '') !== String(context.resource_id)) throw scopedError();
     if (context.member_id && row.member_id
       && String(row.member_id) !== String(context.member_id)) throw scopedError();
+    if (context.member_id && entity === 'calendar_exception') {
+      const calendar = this.db.prepare('SELECT member_id FROM workforce_calendars WHERE id = ? AND organization_id = ? AND tenant_id = ?')
+        .get(String(row.calendar_id), String(context.organization_id), String(context.tenant_id));
+      if (!calendar || String(calendar.member_id) !== String(context.member_id)) throw scopedError();
+    }
     if (context.provider_user_id) {
       const member = row.member_id
         ? this.db.prepare('SELECT user_id FROM workforce_members WHERE id = ? AND organization_id = ? AND tenant_id = ?')
@@ -290,9 +299,13 @@ export class WorkforceSqliteRepository {
       clauses.push('resource_id = ?');
       values.push(String(context.resource_id));
     }
-    if (context.member_id && ['profile','engagement','calendar','calendar_exception','availability','assignment','shift','allocation','utilization'].includes(entity)) {
+    if (context.member_id && ['profile','engagement','calendar','availability','assignment','shift','allocation','utilization'].includes(entity)) {
       clauses.push('member_id = ?');
       values.push(String(context.member_id));
+    }
+    if (context.member_id && entity === 'calendar_exception') {
+      clauses.push('calendar_id IN (SELECT id FROM workforce_calendars WHERE organization_id = ? AND tenant_id = ? AND member_id = ?)');
+      values.push(scope.organization_id, scope.tenant_id, String(context.member_id));
     }
     if (context.provider_user_id) {
       if (entity === 'member') {
@@ -300,6 +313,9 @@ export class WorkforceSqliteRepository {
         values.push(String(context.provider_user_id));
       } else if (spec.fields.includes('member_id')) {
         clauses.push('member_id IN (SELECT id FROM workforce_members WHERE organization_id = ? AND tenant_id = ? AND user_id = ?)');
+        values.push(scope.organization_id, scope.tenant_id, String(context.provider_user_id));
+      } else if (entity === 'calendar_exception') {
+        clauses.push('calendar_id IN (SELECT c.id FROM workforce_calendars c JOIN workforce_members m ON m.id = c.member_id WHERE c.organization_id = ? AND c.tenant_id = ? AND m.user_id = ?)');
         values.push(scope.organization_id, scope.tenant_id, String(context.provider_user_id));
       }
     }
@@ -329,7 +345,7 @@ export class WorkforceSqliteRepository {
     });
     if (!validation.valid) throw fail('WORKFORCE_CREATE_INVALID', validation.errors.join('; '));
     const data = {};
-    for (const field of spec.fields) if (Object.hasOwn(payload, field)) data[field] = payload[field];
+    for (const field of spec.fields) if (Object.hasOwn(payload, field)) data[databaseColumn(field, spec.json)] = payload[field];
     this.assertReferences(entity, data, scope);
     const requestHash = fingerprint({ entity, data });
     const existing = this.db.prepare(`
@@ -404,7 +420,7 @@ export class WorkforceSqliteRepository {
     const existing = this.getForMutation(entity, id, scope, context, 'update');
     if (Number(existing.version) !== expected) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
     const data = {};
-    for (const field of spec.fields) if (Object.hasOwn(input, field)) data[field] = input[field];
+    for (const field of spec.fields) if (Object.hasOwn(input, field)) data[databaseColumn(field, spec.json)] = input[field];
     if (Object.keys(data).length === 0) throw fail('WORKFORCE_UPDATE_EMPTY', 'At least one mutable Workforce field is required');
     this.assertReferences(entity, data, scope);
     const now = this.clock();
