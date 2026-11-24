@@ -130,6 +130,17 @@ Status is ACTIVE or CANCELLED. calendar_id is immutable after creation.
 
 Availability values: AVAILABLE, UNAVAILABLE, TENTATIVE, BLACKOUT.
 
+### Availability recurrence semantics
+
+- A null or empty recurrence_rule represents the existing one-time starts_at/ends_at interval.
+- Recurring windows use a bounded RRULE subset: FREQ=DAILY or WEEKLY, optional INTERVAL (1–366), WEEKLY-only BYDAY (MO,TU,WE,TH,FR,SA,SU), and either COUNT (1–10000) or UNTIL (YYYYMMDD or YYYYMMDDTHHmmssZ).
+- starts_at is DTSTART. Its local date and wall-clock time are interpreted in the record's IANA timezone; ends_at supplies the local end time for each occurrence.
+- effective_from and effective_until bound occurrence dates inclusively.
+- Weekly rules default BYDAY to the weekday of DTSTART. COUNT includes DTSTART when it matches the rule.
+- Recurring windows must begin and end on the same local date. Overnight recurrence windows, monthly/yearly rules, ordinal BYDAY, and other RFC 5545 features are not supported.
+- Invalid or unsupported recurrence rules and nonexistent local times fail closed for booking eligibility. The evaluator checks the complete requested appointment interval and preserves local wall-clock time across daylight-saving changes.
+- This is a Workforce availability projection only; it does not replace Service Resource Availability or Service Resource Commitment authority.
+
 Record status is ACTIVE or INACTIVE. Availability is potential capacity, not a booking. member_id is immutable after creation.
 
 ### workforce_assignments
