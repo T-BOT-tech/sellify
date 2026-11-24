@@ -112,7 +112,7 @@ jobs:
                   profiles='["migration"]'
                 fi
                 ;;
-              *) profiles="[\\"$profile\\"]" ;;
+              *) profiles=$(printf '["%s"]' "$profile") ;;
             esac
           fi
           {
