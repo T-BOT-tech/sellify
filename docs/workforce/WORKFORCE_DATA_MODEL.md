@@ -225,6 +225,9 @@ Statuses: PLANNED, IN_PROGRESS, COMPLETED, CANCELLED.
 
 member_id, booking_id, and operational_task_id are immutable after creation. Utilization records actual work; it is not declared availability.
 
+A read-only summary projection is available at GET /tenants/:chatId/workforce/utilization/summary. It aggregates the existing utilization events by member and Service Resource without creating or changing records. It reports event counts, planned minutes, measured completed planned minutes, actual minutes, variance, and completed events missing valid actual timestamps. Optional from/to filters are ISO-8601 timestamps and filter by planned_starts_at using an inclusive from and exclusive to boundary. Existing utilization view permission, tenant scope, provider member identity, and assigned resource scope apply.
+
+
 ## Canonical references and foreign keys
 
 - organization_id references organizations.
