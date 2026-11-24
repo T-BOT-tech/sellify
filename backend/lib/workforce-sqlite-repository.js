@@ -8,7 +8,7 @@ import {
 const TABLES = Object.freeze({
   member: {
     table: 'workforce_members', id: 'id', state: 'status',
-    fields: ['member_type','primary_location_id','timezone','display_name'],
+    fields: ['member_type','primary_location_id','timezone','display_name','employee_number'],
     createOnlyFields: ['user_id'],
     json: [],
   },
@@ -125,6 +125,13 @@ const TIMESTAMP_FIELDS = new Set([
 ]);
 
 function normalizeRepositoryValue(field, value) {
+  if (field === 'employee_number') {
+    if (value == null) return null;
+    if (typeof value !== 'string') throw fail('WORKFORCE_EMPLOYEE_NUMBER_INVALID', 'employee_number must be a string');
+    const normalized = value.trim();
+    if (normalized.length > 80) throw fail('WORKFORCE_EMPLOYEE_NUMBER_INVALID', 'employee_number must not exceed 80 characters');
+    return normalized || null;
+  }
   if (field === 'recurrence_rule' && value != null && value !== '') {
     const result = validateWorkforceRecurrenceRule(value);
     if (!result.valid) throw fail('WORKFORCE_RECURRENCE_RULE_INVALID', result.errors.join('; '));
@@ -146,7 +153,7 @@ function normalizeRepositoryValue(field, value) {
 
 const FILTER_COLUMNS = new Set([
   'member_id','resource_id','location_id','booking_id','operational_task_id',
-  'calendar_id','status','state','availability','exception_type','assignment_type',
+  'calendar_id','status','state','availability','exception_type','assignment_type','employee_number',
 ]);
 
 function fail(code, message, statusCode = 400) {
