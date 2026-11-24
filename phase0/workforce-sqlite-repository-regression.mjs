@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { runWorkforceSqliteMigrations } from '../backend/lib/workforce-sqlite-migrations.js';
+import { runWorkforceSqliteMigrations, runWorkforceServiceBookingMigration } from '../backend/lib/workforce-sqlite-migrations.js';
 import { WorkforceSqliteRepository } from '../backend/lib/workforce-sqlite-repository.js';
 
 const directory = mkdtempSync(path.join(os.tmpdir(), 'sellify-workforce-repository-'));
@@ -58,6 +58,7 @@ try {
       VALUES ('booking-a','org-a','chat-a'), ('booking-b','org-b','chat-b');
   `);
   runWorkforceSqliteMigrations(db);
+  runWorkforceServiceBookingMigration(db);
 
   const created = repository.create('member', {
     idempotency_key: 'member-create-a',
