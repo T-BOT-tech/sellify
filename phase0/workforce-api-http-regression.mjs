@@ -153,6 +153,10 @@ try {
   const memberId = created.payload.record?.id;
   assert.ok(memberId, 'create response must return the canonical Workforce member id');
 
+  const externalMember = await createWorkforceRecord(baseUrl, ownerSession.token, collection,
+    'workforce-http-external-' + suffix, { member_type: 'CONTRACTOR', display_name: 'External HTTP Contractor' });
+  assert.equal(externalMember.user_id, null, 'external contractor creation must not require an Identity account');
+
   const replay = await jsonRequest(baseUrl, collection, {
     token: ownerSession.token,
     method: 'POST',
