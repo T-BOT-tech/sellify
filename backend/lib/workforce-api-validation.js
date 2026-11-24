@@ -1,3 +1,4 @@
+import { validateWorkforceRecurrenceRule } from './workforce-recurrence-contract.js';
 import { WORKFORCE_MEMBER_TYPES } from './workforce-contract.js';
 import { WORKFORCE_PROFILE_VISIBILITY } from './workforce-profile-contract.js';
 import { WORKFORCE_ENGAGEMENT_TYPES } from './workforce-engagement-contract.js';
@@ -73,6 +74,10 @@ export function validateWorkforceApiPayload(entity, operation, input = {}) {
 
   if (input.all_day !== undefined && typeof input.all_day !== 'boolean') {
     errors.push('all_day must be a boolean');
+  }
+  if (entity === 'availability' && input.recurrence_rule !== undefined) {
+    const recurrence = validateWorkforceRecurrenceRule(input.recurrence_rule);
+    if (!recurrence.valid) errors.push(...recurrence.errors);
   }
   if (input.timezone !== undefined) {
     try {
