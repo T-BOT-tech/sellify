@@ -335,7 +335,7 @@ export class WorkforceSqliteRepository {
       if (entity === 'member') {
         clauses.push('user_id = ?');
         values.push(String(context.provider_user_id));
-      } else if (spec.fields.includes('member_id')) {
+      } else if (spec.fields.includes('member_id') || (spec.createOnlyFields || []).includes('member_id')) {
         clauses.push('member_id IN (SELECT id FROM workforce_members WHERE organization_id = ? AND tenant_id = ? AND user_id = ?)');
         values.push(scope.organization_id, scope.tenant_id, String(context.provider_user_id));
       } else if (entity === 'calendar_exception') {
