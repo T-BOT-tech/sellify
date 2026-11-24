@@ -71,6 +71,7 @@ try {
   const suffix = String(Date.now());
   const owner = await store.getOrCreateUserByTelegram('workforce-http-owner-' + suffix, 'Workforce HTTP Owner');
   const memberUser = await store.getOrCreateUserByTelegram('workforce-http-member-' + suffix, 'Workforce HTTP Member');
+  const externalAccountUser = await store.getOrCreateUserByTelegram('workforce-http-external-account-' + suffix, 'External Workforce Account');
   const otherOwner = await store.getOrCreateUserByTelegram('workforce-http-other-' + suffix, 'Other Tenant Owner');
   const tenant = await store.createTenantForUser({
     userId: owner.id,
@@ -89,6 +90,7 @@ try {
     timezone: 'Africa/Addis_Ababa',
   });
   await store.ensureMembership(memberUser.id, tenant.chatId, 'staff');
+  await store.ensureMembership(externalAccountUser.id, tenant.chatId, 'staff');
   const ownerSession = await store.createSession({
     userId: owner.id, chatId: tenant.chatId, deviceName: 'Workforce HTTP owner',
   });
@@ -156,6 +158,26 @@ try {
   const externalMember = await createWorkforceRecord(baseUrl, ownerSession.token, collection,
     'workforce-http-external-' + suffix, { member_type: 'CONTRACTOR', display_name: 'External HTTP Contractor' });
   assert.equal(externalMember.user_id, null, 'external contractor creation must not require an Identity account');
+  const externalItem = collection + '/' + encodeURIComponent(externalMember.id);
+  const linkedExternal = await jsonRequest(baseUrl, externalItem + '/link-account', {
+    token: ownerSession.token, method: 'POST',
+    body: { expected_version: 1, user_id: externalAccountUser.id },
+  });
+  assert.equal(linkedExternal.response.status, 200, JSON.stringify(linkedExternal.payload));
+  assert.equal(linkedExternal.payload.record?.user_id, externalAccountUser.id);
+  assert.equal(linkedExternal.payload.record?.version, 2);
+  const unlinkedExternal = await jsonRequest(baseUrl, externalItem + '/unlink-account', {
+    token: ownerSession.token, method: 'POST', body: { expected_version: 2 },
+  });
+  assert.equal(unlinkedExternal.response.status, 200, JSON.stringify(unlinkedExternal.payload));
+  assert.equal(unlinkedExternal.payload.record?.user_id, null);
+  assert.equal(unlinkedExternal.payload.record?.version, 3);
+  const crossTenantLink = await jsonRequest(baseUrl, externalItem + '/link-account', {
+    token: ownerSession.token, method: 'POST',
+    body: { expected_version: 3, user_id: otherOwner.id },
+  });
+  assert.equal(crossTenantLink.response.status, 422);
+  assert.equal(crossTenantLink.payload.error?.code, 'WORKFORCE_USER_MEMBERSHIP_REQUIRED');
 
   const replay = await jsonRequest(baseUrl, collection, {
     token: ownerSession.token,
