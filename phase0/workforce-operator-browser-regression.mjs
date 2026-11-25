@@ -97,6 +97,10 @@ try {
   let generatedShift = null;
   let profile = null;
   let locationAssignment = null;
+  let leaveRequest = null;
+  let absenceRecord = null;
+  const leaveHistory = [];
+  const absenceHistory = [];
   page.on('pageerror', error => pageErrors.push(error.stack || error.message));
 
   await page.route('**/*', async route => {
@@ -216,12 +220,77 @@ try {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: engagement ? [engagement] : [] }) });
       return;
     }
+    if (pathname.endsWith('/leave-requests') && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: leaveRequest ? [leaveRequest] : [] }) });
+      return;
+    }
+    if (pathname.endsWith('/absences') && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: absenceRecord ? [absenceRecord] : [] }) });
+      return;
+    }
+    if (pathname.endsWith('/leave-requests') && method === 'POST') {
+      assert.equal(body.member_id, member.id);
+      assert.equal(body.leave_category, 'ANNUAL');
+      assert.equal(body.all_day, true);
+      assert.ok(Number.isFinite(Date.parse(body.starts_at)) && Number.isFinite(Date.parse(body.ends_at)));
+      assert.ok(Date.parse(body.starts_at) < Date.parse(body.ends_at));
+      assert.ok(body.timezone);
+      assert.equal(body.reason, 'Synthetic planned leave');
+      assert.match(request.headers()['idempotency-key'] || '', /^workforce-ui-/);
+      leaveRequest = { id: 'leave-synthetic-1', ...body, requested_by: 'synthetic-manager', status: 'DRAFT', version: 1 };
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ record: leaveRequest }) });
+      return;
+    }
+    if (pathname.endsWith('/leave-synthetic-1/submit') && method === 'POST') {
+      assert.equal(body.expected_version, leaveRequest.version);
+      leaveRequest = { ...leaveRequest, status: 'PENDING_APPROVAL', version: leaveRequest.version + 1 };
+      leaveHistory.push({ action: 'workforce.leave_request.submit', created_at: '2026-11-25T10:00:00.000Z', metadata: {} });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: leaveRequest }) });
+      return;
+    }
+    if (pathname.endsWith('/leave-synthetic-1/approve') && method === 'POST') {
+      assert.equal(body.expected_version, leaveRequest.version);
+      leaveRequest = { ...leaveRequest, status: 'APPROVED', decision_reason: body.decision_reason || '', version: leaveRequest.version + 1 };
+      leaveHistory.push({ action: 'workforce.leave_request.approve', created_at: '2026-11-25T10:05:00.000Z', metadata: { decision_reason: body.decision_reason || '' } });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: leaveRequest }) });
+      return;
+    }
+    if (pathname.endsWith('/leave-synthetic-1/cancel') && method === 'POST') {
+      assert.equal(body.expected_version, leaveRequest.version);
+      assert.equal(body.reason, 'Coverage changed');
+      leaveRequest = { ...leaveRequest, status: 'CANCELLED', version: leaveRequest.version + 1 };
+      leaveHistory.push({ action: 'workforce.leave_request.cancel', created_at: '2026-11-25T10:10:00.000Z', metadata: { reason: body.reason } });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: leaveRequest }) });
+      return;
+    }
+    if (pathname.endsWith('/absences') && method === 'POST') {
+      assert.equal(body.member_id, member.id);
+      assert.equal(body.absence_type, 'SICKNESS');
+      assert.ok(Number.isFinite(Date.parse(body.starts_at)) && Number.isFinite(Date.parse(body.ends_at)));
+      assert.ok(Date.parse(body.starts_at) < Date.parse(body.ends_at));
+      assert.ok(body.timezone);
+      assert.equal(body.reason, 'Synthetic unplanned absence');
+      assert.match(request.headers()['idempotency-key'] || '', /^workforce-ui-/);
+      absenceRecord = { id: 'absence-synthetic-1', ...body, status: 'RECORDED', version: 1 };
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ record: absenceRecord }) });
+      return;
+    }
+    if (pathname.endsWith('/absence-synthetic-1/void') && method === 'POST') {
+      assert.equal(body.expected_version, absenceRecord.version);
+      assert.equal(body.reason, 'Incorrect synthetic record');
+      absenceRecord = { ...absenceRecord, status: 'VOIDED', version: absenceRecord.version + 1 };
+      absenceHistory.push({ action: 'workforce.absence.void', created_at: '2026-11-25T10:15:00.000Z', metadata: { reason: body.reason } });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: absenceRecord }) });
+      return;
+    }
     if (pathname.endsWith('/shifts') && method === 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: generatedShift ? [generatedShift] : [] }) });
       return;
     }
     if (pathname.endsWith('/history') && method === 'GET') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: shiftHistory }) });
+      const records = pathname.includes('/leave-requests/') ? leaveHistory
+        : pathname.includes('/absences/') ? absenceHistory : shiftHistory;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records }) });
       return;
     }
     if (pathname.endsWith('/shift-templates') && method === 'GET') {
@@ -454,6 +523,62 @@ try {
   assert.equal(engagementSubmitCall?.body.expected_version, 1, 'engagement submit must use optimistic concurrency');
   assert.equal(engagementActivateCall?.body.expected_version, 2, 'engagement activation must use the latest version');
 
+  const leaveForm = page.locator('#workforceLeaveRequestForm');
+  await leaveForm.locator('[name="member_id"]').selectOption('member-synthetic-1');
+  await leaveForm.locator('[name="leave_category"]').selectOption('ANNUAL');
+  await leaveForm.locator('[name="starts_at"]').fill('2026-11-27T09:00');
+  await leaveForm.locator('[name="ends_at"]').fill('2026-11-27T12:00');
+  await leaveForm.locator('[name="all_day"]').check();
+  await leaveForm.locator('[name="reason"]').fill('Synthetic planned leave');
+  await leaveForm.getByRole('button', { name: 'Submit leave request' }).click();
+  await page.getByText('Leave request submitted.').waitFor({ timeout: 10000 });
+  await page.locator('.workforce-leave-row .logistics-status').filter({ hasText: 'PENDING APPROVAL' }).waitFor();
+  const leaveCreateCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/leave-requests'));
+  const leaveSubmitCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/leave-synthetic-1/submit'));
+  assert.ok(leaveCreateCall, 'leave request must be created through the canonical API');
+  assert.equal(leaveCreateCall.authorization, 'Bearer synthetic-session-token');
+  assert.match(leaveCreateCall.idempotencyKey, /^workforce-ui-/);
+  assert.equal(leaveSubmitCall?.body.expected_version, 1, 'leave submission must use the created record version');
+  const approveForm = page.locator('.workforce-leave-action-form[data-action="approve"]');
+  await approveForm.locator('[name="decision_reason"]').fill('Coverage confirmed');
+  await approveForm.getByRole('button', { name: 'Approve' }).click();
+  await page.getByText('Leave request approved.').waitFor({ timeout: 10000 });
+  await page.locator('.workforce-leave-row .logistics-status').filter({ hasText: 'APPROVED' }).waitFor();
+  const leaveApproveCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/leave-synthetic-1/approve'));
+  assert.equal(leaveApproveCall?.body.expected_version, 2);
+  assert.equal(leaveApproveCall?.body.decision_reason, 'Coverage confirmed');
+  const cancelForm = page.locator('.workforce-leave-action-form[data-action="cancel"]');
+  await cancelForm.locator('[name="reason"]').fill('Coverage changed');
+  await cancelForm.getByRole('button', { name: 'Cancel approval' }).click();
+  await page.getByText('Leave request canceld.').waitFor({ timeout: 10000 });
+  await page.locator('.workforce-leave-row .logistics-status').filter({ hasText: 'CANCELLED' }).waitFor();
+  const leaveCancelCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/leave-synthetic-1/cancel'));
+  assert.equal(leaveCancelCall?.body.expected_version, 3);
+  await page.locator('.workforce-leave-row').getByRole('button', { name: 'View history' }).click();
+  await page.getByText('approve', { exact: true }).waitFor({ timeout: 10000 });
+
+  const absenceForm = page.locator('#workforceAbsenceForm');
+  await absenceForm.locator('[name="member_id"]').selectOption('member-synthetic-1');
+  await absenceForm.locator('[name="absence_type"]').selectOption('SICKNESS');
+  await absenceForm.locator('[name="starts_at"]').fill('2026-11-28T09:00');
+  await absenceForm.locator('[name="ends_at"]').fill('2026-11-28T12:00');
+  await absenceForm.locator('[name="reason"]').fill('Synthetic unplanned absence');
+  await absenceForm.getByRole('button', { name: 'Record absence' }).click();
+  await page.getByText('Unplanned absence recorded.').waitFor({ timeout: 10000 });
+  await page.locator('.workforce-absence-row .logistics-status').filter({ hasText: 'RECORDED' }).waitFor();
+  const absenceCreateCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/absences'));
+  assert.ok(absenceCreateCall, 'absence must be recorded through the canonical API');
+  assert.match(absenceCreateCall.idempotencyKey, /^workforce-ui-/);
+  const voidForm = page.locator('.workforce-absence-void-form');
+  await voidForm.locator('[name="reason"]').fill('Incorrect synthetic record');
+  await voidForm.getByRole('button', { name: 'Void record' }).click();
+  await page.getByText('Absence record voided.').waitFor({ timeout: 10000 });
+  await page.locator('.workforce-absence-row .logistics-status').filter({ hasText: 'VOIDED' }).waitFor();
+  const absenceVoidCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/absence-synthetic-1/void'));
+  assert.equal(absenceVoidCall?.body.expected_version, 1);
+  await page.locator('.workforce-absence-row').getByRole('button', { name: 'View history' }).click();
+  await page.getByText('void', { exact: true }).waitFor({ timeout: 10000 });
+
   const templateForm = page.locator('#workforceShiftTemplateForm');
   await templateForm.locator('[name="name"]').fill('Morning Shift');
   await templateForm.locator('[name="start_local_time"]').fill('08:00');
@@ -530,7 +655,7 @@ try {
   assert.deepEqual(pageErrors, [], 'browser journey must not emit uncaught page errors');
 
   console.log('Workforce operator browser journey: PASS');
-  console.log('Mobile workspace, primary location editing, account link/unlink, location assignment lifecycle, structured profile create/update, engagement lifecycle, shift-template creation, dated shift reassignment/history/lifecycle, availability, and optimistic concurrency: VERIFIED');
+  console.log('Mobile workspace, member administration, leave submission/approval/cancellation, absence recording/correction/history, shift templates and dated roster lifecycle, availability, and optimistic concurrency: VERIFIED');
 } catch (error) {
   console.error(error);
   console.error('Browser diagnostics:\n' + JSON.stringify(browserDiagnostics, null, 2));

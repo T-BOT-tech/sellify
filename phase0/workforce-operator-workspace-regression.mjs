@@ -47,6 +47,19 @@ assert.ok(ui.includes('reassignDatedShift') && ui.includes('loadDatedShiftHistor
   'dated shifts must expose reassignment with reason and immutable history');
 assert.ok(ui.includes('cancelDatedShift') && ui.includes('Cancellation reason'),
   'dated shift cancellation must capture a reason');
+assert.ok(ui.includes('workforceLeaveRequestForm') && ui.includes('saveLeaveRequest')
+  && ui.includes("endpoint('leave-requests')") && ui.includes("'/submit'"),
+  'employees and managers must be able to submit leave through the canonical Workforce API');
+assert.ok(ui.includes('workforceAbsenceForm') && ui.includes('saveAbsence')
+  && ui.includes("endpoint('absences')"),
+  'authorized managers must be able to record unplanned absences');
+assert.ok(ui.includes('submitLeaveAction') && ui.includes('voidAbsence')
+  && ui.includes("'/approve'") && ui.includes("'/reject'") && ui.includes("'/withdraw'") && ui.includes("'/cancel'") && ui.includes("'/void'"),
+  'leave decisions, withdrawal, cancellation and absence correction must use backend lifecycle actions');
+assert.ok(ui.includes('loadWorkforceRecordHistory') && ui.includes('workforce-record-history-button')
+  && ui.includes("optionalRecords('leave-requests')") && ui.includes("optionalRecords('absences')"),
+  'leave and absence records must display canonical lists and audit history');
+
 assert.ok(ui.includes('validLocalDate') && ui.includes('work_days') && ui.includes('break_rules'),
   'template creation and roster generation must validate dates, weekdays and break rules');
 assert.ok(ui.includes('workforceProfileForm') && ui.includes('saveProfile'),

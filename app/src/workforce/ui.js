@@ -581,7 +581,8 @@ async function submitLeaveAction(form, root) {
     await request(endpoint('leave-requests', '/' + encodeURIComponent(recordId) + '/' + action), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     });
-    await refreshWorkspaceWithStatus(root, '#workforceLeaveAbsenceAdmin', 'Leave request ' + action + 'd.');
+    const actionLabel = ({ approve: 'approved', reject: 'rejected', withdraw: 'withdrawn', cancel: 'cancelled' })[action];
+    await refreshWorkspaceWithStatus(root, '#workforceLeaveAbsenceAdmin', 'Leave request ' + actionLabel + '.');
   } catch (error) {
     const status = root.querySelector('#workforceStatus');
     if (status) status.textContent = error.message || 'Leave request action failed.';
