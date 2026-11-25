@@ -386,6 +386,9 @@ function renderDatedShiftAdmin(workspace, shifts, members) {
     const state = String(shift.status || 'UNKNOWN').toUpperCase();
     const member = members.find(item => String(item.id) === String(shift.member_id));
     const memberLabel = member?.display_name || shift.member_id || 'Unassigned';
+    const assessmentState = String(shift.constraint_state || 'UNKNOWN').toUpperCase();
+    const assessmentPolicy = shift.constraint_policy_version ? ' · policy v' + Number(shift.constraint_policy_version) : ' · no active policy';
+    const assessmentFindings = Array.isArray(shift.constraint_findings) ? shift.constraint_findings.map(item => item.message).filter(Boolean).join('; ') : '';
     const transition = state === 'PLANNED' ? 'confirm' : state === 'CONFIRMED' ? 'start' : state === 'IN_PROGRESS' ? 'complete' : '';
     const transitionButton = transition
       ? '<button type="button" class="btn-secondary workforce-shift-transition" data-shift-id="' + escapeAttr(shift.id)
@@ -407,7 +410,9 @@ function renderDatedShiftAdmin(workspace, shifts, members) {
       + '<div class="logistics-meta">' + escapeHtml(shiftTimeLabel(shift.starts_at, shift.timezone)) + ' – '
       + escapeHtml(shiftTimeLabel(shift.ends_at, shift.timezone)) + ' · ' + escapeHtml(shift.timezone || 'Timezone not set') + '</div>'
       + '<div class="logistics-meta">' + (shift.generated_local_date ? 'Generated for ' + escapeHtml(shift.generated_local_date) : 'Manual dated shift')
-      + ' · v' + Number(shift.version || 1) + '</div></div>'
+      + ' · v' + Number(shift.version || 1) + '</div>'
+      + '<div class="logistics-meta">Scheduling assessment: ' + escapeHtml(assessmentState.replaceAll('_',' ')) + escapeHtml(assessmentPolicy) + '</div>'
+      + (assessmentFindings ? '<div class="logistics-meta">' + escapeHtml(assessmentFindings) + '</div>' : '') + '</div>'
       + '<div class="workforce-member-controls">' + transitionButton
       + '<button type="button" class="btn-secondary workforce-shift-history-button" data-shift-id="' + escapeAttr(shift.id) + '">View history</button></div>'
       + reassignForm + cancelForm + '<div class="workforce-shift-history" hidden></div></article>';
