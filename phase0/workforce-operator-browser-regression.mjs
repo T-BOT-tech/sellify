@@ -205,7 +205,7 @@ try {
       assert.deepEqual(body.break_rules, [{ start_local_time: '12:00', end_local_time: '12:30' }]);
       assert.equal(body.location_id, 'location-synthetic-1');
       assert.match(request.headers()['idempotency-key'] || '', /^workforce-ui-/);
-      shiftTemplate = { id: 'shift-template-synthetic-1', ...body, status: 'DRAFT', version: 1 };
+      shiftTemplate = { id: 'shift-template-synthetic-1', ...body, status: 'ACTIVE', version: 1 };
       await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ record: shiftTemplate }) });
       return;
     }
@@ -411,13 +411,11 @@ try {
   await templateForm.locator('[name="effective_from"]').fill('2026-11-26');
   await templateForm.getByRole('button', { name: 'Create shift template' }).click();
   await page.getByText('Shift template created.').waitFor({ timeout: 10000 });
-  await page.locator('.workforce-shift-template-row .logistics-status').filter({ hasText: 'DRAFT' }).waitFor();
+  await page.locator('.workforce-shift-template-row .logistics-status').filter({ hasText: 'ACTIVE' }).waitFor();
   const templateCreateCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/shift-templates'));
   assert.ok(templateCreateCall, 'manager shift template form must use the canonical API');
   assert.equal(templateCreateCall.authorization, 'Bearer synthetic-session-token');
   assert.match(templateCreateCall.idempotencyKey, /^workforce-ui-/);
-  await page.locator('.workforce-shift-template-row').getByRole('button', { name: 'Activate' }).click();
-  await page.locator('.workforce-shift-template-row .logistics-status').filter({ hasText: 'ACTIVE' }).waitFor();
   const generationForm = page.locator('.workforce-shift-generation-form');
   await generationForm.locator('[name="member_id"]').selectOption('member-synthetic-1');
   await generationForm.locator('[name="from_date"]').fill('2026-11-26');
@@ -425,7 +423,7 @@ try {
   await generationForm.getByRole('button', { name: 'Generate dated shifts' }).click();
   await page.getByText('Created 1, already existed 0, conflicts 0, skipped 0.').waitFor({ timeout: 10000 });
   const generationCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/shift-template-synthetic-1/generate'));
-  assert.equal(generationCall?.body.expected_version, 2, 'generation must use the active template version');
+  assert.equal(generationCall?.body.expected_version, 1, 'generation must use the active template version');
   assert.equal(generationCall?.body.member_id, member.id);
   assert.equal(generationCall?.authorization, 'Bearer synthetic-session-token');
   assert.match(generationCall?.idempotencyKey || '', /^workforce-ui-/);
