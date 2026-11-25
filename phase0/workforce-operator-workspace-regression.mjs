@@ -50,6 +50,10 @@ assert.ok(ui.includes('cancelDatedShift') && ui.includes('Cancellation reason'),
 assert.ok(ui.includes('constraint_state') && ui.includes('constraint_policy_version')
   && ui.includes('Scheduling assessment:'),
   'dated shifts must show the policy version and assessment state used when they were scheduled');
+assert.ok(ui.includes('allow_overrides') && ui.includes('allow_unknown_overrides')
+  && ui.includes('override_reason') && ui.includes('constraint_override_reason'),
+  'policy override permissions, manager-provided reasons and persisted override evidence must be visible in the scheduling workspace');
+
 
 assert.ok(ui.includes('workforceLeaveRequestForm') && ui.includes('saveLeaveRequest')
   && ui.includes("endpoint('leave-requests')") && ui.includes("'/submit'"),
