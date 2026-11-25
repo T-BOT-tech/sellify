@@ -282,6 +282,14 @@ export function workforceWorkspaceShell() {
     + '<h4>Assign to a location</h4><label>Location<select name="location_id" required><option value="">Choose a location</option></select></label>'
     + '<label>Start<input name="starts_at" type="datetime-local" required></label><label>End<input name="ends_at" type="datetime-local" required></label>'
     + '<button type="submit" class="btn-primary">Create location assignment</button><p class="logistics-meta workforce-form-status" role="status"></p></form>'
+    + '<form id="workforceAvailabilityAssessmentForm" class="settings-form workforce-admin-form workforce-assessment-form">'
+    + '<h4>Assess availability</h4><p class="logistics-meta">Check the selected professional against current Workforce evidence. This does not create a booking, shift or reservation.</p>'
+    + '<label>Requested start<input name="starts_at" type="datetime-local" required></label>'
+    + '<label>Requested end<input name="ends_at" type="datetime-local" required></label>'
+    + '<label>Timezone<input name="timezone" value="' + escapeAttr(zone) + '" readonly required></label>'
+    + '<button type="submit" class="btn-secondary">Assess availability</button>'
+    + '<p class="logistics-meta workforce-form-status" role="status" aria-live="polite"></p>'
+    + '<div id="workforceAvailabilityAssessmentResult" aria-live="polite"></div></form>'
     + '<form id="workforceAvailabilityForm" class="settings-form workforce-availability-form">'
     + '<h4>Declare availability</h4><label>Availability<select name="availability" required><option value="AVAILABLE">Available</option>'
     + '<option value="UNAVAILABLE">Unavailable</option><option value="TENTATIVE">Tentative</option><option value="BLACKOUT">Blackout</option></select></label>'
@@ -895,6 +903,18 @@ async function refreshMember(root, memberId, member = null) {
   const form = workspace.querySelector('#workforceAvailabilityForm');
   form.dataset.memberId = memberId;
   form.hidden = !canManageMembers();
+  const assessmentForm = workspace.querySelector('#workforceAvailabilityAssessmentForm');
+  assessmentForm.dataset.memberId = memberId;
+  assessmentForm.dataset.locationId = member?.primary_location_id || '';
+  const localInputValue = date => {
+    const adjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return adjusted.toISOString().slice(0, 16);
+  };
+  const assessmentStart = new Date();
+  assessmentForm.elements.starts_at.value = localInputValue(assessmentStart);
+  assessmentForm.elements.ends_at.value = localInputValue(new Date(assessmentStart.getTime() + 60 * 60000));
+  assessmentForm.elements.timezone.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  assessmentForm.querySelector('#workforceAvailabilityAssessmentResult').innerHTML = '';
 }
 
 function renderMemberProfile(workspace, member) {
@@ -1407,6 +1427,57 @@ async function engagementAction(button, root) {
   }
 }
 
+function renderAvailabilityAssessment(assessment) {
+  if (!assessment || typeof assessment !== 'object') return '<p class="logistics-meta">The server returned no availability assessment.</p>';
+  const state = String(assessment.state || 'UNKNOWN').toUpperCase();
+  const sources = Array.isArray(assessment.source_versions) ? assessment.source_versions : [];
+  const findings = Array.isArray(assessment.findings) ? assessment.findings : [];
+  return '<section class="logistics-card workforce-assessment-result"><div class="logistics-top"><strong>Assessment: '
+    + escapeHtml(state.replaceAll('_', ' ')) + '</strong><span class="logistics-status">' + escapeHtml(state) + '</span></div>'
+    + '<p class="logistics-meta">Evaluated: ' + escapeHtml(dateLabel(assessment.evaluated_at)) + '</p>'
+    + '<h5>Evidence sources</h5><ul>' + sources.map(item => '<li>' + escapeHtml(item.source || 'source') + ': '
+      + escapeHtml(item.status || 'UNKNOWN') + (item.version ? ' · v' + escapeHtml(item.version) : '') + '</li>').join('') + '</ul>'
+    + '<h5>Findings</h5>' + (findings.length ? '<ul>' + findings.map(item => '<li><strong>'
+      + escapeHtml(item.state || 'UNKNOWN') + '</strong> · ' + escapeHtml(item.code || 'FINDING') + ': '
+      + escapeHtml(item.message || '') + '</li>').join('') + '</ul>' : '<p class="logistics-meta">No findings were returned.</p>')
+    + '<p class="logistics-meta">Assessment only. No booking, reservation, shift or operational commitment was created.</p></section>';
+}
+
+async function assessMemberAvailability(form, root) {
+  const status = form.querySelector('.workforce-form-status');
+  const resultNode = form.querySelector('#workforceAvailabilityAssessmentResult');
+  const values = new FormData(form);
+  const start = new Date(String(values.get('starts_at') || ''));
+  const end = new Date(String(values.get('ends_at') || ''));
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start >= end) {
+    status.textContent = 'Choose a valid start and end time.'; return;
+  }
+  const memberId = form.dataset.memberId;
+  if (!memberId) return;
+  const workspace = root.querySelector('#workforceWorkspace');
+  const sequence = workspace?.dataset.detailSequence || '';
+  const tenantId = String(config.chatId), token = String(config.sessionToken);
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true; status.textContent = 'Assessing availability…'; resultNode.innerHTML = '';
+  try {
+    const body = {
+      starts_at: start.toISOString(), ends_at: end.toISOString(),
+      timezone: String(values.get('timezone') || '').trim(),
+      ...(form.dataset.locationId ? { location_id: form.dataset.locationId } : {}),
+    };
+    const data = await request(endpoint('members') + '/' + encodeURIComponent(memberId) + '/availability-assessment', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    if (!workspace?.isConnected || workspace.dataset.detailSequence !== sequence
+      || String(config.chatId) !== tenantId || String(config.sessionToken) !== token
+      || String(workspace.dataset.selectedMemberId || '') !== String(memberId)) return;
+    resultNode.innerHTML = renderAvailabilityAssessment(data.assessment);
+    status.textContent = 'Assessment completed. This is not a booking or reservation.';
+  } catch (error) {
+    status.textContent = error.message || 'Availability could not be assessed.';
+  } finally { submit.disabled = false; }
+}
+
 async function saveAvailability(form, root) {
   const status = form.querySelector('.workforce-form-status');
   const values = new FormData(form);
@@ -1500,10 +1571,11 @@ export function mountWorkforceWorkspace(root = document) {
     });
     root.addEventListener('submit', event => {
       const id = event.target?.id;
-      if (!['workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm','workforceEngagementForm','workforceProfileForm','workforceLocationAssignmentForm','workforceShiftTemplateForm','workforceLeaveRequestForm','workforceAbsenceForm','workforceSchedulingPolicyForm'].includes(id)
+      if (!['workforceAvailabilityAssessmentForm','workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm','workforceEngagementForm','workforceProfileForm','workforceLocationAssignmentForm','workforceShiftTemplateForm','workforceLeaveRequestForm','workforceAbsenceForm','workforceSchedulingPolicyForm'].includes(id)
         && !['workforce-leave-action-form','workforce-absence-void-form','workforce-scheduling-policy-action-form'].some(name => event.target?.classList?.contains(name))
         && !['workforce-shift-generation-form','workforce-shift-reassign-form','workforce-shift-cancel-form'].some(name => event.target?.classList?.contains(name))) return;
       event.preventDefault();
+      if (id === 'workforceAvailabilityAssessmentForm') assessMemberAvailability(event.target, root);
       if (id === 'workforceAvailabilityForm') saveAvailability(event.target, root);
       if (id === 'workforceEngagementForm') saveEngagement(event.target, root);
       if (id === 'workforceShiftTemplateForm') saveShiftTemplate(event.target, root);
