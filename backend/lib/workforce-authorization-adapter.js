@@ -7,6 +7,8 @@ import {
 } from './workforce-authorization-service.js';
 
 const PERMISSION_BY_ENTITY = Object.freeze({
+  department: { view: 'workforce:department:view', manage: 'workforce:department:manage' },
+  position: { view: 'workforce:position:view', manage: 'workforce:position:manage' },
   member: { view: 'workforce:member:view', manage: 'workforce:member:manage' },
   profile: { view: 'workforce:profile:view', manage: 'workforce:profile:manage' },
   engagement: { view: 'workforce:engagement:view', manage: 'workforce:engagement:manage' },
