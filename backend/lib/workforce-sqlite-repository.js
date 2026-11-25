@@ -826,6 +826,11 @@ export class WorkforceSqliteRepository {
       throw fail('WORKFORCE_LIFECYCLE_CONFLICT', `Cannot ${operation} ${entity} from ${record[spec.state]}`, 409);
     }
     if (Number(record.version) !== expected) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
+    if (entity === 'member' && ['suspend','deactivate'].includes(operation)) {
+      const reports = this.db.prepare("SELECT COUNT(*) AS count FROM workforce_members WHERE organization_id=? AND tenant_id=? AND supervisor_member_id=? AND status='ACTIVE'")
+        .get(scope.organization_id, scope.tenant_id, String(id)).count;
+      if (Number(reports)) throw fail('WORKFORCE_SUPERVISOR_HAS_ACTIVE_REPORTS', 'Reassign active direct reports before suspending or deactivating this supervisor', 409);
+    }
     if (entity === 'department' && operation === 'deactivate') {
       const members = this.db.prepare("SELECT COUNT(*) AS count FROM workforce_members WHERE organization_id=? AND tenant_id=? AND department_id=? AND status='ACTIVE'")
         .get(scope.organization_id, scope.tenant_id, String(id)).count;
