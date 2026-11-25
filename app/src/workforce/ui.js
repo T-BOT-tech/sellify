@@ -6,6 +6,7 @@ import { escapeHtml, escapeAttr } from '../utils/index.js';
 const SECTIONS = Object.freeze([
   ['profiles', 'Profiles'], ['engagements', 'Engagements'], ['calendars', 'Calendars'],
   ['availability', 'Availability'], ['assignments', 'Assignments'], ['shifts', 'Shifts'], ['allocations', 'Allocations'],
+  ['leave-requests', 'Leave requests'], ['absences', 'Absences'],
 ]);
 const boundRoots = new WeakSet();
 const workspaceData = new WeakMap();
@@ -222,6 +223,23 @@ export function workforceWorkspaceShell() {
     + '<label>Location<select name="location_id"><option value="">Member primary location</option></select></label>'
     + '<label>Effective from<input name="effective_from" type="date" required></label><label>Effective until (optional)<input name="effective_until" type="date"></label>'
     + '<button type="submit" class="btn-primary">Create shift template</button><p class="logistics-meta workforce-form-status" role="status"></p></form></section>'
+    + '<section id="workforceLeaveAbsenceAdmin" hidden><h3>Leave and absence</h3>'
+    + '<p class="logistics-meta">Leave requests require manager decisions. Recorded unplanned absences affect scheduling immediately; corrections are retained in history.</p>'
+    + '<div class="workforce-admin-grid"><div><h4>Request leave</h4>'
+    + '<form id="workforceLeaveRequestForm" class="settings-form workforce-admin-form">'
+    + '<label class="workforce-leave-member-label">Professional<select name="member_id" required><option value="">Choose a professional</option></select></label>'
+    + '<label>Category<select name="leave_category" required><option>ANNUAL</option><option>SICK</option><option>PERSONAL</option><option>UNPAID</option><option>PARENTAL</option><option>BEREAVEMENT</option><option>OTHER</option></select></label>'
+    + '<label>Starts<input name="starts_at" type="datetime-local" required></label><label>Ends<input name="ends_at" type="datetime-local" required></label>'
+    + '<label><input name="all_day" type="checkbox"> All-day leave</label><label>Reason<textarea name="reason" rows="2" maxlength="1000" required></textarea></label>'
+    + '<button type="submit" class="btn-primary">Submit leave request</button><p class="logistics-meta workforce-form-status" role="status"></p></form></div>'
+    + '<div id="workforceAbsenceAdmin"><h4>Record unplanned absence</h4>'
+    + '<form id="workforceAbsenceForm" class="settings-form workforce-admin-form">'
+    + '<label>Professional<select name="member_id" required><option value="">Choose an active professional</option></select></label>'
+    + '<label>Absence type<select name="absence_type" required><option>SICKNESS</option><option>UNPLANNED</option><option>NO_SHOW</option><option>OTHER</option></select></label>'
+    + '<label>Starts<input name="starts_at" type="datetime-local" required></label><label>Ends<input name="ends_at" type="datetime-local" required></label>'
+    + '<label><input name="all_day" type="checkbox"> All-day absence</label><label>Reason<textarea name="reason" rows="2" maxlength="1000" required></textarea></label>'
+    + '<button type="submit" class="btn-primary">Record absence</button><p class="logistics-meta workforce-form-status" role="status"></p></form></div></div>'
+    + '<h4>Leave requests</h4><div id="workforceLeaveRequests"></div><h4>Recorded absences</h4><div id="workforceAbsences"></div></section>'
     + '<section id="workforceMemberDetails" hidden><div class="workforce-heading"><h3 id="workforceSelectedMemberTitle">Member workspace</h3>'
     + '<button type="button" class="btn-secondary" id="workforceClearMember">Close</button></div><div id="workforceMemberProfile"></div><div id="workforceMemberRecords"></div>'
     + '<form id="workforceProfileForm" class="settings-form workforce-admin-form" hidden>'
@@ -423,6 +441,191 @@ async function optionalRecords(entity) {
   }
 }
 
+function renderLeaveAbsenceAdmin(workspace, leaveRequests, absences, members) {
+  const section = workspace.querySelector('#workforceLeaveAbsenceAdmin');
+  if (!section) return;
+  section.hidden = false;
+  const manager = canManageMembers();
+  const activeMembers = members.filter(member => String(member.status || '').toUpperCase() === 'ACTIVE');
+  const leaveForm = section.querySelector('#workforceLeaveRequestForm');
+  const leaveMemberLabel = leaveForm.querySelector('.workforce-leave-member-label');
+  const leaveMemberSelect = leaveForm.elements.member_id;
+  fillSelect(leaveMemberSelect, manager ? members : members.slice(0, 1), '', 'display_name');
+  if (manager) {
+    leaveMemberLabel.hidden = false;
+    leaveMemberSelect.disabled = false;
+  } else {
+    leaveMemberLabel.hidden = true;
+    leaveMemberSelect.disabled = false;
+    leaveMemberSelect.value = members[0]?.id || '';
+  }
+  leaveForm.hidden = members.length === 0;
+  const absenceSection = section.querySelector('#workforceAbsenceAdmin');
+  absenceSection.hidden = !manager;
+  const absenceForm = section.querySelector('#workforceAbsenceForm');
+  fillSelect(absenceForm.elements.member_id, activeMembers, '', 'display_name');
+  absenceForm.hidden = !manager || activeMembers.length === 0;
+
+  const leaveRows = leaveRequests.map(record => {
+    const state = String(record.status || 'UNKNOWN').toUpperCase();
+    const member = members.find(item => String(item.id) === String(record.member_id));
+    const actions = [];
+    if (manager && state === 'PENDING_APPROVAL') {
+      actions.push('<form class="workforce-leave-action-form" data-record-id="' + escapeAttr(record.id) + '" data-action="approve" data-version="' + Number(record.version || 1) + '"><label>Decision note (optional)<input name="decision_reason" maxlength="500"></label><button type="submit" class="btn-secondary">Approve</button></form>');
+      actions.push('<form class="workforce-leave-action-form" data-record-id="' + escapeAttr(record.id) + '" data-action="reject" data-version="' + Number(record.version || 1) + '"><label>Rejection reason<input name="decision_reason" maxlength="500" required></label><button type="submit" class="btn-secondary">Reject</button></form>');
+    } else if (manager && state === 'APPROVED') {
+      actions.push('<form class="workforce-leave-action-form" data-record-id="' + escapeAttr(record.id) + '" data-action="cancel" data-version="' + Number(record.version || 1) + '"><label>Cancellation reason<input name="reason" maxlength="500" required></label><button type="submit" class="btn-secondary">Cancel approval</button></form>');
+    } else if (!manager && ['DRAFT','PENDING_APPROVAL'].includes(state)) {
+      actions.push('<form class="workforce-leave-action-form" data-record-id="' + escapeAttr(record.id) + '" data-action="withdraw" data-version="' + Number(record.version || 1) + '"><label>Withdrawal note (optional)<input name="reason" maxlength="500"></label><button type="submit" class="btn-secondary">Withdraw request</button></form>');
+    }
+    return '<article class="workforce-record-row workforce-leave-row"><div><strong>' + escapeHtml(member?.display_name || 'Workforce member') + '</strong><span class="logistics-status">' + escapeHtml(state.replaceAll('_',' ')) + '</span>'
+      + '<div class="logistics-meta">' + escapeHtml(String(record.leave_category || 'Leave').replaceAll('_',' ')) + ' · ' + escapeHtml(dateLabel(record.starts_at)) + ' – ' + escapeHtml(dateLabel(record.ends_at)) + ' · ' + escapeHtml(record.timezone || '') + '</div>'
+      + '<div class="logistics-meta">' + escapeHtml(record.reason || '') + (record.decision_reason ? ' · Decision: ' + escapeHtml(record.decision_reason) : '') + '</div>'
+      + '<button type="button" class="btn-secondary workforce-record-history-button" data-entity="leave-requests" data-record-id="' + escapeAttr(record.id) + '">View history</button><div class="workforce-record-history" hidden></div></div>'
+      + '<div class="workforce-member-controls">' + actions.join('') + '</div></article>';
+  }).join('');
+  section.querySelector('#workforceLeaveRequests').innerHTML = leaveRows || '<p class="logistics-meta">No leave requests recorded.</p>';
+
+  const absenceRows = absences.map(record => {
+    const state = String(record.status || 'UNKNOWN').toUpperCase();
+    const member = members.find(item => String(item.id) === String(record.member_id));
+    const voidForm = manager && state === 'RECORDED'
+      ? '<form class="workforce-absence-void-form" data-record-id="' + escapeAttr(record.id) + '" data-version="' + Number(record.version || 1) + '"><label>Correction reason<input name="reason" maxlength="500" required></label><button type="submit" class="btn-secondary">Void record</button></form>' : '';
+    return '<article class="workforce-record-row workforce-absence-row"><div><strong>' + escapeHtml(member?.display_name || 'Workforce member') + '</strong><span class="logistics-status">' + escapeHtml(state) + '</span>'
+      + '<div class="logistics-meta">' + escapeHtml(String(record.absence_type || 'Absence').replaceAll('_',' ')) + ' · ' + escapeHtml(dateLabel(record.starts_at)) + ' – ' + escapeHtml(dateLabel(record.ends_at)) + ' · ' + escapeHtml(record.timezone || '') + '</div>'
+      + '<div class="logistics-meta">' + escapeHtml(record.reason || '') + '</div>'
+      + '<button type="button" class="btn-secondary workforce-record-history-button" data-entity="absences" data-record-id="' + escapeAttr(record.id) + '">View history</button><div class="workforce-record-history" hidden></div></div>'
+      + '<div class="workforce-member-controls">' + voidForm + '</div></article>';
+  }).join('');
+  section.querySelector('#workforceAbsences').innerHTML = absenceRows || '<p class="logistics-meta">No unplanned absences recorded.</p>';
+}
+
+async function saveLeaveRequest(form, root) {
+  const status = form.querySelector('.workforce-form-status');
+  const values = new FormData(form);
+  const workspace = root.querySelector('#workforceWorkspace');
+  const members = workspaceData.get(workspace)?.members || [];
+  const memberId = String(values.get('member_id') || members[0]?.id || '').trim();
+  const startsAt = new Date(String(values.get('starts_at') || ''));
+  const endsAt = new Date(String(values.get('ends_at') || ''));
+  const reason = String(values.get('reason') || '').trim();
+  if (!memberId || !Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime())
+    || startsAt >= endsAt || !reason || reason.length > 1000) {
+    status.textContent = 'Choose a professional, valid start and end, and provide a reason.'; return;
+  }
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true; status.textContent = 'Submitting leave request…';
+  try {
+    const created = await request(endpoint('leave-requests'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'workforce-ui-' + crypto.randomUUID() },
+      body: JSON.stringify({ member_id: memberId, leave_category: String(values.get('leave_category') || 'OTHER'),
+        starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString(), timezone,
+        all_day: values.get('all_day') === 'on', reason }),
+    });
+    const record = created.record;
+    if (!record?.id || !Number.isInteger(Number(record.version))) throw new Error('Leave request response was incomplete.');
+    await request(endpoint('leave-requests', '/' + encodeURIComponent(record.id) + '/submit'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expected_version: Number(record.version) }),
+    });
+    form.reset();
+    await refreshWorkspaceWithStatus(root, '#workforceLeaveAbsenceAdmin', 'Leave request submitted.');
+  } catch (error) { status.textContent = error.message || 'Leave request could not be submitted.'; }
+  finally { submit.disabled = false; }
+}
+
+async function saveAbsence(form, root) {
+  const status = form.querySelector('.workforce-form-status');
+  const values = new FormData(form);
+  const memberId = String(values.get('member_id') || '').trim();
+  const startsAt = new Date(String(values.get('starts_at') || ''));
+  const endsAt = new Date(String(values.get('ends_at') || ''));
+  const reason = String(values.get('reason') || '').trim();
+  if (!memberId || !Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime())
+    || startsAt >= endsAt || !reason || reason.length > 1000) {
+    status.textContent = 'Choose a professional, valid start and end, and provide a reason.'; return;
+  }
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true; status.textContent = 'Recording absence…';
+  try {
+    await request(endpoint('absences'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'workforce-ui-' + crypto.randomUUID() },
+      body: JSON.stringify({ member_id: memberId, absence_type: String(values.get('absence_type') || 'OTHER'),
+        starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString(), timezone,
+        all_day: values.get('all_day') === 'on', reason }),
+    });
+    form.reset();
+    await refreshWorkspaceWithStatus(root, '#workforceLeaveAbsenceAdmin', 'Unplanned absence recorded.');
+  } catch (error) { status.textContent = error.message || 'Absence could not be recorded.'; }
+  finally { submit.disabled = false; }
+}
+
+async function submitLeaveAction(form, root) {
+  const action = form.dataset.action, recordId = form.dataset.recordId, version = Number(form.dataset.version);
+  if (!recordId || !['approve','reject','withdraw','cancel'].includes(action) || !Number.isInteger(version) || version < 1) return;
+  const values = new FormData(form);
+  const payload = { expected_version: version };
+  const reason = String(values.get('reason') || '').trim();
+  const decisionReason = String(values.get('decision_reason') || '').trim();
+  if (action === 'reject' && !decisionReason) {
+    form.querySelector('[name="decision_reason"]')?.focus(); return;
+  }
+  if (action === 'cancel' && !reason) { form.querySelector('[name="reason"]')?.focus(); return; }
+  if (reason) payload.reason = reason;
+  if (decisionReason) payload.decision_reason = decisionReason;
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true;
+  try {
+    await request(endpoint('leave-requests', '/' + encodeURIComponent(recordId) + '/' + action), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    await refreshWorkspaceWithStatus(root, '#workforceLeaveAbsenceAdmin', 'Leave request ' + action + 'd.');
+  } catch (error) {
+    const status = root.querySelector('#workforceStatus');
+    if (status) status.textContent = error.message || 'Leave request action failed.';
+    submit.disabled = false;
+  }
+}
+
+async function voidAbsence(form, root) {
+  const recordId = form.dataset.recordId, version = Number(form.dataset.version);
+  const reason = String(new FormData(form).get('reason') || '').trim();
+  if (!recordId || !reason || reason.length > 500 || !Number.isInteger(version) || version < 1) return;
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true;
+  try {
+    await request(endpoint('absences', '/' + encodeURIComponent(recordId) + '/void'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expected_version: version, reason }),
+    });
+    await refreshWorkspaceWithStatus(root, '#workforceLeaveAbsenceAdmin', 'Absence record voided.');
+  } catch (error) {
+    const status = root.querySelector('#workforceStatus');
+    if (status) status.textContent = error.message || 'Absence record could not be voided.';
+    submit.disabled = false;
+  }
+}
+
+async function loadWorkforceRecordHistory(button) {
+  const entity = button.dataset.entity, recordId = button.dataset.recordId;
+  const host = button.parentElement?.querySelector('.workforce-record-history');
+  if (!['leave-requests','absences'].includes(entity) || !recordId || !host) return;
+  if (!host.hidden) { host.hidden = true; return; }
+  host.hidden = false; host.innerHTML = '<p class="logistics-meta">Loading history…</p>';
+  try {
+    const data = await request(endpoint(entity, '/' + encodeURIComponent(recordId) + '/history'));
+    const rows = (Array.isArray(data.records) ? data.records : []).map(event =>
+      '<li><strong>' + escapeHtml(String(event.action || '').split('.').pop().replaceAll('_',' ')) + '</strong>'
+      + '<span class="logistics-meta"> · ' + escapeHtml(dateLabel(event.created_at))
+      + (event.metadata?.reason ? ' · ' + escapeHtml(event.metadata.reason) : '')
+      + (event.metadata?.decision_reason ? ' · ' + escapeHtml(event.metadata.decision_reason) : '') + '</span></li>'
+    ).join('');
+    host.innerHTML = rows ? '<ul>' + rows + '</ul>' : '<p class="logistics-meta">No history is available.</p>';
+  } catch (error) { host.innerHTML = '<p class="logistics-meta">' + escapeHtml(error.message || 'History could not be loaded.') + '</p>'; }
+}
+
 async function refreshWorkspace(root) {
   const workspace = root.querySelector('#workforceWorkspace');
   if (!workspace) return;
@@ -439,16 +642,17 @@ async function refreshWorkspace(root) {
   const tenantId = String(config.chatId), token = String(config.sessionToken);
   status.textContent = 'Loading Workforce records…'; status.dataset.state = 'LOADING';
   try {
-    const [membersData, summaryData, departments, positions, engagements, locations, shiftTemplates, shifts] = await Promise.all([
+    const [membersData, summaryData, departments, positions, engagements, locations, shiftTemplates, shifts, leaveRequests, absences] = await Promise.all([
       request(endpoint('members') + '?limit=100'),
       request(endpoint('utilization', '/summary')),
       optionalRecords('departments'), optionalRecords('positions'), optionalRecords('engagements'),
       optionalOrganizationLocations(), optionalRecords('shift-templates'), optionalRecords('shifts'),
+      optionalRecords('leave-requests'), optionalRecords('absences'),
     ]);
     if (!workspace.isConnected || workspace.dataset.refreshSequence !== String(seq)
       || String(config.chatId) !== tenantId || String(config.sessionToken) !== token) return;
     const members = Array.isArray(membersData.records) ? membersData.records : [];
-    workspaceData.set(workspace, { members, departments, positions, engagements, locations, shiftTemplates, shifts });
+    workspaceData.set(workspace, { members, departments, positions, engagements, locations, shiftTemplates, shifts, leaveRequests, absences });
     workspace.querySelector('#workforceOverviewMetrics').innerHTML =
       renderOverviewMetrics(members, departments, positions, engagements);
     summaryNode.innerHTML = renderSummary(summaryData.summary || {});
@@ -456,6 +660,7 @@ async function refreshWorkspace(root) {
     renderOrganizationAdmin(workspace, departments, positions);
     renderShiftTemplateAdmin(workspace, shiftTemplates, departments, positions, locations, members);
     renderDatedShiftAdmin(workspace, shifts, members);
+    renderLeaveAbsenceAdmin(workspace, leaveRequests, absences, members);
     status.textContent = members.length + ' Workforce member' + (members.length === 1 ? '' : 's') + ' loaded.';
     status.dataset.state = 'READY';
     const selected = workspace.dataset.selectedMemberId;
@@ -1091,6 +1296,7 @@ export function mountWorkforceWorkspace(root = document) {
       const assignmentButton = event.target.closest('.workforce-assignment-action');
       const shiftTransitionButton = event.target.closest('.workforce-shift-transition');
       const shiftHistoryButton = event.target.closest('.workforce-shift-history-button');
+      const recordHistoryButton = event.target.closest('.workforce-record-history-button');
       const page = event.target.closest('[data-member-page]');
       const clear = event.target.closest('#workforceClearMember');
       if (refresh) refreshWorkspace(root);
@@ -1101,6 +1307,7 @@ export function mountWorkforceWorkspace(root = document) {
       if (assignmentButton) assignmentAction(assignmentButton, root);
       if (shiftTransitionButton) transitionDatedShift(shiftTransitionButton, root);
       if (shiftHistoryButton) loadDatedShiftHistory(shiftHistoryButton, root);
+      if (recordHistoryButton) loadWorkforceRecordHistory(recordHistoryButton);
       if (page) {
         const current = Number(workspace.dataset.memberPage || 0);
         workspace.dataset.memberPage = String(Math.max(0, current + (page.dataset.memberPage === 'next' ? 1 : -1)));
@@ -1129,12 +1336,17 @@ export function mountWorkforceWorkspace(root = document) {
     });
     root.addEventListener('submit', event => {
       const id = event.target?.id;
-      if (!['workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm','workforceEngagementForm','workforceProfileForm','workforceLocationAssignmentForm','workforceShiftTemplateForm'].includes(id)
+      if (!['workforceAvailabilityForm','workforceMemberCreateForm','workforceDepartmentForm','workforcePositionForm','workforceEngagementForm','workforceProfileForm','workforceLocationAssignmentForm','workforceShiftTemplateForm','workforceLeaveRequestForm','workforceAbsenceForm'].includes(id)
+        && !['workforce-leave-action-form','workforce-absence-void-form'].some(name => event.target?.classList?.contains(name))
         && !['workforce-shift-generation-form','workforce-shift-reassign-form','workforce-shift-cancel-form'].some(name => event.target?.classList?.contains(name))) return;
       event.preventDefault();
       if (id === 'workforceAvailabilityForm') saveAvailability(event.target, root);
       if (id === 'workforceEngagementForm') saveEngagement(event.target, root);
       if (id === 'workforceShiftTemplateForm') saveShiftTemplate(event.target, root);
+      if (id === 'workforceLeaveRequestForm') saveLeaveRequest(event.target, root);
+      if (id === 'workforceAbsenceForm') saveAbsence(event.target, root);
+      if (event.target?.classList?.contains('workforce-leave-action-form')) submitLeaveAction(event.target, root);
+      if (event.target?.classList?.contains('workforce-absence-void-form')) voidAbsence(event.target, root);
       if (event.target?.classList?.contains('workforce-shift-generation-form')) generateTemplateShifts(event.target, root);
       if (event.target?.classList?.contains('workforce-shift-reassign-form')) reassignDatedShift(event.target, root);
       if (event.target?.classList?.contains('workforce-shift-cancel-form')) cancelDatedShift(event.target, root);
