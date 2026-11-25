@@ -318,8 +318,8 @@ export class WorkforceSqliteRepository {
       if (!duration) throw fail('WORKFORCE_TEMPLATE_DURATION_INVALID', 'A shift template must have a non-zero local-time duration');
       const breaks = data.break_rules_json ?? data.break_rules ?? [];
       if (!Array.isArray(breaks) || breaks.some(rule => !rule || typeof rule !== 'object' || Array.isArray(rule)
-        || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(String(rule.start_local_time || ''))
-        || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(String(rule.end_local_time || ''))
+        || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(rule.start_local_time || ''))
+        || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(rule.end_local_time || ''))
         || rule.start_local_time === rule.end_local_time)) {
         throw fail('WORKFORCE_BREAK_RULES_INVALID', 'Template break_rules must be local-time intervals');
       }
