@@ -427,6 +427,22 @@ try {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: member }) });
       return;
     }
+    if (pathname.endsWith('/members/member-synthetic-1/availability-assessment') && method === 'POST') {
+      assert.ok(Number.isFinite(Date.parse(body.starts_at)) && Number.isFinite(Date.parse(body.ends_at)));
+      assert.ok(Date.parse(body.starts_at) < Date.parse(body.ends_at));
+      assert.ok(body.timezone, 'assessment request must include the selected IANA timezone');
+      assert.equal(Object.hasOwn(body, 'member_id'), false, 'the server must bind member identity from the route');
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ assessment: {
+        state: 'UNKNOWN', evaluated_at: '2026-11-25T12:00:00.000Z', is_booking: false,
+        source_versions: [
+          { source: 'calendar', status: 'COMPLETE', version: '2' },
+          { source: 'operational_commitments', status: 'MISSING', evaluated_at: '2026-11-25T12:00:00.000Z' },
+        ],
+        findings: [{ code: 'EVIDENCE_INCOMPLETE', state: 'UNKNOWN', source: 'operational_commitments',
+          message: 'Logistics-to-Workforce identity and time-window linkage is not verified' }],
+      }, authority: 'workforce_availability_assessment' }) });
+      return;
+    }
     if (pathname.endsWith('/availability') && method === 'POST') {
       assert.equal(body.member_id, member.id);
       assert.equal(body.availability, 'AVAILABLE');
@@ -488,6 +504,22 @@ try {
   await page.locator('.workforce-member-card').first().getByRole('button', { name: 'Open member' }).click();
   await page.locator('#workforceMemberDetails').waitFor({ state: 'visible' });
   await page.locator('#workforceAvailabilityForm').waitFor({ state: 'visible' });
+  const assessmentForm = page.locator('#workforceAvailabilityAssessmentForm');
+  await assessmentForm.waitFor({ state: 'visible' });
+  await assessmentForm.locator('[name="starts_at"]').fill('2026-11-26T09:00');
+  await assessmentForm.locator('[name="ends_at"]').fill('2026-11-26T10:00');
+  await assessmentForm.getByRole('button', { name: 'Assess availability' }).click();
+  await page.locator('#workforceAvailabilityAssessmentResult').getByText('UNKNOWN', { exact: false }).waitFor({ timeout: 10000 });
+  await page.getByText('Logistics-to-Workforce identity and time-window linkage is not verified').waitFor();
+  const availabilityAssessmentCall = apiCalls.find(call =>
+    call.method === 'POST' && call.pathname.endsWith('/members/member-synthetic-1/availability-assessment'));
+  assert.ok(availabilityAssessmentCall, 'member workspace must call the canonical server-side assessment route');
+  assert.ok(availabilityAssessmentCall.body.starts_at && availabilityAssessmentCall.body.ends_at
+    && availabilityAssessmentCall.body.timezone);
+  assert.equal(Object.hasOwn(availabilityAssessmentCall.body, 'member_id'), false,
+    'member identity must be route-bound by the backend');
+  assert.ok(await page.locator('#workforceAvailabilityAssessmentResult').innerText().then(text => text.includes('Assessment only')),
+    'the UI must explain that availability assessment does not create a booking or commitment');
   const memberAssignmentForm = page.locator('#workforceMemberProfileForm');
   await memberAssignmentForm.locator('[name="primary_location_id"]').selectOption('location-synthetic-1');
   await memberAssignmentForm.getByRole('button', { name: 'Save profile and assignments' }).click();
