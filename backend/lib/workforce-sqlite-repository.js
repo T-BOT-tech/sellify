@@ -1051,6 +1051,115 @@ export class WorkforceSqliteRepository {
     }
   }
 
+  listShiftHistory(entity, id, context = {}) {
+    if (entity !== 'shift') throw fail('WORKFORCE_ENTITY_INVALID', 'Shift history is supported only for dated shifts');
+    const scope = this.assertContext(context);
+    this.getForMutation('shift', id, scope, context, 'get');
+    const rows = this.db.prepare(`
+      SELECT action, entity_type, entity_id, metadata_json, created_at
+      FROM audit_events
+      WHERE chat_id = ? AND organization_id = ?
+        AND entity_type = 'workforce_shift' AND entity_id = ?
+        AND action LIKE 'workforce.shift.%'
+      ORDER BY id ASC LIMIT 100
+    `).all(scope.chat_id, scope.organization_id, String(id));
+    return rows.map(row => {
+      let metadata = {};
+      try { metadata = JSON.parse(row.metadata_json || '{}'); } catch {}
+      if (String(metadata.tenant_id || '') !== scope.tenant_id) return null;
+      return { action: row.action, created_at: row.created_at, metadata };
+    }).filter(Boolean);
+  }
+
+  reassignShift(entity, id, input = {}, context = {}) {
+    if (entity !== 'shift') throw fail('WORKFORCE_ENTITY_INVALID', 'Reassignment is supported only for dated shifts');
+    const scope = this.assertContext(context);
+    const expected = Number(input.expected_version);
+    const memberId = typeof input.member_id === 'string' ? input.member_id.trim() : '';
+    const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
+    const validation = validateWorkforceRepositoryOperation('shift', 'update', { ...scope, expected_version: expected });
+    if (!validation.valid) throw fail('WORKFORCE_SHIFT_REASSIGNMENT_INVALID', validation.errors.join('; '));
+    if (!memberId) throw fail('WORKFORCE_MEMBER_ID_REQUIRED', 'member_id is required to reassign a dated shift');
+    if (!reason || reason.length > 500) throw fail('WORKFORCE_SHIFT_REASSIGNMENT_REASON_REQUIRED', 'A reassignment reason of 1 to 500 characters is required');
+    const existing = this.getForMutation('shift', id, scope, context, 'update');
+    if (Number(existing.version) !== expected) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
+    if (!['PLANNED', 'CONFIRMED'].includes(String(existing.status))) {
+      throw fail('WORKFORCE_SHIFT_REASSIGNMENT_STATE_INVALID', 'Only planned or confirmed shifts can be reassigned', 409);
+    }
+    if (String(existing.member_id) === memberId) throw fail('WORKFORCE_SHIFT_REASSIGNMENT_UNCHANGED', 'The selected professional already owns this shift');
+
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const current = this.getForMutation('shift', id, scope, context, 'update');
+      if (Number(current.version) !== expected) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
+      if (!['PLANNED', 'CONFIRMED'].includes(String(current.status))) {
+        throw fail('WORKFORCE_SHIFT_REASSIGNMENT_STATE_INVALID', 'Only planned or confirmed shifts can be reassigned', 409);
+      }
+      const member = this.db.prepare(`
+        SELECT * FROM workforce_members
+        WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
+      `).get(memberId, scope.organization_id, scope.tenant_id, scope.chat_id);
+      if (!member) throw fail('WORKFORCE_MEMBER_SCOPE_INVALID', 'Replacement professional is outside the active organization and tenant', 422);
+      if (String(member.status) !== 'ACTIVE') throw fail('WORKFORCE_MEMBER_NOT_ELIGIBLE', 'Only active Workforce members can receive a reassigned shift', 409);
+      if (current.shift_template_id) {
+        const template = this.db.prepare(`
+          SELECT department_id, position_id FROM workforce_shift_templates
+          WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
+        `).get(String(current.shift_template_id), scope.organization_id, scope.tenant_id, scope.chat_id);
+        if (!template) throw fail('WORKFORCE_SHIFT_TEMPLATE_SCOPE_INVALID', 'The shift template is outside the active organization and tenant', 422);
+        if (template.department_id && String(member.department_id || '') !== String(template.department_id)) {
+          throw fail('WORKFORCE_MEMBER_DEPARTMENT_MISMATCH', 'Replacement professional does not match the shift department', 409);
+        }
+        if (template.position_id && String(member.position_id || '') !== String(template.position_id)) {
+          throw fail('WORKFORCE_MEMBER_POSITION_MISMATCH', 'Replacement professional does not match the shift position', 409);
+        }
+      }
+      if (current.location_id && String(member.primary_location_id || '') !== String(current.location_id)) {
+        const assignment = this.db.prepare(`
+          SELECT id FROM workforce_assignments
+          WHERE organization_id = ? AND tenant_id = ? AND chat_id = ? AND member_id = ?
+            AND assignment_type = 'LOCATION' AND location_id = ? AND status = 'ACTIVE'
+            AND starts_at <= ? AND ends_at >= ? LIMIT 1
+        `).get(scope.organization_id, scope.tenant_id, scope.chat_id, memberId,
+          String(current.location_id), current.starts_at, current.ends_at);
+        if (!assignment) throw fail('WORKFORCE_LOCATION_ASSIGNMENT_REQUIRED', 'Replacement professional must be assigned to the shift location for its full duration', 409);
+      }
+      const engagement = this.db.prepare(`
+        SELECT id FROM workforce_engagements
+        WHERE organization_id = ? AND tenant_id = ? AND chat_id = ? AND member_id = ? AND status = 'ACTIVE'
+          AND starts_at <= ? AND (ends_at IS NULL OR ends_at >= ?)
+        ORDER BY starts_at DESC LIMIT 1
+      `).get(scope.organization_id, scope.tenant_id, scope.chat_id, memberId, current.starts_at, current.ends_at);
+      if (!engagement) throw fail('WORKFORCE_ACTIVE_ENGAGEMENT_REQUIRED', 'Replacement professional needs an active engagement covering the full shift', 409);
+      const overlapping = this.db.prepare(`
+        SELECT id, starts_at, ends_at, status FROM workforce_shifts
+        WHERE organization_id = ? AND tenant_id = ? AND chat_id = ? AND member_id = ?
+          AND id <> ? AND status <> 'CANCELLED' AND starts_at < ? AND ends_at > ?
+        ORDER BY starts_at LIMIT 10
+      `).all(scope.organization_id, scope.tenant_id, scope.chat_id, memberId,
+        String(id), current.ends_at, current.starts_at);
+      if (overlapping.length) throw fail('WORKFORCE_CONSTRAINT_CONFLICT', 'Replacement professional has an overlapping dated shift', 409);
+      const now = this.clock();
+      const result = this.db.prepare(`
+        UPDATE workforce_shifts SET member_id = ?, updated_by = ?, updated_at = ?, version = version + 1
+        WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ? AND version = ? AND member_id = ?
+      `).run(memberId, context.actor_id || null, now, String(id),
+        scope.organization_id, scope.tenant_id, scope.chat_id, expected, String(current.member_id));
+      if (Number(result.changes) !== 1) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
+      this.writeAudit(scope, 'shift', String(id), 'reassigned', {
+        from_member_id: current.member_id, to_member_id: memberId, reason, version: expected + 1,
+      }, context);
+      const row = this.db.prepare(`
+        SELECT * FROM workforce_shifts WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
+      `).get(String(id), scope.organization_id, scope.tenant_id, scope.chat_id);
+      this.db.exec('COMMIT');
+      return fromDatabaseRow(row, TABLES.shift.json);
+    } catch (error) {
+      if (this.db.isTransaction) this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
   transition(entity, operation, id, input = {}, context = {}) {
     const spec = TABLES[entity];
     const transition = TRANSITIONS[entity]?.[operation];
@@ -1066,6 +1175,10 @@ export class WorkforceSqliteRepository {
       throw fail('WORKFORCE_LIFECYCLE_CONFLICT', `Cannot ${operation} ${entity} from ${record[spec.state]}`, 409);
     }
     if (Number(record.version) !== expected) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
+    const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
+    if (entity === 'shift' && operation === 'cancel' && (!reason || reason.length > 500)) {
+      throw fail('WORKFORCE_SHIFT_CANCELLATION_REASON_REQUIRED', 'A cancellation reason of 1 to 500 characters is required');
+    }
     if (entity === 'member' && ['suspend','deactivate'].includes(operation)) {
       const reports = this.db.prepare("SELECT COUNT(*) AS count FROM workforce_members WHERE organization_id=? AND tenant_id=? AND supervisor_member_id=? AND status='ACTIVE'")
         .get(scope.organization_id, scope.tenant_id, String(id)).count;
@@ -1098,7 +1211,7 @@ export class WorkforceSqliteRepository {
         WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ? AND version = ? AND ${spec.state} = ?
       `).run(transition.to,context.actor_id || null,now,String(id),scope.organization_id,scope.tenant_id,scope.chat_id,expected,record[spec.state]);
       if (Number(result.changes) !== 1) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
-      this.writeAudit(scope, entity, String(id), operation, { from: record[spec.state], to: transition.to, version: expected + 1 }, context);
+      this.writeAudit(scope, entity, String(id), operation, { from: record[spec.state], to: transition.to, version: expected + 1, ...(reason ? { reason } : {}) }, context);
       const row = this.db.prepare(`
         SELECT * FROM ${spec.table}
         WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
