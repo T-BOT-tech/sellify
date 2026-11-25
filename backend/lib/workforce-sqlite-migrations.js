@@ -1040,3 +1040,46 @@ export function runWorkforceSchedulingPolicyMigration(db, now = () => new Date()
     return { applied: true, version };
   } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
 }
+
+
+/** M11 / migration 99 — persist the scheduling-policy evidence used for each shift decision. */
+export const WORKFORCE_SHIFT_SCHEDULING_ASSESSMENT_MIGRATION_VERSION = 99;
+
+export function runWorkforceShiftSchedulingAssessmentMigration(db, now = () => new Date().toISOString()) {
+  const version = WORKFORCE_SHIFT_SCHEDULING_ASSESSMENT_MIGRATION_VERSION;
+  if (db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version)) return { applied: false, version };
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec(`
+      ALTER TABLE workforce_shifts ADD COLUMN constraint_policy_id TEXT
+        REFERENCES workforce_scheduling_policies(id) ON DELETE SET NULL;
+      ALTER TABLE workforce_shifts ADD COLUMN constraint_policy_version INTEGER
+        CHECK (constraint_policy_version IS NULL OR constraint_policy_version > 0);
+      ALTER TABLE workforce_shifts ADD COLUMN constraint_state TEXT NOT NULL DEFAULT 'UNKNOWN'
+        CHECK (constraint_state IN ('PASS','WARNING','BLOCKING_CONFLICT','UNKNOWN'));
+      ALTER TABLE workforce_shifts ADD COLUMN constraint_findings_json TEXT NOT NULL DEFAULT '[]'
+        CHECK (json_valid(constraint_findings_json) AND json_type(constraint_findings_json)='array');
+      CREATE INDEX IF NOT EXISTS idx_workforce_shifts_constraint_policy
+        ON workforce_shifts(organization_id,tenant_id,constraint_policy_id,constraint_policy_version);
+      CREATE TRIGGER IF NOT EXISTS workforce_shift_constraint_policy_scope_insert
+      BEFORE INSERT ON workforce_shifts
+      WHEN NEW.constraint_policy_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM workforce_scheduling_policies p
+        WHERE p.id=NEW.constraint_policy_id AND p.organization_id=NEW.organization_id
+          AND p.tenant_id=NEW.tenant_id AND p.chat_id=NEW.chat_id
+      )
+      BEGIN SELECT RAISE(ABORT, 'workforce_shift_constraint_policy_scope_invalid'); END;
+      CREATE TRIGGER IF NOT EXISTS workforce_shift_constraint_policy_scope_update
+      BEFORE UPDATE OF constraint_policy_id ON workforce_shifts
+      WHEN NEW.constraint_policy_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM workforce_scheduling_policies p
+        WHERE p.id=NEW.constraint_policy_id AND p.organization_id=NEW.organization_id
+          AND p.tenant_id=NEW.tenant_id AND p.chat_id=NEW.chat_id
+      )
+      BEGIN SELECT RAISE(ABORT, 'workforce_shift_constraint_policy_scope_invalid'); END;
+    `);
+    db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, now());
+    db.exec('COMMIT');
+    return { applied: true, version };
+  } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw error; }
+}
