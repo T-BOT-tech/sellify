@@ -569,7 +569,7 @@ export function runWorkforceDepartmentMigration(db, now = () => new Date().toISO
   if (db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version)) return { applied: false, version };
   db.exec('BEGIN IMMEDIATE');
   try {
-    db.exec(\`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS workforce_departments (
         id TEXT PRIMARY KEY,
         organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -603,7 +603,7 @@ export function runWorkforceDepartmentMigration(db, now = () => new Date().toISO
         EXISTS (SELECT 1 FROM workforce_members m WHERE m.department_id=OLD.id AND m.status='ACTIVE')
         OR EXISTS (SELECT 1 FROM workforce_positions p WHERE p.department_id=OLD.id AND p.status='ACTIVE')
       ) BEGIN SELECT RAISE(ABORT, 'WORKFORCE_DEPARTMENT_HAS_ACTIVE_ASSIGNMENTS'); END;
-    \`);
+    `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, now());
     db.exec('COMMIT');
     return { applied: true, version };
@@ -618,7 +618,7 @@ export function runWorkforcePositionMigration(db, now = () => new Date().toISOSt
   if (db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version)) return { applied: false, version };
   db.exec('BEGIN IMMEDIATE');
   try {
-    db.exec(\`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS workforce_positions (
         id TEXT PRIMARY KEY,
         organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -661,7 +661,7 @@ export function runWorkforcePositionMigration(db, now = () => new Date().toISOSt
       WHEN OLD.status='ACTIVE' AND NEW.status='INACTIVE'
       AND EXISTS (SELECT 1 FROM workforce_members m WHERE m.position_id=OLD.id AND m.status='ACTIVE')
       BEGIN SELECT RAISE(ABORT, 'WORKFORCE_POSITION_HAS_ACTIVE_ASSIGNMENTS'); END;
-    \`);
+    `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, now());
     db.exec('COMMIT');
     return { applied: true, version };
@@ -676,7 +676,7 @@ export function runWorkforceReportingRelationshipMigration(db, now = () => new D
   if (db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version)) return { applied: false, version };
   db.exec('BEGIN IMMEDIATE');
   try {
-    db.exec(\`
+    db.exec(`
       CREATE TRIGGER IF NOT EXISTS workforce_members_supervisor_scope_insert
       BEFORE INSERT ON workforce_members WHEN NEW.supervisor_member_id IS NOT NULL BEGIN
         SELECT CASE WHEN NEW.supervisor_member_id=NEW.id OR NOT EXISTS (
@@ -704,7 +704,7 @@ export function runWorkforceReportingRelationshipMigration(db, now = () => new D
           SELECT 1 FROM supervisor_chain WHERE id=NEW.id
         ) THEN RAISE(ABORT, 'WORKFORCE_REPORTING_CYCLE_INVALID') END;
       END;
-    \`);
+    `);
     db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, now());
     db.exec('COMMIT');
     return { applied: true, version };
