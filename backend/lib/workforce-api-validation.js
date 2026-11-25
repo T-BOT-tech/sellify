@@ -92,6 +92,35 @@ export function validateWorkforceApiPayload(entity, operation, input = {}) {
       (typeof input.classification !== 'string' || input.classification.trim().length > 80)) errors.push('classification must be a string of at most 80 characters');
   }
 
+  if (entity === 'shift_template') {
+    const localTime = value => typeof value === 'string' && /^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(value);
+    const validDate = value => typeof value === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(value)
+      && Number.isFinite(Date.parse(value + 'T00:00:00Z'))
+      && new Date(value + 'T00:00:00Z').toISOString().slice(0,10) === value;
+    if (input.name !== undefined && (typeof input.name !== 'string' || !input.name.trim() || input.name.trim().length > 120)) {
+      errors.push('name must be a non-empty string of at most 120 characters');
+    }
+    for (const field of ['start_local_time','end_local_time']) {
+      if (input[field] !== undefined && !localTime(input[field])) errors.push(field + ' must use HH:MM local time');
+    }
+    if (input.work_days !== undefined && (!Array.isArray(input.work_days) || input.work_days.length === 0
+      || input.work_days.some(day => !Number.isInteger(day) || day < 1 || day > 7)
+      || new Set(input.work_days).size !== input.work_days.length)) {
+      errors.push('work_days must contain unique ISO weekdays from 1 to 7');
+    }
+    if (input.break_rules !== undefined && (!Array.isArray(input.break_rules) || input.break_rules.some(rule =>
+      !rule || typeof rule !== 'object' || Array.isArray(rule)
+      || !localTime(rule.start_local_time) || !localTime(rule.end_local_time)
+      || rule.start_local_time === rule.end_local_time))) {
+      errors.push('break_rules must contain valid local-time intervals');
+    }
+    if (input.effective_from !== undefined && !validDate(input.effective_from)) errors.push('effective_from must be YYYY-MM-DD');
+    if (input.effective_until !== undefined && input.effective_until !== null && !validDate(input.effective_until)) errors.push('effective_until must be YYYY-MM-DD or null');
+    if (input.effective_from && input.effective_until && input.effective_until < input.effective_from) {
+      errors.push('effective_until must not be before effective_from');
+    }
+  }
+
   if (input.all_day !== undefined && typeof input.all_day !== 'boolean') {
     errors.push('all_day must be a boolean');
   }
