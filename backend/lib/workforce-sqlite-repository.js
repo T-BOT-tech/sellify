@@ -1487,7 +1487,7 @@ export class WorkforceSqliteRepository {
           LIMIT 1
         `).get(scope.organization_id, scope.tenant_id, String(data.user_id));
         if (existingLink) {
-          throw fail('WORKFORCE_USER_ALREADY_LINKED', 'This Sellify user is already linked to another Workforce member in this organization', 409);
+          throw fail('WORKFORCE_USER_ALREADY_LINKED', 'This Sellify user is already linked to another Workforce member in this organization and tenant', 409);
         }
       }
       if (entity === 'shift') {
