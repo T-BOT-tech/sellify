@@ -198,6 +198,11 @@ try {
   await engagementForm.locator('[name="terms_reference"]').fill('SYNTHETIC-EMPLOYMENT-001');
   await engagementForm.getByRole('button', { name: 'Create engagement' }).click();
   await page.getByText('Engagement recorded.').waitFor({ timeout: 10000 });
+  const engagementSettingsModal = page.locator('#settingsModal');
+  if (await engagementSettingsModal.evaluate(element => element.classList.contains('open'))) {
+    await engagementSettingsModal.getByRole('button', { name: 'Close Settings' }).click({ force: true });
+    await page.waitForFunction(() => !document.querySelector('#settingsModal')?.classList.contains('open'));
+  }
   await page.locator('.workforce-engagement-row .logistics-status').filter({ hasText: 'DRAFT' }).waitFor();
   const engagementCreateCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/engagements'));
   assert.ok(engagementCreateCall, 'manager engagement form must submit through the canonical API');
