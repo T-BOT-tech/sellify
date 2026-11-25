@@ -16,6 +16,8 @@ export const WORKFORCE_AUTHORIZATION_PERMISSIONS = Object.freeze({
   departmentManage: 'workforce:department:manage',
   positionView: 'workforce:position:view',
   positionManage: 'workforce:position:manage',
+  shiftTemplateView: 'workforce:shift_template:view',
+  shiftTemplateManage: 'workforce:shift_template:manage',
   memberView: 'workforce:member:view',
   memberManage: 'workforce:member:manage',
   memberActivate: 'workforce:member:activate',
