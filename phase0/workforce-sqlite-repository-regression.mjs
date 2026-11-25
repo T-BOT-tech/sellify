@@ -669,6 +669,31 @@ try {
     expected_version: 1, availability: 'UNAVAILABLE',
   }, scopeA);
   assert.equal(unavailable.availability, 'UNAVAILABLE');
+  const assessment = repository.assessAvailability({
+    organization_id: scopeA.organization_id,
+    tenant_id: scopeA.tenant_id,
+    chat_id: scopeA.chat_id,
+    member_id: created.record.id,
+    starts_at: '2026-11-25T06:00:00.000Z',
+    ends_at: '2026-11-25T07:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+  }, scopeA);
+  assert.equal(assessment.state, 'UNKNOWN',
+    'assessment must fail closed while calendar and operational commitment evidence are incomplete');
+  assert.equal(assessment.is_booking, false);
+  assert.ok(assessment.findings.some(item => item.code === 'EVIDENCE_INCOMPLETE'
+    || item.code === 'EVIDENCE_SOURCE_MISSING'));
+  assert.throws(() => repository.assessAvailability({
+    organization_id: scopeA.organization_id,
+    tenant_id: scopeA.tenant_id,
+    chat_id: scopeA.chat_id,
+    member_id: created.record.id,
+    starts_at: '2026-11-25T06:00:00.000Z',
+    ends_at: '2026-11-25T07:00:00.000Z',
+    timezone: 'Africa/Addis_Ababa',
+  }, scopeB), error => error?.code === 'WORKFORCE_SCOPE_NOT_FOUND'
+    || error?.code === 'WORKFORCE_FORBIDDEN');
+
   assert.throws(() => repository.create('availability', {
     idempotency_key: 'availability-invalid-recurrence-a',
     member_id: created.record.id,
