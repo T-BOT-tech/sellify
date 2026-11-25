@@ -59,6 +59,7 @@ try {
     id: 'member-synthetic-1', display_name: 'Synthetic Workforce Member',
     member_type: 'PROVIDER', status: 'ACTIVE', version: 1,
   };
+  let engagement = null;
   page.on('pageerror', error => pageErrors.push(error.stack || error.message));
 
   await page.route('**/*', async route => {
@@ -87,6 +88,33 @@ try {
     }
     if (pathname.endsWith('/members') && method === 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: [member] }) });
+      return;
+    }
+    if (pathname.endsWith('/engagements') && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: engagement ? [engagement] : [] }) });
+      return;
+    }
+    if (pathname.endsWith('/engagements') && method === 'POST') {
+      assert.equal(body.member_id, member.id, 'engagement must belong to the selected Workforce member');
+      assert.equal(body.engagement_type, 'EMPLOYMENT');
+      assert.ok(Number.isFinite(Date.parse(body.starts_at)) && Number.isFinite(Date.parse(body.ends_at)));
+      assert.ok(Date.parse(body.starts_at) < Date.parse(body.ends_at));
+      assert.match(request.headers()['idempotency-key'] || '', /^workforce-ui-/);
+      engagement = { id: 'engagement-synthetic-1', member_id: member.id, engagement_type: body.engagement_type,
+        starts_at: body.starts_at, ends_at: body.ends_at, status: 'DRAFT', version: 1 };
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ record: engagement }) });
+      return;
+    }
+    if (pathname.endsWith('/engagement-synthetic-1/submit') && method === 'POST') {
+      assert.equal(body.expected_version, engagement.version);
+      engagement = { ...engagement, status: 'PENDING_APPROVAL', version: engagement.version + 1 };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: engagement }) });
+      return;
+    }
+    if (pathname.endsWith('/engagement-synthetic-1/activate') && method === 'POST') {
+      assert.equal(body.expected_version, engagement.version);
+      engagement = { ...engagement, status: 'ACTIVE', version: engagement.version + 1 };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: engagement }) });
       return;
     }
     if (pathname.endsWith('/suspend') && method === 'POST') {
@@ -153,6 +181,29 @@ try {
   await page.locator('.workforce-member-card').getByRole('button', { name: 'Open member' }).click();
   await page.locator('#workforceMemberDetails').waitFor({ state: 'visible' });
   await page.locator('#workforceAvailabilityForm').waitFor({ state: 'visible' });
+  await page.locator('#workforceEngagementForm').waitFor({ state: 'visible' });
+
+  const engagementForm = page.locator('#workforceEngagementForm');
+  await engagementForm.locator('[name="engagement_type"]').selectOption('EMPLOYMENT');
+  await engagementForm.locator('[name="starts_at"]').fill('2026-11-26T08:00');
+  await engagementForm.locator('[name="ends_at"]').fill('2026-12-26T17:00');
+  await engagementForm.locator('[name="terms_reference"]').fill('SYNTHETIC-EMPLOYMENT-001');
+  await engagementForm.getByRole('button', { name: 'Create engagement' }).click();
+  await page.getByText('Engagement recorded.').waitFor({ timeout: 10000 });
+  await page.locator('.workforce-engagement-row .logistics-status').filter({ hasText: 'DRAFT' }).waitFor();
+  const engagementCreateCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/engagements'));
+  assert.ok(engagementCreateCall, 'manager engagement form must submit through the canonical API');
+  assert.equal(engagementCreateCall.body.member_id, member.id);
+  assert.equal(engagementCreateCall.authorization, 'Bearer synthetic-session-token');
+  assert.match(engagementCreateCall.idempotencyKey, /^workforce-ui-/);
+  await page.getByRole('button', { name: 'Submit for approval' }).click();
+  await page.locator('.workforce-engagement-row .logistics-status').filter({ hasText: 'PENDING APPROVAL' }).waitFor();
+  await page.getByRole('button', { name: 'Activate' }).click();
+  await page.locator('.workforce-engagement-row .logistics-status').filter({ hasText: 'ACTIVE' }).waitFor();
+  const engagementSubmitCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/engagement-synthetic-1/submit'));
+  const engagementActivateCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/engagement-synthetic-1/activate'));
+  assert.equal(engagementSubmitCall?.body.expected_version, 1, 'engagement submit must use optimistic concurrency');
+  assert.equal(engagementActivateCall?.body.expected_version, 2, 'engagement activation must use the latest version');
 
   const form = page.locator('#workforceAvailabilityForm');
   await form.locator('[name="availability"]').selectOption('AVAILABLE');
@@ -184,7 +235,7 @@ try {
   assert.deepEqual(pageErrors, [], 'browser journey must not emit uncaught page errors');
 
   console.log('Workforce operator browser journey: PASS');
-  console.log('Mobile workspace, authenticated API requests, member detail, availability creation, idempotency, and optimistic member lifecycle: VERIFIED');
+  console.log('Mobile workspace, authenticated API requests, member detail, engagement creation/approval/activation, availability creation, idempotency, and optimistic lifecycle: VERIFIED');
 } catch (error) {
   console.error(error);
   console.error('Browser diagnostics:\n' + JSON.stringify(browserDiagnostics, null, 2));
