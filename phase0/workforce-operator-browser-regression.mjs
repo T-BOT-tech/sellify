@@ -148,7 +148,7 @@ try {
     'Workforce workspace must load successfully. Status: ' + workspaceStatus
       + '; intercepted API calls: ' + JSON.stringify(apiCalls),
   );
-  await page.getByText('Synthetic Workforce Member').waitFor({ timeout: 10000 });
+  await page.locator('#workforceMembers').getByText('Synthetic Workforce Member').waitFor({ timeout: 10000 });
   await page.getByText('Planned', { exact: true }).waitFor();
   await page.locator('.workforce-member-card').getByRole('button', { name: 'Open member' }).click();
   await page.locator('#workforceMemberDetails').waitFor({ state: 'visible' });
