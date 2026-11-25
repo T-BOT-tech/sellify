@@ -540,6 +540,46 @@ try {
   assert.ok(absenceHistory.payload.records?.some(event => event.action === 'workforce.absence.void'
     && event.metadata?.reason === 'Absence record corrected'));
 
+  const policyPath = '/tenants/' + encodeURIComponent(tenant.chatId) + '/workforce/scheduling-policies';
+  const policy = await createWorkforceRecord(baseUrl, managerSession.token, policyPath,
+    'workforce-http-scheduling-policy-' + suffix, {
+      name: 'Operations scheduling policy', effective_from: '2026-11-25',
+      rules: { max_shift_minutes: 600, max_daily_minutes: 600, max_weekly_minutes: 2400,
+        minimum_rest_minutes: 660, minimum_break_after_minutes: 360,
+        minimum_break_duration_minutes: 30, max_consecutive_days: 6,
+        required_qualifications: ['First Aid'], location_policy: 'ASSIGNED_ONLY',
+        enforcement: { max_daily_minutes: 'WARN' } },
+    });
+  assert.equal(policy.status, 'DRAFT');
+  assert.equal(policy.version, 1);
+  const policyList = await jsonRequest(baseUrl, policyPath, { token: managerSession.token });
+  assert.equal(policyList.response.status, 200, JSON.stringify(policyList.payload));
+  assert.ok(policyList.payload.records?.some(item => item.id === policy.id));
+  const policyActivation = await jsonRequest(baseUrl, policyPath + '/' + encodeURIComponent(policy.id) + '/activate', {
+    token: managerSession.token, method: 'POST', body: { expected_version: 1 },
+  });
+  assert.equal(policyActivation.response.status, 200, JSON.stringify(policyActivation.payload));
+  assert.equal(policyActivation.payload.record?.status, 'ACTIVE');
+  assert.equal(policyActivation.payload.record?.version, 2);
+  const policyUpdate = await jsonRequest(baseUrl, policyPath + '/' + encodeURIComponent(policy.id), {
+    token: managerSession.token, method: 'PATCH',
+    body: { expected_version: 2, rules: { max_shift_minutes: 540, max_daily_minutes: 540,
+      enforcement: { max_daily_minutes: 'BLOCK' } } },
+  });
+  assert.equal(policyUpdate.response.status, 200, JSON.stringify(policyUpdate.payload));
+  assert.equal(policyUpdate.payload.record?.version, 3);
+  assert.equal(policyUpdate.payload.record?.rules?.max_shift_minutes, 540);
+  const policyHistory = await jsonRequest(baseUrl, policyPath + '/' + encodeURIComponent(policy.id) + '/history', {
+    token: managerSession.token,
+  });
+  assert.equal(policyHistory.response.status, 200, JSON.stringify(policyHistory.payload));
+  assert.ok(policyHistory.payload.records?.some(event => event.action === 'workforce.scheduling_policy.updated'
+    && event.metadata?.policy_version === 3 && event.metadata?.rules?.max_shift_minutes === 540),
+  'policy history must retain the exact rule snapshot for each version');
+  const crossTenantPolicyRead = await jsonRequest(baseUrl, policyPath, { token: otherSession.token });
+  assert.equal(crossTenantPolicyRead.response.status, 403,
+    'a session from another tenant must not read scheduling policies');
+
   engagement = await lifecycle('engagements', engagement, 'suspend', 3, 'SUSPENDED');
   engagement = await lifecycle('engagements', engagement, 'activate', 4, 'ACTIVE');
   await lifecycle('engagements', engagement, 'end', 5, 'ENDED');
@@ -585,7 +625,7 @@ try {
     'a session from another tenant must not create Workforce records');
 
   console.log('Workforce authenticated HTTP API regression: PASS');
-  console.log('Session authentication, Workforce CRUD, template-based dated shift generation, DST-aware time conversion, idempotency, conflict detection, optimistic concurrency, and tenant isolation: VERIFIED');
+  console.log('Session authentication, Workforce CRUD, leave/absence lifecycle, versioned scheduling policy administration, template-based dated shift generation, DST-aware time conversion, idempotency, conflict detection, optimistic concurrency, and tenant isolation: VERIFIED');
 } catch (error) {
   console.error(error);
   if (output) console.error('Backend output:\n' + output);
