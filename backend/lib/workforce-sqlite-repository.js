@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { validateWorkforceRecurrenceRule } from './workforce-recurrence-contract.js';
 import { WORKFORCE_LEAVE_TRANSITIONS, WORKFORCE_ABSENCE_TRANSITIONS, validateWorkforceLeaveRequest, validateWorkforceAbsence, validateWorkforceLeaveTransition, isValidWorkforceLeaveCategory, isValidWorkforceAbsenceType } from './workforce-leave-contract.js';
-import { validateWorkforceSchedulingPolicy, validateWorkforceSchedulingPolicyRules } from './workforce-scheduling-constraints-contract.js';
+import { validateWorkforceSchedulingPolicy, validateWorkforceSchedulingPolicyRules, evaluateWorkforceSchedulingConstraints } from './workforce-scheduling-constraints-contract.js';
 import { buildShiftWindowFromTemplate, isoWeekday } from './workforce-shift-time.js';
 import {
   WORKFORCE_REPOSITORY_ENTITY_OPERATIONS,
@@ -58,7 +58,7 @@ const TABLES = Object.freeze({
     table: 'workforce_shifts', id: 'id', state: 'status',
     fields: ['resource_id','location_id','starts_at','ends_at','timezone','break_rules'],
     createOnlyFields: ['member_id','recurrence_source_id','assignment_source_id','shift_template_id','template_version','generated_local_date'],
-    json: ['break_rules_json'],
+    json: ['break_rules_json','constraint_findings_json'],
   },
   allocation: {
     table: 'workforce_allocations', id: 'id', state: 'state',
@@ -379,6 +379,17 @@ export class WorkforceSqliteRepository {
           AND starts_at < ? AND ends_at > ? LIMIT 1
       `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(data.member_id), data.ends_at, data.starts_at);
       if (recordedAbsence) throw fail('WORKFORCE_ABSENCE_AVAILABILITY_CONFLICT', 'A recorded absence blocks this shift period', 409);
+    }
+    if (entity === 'shift') {
+      const assessment = this.assertSchedulingAssessment(this.assessSchedulingConstraints(data.member_id, {
+        member_id: data.member_id, starts_at: data.starts_at, ends_at: data.ends_at,
+        timezone: data.timezone, location_id: data.location_id,
+        break_rules: data.break_rules_json || [],
+      }, scope));
+      data.constraint_policy_id = assessment.policy_id;
+      data.constraint_policy_version = assessment.policy_version;
+      data.constraint_state = assessment.state;
+      data.constraint_findings_json = assessment.findings;
     }
     if (data.calendar_id) {
       const calendar = this.db.prepare(`
@@ -755,6 +766,103 @@ export class WorkforceSqliteRepository {
     });
   }
 
+  assessSchedulingConstraints(memberId, candidate, scope, excludeShiftId = null) {
+    const start = Date.parse(candidate.starts_at), end = Date.parse(candidate.ends_at);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) {
+      throw fail('WORKFORCE_SCHEDULING_CANDIDATE_INVALID', 'A valid candidate shift interval is required', 422);
+    }
+    let localDate;
+    try {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: candidate.timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+      }).formatToParts(new Date(start));
+      const values = Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+      localDate = values.year + '-' + values.month + '-' + values.day;
+    } catch {
+      throw fail('WORKFORCE_SCHEDULING_TIMEZONE_INVALID', 'A valid IANA timezone is required for scheduling assessment', 422);
+    }
+    const member = this.db.prepare(`
+      SELECT id, primary_location_id FROM workforce_members
+      WHERE id=? AND organization_id=? AND tenant_id=? AND chat_id=?
+    `).get(String(memberId), scope.organization_id, scope.tenant_id, scope.chat_id);
+    if (!member) throw fail('WORKFORCE_MEMBER_SCOPE_INVALID', 'Scheduling candidate is outside the active organization and tenant', 422);
+
+    const policyRow = this.db.prepare(`
+      SELECT * FROM workforce_scheduling_policies
+      WHERE organization_id=? AND tenant_id=? AND chat_id=? AND status='ACTIVE'
+        AND effective_from<=? AND (effective_until IS NULL OR effective_until>=?)
+      ORDER BY effective_from DESC LIMIT 1
+    `).get(scope.organization_id, scope.tenant_id, scope.chat_id, localDate, localDate);
+    if (!policyRow) return evaluateWorkforceSchedulingConstraints({
+      policy: null, candidate: { ...candidate, member_id: String(memberId),
+        location_id: candidate.location_id || member.primary_location_id || null }, existing_shifts: [],
+    });
+
+    const policy = fromDatabaseRow(policyRow, TABLES.scheduling_policy.json);
+    const profile = this.db.prepare(`
+      SELECT qualifications_json FROM workforce_profiles
+      WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=?
+        AND (effective_from IS NULL OR effective_from<=?)
+        AND (effective_until IS NULL OR effective_until>=?)
+      ORDER BY effective_from DESC, updated_at DESC LIMIT 1
+    `).get(scope.organization_id, scope.tenant_id, scope.chat_id, String(memberId), localDate, localDate);
+    let qualifications;
+    if (profile) {
+      try {
+        const parsed = JSON.parse(profile.qualifications_json || '[]');
+        if (Array.isArray(parsed)) qualifications = parsed;
+      } catch {}
+    }
+
+    const eligibleLocationIds = new Set();
+    if (member.primary_location_id) eligibleLocationIds.add(String(member.primary_location_id));
+    const locationAssignments = this.db.prepare(`
+      SELECT location_id FROM workforce_assignments
+      WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=?
+        AND assignment_type='LOCATION' AND status='ACTIVE'
+        AND (starts_at IS NULL OR starts_at<=?)
+        AND (ends_at IS NULL OR ends_at>=?)
+    `).all(scope.organization_id, scope.tenant_id, scope.chat_id, String(memberId),
+      candidate.starts_at, candidate.ends_at);
+    for (const assignment of locationAssignments) if (assignment.location_id) eligibleLocationIds.add(String(assignment.location_id));
+
+    const rangeStart = new Date(start - 35 * 86400000).toISOString();
+    const rangeEnd = new Date(end + 35 * 86400000).toISOString();
+    const existingShifts = this.db.prepare(`
+      SELECT id, starts_at, ends_at, status FROM workforce_shifts
+      WHERE organization_id=? AND tenant_id=? AND chat_id=? AND member_id=?
+        AND status<>'CANCELLED' AND starts_at<? AND ends_at>?
+        AND (? IS NULL OR id<>?)
+      ORDER BY starts_at LIMIT 250
+    `).all(scope.organization_id, scope.tenant_id, scope.chat_id, String(memberId),
+      rangeEnd, rangeStart, excludeShiftId ? String(excludeShiftId) : null,
+      excludeShiftId ? String(excludeShiftId) : null);
+
+    return evaluateWorkforceSchedulingConstraints({
+      policy,
+      candidate: { ...candidate, member_id: String(memberId),
+        location_id: candidate.location_id || member.primary_location_id || null },
+      existing_shifts: existingShifts,
+      qualifications,
+      eligible_location_ids: [...eligibleLocationIds],
+    });
+  }
+
+  assertSchedulingAssessment(assessment) {
+    if (!assessment?.policy_id) return assessment;
+    if (assessment.state === 'BLOCKING_CONFLICT' || assessment.state === 'UNKNOWN') {
+      const code = assessment.state === 'BLOCKING_CONFLICT'
+        ? 'WORKFORCE_SCHEDULING_CONSTRAINT_CONFLICT' : 'WORKFORCE_SCHEDULING_ASSESSMENT_UNKNOWN';
+      const message = assessment.state === 'BLOCKING_CONFLICT'
+        ? 'The proposed shift conflicts with the active scheduling policy'
+        : 'The proposed shift cannot be assessed with the evidence required by the active scheduling policy';
+      const error = fail(code, message, 409);
+      error.details = { assessment };
+      throw error;
+    }
+    return assessment;
+  }
+
   generateShiftsFromTemplate(templateId, input = {}, context = {}) {
     const scope = this.assertContext(context);
     const template = this.get('shift_template', templateId, context);
@@ -894,6 +1002,10 @@ export class WorkforceSqliteRepository {
           }, context);
         }
       } catch (error) {
+        if (['WORKFORCE_SCHEDULING_CONSTRAINT_CONFLICT','WORKFORCE_SCHEDULING_ASSESSMENT_UNKNOWN'].includes(error.code)) {
+          conflicts.push({ local_date: localDate, reason: error.code, assessment: error.details?.assessment || null });
+          continue;
+        }
         if (error.code !== 'WORKFORCE_CONSTRAINT_CONFLICT') throw error;
         const raced = this.db.prepare(`
           SELECT * FROM workforce_shifts
@@ -1298,15 +1410,23 @@ export class WorkforceSqliteRepository {
           AND starts_at < ? AND ends_at > ? LIMIT 1
       `).get(scope.organization_id, scope.tenant_id, scope.chat_id, memberId, current.ends_at, current.starts_at);
       if (recordedAbsence) throw fail('WORKFORCE_ABSENCE_AVAILABILITY_CONFLICT', 'Replacement professional has a recorded absence during this shift', 409);
+      const assessment = this.assertSchedulingAssessment(this.assessSchedulingConstraints(memberId, {
+        member_id: memberId, starts_at: current.starts_at, ends_at: current.ends_at,
+        timezone: current.timezone, location_id: current.location_id, break_rules: current.break_rules || [],
+      }, scope, String(id)));
       const now = this.clock();
       const result = this.db.prepare(`
-        UPDATE workforce_shifts SET member_id = ?, updated_by = ?, updated_at = ?, version = version + 1
+        UPDATE workforce_shifts SET member_id = ?, constraint_policy_id = ?, constraint_policy_version = ?,
+          constraint_state = ?, constraint_findings_json = ?, updated_by = ?, updated_at = ?, version = version + 1
         WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ? AND version = ? AND member_id = ?
-      `).run(memberId, context.actor_id || null, now, String(id),
+      `).run(memberId, assessment.policy_id, assessment.policy_version, assessment.state,
+        JSON.stringify(assessment.findings), context.actor_id || null, now, String(id),
         scope.organization_id, scope.tenant_id, scope.chat_id, expected, String(current.member_id));
       if (Number(result.changes) !== 1) throw fail('WORKFORCE_VERSION_CONFLICT', 'Workforce record changed since it was loaded', 409);
       this.writeAudit(scope, 'shift', String(id), 'reassigned', {
         from_member_id: current.member_id, to_member_id: memberId, reason, version: expected + 1,
+        constraint_policy_id: assessment.policy_id, constraint_policy_version: assessment.policy_version,
+        constraint_state: assessment.state, constraint_findings: assessment.findings,
       }, context);
       const row = this.db.prepare(`
         SELECT * FROM workforce_shifts WHERE id = ? AND organization_id = ? AND tenant_id = ? AND chat_id = ?
