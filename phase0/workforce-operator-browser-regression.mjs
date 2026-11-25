@@ -99,8 +99,10 @@ try {
   let locationAssignment = null;
   let leaveRequest = null;
   let absenceRecord = null;
+  let schedulingPolicy = null;
   const leaveHistory = [];
   const absenceHistory = [];
+  const schedulingPolicyHistory = [];
   page.on('pageerror', error => pageErrors.push(error.stack || error.message));
 
   await page.route('**/*', async route => {
@@ -283,13 +285,57 @@ try {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: absenceRecord }) });
       return;
     }
+    if (pathname.endsWith('/scheduling-policies') && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: schedulingPolicy ? [schedulingPolicy] : [] }) });
+      return;
+    }
+    if (pathname.endsWith('/scheduling-policies') && method === 'POST') {
+      assert.equal(body.name, 'Synthetic operations policy');
+      assert.equal(body.effective_from, '2026-11-25');
+      assert.equal(body.rules.max_shift_minutes, 600);
+      assert.equal(body.rules.max_daily_minutes, 600);
+      assert.equal(body.rules.minimum_rest_minutes, 660);
+      assert.deepEqual(body.rules.required_qualifications, ['First Aid','Customer care']);
+      assert.equal(body.rules.location_policy, 'ASSIGNED_ONLY');
+      assert.equal(body.rules.enforcement.max_daily_minutes, 'WARN');
+      assert.match(request.headers()['idempotency-key'] || '', /^workforce-ui-/);
+      schedulingPolicy = { id: 'scheduling-policy-synthetic-1', ...body, status: 'DRAFT', version: 1 };
+      schedulingPolicyHistory.push({ action: 'workforce.scheduling_policy.created', created_at: '2026-11-25T10:00:00.000Z', metadata: { policy_version: 1, rules: body.rules } });
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ record: schedulingPolicy }) });
+      return;
+    }
+    if (pathname.endsWith('/scheduling-policy-synthetic-1') && method === 'PATCH') {
+      assert.equal(body.expected_version, schedulingPolicy.version);
+      assert.equal(body.rules.max_shift_minutes, 540);
+      assert.equal(body.rules.max_daily_minutes, 540);
+      assert.equal(body.rules.enforcement.max_daily_minutes, 'BLOCK');
+      schedulingPolicy = { ...schedulingPolicy, ...body, version: schedulingPolicy.version + 1 };
+      schedulingPolicyHistory.push({ action: 'workforce.scheduling_policy.updated', created_at: '2026-11-25T10:05:00.000Z', metadata: { policy_version: schedulingPolicy.version, rules: body.rules } });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: schedulingPolicy }) });
+      return;
+    }
+    if (pathname.endsWith('/scheduling-policy-synthetic-1/activate') && method === 'POST') {
+      assert.equal(body.expected_version, schedulingPolicy.version);
+      schedulingPolicy = { ...schedulingPolicy, status: 'ACTIVE', version: schedulingPolicy.version + 1 };
+      schedulingPolicyHistory.push({ action: 'workforce.scheduling_policy.activated', created_at: '2026-11-25T10:02:00.000Z', metadata: { policy_version: schedulingPolicy.version } });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: schedulingPolicy }) });
+      return;
+    }
+    if (pathname.endsWith('/scheduling-policy-synthetic-1/deactivate') && method === 'POST') {
+      assert.equal(body.expected_version, schedulingPolicy.version);
+      schedulingPolicy = { ...schedulingPolicy, status: 'INACTIVE', version: schedulingPolicy.version + 1 };
+      schedulingPolicyHistory.push({ action: 'workforce.scheduling_policy.deactivated', created_at: '2026-11-25T10:10:00.000Z', metadata: { policy_version: schedulingPolicy.version } });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ record: schedulingPolicy }) });
+      return;
+    }
     if (pathname.endsWith('/shifts') && method === 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records: generatedShift ? [generatedShift] : [] }) });
       return;
     }
     if (pathname.endsWith('/history') && method === 'GET') {
       const records = pathname.includes('/leave-requests/') ? leaveHistory
-        : pathname.includes('/absences/') ? absenceHistory : shiftHistory;
+        : pathname.includes('/absences/') ? absenceHistory
+          : pathname.includes('/scheduling-policies/') ? schedulingPolicyHistory : shiftHistory;
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ records }) });
       return;
     }
@@ -579,6 +625,46 @@ try {
   await page.locator('.workforce-absence-row').getByRole('button', { name: 'View history' }).click();
   await page.getByText('void', { exact: true }).waitFor({ timeout: 10000 });
 
+  const policyForm = page.locator('#workforceSchedulingPolicyForm');
+  await policyForm.locator('[name="name"]').fill('Synthetic operations policy');
+  await policyForm.locator('[name="effective_from"]').fill('2026-11-25');
+  await policyForm.locator('[name="max_shift_minutes"]').fill('600');
+  await policyForm.locator('[name="max_daily_minutes"]').fill('600');
+  await policyForm.locator('[name="minimum_rest_minutes"]').fill('660');
+  await policyForm.locator('[name="required_qualifications"]').fill('First Aid, Customer care');
+  await policyForm.locator('[name="location_policy"]').selectOption('ASSIGNED_ONLY');
+  await policyForm.locator('[name="max_daily_enforcement"]').selectOption('WARN');
+  await policyForm.getByRole('button', { name: 'Save scheduling policy' }).click();
+  await page.getByText('Scheduling policy created as a draft.').waitFor({ timeout: 10000 });
+  await page.locator('.workforce-scheduling-policy-row .logistics-status').filter({ hasText: 'DRAFT' }).waitFor();
+  const policyCreateCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/scheduling-policies'));
+  assert.ok(policyCreateCall, 'scheduling policy form must create through the canonical API');
+  assert.equal(policyCreateCall.authorization, 'Bearer synthetic-session-token');
+  assert.match(policyCreateCall.idempotencyKey, /^workforce-ui-/);
+  const policyActivateForm = page.locator('.workforce-scheduling-policy-action-form[data-action="activate"]');
+  await policyActivateForm.getByRole('button', { name: 'Activate policy' }).click();
+  await page.getByText('Scheduling policy activated.').waitFor({ timeout: 10000 });
+  await page.locator('.workforce-scheduling-policy-row .logistics-status').filter({ hasText: 'ACTIVE' }).waitFor();
+  const policyActivateCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/scheduling-policy-synthetic-1/activate'));
+  assert.equal(policyActivateCall?.body.expected_version, 1);
+  await page.locator('.workforce-scheduling-policy-row').getByRole('button', { name: 'Edit policy' }).click();
+  await policyForm.locator('[name="max_shift_minutes"]').fill('540');
+  await policyForm.locator('[name="max_daily_minutes"]').fill('540');
+  await policyForm.locator('[name="max_daily_enforcement"]').selectOption('BLOCK');
+  await policyForm.getByRole('button', { name: 'Save scheduling policy' }).click();
+  await page.getByText('Scheduling policy version saved.').waitFor({ timeout: 10000 });
+  const policyUpdateCall = apiCalls.find(call => call.method === 'PATCH' && call.pathname.endsWith('/scheduling-policy-synthetic-1'));
+  assert.equal(policyUpdateCall?.body.expected_version, 2);
+  assert.equal(policyUpdateCall?.body.rules.max_shift_minutes, 540);
+  await page.locator('.workforce-scheduling-policy-row').getByRole('button', { name: 'View history' }).click();
+  await page.getByText('updated', { exact: true }).waitFor({ timeout: 10000 });
+  const policyDeactivateForm = page.locator('.workforce-scheduling-policy-action-form[data-action="deactivate"]');
+  await policyDeactivateForm.getByRole('button', { name: 'Deactivate policy' }).click();
+  await page.getByText('Scheduling policy deactivated.').waitFor({ timeout: 10000 });
+  await page.locator('.workforce-scheduling-policy-row .logistics-status').filter({ hasText: 'INACTIVE' }).waitFor();
+  const policyDeactivateCall = apiCalls.find(call => call.method === 'POST' && call.pathname.endsWith('/scheduling-policy-synthetic-1/deactivate'));
+  assert.equal(policyDeactivateCall?.body.expected_version, 3);
+
   const templateForm = page.locator('#workforceShiftTemplateForm');
   await templateForm.locator('[name="name"]').fill('Morning Shift');
   await templateForm.locator('[name="start_local_time"]').fill('08:00');
@@ -655,7 +741,7 @@ try {
   assert.deepEqual(pageErrors, [], 'browser journey must not emit uncaught page errors');
 
   console.log('Workforce operator browser journey: PASS');
-  console.log('Mobile workspace, member administration, leave submission/approval/cancellation, absence recording/correction/history, shift templates and dated roster lifecycle, availability, and optimistic concurrency: VERIFIED');
+  console.log('Mobile workspace, member administration, leave/absence lifecycles, scheduling policy create/version/activate/deactivate/history, shift templates and dated roster lifecycle, availability, and optimistic concurrency: VERIFIED');
 } catch (error) {
   console.error(error);
   console.error('Browser diagnostics:\n' + JSON.stringify(browserDiagnostics, null, 2));

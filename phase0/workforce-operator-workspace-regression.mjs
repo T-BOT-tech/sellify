@@ -61,6 +61,14 @@ assert.ok(ui.includes('submitLeaveAction') && ui.includes('voidAbsence')
 assert.ok(ui.includes('loadWorkforceRecordHistory') && ui.includes('workforce-record-history-button')
   && ui.includes("optionalRecords('leave-requests')") && ui.includes("optionalRecords('absences')"),
   'leave and absence records must display canonical lists and audit history');
+assert.ok(ui.includes('workforceSchedulingPolicyForm') && ui.includes('saveSchedulingPolicy')
+  && ui.includes("endpoint('scheduling-policies')") && ui.includes('schedulingPolicyAction'),
+  'managers must be able to create, version and activate organization scheduling policies through the canonical API');
+assert.ok(ui.includes("optionalRecords('scheduling-policies')")
+  && ui.includes("data-entity=\"scheduling-policies\"")
+  && ui.includes('loadWorkforceRecordHistory'),
+  'scheduling policies must expose the canonical policy list and immutable version history');
+
 
 assert.ok(ui.includes('validLocalDate') && ui.includes('work_days') && ui.includes('break_rules'),
   'template creation and roster generation must validate dates, weekdays and break rules');
