@@ -220,7 +220,7 @@ try {
   assert.match(availabilityCall.idempotencyKey, /^workforce-ui-/);
   assert.equal(availabilityCall.body.timezone, browserTimezone);
 
-  await page.getByRole('button', { name: 'Suspend' }).click();
+  await page.locator('.workforce-member-card').getByRole('button', { name: 'Suspend' }).click();
   await page.waitForFunction(() => {
     const status = document.querySelector('.workforce-member-card .logistics-status');
     return status?.textContent?.trim() === 'SUSPENDED';
