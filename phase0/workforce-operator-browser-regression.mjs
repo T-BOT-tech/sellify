@@ -174,6 +174,10 @@ try {
     return ['READY', 'ERROR', 'DENIED'].includes(status?.dataset.state || '');
   }, null, { timeout: 10000 });
   const workspaceStatus = await page.locator('#workforceStatus').textContent();
+  const initializedSettingsModal = page.locator('#settingsModal');
+  if (await initializedSettingsModal.evaluate(element => element.classList.contains('open'))) {
+    await initializedSettingsModal.getByRole('button', { name: 'Close Settings' }).click();
+  }
   assert.equal(
     await page.locator('#workforceStatus').getAttribute('data-state'),
     'READY',
