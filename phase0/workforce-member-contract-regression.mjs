@@ -45,6 +45,9 @@ const validExternalCreate = validateWorkforceMemberCreate({
 });
 assert.equal(validExternalCreate.valid, true, 'external professionals do not require a Sellify user');
 assert.ok(WORKFORCE_MEMBER_OPTIONAL_FIELDS.includes('employee_number'));
+for (const field of ['department_id','position_id','supervisor_member_id']) assert.ok(WORKFORCE_MEMBER_OPTIONAL_FIELDS.includes(field));
+assert.equal(validateWorkforceMemberCreate({ organization_id: 'org-1', chat_id: 'chat-1', member_type: 'EMPLOYEE', idempotency_key: 'm4', department_id: 'dept-1', position_id: 'position-1' }).valid, true);
+assert.equal(validateWorkforceMemberUpdate({ organization_id: 'org-1', chat_id: 'chat-1', member_id: 'member-1', expected_version: 1, supervisor_member_id: '' }).valid, false);
 assert.equal(validateWorkforceMemberCreate({ organization_id: 'org-1', chat_id: 'chat-1', member_type: 'EMPLOYEE', idempotency_key: 'm2', employee_number: 'EMP-1' }).valid, true);
 assert.equal(validateWorkforceMemberCreate({ organization_id: 'org-1', chat_id: 'chat-1', member_type: 'EMPLOYEE', idempotency_key: 'm3', employee_number: 123 }).valid, false);
 assert.deepEqual(validExternalCreate.errors, []);
