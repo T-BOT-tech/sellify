@@ -39,7 +39,7 @@ function dateLabel(value) {
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
 }
 function validLocalDate(value) {
-  if (typeof value !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(value + 'T00:00:00.000Z');
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
@@ -798,7 +798,7 @@ async function saveShiftTemplate(form, root) {
   const workDays = values.getAll('work_days').map(Number);
   const breakStart = String(values.get('break_start_local_time') || '');
   const breakEnd = String(values.get('break_end_local_time') || '');
-  if (!name || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(start) || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(end)
+  if (!name || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(start) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(end)
     || start === end || !timezone || !validLocalDate(effectiveFrom)
     || (effectiveUntil && effectiveUntil < effectiveFrom) || !workDays.length
     || ((breakStart || breakEnd) && (!breakStart || !breakEnd || breakStart === breakEnd))) {
