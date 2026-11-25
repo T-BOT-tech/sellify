@@ -47,11 +47,10 @@ try {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
   const page = await context.newPage();
   const dismissSettingsOverlay = async () => {
+    // The settings overlay belongs to the surrounding app shell, not this synthetic Workforce journey.
+    // Remove it from the fixture so it cannot intercept the Workforce controls under test.
     const modal = page.locator('#settingsModal');
-    if (await modal.evaluate(element => element.classList.contains('open'))) {
-      await modal.getByRole('button', { name: 'Close Settings' }).click({ force: true });
-      await page.waitForFunction(() => !document.querySelector('#settingsModal')?.classList.contains('open'));
-    }
+    await modal.evaluate(element => element.classList.remove('open'));
   };
   pageErrors.length = 0;
   apiCalls.length = 0;
